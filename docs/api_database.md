@@ -469,19 +469,25 @@ supabase.auth.onAuthStateChange.listen((data) {
 });
 ```
 
-### Next.js auth (web)
+### SvelteKit auth (web)
 
 ```typescript
-// apps/web/lib/supabase/server.ts
+// apps/web/src/lib/supabase-server.ts
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import type { Cookies } from '@sveltejs/kit';
 
-export function createClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookies().getAll(), setAll: (c) => c.forEach(({ name, value, options }) => cookies().set(name, value, options)) } }
-  );
+export function createClient(cookies: Cookies) {
+  return createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll: () => cookies.getAll(),
+      setAll: (cookiesToSet) => {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookies.set(name, value, { ...options, path: '/' });
+        });
+      },
+    },
+  });
 }
 ```
 

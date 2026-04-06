@@ -28,11 +28,11 @@ cd run-app
 melos bootstrap
 
 # Install web app dependencies
-npm install
+cd apps/web && pnpm install && cd ../..
 
 # Verify everything is wired up
 melos run analyze
-npm run lint --workspace=apps/web
+cd apps/web && pnpm check
 ```
 
 ---
@@ -46,7 +46,7 @@ run-app/
 │   ├── mobile_android/      # Flutter Android target
 │   ├── watch_ios/           # Native Swift WatchKit (Xcode project)
 │   ├── watch_wear/          # Flutter Wear OS target
-│   ├── web/                 # Next.js 14 web app
+│   ├── web/                 # SvelteKit web app
 │   └── backend/             # Supabase Edge Functions
 ├── packages/
 │   ├── core_models/         # Shared Dart data types
@@ -113,25 +113,14 @@ scripts:
 
 ---
 
-## npm workspace config
+## Web app package management
 
-The web app lives outside Melos (different language) but in the same Git repo, linked via npm workspaces.
+The web app lives outside Melos (different language) but in the same Git repo. It uses **pnpm** as its package manager (matching the upstream web template).
 
-```json
-// package.json (root)
-{
-  "name": "run-app-root",
-  "private": true,
-  "workspaces": [
-    "apps/web",
-    "apps/backend"
-  ],
-  "scripts": {
-    "dev:web": "npm run dev --workspace=apps/web",
-    "build:web": "npm run build --workspace=apps/web",
-    "lint:web": "npm run lint --workspace=apps/web"
-  }
-}
+```bash
+# Install web app dependencies
+cd apps/web
+pnpm install
 ```
 
 ---
@@ -189,12 +178,15 @@ flutter run -d {wear-emulator-id}
 ```bash
 cd apps/web
 
+# Install dependencies
+pnpm install
+
 # Copy environment file
 cp .env.example .env.local
-# Fill in NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_MAPS_API_KEY
+# Fill in PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, PUBLIC_MAPS_API_KEY
 
-npm run dev
-# Opens at http://localhost:3000
+pnpm dev
+# Opens at http://localhost:7777
 ```
 
 ### Backend (Edge Functions)
@@ -251,11 +243,11 @@ For local development, create a `launch.json` in VS Code or a run configuration 
 
 ```bash
 # apps/web/.env.local
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-NEXT_PUBLIC_MAPS_API_KEY=AIza...
+PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=eyJ...
+PUBLIC_MAPS_API_KEY=AIza...
 STRAVA_CLIENT_ID=12345
-STRAVA_CLIENT_SECRET=abc...   # server-side only — no NEXT_PUBLIC_ prefix
+STRAVA_CLIENT_SECRET=abc...   # server-side only — no PUBLIC_ prefix
 ```
 
 ### Edge Functions
@@ -337,18 +329,17 @@ linter:
 include: ../../analysis_options.yaml
 ```
 
-### TypeScript / Next.js
+### TypeScript / SvelteKit
 
-```json
-// apps/web/.eslintrc.json
-{
-  "extends": ["next/core-web-vitals", "next/typescript"],
-  "rules": {
-    "prefer-const": "error",
-    "no-unused-vars": "error"
-  }
-}
+Type checking is handled by `svelte-check`:
+
+```bash
+cd apps/web
+pnpm check        # Type-check all Svelte and TypeScript files
+pnpm check:watch  # Watch mode
 ```
+
+Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, `$props`) is used throughout — not the legacy options API.
 
 ---
 
@@ -362,7 +353,7 @@ Full pipeline defined in `.github/workflows/ci.yml`. Key jobs:
 | `build-ios` | macos-latest | All PRs | `flutter build ipa --no-codesign` |
 | `build-android` | ubuntu-latest | All PRs | `flutter build appbundle` |
 | `build-watch-swift` | macos-latest | All PRs | `xcodebuild` for WatchKit scheme |
-| `build-web` | ubuntu-latest | All PRs | `npm ci` → `npm run lint` → `npm run build` |
+| `build-web` | ubuntu-latest | All PRs | `pnpm install` → `pnpm check` → `pnpm build` |
 | `deploy-web` | Via Vercel | Push to `main` | Automatic via Vercel GitHub integration |
 | `deploy-functions` | ubuntu-latest | Push to `main` | `supabase functions deploy --all` |
 
@@ -380,7 +371,7 @@ melos run test
 
 ```bash
 melos run analyze
-npm run lint --workspace=apps/web
+cd apps/web && pnpm check
 ```
 
 ### Add a dependency to a specific package
@@ -394,7 +385,7 @@ flutter pub add xml
 
 ```bash
 melos exec -- flutter pub upgrade
-cd apps/web && npm update
+cd apps/web && pnpm update
 ```
 
 ### Deploy Edge Functions

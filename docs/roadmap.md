@@ -106,9 +106,9 @@ Wear OS Tiles and watchOS complications showing live pace, HR, and distance with
 ## Phase 2b — web app: plan big, review deep
 
 **Target:** ~5 weeks (runs in parallel with or immediately after Phase 2)
-**Goal:** A Next.js web app at `app.runapp.com` that handles everything better done on a big screen
+**Goal:** A SvelteKit web app at `app.runapp.com` that handles everything better done on a big screen
 
-The web app shares zero UI code with Flutter but calls the exact same Supabase REST API. No new backend work needed — it's purely a new client.
+The web app is built with SvelteKit and shares zero UI code with Flutter, but calls the exact same Supabase REST API. No new backend work needed — it's purely a new client.
 
 ### Features
 
@@ -234,7 +234,7 @@ Public browseable library of user-shared routes, sortable by location, distance,
 | iOS + Android app | Flutter + Dart |
 | Apple Watch | Native Swift + SwiftUI + WatchKit |
 | Wear OS watch | Flutter + Compose for Wear |
-| Web app | Next.js 14 + React + TypeScript |
+| Web app | SvelteKit 2 + Svelte 5 + TypeScript |
 | Web maps | Google Maps JavaScript API |
 | Web deployment | Vercel |
 | Monorepo | Melos workspace (Flutter) + npm workspaces (web) |

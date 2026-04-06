@@ -1,0 +1,14 @@
+{
+  "name": "run-app-root",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/backend"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web",
+    "lint:web": "npm run lint --workspace=apps/web",
+    "check:web": "npm run check --workspace=apps/web"
+  }
+}

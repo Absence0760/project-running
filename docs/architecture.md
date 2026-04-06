@@ -4,7 +4,7 @@
 
 ## Overview
 
-A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a Next.js web app, sharing a single Supabase backend and Google Maps for route planning and navigation.
+A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a SvelteKit web app, sharing a single Supabase backend and Google Maps for route planning and navigation.
 
 The architecture is designed around three principles:
 
@@ -25,14 +25,14 @@ run-app/                          # Monorepo root
 │   ├── mobile_android/           # Flutter Android app target
 │   ├── watch_ios/                # Native Swift + WatchKit (Xcode project)
 │   ├── watch_wear/               # Flutter Wear OS target
-│   ├── web/                      # Next.js 14 web app (TypeScript)
-│   │   ├── app/                  # App Router pages
-│   │   │   ├── routes/           # Route builder + library
-│   │   │   ├── runs/             # Run history + detail
-│   │   │   ├── dashboard/        # Stats and analytics
-│   │   │   └── settings/         # Integrations + account
-│   │   ├── components/           # React components
-│   │   ├── lib/                  # Supabase client, API helpers
+│   ├── web/                      # SvelteKit web app (TypeScript)
+│   │   ├── src/
+│   │   │   ├── routes/           # SvelteKit file-based routes
+│   │   │   │   ├── routes/       # Route builder + library
+│   │   │   │   ├── runs/         # Run history + detail
+│   │   │   │   ├── dashboard/    # Stats and analytics
+│   │   │   │   └── settings/     # Integrations + account
+│   │   │   └── lib/              # Supabase client, API helpers, components
 │   │   └── package.json
 │   └── backend/                  # Supabase Edge Functions (Node.js / TypeScript)
 ├── packages/
@@ -49,7 +49,7 @@ run-app/                          # Monorepo root
 └── README.md
 ```
 
-> Note: the `packages/` layer is Flutter/Dart only. The web app (`apps/web/`) is a standalone Next.js project — it shares the Supabase backend but has no code dependency on the Dart packages.
+> Note: the `packages/` layer is Flutter/Dart only. The web app (`apps/web/`) is a standalone SvelteKit project — it shares the Supabase backend but has no code dependency on the Dart packages.
 
 ### Melos workspace config
 
@@ -79,7 +79,7 @@ scripts:
 │                                                                          │
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌─────────┐ ┌─────────────┐ │
 │  │ iOS app   │ │Android app│ │Apple Watch│ │ Wear OS │ │  Web app    │ │
-│  │ Flutter   │ │  Flutter  │ │Swift+WKit │ │ Flutter │ │  Next.js   │ │
+│  │ Flutter   │ │  Flutter  │ │Swift+WKit │ │ Flutter │ │ SvelteKit  │ │
 │  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └────┬────┘ └──────┬──────┘ │
 │        │             │       WatchConnectivity    │             │        │
 └────────┼─────────────┼─────────────┼─────────────┼─────────────┼────────┘
@@ -151,11 +151,11 @@ Flutter runs natively on Wear OS. Uses `compose_for_wear` plugin for watch-appro
 - Route navigation synced from phone via Data Layer
 - Sync to phone via `wear` Flutter plugin
 
-### Web app (Next.js)
+### Web app (SvelteKit)
 
-A standalone Next.js 14 app at `apps/web/`, deployed to Vercel. It is intentionally not a full-featured clone of the mobile app — its purpose is the things that are genuinely better on a large screen.
+A standalone SvelteKit app at `apps/web/`, deployed to Vercel. It is intentionally not a full-featured clone of the mobile app — its purpose is the things that are genuinely better on a large screen.
 
-**Stack:** Next.js 14 App Router · TypeScript · Tailwind CSS · Supabase JS client · Google Maps JS API · Recharts
+**Stack:** SvelteKit 2 · Svelte 5 · TypeScript · Supabase JS client · Google Maps JS API · Storybook
 
 **Key responsibilities:**
 - Full-screen route builder (the best route planning experience in the product)
@@ -165,37 +165,48 @@ A standalone Next.js 14 app at `apps/web/`, deployed to Vercel. It is intentiona
 
 **Auth:** Supabase Auth with `@supabase/ssr` — server-side session management via cookies. No separate auth system — same user accounts as mobile.
 
-**Page structure:**
+**Route structure:**
 
 ```
-app/
-├── (auth)/
-│   └── login/                  # Google + Apple sign-in
-├── dashboard/                  # Weekly mileage, heatmap, records
+src/routes/
+├── login/
+│   └── +page.svelte            # Google + Apple sign-in
+├── dashboard/
+│   └── +page.svelte            # Weekly mileage, heatmap, records
 ├── routes/
-│   ├── page.tsx                # Route library list
-│   ├── new/page.tsx            # Full-screen Google Maps route builder
-│   └── [id]/page.tsx           # Route detail (public or private)
+│   ├── +page.svelte            # Route library list
+│   ├── new/+page.svelte        # Full-screen Google Maps route builder
+│   └── [id]/+page.svelte       # Route detail (public or private)
 ├── runs/
-│   ├── page.tsx                # Run history with filters
-│   └── [id]/page.tsx           # Run detail — map + full analysis
+│   ├── +page.svelte            # Run history with filters
+│   └── [id]/+page.svelte       # Run detail — map + full analysis
 └── settings/
-    ├── integrations/page.tsx   # Connect Strava, Garmin, parkrun
-    └── account/page.tsx        # Profile, subscription, data export
+    ├── integrations/+page.svelte  # Connect Strava, Garmin, parkrun
+    └── account/+page.svelte       # Profile, subscription, data export
 ```
 
 **Route builder (web-specific):**
 
 The web route builder uses the Google Maps JavaScript API directly — more capable than the Flutter plugin. Users click to place waypoints, drag to reshape, toggle road/trail snapping, and get a live elevation profile as they draw. Routes save to Supabase and appear instantly on mobile.
 
-```typescript
-// apps/web/components/RouteBuilder.tsx
-const map = new google.maps.Map(ref.current, { ... });
-const directionsService = new google.maps.DirectionsService();
-const poly = new google.maps.Polyline({ map, path: [] });
+```svelte
+<!-- apps/web/src/lib/components/RouteBuilder.svelte -->
+<script lang="ts">
+  import { onMount } from 'svelte';
 
-// On each waypoint click → request directions segment → append to polyline
-// Export final polyline → encode as GPX → upload to Supabase Storage
+  let mapContainer: HTMLDivElement;
+
+  onMount(() => {
+    const map = new google.maps.Map(mapContainer, { ... });
+    const directionsService = new google.maps.DirectionsService();
+    const poly = new google.maps.Polyline({ map, path: [] });
+
+    // On each waypoint click → request directions segment → append to polyline
+    // Export final polyline → encode as GPX → upload to Supabase Storage
+  });
+</script>
+
+<div bind:this={mapContainer} class="w-full h-full"></div>
 ```
 
 ---
@@ -453,19 +464,20 @@ Requires business approval from Garmin. Integrate in Phase 3.
 | iOS + Android UI | Flutter 3.x + Dart | Single codebase, ~80% shared |
 | Apple Watch | Swift 5 + SwiftUI + WatchKit | Separate Xcode project in monorepo |
 | Wear OS | Flutter + `wear` plugin | Compose for Wear via platform channel |
-| Web app | Next.js 14 + TypeScript | App Router, deployed to Vercel |
+| Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to Vercel |
 | Web maps | Google Maps JavaScript API | Route builder, run replay |
-| Web charts | Recharts | Elevation, pace, HR zone visualisations |
-| Web auth | Supabase Auth + `@supabase/ssr` | SSR-safe cookie sessions |
-| Monorepo tooling | Melos (Flutter) + npm workspaces (web) | Separate toolchains, same repo |
+| Web icons | unplugin-icons + Iconify | Material Symbols icon set |
+| Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
+| Component explorer | Storybook 8 | Component stories alongside components |
+| Monorepo tooling | Melos (Flutter) + pnpm (web) | Separate toolchains, same repo |
 | Maps (mobile) | Google Maps Flutter plugin | Route display, live position |
-| GPS parsing | `gpx` + custom KML parser | Dart (mobile), `togeojson` (web) |
+| GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
 | Health sync | `health` pub.dev package | Abstracts HealthKit + Health Connect |
 | Local storage | `drift` (SQLite) | Offline-first run storage on mobile |
 | Backend | Supabase | Postgres + Auth + Storage + Edge Functions |
 | Auth | Supabase Auth | Apple Sign-In + Google Sign-In |
 | CI/CD | GitHub Actions | Per-app matrix jobs |
-| Lint | `flutter_lints` + ESLint | Per-platform lint config |
+| Lint | `flutter_lints` + svelte-check | Per-platform lint config |
 
 ---
 
@@ -508,9 +520,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci --workspace=apps/web
-      - run: npm run lint --workspace=apps/web
-      - run: npm run build --workspace=apps/web
+      - run: cd apps/web && pnpm install
+      - run: cd apps/web && pnpm check
+      - run: cd apps/web && pnpm build
       # Vercel deployment handled automatically on push to main
 ```
 
@@ -525,9 +537,9 @@ Web app deploys to Vercel via the Vercel GitHub integration — no manual deploy
 - **parkrun athlete numbers** are public — no passwords stored
 - **GPS data** stored as JSONB blobs in Postgres, encrypted at rest by Supabase
 - **Apple Sign-In** on iOS 13+ — no email/password surface to attack
-- **Web app sessions** managed server-side via `@supabase/ssr` — auth cookies are httpOnly and not accessible to JavaScript
+- **Web app sessions** managed via `@supabase/ssr` — auth cookies are httpOnly and not accessible to JavaScript
 - **Public route/run pages** use Supabase `is_public` flag — RLS policies enforce that only explicitly shared records are readable without auth
-- **Environment secrets** (`SUPABASE_URL`, `STRAVA_CLIENT_SECRET`, `MAPS_API_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) stored in GitHub Actions secrets and Vercel environment variables — never committed to the repo
+- **Environment secrets** (`SUPABASE_URL`, `STRAVA_CLIENT_SECRET`, `MAPS_API_KEY`, `PUBLIC_SUPABASE_ANON_KEY`) stored in GitHub Actions secrets and Vercel environment variables — never committed to the repo
 
 ---
 
