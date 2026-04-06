@@ -1,6 +1,9 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
+	import { auth } from '$lib/stores/auth.svelte';
 
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -9,18 +12,41 @@
 		{ href: '/settings/integrations', label: 'Settings', icon: 'settings' },
 	];
 
+	const publicPaths = ['/', '/login'];
+
 	function isActive(href: string, path: string): boolean {
 		if (href === '/settings/integrations') return path.startsWith('/settings');
 		return path.startsWith(href);
 	}
+
+	// Auth guard — redirect to /login if not authenticated on protected routes
+	$effect(() => {
+		if (browser && !auth.loggedIn && !publicPaths.includes($page.url.pathname)) {
+			goto('/login');
+		}
+	});
+
+	// If logged in but no user data yet, fetch it
+	$effect(() => {
+		if (browser && auth.loggedIn && !auth.user) {
+			auth.fetchUser();
+		}
+	});
+
+	async function handleLogout() {
+		await auth.logout();
+		goto('/login');
+	}
 </script>
 
-{#if $page.url.pathname === '/' || $page.url.pathname === '/login'}
+{#if publicPaths.includes($page.url.pathname)}
+	<!-- Public pages: landing + login — no sidebar -->
 	<slot />
-{:else}
+{:else if auth.loggedIn}
+	<!-- Authenticated app shell -->
 	<div class="app-shell">
 		<nav class="sidebar">
-			<a href="/" class="logo">
+			<a href="/dashboard" class="logo">
 				<span class="logo-icon">&#9654;</span>
 				<span class="logo-text">Run</span>
 			</a>
@@ -41,10 +67,21 @@
 			</ul>
 
 			<div class="sidebar-footer">
-				<a href="/login" class="nav-link">
-					<span class="nav-icon material-symbols">person</span>
-					<span>Sign In</span>
-				</a>
+				{#if auth.user}
+					<div class="user-info">
+						<div class="user-avatar">
+							{auth.user.display_name?.[0]?.toUpperCase() ?? '?'}
+						</div>
+						<div class="user-details">
+							<span class="user-name">{auth.user.display_name ?? auth.user.email}</span>
+							<span class="user-email">{auth.user.email}</span>
+						</div>
+					</div>
+				{/if}
+				<button class="nav-link logout-btn" onclick={handleLogout}>
+					<span class="nav-icon material-symbols">logout</span>
+					<span>Sign Out</span>
+				</button>
 			</div>
 		</nav>
 
@@ -108,6 +145,11 @@
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		transition: all var(--transition-fast);
+		border: none;
+		background: none;
+		width: 100%;
+		text-align: left;
+		cursor: pointer;
 	}
 
 	.nav-link:hover {
@@ -129,6 +171,62 @@
 	.sidebar-footer {
 		border-top: 1px solid var(--color-border);
 		padding-top: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.user-info {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+	}
+
+	.user-avatar {
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		background: var(--color-primary);
+		color: white;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.8rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+
+	.user-details {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.user-name {
+		font-size: 0.85rem;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.user-email {
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.logout-btn {
+		color: var(--color-text-tertiary);
+		font-size: 0.85rem;
+	}
+
+	.logout-btn:hover {
+		color: var(--color-danger);
+		background: var(--color-danger-light);
 	}
 
 	.main-content {
@@ -137,7 +235,6 @@
 		min-height: 100vh;
 	}
 
-	/* Material Symbols font — using text labels as icon names */
 	.material-symbols {
 		font-family: 'Material Symbols Outlined', system-ui;
 		font-weight: normal;
