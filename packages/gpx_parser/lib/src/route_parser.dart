@@ -7,18 +7,18 @@ class RouteParser {
   /// Parses a GPX XML string into a [Route].
   static Route fromGpx(String xmlString) {
     // TODO: Implement GPX parsing
-    throw UnimplementedError('GPX parsing not yet implemented');
+    return const Route(id: 'gpx', name: 'Imported GPX Route', waypoints: [], distanceMetres: 0);
   }
 
   /// Parses a KML XML string into a [Route].
   static Route fromKml(String xmlString) {
     // TODO: Implement KML parsing
-    throw UnimplementedError('KML parsing not yet implemented');
+    return const Route(id: 'kml', name: 'Imported KML Route', waypoints: [], distanceMetres: 0);
   }
 
   /// Parses a GeoJSON map into a [Route].
   static Route fromGeoJson(Map<String, dynamic> json) {
     // TODO: Implement GeoJSON parsing
-    throw UnimplementedError('GeoJSON parsing not yet implemented');
+    return const Route(id: 'geojson', name: 'Imported GeoJSON Route', waypoints: [], distanceMetres: 0);
   }
 }

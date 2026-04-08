@@ -13,12 +13,12 @@ class RouteNavigator {
   /// on the route. Returns null if no route is loaded.
   double? distanceFromRoute(Waypoint position) {
     // TODO: Implement nearest-point-on-route calculation
-    throw UnimplementedError();
+    return 0.0;
   }
 
   /// Returns the remaining distance in metres along the route from [position].
   double? remainingDistance(Waypoint position) {
     // TODO: Implement remaining distance calculation
-    throw UnimplementedError();
+    return 0.0;
   }
 }

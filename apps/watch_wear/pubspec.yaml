@@ -16,8 +16,6 @@ dependencies:
     path: ../../packages/run_recorder
   api_client:
     path: ../../packages/api_client
-  wear: ^1.1.0
-  geolocator: ^12.0.0
 
 dev_dependencies:
   flutter_test:

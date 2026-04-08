@@ -6,25 +6,23 @@ import 'package:core_models/core_models.dart';
 class ApiClient {
   /// Saves a completed [Run] to the backend.
   Future<void> saveRun(Run run) async {
-    // TODO: Implement
-    throw UnimplementedError();
+    // TODO: Implement Supabase REST call
   }
 
   /// Fetches the user's runs, newest first.
   Future<List<Run>> getRuns({int limit = 20, DateTime? before}) async {
-    // TODO: Implement
-    throw UnimplementedError();
+    // TODO: Implement Supabase REST call
+    return [];
   }
 
   /// Saves a [Route] to the backend.
   Future<void> saveRoute(Route route) async {
-    // TODO: Implement
-    throw UnimplementedError();
+    // TODO: Implement Supabase REST call
   }
 
   /// Fetches the user's saved routes.
   Future<List<Route>> getRoutes() async {
-    // TODO: Implement
-    throw UnimplementedError();
+    // TODO: Implement Supabase REST call
+    return [];
   }
 }

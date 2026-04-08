@@ -15,7 +15,21 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Implement stat card design
-    return const Placeholder();
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) Icon(icon, size: 20, color: theme.colorScheme.primary),
+            if (icon != null) const SizedBox(height: 4),
+            Text(value, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 2),
+            Text(label, style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
   }
 }
