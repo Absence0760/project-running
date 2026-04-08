@@ -56,7 +56,7 @@ Opens at **http://localhost:7777**.
 | `pnpm preview` | Preview production build on `:8888` |
 | `pnpm check` | Type-check all Svelte and TypeScript files |
 | `pnpm check:watch` | Type-check in watch mode |
-| `pnpm storybook` | Component explorer on `:9999` |
+
 
 ---
 

@@ -155,7 +155,7 @@ Flutter runs natively on Wear OS. Uses `compose_for_wear` plugin for watch-appro
 
 A standalone SvelteKit app at `apps/web/`, deployed to Vercel. It is intentionally not a full-featured clone of the mobile app — its purpose is the things that are genuinely better on a large screen.
 
-**Stack:** SvelteKit 2 · Svelte 5 · TypeScript · Supabase JS client · MapLibre GL JS · Storybook
+**Stack:** SvelteKit 2 · Svelte 5 · TypeScript · Supabase JS client · MapLibre GL JS
 
 **Key responsibilities:**
 - Full-screen route builder (the best route planning experience in the product)
@@ -456,7 +456,7 @@ Requires business approval from Garmin. Integrate in Phase 3.
 | Web maps | MapLibre GL JS | Route builder, run replay |
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
-| Component explorer | Storybook 8 | Component stories alongside components |
+
 | Monorepo tooling | Melos (Flutter) + pnpm (web) | Separate toolchains, same repo |
 | Maps (mobile) | flutter_map + MapLibre | Route display, live position |
 | GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
