@@ -35,10 +35,16 @@
 	let routeElevations: number[] = [];
 	let markers: maplibregl.Marker[] = [];
 	let isRouting = false;
+	let nearStart = false;
 	let searchQuery = $state('');
 	let searchResults = $state<{ name: string; lng: number; lat: number }[]>([]);
 	let showResults = $state(false);
 	let searchTimeout: ReturnType<typeof setTimeout>;
+
+	const SNAP_DISTANCE_PX = 25;
+	const OVERLAP_THRESHOLD_M = 30;
+
+	// --- Search ---
 
 	async function handleSearch(query: string) {
 		if (query.length < 2) {
@@ -73,15 +79,22 @@
 		searchInput.blur();
 	}
 
+	// --- Waypoint markers ---
+
 	function createWaypointMarker(lngLat: { lng: number; lat: number }, index: number): maplibregl.Marker {
 		const el = document.createElement('div');
 		el.className = 'route-waypoint';
 		el.dataset.index = String(index);
 
-		// Style based on position
 		if (index === 0) {
 			el.classList.add('route-waypoint-start');
 		}
+
+		// Number label
+		const label = document.createElement('span');
+		label.className = 'route-waypoint-label';
+		label.textContent = String(index + 1);
+		el.appendChild(label);
 
 		const marker = new maplibregl.Marker({ element: el, draggable: true })
 			.setLngLat([lngLat.lng, lngLat.lat])
@@ -103,8 +116,19 @@
 			el.dataset.index = String(i);
 			if (i === 0) el.classList.add('route-waypoint-start');
 			if (i === waypoints.length - 1 && waypoints.length > 1) el.classList.add('route-waypoint-end');
+
+			// Update label
+			let label = el.querySelector('.route-waypoint-label') as HTMLSpanElement;
+			if (!label) {
+				label = document.createElement('span');
+				label.className = 'route-waypoint-label';
+				el.appendChild(label);
+			}
+			label.textContent = String(i + 1);
 		});
 	}
+
+	// --- Routing ---
 
 	async function recalculateRoute() {
 		if (waypoints.length < 2) {
@@ -122,11 +146,9 @@
 			const result = await fetchFullRoute(waypoints, profile);
 			routeCoordinates = result.coordinates;
 
-			// Fetch elevation for sampled points
 			const { sampled } = sampleCoordinates(routeCoordinates, 100);
 			const elevations = await fetchElevations(sampled);
 
-			// Interpolate elevations back to full coordinate set if sampled
 			if (sampled.length < routeCoordinates.length) {
 				routeElevations = interpolateElevations(elevations, sampled.length, routeCoordinates.length);
 			} else {
@@ -155,23 +177,144 @@
 		return result;
 	}
 
-	function updateRouteLine() {
-		const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined;
-		if (!source) return;
+	// --- Overlap detection ---
 
+	/**
+	 * Split route coordinates into primary and overlap segments.
+	 * A coordinate is "overlapping" if it's within OVERLAP_THRESHOLD_M
+	 * of any earlier part of the route.
+	 */
+	function splitOverlaps(coords: [number, number][]): {
+		primary: [number, number][];
+		overlap: [number, number][];
+	} {
+		if (coords.length < 10) return { primary: coords, overlap: [] };
+
+		const primary: [number, number][] = [];
+		const overlap: [number, number][] = [];
+
+		// Build a grid index for fast proximity lookup
+		const visited: [number, number][] = [];
+		const checkInterval = Math.max(1, Math.floor(coords.length / 500)); // sample for perf
+
+		for (let i = 0; i < coords.length; i++) {
+			const pt = coords[i];
+			let isOverlap = false;
+
+			// Only check against points well before this one (skip nearby indices)
+			if (i > 20) {
+				const searchEnd = i - 15;
+				for (let j = 0; j < searchEnd; j += checkInterval) {
+					if (haversine(pt, visited[j] || coords[j]) < OVERLAP_THRESHOLD_M) {
+						isOverlap = true;
+						break;
+					}
+				}
+			}
+
+			if (isOverlap) {
+				// Ensure continuity: add bridge point from primary
+				if (overlap.length === 0 && primary.length > 0) {
+					overlap.push(primary[primary.length - 1]);
+				}
+				overlap.push(pt);
+			} else {
+				// Bridge back from overlap
+				if (overlap.length > 0 && primary.length > 0) {
+					primary.push(overlap[overlap.length - 1]);
+				}
+				primary.push(pt);
+			}
+
+			visited.push(pt);
+		}
+
+		return { primary, overlap };
+	}
+
+	function updateRouteLine() {
+		const routeSource = map.getSource('route') as maplibregl.GeoJSONSource | undefined;
+		const overlapSource = map.getSource('route-overlap') as maplibregl.GeoJSONSource | undefined;
+		if (!routeSource || !overlapSource) return;
+
+		const { primary, overlap } = splitOverlaps(routeCoordinates);
+
+		routeSource.setData({
+			type: 'Feature',
+			properties: {},
+			geometry: { type: 'LineString', coordinates: primary }
+		});
+
+		overlapSource.setData({
+			type: 'Feature',
+			properties: {},
+			geometry: { type: 'LineString', coordinates: overlap }
+		});
+	}
+
+	// --- Preview line (cursor to last waypoint) ---
+
+	function updatePreviewLine(lngLat: { lng: number; lat: number }) {
+		const source = map.getSource('preview-line') as maplibregl.GeoJSONSource | undefined;
+		if (!source || waypoints.length === 0) return;
+
+		const last = waypoints[waypoints.length - 1];
 		source.setData({
 			type: 'Feature',
 			properties: {},
 			geometry: {
 				type: 'LineString',
-				coordinates: routeCoordinates
+				coordinates: [
+					[last.lng, last.lat],
+					[lngLat.lng, lngLat.lat]
+				]
 			}
 		});
 	}
 
+	function clearPreviewLine() {
+		const source = map.getSource('preview-line') as maplibregl.GeoJSONSource | undefined;
+		if (!source) return;
+		source.setData({
+			type: 'Feature',
+			properties: {},
+			geometry: { type: 'LineString', coordinates: [] }
+		});
+	}
+
+	// --- Snap to start detection ---
+
+	function checkSnapToStart(e: maplibregl.MapMouseEvent): boolean {
+		if (waypoints.length < 3) {
+			nearStart = false;
+			return false;
+		}
+
+		const startPx = map.project([waypoints[0].lng, waypoints[0].lat]);
+		const cursorPx = e.point;
+		const dist = Math.sqrt(
+			(startPx.x - cursorPx.x) ** 2 + (startPx.y - cursorPx.y) ** 2
+		);
+
+		nearStart = dist < SNAP_DISTANCE_PX;
+		updateStartMarkerPulse();
+		return nearStart;
+	}
+
+	function updateStartMarkerPulse() {
+		if (markers.length === 0) return;
+		const el = markers[0].getElement();
+		if (nearStart) {
+			el.classList.add('route-waypoint-pulse');
+		} else {
+			el.classList.remove('route-waypoint-pulse');
+		}
+	}
+
+	// --- Stats ---
+
 	function emitUpdate() {
 		const gain = calculateElevationGain(routeElevations);
-		// Calculate total distance from coordinates using haversine
 		let distance = 0;
 		for (let i = 1; i < routeCoordinates.length; i++) {
 			distance += haversine(routeCoordinates[i - 1], routeCoordinates[i]);
@@ -197,13 +340,22 @@
 		return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 	}
 
+	// --- Public API ---
+
 	export function addWaypoint(lngLat: { lng: number; lat: number }) {
+		// Snap to start if near enough (closing the loop)
+		if (nearStart && waypoints.length >= 3) {
+			lngLat = { lng: waypoints[0].lng, lat: waypoints[0].lat };
+		}
+
 		const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
 		waypoints.push(point);
 
 		const marker = createWaypointMarker(lngLat, waypoints.length - 1);
 		markers.push(marker);
 		updateMarkerStyles();
+		nearStart = false;
+		updateStartMarkerPulse();
 
 		recalculateRoute();
 	}
@@ -215,6 +367,7 @@
 		const marker = markers.pop();
 		marker?.remove();
 		updateMarkerStyles();
+		clearPreviewLine();
 
 		recalculateRoute();
 	}
@@ -225,6 +378,8 @@
 		routeElevations = [];
 		markers.forEach((m) => m.remove());
 		markers = [];
+		nearStart = false;
+		clearPreviewLine();
 
 		updateRouteLine();
 		emitUpdate();
@@ -238,66 +393,134 @@
 		};
 	}
 
-	onMount(() => {
-		map = new maplibregl.Map({
-			container: mapContainer,
-			style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-			center: [144.9631, -37.8136],
-			zoom: 13
-		});
+	// --- Map setup ---
 
+	onMount(() => {
+		const defaultCenter: [number, number] = [0, 20];
+		const defaultZoom = 2;
+
+		function initMap(center: [number, number], zoom: number) {
+			map = new maplibregl.Map({
+				container: mapContainer,
+				style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+				center,
+				zoom
+			});
+			setupMap();
+		}
+
+		navigator.geolocation.getCurrentPosition(
+			(pos) => initMap([pos.coords.longitude, pos.coords.latitude], 14),
+			() => initMap(defaultCenter, defaultZoom),
+			{ timeout: 3000 }
+		);
+	});
+
+	function goToMyLocation() {
+		navigator.geolocation.getCurrentPosition(
+			(pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 }),
+			() => {},
+			{ timeout: 5000 }
+		);
+	}
+
+	function setupMap() {
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
 		const geolocate = new maplibregl.GeolocateControl({
 			positionOptions: { enableHighAccuracy: true },
-			trackUserLocation: false
+			trackUserLocation: true,
+			showUserLocation: true
 		});
 		map.addControl(geolocate, 'top-right');
 
-		// Auto-center on user's location when map loads
+		// Show the blue dot once the map loads
 		map.on('load', () => {
 			geolocate.trigger();
 		});
 
 		map.on('load', () => {
-			// Add route line source and layer
+			// Primary route line
 			map.addSource('route', {
 				type: 'geojson',
-				data: {
-					type: 'Feature',
-					properties: {},
-					geometry: { type: 'LineString', coordinates: [] }
-				}
+				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
 			});
 
-			// Route casing (outline)
+			// Overlap route line (different color for out-and-back/loop overlap)
+			map.addSource('route-overlap', {
+				type: 'geojson',
+				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
+			});
+
+			// Preview line (cursor to last waypoint)
+			map.addSource('preview-line', {
+				type: 'geojson',
+				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
+			});
+
+			// Route casing
 			map.addLayer({
 				id: 'route-casing',
 				type: 'line',
 				source: 'route',
-				paint: {
-					'line-color': '#1d4ed8',
-					'line-width': 8,
-					'line-opacity': 0.3
-				},
-				layout: {
-					'line-join': 'round',
-					'line-cap': 'round'
-				}
+				paint: { 'line-color': '#1d4ed8', 'line-width': 8, 'line-opacity': 0.25 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' }
 			});
 
-			// Route line
+			// Primary route line
 			map.addLayer({
 				id: 'route-line',
 				type: 'line',
 				source: 'route',
-				paint: {
-					'line-color': '#3b82f6',
-					'line-width': 4
-				},
+				paint: { 'line-color': '#3b82f6', 'line-width': 4 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' }
+			});
+
+			// Overlap casing
+			map.addLayer({
+				id: 'route-overlap-casing',
+				type: 'line',
+				source: 'route-overlap',
+				paint: { 'line-color': '#9333ea', 'line-width': 8, 'line-opacity': 0.25 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' }
+			});
+
+			// Overlap line (purple)
+			map.addLayer({
+				id: 'route-overlap-line',
+				type: 'line',
+				source: 'route-overlap',
+				paint: { 'line-color': '#a855f7', 'line-width': 4 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' }
+			});
+
+			// Direction arrows on the primary route
+			map.addLayer({
+				id: 'route-arrows',
+				type: 'symbol',
+				source: 'route',
 				layout: {
-					'line-join': 'round',
-					'line-cap': 'round'
+					'symbol-placement': 'line',
+					'symbol-spacing': 80,
+					'text-field': '▶',
+					'text-size': 12,
+					'text-rotation-alignment': 'map',
+					'text-keep-upright': false
+				},
+				paint: {
+					'text-color': '#1d4ed8'
+				}
+			});
+
+			// Preview line (dashed)
+			map.addLayer({
+				id: 'preview-line',
+				type: 'line',
+				source: 'preview-line',
+				paint: {
+					'line-color': '#94a3b8',
+					'line-width': 2,
+					'line-dasharray': [4, 4]
 				}
 			});
 		});
@@ -308,9 +531,23 @@
 			addWaypoint(e.lngLat);
 		});
 
-		// Change cursor on hover over map
+		// Mouse move: preview line + snap detection
+		map.on('mousemove', (e: maplibregl.MapMouseEvent) => {
+			if (waypoints.length > 0) {
+				updatePreviewLine(e.lngLat);
+			}
+			checkSnapToStart(e);
+		});
+
+		// Clear preview when mouse leaves map
+		map.on('mouseout', () => {
+			clearPreviewLine();
+			nearStart = false;
+			updateStartMarkerPulse();
+		});
+
 		map.getCanvas().style.cursor = 'crosshair';
-	});
+	}
 
 	onDestroy(() => {
 		markers.forEach((m) => m.remove());
@@ -319,7 +556,6 @@
 
 	// Re-route when mode changes
 	$effect(() => {
-		// Access mode to register the dependency
 		const _mode = mode;
 		if (waypoints.length >= 2) {
 			recalculateRoute();
@@ -329,15 +565,20 @@
 
 <div class="map-wrapper">
 	<div class="search-box">
-		<input
-			bind:this={searchInput}
-			bind:value={searchQuery}
-			oninput={onSearchInput}
-			onfocusout={() => setTimeout(() => (showResults = false), 200)}
-			onfocusin={() => { if (searchResults.length > 0) showResults = true; }}
-			type="text"
-			placeholder="Search for a place..."
-		/>
+		<div class="search-row">
+			<input
+				bind:this={searchInput}
+				bind:value={searchQuery}
+				oninput={onSearchInput}
+				onfocusout={() => setTimeout(() => (showResults = false), 200)}
+				onfocusin={() => { if (searchResults.length > 0) showResults = true; }}
+				type="text"
+				placeholder="Search for a place..."
+			/>
+			<button class="locate-btn" onclick={goToMyLocation} title="Go to my location">
+				<span class="material-symbols">my_location</span>
+			</button>
+		</div>
 		{#if showResults}
 			<ul class="search-results">
 				{#each searchResults as result}
@@ -373,8 +614,13 @@
 		width: 320px;
 	}
 
+	.search-row {
+		display: flex;
+		gap: 6px;
+	}
+
 	.search-box input {
-		width: 100%;
+		flex: 1;
 		padding: 10px 14px;
 		border: none;
 		border-radius: 8px;
@@ -386,6 +632,31 @@
 	.search-box input:focus {
 		outline: none;
 		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+	}
+
+	.locate-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border: none;
+		border-radius: 8px;
+		background: white;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+		cursor: pointer;
+		color: #333;
+		flex-shrink: 0;
+	}
+
+	.locate-btn:hover {
+		background: #f3f4f6;
+		color: #3b82f6;
+	}
+
+	.locate-btn .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.2rem;
 	}
 
 	.search-results {
@@ -418,29 +689,57 @@
 		border-top: 1px solid #e5e7eb;
 	}
 
+	/* Waypoint markers */
 	:global(.route-waypoint) {
-		width: 16px;
-		height: 16px;
+		width: 22px;
+		height: 22px;
 		border-radius: 50%;
 		background: #3b82f6;
 		border: 2.5px solid white;
 		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 		cursor: grab;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		position: relative;
 	}
 
 	:global(.route-waypoint:active) {
 		cursor: grabbing;
 	}
 
+	:global(.route-waypoint-label) {
+		font-size: 9px;
+		font-weight: 700;
+		color: white;
+		line-height: 1;
+		pointer-events: none;
+		user-select: none;
+	}
+
 	:global(.route-waypoint-start) {
 		background: #22c55e;
-		width: 18px;
-		height: 18px;
+		width: 26px;
+		height: 26px;
 	}
 
 	:global(.route-waypoint-end) {
 		background: #ef4444;
-		width: 18px;
-		height: 18px;
+		width: 24px;
+		height: 24px;
+	}
+
+	/* Pulse animation for snap-to-start hint */
+	:global(.route-waypoint-pulse) {
+		animation: pulse-ring 1s ease-out infinite;
+	}
+
+	@keyframes pulse-ring {
+		0% {
+			box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+		}
+		100% {
+			box-shadow: 0 0 0 14px rgba(34, 197, 94, 0);
+		}
 	}
 </style>
