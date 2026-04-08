@@ -1,4 +1,6 @@
 <script lang="ts">
+	import RunMap from '$lib/components/RunMap.svelte';
+	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import {
 		mockRuns,
 		formatDuration,
@@ -11,8 +13,11 @@
 
 	let { data } = $props();
 
-	// Use first mock run as the displayed run
-	const run = mockRuns[0];
+	// Find the run by ID, or fall back to first mock run
+	const run = mockRuns.find((r) => r.id === data.id) ?? mockRuns[0];
+
+	// Generate mock GPS track if none exists
+	const baseTrack = run.track ?? generateMockTrack(run.distance_m);
 
 	// Generate mock splits
 	const distanceKm = run.distance_m / 1000;
@@ -40,19 +45,45 @@
 		{ zone: 'Zone 4', label: 'Threshold', pct: 20, color: '#FF9800' },
 		{ zone: 'Zone 5', label: 'Max', pct: 5, color: '#F44336' },
 	];
+
+	// Mock elevation data from track
+	const elevations = baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30);
+
+	function generateMockTrack(distanceM: number) {
+		// Generate a simple mock track around Melbourne
+		const points = Math.max(50, Math.round(distanceM / 20));
+		const baseLat = -37.8136;
+		const baseLng = 144.9631;
+		const track = [];
+
+		for (let i = 0; i < points; i++) {
+			const angle = (i / points) * Math.PI * 2;
+			const radius = (distanceM / 1000) * 0.004;
+			track.push({
+				lat: baseLat + Math.sin(angle) * radius + (Math.random() - 0.5) * 0.0005,
+				lng: baseLng + Math.cos(angle) * radius + (Math.random() - 0.5) * 0.0005,
+				ele: 20 + Math.sin(angle * 3) * 15 + Math.random() * 5,
+			});
+		}
+		// Close the loop
+		track.push(track[0]);
+		return track;
+	}
 </script>
 
 <div class="run-detail">
 	<main class="map-panel">
-		<div class="map-placeholder">
-			<span class="material-symbols">map</span>
-			<p>GPS trace map</p>
-		</div>
+		<RunMap track={baseTrack} />
 	</main>
 
 	<aside class="stats-panel">
 		<header class="detail-header">
-			<h1>{formatDate(run.started_at)}</h1>
+			<div>
+				<h1>{formatDate(run.started_at)}</h1>
+				<a href="/runs" class="back-link">
+					<span class="material-symbols">arrow_back</span> All runs
+				</a>
+			</div>
 			<span class="source-badge" style="background: {sourceColor(run.source)}"
 				>{sourceLabel(run.source)}</span
 			>
@@ -81,6 +112,12 @@
 				<span class="key-stat-label">Elevation</span>
 			</div>
 		</div>
+
+		<!-- Elevation Profile -->
+		<section class="section">
+			<h2>Elevation Profile</h2>
+			<ElevationProfile {elevations} totalDistance={run.distance_m} />
+		</section>
 
 		<!-- Splits -->
 		<section class="section">
@@ -145,21 +182,6 @@
 		background: var(--color-bg-tertiary);
 	}
 
-	.map-placeholder {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		color: var(--color-text-tertiary);
-		gap: var(--space-sm);
-	}
-
-	.map-placeholder .material-symbols {
-		font-family: 'Material Symbols Outlined';
-		font-size: 3rem;
-	}
-
 	.stats-panel {
 		flex: 2;
 		border-left: 1px solid var(--color-border);
@@ -171,13 +193,26 @@
 	.detail-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
+		align-items: flex-start;
 		margin-bottom: var(--space-xl);
 	}
 
 	h1 {
 		font-size: 1.25rem;
 		font-weight: 700;
+	}
+
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		margin-top: var(--space-xs);
+	}
+
+	.back-link:hover {
+		color: var(--color-primary);
 	}
 
 	h2 {
@@ -199,7 +234,6 @@
 		letter-spacing: 0.03em;
 	}
 
-	/* Key stats */
 	.key-stats {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
@@ -226,12 +260,10 @@
 		letter-spacing: 0.05em;
 	}
 
-	/* Sections */
 	.section {
 		margin-bottom: var(--space-xl);
 	}
 
-	/* Splits */
 	.splits-table {
 		width: 100%;
 		border-collapse: collapse;
@@ -271,7 +303,6 @@
 		color: var(--color-secondary);
 	}
 
-	/* HR zones */
 	.hr-bar {
 		display: flex;
 		height: 1.5rem;
@@ -317,5 +348,6 @@
 
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
+		font-size: 1rem;
 	}
 </style>

@@ -12,7 +12,8 @@
 		{ href: '/settings/integrations', label: 'Settings', icon: 'settings' },
 	];
 
-	const publicPaths = ['/', '/login'];
+	const publicPaths = ['/', '/login', '/auth/callback'];
+	const isPublic = (path: string) => publicPaths.includes(path) || path.startsWith('/live/');
 
 	function isActive(href: string, path: string): boolean {
 		if (href === '/settings/integrations') return path.startsWith('/settings');
@@ -21,15 +22,8 @@
 
 	// Auth guard — redirect to /login if not authenticated on protected routes
 	$effect(() => {
-		if (browser && !auth.loggedIn && !publicPaths.includes($page.url.pathname)) {
+		if (browser && !auth.loading && !auth.loggedIn && !isPublic($page.url.pathname)) {
 			goto('/login');
-		}
-	});
-
-	// If logged in but no user data yet, fetch it
-	$effect(() => {
-		if (browser && auth.loggedIn && !auth.user) {
-			auth.fetchUser();
 		}
 	});
 
@@ -39,7 +33,7 @@
 	}
 </script>
 
-{#if publicPaths.includes($page.url.pathname)}
+{#if isPublic($page.url.pathname)}
 	<!-- Public pages: landing + login — no sidebar -->
 	<slot />
 {:else if auth.loggedIn}

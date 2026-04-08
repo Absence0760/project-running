@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CalendarHeatmap from '$lib/components/CalendarHeatmap.svelte';
 	import {
 		mockRuns,
 		mockWeeklyMileage,
@@ -76,6 +77,12 @@
 				</div>
 			{/each}
 		</div>
+	</section>
+
+	<!-- Calendar heatmap -->
+	<section class="card">
+		<h2>Activity</h2>
+		<CalendarHeatmap runs={mockRuns} />
 	</section>
 
 	<div class="two-col">

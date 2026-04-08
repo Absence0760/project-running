@@ -4,7 +4,7 @@
 
 	let error = $state('');
 	let loading = $state(false);
-	let demoEmail = $state('demo@runapp.com');
+	let demoEmail = $state('test@test.com');
 
 	async function handleGoogleSignIn() {
 		error = '';

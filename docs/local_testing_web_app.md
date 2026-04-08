@@ -68,13 +68,15 @@ apps/web/
 │   ├── routes/                    # SvelteKit file-based routing
 │   │   ├── +layout.svelte         # Root layout
 │   │   ├── +page.svelte           # Landing page (/)
-│   │   ├── login/                 # Auth page
-│   │   ├── dashboard/             # Stats and analytics
+│   │   ├── login/                 # Auth page (Google/Apple OAuth + demo login)
+│   │   ├── auth/callback/         # OAuth redirect handler
+│   │   ├── dashboard/             # Stats, mileage chart, calendar heatmap, PRs
 │   │   ├── routes/                # Route builder + library
 │   │   │   ├── new/               # Full-screen route builder
 │   │   │   └── [id]/              # Route detail
-│   │   ├── runs/                  # Run history
-│   │   │   └── [id]/              # Run detail + analysis
+│   │   ├── runs/                  # Run history with source filtering
+│   │   │   └── [id]/              # Run detail: MapLibre GPS trace, elevation, splits, HR
+│   │   ├── live/[id]/             # Live spectator view (public, no auth)
 │   │   └── settings/
 │   │       ├── integrations/      # Connect Strava, Garmin, parkrun
 │   │       └── account/           # Profile, data export
@@ -85,9 +87,13 @@ apps/web/
 │   │   ├── routing.ts             # OSRM road-snapping API
 │   │   ├── elevation.ts           # Open-Meteo elevation lookups
 │   │   ├── gpx.ts                 # GPX export generator
+│   │   ├── stores/
+│   │   │   └── auth.svelte.ts         # Supabase auth store (OAuth + session)
 │   │   └── components/
 │   │       ├── RouteBuilder.svelte    # MapLibre map with waypoints
-│   │       └── ElevationProfile.svelte # SVG elevation chart
+│   │       ├── RunMap.svelte          # MapLibre GPS trace viewer
+│   │       ├── ElevationProfile.svelte # SVG elevation chart
+│   │       └── CalendarHeatmap.svelte # GitHub-style activity heatmap
 │   ├── app.html
 │   ├── app.css
 │   └── app.d.ts

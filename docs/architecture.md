@@ -453,7 +453,7 @@ Requires business approval from Garmin. Integrate in Phase 3.
 | Apple Watch | Swift 5 + SwiftUI + WatchKit | Separate Xcode project in monorepo |
 | Wear OS | Flutter + `wear` plugin | Compose for Wear via platform channel |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to Vercel |
-| Web maps | MapLibre GL JS | Route builder, run replay |
+| Web maps | MapLibre GL JS | Route builder, run GPS trace, live spectator |
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
 

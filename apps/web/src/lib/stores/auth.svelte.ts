@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { supabase } from '$lib/supabase';
 
 interface User {
 	id: string;
@@ -10,81 +11,137 @@ interface User {
 	subscription_tier: 'free' | 'premium';
 }
 
-interface Session {
-	access_token: string;
-	user: { id: string; email: string };
-}
-
-function getStoredToken(): string | null {
-	if (!browser) return null;
-	return localStorage.getItem('auth_token');
-}
-
 function createAuthStore() {
 	let user = $state<User | null>(null);
-	let session = $state<Session | null>(null);
-	let loggedIn = $state(!!getStoredToken());
-	let loading = $state(false);
+	let loggedIn = $state(false);
+	let loading = $state(true);
 
 	async function signInWithGoogle() {
-		// TODO: Wire to Supabase OAuth
-		// const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-		throw new Error('Google sign-in not yet configured — use demo login for local testing');
+		const { error } = await supabase.auth.signInWithOAuth({
+			provider: 'google',
+			options: { redirectTo: `${window.location.origin}/auth/callback` }
+		});
+		if (error) throw error;
 	}
 
 	async function signInWithApple() {
-		// TODO: Wire to Supabase OAuth
-		// const { error } = await supabase.auth.signInWithOAuth({ provider: 'apple' });
-		throw new Error('Apple sign-in not yet configured — use demo login for local testing');
+		const { error } = await supabase.auth.signInWithOAuth({
+			provider: 'apple',
+			options: { redirectTo: `${window.location.origin}/auth/callback` }
+		});
+		if (error) throw error;
 	}
 
 	/**
-	 * Demo login for local testing — bypasses OAuth.
-	 * In production this would be removed.
+	 * Email/password login for local development.
 	 */
 	async function demoLogin(email: string) {
 		loading = true;
 		try {
-			// Simulate a session with mock data
-			const mockSession: Session = {
-				access_token: 'demo-token',
-				user: { id: 'demo-user-id', email },
-			};
-			session = mockSession;
-			localStorage.setItem('auth_token', mockSession.access_token);
-			loggedIn = true;
-			await fetchUser();
+			// Try sign in first, fall back to sign up
+			const password = 'testtest';
+			let { error } = await supabase.auth.signInWithPassword({ email, password });
+			if (error?.message?.includes('Invalid login') || error?.message?.includes('invalid_credentials')) {
+				// User might not exist — try sign up
+				const signup = await supabase.auth.signUp({ email, password });
+				if (signup.error) {
+					// If already registered, the password was wrong
+					if (signup.error.message?.includes('already registered')) {
+						throw new Error('Incorrect password. If you created this user via CLI with a different password, recreate it or use that password.');
+					}
+					throw signup.error;
+				}
+			} else if (error) {
+				throw error;
+			}
+			await refreshSession();
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function fetchUser() {
-		if (!loggedIn) return;
-		// TODO: Fetch from Supabase user_profiles table
-		// const { data } = await supabase.from('user_profiles').select('*').eq('id', session.user.id).single();
-		user = {
-			id: session?.user.id ?? 'demo-user-id',
-			email: session?.user.email ?? 'demo@runapp.com',
-			display_name: 'Jared Howard',
-			avatar_url: null,
-			parkrun_number: 'A123456',
-			preferred_unit: 'km',
-			subscription_tier: 'free',
-		};
+	async function refreshSession() {
+		const { data: { session } } = await supabase.auth.getSession();
+		if (session) {
+			loggedIn = true;
+			await fetchUser(session.user.id, session.user.email ?? '');
+		} else {
+			loggedIn = false;
+			user = null;
+		}
+	}
+
+	async function fetchUser(userId?: string, email?: string) {
+		if (!userId) {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) return;
+			userId = session.user.id;
+			email = session.user.email ?? '';
+		}
+
+		// Try to fetch profile, create if missing
+		const { data: profile } = await supabase
+			.from('user_profiles')
+			.select('*')
+			.eq('id', userId)
+			.single();
+
+		if (profile) {
+			user = {
+				id: userId,
+				email: email ?? '',
+				display_name: profile.display_name,
+				avatar_url: profile.avatar_url,
+				parkrun_number: profile.parkrun_number,
+				preferred_unit: profile.preferred_unit ?? 'km',
+				subscription_tier: profile.subscription_tier ?? 'free',
+			};
+		} else {
+			// Profile doesn't exist yet — create it
+			await supabase.from('user_profiles').upsert({
+				id: userId,
+				preferred_unit: 'km',
+				subscription_tier: 'free',
+			});
+			user = {
+				id: userId,
+				email: email ?? '',
+				display_name: null,
+				avatar_url: null,
+				parkrun_number: null,
+				preferred_unit: 'km',
+				subscription_tier: 'free',
+			};
+		}
 	}
 
 	async function logout() {
-		// TODO: await supabase.auth.signOut();
-		localStorage.removeItem('auth_token');
+		await supabase.auth.signOut();
 		user = null;
-		session = null;
 		loggedIn = false;
 	}
 
-	// Restore session on load
-	if (browser && getStoredToken()) {
-		fetchUser();
+	// Listen for auth state changes
+	if (browser) {
+		supabase.auth.onAuthStateChange(async (event, session) => {
+			if (session) {
+				loggedIn = true;
+				await fetchUser(session.user.id, session.user.email ?? '');
+			} else {
+				loggedIn = false;
+				user = null;
+			}
+			loading = false;
+		});
+
+		// Initial session check
+		supabase.auth.getSession().then(({ data: { session } }) => {
+			if (session) {
+				loggedIn = true;
+				fetchUser(session.user.id, session.user.email ?? '');
+			}
+			loading = false;
+		});
 	}
 
 	return {
@@ -96,6 +153,7 @@ function createAuthStore() {
 		signInWithApple,
 		demoLogin,
 		fetchUser,
+		refreshSession,
 		logout,
 	};
 }
