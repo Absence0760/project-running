@@ -13,7 +13,7 @@ The Android app is a Flutter target at `apps/mobile_android/`.
 | Android Studio Hedgehog+ | `developer.android.com/studio` |
 | Android emulator | Created via Android Studio Device Manager |
 | Local backend running | See `local_testing_backend.md` |
-| Google Maps API key | Google Cloud Console (enable Maps SDK for Android) |
+| MapTiler API key | Free at maptiler.com/cloud |
 
 ---
 
@@ -38,8 +38,8 @@ Start the emulator before running the app.
 cd apps/mobile_android
 flutter run -d emulator-5554 \
   --dart-define=SUPABASE_URL=http://10.0.2.2:54321 \
-  --dart-define=SUPABASE_ANON_KEY=<anon-key-from-supabase-start> \
-  --dart-define=MAPS_API_KEY=<your-google-maps-key>
+  --dart-define=SUPABASE_ANON_KEY=<publishable-key-from-supabase-status> \
+  --dart-define=MAPTILER_KEY=<your-maptiler-key>
 ```
 
 > **Important:** Use `10.0.2.2` instead of `localhost`. The Android emulator's `localhost` refers to the emulator itself, not your host machine. `10.0.2.2` is a special alias that routes to the host's loopback address.
@@ -90,14 +90,9 @@ Use route playback to test live run recording, auto-pause, and off-route detecti
 - Make sure you're using `http://10.0.2.2:54321`, not `http://localhost:54321`
 - Check that the emulator has internet access (try opening a URL in the emulator's browser)
 
-### Google Maps showing blank/grey
+### Map showing blank/grey
 
-Ensure the **Maps SDK for Android** is enabled in the Google Cloud Console for your API key. The key must also be added to `AndroidManifest.xml`:
-
-```xml
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="${MAPS_API_KEY}" />
+Ensure your MapTiler API key is valid and passed correctly via `--dart-define=MAPTILER_KEY=<key>`.
 ```
 
 ### Health Connect not available

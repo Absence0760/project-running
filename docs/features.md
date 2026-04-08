@@ -23,7 +23,7 @@ Each feature has:
 
 **Phase:** 1 | **Platform:** iOS, Android, Web
 
-**Why:** The primary differentiator. No competitor provides a clean Google Maps → running app pipeline. Google Maps is the map tool most runners already use to plan routes — the friction of the current export/import workflow is the gap to fill.
+**Why:** The primary differentiator. No competitor provides a clean route import pipeline. Runners plan routes in various tools (Google My Maps, Komoot, AllTrails) — the friction of the current export/import workflow is the gap to fill.
 
 **Spec:**
 
@@ -31,7 +31,7 @@ On mobile, users trigger import via the OS share sheet (sharing a file from Goog
 
 Supported formats:
 - `.gpx` — standard GPS exchange format
-- `.kml` / `.kmz` — Google Maps export format
+- `.kml` / `.kmz` — Google My Maps / Earth export format
 - `.geojson` — web mapping standard
 
 On receipt, the file is parsed into a `Route` object (name, waypoint list, total distance, elevation gain). The route is displayed on the map with a summary card showing distance and elevation. The user can rename it before saving.
@@ -255,10 +255,10 @@ The map on the watch does not pan or zoom — it auto-scales to always show both
 
 **Spec:**
 
-A full-browser-window Google Maps instance. Users click to place waypoints; the app auto-draws the road-snapped route between them using the Google Directions API. Each click appends a new segment.
+A full-browser-window MapLibre GL JS instance. Users click to place waypoints; the app auto-draws the road-snapped route between them using OSRM or Valhalla routing. Each click appends a new segment.
 
 Controls panel (left sidebar):
-- Mode: road / trail (trail mode uses Google Maps walking directions)
+- Mode: road / trail (trail mode uses walking profile routing)
 - Total distance (updates live as waypoints are placed)
 - Elevation profile chart (below the map, updates live)
 - Undo last waypoint
@@ -266,7 +266,7 @@ Controls panel (left sidebar):
 - Route name input
 - Save to library / export as GPX
 
-Drag-to-reshape: users can drag any point on the route polyline to redirect it, adding an implicit waypoint. This mirrors the UX of Google Maps directions.
+Drag-to-reshape: users can drag any point on the route polyline to redirect it, adding an implicit waypoint.
 
 Saved routes appear immediately in the mobile apps on next open.
 
@@ -313,7 +313,7 @@ Saved routes appear immediately in the mobile apps on next open.
 
 Full-page view for a single run:
 
-- **Map (left, ~60% width):** full GPS trace on a Google Maps satellite/terrain hybrid. Start and finish markers. Option to animate the trace (replay the run as a moving dot). Hover on the trace highlights the corresponding point on the elevation and pace charts.
+- **Map (left, ~60% width):** full GPS trace on a MapLibre satellite/terrain hybrid. Start and finish markers. Option to animate the trace (replay the run as a moving dot). Hover on the trace highlights the corresponding point on the elevation and pace charts.
 - **Stats sidebar (right, ~40% width):**
   - Distance, duration, average pace, average HR, elevation gain
   - Splits table: one row per km (or mile), showing pace, HR, elevation delta

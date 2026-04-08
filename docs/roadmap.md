@@ -4,13 +4,13 @@
 
 ## Vision
 
-A cross-platform running app that covers every device and surface a runner might use — iPhone, Android phone, Apple Watch, Wear OS, and a full desktop web app — with seamless Google Maps route planning, live spectator tracking, ML-powered training plans, and free access to the features every other app puts behind a paywall.
+A cross-platform running app that covers every device and surface a runner might use — iPhone, Android phone, Apple Watch, Wear OS, and a full desktop web app — with seamless route planning, live spectator tracking, ML-powered training plans, and free access to the features every other app puts behind a paywall.
 
 ---
 
 ## Strategic pillars
 
-1. **Google Maps first** — plan routes in the tool runners already know, import in one tap
+1. **MapLibre GL JS** — open-source vector maps with smooth rendering, 3D terrain, and zero vendor lock-in
 2. **Watch parity** — Apple Watch and Wear OS treated as first-class platforms, not companions
 3. **Free core** — route building, GPX import, and run history stay permanently free
 4. **Open ecosystem** — sync with Strava, HealthKit, Health Connect, parkrun, and race results
@@ -42,8 +42,8 @@ Full technical details in `backend_scaling.md`.
 
 ### Features
 
-#### GPX / KML import from Google Maps
-The primary differentiator. Users export a KML from Google My Maps and open it directly in the app. The route loads instantly on a map, ready to run. No account required. Free forever.
+#### GPX / KML import
+The primary differentiator. Users export a KML from Google My Maps or any other source and open it directly in the app. The route loads instantly on a map, ready to run. No account required. Free forever.
 
 - Parse GPX, KML, KMZ, and GeoJSON formats
 - Display route on map with distance and elevation summary
@@ -85,7 +85,7 @@ Infrastructure hardening before public beta. No new services — all within Supa
 - [ ] Encrypt OAuth tokens in `integrations` table with `pgcrypto`
 - [ ] Add rate limiting to Edge Function endpoints
 - [ ] Validate Strava webhook signatures
-- [ ] Set up Google Maps API billing alerts
+- [ ] Set up MapTiler API usage monitoring
 
 ### Milestone: internal TestFlight / Play Store internal track release
 
@@ -166,7 +166,7 @@ The web app is built with SvelteKit and shares zero UI code with Flutter, but ca
 ### Features
 
 #### Full-screen route builder
-The best route planning experience in the product. Google Maps JS API with click-to-place waypoints, drag-to-adjust paths, and road/trail snapping. Substantially more capable than the mobile version.
+The best route planning experience in the product. MapLibre GL JS with click-to-place waypoints, drag-to-adjust paths, and road/trail snapping. Substantially more capable than the mobile version.
 
 - Click to place waypoints, drag to reshape
 - Road snap and trail mode toggles
@@ -235,9 +235,9 @@ Database performance optimisations for dashboard queries at scale.
 ### Features
 
 #### In-app route builder (free)
-Draw routes directly on Google Maps inside the app — no export/import step. Strava paywalls this. Yours is free. Primary acquisition driver.
+Draw routes directly on a map inside the app — no export/import step. Strava paywalls this. Yours is free. Primary acquisition driver.
 
-- Click-to-place waypoints on Google Maps
+- Click-to-place waypoints on MapLibre
 - Auto-snap to roads or trail mode
 - Elevation preview before running
 - Save to route library + shareable link
@@ -321,6 +321,17 @@ Add premium feature endpoints to the Go service and spatial database capabilitie
 
 ---
 
+## Future — Protomaps self-hosted tiles
+
+Migrate from MapTiler to self-hosted map tiles using Protomaps (PMTiles format on S3 or Cloudflare R2). Eliminates per-request tile costs entirely — pay only for storage and bandwidth. Evaluate once tile API usage exceeds MapTiler free tier.
+
+- [ ] Generate PMTiles from OpenStreetMap planet extract
+- [ ] Host on Cloudflare R2 (or S3)
+- [ ] Point MapLibre style URL to self-hosted tiles
+- [ ] Remove MapTiler dependency
+
+---
+
 ## Competitive positioning
 
 | Feature | Run App | Strava | Nike Run Club | Garmin Connect | AllTrails |
@@ -332,7 +343,7 @@ Add premium feature endpoints to the Go service and spatial database capabilitie
 | Web app | ✓ | ✓ | — | Partial | ✓ |
 | Route builder (free) | ✓ | Paywalled | — | ✓ | Partial |
 | GPX import (free) | ✓ | Paywalled | — | ✓ | ✓ |
-| Google Maps integration | ✓ | — | — | — | — |
+| Open-source maps (MapLibre) | ✓ | — | — | — | — |
 | parkrun sync | ✓ | — | — | — | — |
 | Live spectator tracking | ✓ | ✓ (Beacon, paid) | — | ✓ (LiveTrack) | — |
 | Training plans | ✓ (premium) | — | ✓ (guided runs) | ✓ | — |
@@ -348,10 +359,10 @@ Add premium feature endpoints to the Go service and spatial database capabilitie
 | Apple Watch | Native Swift + SwiftUI + WatchKit | 2 |
 | Wear OS watch | Flutter | 2 |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | 2b |
-| Web maps | Google Maps JavaScript API | 2b |
+| Web maps | MapLibre GL JS (tiles via MapTiler, future: Protomaps self-hosted) | 2b |
 | Web deployment | Vercel | 2b |
 | Monorepo | Melos workspace (Flutter) + pnpm (web) | 1 |
-| Maps (mobile) | Google Maps Flutter plugin | 1 |
+| Maps (mobile) | flutter_map + MapLibre | 1 |
 | GPX/KML parsing | Dart `gpx` package + `togeojson` (web) | 1 |
 | Health sync | `health` pub.dev package (HealthKit + Health Connect) | 1 |
 | Backend — core | Supabase (Postgres + Auth + Storage + Edge Functions) | 1 |
@@ -373,7 +384,7 @@ Add premium feature endpoints to the Go service and spatial database capabilitie
 | 100K | $75 | $25 | $10 | **$110** |
 | 500K | $599 (Team) | $50 | $25 | **$674** |
 
-Google Maps API costs are the wildcard — route builder and map tiles are billed per load. Set billing alerts from day one. Consider switching run display maps to Mapbox (cheaper at scale) while keeping Google Maps for the route builder.
+Map tile costs are minimal — MapTiler has a generous free tier, and Protomaps (self-hosted) eliminates tile costs entirely at scale. Budget for routing API costs (OSRM or Valhalla, both self-hostable).
 
 ---
 
@@ -382,7 +393,7 @@ Google Maps API costs are the wildcard — route builder and map tiles are bille
 - **Apple Watch native Swift** adds a separate codebase. Scope carefully — keep the watch app lean (record + navigate only) and leave analytics on the phone.
 - **parkrun scraping** can break without notice. Build it as a best-effort feature with graceful degradation.
 - **Garmin Connect** developer program requires business approval. Do not block Phase 3 on this — use HealthKit/Health Connect as the primary Garmin data path for early users.
-- **Google Maps API costs** scale with usage. Set billing alerts from day one. Consider switching route display to Mapbox (cheaper at scale) while keeping the Google Maps route builder for the familiarity users expect.
+- **Map tile hosting** — MapTiler free tier covers early growth. Migrate to Protomaps (self-hosted PMTiles on S3/R2) when tile costs matter. This is on the roadmap.
 - **Web app scope creep** — the web app is a power tool, not a second mobile app. Resist the urge to replicate every mobile screen. Keep it focused on route building, analytics, and account management.
 - **Live tracking battery drain** — Publishing GPS every 3 seconds over WebSocket adds battery cost. Make it opt-in per run, not default. Test drain target: <5% additional per hour.
 - **Training plan accuracy** — V1 plans are rule-based (Daniels' formula), which is proven science but not personalised. If user outcome data shows the rules aren't enough, add a Python ML service later — the Go service architecture supports this cleanly.

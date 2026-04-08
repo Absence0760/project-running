@@ -1,6 +1,3 @@
-[project]
-id = ""
-
 [api]
 port = 54321
 
@@ -10,9 +7,13 @@ port = 54322
 [auth]
 site_url = "http://localhost:5173"
 additional_redirect_urls = ["http://localhost:5173/auth/callback"]
+enable_signup = true
+
+[auth.email]
+enable_confirmations = false
 
 [auth.external.google]
-enabled = true
+enabled = false
 
 [auth.external.apple]
-enabled = true
+enabled = false

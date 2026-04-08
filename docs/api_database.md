@@ -296,7 +296,7 @@ Supabase generates a full REST API from the database schema automatically. Clien
 Base URL: `https://{project-ref}.supabase.co/rest/v1/`
 
 All requests require:
-- `apikey: {anon_key}` header
+- `apikey: {publishable_key}` header
 - `Authorization: Bearer {user_jwt}` header
 
 ### Runs

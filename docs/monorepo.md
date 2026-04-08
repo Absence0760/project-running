@@ -183,7 +183,7 @@ pnpm install
 
 # Copy environment file
 cp .env.example .env.local
-# Fill in PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, PUBLIC_MAPS_API_KEY
+# Fill in PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, PUBLIC_MAPTILER_KEY
 
 pnpm dev
 # Opens at http://localhost:7777
@@ -216,7 +216,7 @@ Environment variables for Flutter are injected at build time via `--dart-define`
 flutter run \
   --dart-define=SUPABASE_URL=https://xxx.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=eyJ... \
-  --dart-define=MAPS_API_KEY=AIza...
+  --dart-define=MAPTILER_KEY=your-maptiler-key
 ```
 
 For local development, create a `launch.json` in VS Code or a run configuration in Android Studio with these values pre-filled.
@@ -232,7 +232,7 @@ For local development, create a `launch.json` in VS Code or a run configuration 
       "args": [
         "--dart-define=SUPABASE_URL=${env:SUPABASE_URL}",
         "--dart-define=SUPABASE_ANON_KEY=${env:SUPABASE_ANON_KEY}",
-        "--dart-define=MAPS_API_KEY=${env:MAPS_API_KEY}"
+        "--dart-define=MAPTILER_KEY=${env:MAPTILER_KEY}"
       ]
     }
   ]
@@ -245,7 +245,7 @@ For local development, create a `launch.json` in VS Code or a run configuration 
 # apps/web/.env.local
 PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 PUBLIC_SUPABASE_ANON_KEY=eyJ...
-PUBLIC_MAPS_API_KEY=AIza...
+PUBLIC_MAPTILER_KEY=your-maptiler-key
 STRAVA_CLIENT_ID=12345
 STRAVA_CLIENT_SECRET=abc...   # server-side only — no PUBLIC_ prefix
 ```
@@ -266,7 +266,7 @@ PARKRUN_USER_AGENT=RunApp/1.0 (contact@runapp.com)
 | `SUPABASE_URL` | All CI jobs |
 | `SUPABASE_ANON_KEY` | Flutter builds, web build |
 | `SUPABASE_SERVICE_ROLE_KEY` | Edge Function deploy |
-| `MAPS_API_KEY` | Flutter builds, web build |
+| `MAPTILER_KEY` | Flutter builds, web build |
 | `STRAVA_CLIENT_SECRET` | Edge Function deploy |
 | `VERCEL_TOKEN` | Web deployment |
 | `VERCEL_ORG_ID` | Web deployment |

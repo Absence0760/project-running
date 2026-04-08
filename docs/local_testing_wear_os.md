@@ -37,7 +37,7 @@ Start the emulator before running the app.
 cd apps/watch_wear
 flutter run -d <wear-emulator-id> \
   --dart-define=SUPABASE_URL=http://10.0.2.2:54321 \
-  --dart-define=SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
+  --dart-define=SUPABASE_ANON_KEY=<publishable-key-from-supabase-status>
 ```
 
 To find the emulator device ID:

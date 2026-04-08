@@ -535,7 +535,7 @@ run-app/
 
 These are rough estimates. Actual costs depend heavily on read/write patterns, GPS track sizes, and live tracking usage.
 
-Google Maps API costs are the wildcard — route builder and map tiles are billed per load. Set billing alerts from day one. Consider switching run display maps to Mapbox (cheaper at scale) while keeping Google Maps for the route builder.
+Map tile costs are minimal — MapTiler has a generous free tier, and Protomaps (self-hosted PMTiles on S3/R2) eliminates tile costs entirely at scale.
 
 ---
 

@@ -19,20 +19,24 @@ The backend must be running before any client app can authenticate or sync data.
 cd apps/backend
 
 # Start Postgres, Auth, Storage, and REST API
-supabase start
+supabase start --exclude vector
 ```
 
-On first run this pulls Docker images — takes a few minutes. On success it prints:
+On first run this pulls Docker images — takes a few minutes. On success it prints URLs, database credentials, and API keys. You can retrieve them at any time with:
 
-```
-API URL:       http://localhost:54321
-anon key:      eyJ...
-service_role:  eyJ...
-DB URL:        postgresql://postgres:postgres@localhost:54322/postgres
-Studio URL:    http://localhost:54323
+```bash
+supabase status
 ```
 
-**Save the `anon key`** — every client app needs it.
+Key values for client apps:
+
+| Field | Example |
+|---|---|
+| Project URL | `http://127.0.0.1:54321` |
+| Publishable key | `sb_publishable_...` |
+| Database URL | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
+
+These are local defaults and are regenerated on each `supabase start` — no need to save them.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## Overview
 
-A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a SvelteKit web app, sharing a single Supabase backend and Google Maps for route planning and navigation.
+A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a SvelteKit web app, sharing a single Supabase backend and MapLibre GL JS for route planning and navigation.
 
 The architecture is designed around three principles:
 
@@ -96,7 +96,7 @@ scripts:
                                    │ OAuth / webhooks
 ┌──────────────────────────────────▼──────────────────────────────┐
 │  External integrations                                          │
-│  Google Maps API │ Strava API │ Garmin Connect │ HealthKit      │
+│  MapLibre GL JS │ Strava API │ Garmin Connect │ HealthKit      │
 │  Health Connect  │ parkrun    │ RunSignUp      │ Elevation API  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -155,7 +155,7 @@ Flutter runs natively on Wear OS. Uses `compose_for_wear` plugin for watch-appro
 
 A standalone SvelteKit app at `apps/web/`, deployed to Vercel. It is intentionally not a full-featured clone of the mobile app — its purpose is the things that are genuinely better on a large screen.
 
-**Stack:** SvelteKit 2 · Svelte 5 · TypeScript · Supabase JS client · Google Maps JS API · Storybook
+**Stack:** SvelteKit 2 · Svelte 5 · TypeScript · Supabase JS client · MapLibre GL JS · Storybook
 
 **Key responsibilities:**
 - Full-screen route builder (the best route planning experience in the product)
@@ -175,7 +175,7 @@ src/routes/
 │   └── +page.svelte            # Weekly mileage, heatmap, records
 ├── routes/
 │   ├── +page.svelte            # Route library list
-│   ├── new/+page.svelte        # Full-screen Google Maps route builder
+│   ├── new/+page.svelte        # Full-screen MapLibre route builder
 │   └── [id]/+page.svelte       # Route detail (public or private)
 ├── runs/
 │   ├── +page.svelte            # Run history with filters
@@ -187,7 +187,7 @@ src/routes/
 
 **Route builder (web-specific):**
 
-The web route builder uses the Google Maps JavaScript API directly — more capable than the Flutter plugin. Users click to place waypoints, drag to reshape, toggle road/trail snapping, and get a live elevation profile as they draw. Routes save to Supabase and appear instantly on mobile.
+The web route builder uses the MapLibre GL JS directly — more capable than the Flutter plugin. Users click to place waypoints, drag to reshape, toggle road/trail snapping, and get a live elevation profile as they draw. Routes save to Supabase and appear instantly on mobile.
 
 ```svelte
 <!-- apps/web/src/lib/components/RouteBuilder.svelte -->
@@ -197,9 +197,9 @@ The web route builder uses the Google Maps JavaScript API directly — more capa
   let mapContainer: HTMLDivElement;
 
   onMount(() => {
-    const map = new google.maps.Map(mapContainer, { ... });
-    const directionsService = new google.maps.DirectionsService();
-    const poly = new google.maps.Polyline({ map, path: [] });
+    const map = new maplibregl.Map({ container: mapContainer, style: '...', center: [...], zoom: 13 });
+    // Use GeoJSON source + line layer for route rendering
+    // Use MapTiler or Protomaps for tile source
 
     // On each waypoint click → request directions segment → append to polyline
     // Export final polyline → encode as GPX → upload to Supabase Storage
@@ -285,7 +285,7 @@ class ApiClient {
 
 Shared Flutter widgets used by both phone apps. Ensures visual consistency across platforms.
 
-- `RunMap` — Google Maps widget with route overlay and live position
+- `RunMap` — MapLibre widget with route overlay and live position
 - `StatCard` — metric display card (distance, pace, HR)
 - `RunListTile` — run history row
 - `ElevationChart` — post-run elevation + pace chart
@@ -448,7 +448,7 @@ Requires business approval from Garmin. Integrate in Phase 3.
 ## Data flow: importing a GPX route
 
 ```
-1. User shares KML from Google Maps → app receives file
+1. User shares KML from Google My Maps or other tool → app receives file
 2. RouteParser.fromKml() → Route object
 3. Route displayed on map (distance, elevation summary)
 4. User taps Save → ApiClient.saveRoute()
@@ -465,12 +465,12 @@ Requires business approval from Garmin. Integrate in Phase 3.
 | Apple Watch | Swift 5 + SwiftUI + WatchKit | Separate Xcode project in monorepo |
 | Wear OS | Flutter + `wear` plugin | Compose for Wear via platform channel |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to Vercel |
-| Web maps | Google Maps JavaScript API | Route builder, run replay |
+| Web maps | MapLibre GL JS | Route builder, run replay |
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
 | Component explorer | Storybook 8 | Component stories alongside components |
 | Monorepo tooling | Melos (Flutter) + pnpm (web) | Separate toolchains, same repo |
-| Maps (mobile) | Google Maps Flutter plugin | Route display, live position |
+| Maps (mobile) | flutter_map + MapLibre | Route display, live position |
 | GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
 | Health sync | `health` pub.dev package | Abstracts HealthKit + Health Connect |
 | Local storage | `drift` (SQLite) | Offline-first run storage on mobile |
@@ -539,7 +539,7 @@ Web app deploys to Vercel via the Vercel GitHub integration — no manual deploy
 - **Apple Sign-In** on iOS 13+ — no email/password surface to attack
 - **Web app sessions** managed via `@supabase/ssr` — auth cookies are httpOnly and not accessible to JavaScript
 - **Public route/run pages** use Supabase `is_public` flag — RLS policies enforce that only explicitly shared records are readable without auth
-- **Environment secrets** (`SUPABASE_URL`, `STRAVA_CLIENT_SECRET`, `MAPS_API_KEY`, `PUBLIC_SUPABASE_ANON_KEY`) stored in GitHub Actions secrets and Vercel environment variables — never committed to the repo
+- **Environment secrets** (`SUPABASE_URL`, `STRAVA_CLIENT_SECRET`, `MAPTILER_KEY`, `PUBLIC_SUPABASE_ANON_KEY`) stored in GitHub Actions secrets and Vercel environment variables — never committed to the repo
 
 ---
 

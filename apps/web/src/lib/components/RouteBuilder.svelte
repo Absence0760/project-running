@@ -1,17 +1,29 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
+	import maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
 
 	let mapContainer: HTMLDivElement;
+	let map: maplibregl.Map;
 
 	onMount(() => {
-		// TODO: Initialize Google Maps JS API
-		// const map = new google.maps.Map(mapContainer, { ... });
-		// const directionsService = new google.maps.DirectionsService();
-		// const poly = new google.maps.Polyline({ map, path: [] });
-		//
-		// On each waypoint click -> request directions segment -> append to polyline
-		// Export final polyline -> encode as GPX -> upload to Supabase Storage
+		map = new maplibregl.Map({
+			container: mapContainer,
+			style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+			center: [144.9631, -37.8136], // Melbourne default
+			zoom: 13
+		});
+
+		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+		// TODO: On each waypoint click -> request directions segment -> append to GeoJSON line
+		// TODO: Export final line -> encode as GPX -> upload to Supabase Storage
+	});
+
+	onDestroy(() => {
+		map?.remove();
 	});
 </script>
 
-<div bind:this={mapContainer} class="w-full h-full"></div>
+<div bind:this={mapContainer} style="width: 100%; height: 100%;"></div>

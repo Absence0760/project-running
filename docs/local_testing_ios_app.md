@@ -13,7 +13,7 @@ The iOS app is a Flutter target at `apps/mobile_ios/`.
 | Xcode 15+ | Mac App Store |
 | iOS Simulator | Included with Xcode |
 | Local backend running | See `local_testing_backend.md` |
-| Google Maps API key | Google Cloud Console (enable Maps SDK for iOS) |
+| MapTiler API key | Free at maptiler.com/cloud |
 
 ---
 
@@ -37,8 +37,8 @@ open -a Simulator
 cd apps/mobile_ios
 flutter run -d iPhone \
   --dart-define=SUPABASE_URL=http://localhost:54321 \
-  --dart-define=SUPABASE_ANON_KEY=<anon-key-from-supabase-start> \
-  --dart-define=MAPS_API_KEY=<your-google-maps-key>
+  --dart-define=SUPABASE_ANON_KEY=<publishable-key-from-supabase-status> \
+  --dart-define=MAPTILER_KEY=<your-maptiler-key>
 ```
 
 To target a specific simulator:
@@ -64,7 +64,7 @@ To avoid typing `--dart-define` flags every time, create `.vscode/launch.json`:
       "args": [
         "--dart-define=SUPABASE_URL=${env:SUPABASE_URL}",
         "--dart-define=SUPABASE_ANON_KEY=${env:SUPABASE_ANON_KEY}",
-        "--dart-define=MAPS_API_KEY=${env:MAPS_API_KEY}"
+        "--dart-define=MAPTILER_KEY=${env:MAPTILER_KEY}"
       ]
     }
   ]
@@ -110,11 +110,11 @@ Use **Freeway Drive** or **City Run** to test the live recording screen, auto-pa
 
 ### "Connection refused" when app launches
 
-The local Supabase backend isn't running. Start it first — see `local_testing_backend.md`. Verify the URL and anon key match what `supabase start` printed.
+The local Supabase backend isn't running. Start it first — see `local_testing_backend.md`. Verify the URL and publishable key match the output of `supabase status`.
 
-### Google Maps showing blank/grey
+### Map showing blank/grey
 
-Ensure the **Maps SDK for iOS** is enabled in the Google Cloud Console for your API key. Also check that the key is passed correctly via `--dart-define`.
+Ensure your MapTiler API key is valid and passed correctly via `--dart-define=MAPTILER_KEY=<key>`.
 
 ### `melos bootstrap` fails
 

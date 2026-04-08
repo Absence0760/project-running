@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Map placeholder widget — displays coordinates until Google Maps is configured.
+/// Map placeholder widget — displays coordinates until MapLibre is configured.
 class RunMap extends StatelessWidget {
   final double? latitude;
   final double? longitude;

@@ -11,7 +11,7 @@ The web app is a SvelteKit 2 + Svelte 5 project at `apps/web/`. It uses pnpm as 
 | Node.js 20 LTS | `nodejs.org` |
 | pnpm 9.x | `npm install -g pnpm` |
 | Local backend running | See `local_testing_backend.md` |
-| Google Maps API key | Google Cloud Console → APIs & Services → Credentials (enable Maps JavaScript API) |
+| MapTiler API key | Free at maptiler.com/cloud (for map tiles) |
 
 ---
 
@@ -31,8 +31,8 @@ Edit `.env.local` with your local backend values:
 
 ```bash
 PUBLIC_SUPABASE_URL=http://localhost:54321
-PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
-PUBLIC_MAPS_API_KEY=<your-google-maps-key>
+PUBLIC_SUPABASE_ANON_KEY=<publishable-key-from-supabase-status>
+PUBLIC_MAPTILER_KEY=<your-maptiler-key>
 ```
 
 ---
@@ -106,9 +106,9 @@ apps/web/
 
 ## Troubleshooting
 
-### Google Maps showing grey tiles
+### Map showing grey tiles or not loading
 
-Your API key is missing or the **Maps JavaScript API** is not enabled in the Google Cloud Console. Check **APIs & Services → Enabled APIs** for your project.
+Your MapTiler API key is missing or invalid. Sign up at maptiler.com/cloud for a free key and add it to `.env.local` as `PUBLIC_MAPTILER_KEY`.
 
 ### "Failed to fetch" errors in the browser
 

@@ -8,7 +8,7 @@
 <main class="hero">
 	<h1>Plan routes.<br />Track runs.<br />Analyse everything.</h1>
 	<p class="hero-sub">
-		Import from Google Maps. Record on your phone or watch.
+		Import a route. Record on your phone or watch.
 		Review on a big screen. Free forever.
 	</p>
 	<div class="hero-actions">

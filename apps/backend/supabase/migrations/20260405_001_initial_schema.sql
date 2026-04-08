@@ -1,5 +1,23 @@
 -- Initial schema for Run app
 
+-- Routes table (before runs, which references it)
+create table routes (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid references auth.users not null,
+  name            text not null,
+  waypoints       jsonb not null,
+  distance_m      numeric(10, 2) not null,
+  elevation_m     numeric(8, 2),
+  surface         text default 'road',
+  is_public       boolean default false,
+  slug            text unique,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
+);
+
+create index routes_user_id on routes (user_id, created_at desc);
+create index routes_public on routes (is_public, created_at desc) where is_public = true;
+
 -- Runs table
 create table runs (
   id            uuid primary key default gen_random_uuid(),
@@ -18,24 +36,6 @@ create table runs (
 
 create index runs_user_started_at on runs (user_id, started_at desc);
 create unique index runs_external_id on runs (external_id) where external_id is not null;
-
--- Routes table
-create table routes (
-  id              uuid primary key default gen_random_uuid(),
-  user_id         uuid references auth.users not null,
-  name            text not null,
-  waypoints       jsonb not null,
-  distance_m      numeric(10, 2) not null,
-  elevation_m     numeric(8, 2),
-  surface         text default 'road',
-  is_public       boolean default false,
-  slug            text unique,
-  created_at      timestamptz default now(),
-  updated_at      timestamptz default now()
-);
-
-create index routes_user_id on routes (user_id, created_at desc);
-create index routes_public on routes (is_public, created_at desc) where is_public = true;
 
 -- Integrations table
 create table integrations (

@@ -21,7 +21,8 @@ dependencies:
   ui_kit:
     path: ../../packages/ui_kit
   supabase_flutter: ^2.3.0
-  google_maps_flutter: ^2.5.0
+  flutter_map: ^6.1.0
+  flutter_map_maplibre: ^0.1.0
   geolocator: ^12.0.0
   health: ^10.0.0
   drift: ^2.14.0

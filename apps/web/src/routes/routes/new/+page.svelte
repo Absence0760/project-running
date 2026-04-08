@@ -1,4 +1,6 @@
 <script lang="ts">
+	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
+
 	let routeName = $state('');
 	let mode = $state<'road' | 'trail'>('road');
 	let waypoints = $state(0);
@@ -91,11 +93,7 @@
 	</aside>
 
 	<main class="map-area">
-		<div class="map-placeholder">
-			<span class="material-symbols">map</span>
-			<p>Google Maps loads here</p>
-			<p class="hint">Click to place waypoints</p>
-		</div>
+		<RouteBuilder />
 	</main>
 </div>
 

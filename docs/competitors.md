@@ -6,7 +6,7 @@ A reference for understanding the competitive landscape, where each major app fa
 
 ## Market overview
 
-The running app market is dominated by a small number of well-funded incumbents. None covers all platforms cleanly, and all of them gate meaningful features behind subscriptions. The opportunity is a free-first, watch-parity, Google Maps-native alternative.
+The running app market is dominated by a small number of well-funded incumbents. None covers all platforms cleanly, and all of them gate meaningful features behind subscriptions. The opportunity is a free-first, watch-parity, open-source-maps alternative.
 
 ---
 
@@ -26,7 +26,7 @@ The running app market is dominated by a small number of well-funded incumbents.
 **Weaknesses:**
 - Route builder is paywalled (Strava Premium ~$11.99/month)
 - GPX download of your own routes is paywalled
-- No direct Google Maps integration — users must export KML and re-import manually
+- No streamlined route import — users must export KML and re-import manually
 - Watch apps are thin — Strava is a companion to Garmin, not a replacement
 - Wear OS app exists but is not feature-complete compared to Apple Watch
 - UI has become cluttered; onboarding experience is poor for non-athletes
@@ -144,7 +144,7 @@ The running app market is dominated by a small number of well-funded incumbents.
 | Route builder | ✓ Free | Paywalled | Web only | — | Limited | ✓ |
 | GPX import | ✓ Free | Paywalled | ✓ | — | ✓ | ✓ |
 | GPX export | ✓ | Paywalled | ✓ | — | Paywalled | ✓ |
-| Google Maps integration | ✓ | — | — | — | — | — |
+| Open-source maps (MapLibre) | ✓ | — | — | — | — | — |
 | Turn-by-turn navigation | ✓ | — | ✓ | — | Limited | ✓ |
 | parkrun sync | ✓ | — | — | — | — | — |
 | Strava import | ✓ | Native | ✓ | ✓ | Limited | ✓ |
@@ -183,8 +183,8 @@ parkrun has millions of registered participants worldwide and a famously engaged
 ### Wear OS users with no good option
 NRC dropping Wear OS support leaves a gap. Android users with a Pixel Watch or Galaxy Watch running Wear OS have no dedicated running app with standalone GPS. This is a specific, searchable pain point.
 
-### Google Maps-native workflow
-"Plan a run on Google Maps" is a common search query. Positioning around this workflow — "plan in Google Maps, run with [app name]" — is a differentiated SEO angle that no competitor owns.
+### GPX/KML import workflow
+"Plan a run on Google Maps" is a common search query. Positioning around a smooth import workflow — "plan anywhere, run with [app name]" — is a differentiated SEO angle that no competitor owns.
 
 ### Free route builder
 "Free Strava route builder alternative" is a high-intent search that converts well. Users who've hit the Strava paywall are actively looking for alternatives.
@@ -193,11 +193,11 @@ NRC dropping Wear OS support leaves a gap. Android users with a Pixel Watch or G
 
 ## Risks and watch items
 
-**Strava could open their route builder to free users.** They've done it before on some features. Monitor announcements. If this happens, the free route builder is no longer a differentiator — lean harder on Google Maps integration and watch parity instead.
+**Strava could open their route builder to free users.** They've done it before on some features. Monitor announcements. If this happens, the free route builder is no longer a differentiator — lean harder on open-source maps and watch parity instead.
 
 **Nike Run Club could add Wear OS.** NRC is free and well-resourced. If they add Wear OS support, the Android watch gap closes. The response is to be deeper on route planning and data sync — areas NRC will never prioritise.
 
-**Google Maps API pricing.** The Maps JS API for the web route builder charges per map load. At scale this becomes significant. Monitor costs closely and consider Mapbox as an alternative for the route display (while keeping Google Maps for the builder, where users expect it).
+**Map tile costs at scale.** MapTiler has a generous free tier. At scale, migrate to Protomaps (self-hosted PMTiles on S3/R2) to eliminate per-request tile costs entirely.
 
 **Strava API rate limits at scale.** The default Strava API quota is 2,000 requests per day across all users. With many connected users this gets tight quickly. Apply for a quota increase early — Strava reviews these individually.
 
