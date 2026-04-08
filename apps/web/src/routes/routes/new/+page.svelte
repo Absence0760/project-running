@@ -1,11 +1,45 @@
 <script lang="ts">
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
+	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import { toGpx, downloadFile } from '$lib/gpx';
 
 	let routeName = $state('');
 	let mode = $state<'road' | 'trail'>('road');
-	let waypoints = $state(0);
+	let waypointCount = $state(0);
 	let distance = $state(0);
 	let elevation = $state(0);
+	let elevations = $state<number[]>([]);
+	let coordinates = $state<[number, number][]>([]);
+	let builder: RouteBuilder;
+
+	function handleUpdate(data: {
+		waypoints: number;
+		distance: number;
+		elevation: number;
+		elevations: number[];
+		coordinates: [number, number][];
+	}) {
+		waypointCount = data.waypoints;
+		distance = data.distance;
+		elevation = data.elevation;
+		elevations = data.elevations;
+		coordinates = data.coordinates;
+	}
+
+	function handleUndo() {
+		builder?.undoWaypoint();
+	}
+
+	function handleClear() {
+		builder?.clearWaypoints();
+	}
+
+	function handleExportGpx() {
+		const name = routeName || 'Untitled Route';
+		const gpx = toGpx(name, coordinates, elevations);
+		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
+		downloadFile(gpx, filename, 'application/gpx+xml');
+	}
 </script>
 
 <div class="builder-layout">
@@ -55,45 +89,56 @@
 					<span class="builder-stat-label">Elevation</span>
 				</div>
 				<div class="builder-stat">
-					<span class="builder-stat-value">{waypoints}</span>
+					<span class="builder-stat-value">{waypointCount}</span>
 					<span class="builder-stat-label">Points</span>
 				</div>
 			</div>
 
-			<!-- Elevation profile preview -->
 			<div class="elevation-preview">
 				<span class="label-text">Elevation Profile</span>
-				<div class="elevation-empty">
-					<span class="material-symbols">show_chart</span>
-					<span>Add waypoints to see profile</span>
-				</div>
+				{#if elevations.length >= 2}
+					<ElevationProfile {elevations} totalDistance={distance} />
+				{:else}
+					<div class="elevation-empty">
+						<span class="material-symbols">show_chart</span>
+						<span>Add waypoints to see profile</span>
+					</div>
+				{/if}
 			</div>
 
 			<div class="action-row">
-				<button class="btn btn-ghost" disabled={waypoints === 0}>
+				<button class="btn btn-ghost" disabled={waypointCount === 0} onclick={handleUndo}>
 					<span class="material-symbols">undo</span>
 					Undo
 				</button>
-				<button class="btn btn-ghost" disabled={waypoints === 0}>
+				<button class="btn btn-ghost" disabled={waypointCount === 0} onclick={handleClear}>
 					<span class="material-symbols">delete</span>
 					Clear
 				</button>
 			</div>
 
 			<div class="action-row">
-				<button class="btn btn-primary" disabled={waypoints === 0}>Save Route</button>
-				<button class="btn btn-outline" disabled={waypoints === 0}>Export GPX</button>
+				<button class="btn btn-primary" disabled={waypointCount < 2}>Save Route</button>
+				<button
+					class="btn btn-outline"
+					disabled={waypointCount < 2}
+					onclick={handleExportGpx}
+				>
+					Export GPX
+				</button>
 			</div>
 		</div>
 
 		<div class="sidebar-hint">
 			<span class="material-symbols">info</span>
-			Click on the map to place waypoints. The route will auto-snap to {mode === 'road' ? 'roads' : 'walking paths'}.
+			Click on the map to place waypoints. The route will auto-snap to {mode === 'road'
+				? 'roads'
+				: 'walking paths'}. Drag markers to reshape.
 		</div>
 	</aside>
 
 	<main class="map-area">
-		<RouteBuilder />
+		<RouteBuilder bind:this={builder} {mode} onupdate={handleUpdate} />
 	</main>
 </div>
 
@@ -319,24 +364,6 @@
 	.map-area {
 		flex: 1;
 		background: var(--color-bg-tertiary);
-	}
-
-	.map-placeholder {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		color: var(--color-text-tertiary);
-		gap: var(--space-sm);
-	}
-
-	.map-placeholder .material-symbols {
-		font-size: 3rem;
-	}
-
-	.hint {
-		font-size: 0.85rem;
 	}
 
 	.material-symbols {

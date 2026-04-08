@@ -189,25 +189,13 @@ src/routes/
 
 The web route builder uses the MapLibre GL JS directly — more capable than the Flutter plugin. Users click to place waypoints, drag to reshape, toggle road/trail snapping, and get a live elevation profile as they draw. Routes save to Supabase and appear instantly on mobile.
 
-```svelte
-<!-- apps/web/src/lib/components/RouteBuilder.svelte -->
-<script lang="ts">
-  import { onMount } from 'svelte';
+Key modules:
 
-  let mapContainer: HTMLDivElement;
-
-  onMount(() => {
-    const map = new maplibregl.Map({ container: mapContainer, style: '...', center: [...], zoom: 13 });
-    // Use GeoJSON source + line layer for route rendering
-    // Use MapTiler or Protomaps for tile source
-
-    // On each waypoint click → request directions segment → append to polyline
-    // Export final polyline → encode as GPX → upload to Supabase Storage
-  });
-</script>
-
-<div bind:this={mapContainer} class="w-full h-full"></div>
-```
+- `RouteBuilder.svelte` — MapLibre GL JS map with click-to-place waypoints, draggable markers, and GeoJSON route line rendering
+- `ElevationProfile.svelte` — SVG elevation chart updated live as waypoints are placed
+- `routing.ts` — OSRM integration for road-snapped routing between waypoints (car profile for roads, foot profile for trails)
+- `elevation.ts` — Open-Meteo API for elevation data along the route
+- `gpx.ts` — GPX file generation and browser download
 
 ---
 

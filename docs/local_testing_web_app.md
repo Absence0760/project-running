@@ -82,8 +82,12 @@ apps/web/
 │   │   ├── supabase.ts            # Browser Supabase client
 │   │   ├── supabase-server.ts     # Server-side Supabase client
 │   │   ├── types.ts               # TypeScript interfaces
+│   │   ├── routing.ts             # OSRM road-snapping API
+│   │   ├── elevation.ts           # Open-Meteo elevation lookups
+│   │   ├── gpx.ts                 # GPX export generator
 │   │   └── components/
-│   │       └── RouteBuilder.svelte
+│   │       ├── RouteBuilder.svelte    # MapLibre map with waypoints
+│   │       └── ElevationProfile.svelte # SVG elevation chart
 │   ├── app.html
 │   ├── app.css
 │   └── app.d.ts
