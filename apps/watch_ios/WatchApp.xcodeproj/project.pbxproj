@@ -13,6 +13,7 @@
 		A1B2C3D4E5F60001000A0004 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0004 /* LocationManager.swift */; };
 		A1B2C3D4E5F60001000A0005 /* RouteNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */; };
 		A1B2C3D4E5F60001000A0006 /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */; };
+		A1B2C3D4E5F60001000A000B /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */; };
 		A1B2C3D4E5F60001000A0007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0007 /* Assets.xcassets */; };
 		A1B2C3D4E5F60001000A0008 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0001 /* HealthKit.framework */; };
 		A1B2C3D4E5F60001000A0009 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0002 /* CoreLocation.framework */; };
@@ -26,6 +27,7 @@
 		A1B2C3D4E5F60002000A0004 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteNavigator.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1B2C3D4E5F60003000A0001 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
@@ -66,6 +68,7 @@
 				A1B2C3D4E5F60002000A0004 /* LocationManager.swift */,
 				A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */,
 				A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */,
+				A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */,
 				A1B2C3D4E5F60002000A0007 /* Assets.xcassets */,
 				A1B2C3D4E5F60002000A0008 /* Info.plist */,
 			);
@@ -166,6 +169,7 @@
 				A1B2C3D4E5F60001000A0004 /* LocationManager.swift in Sources */,
 				A1B2C3D4E5F60001000A0005 /* RouteNavigator.swift in Sources */,
 				A1B2C3D4E5F60001000A0006 /* WatchConnectivityManager.swift in Sources */,
+				A1B2C3D4E5F60001000A000B /* SupabaseService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
