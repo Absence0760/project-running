@@ -18,19 +18,23 @@ void main() async {
   final store = LocalRunStore();
   await store.init();
 
-  // Auto sign-in as test user
+  // Auto sign-in with dev credentials from .env.local
   final api = ApiClient();
-  try {
-    await api.signIn(email: 'runner@test.com', password: 'testtest');
-  } catch (e) {
-    debugPrint('Auto sign-in failed: $e');
+  final devEmail = dotenv.env['DEV_USER_EMAIL'];
+  final devPassword = dotenv.env['DEV_USER_PASSWORD'];
+  if (devEmail != null && devPassword != null) {
+    try {
+      await api.signIn(email: devEmail, password: devPassword);
+    } catch (e) {
+      debugPrint('Auto sign-in failed: $e');
+    }
   }
 
   runApp(RunApp(apiClient: api, runStore: store));
 }
 
 class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
-  ThemeModeNotifier() : super(ThemeMode.system);
+  ThemeModeNotifier() : super(ThemeMode.dark);
 }
 
 final themeModeNotifier = ThemeModeNotifier();

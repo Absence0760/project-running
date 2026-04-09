@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
     RunScreen(apiClient: widget.apiClient, runStore: widget.runStore),
     HistoryScreen(apiClient: widget.apiClient, runStore: widget.runStore),
     const RoutesScreen(),
-    const SettingsScreen(),
+    SettingsScreen(apiClient: widget.apiClient),
   ];
 
   @override

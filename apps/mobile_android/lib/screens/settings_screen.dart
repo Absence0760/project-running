@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:api_client/api_client.dart';
 import '../main.dart' show themeModeNotifier;
 
 /// Account settings and integrations management.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final ApiClient apiClient;
+  const SettingsScreen({super.key, required this.apiClient});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -28,12 +30,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: CircleAvatar(
               backgroundColor: theme.colorScheme.primaryContainer,
-              child: const Text('JH'),
+              child: Text(
+                (widget.apiClient.userEmail ?? '?')[0].toUpperCase(),
+              ),
             ),
-            title: const Text('Jared Howard'),
-            subtitle: const Text('jared@example.com'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            title: Text(widget.apiClient.userEmail ?? 'Not signed in'),
+            subtitle: Text(widget.apiClient.userId != null ? 'Signed in' : 'No account'),
           ),
           const Divider(),
 

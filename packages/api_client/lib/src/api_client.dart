@@ -30,6 +30,9 @@ class ApiClient {
   /// The current user ID, or null if not signed in.
   String? get userId => _client.auth.currentUser?.id;
 
+  /// The current user's email, or null if not signed in.
+  String? get userEmail => _client.auth.currentUser?.email;
+
   /// Saves a completed [Run] to the backend.
   Future<void> saveRun(Run run) async {
     final userId = _client.auth.currentUser?.id;
