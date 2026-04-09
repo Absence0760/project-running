@@ -21,8 +21,6 @@ A cross-platform running app that covers every device and surface a runner might
 
 ## Architecture evolution
 
-The backend grows across phases. Each phase adds only what's needed — no premature infrastructure.
-
 ```
 Phase 1:    Supabase only (CRUD, auth, storage)
 Phase 2:  + Go service    (WebSockets, background jobs)
@@ -40,47 +38,53 @@ Full technical details in `backend_scaling.md`.
 **Goal:** A working, testable app that covers plan → run → review
 **Backend:** Supabase only
 
-### Features
+### GPX / KML import
 
-#### GPX / KML import
 The primary differentiator. Users export a KML from Google My Maps or any other source and open it directly in the app. The route loads instantly on a map, ready to run. No account required. Free forever.
 
-- Parse GPX, KML, KMZ, and GeoJSON formats
-- Display route on map with distance and elevation summary
-- Save route to local library for reuse
+- [ ] Parse GPX, KML, KMZ, and GeoJSON formats
+- [ ] Display route on map with distance and elevation summary
+- [ ] Save route to local library for reuse
 
-#### Live GPS run recording (phone)
+### Live GPS run recording (phone)
+
 Track position, pace, distance, and elapsed time using device GPS. Runs saved to local storage first — no backend required at this stage.
 
-- Background location tracking (iOS + Android)
-- Real-time pace and distance display
-- Auto-pause on stop detection
+- [ ] Background location tracking (iOS + Android)
+- [ ] Real-time pace and distance display
+- [ ] Auto-pause on stop detection
 
-#### Route overlay during run
+### Route overlay during run
+
 Show the imported route on the map while running. Current position tracks against the planned line. Off-route haptic alerts when drifting more than 50m from the path.
 
-- Live position marker on route
-- Distance remaining to end
-- Off-route detection and alert
+- [ ] Live position marker on route
+- [ ] Distance remaining to end
+- [ ] Off-route detection and alert
 
-#### Run history + basic stats
+### Run history + basic stats
+
 Persist completed runs locally with distance, duration, average pace, and a map trace of the actual path taken.
 
-- Run list sorted by date
-- Individual run detail view (map + stats)
-- Weekly mileage summary on home screen
+- [x] Run list sorted by date
+- [x] Individual run detail view (map + stats)
+- [x] Weekly mileage summary on home screen
 
-#### Cloud sync + auth
-Apple Sign-In and Google Sign-In via Supabase Auth. Runs sync to Postgres so they persist across devices and app reinstalls.
+### Cloud sync + auth
 
-- OAuth SSO (no email/password)
-- Background sync on wifi
-- Conflict resolution: device wins on merge
+- [x] Supabase Auth with email/password sign-in and sign-up
+- [x] Google and Apple OAuth scaffolded (needs provider credentials to enable)
+- [x] Auth callback route for OAuth redirect
+- [ ] Background sync on wifi (mobile)
+- [ ] Conflict resolution: device wins on merge
 
 ### Backend work (Phase 1)
 
-Infrastructure hardening before public beta. No new services — all within Supabase.
-
+- [x] Database schema: runs, routes, integrations, user_profiles tables
+- [x] Row-level security policies on all tables
+- [x] Database functions (weekly_mileage, personal_records)
+- [x] Seed script with test user and mock data
+- [x] Edge Functions: parkrun-import, strava-import, strava-webhook, refresh-tokens, export-data
 - [ ] Move GPS tracks from JSONB `track` column to Supabase Storage (store `track_url` reference in row)
 - [ ] Encrypt OAuth tokens in `integrations` table with `pgcrypto`
 - [ ] Add rate limiting to Edge Function endpoints
@@ -97,59 +101,50 @@ Infrastructure hardening before public beta. No new services — all within Supa
 **Goal:** Both watch platforms feel like first-class running computers, not companion screens
 **Backend:** Supabase + Go service
 
-### Features
+### Apple Watch standalone GPS recording
 
-#### Apple Watch standalone GPS recording
-Native Swift + WatchKit app. Record pace, HR, distance directly from the wrist without the phone nearby. Syncs to iPhone when back in Bluetooth range.
+- [ ] Standalone workout session (no phone required)
+- [ ] Heart rate via HealthKit sensor
+- [ ] Haptic pace alerts (above / below target)
+- [ ] Syncs run data via Watch Connectivity framework
 
-- Standalone workout session (no phone required)
-- Heart rate via HealthKit sensor
-- Haptic pace alerts (above / below target)
-- Syncs run data via Watch Connectivity framework
+### Wear OS standalone GPS recording
 
-#### Wear OS standalone GPS recording
-Flutter on Wear OS. Same standalone capability for Android watch users. Syncs to phone via Data Layer API.
+- [ ] Compose for Wear UI (Kotlin + Flutter hybrid)
+- [ ] GPS + HR recording independent of phone
+- [ ] Background sync on reconnect
 
-- Compose for Wear UI (Kotlin + Flutter hybrid)
-- GPS + HR recording independent of phone
-- Background sync on reconnect
+### Route navigation on watch
 
-#### Route navigation on watch
-Push an imported route to the watch before a run. Shows a simplified map with current position, distance remaining, and direction arrows. Haptic alert on off-route deviation.
+- [ ] Route preview on watch face before starting
+- [ ] Live position on mini-map during run
+- [ ] Off-route haptic + "recalculating" indicator
 
-- Route preview on watch face before starting
-- Live position on mini-map during run
-- Off-route haptic + "recalculating" indicator
+### Glanceable tiles and complications
 
-#### Glanceable tiles and complications
-Wear OS Tiles and watchOS complications showing live pace, HR, and distance without opening the app. Critical for usability during a run.
+- [ ] watchOS complication: pace + distance
+- [ ] Wear OS tile: active run summary
 
-- watchOS complication: pace + distance
-- Wear OS tile: active run summary
+### Live spectator tracking
 
-#### Live spectator tracking
-Friends and family can watch a runner's progress in real time via a shareable link. The runner's phone/watch publishes GPS position every 3 seconds to the Go service WebSocket hub. Spectators see the runner move on a map in their browser.
-
-- Runner shares a live tracking link before starting
-- Spectators see live position, pace, distance on a map (no app install needed)
-- Works via WebSocket — low latency, low bandwidth
-- Positions stored ephemerally in Redis (TTL 24h) for late joiners
+- [x] `/live/{run_id}` spectator page with MapLibre map (simulated runner)
+- [x] Live position dot, trace line, pace/distance/elapsed stats
+- [ ] Runner shares a live tracking link before starting
+- [ ] WebSocket connection to Go service (replace simulation)
+- [ ] Positions stored ephemerally in Redis (TTL 24h) for late joiners
 
 ### Backend work (Phase 2)
 
-Deploy the Go service for real-time capabilities and background processing.
-
 - [ ] Deploy Go service to Fly.io (~$5/month)
-  - WebSocket hub for live spectator tracking
-  - Background job queue (Postgres-backed via River)
-  - Strava webhook handler (moved from Edge Function)
-  - Token refresh worker (moved from Edge Function)
-  - Data export worker (moved from Edge Function)
+  - [ ] WebSocket hub for live spectator tracking
+  - [ ] Background job queue (Postgres-backed via River)
+  - [ ] Strava webhook handler (moved from Edge Function)
+  - [ ] Token refresh worker (moved from Edge Function)
+  - [ ] Data export worker (moved from Edge Function)
 - [ ] Set up Upstash Redis for live position streams
-- [ ] Add `personal_records` summary table with insert trigger (replaces slow `personal_records()` function)
+- [ ] Add `personal_records` summary table with insert trigger
 - [ ] Add `jobs` table for Go worker queue
 - [ ] Migrate Strava webhook, token refresh, data export from Edge Functions to Go service
-- [ ] Only parkrun import remains as an Edge Function (simple, infrequent)
 
 ### Milestone: App Store + Play Store public beta
 
@@ -161,63 +156,85 @@ Deploy the Go service for real-time capabilities and background processing.
 **Goal:** A SvelteKit web app at `app.runapp.com` that handles everything better done on a big screen
 **Backend:** No new services — database optimisations only
 
-The web app is built with SvelteKit and shares zero UI code with Flutter, but calls the exact same Supabase REST API and connects to the Go service WebSocket for live tracking.
+### Full-screen route builder
 
-### Features
+- [x] MapLibre GL JS map with click-to-place waypoints
+- [x] Draggable markers to reshape route
+- [x] Road snap (OSRM car profile) and trail mode (OSRM foot profile)
+- [x] Auto-calculated distance and elevation profile as you draw
+- [x] Direction arrows on route line
+- [x] Overlap detection (purple for out-and-back sections)
+- [x] Preview line from last waypoint to cursor
+- [x] Snap-to-start with pulsing marker to close loops
+- [x] Numbered waypoint markers (green start, red end)
+- [x] Place search via MapTiler geocoding
+- [x] Geolocate button + auto-center on user location
+- [x] Export as GPX with elevation data
+- [x] Save route to Supabase
+- [ ] Export as KML
+- [ ] Shareable link generation
 
-#### Full-screen route builder
-The best route planning experience in the product. MapLibre GL JS with click-to-place waypoints, drag-to-adjust paths, and road/trail snapping. Substantially more capable than the mobile version.
+### Run history dashboard
 
-- Click to place waypoints, drag to reshape
-- Road snap and trail mode toggles
-- Auto-calculated distance and elevation profile as you draw
-- Export as GPX, KML, or shareable link
-- Save to account — appears instantly on mobile and watch
+- [x] Stat cards (this week distance/runs, total runs, longest run, weekly pace)
+- [x] Weekly mileage bar chart (12 weeks)
+- [x] Calendar heatmap of runs (GitHub-style, 20 weeks)
+- [x] Personal records table (5k, 10k, half, marathon)
+- [x] Recent runs list with source badges
+- [x] All data fetched from Supabase (mock fallback for empty tables)
+- [ ] Monthly and yearly mileage toggle
+- [ ] Filter by source (recorded, Strava, parkrun, Garmin)
 
-#### Run history dashboard
-A rich read-only view of all your runs — the kind of data review that works better on a 27" screen than a phone.
+### Deep run analysis
 
-- Calendar heatmap of runs by week (like GitHub contributions)
-- Monthly and yearly mileage bar charts
-- Personal records table (fastest 5k, 10k, half, full)
-- Filter by source (recorded, Strava, parkrun, Garmin)
+- [x] MapLibre GPS trace with direction arrows, start/finish markers
+- [x] Elevation profile (SVG chart)
+- [x] Splits table (per-km pace + elevation)
+- [x] Heart rate zone breakdown (stacked bar + legend)
+- [x] Key stats (distance, duration, pace, HR, elevation)
+- [x] Back link to run list
+- [ ] Comparison against previous runs on same route
+- [ ] Trace animation (replay run as moving dot)
 
-#### Deep run analysis
-Click any run to open a full-page analysis view with the complete GPS trace and every metric in detail.
+### Live tracking spectator view (web)
 
-- Full-resolution interactive map with actual GPS track
-- Elevation profile with per-km pace overlay
-- Heart rate zone breakdown
-- Splits table (pace, HR, elevation per km/mile)
-- Comparison against previous runs on the same route
+- [x] Public page at `/live/{run_id}` (no auth required)
+- [x] MapLibre map with runner dot and trace line
+- [x] Live distance, elapsed time, pace stats
+- [x] Pulsing "LIVE" badge
+- [ ] Connect to Go service WebSocket (currently simulated)
+- [ ] Map auto-follows runner position
+- [ ] Open Graph image card for social sharing
 
-#### Live tracking spectator view (web)
-The spectator page for live run tracking. Opens in any browser, no login required. Shows the runner's position on a map with pace and distance stats updating in real time.
+### Account and integrations management
 
-- `app.runapp.com/live/{run_id}` — public spectator page
-- Connects to Go service WebSocket
-- Map auto-follows the runner's position
-- Shows elapsed time, distance, current pace
+- [x] Connect / disconnect Strava, Garmin, parkrun, HealthKit (persisted to Supabase)
+- [ ] Account settings page (display name, preferred units, avatar)
+- [ ] Enter parkrun athlete number
+- [ ] Download all data as GPX or CSV (GDPR compliance)
+- [ ] Manage premium subscription
 
-#### Account and integrations management
-The settings hub — easier to navigate on desktop than buried in a mobile settings screen.
+### Public route and run pages
 
-- Connect / disconnect Strava, Garmin, parkrun
-- Enter parkrun athlete number
-- Download all data as GPX or CSV (GDPR compliance)
-- Manage premium subscription
+- [x] `/share/route/{id}` — public route with map, distance, elevation, sign-up CTA
+- [x] `/share/run/{id}` — public run with GPS trace, stats, sign-up CTA
+- [ ] Open Graph image cards for social sharing
+- [ ] SEO metadata (title, description)
 
-#### Public route and run pages
-SEO-indexed public pages for shared routes and run activities — the organic growth engine.
+### Auth and data layer
 
-- `app.runapp.com/routes/{id}` — shareable route with map, distance, elevation
-- `app.runapp.com/runs/{id}` — shareable completed run with stats and trace
-- Open Graph image cards for social sharing
+- [x] Supabase Auth store with `onAuthStateChange` listener
+- [x] Email/password sign-in and sign-up
+- [x] Google and Apple OAuth scaffolded
+- [x] Auth callback route (`/auth/callback`)
+- [x] Auth guard on protected routes (loading state while checking)
+- [x] Data access layer (`data.ts`) with Supabase queries + mock fallback
+- [x] Layout with sidebar nav, user info, logout
 
 ### Backend work (Phase 2b)
 
-Database performance optimisations for dashboard queries at scale.
-
+- [x] Supabase config: auth redirect URLs, email confirmations disabled for dev
+- [x] Seed script with test user, runs, routes, integrations
 - [ ] Create `mv_weekly_mileage` materialized view with `pg_cron` refresh (every 5 min)
 - [ ] Add full-text search index on `routes.name` for route library search
 - [ ] Verify dashboard queries perform under 2 seconds for users with 200+ runs
@@ -232,90 +249,79 @@ Database performance optimisations for dashboard queries at scale.
 **Goal:** Build the features that drive acquisition, retention, and revenue
 **Backend:** Supabase + Go service (premium features added to Go service)
 
-### Features
+### In-app route builder (free)
 
-#### In-app route builder (free)
-Draw routes directly on a map inside the app — no export/import step. Strava paywalls this. Yours is free. Primary acquisition driver.
+- [ ] Click-to-place waypoints on MapLibre (mobile)
+- [ ] Auto-snap to roads or trail mode
+- [ ] Elevation preview before running
+- [ ] Save to route library + shareable link
 
-- Click-to-place waypoints on MapLibre
-- Auto-snap to roads or trail mode
-- Elevation preview before running
-- Save to route library + shareable link
+### Community route library
 
-#### Community route library
-Public browseable library of user-shared routes, sortable by location, distance, and surface type. Creates network effects and organic SEO discovery. Powered by PostGIS spatial queries.
+- [ ] Public / private toggle per route
+- [ ] "Popular near me" discovery feed (PostGIS `ST_DWithin` queries)
+- [ ] Route ratings and comments
+- [ ] Share to social (image card with map + stats)
+- [ ] SEO-indexed public route pages
 
-- Public / private toggle per route
-- "Popular near me" discovery feed (PostGIS `ST_DWithin` queries)
-- Route ratings and comments
-- Share to social (image card with map + stats)
-- SEO-indexed public route pages
+### External platform sync
 
-#### External platform sync
-
-| Source | Method | Data |
+| Source | Method | Status |
 |---|---|---|
-| Apple HealthKit | `health` Flutter package | All workouts on device from any app |
-| Android Health Connect | `health` Flutter package | All workouts on device from any app |
-| Strava | Official OAuth 2.0 API + webhook | Activities, routes, segments |
-| Garmin Connect | Official developer program (apply) | .FIT files, HR, training data |
-| parkrun | Athlete number scrape | 5k times, event history |
-| Race results | RunSignUp API + bib scrape | Finishing times, splits |
+| Apple HealthKit | `health` Flutter package | [ ] Not started |
+| Android Health Connect | `health` Flutter package | [ ] Not started |
+| Strava | Official OAuth 2.0 API + webhook | [ ] Edge Function exists, not wired |
+| Garmin Connect | Official developer program (apply) | [ ] Not started |
+| parkrun | Athlete number scrape | [ ] Edge Function exists, not wired |
+| Race results | RunSignUp API + bib scrape | [ ] Not started |
 
-#### Premium tier — training and coaching (~$6/month)
-Rule-based training intelligence served by the Go service. All V1 algorithms are proven exercise science formulas — no ML required. The paywall sits on top of coaching intelligence — the core app remains free. Managed via RevenueCat (abstracts App Store + Play Store in-app purchases).
-
-If ML model training is needed in the future (personalised plans based on user outcome data), a Python service can be added at that point — the architecture supports it cleanly. Until then, TypeScript/Go handles everything.
+### Premium tier — training and coaching (~$6/month)
 
 **Training plan generator:**
-- Adaptive weekly plans for 5k, 10k, half marathon, full marathon
-- Calculates current fitness (VDOT from recent times) using Daniels' Running Formula
-- Determines training phase (base → build → peak → taper)
-- Generates workouts: easy, tempo, interval, long run with target paces
-- Adjusts based on missed sessions and recovery patterns
+- [ ] Adaptive weekly plans for 5k, 10k, half marathon, full marathon
+- [ ] VDOT calculation using Daniels' Running Formula
+- [ ] Training phase determination (base → build → peak → taper)
+- [ ] Workout generation: easy, tempo, interval, long run with target paces
+- [ ] Adjustment based on missed sessions and recovery patterns
 
 **VO2 max estimation:**
-- Estimates aerobic fitness from pace and heart rate data
-- Cooper test formula with HR drift cross-reference
-- Tracks VO2 max trend over time (improving / maintaining / declining)
-- Updates after each qualifying run
+- [ ] Estimate from pace and heart rate data (Cooper formula)
+- [ ] Track VO2 max trend over time
+- [ ] Update after each qualifying run
 
 **Race pace predictor:**
-- Predicts finish time for 5k, 10k, half, and marathon
-- Riegel formula (`T2 = T1 * (D2/D1)^1.06`) with VO2 max adjustment
-- Confidence levels based on data quality
+- [ ] Predict finish times (Riegel formula with VO2 max adjustment)
+- [ ] Confidence levels based on data quality
 
 **Recovery advisor:**
-- Acute training load (ATL) — 7-day exponentially weighted moving average
-- Chronic training load (CTL) — 42-day EWMA
-- Training stress balance (TSB = CTL - ATL)
-- Recommends rest, easy, or hard session based on fatigue level
-- Days until next recommended hard session
+- [ ] Acute training load (ATL) — 7-day EWMA
+- [ ] Chronic training load (CTL) — 42-day EWMA
+- [ ] Training stress balance (TSB = CTL - ATL)
+- [ ] Rest/easy/hard session recommendation
+- [ ] Days until next recommended hard session
 
-#### Elevation and pace analysis (post-run)
-Elevation profile, per-kilometre splits, heart rate zones, and comparison against previous runs on the same route. The data layer that keeps runners coming back daily.
+### Elevation and pace analysis (post-run)
 
-- Interactive elevation chart with pace overlay
-- Split table (pace, HR, elevation per km/mile)
-- Best effort tracking on named segments
-- Compare against personal best on same route
+- [x] Elevation profile with chart
+- [x] Split table (pace, elevation per km)
+- [ ] Interactive elevation chart with pace overlay
+- [ ] Best effort tracking on named segments
+- [ ] Compare against personal best on same route
 
 ### Backend work (Phase 3)
 
-Add premium feature endpoints to the Go service and spatial database capabilities.
-
 - [ ] Add premium endpoints to Go service:
-  - `POST /training-plan` — generate weekly plan (Daniels' VDOT tables)
-  - `GET /vo2max` — estimate from recent runs with HR data (Cooper formula)
-  - `GET /race-predictor` — predict finish times (Riegel formula)
-  - `GET /recovery` — training load and recovery recommendation (ATL/CTL/TSB)
-  - All gated by `subscription_tier = 'premium'` check
+  - [ ] `POST /training-plan` — generate weekly plan (Daniels' VDOT tables)
+  - [ ] `GET /vo2max` — estimate from recent runs with HR data
+  - [ ] `GET /race-predictor` — predict finish times (Riegel formula)
+  - [ ] `GET /recovery` — training load and recovery recommendation
+  - [ ] Gate all by `subscription_tier = 'premium'`
 - [ ] Enable PostGIS extension in Supabase
 - [ ] Add `geom geography(LineString, 4326)` column to `routes` with spatial index
 - [ ] Add `training_plans` table for generated plans
 - [ ] Add `fitness_snapshots` table for VO2 max and training load history
 - [ ] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles`
-- [ ] Apply for Garmin Connect developer program (do not block Phase 3 on approval)
+- [ ] Apply for Garmin Connect developer program
 
 ### Milestone: App Store + Play Store general availability
 
