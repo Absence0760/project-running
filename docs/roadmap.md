@@ -42,9 +42,10 @@ Full technical details in `backend_scaling.md`.
 
 The primary differentiator. Users export a KML from Google My Maps or any other source and open it directly in the app. The route loads instantly on a map, ready to run. No account required. Free forever.
 
-- [ ] Parse GPX, KML, KMZ, and GeoJSON formats
-- [ ] Display route on map with distance and elevation summary
-- [ ] Save route to local library for reuse
+- [x] Parse GPX, KML, KMZ, and GeoJSON formats (web)
+- [x] Display route with distance and elevation summary on import
+- [x] Save imported route to Supabase
+- [ ] Parse on mobile (iOS + Android)
 
 ### Live GPS run recording (phone)
 

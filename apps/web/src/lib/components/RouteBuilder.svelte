@@ -427,16 +427,31 @@
 	function setupMap() {
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-		const geolocate = new maplibregl.GeolocateControl({
-			positionOptions: { enableHighAccuracy: true },
-			trackUserLocation: true,
-			showUserLocation: true
-		});
-		map.addControl(geolocate, 'top-right');
+		// Show user location as a non-interactive dot (no accuracy circle)
+		let locationMarker: maplibregl.Marker | null = null;
+		let watchId: number | null = null;
 
-		// Show the blue dot once the map loads
 		map.on('load', () => {
-			geolocate.trigger();
+			watchId = navigator.geolocation.watchPosition(
+				(pos) => {
+					const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+					if (!locationMarker) {
+						const el = document.createElement('div');
+						el.className = 'user-location-dot';
+						locationMarker = new maplibregl.Marker({ element: el })
+							.setLngLat(lngLat)
+							.addTo(map);
+					} else {
+						locationMarker.setLngLat(lngLat);
+					}
+				},
+				() => {},
+				{ enableHighAccuracy: true }
+			);
+		});
+
+		map.on('remove', () => {
+			if (watchId !== null) navigator.geolocation.clearWatch(watchId);
 		});
 
 		map.on('load', () => {
@@ -741,5 +756,15 @@
 		100% {
 			box-shadow: 0 0 0 14px rgba(34, 197, 94, 0);
 		}
+	}
+
+	:global(.user-location-dot) {
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		background: #4285f4;
+		border: 2.5px solid white;
+		box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.3);
+		pointer-events: none;
 	}
 </style>

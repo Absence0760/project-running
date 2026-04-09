@@ -107,7 +107,8 @@ apps/web/
 │   │   ├── types.ts               # TypeScript interfaces
 │   │   ├── routing.ts             # OSRM road-snapping API
 │   │   ├── elevation.ts           # Open-Meteo elevation lookups
-│   │   ├── gpx.ts                 # GPX export generator
+│   │   ├── gpx.ts                 # GPX + KML export generator
+│   │   ├── import.ts              # GPX/KML/KMZ/GeoJSON file parser
 │   │   ├── data.ts                # Supabase data access layer
 │   │   ├── stores/
 │   │   │   └── auth.svelte.ts         # Supabase auth store (OAuth + session)
@@ -115,7 +116,8 @@ apps/web/
 │   │       ├── RouteBuilder.svelte    # MapLibre map with waypoints
 │   │       ├── RunMap.svelte          # MapLibre GPS trace viewer
 │   │       ├── ElevationProfile.svelte # SVG elevation chart
-│   │       └── CalendarHeatmap.svelte # GitHub-style activity heatmap
+│   │       ├── CalendarHeatmap.svelte # GitHub-style activity heatmap
+│   │       └── ImportRoute.svelte    # Drag-and-drop route file import modal
 │   ├── app.html
 │   ├── app.css
 │   └── app.d.ts

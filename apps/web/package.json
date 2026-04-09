@@ -29,6 +29,7 @@
 		"@supabase/ssr": "^0.1.0",
 		"@supabase/supabase-js": "^2.39.0",
 		"isomorphic-dompurify": "^2.35.0",
+		"jszip": "^3.10.1",
 		"maplibre-gl": "^5.22.0"
 	}
 }

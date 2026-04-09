@@ -2,10 +2,12 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { fetchRoutes } from '$lib/data';
+	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import type { Route } from '$lib/types';
 
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
+	let showImport = $state(false);
 
 	onMount(async () => {
 		routes = await fetchRoutes();
@@ -13,13 +15,23 @@
 	});
 </script>
 
+{#if showImport}
+	<ImportRoute onclose={() => (showImport = false)} />
+{/if}
+
 <div class="page">
 	<header class="page-header">
 		<h1>Routes</h1>
-		<a href="/routes/new" class="btn btn-primary">
-			<span class="material-symbols">add</span>
-			New Route
-		</a>
+		<div class="header-actions">
+			<button class="btn btn-outline" onclick={() => (showImport = true)}>
+				<span class="material-symbols">upload_file</span>
+				Import
+			</button>
+			<a href="/routes/new" class="btn btn-primary">
+				<span class="material-symbols">add</span>
+				New Route
+			</a>
+		</div>
 	</header>
 
 	{#if loading}
@@ -92,6 +104,22 @@
 
 	.btn-primary:hover {
 		background: var(--color-primary-hover);
+	}
+
+	.btn-outline {
+		background: transparent;
+		border: 1.5px solid var(--color-border);
+		color: var(--color-text);
+	}
+
+	.btn-outline:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.header-actions {
+		display: flex;
+		gap: var(--space-sm);
 	}
 
 	.loading {
