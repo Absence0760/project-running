@@ -97,6 +97,7 @@ class RunRecorder {
       distanceMetres: _distanceMetres,
       currentPaceSecondsPerKm: pace,
       currentPosition: _track.last,
+      track: List.unmodifiable(_track),
     ));
   }
 

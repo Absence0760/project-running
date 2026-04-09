@@ -4,8 +4,8 @@ import '../main.dart' show themeModeNotifier;
 
 /// Account settings and integrations management.
 class SettingsScreen extends StatefulWidget {
-  final ApiClient apiClient;
-  const SettingsScreen({super.key, required this.apiClient});
+  final ApiClient? apiClient;
+  const SettingsScreen({super.key, this.apiClient});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -29,13 +29,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: CircleAvatar(
-              backgroundColor: theme.colorScheme.primaryContainer,
+              backgroundColor: widget.apiClient?.userId != null
+                  ? theme.colorScheme.primaryContainer
+                  : theme.colorScheme.surfaceContainerHighest,
               child: Text(
-                (widget.apiClient.userEmail ?? '?')[0].toUpperCase(),
+                widget.apiClient?.userEmail != null
+                    ? widget.apiClient!.userEmail![0].toUpperCase()
+                    : '?',
               ),
             ),
-            title: Text(widget.apiClient.userEmail ?? 'Not signed in'),
-            subtitle: Text(widget.apiClient.userId != null ? 'Signed in' : 'No account'),
+            title: Text(widget.apiClient?.userEmail ?? 'Offline mode'),
+            subtitle: Text(widget.apiClient?.userId != null
+                ? 'Signed in — runs will sync'
+                : 'Sign in to sync runs across devices'),
           ),
           const Divider(),
 

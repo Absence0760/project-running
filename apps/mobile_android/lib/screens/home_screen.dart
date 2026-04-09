@@ -8,9 +8,9 @@ import 'routes_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final ApiClient apiClient;
+  final ApiClient? apiClient;
   final LocalRunStore runStore;
-  const HomeScreen({super.key, required this.apiClient, required this.runStore});
+  const HomeScreen({super.key, this.apiClient, required this.runStore});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();

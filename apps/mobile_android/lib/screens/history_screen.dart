@@ -6,9 +6,9 @@ import '../local_run_store.dart';
 
 /// Run history showing local runs with sync status.
 class HistoryScreen extends StatefulWidget {
-  final ApiClient apiClient;
+  final ApiClient? apiClient;
   final LocalRunStore runStore;
-  const HistoryScreen({super.key, required this.apiClient, required this.runStore});
+  const HistoryScreen({super.key, this.apiClient, required this.runStore});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -34,6 +34,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _syncAll() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in from Settings to sync runs')),
+      );
+      return;
+    }
+
     final unsynced = widget.runStore.unsyncedRuns;
     if (unsynced.isEmpty) return;
 
@@ -43,7 +51,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     for (final run in unsynced) {
       try {
-        await widget.apiClient.saveRun(run);
+        await api.saveRun(run);
         await widget.runStore.markSynced(run.id);
         synced++;
       } catch (e) {

@@ -8,11 +8,15 @@ class RunSnapshot {
   final Waypoint currentPosition;
   final double? offRouteDistanceMetres;
 
+  /// The full GPS track recorded so far (unmodifiable).
+  final List<Waypoint> track;
+
   const RunSnapshot({
     required this.elapsed,
     required this.distanceMetres,
     this.currentPaceSecondsPerKm,
     required this.currentPosition,
     this.offRouteDistanceMetres,
+    this.track = const [],
   });
 }

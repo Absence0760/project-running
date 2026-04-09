@@ -10,23 +10,32 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env.local');
 
-  await ApiClient.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
-
   final store = LocalRunStore();
   await store.init();
 
-  // Auto sign-in with dev credentials from .env.local
-  final api = ApiClient();
-  final devEmail = dotenv.env['DEV_USER_EMAIL'];
-  final devPassword = dotenv.env['DEV_USER_PASSWORD'];
-  if (devEmail != null && devPassword != null) {
+  // Try to initialize Supabase — skip if not configured or unreachable
+  ApiClient? api;
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  if (supabaseUrl != null && supabaseUrl.isNotEmpty &&
+      anonKey != null && anonKey.isNotEmpty) {
     try {
-      await api.signIn(email: devEmail, password: devPassword);
+      await ApiClient.initialize(url: supabaseUrl, anonKey: anonKey);
+      api = ApiClient();
+
+      final devEmail = dotenv.env['DEV_USER_EMAIL'];
+      final devPassword = dotenv.env['DEV_USER_PASSWORD'];
+      if (devEmail != null && devEmail.isNotEmpty &&
+          devPassword != null && devPassword.isNotEmpty) {
+        try {
+          await api.signIn(email: devEmail, password: devPassword);
+        } catch (e) {
+          debugPrint('Auto sign-in failed: $e');
+        }
+      }
     } catch (e) {
-      debugPrint('Auto sign-in failed: $e');
+      debugPrint('Supabase init failed, running offline: $e');
+      api = null;
     }
   }
 
@@ -40,9 +49,9 @@ class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
 final themeModeNotifier = ThemeModeNotifier();
 
 class RunApp extends StatelessWidget {
-  final ApiClient apiClient;
+  final ApiClient? apiClient;
   final LocalRunStore runStore;
-  const RunApp({super.key, required this.apiClient, required this.runStore});
+  const RunApp({super.key, this.apiClient, required this.runStore});
 
   @override
   Widget build(BuildContext context) {
