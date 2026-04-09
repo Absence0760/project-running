@@ -37,6 +37,24 @@ PUBLIC_MAPTILER_KEY=<your-maptiler-key>
 
 ---
 
+## Seed the database
+
+Before running the web app for the first time, seed the local database with test data:
+
+```bash
+cd apps/backend
+supabase db reset
+```
+
+This creates a test user and populates all tables. Log in with:
+
+- **Email:** `runner@test.com`
+- **Password:** `testtest`
+
+See `local_testing_backend.md` for details on what the seed includes.
+
+---
+
 ## Running
 
 ```bash
@@ -77,6 +95,9 @@ apps/web/
 │   │   ├── runs/                  # Run history with source filtering
 │   │   │   └── [id]/              # Run detail: MapLibre GPS trace, elevation, splits, HR
 │   │   ├── live/[id]/             # Live spectator view (public, no auth)
+│   │   ├── share/
+│   │   │   ├── route/[id]/        # Public shared route page
+│   │   │   └── run/[id]/          # Public shared run page
 │   │   └── settings/
 │   │       ├── integrations/      # Connect Strava, Garmin, parkrun
 │   │       └── account/           # Profile, data export
@@ -87,6 +108,7 @@ apps/web/
 │   │   ├── routing.ts             # OSRM road-snapping API
 │   │   ├── elevation.ts           # Open-Meteo elevation lookups
 │   │   ├── gpx.ts                 # GPX export generator
+│   │   ├── data.ts                # Supabase data access layer
 │   │   ├── stores/
 │   │   │   └── auth.svelte.ts         # Supabase auth store (OAuth + session)
 │   │   └── components/

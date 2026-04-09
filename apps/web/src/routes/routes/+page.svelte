@@ -1,5 +1,16 @@
 <script lang="ts">
-	import { mockRoutes, formatDistance } from '$lib/mock-data';
+	import { onMount } from 'svelte';
+	import { formatDistance } from '$lib/mock-data';
+	import { fetchRoutes } from '$lib/data';
+	import type { Route } from '$lib/types';
+
+	let routes = $state<Route[]>([]);
+	let loading = $state(true);
+
+	onMount(async () => {
+		routes = await fetchRoutes();
+		loading = false;
+	});
 </script>
 
 <div class="page">
@@ -11,27 +22,37 @@
 		</a>
 	</header>
 
-	<div class="route-grid">
-		{#each mockRoutes as route}
-			<a href="/routes/{route.id}" class="route-card">
-				<div class="route-map-placeholder">
-					<span class="material-symbols">route</span>
-				</div>
-				<div class="route-info">
-					<h3>{route.name}</h3>
-					<div class="route-meta">
-						<span>{formatDistance(route.distance_m)}</span>
-						{#if route.elevation_m}
-							<span class="meta-sep">&middot;</span>
-							<span>{route.elevation_m} m elev</span>
-						{/if}
-						<span class="meta-sep">&middot;</span>
-						<span class="surface-tag">{route.surface}</span>
+	{#if loading}
+		<p class="loading">Loading routes...</p>
+	{:else if routes.length === 0}
+		<div class="empty">
+			<span class="material-symbols empty-icon">route</span>
+			<p>No routes yet. Create your first route!</p>
+			<a href="/routes/new" class="btn btn-primary">New Route</a>
+		</div>
+	{:else}
+		<div class="route-grid">
+			{#each routes as route}
+				<a href="/routes/{route.id}" class="route-card">
+					<div class="route-map-placeholder">
+						<span class="material-symbols">route</span>
 					</div>
-				</div>
-			</a>
-		{/each}
-	</div>
+					<div class="route-info">
+						<h3>{route.name}</h3>
+						<div class="route-meta">
+							<span>{formatDistance(route.distance_m)}</span>
+							{#if route.elevation_m}
+								<span class="meta-sep">&middot;</span>
+								<span>{route.elevation_m} m elev</span>
+							{/if}
+							<span class="meta-sep">&middot;</span>
+							<span class="surface-tag">{route.surface}</span>
+						</div>
+					</div>
+				</a>
+			{/each}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -71,6 +92,25 @@
 
 	.btn-primary:hover {
 		background: var(--color-primary-hover);
+	}
+
+	.loading {
+		text-align: center;
+		color: var(--color-text-tertiary);
+		padding: var(--space-2xl);
+	}
+
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-2xl);
+		color: var(--color-text-tertiary);
+	}
+
+	.empty-icon {
+		font-size: 3rem;
 	}
 
 	.route-grid {

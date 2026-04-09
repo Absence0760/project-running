@@ -32,42 +32,17 @@ function createAuthStore() {
 		if (error) throw error;
 	}
 
-	/**
-	 * Email/password login for local development.
-	 */
-	async function demoLogin(email: string) {
-		loading = true;
-		try {
-			// Try sign in first, fall back to sign up
-			const password = 'testtest';
-			let { error } = await supabase.auth.signInWithPassword({ email, password });
-			if (error?.message?.includes('Invalid login') || error?.message?.includes('invalid_credentials')) {
-				// User might not exist — try sign up
-				const signup = await supabase.auth.signUp({ email, password });
-				if (signup.error) {
-					// If already registered, the password was wrong
-					if (signup.error.message?.includes('already registered')) {
-						throw new Error('Incorrect password. If you created this user via CLI with a different password, recreate it or use that password.');
-					}
-					throw signup.error;
-				}
-			} else if (error) {
-				throw error;
-			}
-			await refreshSession();
-		} finally {
-			loading = false;
-		}
-	}
-
 	async function refreshSession() {
 		const { data: { session } } = await supabase.auth.getSession();
 		if (session) {
 			loggedIn = true;
-			await fetchUser(session.user.id, session.user.email ?? '');
+			loading = false;
+			// Don't await — fetch profile in background so navigation isn't blocked
+			fetchUser(session.user.id, session.user.email ?? '').catch(console.error);
 		} else {
 			loggedIn = false;
 			user = null;
+			loading = false;
 		}
 	}
 
@@ -123,10 +98,10 @@ function createAuthStore() {
 
 	// Listen for auth state changes
 	if (browser) {
-		supabase.auth.onAuthStateChange(async (event, session) => {
+		supabase.auth.onAuthStateChange((event, session) => {
 			if (session) {
 				loggedIn = true;
-				await fetchUser(session.user.id, session.user.email ?? '');
+				fetchUser(session.user.id, session.user.email ?? '').catch(console.error);
 			} else {
 				loggedIn = false;
 				user = null;
@@ -151,7 +126,6 @@ function createAuthStore() {
 		get isPremium() { return user?.subscription_tier === 'premium'; },
 		signInWithGoogle,
 		signInWithApple,
-		demoLogin,
 		fetchUser,
 		refreshSession,
 		logout,

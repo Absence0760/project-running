@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
-		mockRuns,
 		formatDuration,
 		formatPace,
 		formatDistance,
@@ -8,12 +8,15 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import type { RunSource } from '$lib/types';
+	import { fetchRuns } from '$lib/data';
+	import type { Run, RunSource } from '$lib/types';
 
+	let runs = $state<Run[]>([]);
+	let loading = $state(true);
 	let sourceFilter = $state<RunSource | 'all'>('all');
 
 	let filteredRuns = $derived(
-		sourceFilter === 'all' ? mockRuns : mockRuns.filter((r) => r.source === sourceFilter),
+		sourceFilter === 'all' ? runs : runs.filter((r) => r.source === sourceFilter),
 	);
 
 	const sources: { value: RunSource | 'all'; label: string }[] = [
@@ -23,6 +26,11 @@
 		{ value: 'parkrun', label: 'parkrun' },
 		{ value: 'healthkit', label: 'HealthKit' },
 	];
+
+	onMount(async () => {
+		runs = await fetchRuns();
+		loading = false;
+	});
 </script>
 
 <div class="page">
@@ -41,48 +49,52 @@
 		</div>
 	</header>
 
-	<div class="run-list">
-		{#each filteredRuns as run}
-			<a href="/runs/{run.id}" class="run-card">
-				<div class="run-map-placeholder">
-					<span class="material-symbols">map</span>
-				</div>
-				<div class="run-details">
-					<div class="run-top">
-						<span class="run-date">{formatDate(run.started_at)}</span>
-						<span class="source-badge" style="background: {sourceColor(run.source)}"
-							>{sourceLabel(run.source)}</span
-						>
+	{#if loading}
+		<p class="loading-text">Loading runs...</p>
+	{:else}
+		<div class="run-list">
+			{#each filteredRuns as run}
+				<a href="/runs/{run.id}" class="run-card">
+					<div class="run-map-placeholder">
+						<span class="material-symbols">map</span>
 					</div>
-					<div class="run-stats">
-						<div class="run-stat">
-							<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
-							<span class="run-stat-label">Distance</span>
-						</div>
-						<div class="run-stat">
-							<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
-							<span class="run-stat-label">Time</span>
-						</div>
-						<div class="run-stat">
-							<span class="run-stat-value"
-								>{formatPace(run.duration_s, run.distance_m)} /km</span
+					<div class="run-details">
+						<div class="run-top">
+							<span class="run-date">{formatDate(run.started_at)}</span>
+							<span class="source-badge" style="background: {sourceColor(run.source)}"
+								>{sourceLabel(run.source)}</span
 							>
-							<span class="run-stat-label">Pace</span>
 						</div>
+						<div class="run-stats">
+							<div class="run-stat">
+								<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
+								<span class="run-stat-label">Distance</span>
+							</div>
+							<div class="run-stat">
+								<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
+								<span class="run-stat-label">Time</span>
+							</div>
+							<div class="run-stat">
+								<span class="run-stat-value"
+									>{formatPace(run.duration_s, run.distance_m)} /km</span
+								>
+								<span class="run-stat-label">Pace</span>
+							</div>
+						</div>
+						{#if run.metadata?.event}
+							<div class="run-event">
+								{run.metadata.event}
+								{#if run.metadata.position} &middot; Position {run.metadata.position}{/if}
+							</div>
+						{/if}
 					</div>
-					{#if run.metadata?.event}
-						<div class="run-event">
-							{run.metadata.event}
-							{#if run.metadata.position} &middot; Position {run.metadata.position}{/if}
-						</div>
-					{/if}
-				</div>
-			</a>
-		{/each}
-	</div>
+				</a>
+			{/each}
+		</div>
 
-	{#if filteredRuns.length === 0}
-		<div class="empty">No runs found for this filter.</div>
+		{#if filteredRuns.length === 0}
+			<div class="empty">No runs found for this filter.</div>
+		{/if}
 	{/if}
 </div>
 
@@ -127,6 +139,12 @@
 		background: var(--color-primary);
 		border-color: var(--color-primary);
 		color: white;
+	}
+
+	.loading-text {
+		text-align: center;
+		color: var(--color-text-tertiary);
+		padding: var(--space-2xl);
 	}
 
 	.run-list {

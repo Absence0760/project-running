@@ -1,8 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import {
-		mockRuns,
 		formatDuration,
 		formatPace,
 		formatDistance,
@@ -10,34 +10,19 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
+	import { fetchRunById } from '$lib/data';
+	import type { Run } from '$lib/types';
 
 	let { data } = $props();
 
-	// Find the run by ID, or fall back to first mock run
-	const run = mockRuns.find((r) => r.id === data.id) ?? mockRuns[0];
+	let run = $state<Run | null>(null);
+	let loading = $state(true);
 
-	// Generate mock GPS track if none exists
-	const baseTrack = run.track ?? generateMockTrack(run.distance_m);
-
-	// Generate mock splits
-	const distanceKm = run.distance_m / 1000;
-	const numSplits = Math.ceil(distanceKm);
-	const avgPaceSec = run.duration_s / distanceKm;
-
-	const splits = Array.from({ length: numSplits }, (_, i) => {
-		const variance = (Math.random() - 0.5) * 20;
-		const splitPace = avgPaceSec + variance;
-		const splitDistance = i < numSplits - 1 ? 1000 : (distanceKm - Math.floor(distanceKm)) * 1000 || 1000;
-		const elevation = Math.round((Math.random() - 0.3) * 15);
-		return {
-			km: i + 1,
-			pace_s: Math.round(splitPace),
-			distance_m: splitDistance,
-			elevation_m: elevation,
-		};
+	onMount(async () => {
+		run = await fetchRunById(data.id);
+		loading = false;
 	});
 
-	// Mock HR zones
 	const hrZones = [
 		{ zone: 'Zone 1', label: 'Recovery', pct: 8, color: '#90CAF9' },
 		{ zone: 'Zone 2', label: 'Easy', pct: 32, color: '#4CAF50' },
@@ -46,16 +31,28 @@
 		{ zone: 'Zone 5', label: 'Max', pct: 5, color: '#F44336' },
 	];
 
-	// Mock elevation data from track
-	const elevations = baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30);
+	let baseTrack = $derived(run ? (run.track ?? generateMockTrack(run.distance_m)) : []);
+	let elevations = $derived(baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30));
+
+	let splits = $derived.by(() => {
+		if (!run) return [];
+		const distanceKm = run.distance_m / 1000;
+		const numSplits = Math.ceil(distanceKm);
+		const avgPaceSec = run.duration_s / distanceKm;
+		return Array.from({ length: numSplits }, (_, i) => {
+			const variance = (Math.random() - 0.5) * 20;
+			const splitPace = avgPaceSec + variance;
+			const splitDistance = i < numSplits - 1 ? 1000 : (distanceKm - Math.floor(distanceKm)) * 1000 || 1000;
+			const elevation = Math.round((Math.random() - 0.3) * 15);
+			return { km: i + 1, pace_s: Math.round(splitPace), distance_m: splitDistance, elevation_m: elevation };
+		});
+	});
 
 	function generateMockTrack(distanceM: number) {
-		// Generate a simple mock track around Melbourne
 		const points = Math.max(50, Math.round(distanceM / 20));
 		const baseLat = -37.8136;
 		const baseLng = 144.9631;
 		const track = [];
-
 		for (let i = 0; i < points; i++) {
 			const angle = (i / points) * Math.PI * 2;
 			const radius = (distanceM / 1000) * 0.004;
@@ -65,12 +62,14 @@
 				ele: 20 + Math.sin(angle * 3) * 15 + Math.random() * 5,
 			});
 		}
-		// Close the loop
 		track.push(track[0]);
 		return track;
 	}
 </script>
 
+{#if loading}
+	<div class="run-detail"><p class="loading-text">Loading run...</p></div>
+{:else if run}
 <div class="run-detail">
 	<main class="map-panel">
 		<RunMap track={baseTrack} />
@@ -170,8 +169,15 @@
 		</section>
 	</aside>
 </div>
+{/if}
 
 <style>
+	.loading-text {
+		text-align: center;
+		color: var(--color-text-tertiary);
+		padding: var(--space-2xl);
+	}
+
 	.run-detail {
 		display: flex;
 		height: 100vh;

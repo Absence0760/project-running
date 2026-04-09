@@ -13,7 +13,7 @@
 	];
 
 	const publicPaths = ['/', '/login', '/auth/callback'];
-	const isPublic = (path: string) => publicPaths.includes(path) || path.startsWith('/live/');
+	const isPublic = (path: string) => publicPaths.includes(path) || path.startsWith('/live/') || path.startsWith('/share/');
 
 	function isActive(href: string, path: string): boolean {
 		if (href === '/settings/integrations') return path.startsWith('/settings');
@@ -36,6 +36,10 @@
 {#if isPublic($page.url.pathname)}
 	<!-- Public pages: landing + login — no sidebar -->
 	<slot />
+{:else if auth.loading}
+	<div class="loading-screen">
+		<span class="loading-text">Loading...</span>
+	</div>
 {:else if auth.loggedIn}
 	<!-- Authenticated app shell -->
 	<div class="app-shell">
@@ -227,6 +231,17 @@
 		flex: 1;
 		margin-left: var(--sidebar-width);
 		min-height: 100vh;
+	}
+
+	.loading-screen {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 100vh;
+	}
+
+	.loading-text {
+		color: var(--color-text-tertiary);
 	}
 
 	.material-symbols {

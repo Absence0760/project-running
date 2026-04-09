@@ -40,13 +40,19 @@ These are local defaults and are regenerated on each `supabase start` — no nee
 
 ---
 
-## Apply database migrations
+## Apply database migrations and seed data
 
 ```bash
 supabase db reset
 ```
 
-This drops and recreates the local database using the migration files in `supabase/migrations/`. Run this whenever you pull new migration files.
+This drops and recreates the local database using the migration files in `supabase/migrations/`, then runs `seed.sql` which creates a test user and populates all tables with realistic mock data.
+
+**Test user credentials:**
+- Email: `runner@test.com`
+- Password: `testtest`
+
+The seed includes 12 runs (across app, Strava, parkrun, HealthKit sources), 5 routes, a user profile, and 2 connected integrations. This is enough to test the dashboard, run history, route library, and all other pages with real data.
 
 ---
 

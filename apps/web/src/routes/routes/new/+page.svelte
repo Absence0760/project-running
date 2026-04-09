@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import { toGpx, downloadFile } from '$lib/gpx';
+	import { saveRoute } from '$lib/data';
 
 	let routeName = $state('');
 	let mode = $state<'road' | 'trail'>('road');
@@ -11,6 +13,8 @@
 	let elevations = $state<number[]>([]);
 	let coordinates = $state<[number, number][]>([]);
 	let builder: RouteBuilder;
+	let saving = $state(false);
+	let saveError = $state('');
 
 	function handleUpdate(data: {
 		waypoints: number;
@@ -39,6 +43,30 @@
 		const gpx = toGpx(name, coordinates, elevations);
 		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
 		downloadFile(gpx, filename, 'application/gpx+xml');
+	}
+
+	async function handleSaveRoute() {
+		saving = true;
+		saveError = '';
+		try {
+			const routeData = builder?.getRouteData();
+			if (!routeData) return;
+
+			const saved = await saveRoute({
+				name: routeName || 'Untitled Route',
+				waypoints: routeData.waypoints,
+				distance_m: Math.round(distance * 100) / 100,
+				elevation_m: elevation > 0 ? elevation : null,
+				surface: mode === 'trail' ? 'trail' : 'road',
+				is_public: false,
+			});
+
+			goto(`/routes/${saved.id}`);
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Failed to save route';
+		} finally {
+			saving = false;
+		}
 	}
 </script>
 
@@ -117,8 +145,18 @@
 				</button>
 			</div>
 
+			{#if saveError}
+				<div class="save-error">{saveError}</div>
+			{/if}
+
 			<div class="action-row">
-				<button class="btn btn-primary" disabled={waypointCount < 2}>Save Route</button>
+				<button
+					class="btn btn-primary"
+					disabled={waypointCount < 2 || saving}
+					onclick={handleSaveRoute}
+				>
+					{saving ? 'Saving...' : 'Save Route'}
+				</button>
 				<button
 					class="btn btn-outline"
 					disabled={waypointCount < 2}
@@ -343,6 +381,15 @@
 	.btn-ghost:hover:not(:disabled) {
 		background: var(--color-bg-secondary);
 		color: var(--color-text);
+	}
+
+	.save-error {
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-danger-light, #fef2f2);
+		border: 1px solid rgba(229, 57, 53, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-danger, #e53935);
+		font-size: 0.8rem;
 	}
 
 	.sidebar-hint {

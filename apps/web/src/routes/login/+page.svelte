@@ -1,20 +1,22 @@
 <script lang="ts">
-	import { auth } from '$lib/stores/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
+	import { supabase } from '$lib/supabase';
 
 	let error = $state('');
 	let loading = $state(false);
-	let demoEmail = $state('test@test.com');
+	let email = $state('');
+	let password = $state('');
+	let isSignUp = $state(false);
 
 	async function handleGoogleSignIn() {
 		error = '';
 		loading = true;
 		try {
 			await auth.signInWithGoogle();
-			goto('/dashboard');
+			// OAuth redirects to /auth/callback
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Sign in failed';
-		} finally {
 			loading = false;
 		}
 	}
@@ -24,24 +26,29 @@
 		loading = true;
 		try {
 			await auth.signInWithApple();
-			goto('/dashboard');
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Sign in failed';
-		} finally {
 			loading = false;
 		}
 	}
 
-	async function handleDemoLogin(e: Event) {
+	async function handleEmailSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
 		loading = true;
 		try {
-			await auth.demoLogin(demoEmail);
+			if (isSignUp) {
+				const { error: signUpError } = await supabase.auth.signUp({ email, password });
+				if (signUpError) throw signUpError;
+			} else {
+				const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+				if (signInError) throw signInError;
+			}
+			// Wait for onAuthStateChange to set loggedIn, then navigate
+			await auth.refreshSession();
 			goto('/dashboard');
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Login failed';
-		} finally {
+			error = err instanceof Error ? err.message : 'Authentication failed';
 			loading = false;
 		}
 	}
@@ -53,7 +60,7 @@
 			<span class="logo-icon">&#9654;</span> Run
 		</a>
 
-		<h1>Sign in to your account</h1>
+		<h1>{isSignUp ? 'Create an account' : 'Sign in to your account'}</h1>
 		<p class="subtitle">Track your runs across all your devices.</p>
 
 		{#if error}
@@ -80,24 +87,40 @@
 		</div>
 
 		<div class="divider">
-			<span>or</span>
+			<span>or continue with email</span>
 		</div>
 
-		<!-- Demo login for local testing -->
-		<form class="demo-section" onsubmit={handleDemoLogin}>
-			<p class="demo-label">Local testing</p>
-			<div class="demo-row">
-				<input
-					type="email"
-					bind:value={demoEmail}
-					placeholder="demo@runapp.com"
-					required
-				/>
-				<button type="submit" class="btn btn-demo" disabled={loading}>
-					{loading ? 'Signing in...' : 'Demo Login'}
-				</button>
-			</div>
+		<form class="email-form" onsubmit={handleEmailSubmit}>
+			<input
+				type="email"
+				bind:value={email}
+				placeholder="Email address"
+				required
+				autocomplete="email"
+			/>
+			<input
+				type="password"
+				bind:value={password}
+				placeholder="Password"
+				required
+				minlength="6"
+				autocomplete={isSignUp ? 'new-password' : 'current-password'}
+			/>
+			<button type="submit" class="btn btn-email" disabled={loading}>
+				{#if loading}
+					Signing {isSignUp ? 'up' : 'in'}...
+				{:else}
+					{isSignUp ? 'Sign Up' : 'Sign In'}
+				{/if}
+			</button>
 		</form>
+
+		<p class="toggle-mode">
+			{isSignUp ? 'Already have an account?' : "Don't have an account?"}
+			<button class="link-btn" onclick={() => { isSignUp = !isSignUp; error = ''; }}>
+				{isSignUp ? 'Sign in' : 'Sign up'}
+			</button>
+		</p>
 
 		<p class="terms">
 			By signing in, you agree to our Terms of Service and Privacy Policy.
@@ -220,26 +243,15 @@
 		border-top: 1px solid var(--color-border);
 	}
 
-	.demo-section {
+	.email-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
 		text-align: left;
 	}
 
-	.demo-label {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--color-text-tertiary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: var(--space-sm);
-	}
-
-	.demo-row {
-		display: flex;
-		gap: var(--space-sm);
-	}
-
 	input {
-		flex: 1;
+		width: 100%;
 		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
@@ -253,19 +265,35 @@
 		border-color: var(--color-primary);
 	}
 
-	.btn-demo {
-		width: auto;
-		padding: var(--space-sm) var(--space-lg);
+	.btn-email {
 		background: var(--color-primary);
 		color: white;
 		border: none;
-		font-size: 0.85rem;
 		font-weight: 600;
-		white-space: nowrap;
 	}
 
-	.btn-demo:hover:not(:disabled) {
+	.btn-email:hover:not(:disabled) {
 		background: var(--color-primary-hover);
+	}
+
+	.toggle-mode {
+		margin-top: var(--space-lg);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+
+	.link-btn {
+		background: none;
+		border: none;
+		color: var(--color-primary);
+		font-weight: 600;
+		cursor: pointer;
+		font-size: inherit;
+		padding: 0;
+	}
+
+	.link-btn:hover {
+		text-decoration: underline;
 	}
 
 	.terms {

@@ -1,63 +1,91 @@
 <script lang="ts">
-	import { mockRoutes, formatDistance } from '$lib/mock-data';
+	import { onMount } from 'svelte';
+	import { formatDistance } from '$lib/mock-data';
+	import { toGpx, downloadFile } from '$lib/gpx';
+	import { fetchRouteById } from '$lib/data';
+	import RunMap from '$lib/components/RunMap.svelte';
+	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import type { Route } from '$lib/types';
 
 	let { data } = $props();
 
-	const route = mockRoutes[0];
+	let route = $state<Route | null>(null);
+	let loading = $state(true);
+
+	onMount(async () => {
+		route = await fetchRouteById(data.id);
+		loading = false;
+	});
+
+	function handleExportGpx() {
+		if (!route || !route.waypoints.length) return;
+		const coords: [number, number][] = route.waypoints.map((w) => [w.lng, w.lat]);
+		const elevations = route.waypoints.map((w) => w.ele ?? 0);
+		const gpx = toGpx(route.name, coords, elevations);
+		const filename = route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
+		downloadFile(gpx, filename, 'application/gpx+xml');
+	}
+
+	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
 </script>
 
-<div class="page">
-	<a href="/routes" class="back-link">
-		<span class="material-symbols">arrow_back</span>
-		Routes
-	</a>
+{#if loading}
+	<div class="page"><p class="loading">Loading route...</p></div>
+{:else if route}
+	<div class="page">
+		<a href="/routes" class="back-link">
+			<span class="material-symbols">arrow_back</span>
+			Routes
+		</a>
 
-	<header class="detail-header">
-		<div>
-			<h1>{route.name}</h1>
-			<div class="route-meta">
-				<span>{formatDistance(route.distance_m)}</span>
-				{#if route.elevation_m}
+		<header class="detail-header">
+			<div>
+				<h1>{route.name}</h1>
+				<div class="route-meta">
+					<span>{formatDistance(route.distance_m)}</span>
+					{#if route.elevation_m}
+						<span class="meta-sep">&middot;</span>
+						<span>{route.elevation_m} m elevation gain</span>
+					{/if}
 					<span class="meta-sep">&middot;</span>
-					<span>{route.elevation_m} m elevation gain</span>
-				{/if}
-				<span class="meta-sep">&middot;</span>
-				<span class="surface-tag">{route.surface}</span>
+					<span class="surface-tag">{route.surface}</span>
+				</div>
 			</div>
-		</div>
-		<div class="actions">
-			<button class="btn btn-outline">Export GPX</button>
-			<button class="btn btn-primary">Start Run</button>
-		</div>
-	</header>
+			<div class="actions">
+				<button class="btn btn-outline" onclick={handleExportGpx}>Export GPX</button>
+			</div>
+		</header>
 
-	<div class="map-container">
-		<div class="map-placeholder">
-			<span class="material-symbols">map</span>
-			<p>Route map</p>
-		</div>
+		{#if route.waypoints.length > 0}
+			<div class="map-container">
+				<RunMap track={route.waypoints} />
+			</div>
+
+			<section class="card">
+				<h2>Elevation Profile</h2>
+				<ElevationProfile {elevations} totalDistance={route.distance_m} />
+			</section>
+		{:else}
+			<div class="map-container">
+				<div class="map-placeholder">
+					<span class="material-symbols">map</span>
+					<p>No waypoint data available</p>
+				</div>
+			</div>
+		{/if}
 	</div>
-
-	<!-- Elevation profile placeholder -->
-	<section class="card">
-		<h2>Elevation Profile</h2>
-		<div class="elevation-placeholder">
-			<svg viewBox="0 0 400 80" class="elevation-svg">
-				<path
-					d="M0 70 C50 60, 80 30, 120 40 S180 10, 220 35 S280 55, 320 25 S370 45, 400 50 L400 80 L0 80 Z"
-					fill="var(--color-primary-light)"
-					stroke="var(--color-primary)"
-					stroke-width="2"
-				/>
-			</svg>
-		</div>
-	</section>
-</div>
+{/if}
 
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
 		max-width: 56rem;
+	}
+
+	.loading {
+		text-align: center;
+		color: var(--color-text-tertiary);
+		padding: var(--space-2xl);
 	}
 
 	.back-link {
@@ -126,16 +154,6 @@
 		cursor: pointer;
 	}
 
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-		border: none;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
-
 	.btn-outline {
 		background: transparent;
 		border: 1.5px solid var(--color-border);
@@ -149,22 +167,23 @@
 
 	.map-container {
 		margin-bottom: var(--space-xl);
+		height: 24rem;
+		border-radius: var(--radius-lg);
+		overflow: hidden;
 	}
 
 	.map-placeholder {
-		height: 24rem;
-		background: var(--color-bg-tertiary);
-		border-radius: var(--radius-lg);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: var(--space-sm);
+		height: 100%;
+		background: var(--color-bg-tertiary);
 		color: var(--color-text-tertiary);
+		gap: var(--space-sm);
 	}
 
 	.map-placeholder .material-symbols {
-		font-family: 'Material Symbols Outlined';
 		font-size: 3rem;
 	}
 
@@ -173,15 +192,6 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
-	}
-
-	.elevation-placeholder {
-		height: 5rem;
-	}
-
-	.elevation-svg {
-		width: 100%;
-		height: 100%;
 	}
 
 	.material-symbols {

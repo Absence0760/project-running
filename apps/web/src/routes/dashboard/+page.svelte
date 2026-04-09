@@ -1,9 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import CalendarHeatmap from '$lib/components/CalendarHeatmap.svelte';
 	import {
-		mockRuns,
-		mockWeeklyMileage,
-		mockPersonalRecords,
 		formatDuration,
 		formatPace,
 		formatDistance,
@@ -12,18 +10,35 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
+	import { fetchRuns, fetchWeeklyMileage, fetchPersonalRecords } from '$lib/data';
+	import type { Run } from '$lib/types';
 
-	// Stat calculations
+	let runs = $state<Run[]>([]);
+	let weeklyMileage = $state<{ week: string; distance_km: number }[]>([]);
+	let personalRecords = $state<{ distance: string; time_s: number; date: string }[]>([]);
+	let loading = $state(true);
+
+	onMount(async () => {
+		[runs, weeklyMileage, personalRecords] = await Promise.all([
+			fetchRuns(),
+			fetchWeeklyMileage(),
+			fetchPersonalRecords(),
+		]);
+		loading = false;
+	});
+
 	const now = new Date();
 	const weekStart = new Date(now);
 	weekStart.setDate(now.getDate() - now.getDay());
 	weekStart.setHours(0, 0, 0, 0);
 
-	const thisWeekRuns = mockRuns.filter((r) => new Date(r.started_at) >= weekStart);
-	const thisWeekDistance = thisWeekRuns.reduce((sum, r) => sum + r.distance_m, 0);
-	const totalRuns = mockRuns.length;
-	const longestRun = Math.max(...mockRuns.map((r) => r.distance_m));
-	const maxWeeklyBar = Math.max(...mockWeeklyMileage.map((w) => w.distance_km));
+	let thisWeekRuns = $derived(runs.filter((r) => new Date(r.started_at) >= weekStart));
+	let thisWeekDistance = $derived(thisWeekRuns.reduce((sum, r) => sum + r.distance_m, 0));
+	let totalRuns = $derived(runs.length);
+	let longestRun = $derived(runs.length > 0 ? Math.max(...runs.map((r) => r.distance_m)) : 0);
+	let maxWeeklyBar = $derived(
+		weeklyMileage.length > 0 ? Math.max(...weeklyMileage.map((w) => w.distance_km)) : 1
+	);
 </script>
 
 <div class="page">
@@ -31,103 +46,111 @@
 		<h1>Dashboard</h1>
 	</header>
 
-	<!-- Stat cards -->
-	<div class="stat-grid">
-		<div class="stat-card">
-			<span class="stat-label">This Week</span>
-			<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
-			<span class="stat-sub">{thisWeekRuns.length} run{thisWeekRuns.length !== 1 ? 's' : ''}</span>
+	{#if loading}
+		<p class="loading-text">Loading dashboard...</p>
+	{:else}
+		<!-- Stat cards -->
+		<div class="stat-grid">
+			<div class="stat-card">
+				<span class="stat-label">This Week</span>
+				<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
+				<span class="stat-sub">{thisWeekRuns.length} run{thisWeekRuns.length !== 1 ? 's' : ''}</span>
+			</div>
+			<div class="stat-card">
+				<span class="stat-label">Total Runs</span>
+				<span class="stat-value">{totalRuns}</span>
+				<span class="stat-sub">all sources</span>
+			</div>
+			<div class="stat-card">
+				<span class="stat-label">Longest Run</span>
+				<span class="stat-value">{formatDistance(longestRun)}</span>
+				<span class="stat-sub">all time</span>
+			</div>
+			<div class="stat-card">
+				<span class="stat-label">This Week Pace</span>
+				<span class="stat-value">
+					{thisWeekRuns.length > 0
+						? formatPace(
+								thisWeekRuns.reduce((s, r) => s + r.duration_s, 0),
+								thisWeekDistance,
+							) + ' /km'
+						: '--'}
+				</span>
+				<span class="stat-sub">average</span>
+			</div>
 		</div>
-		<div class="stat-card">
-			<span class="stat-label">Total Runs</span>
-			<span class="stat-value">{totalRuns}</span>
-			<span class="stat-sub">all sources</span>
-		</div>
-		<div class="stat-card">
-			<span class="stat-label">Longest Run</span>
-			<span class="stat-value">{formatDistance(longestRun)}</span>
-			<span class="stat-sub">all time</span>
-		</div>
-		<div class="stat-card">
-			<span class="stat-label">This Week Pace</span>
-			<span class="stat-value">
-				{thisWeekRuns.length > 0
-					? formatPace(
-							thisWeekRuns.reduce((s, r) => s + r.duration_s, 0),
-							thisWeekDistance,
-						) + ' /km'
-					: '--'}
-			</span>
-			<span class="stat-sub">average</span>
-		</div>
-	</div>
 
-	<!-- Weekly mileage chart -->
-	<section class="card">
-		<h2>Weekly Mileage</h2>
-		<div class="chart">
-			{#each mockWeeklyMileage as week}
-				<div class="bar-col">
-					<div class="bar-tooltip">{week.distance_km.toFixed(1)} km</div>
-					<div
-						class="bar"
-						style="height: {(week.distance_km / maxWeeklyBar) * 100}%"
-					></div>
-					<span class="bar-label">{week.week.split(' ')[0]}</span>
-				</div>
-			{/each}
-		</div>
-	</section>
-
-	<!-- Calendar heatmap -->
-	<section class="card">
-		<h2>Activity</h2>
-		<CalendarHeatmap runs={mockRuns} />
-	</section>
-
-	<div class="two-col">
-		<!-- Personal records -->
+		<!-- Weekly mileage chart -->
 		<section class="card">
-			<h2>Personal Records</h2>
-			<table class="pr-table">
-				<thead>
-					<tr>
-						<th>Distance</th>
-						<th>Time</th>
-						<th>Date</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each mockPersonalRecords as pr}
-						<tr>
-							<td class="pr-distance">{pr.distance}</td>
-							<td class="pr-time">{formatDuration(pr.time_s)}</td>
-							<td class="pr-date">{formatDate(pr.date)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
-
-		<!-- Recent runs -->
-		<section class="card">
-			<h2>Recent Runs</h2>
-			<div class="run-list">
-				{#each mockRuns.slice(0, 7) as run}
-					<a href="/runs/{run.id}" class="run-row">
-						<div class="run-info">
-							<span class="run-date">{formatDateShort(run.started_at)}</span>
-							<span class="run-distance">{formatDistance(run.distance_m)}</span>
-						</div>
-						<div class="run-meta">
-							<span class="run-pace">{formatPace(run.duration_s, run.distance_m)} /km</span>
-							<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
-						</div>
-					</a>
+			<h2>Weekly Mileage</h2>
+			<div class="chart">
+				{#each weeklyMileage as week}
+					<div class="bar-col">
+						<div class="bar-tooltip">{week.distance_km.toFixed(1)} km</div>
+						<div
+							class="bar"
+							style="height: {(week.distance_km / maxWeeklyBar) * 100}%"
+						></div>
+						<span class="bar-label">{week.week.split(' ')[0]}</span>
+					</div>
 				{/each}
 			</div>
 		</section>
-	</div>
+
+		<!-- Calendar heatmap -->
+		<section class="card">
+			<h2>Activity</h2>
+			<CalendarHeatmap {runs} />
+		</section>
+
+		<div class="two-col">
+			<!-- Personal records -->
+			<section class="card">
+				<h2>Personal Records</h2>
+				{#if personalRecords.length > 0}
+					<table class="pr-table">
+						<thead>
+							<tr>
+								<th>Distance</th>
+								<th>Time</th>
+								<th>Date</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each personalRecords as pr}
+								<tr>
+									<td class="pr-distance">{pr.distance}</td>
+									<td class="pr-time">{formatDuration(pr.time_s)}</td>
+									<td class="pr-date">{formatDate(pr.date)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{:else}
+					<p class="empty-text">Complete qualifying runs to see PRs</p>
+				{/if}
+			</section>
+
+			<!-- Recent runs -->
+			<section class="card">
+				<h2>Recent Runs</h2>
+				<div class="run-list">
+					{#each runs.slice(0, 7) as run}
+						<a href="/runs/{run.id}" class="run-row">
+							<div class="run-info">
+								<span class="run-date">{formatDateShort(run.started_at)}</span>
+								<span class="run-distance">{formatDistance(run.distance_m)}</span>
+							</div>
+							<div class="run-meta">
+								<span class="run-pace">{formatPace(run.duration_s, run.distance_m)} /km</span>
+								<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
+							</div>
+						</a>
+					{/each}
+				</div>
+			</section>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -152,7 +175,17 @@
 		color: var(--color-text);
 	}
 
-	/* Stat cards */
+	.loading-text {
+		text-align: center;
+		color: var(--color-text-tertiary);
+		padding: var(--space-2xl);
+	}
+
+	.empty-text {
+		color: var(--color-text-tertiary);
+		font-size: 0.85rem;
+	}
+
 	.stat-grid {
 		display: grid;
 		grid-template-columns: repeat(4, 1fr);
@@ -190,7 +223,6 @@
 		margin-top: var(--space-xs);
 	}
 
-	/* Card */
 	.card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -199,7 +231,6 @@
 		margin-bottom: var(--space-xl);
 	}
 
-	/* Bar chart */
 	.chart {
 		display: flex;
 		align-items: flex-end;
@@ -248,14 +279,12 @@
 		margin-top: var(--space-xs);
 	}
 
-	/* Two column layout */
 	.two-col {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-xl);
 	}
 
-	/* PR table */
 	.pr-table {
 		width: 100%;
 		border-collapse: collapse;
@@ -292,7 +321,6 @@
 		font-size: 0.875rem;
 	}
 
-	/* Run list */
 	.run-list {
 		display: flex;
 		flex-direction: column;
