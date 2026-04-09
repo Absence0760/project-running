@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
-	import { toGpx, downloadFile } from '$lib/gpx';
+	import { toGpx, toKml, downloadFile } from '$lib/gpx';
 	import { saveRoute } from '$lib/data';
 
 	let routeName = $state('');
@@ -43,6 +43,13 @@
 		const gpx = toGpx(name, coordinates, elevations);
 		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
 		downloadFile(gpx, filename, 'application/gpx+xml');
+	}
+
+	function handleExportKml() {
+		const name = routeName || 'Untitled Route';
+		const kml = toKml(name, coordinates, elevations);
+		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
+		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
 	}
 
 	async function handleSaveRoute() {
@@ -162,7 +169,14 @@
 					disabled={waypointCount < 2}
 					onclick={handleExportGpx}
 				>
-					Export GPX
+					GPX
+				</button>
+				<button
+					class="btn btn-outline"
+					disabled={waypointCount < 2}
+					onclick={handleExportKml}
+				>
+					KML
 				</button>
 			</div>
 		</div>

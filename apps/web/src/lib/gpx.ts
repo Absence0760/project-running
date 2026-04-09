@@ -46,6 +46,41 @@ export function downloadFile(content: string, filename: string, mimeType: string
 	URL.revokeObjectURL(url);
 }
 
+/**
+ * Generate a KML XML string from route coordinates and metadata.
+ */
+export function toKml(
+	name: string,
+	coordinates: [number, number][],
+	elevations: number[]
+): string {
+	const coordString = coordinates
+		.map(([lng, lat], i) => `${lng},${lat},${elevations[i] ?? 0}`)
+		.join('\n          ');
+
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${escapeXml(name)}</name>
+    <Placemark>
+      <name>${escapeXml(name)}</name>
+      <Style>
+        <LineStyle>
+          <color>ffff0000</color>
+          <width>3</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+          ${coordString}
+        </coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+}
+
 function escapeXml(str: string): string {
 	return str
 		.replace(/&/g, '&amp;')

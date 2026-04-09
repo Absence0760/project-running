@@ -170,9 +170,9 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Place search via MapTiler geocoding
 - [x] Geolocate button + auto-center on user location
 - [x] Export as GPX with elevation data
+- [x] Export as KML
 - [x] Save route to Supabase
-- [ ] Export as KML
-- [ ] Shareable link generation
+- [x] Shareable link generation (makes route public + copies link)
 
 ### Run history dashboard
 
@@ -182,8 +182,8 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Personal records table (5k, 10k, half, marathon)
 - [x] Recent runs list with source badges
 - [x] All data fetched from Supabase (mock fallback for empty tables)
-- [ ] Monthly and yearly mileage toggle
-- [ ] Filter by source (recorded, Strava, parkrun, Garmin)
+- [x] Monthly and yearly mileage toggle (week/month/year view)
+- [x] Filter by source (All, Recorded, Strava, parkrun, HealthKit)
 
 ### Deep run analysis
 
@@ -193,8 +193,8 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Heart rate zone breakdown (stacked bar + legend)
 - [x] Key stats (distance, duration, pace, HR, elevation)
 - [x] Back link to run list
+- [x] Trace animation (replay run as moving dot with animated trace)
 - [ ] Comparison against previous runs on same route
-- [ ] Trace animation (replay run as moving dot)
 
 ### Live tracking spectator view (web)
 
@@ -202,24 +202,24 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] MapLibre map with runner dot and trace line
 - [x] Live distance, elapsed time, pace stats
 - [x] Pulsing "LIVE" badge
+- [x] Map auto-follows runner position
+- [x] Open Graph and SEO meta tags
 - [ ] Connect to Go service WebSocket (currently simulated)
-- [ ] Map auto-follows runner position
-- [ ] Open Graph image card for social sharing
 
 ### Account and integrations management
 
 - [x] Connect / disconnect Strava, Garmin, parkrun, HealthKit (persisted to Supabase)
-- [ ] Account settings page (display name, preferred units, avatar)
-- [ ] Enter parkrun athlete number
-- [ ] Download all data as GPX or CSV (GDPR compliance)
+- [x] Account settings page (display name, preferred units)
+- [x] Enter parkrun athlete number
+- [x] Download all data as CSV (GDPR compliance)
 - [ ] Manage premium subscription
 
 ### Public route and run pages
 
 - [x] `/share/route/{id}` — public route with map, distance, elevation, sign-up CTA
 - [x] `/share/run/{id}` — public run with GPS trace, stats, sign-up CTA
-- [ ] Open Graph image cards for social sharing
-- [ ] SEO metadata (title, description)
+- [x] Open Graph meta tags (title, description, type)
+- [x] SEO metadata (title, description)
 
 ### Auth and data layer
 
@@ -235,8 +235,10 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 - [x] Supabase config: auth redirect URLs, email confirmations disabled for dev
 - [x] Seed script with test user, runs, routes, integrations
-- [ ] Create `mv_weekly_mileage` materialized view with `pg_cron` refresh (every 5 min)
-- [ ] Add full-text search index on `routes.name` for route library search
+- [x] `mv_weekly_mileage` materialized view
+- [x] Full-text search index on `routes.name`
+- [x] Composite indexes for dashboard queries (runs by source, distance range)
+- [ ] `pg_cron` job to refresh materialized view (every 5 min)
 - [ ] Verify dashboard queries perform under 2 seconds for users with 200+ runs
 
 ### Milestone: web app live at `app.runapp.com`

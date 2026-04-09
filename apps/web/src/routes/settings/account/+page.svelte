@@ -1,7 +1,44 @@
 <script lang="ts">
-	let displayName = $state('Jared Howard');
-	let parkrunNumber = $state('A123456');
-	let preferredUnit = $state<'km' | 'mi'>('km');
+	import { auth } from '$lib/stores/auth.svelte';
+	import { supabase } from '$lib/supabase';
+	import { downloadFile } from '$lib/gpx';
+	import { fetchRuns } from '$lib/data';
+
+	let displayName = $state(auth.user?.display_name ?? '');
+	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
+	let preferredUnit = $state<'km' | 'mi'>(auth.user?.preferred_unit ?? 'km');
+	let saving = $state(false);
+	let saved = $state(false);
+	let exporting = $state(false);
+
+	async function handleSave() {
+		if (!auth.user) return;
+		saving = true;
+		saved = false;
+		await supabase.from('user_profiles').update({
+			display_name: displayName || null,
+			parkrun_number: parkrunNumber || null,
+			preferred_unit: preferredUnit,
+		}).eq('id', auth.user.id);
+		saved = true;
+		saving = false;
+		setTimeout(() => (saved = false), 2000);
+	}
+
+	async function handleExportCsv() {
+		exporting = true;
+		try {
+			const runs = await fetchRuns();
+			const header = 'date,distance_m,duration_s,pace_s_per_km,source\n';
+			const rows = runs.map((r) => {
+				const pace = r.distance_m > 0 ? Math.round(r.duration_s / (r.distance_m / 1000)) : 0;
+				return `${r.started_at},${r.distance_m},${r.duration_s},${pace},${r.source}`;
+			}).join('\n');
+			downloadFile(header + rows, 'runs_export.csv', 'text/csv');
+		} finally {
+			exporting = false;
+		}
+	}
 </script>
 
 <div class="page">
@@ -22,7 +59,9 @@
 				<input type="text" bind:value={parkrunNumber} placeholder="A123456" />
 			</label>
 		</div>
-		<button class="btn btn-primary btn-save">Save Changes</button>
+		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
+		{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
+	</button>
 	</section>
 
 	<!-- Preferences -->
@@ -53,16 +92,10 @@
 	<section class="card">
 		<h2>Data Export</h2>
 		<p class="section-desc">Download all your data. Available as GPX (routes + GPS traces) or CSV (run history).</p>
-		<div class="export-buttons">
-			<button class="btn btn-outline">
-				<span class="material-symbols">download</span>
-				Export as GPX
-			</button>
-			<button class="btn btn-outline">
-				<span class="material-symbols">download</span>
-				Export as CSV
-			</button>
-		</div>
+		<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting}>
+			<span class="material-symbols">download</span>
+			{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
+		</button>
 	</section>
 
 	<!-- Danger zone -->

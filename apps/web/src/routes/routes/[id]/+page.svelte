@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { toGpx, downloadFile } from '$lib/gpx';
+	import { toGpx, toKml, downloadFile } from '$lib/gpx';
 	import { fetchRouteById } from '$lib/data';
+	import { supabase } from '$lib/supabase';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Route } from '$lib/types';
@@ -17,13 +18,42 @@
 		loading = false;
 	});
 
+	let shareLink = $state('');
+	let shareCopied = $state(false);
+
 	function handleExportGpx() {
 		if (!route || !route.waypoints.length) return;
 		const coords: [number, number][] = route.waypoints.map((w) => [w.lng, w.lat]);
-		const elevations = route.waypoints.map((w) => w.ele ?? 0);
-		const gpx = toGpx(route.name, coords, elevations);
+		const eles = route.waypoints.map((w) => w.ele ?? 0);
+		const gpx = toGpx(route.name, coords, eles);
 		const filename = route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
 		downloadFile(gpx, filename, 'application/gpx+xml');
+	}
+
+	function handleExportKml() {
+		if (!route || !route.waypoints.length) return;
+		const coords: [number, number][] = route.waypoints.map((w) => [w.lng, w.lat]);
+		const eles = route.waypoints.map((w) => w.ele ?? 0);
+		const kml = toKml(route.name, coords, eles);
+		const filename = route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
+		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
+	}
+
+	async function handleShare() {
+		if (!route) return;
+		// Make route public if it isn't already
+		if (!route.is_public) {
+			await supabase.from('routes').update({ is_public: true }).eq('id', route.id);
+			route.is_public = true;
+		}
+		shareLink = `${window.location.origin}/share/route/${route.id}`;
+		shareCopied = false;
+	}
+
+	async function copyShareLink() {
+		await navigator.clipboard.writeText(shareLink);
+		shareCopied = true;
+		setTimeout(() => (shareCopied = false), 2000);
 	}
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
@@ -52,9 +82,20 @@
 				</div>
 			</div>
 			<div class="actions">
-				<button class="btn btn-outline" onclick={handleExportGpx}>Export GPX</button>
+				<button class="btn btn-outline" onclick={handleExportGpx}>GPX</button>
+				<button class="btn btn-outline" onclick={handleExportKml}>KML</button>
+				<button class="btn btn-primary" onclick={handleShare}>Share</button>
 			</div>
 		</header>
+
+		{#if shareLink}
+			<div class="share-bar">
+				<input type="text" readonly value={shareLink} />
+				<button class="btn btn-outline" onclick={copyShareLink}>
+					{shareCopied ? 'Copied!' : 'Copy'}
+				</button>
+			</div>
+		{/if}
 
 		{#if route.waypoints.length > 0}
 			<div class="map-container">
@@ -163,6 +204,35 @@
 	.btn-outline:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
+	}
+
+	.btn-primary {
+		background: var(--color-primary);
+		color: white;
+		border: none;
+	}
+
+	.btn-primary:hover {
+		background: var(--color-primary-hover);
+	}
+
+	.share-bar {
+		display: flex;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-xl);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+
+	.share-bar input {
+		flex: 1;
+		padding: var(--space-xs) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+		background: var(--color-surface);
+		font-family: 'SF Mono', 'Menlo', monospace;
 	}
 
 	.map-container {

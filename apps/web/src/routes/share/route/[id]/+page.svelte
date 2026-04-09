@@ -19,7 +19,17 @@
 	});
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+	let pageTitle = $derived(route ? `${route.name} — Run App` : 'Route — Run App');
+	let pageDesc = $derived(route ? `${(route.distance_m / 1000).toFixed(1)} km ${route.surface} route${route.elevation_m ? ` with ${route.elevation_m} m elevation` : ''}` : '');
 </script>
+
+<svelte:head>
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDesc} />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDesc} />
+	<meta property="og:type" content="website" />
+</svelte:head>
 
 <div class="share-page">
 	<header class="share-header">

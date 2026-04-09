@@ -30,7 +30,17 @@
 
 	let track = $derived(run?.track ?? []);
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
+	let pageTitle = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km Run — Run App` : 'Run — Run App');
+	let pageDesc = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km in ${formatDuration(run.duration_s)} — ${formatPace(run.duration_s, run.distance_m)} /km` : '');
 </script>
+
+<svelte:head>
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDesc} />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDesc} />
+	<meta property="og:type" content="website" />
+</svelte:head>
 
 <div class="share-page">
 	<header class="share-header">

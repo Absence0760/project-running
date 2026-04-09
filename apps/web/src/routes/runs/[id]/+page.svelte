@@ -72,7 +72,7 @@
 {:else if run}
 <div class="run-detail">
 	<main class="map-panel">
-		<RunMap track={baseTrack} />
+		<RunMap track={baseTrack} animatable />
 	</main>
 
 	<aside class="stats-panel">

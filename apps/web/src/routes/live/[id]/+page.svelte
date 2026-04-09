@@ -87,6 +87,14 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Live Run — Run App</title>
+	<meta name="description" content="Watch a runner's progress in real time" />
+	<meta property="og:title" content="Live Run — Run App" />
+	<meta property="og:description" content="Watch a runner's progress in real time" />
+	<meta property="og:type" content="website" />
+</svelte:head>
+
 <!-- Public page — no sidebar, no auth required -->
 <div class="live-page">
 	<header class="live-header">

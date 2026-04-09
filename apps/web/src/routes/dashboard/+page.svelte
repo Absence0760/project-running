@@ -11,12 +11,22 @@
 		sourceColor,
 	} from '$lib/mock-data';
 	import { fetchRuns, fetchWeeklyMileage, fetchPersonalRecords } from '$lib/data';
-	import type { Run } from '$lib/types';
+	import type { Run, RunSource } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
 	let weeklyMileage = $state<{ week: string; distance_km: number }[]>([]);
 	let personalRecords = $state<{ distance: string; time_s: number; date: string }[]>([]);
 	let loading = $state(true);
+	let mileageView = $state<'weekly' | 'monthly' | 'yearly'>('weekly');
+	let sourceFilter = $state<RunSource | 'all'>('all');
+
+	const sources: { value: RunSource | 'all'; label: string }[] = [
+		{ value: 'all', label: 'All' },
+		{ value: 'app', label: 'Recorded' },
+		{ value: 'strava', label: 'Strava' },
+		{ value: 'parkrun', label: 'parkrun' },
+		{ value: 'healthkit', label: 'HealthKit' },
+	];
 
 	onMount(async () => {
 		[runs, weeklyMileage, personalRecords] = await Promise.all([
@@ -32,12 +42,35 @@
 	weekStart.setDate(now.getDate() - now.getDay());
 	weekStart.setHours(0, 0, 0, 0);
 
-	let thisWeekRuns = $derived(runs.filter((r) => new Date(r.started_at) >= weekStart));
+	let filteredRuns = $derived(
+		sourceFilter === 'all' ? runs : runs.filter((r) => r.source === sourceFilter)
+	);
+	let thisWeekRuns = $derived(filteredRuns.filter((r) => new Date(r.started_at) >= weekStart));
 	let thisWeekDistance = $derived(thisWeekRuns.reduce((sum, r) => sum + r.distance_m, 0));
-	let totalRuns = $derived(runs.length);
-	let longestRun = $derived(runs.length > 0 ? Math.max(...runs.map((r) => r.distance_m)) : 0);
-	let maxWeeklyBar = $derived(
-		weeklyMileage.length > 0 ? Math.max(...weeklyMileage.map((w) => w.distance_km)) : 1
+	let totalRuns = $derived(filteredRuns.length);
+	let longestRun = $derived(filteredRuns.length > 0 ? Math.max(...filteredRuns.map((r) => r.distance_m)) : 0);
+
+	// Mileage chart data based on view mode
+	let mileageData = $derived.by(() => {
+		if (mileageView === 'weekly') return weeklyMileage;
+
+		// Group runs by month or year
+		const groups = new Map<string, number>();
+		for (const run of filteredRuns) {
+			const d = new Date(run.started_at);
+			const key = mileageView === 'monthly'
+				? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+				: String(d.getFullYear());
+			groups.set(key, (groups.get(key) ?? 0) + run.distance_m / 1000);
+		}
+		return Array.from(groups.entries()).map(([week, distance_km]) => ({
+			week,
+			distance_km: Math.round(distance_km * 10) / 10
+		}));
+	});
+
+	let maxBar = $derived(
+		mileageData.length > 0 ? Math.max(...mileageData.map((w) => w.distance_km)) : 1
 	);
 </script>
 
@@ -80,16 +113,36 @@
 			</div>
 		</div>
 
-		<!-- Weekly mileage chart -->
+		<!-- Source filter -->
+		<div class="filter-row">
+			{#each sources as src}
+				<button
+					class="filter-btn"
+					class:active={sourceFilter === src.value}
+					onclick={() => (sourceFilter = src.value)}
+				>
+					{src.label}
+				</button>
+			{/each}
+		</div>
+
+		<!-- Mileage chart -->
 		<section class="card">
-			<h2>Weekly Mileage</h2>
+			<div class="chart-header">
+				<h2>Mileage</h2>
+				<div class="view-toggle">
+					<button class:active={mileageView === 'weekly'} onclick={() => (mileageView = 'weekly')}>Week</button>
+					<button class:active={mileageView === 'monthly'} onclick={() => (mileageView = 'monthly')}>Month</button>
+					<button class:active={mileageView === 'yearly'} onclick={() => (mileageView = 'yearly')}>Year</button>
+				</div>
+			</div>
 			<div class="chart">
-				{#each weeklyMileage as week}
+				{#each mileageData as week}
 					<div class="bar-col">
 						<div class="bar-tooltip">{week.distance_km.toFixed(1)} km</div>
 						<div
 							class="bar"
-							style="height: {(week.distance_km / maxWeeklyBar) * 100}%"
+							style="height: {(week.distance_km / maxBar) * 100}%"
 						></div>
 						<span class="bar-label">{week.week.split(' ')[0]}</span>
 					</div>
@@ -100,7 +153,7 @@
 		<!-- Calendar heatmap -->
 		<section class="card">
 			<h2>Activity</h2>
-			<CalendarHeatmap {runs} />
+			<CalendarHeatmap runs={filteredRuns} />
 		</section>
 
 		<div class="two-col">
@@ -135,7 +188,7 @@
 			<section class="card">
 				<h2>Recent Runs</h2>
 				<div class="run-list">
-					{#each runs.slice(0, 7) as run}
+					{#each filteredRuns.slice(0, 7) as run}
 						<a href="/runs/{run.id}" class="run-row">
 							<div class="run-info">
 								<span class="run-date">{formatDateShort(run.started_at)}</span>
@@ -184,6 +237,72 @@
 	.empty-text {
 		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
+	}
+
+	.filter-row {
+		display: flex;
+		gap: var(--space-xs);
+		margin-bottom: var(--space-xl);
+	}
+
+	.filter-btn {
+		padding: var(--space-xs) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: 9999px;
+		background: var(--color-surface);
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		transition: all var(--transition-fast);
+		cursor: pointer;
+	}
+
+	.filter-btn:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.filter-btn.active {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: white;
+	}
+
+	.chart-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.chart-header h2 {
+		margin-bottom: 0;
+	}
+
+	.view-toggle {
+		display: flex;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		overflow: hidden;
+	}
+
+	.view-toggle button {
+		padding: var(--space-xs) var(--space-md);
+		border: none;
+		background: var(--color-surface);
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.view-toggle button:not(:last-child) {
+		border-right: 1px solid var(--color-border);
+	}
+
+	.view-toggle button.active {
+		background: var(--color-primary);
+		color: white;
 	}
 
 	.stat-grid {

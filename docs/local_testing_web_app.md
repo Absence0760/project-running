@@ -86,21 +86,21 @@ apps/web/
 │   ├── routes/                    # SvelteKit file-based routing
 │   │   ├── +layout.svelte         # Root layout
 │   │   ├── +page.svelte           # Landing page (/)
-│   │   ├── login/                 # Auth page (Google/Apple OAuth + demo login)
+│   │   ├── login/                 # Auth page (email/password + Google/Apple OAuth)
 │   │   ├── auth/callback/         # OAuth redirect handler
-│   │   ├── dashboard/             # Stats, mileage chart, calendar heatmap, PRs
+│   │   ├── dashboard/             # Stats, mileage chart (week/month/year), heatmap, PRs, source filter
 │   │   ├── routes/                # Route builder + library
 │   │   │   ├── new/               # Full-screen route builder
-│   │   │   └── [id]/              # Route detail
+│   │   │   └── [id]/              # Route detail with GPX/KML export + share link
 │   │   ├── runs/                  # Run history with source filtering
-│   │   │   └── [id]/              # Run detail: MapLibre GPS trace, elevation, splits, HR
+│   │   │   └── [id]/              # Run detail: GPS trace with replay, elevation, splits, HR
 │   │   ├── live/[id]/             # Live spectator view (public, no auth)
 │   │   ├── share/
 │   │   │   ├── route/[id]/        # Public shared route page
 │   │   │   └── run/[id]/          # Public shared run page
 │   │   └── settings/
-│   │       ├── integrations/      # Connect Strava, Garmin, parkrun
-│   │       └── account/           # Profile, data export
+│   │       ├── integrations/      # Connect/disconnect Strava, Garmin, parkrun, HealthKit
+│   │       └── account/           # Profile, parkrun number, units, CSV export
 │   ├── lib/
 │   │   ├── supabase.ts            # Browser Supabase client
 │   │   ├── supabase-server.ts     # Server-side Supabase client
@@ -132,7 +132,6 @@ apps/web/
 - Use **Svelte 5 runes** syntax (`$state`, `$derived`, `$effect`, `$props`) — not the legacy options API
 - TypeScript throughout — `lang="ts"` on all `<script>` blocks
 - Scoped CSS in `.svelte` files — no global utility classes
-- Component stories live alongside components as `*.stories.svelte`
 
 ---
 
