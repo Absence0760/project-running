@@ -60,7 +60,7 @@
 </script>
 
 {#if loading}
-	<div class="page"><p class="loading">Loading route...</p></div>
+	<div class="page"><p class="loading">&nbsp;</p></div>
 {:else if route}
 	<div class="page">
 		<a href="/routes" class="back-link">

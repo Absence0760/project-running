@@ -50,7 +50,7 @@
 	</header>
 
 	{#if loading}
-		<p class="loading-text">Loading runs...</p>
+		<p class="loading-text">&nbsp;</p>
 	{:else}
 		<div class="run-list">
 			{#each filteredRuns as run}

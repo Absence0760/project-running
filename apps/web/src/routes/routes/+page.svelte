@@ -35,7 +35,7 @@
 	</header>
 
 	{#if loading}
-		<p class="loading">Loading routes...</p>
+		<p class="loading">&nbsp;</p>
 	{:else if routes.length === 0}
 		<div class="empty">
 			<span class="material-symbols empty-icon">route</span>

@@ -10,21 +10,45 @@ interface OsrmRoute {
 	duration: number;
 }
 
+interface OsrmWaypoint {
+	location: [number, number]; // [lng, lat] snapped to road
+}
+
 interface OsrmResponse {
 	code: string;
 	routes: OsrmRoute[];
+	waypoints?: OsrmWaypoint[];
+}
+
+/**
+ * Snap a point to the nearest road using OSRM's nearest service.
+ * Returns the snapped [lng, lat] position.
+ */
+export async function snapToRoad(
+	point: { lng: number; lat: number },
+	profile: 'foot' | 'car' = 'foot'
+): Promise<[number, number]> {
+	const url = `${OSRM_BASE}/nearest/v1/${profile}/${point.lng},${point.lat}`;
+	const res = await fetch(url);
+	if (!res.ok) return [point.lng, point.lat];
+
+	const data = await res.json();
+	if (data.code === 'Ok' && data.waypoints?.[0]?.location) {
+		return data.waypoints[0].location;
+	}
+	return [point.lng, point.lat];
 }
 
 /**
  * Fetch a road-snapped route between two points using OSRM.
  * Profile: 'foot' for trail mode, 'car' for road mode.
- * Returns the snapped coordinates and segment distance in metres.
+ * Returns the snapped coordinates, distance, and snapped waypoint positions.
  */
 export async function fetchRoute(
 	from: TrackPoint,
 	to: TrackPoint,
 	profile: 'foot' | 'car' = 'foot'
-): Promise<{ coordinates: [number, number][]; distance: number }> {
+): Promise<{ coordinates: [number, number][]; distance: number; snappedFrom: [number, number]; snappedTo: [number, number] }> {
 	const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
 	const url = `${OSRM_BASE}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
 
@@ -37,9 +61,14 @@ export async function fetchRoute(
 	}
 
 	const route = data.routes[0];
+	const snappedFrom = data.waypoints?.[0]?.location ?? [from.lng, from.lat];
+	const snappedTo = data.waypoints?.[1]?.location ?? [to.lng, to.lat];
+
 	return {
 		coordinates: route.geometry.coordinates,
-		distance: route.distance
+		distance: route.distance,
+		snappedFrom,
+		snappedTo
 	};
 }
 

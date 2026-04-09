@@ -68,7 +68,7 @@
 </script>
 
 {#if loading}
-	<div class="run-detail"><p class="loading-text">Loading run...</p></div>
+	<div class="run-detail"><p class="loading-text">&nbsp;</p></div>
 {:else if run}
 <div class="run-detail">
 	<main class="map-panel">

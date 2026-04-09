@@ -30,12 +30,37 @@
 		coordinates = data.coordinates;
 	}
 
+	// Lap detection: count how many times the route returns to the start point
+	let laps = $derived.by(() => {
+		const routeData = builder?.getRouteData();
+		if (!routeData || routeData.waypoints.length < 3) return { count: 0, lapDistance: 0 };
+
+		const start = routeData.waypoints[0];
+		let lapCount = 0;
+
+		for (let i = 1; i < routeData.waypoints.length; i++) {
+			const wp = routeData.waypoints[i];
+			const dist = Math.sqrt((wp.lat - start.lat) ** 2 + (wp.lng - start.lng) ** 2);
+			// Within ~10m of start = a lap completion
+			if (dist < 0.0001) {
+				lapCount++;
+			}
+		}
+
+		return {
+			count: lapCount,
+			lapDistance: lapCount > 0 ? distance / lapCount : 0
+		};
+	});
+
 	function handleUndo() {
 		builder?.undoWaypoint();
+		routed = false;
 	}
 
 	function handleClear() {
 		builder?.clearWaypoints();
+		routed = false;
 	}
 
 	function handleExportGpx() {
@@ -50,6 +75,13 @@
 		const kml = toKml(name, coordinates, elevations);
 		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
 		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
+	}
+
+	let routed = $state(false);
+
+	async function handleCalculateRoute() {
+		await builder?.calculateRoute();
+		routed = true;
 	}
 
 	async function handleSaveRoute() {
@@ -129,6 +161,16 @@
 				</div>
 			</div>
 
+			{#if laps.count > 0}
+				<div class="lap-info">
+					<div class="lap-badge">
+						<span class="material-symbols">loop</span>
+						{laps.count} {laps.count === 1 ? 'lap' : 'laps'}
+					</div>
+					<span class="lap-detail">{(laps.lapDistance / 1000).toFixed(2)} km per lap</span>
+				</div>
+			{/if}
+
 			<div class="elevation-preview">
 				<span class="label-text">Elevation Profile</span>
 				{#if elevations.length >= 2}
@@ -158,22 +200,32 @@
 
 			<div class="action-row">
 				<button
+					class="btn btn-accent"
+					disabled={waypointCount < 2}
+					onclick={handleCalculateRoute}
+				>
+					{routed ? 'Recalculate' : 'Calculate Route'}
+				</button>
+			</div>
+
+			<div class="action-row">
+				<button
 					class="btn btn-primary"
-					disabled={waypointCount < 2 || saving}
+					disabled={!routed || saving}
 					onclick={handleSaveRoute}
 				>
 					{saving ? 'Saving...' : 'Save Route'}
 				</button>
 				<button
 					class="btn btn-outline"
-					disabled={waypointCount < 2}
+					disabled={!routed}
 					onclick={handleExportGpx}
 				>
 					GPX
 				</button>
 				<button
 					class="btn btn-outline"
-					disabled={waypointCount < 2}
+					disabled={!routed}
 					onclick={handleExportKml}
 				>
 					KML
@@ -183,9 +235,13 @@
 
 		<div class="sidebar-hint">
 			<span class="material-symbols">info</span>
-			Click on the map to place waypoints. The route will auto-snap to {mode === 'road'
-				? 'roads'
-				: 'walking paths'}. Drag markers to reshape.
+			{#if waypointCount === 0}
+				Click on the map to place waypoints along your route.
+			{:else if !routed}
+				Keep adding waypoints, then hit Calculate Route to snap to {mode === 'road' ? 'roads' : 'walking paths'}.
+			{:else}
+				Route calculated. Save, export, or add more waypoints.
+			{/if}
 		</div>
 	</aside>
 
@@ -342,6 +398,30 @@
 		font-size: 0.8rem;
 	}
 
+	.lap-info {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(139, 92, 246, 0.1);
+		border: 1px solid rgba(139, 92, 246, 0.25);
+		border-radius: var(--radius-md);
+	}
+
+	.lap-badge {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-weight: 700;
+		font-size: 0.85rem;
+		color: #7c3aed;
+	}
+
+	.lap-detail {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+
 	.action-row {
 		display: flex;
 		gap: var(--space-sm);
@@ -363,6 +443,17 @@
 	.btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.btn-accent {
+		background: var(--color-secondary, #43A047);
+		color: white;
+		border: none;
+		width: 100%;
+	}
+
+	.btn-accent:hover:not(:disabled) {
+		background: var(--color-secondary-hover, #388E3C);
 	}
 
 	.btn-primary {

@@ -64,7 +64,7 @@
 	</header>
 
 	{#if pageLoading}
-		<p class="loading-text">Loading integrations...</p>
+		<p class="loading-text">&nbsp;</p>
 	{:else}
 		<div class="integration-list">
 			{#each integrations as integration, i}

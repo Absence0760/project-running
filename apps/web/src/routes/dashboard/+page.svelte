@@ -80,7 +80,7 @@
 	</header>
 
 	{#if loading}
-		<p class="loading-text">Loading dashboard...</p>
+		<p class="loading-text">&nbsp;</p>
 	{:else}
 		<!-- Stat cards -->
 		<div class="stat-grid">

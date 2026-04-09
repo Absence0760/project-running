@@ -72,6 +72,16 @@ button {
 	cursor: pointer;
 }
 
+/* Hide material icon text until font loads */
+.material-symbols {
+	font-family: 'Material Symbols Outlined';
+	overflow: hidden;
+	width: 1.25em;
+	height: 1.25em;
+	display: inline-block;
+	vertical-align: middle;
+}
+
 img {
 	max-width: 100%;
 	display: block;
