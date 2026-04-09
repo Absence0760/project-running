@@ -2,73 +2,124 @@ import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
-/// Run history list fetched from Supabase.
+import '../local_run_store.dart';
+
+/// Run history showing local runs with sync status.
 class HistoryScreen extends StatefulWidget {
   final ApiClient apiClient;
-  const HistoryScreen({super.key, required this.apiClient});
+  final LocalRunStore runStore;
+  const HistoryScreen({super.key, required this.apiClient, required this.runStore});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  List<Run>? _runs;
-  bool _loading = true;
+  bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
-    _loadRuns();
+    widget.runStore.addListener(_onStoreChanged);
   }
 
-  Future<void> _loadRuns() async {
-    try {
-      final runs = await widget.apiClient.getRuns();
-      setState(() {
-        _runs = runs;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() => _loading = false);
+  @override
+  void dispose() {
+    widget.runStore.removeListener(_onStoreChanged);
+    super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _syncAll() async {
+    final unsynced = widget.runStore.unsyncedRuns;
+    if (unsynced.isEmpty) return;
+
+    setState(() => _syncing = true);
+    int synced = 0;
+    String? lastError;
+
+    for (final run in unsynced) {
+      try {
+        await widget.apiClient.saveRun(run);
+        await widget.runStore.markSynced(run.id);
+        synced++;
+      } catch (e) {
+        lastError = e.toString();
+      }
+    }
+
+    setState(() => _syncing = false);
+
+    if (!mounted) return;
+    if (lastError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synced $synced/${unsynced.length}. Error: $lastError')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('All $synced runs synced')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final runs = widget.runStore.runs;
+    final unsyncedCount = widget.runStore.unsyncedCount;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadRuns,
-              child: _runs == null || _runs!.isEmpty
-                  ? ListView(children: [
-                      const SizedBox(height: 120),
-                      Center(
-                        child: Text('No runs yet',
-                            style: theme.textTheme.bodyLarge
-                                ?.copyWith(color: theme.colorScheme.outline)),
-                      ),
-                    ])
-                  : _buildRunList(theme),
+      appBar: AppBar(
+        title: const Text('History'),
+        actions: [
+          if (_syncing)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (unsyncedCount > 0)
+            Badge(
+              label: Text('$unsyncedCount'),
+              child: IconButton(
+                icon: const Icon(Icons.cloud_upload),
+                tooltip: 'Sync $unsyncedCount runs',
+                onPressed: _syncAll,
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.cloud_done),
+              tooltip: 'Nothing to sync',
+              onPressed: null,
             ),
+        ],
+      ),
+      body: runs.isEmpty
+          ? Center(
+              child: Text('No runs yet',
+                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.outline)),
+            )
+          : _buildRunList(theme, runs),
     );
   }
 
-  Widget _buildRunList(ThemeData theme) {
-    // Weekly summary from the runs
+  Widget _buildRunList(ThemeData theme, List<Run> runs) {
+    // Weekly summary
     final now = DateTime.now();
     final weekStart = now.subtract(Duration(days: now.weekday % 7));
     final weekStartDate = DateTime(weekStart.year, weekStart.month, weekStart.day);
-    final thisWeekRuns = _runs!.where((r) => r.startedAt.isAfter(weekStartDate)).toList();
+    final thisWeekRuns = runs.where((r) => r.startedAt.isAfter(weekStartDate)).toList();
     final weekDistance = thisWeekRuns.fold<double>(0, (sum, r) => sum + r.distanceMetres);
     final weekDuration = thisWeekRuns.fold<Duration>(Duration.zero, (sum, r) => sum + r.duration);
+
+    final unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Weekly summary card
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -99,11 +150,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
         Text('All Runs', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        ..._runs!.map((run) {
+        ...runs.map((run) {
           final dist = (run.distanceMetres / 1000).toStringAsFixed(2);
           final dur = _formatDuration(run.duration);
           final pace = _formatPace(run.duration.inSeconds, run.distanceMetres);
           final date = _formatDate(run.startedAt);
+          final isUnsynced = unsyncedIds.contains(run.id);
+
           return Card(
             child: ListTile(
               leading: CircleAvatar(
@@ -111,8 +164,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: Icon(Icons.directions_run, color: theme.colorScheme.primary),
               ),
               title: Text('$dist km'),
-              subtitle: Text('$date  •  $dur  •  ${run.source.name}'),
-              trailing: Text(pace, style: theme.textTheme.bodySmall),
+              subtitle: Text('$date  •  $dur'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(pace, style: theme.textTheme.bodySmall),
+                  if (isUnsynced) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.cloud_off, size: 16, color: theme.colorScheme.outline),
+                  ],
+                ],
+              ),
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('${run.track.length} GPS points recorded')),

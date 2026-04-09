@@ -4,10 +4,13 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:run_recorder/run_recorder.dart';
 
+import '../local_run_store.dart';
+
 /// Main run recording screen with GPS tracking, live stats, and sync.
 class RunScreen extends StatefulWidget {
   final ApiClient apiClient;
-  const RunScreen({super.key, required this.apiClient});
+  final LocalRunStore runStore;
+  const RunScreen({super.key, required this.apiClient, required this.runStore});
 
   @override
   State<RunScreen> createState() => _RunScreenState();
@@ -28,7 +31,6 @@ class _RunScreenState extends State<RunScreen> {
 
   // Finished run
   Run? _finishedRun;
-  bool _syncing = false;
   bool _synced = false;
   String? _syncError;
 
@@ -53,25 +55,18 @@ class _RunScreenState extends State<RunScreen> {
       _finishedRun = run;
       _state = _ScreenState.finished;
     });
-  }
 
-  Future<void> _sync() async {
-    if (_finishedRun == null) return;
-    setState(() {
-      _syncing = true;
-      _syncError = null;
-    });
+    // Save locally first
+    await widget.runStore.save(run);
+
+    // Attempt auto-sync
     try {
-      await widget.apiClient.saveRun(_finishedRun!);
-      setState(() {
-        _syncing = false;
-        _synced = true;
-      });
+      await widget.apiClient.saveRun(run);
+      await widget.runStore.markSynced(run.id);
+      if (mounted) setState(() => _synced = true);
     } catch (e) {
-      setState(() {
-        _syncing = false;
-        _syncError = e.toString();
-      });
+      debugPrint('Auto-sync failed: $e');
+      if (mounted) setState(() => _syncError = 'Saved offline. Sync from History.');
     }
   }
 
@@ -85,7 +80,6 @@ class _RunScreenState extends State<RunScreen> {
       _pace = null;
       _trackPoints = 0;
       _finishedRun = null;
-      _syncing = false;
       _synced = false;
       _syncError = null;
     });
@@ -221,23 +215,17 @@ class _RunScreenState extends State<RunScreen> {
             const Icon(Icons.cloud_done, color: Colors.green, size: 48),
             const SizedBox(height: 8),
             const Text('Synced'),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: _discard, child: const Text('Done')),
+          ] else if (_syncError != null) ...[
+            const Icon(Icons.cloud_off, size: 48, color: Colors.orange),
+            const SizedBox(height: 8),
+            Text(_syncError!, style: const TextStyle(color: Colors.orange, fontSize: 13)),
           ] else ...[
-            if (_syncError != null) ...[
-              Text(_syncError!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
-              const SizedBox(height: 8),
-            ],
-            FilledButton.icon(
-              onPressed: _syncing ? null : _sync,
-              icon: _syncing
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.cloud_upload),
-              label: Text(_syncing ? 'Syncing...' : 'Sync Run'),
-            ),
-            const SizedBox(height: 12),
-            TextButton(onPressed: _discard, child: const Text('Discard')),
+            const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(height: 8),
+            const Text('Syncing...'),
           ],
+          const SizedBox(height: 16),
+          FilledButton(onPressed: _discard, child: const Text('Done')),
         ],
       ),
     );

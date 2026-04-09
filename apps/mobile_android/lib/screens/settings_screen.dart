@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart' show themeModeNotifier;
 
 /// Account settings and integrations management.
 class SettingsScreen extends StatefulWidget {
@@ -10,7 +11,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _useKilometres = true;
-  bool _darkMode = false;
+  bool _darkMode = themeModeNotifier.value == ThemeMode.dark;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +51,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('Dark mode'),
             value: _darkMode,
-            onChanged: (v) => setState(() => _darkMode = v),
+            onChanged: (v) {
+              setState(() => _darkMode = v);
+              themeModeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
+            },
           ),
           const Divider(),
 

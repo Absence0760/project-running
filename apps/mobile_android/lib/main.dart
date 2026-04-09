@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import 'local_run_store.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -14,6 +15,9 @@ void main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
+  final store = LocalRunStore();
+  await store.init();
+
   // Auto sign-in as test user
   final api = ApiClient();
   try {
@@ -22,20 +26,33 @@ void main() async {
     debugPrint('Auto sign-in failed: $e');
   }
 
-  runApp(RunApp(apiClient: api));
+  runApp(RunApp(apiClient: api, runStore: store));
 }
+
+class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
+  ThemeModeNotifier() : super(ThemeMode.system);
+}
+
+final themeModeNotifier = ThemeModeNotifier();
 
 class RunApp extends StatelessWidget {
   final ApiClient apiClient;
-  const RunApp({super.key, required this.apiClient});
+  final LocalRunStore runStore;
+  const RunApp({super.key, required this.apiClient, required this.runStore});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Run',
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      home: HomeScreen(apiClient: apiClient),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, mode, _) {
+        return MaterialApp(
+          title: 'Run',
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: mode,
+          home: HomeScreen(apiClient: apiClient, runStore: runStore),
+        );
+      },
     );
   }
 }
