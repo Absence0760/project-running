@@ -15,7 +15,8 @@
 			elevation: number;
 			elevations: number[];
 			coordinates: [number, number][];
-		}) => {}
+		}) => {},
+		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -25,6 +26,7 @@
 			elevations: number[];
 			coordinates: [number, number][];
 		}) => void;
+		onmapclick?: (lngLat: { lng: number; lat: number }) => boolean;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -36,14 +38,22 @@
 	let markers: maplibregl.Marker[] = [];
 	let distanceMarkers: maplibregl.Marker[] = [];
 	let isRouting = $state(false);
+	let mapStyle = $state<'streets' | 'satellite' | 'terrain'>('streets');
 	let nearStart = false;
-	let routeVersion = 0; // incremented on each route change to cancel stale requests
+	let routeVersion = 0;
+	let preRouteWaypoints: TrackPoint[] = []; // snapshot for undo-recalculate
 	let searchQuery = $state('');
 	let searchResults = $state<{ name: string; lng: number; lat: number }[]>([]);
 	let showResults = $state(false);
 	let searchTimeout: ReturnType<typeof setTimeout>;
 	let keyHandler: (e: KeyboardEvent) => void;
 	let geoWatchId: number | null = null;
+
+	const MAP_STYLES: Record<string, string> = {
+		streets: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+		satellite: `https://api.maptiler.com/maps/hybrid/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+		terrain: `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+	};
 
 	const SNAP_DISTANCE_PX = 25;
 	const KM_MARKER_INTERVAL = 1000; // metres
@@ -463,11 +473,176 @@
 
 	/**
 	 * Calculate the road-snapped route through all waypoints.
-	 * Call this when the user is done placing waypoints.
+	 * Saves a snapshot of waypoints for undo.
 	 */
 	export async function calculateRoute() {
+		preRouteWaypoints = waypoints.map((w) => ({ ...w }));
 		await recalculateRoute();
 	}
+
+	/**
+	 * Undo route calculation — restore waypoints from before calculate was called.
+	 */
+	export function undoCalculate() {
+		if (preRouteWaypoints.length === 0) return;
+
+		// Clear existing
+		markers.forEach((m) => m.remove());
+		markers = [];
+		routeCoordinates = [];
+		routeElevations = [];
+		distanceMarkers.forEach((m) => m.remove());
+		distanceMarkers = [];
+
+		// Restore waypoints
+		waypoints = preRouteWaypoints.map((w) => ({ ...w }));
+		preRouteWaypoints = [];
+
+		// Recreate markers
+		for (let i = 0; i < waypoints.length; i++) {
+			const marker = createWaypointMarker({ lng: waypoints[i].lng, lat: waypoints[i].lat }, i);
+			markers.push(marker);
+		}
+		updateMarkerStyles();
+		updateRouteLine();
+		updateStraightLine();
+	}
+
+	/**
+	 * Duplicate the route in reverse to create an out-and-back.
+	 */
+	export function outAndBack() {
+		if (waypoints.length < 2) return;
+
+		// Add waypoints in reverse (skip the last since it's the turnaround point)
+		const reversed = waypoints.slice(0, -1).reverse();
+		for (const wp of reversed) {
+			const lngLat = { lng: wp.lng, lat: wp.lat };
+			const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
+			waypoints.push(point);
+
+			const marker = createWaypointMarker(lngLat, waypoints.length - 1);
+			markers.push(marker);
+		}
+		updateMarkerStyles();
+
+		// Clear any calculated route — user needs to recalculate
+		routeCoordinates = [];
+		routeElevations = [];
+		updateStraightLine();
+	}
+
+	/**
+	 * Switch map style between streets, satellite, and terrain.
+	 */
+	export function setMapStyle(style: 'streets' | 'satellite' | 'terrain') {
+		if (!map || mapStyle === style) return;
+		mapStyle = style;
+		map.setStyle(MAP_STYLES[style]);
+
+		// Re-add sources and layers after style change
+		map.once('style.load', () => {
+			addMapSourcesAndLayers();
+			// Redraw existing route or straight lines
+			if (routeCoordinates.length > 0) {
+				updateRouteLine();
+			} else {
+				updateStraightLine();
+			}
+		});
+	}
+
+	/**
+	 * Generate a loop route of approximately the target distance from the start point.
+	 */
+	export async function generateLoop(
+		targetDistanceM: number,
+		startFrom?: { lat: number; lng: number },
+		endAt?: { lat: number; lng: number }
+	) {
+		const start: TrackPoint = startFrom
+			? { lat: startFrom.lat, lng: startFrom.lng }
+			: (() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })();
+
+		const end: TrackPoint = endAt
+			? { lat: endAt.lat, lng: endAt.lng }
+			: { ...start };
+
+		const isLoop = !endAt;
+		let scaleFactor = 0.30;
+		const numPoints = 6;
+		const maxAttempts = 3;
+
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			let newWaypoints: TrackPoint[];
+
+			if (isLoop) {
+				const radiusM = (targetDistanceM * scaleFactor) / (2 * Math.PI);
+				const radiusDeg = radiusM / 111320;
+				const cosLat = Math.cos(start.lat * Math.PI / 180);
+				const randomOffset = Math.random() * Math.PI * 2;
+
+				newWaypoints = [start];
+				for (let i = 1; i <= numPoints; i++) {
+					const angle = randomOffset + (i / numPoints) * Math.PI * 2;
+					newWaypoints.push({
+						lat: start.lat + Math.sin(angle) * radiusDeg,
+						lng: start.lng + Math.cos(angle) * radiusDeg / cosLat,
+					});
+				}
+				newWaypoints.push({ ...start });
+			} else {
+				// Point-to-point: curve the path to hit target distance
+				const directDist = haversine([start.lng, start.lat], [end.lng, end.lat]);
+				const curveAmount = Math.max(0, (targetDistanceM * scaleFactor - directDist) / Math.max(directDist, 1));
+				const dLat = end.lat - start.lat;
+				const dLng = end.lng - start.lng;
+				// Perpendicular offset
+				const perpLat = -dLng * curveAmount * 0.4;
+				const perpLng = dLat * curveAmount * 0.4;
+
+				newWaypoints = [start];
+				for (let i = 1; i <= numPoints; i++) {
+					const t = i / (numPoints + 1);
+					const curveFactor = Math.sin(t * Math.PI);
+					newWaypoints.push({
+						lat: start.lat + dLat * t + perpLat * curveFactor,
+						lng: start.lng + dLng * t + perpLng * curveFactor,
+					});
+				}
+				newWaypoints.push(end);
+			}
+
+			markers.forEach((m) => m.remove());
+			markers = [];
+			waypoints = newWaypoints;
+			for (let i = 0; i < waypoints.length; i++) {
+				const marker = createWaypointMarker({ lng: waypoints[i].lng, lat: waypoints[i].lat }, i);
+				markers.push(marker);
+			}
+			updateMarkerStyles();
+			routeCoordinates = [];
+			routeElevations = [];
+
+			await recalculateRoute();
+
+			if (routeCoordinates.length < 2) break;
+
+			let actualDistance = 0;
+			for (let i = 1; i < routeCoordinates.length; i++) {
+				actualDistance += haversine(routeCoordinates[i - 1], routeCoordinates[i]);
+			}
+
+			const ratio = targetDistanceM / actualDistance;
+			if (ratio > 0.85 && ratio < 1.15) break;
+			scaleFactor *= ratio;
+		}
+
+		updateStraightLine();
+	}
+
+	export function getMapStyle() { return mapStyle; }
+	export function getMapCenter() { return map ? map.getCenter() : null; }
 
 	/**
 	 * Show straight dashed lines between waypoints as a preview before routing.
@@ -569,6 +744,53 @@
 		);
 	}
 
+	function addMapSourcesAndLayers() {
+		const empty = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: [] as [number, number][] } };
+		map.addSource('route', { type: 'geojson', data: empty });
+		map.addSource('route-overlap', { type: 'geojson', data: empty });
+		map.addSource('preview-line', { type: 'geojson', data: empty });
+		map.addSource('waypoint-lines', { type: 'geojson', data: empty });
+
+		map.addLayer({
+			id: 'route-casing', type: 'line', source: 'route',
+			paint: { 'line-color': '#1d4ed8', 'line-width': 8, 'line-opacity': 0.25 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+		map.addLayer({
+			id: 'route-line', type: 'line', source: 'route',
+			paint: { 'line-color': '#3b82f6', 'line-width': 4 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+		map.addLayer({
+			id: 'route-overlap-casing', type: 'line', source: 'route-overlap',
+			paint: { 'line-color': '#9333ea', 'line-width': 8, 'line-opacity': 0.25 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+		map.addLayer({
+			id: 'route-overlap-line', type: 'line', source: 'route-overlap',
+			paint: { 'line-color': '#a855f7', 'line-width': 4 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+		map.addLayer({
+			id: 'route-arrows', type: 'symbol', source: 'route',
+			layout: {
+				'symbol-placement': 'line', 'symbol-spacing': 80,
+				'text-field': '▶', 'text-size': 12,
+				'text-rotation-alignment': 'map', 'text-keep-upright': false
+			},
+			paint: { 'text-color': '#1d4ed8' }
+		});
+		map.addLayer({
+			id: 'waypoint-lines', type: 'line', source: 'waypoint-lines',
+			paint: { 'line-color': '#3b82f6', 'line-width': 2.5, 'line-dasharray': [6, 4], 'line-opacity': 0.6 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+		map.addLayer({
+			id: 'preview-line', type: 'line', source: 'preview-line',
+			paint: { 'line-color': '#94a3b8', 'line-width': 2, 'line-dasharray': [4, 4] }
+		});
+	}
+
 	function setupMap() {
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -591,74 +813,15 @@
 				() => {},
 				{ enableHighAccuracy: true }
 			);
-			// Sources
-			map.addSource('route', {
-				type: 'geojson',
-				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
-			});
-			map.addSource('route-overlap', {
-				type: 'geojson',
-				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
-			});
-			map.addSource('preview-line', {
-				type: 'geojson',
-				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
-			});
-			map.addSource('waypoint-lines', {
-				type: 'geojson',
-				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
-			});
-
-			// Route casing
-			map.addLayer({
-				id: 'route-casing', type: 'line', source: 'route',
-				paint: { 'line-color': '#1d4ed8', 'line-width': 8, 'line-opacity': 0.25 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-			// Primary route
-			map.addLayer({
-				id: 'route-line', type: 'line', source: 'route',
-				paint: { 'line-color': '#3b82f6', 'line-width': 4 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-			// Overlap casing
-			map.addLayer({
-				id: 'route-overlap-casing', type: 'line', source: 'route-overlap',
-				paint: { 'line-color': '#9333ea', 'line-width': 8, 'line-opacity': 0.25 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-			// Overlap line
-			map.addLayer({
-				id: 'route-overlap-line', type: 'line', source: 'route-overlap',
-				paint: { 'line-color': '#a855f7', 'line-width': 4 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-			// Direction arrows
-			map.addLayer({
-				id: 'route-arrows', type: 'symbol', source: 'route',
-				layout: {
-					'symbol-placement': 'line', 'symbol-spacing': 80,
-					'text-field': '▶', 'text-size': 12,
-					'text-rotation-alignment': 'map', 'text-keep-upright': false
-				},
-				paint: { 'text-color': '#1d4ed8' }
-			});
-			// Waypoint-to-waypoint straight line preview (before route calculation)
-			map.addLayer({
-				id: 'waypoint-lines', type: 'line', source: 'waypoint-lines',
-				paint: { 'line-color': '#3b82f6', 'line-width': 2.5, 'line-dasharray': [6, 4], 'line-opacity': 0.6 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-			// Cursor-to-last-waypoint preview line
-			map.addLayer({
-				id: 'preview-line', type: 'line', source: 'preview-line',
-				paint: { 'line-color': '#94a3b8', 'line-width': 2, 'line-dasharray': [4, 4] }
-			});
+			addMapSourcesAndLayers();
 		});
 
-		// Click handler — either insert mid-route or append
+		// Click handler — let parent intercept first, then insert mid-route or append
 		map.on('click', (e: maplibregl.MapMouseEvent) => {
 			if (isRouting) return;
+
+			// Let parent handle the click (e.g. for picking start/end point)
+			if (onmapclick(e.lngLat)) return;
 
 			// Only consider mid-route insertion if:
 			// 1. Clicking on the route line
