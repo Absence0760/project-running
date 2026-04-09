@@ -2,9 +2,10 @@ name: core_models
 description: Shared Dart data types for Run, Route, and Waypoint.
 version: 0.1.0
 publish_to: none
+resolution: workspace
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ^3.11.4
 
 dependencies:
   json_annotation: ^4.8.1

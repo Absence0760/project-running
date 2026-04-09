@@ -2,9 +2,10 @@ name: api_client
 description: Typed HTTP client for the Supabase REST API with auth and offline queuing.
 version: 0.1.0
 publish_to: none
+resolution: workspace
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ^3.11.4
 
 dependencies:
   core_models:

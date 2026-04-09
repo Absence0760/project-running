@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:api_client/api_client.dart';
 
 import 'run_screen.dart';
 import 'history_screen.dart';
@@ -6,7 +7,8 @@ import 'routes_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final ApiClient apiClient;
+  const HomeScreen({super.key, required this.apiClient});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -15,11 +17,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final _screens = const [
-    RunScreen(),
-    HistoryScreen(),
-    RoutesScreen(),
-    SettingsScreen(),
+  late final List<Widget> _screens = [
+    RunScreen(apiClient: widget.apiClient),
+    HistoryScreen(apiClient: widget.apiClient),
+    const RoutesScreen(),
+    const SettingsScreen(),
   ];
 
   @override

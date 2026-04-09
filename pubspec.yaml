@@ -1,0 +1,17 @@
+name: run_app_workspace
+
+environment:
+  sdk: ^3.11.4
+
+dev_dependencies:
+  melos: ^7.5.1
+
+workspace:
+  - apps/mobile_android
+  - apps/mobile_ios
+  - apps/watch_wear
+  - packages/api_client
+  - packages/core_models
+  - packages/gpx_parser
+  - packages/run_recorder
+  - packages/ui_kit

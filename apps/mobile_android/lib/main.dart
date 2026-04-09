@@ -1,15 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:api_client/api_client.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import 'screens/home_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const RunApp());
+  await dotenv.load(fileName: '.env.local');
+
+  await ApiClient.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
+
+  // Auto sign-in as test user
+  final api = ApiClient();
+  try {
+    await api.signIn(email: 'runner@test.com', password: 'testtest');
+  } catch (e) {
+    debugPrint('Auto sign-in failed: $e');
+  }
+
+  runApp(RunApp(apiClient: api));
 }
 
 class RunApp extends StatelessWidget {
-  const RunApp({super.key});
+  final ApiClient apiClient;
+  const RunApp({super.key, required this.apiClient});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +35,7 @@ class RunApp extends StatelessWidget {
       title: 'Run',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      home: const HomeScreen(),
+      home: HomeScreen(apiClient: apiClient),
     );
   }
 }

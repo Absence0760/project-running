@@ -2,9 +2,10 @@ name: ui_kit
 description: Shared Flutter widgets and design tokens for the Run app.
 version: 0.1.0
 publish_to: none
+resolution: workspace
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ^3.11.4
   flutter: '>=3.19.0'
 
 dependencies:
@@ -12,8 +13,6 @@ dependencies:
     sdk: flutter
   core_models:
     path: ../core_models
-  flutter_map: ^6.1.0
-  flutter_map_maplibre: ^0.1.0
 
 dev_dependencies:
   flutter_test:

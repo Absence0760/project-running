@@ -2,9 +2,10 @@ name: run_recorder
 description: Live GPS recording session manager with pace, distance, and off-route detection.
 version: 0.1.0
 publish_to: none
+resolution: workspace
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ^3.11.4
   flutter: '>=3.19.0'
 
 dependencies:
