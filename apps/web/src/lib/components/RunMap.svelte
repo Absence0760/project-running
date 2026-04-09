@@ -7,6 +7,8 @@
 
 	let { track = [], animatable = false }: { track: TrackPoint[]; animatable?: boolean } = $props();
 
+	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
 	let mapContainer: HTMLDivElement;
 	let map: maplibregl.Map;
 	let animating = $state(false);
@@ -78,7 +80,7 @@
 
 		map = new maplibregl.Map({
 			container: mapContainer,
-			style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+			style: `https://api.maptiler.com/maps/${prefersDark ? 'streets-v2-dark' : 'streets-v2'}/style.json?key=${PUBLIC_MAPTILER_KEY}`,
 			center: coords.length > 0 ? coords[Math.floor(coords.length / 2)] : [0, 20],
 			zoom: 13
 		});
@@ -112,7 +114,7 @@
 				id: 'trace-line',
 				type: 'line',
 				source: 'trace',
-				paint: { 'line-color': '#3b82f6', 'line-width': 3.5 },
+				paint: { 'line-color': prefersDark ? '#818CF8' : '#4F46E5', 'line-width': 3.5 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' }
 			});
 
@@ -194,19 +196,19 @@
 		align-items: center;
 		gap: 4px;
 		padding: 8px 14px;
-		background: white;
+		background: var(--color-surface);
 		border: none;
 		border-radius: 8px;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 		font-size: 0.8rem;
 		font-weight: 600;
 		cursor: pointer;
-		color: #333;
+		color: var(--color-text);
 	}
 
 	.replay-btn:hover {
-		background: #f3f4f6;
-		color: #3b82f6;
+		background: var(--color-bg-tertiary);
+		color: var(--color-primary);
 	}
 
 	.replay-btn .material-symbols {

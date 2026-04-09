@@ -49,8 +49,10 @@
 	let keyHandler: (e: KeyboardEvent) => void;
 	let geoWatchId: number | null = null;
 
+	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
 	const MAP_STYLES: Record<string, string> = {
-		streets: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+		streets: `https://api.maptiler.com/maps/${prefersDark ? 'streets-v2-dark' : 'streets-v2'}/style.json?key=${PUBLIC_MAPTILER_KEY}`,
 		satellite: `https://api.maptiler.com/maps/hybrid/style.json?key=${PUBLIC_MAPTILER_KEY}`,
 		terrain: `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
 	};
@@ -708,7 +710,7 @@
 		function initMap(center: [number, number], zoom: number) {
 			map = new maplibregl.Map({
 				container: mapContainer,
-				style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+				style: MAP_STYLES.streets,
 				center, zoom
 			});
 			setupMap();
@@ -978,7 +980,8 @@
 		border: none;
 		border-radius: 8px;
 		font-size: 0.9rem;
-		background: white;
+		background: var(--color-surface);
+		color: var(--color-text);
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	}
 
@@ -995,16 +998,16 @@
 		height: 40px;
 		border: none;
 		border-radius: 8px;
-		background: white;
+		background: var(--color-surface);
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 		cursor: pointer;
-		color: #333;
+		color: var(--color-text);
 		flex-shrink: 0;
 	}
 
 	.locate-btn:hover {
-		background: #f3f4f6;
-		color: #3b82f6;
+		background: var(--color-bg-tertiary);
+		color: var(--color-primary);
 	}
 
 	.locate-btn .material-symbols {
@@ -1016,7 +1019,7 @@
 		list-style: none;
 		margin: 4px 0 0;
 		padding: 0;
-		background: white;
+		background: var(--color-surface);
 		border-radius: 8px;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 		overflow: hidden;
@@ -1031,15 +1034,15 @@
 		text-align: left;
 		font-size: 0.85rem;
 		cursor: pointer;
-		color: #333;
+		color: var(--color-text);
 	}
 
 	.search-results li button:hover {
-		background: #f3f4f6;
+		background: var(--color-bg-tertiary);
 	}
 
 	.search-results li + li {
-		border-top: 1px solid #e5e7eb;
+		border-top: 1px solid var(--color-border);
 	}
 
 	/* Routing indicator */
@@ -1053,19 +1056,19 @@
 		align-items: center;
 		gap: 8px;
 		padding: 8px 16px;
-		background: white;
+		background: var(--color-surface);
 		border-radius: 20px;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 		font-size: 0.8rem;
 		font-weight: 500;
-		color: #3b82f6;
+		color: var(--color-primary);
 	}
 
 	.routing-spinner {
 		width: 14px;
 		height: 14px;
-		border: 2px solid #e5e7eb;
-		border-top-color: #3b82f6;
+		border: 2px solid var(--color-border);
+		border-top-color: var(--color-primary);
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
 	}
@@ -1102,11 +1105,11 @@
 		width: 20px;
 		height: 20px;
 		border-radius: 50%;
-		background: white;
-		border: 2px solid #3b82f6;
+		background: var(--color-surface);
+		border: 2px solid var(--color-primary);
 		font-size: 8px;
 		font-weight: 700;
-		color: #3b82f6;
+		color: var(--color-primary);
 		display: flex;
 		align-items: center;
 		justify-content: center;

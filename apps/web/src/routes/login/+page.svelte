@@ -134,7 +134,31 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 100vh;
-		background: var(--color-bg);
+		background: linear-gradient(150deg, #0F172A 0%, #1E1B4B 40%, #312E81 100%);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.login-page::before {
+		content: '';
+		position: absolute;
+		top: -30%;
+		right: -20%;
+		width: 60%;
+		height: 160%;
+		background: radial-gradient(ellipse, rgba(79, 70, 229, 0.2) 0%, transparent 70%);
+		pointer-events: none;
+	}
+
+	.login-page::after {
+		content: '';
+		position: absolute;
+		bottom: -20%;
+		left: -10%;
+		width: 50%;
+		height: 120%;
+		background: radial-gradient(ellipse, rgba(236, 72, 153, 0.1) 0%, transparent 70%);
+		pointer-events: none;
 	}
 
 	.login-card {
@@ -142,6 +166,22 @@
 		max-width: 24rem;
 		padding: var(--space-2xl);
 		text-align: center;
+		background: rgba(255, 255, 255, 0.95);
+		backdrop-filter: blur(20px);
+		border-radius: var(--radius-xl);
+		box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+		position: relative;
+		z-index: 1;
+		color: #0F172A;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.login-card {
+			background: rgba(30, 41, 59, 0.85);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+			color: #F1F5F9;
+		}
 	}
 
 	.logo {
@@ -150,7 +190,10 @@
 		gap: var(--space-sm);
 		font-weight: 700;
 		font-size: 1.5rem;
-		color: var(--color-primary);
+		background: var(--gradient-primary);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 		margin-bottom: var(--space-2xl);
 	}
 
@@ -223,6 +266,12 @@
 		background: #1a1a1a;
 	}
 
+	@media (prefers-color-scheme: dark) {
+		.btn-apple {
+			border-color: #334155;
+		}
+	}
+
 	.oauth-icon {
 		flex-shrink: 0;
 	}
@@ -266,14 +315,15 @@
 	}
 
 	.btn-email {
-		background: var(--color-primary);
+		background: var(--gradient-primary);
 		color: white;
 		border: none;
 		font-weight: 600;
 	}
 
 	.btn-email:hover:not(:disabled) {
-		background: var(--color-primary-hover);
+		opacity: 0.9;
+		box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 	}
 
 	.toggle-mode {

@@ -266,6 +266,7 @@
 		background: var(--color-primary);
 		border-color: var(--color-primary);
 		color: white;
+		box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
 	}
 
 	.chart-header {
@@ -303,6 +304,7 @@
 	.view-toggle button.active {
 		background: var(--color-primary);
 		color: white;
+		box-shadow: 0 1px 4px rgba(79, 70, 229, 0.3);
 	}
 
 	.stat-grid {
@@ -319,14 +321,37 @@
 		padding: var(--space-lg);
 		display: flex;
 		flex-direction: column;
+		position: relative;
+		overflow: hidden;
+		transition: all var(--transition-base);
+	}
+
+	.stat-card::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 3px;
+		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+	}
+
+	.stat-card:nth-child(1)::before { background: linear-gradient(90deg, #4F46E5, #7C3AED); }
+	.stat-card:nth-child(2)::before { background: linear-gradient(90deg, #10B981, #06B6D4); }
+	.stat-card:nth-child(3)::before { background: linear-gradient(90deg, #F97316, #F59E0B); }
+	.stat-card:nth-child(4)::before { background: linear-gradient(90deg, #EC4899, #EF4444); }
+
+	.stat-card:hover {
+		box-shadow: var(--shadow-md);
+		border-color: transparent;
 	}
 
 	.stat-label {
-		font-size: 0.8rem;
-		font-weight: 500;
+		font-size: 0.75rem;
+		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.06em;
 		margin-bottom: var(--space-xs);
 	}
 
@@ -348,6 +373,11 @@
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
 		margin-bottom: var(--space-xl);
+		transition: all var(--transition-base);
+	}
+
+	.card:hover {
+		box-shadow: var(--shadow-md);
 	}
 
 	.chart {
@@ -386,10 +416,14 @@
 	.bar {
 		width: 100%;
 		max-width: 2.5rem;
-		background: var(--color-primary);
+		background: linear-gradient(180deg, #4F46E5, #7C3AED);
 		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 		min-height: 4px;
 		transition: height var(--transition-base);
+	}
+
+	.bar-col:hover .bar {
+		background: linear-gradient(180deg, #6366F1, #A78BFA);
 	}
 
 	.bar-label {

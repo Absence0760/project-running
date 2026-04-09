@@ -93,12 +93,18 @@
 	.app-shell {
 		display: flex;
 		min-height: 100vh;
+
+		--sidebar-text: #E2E8F0;
+		--sidebar-text-muted: #94A3B8;
+		--sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+		--sidebar-active-bg: rgba(79, 70, 229, 0.25);
+		--sidebar-active-text: #C7D2FE;
+		--sidebar-border: rgba(255, 255, 255, 0.08);
 	}
 
 	.sidebar {
 		width: var(--sidebar-width);
-		background: var(--color-surface);
-		border-right: 1px solid var(--color-border);
+		background: var(--gradient-sidebar);
 		display: flex;
 		flex-direction: column;
 		padding: var(--space-md);
@@ -117,11 +123,15 @@
 		margin-bottom: var(--space-lg);
 		font-weight: 700;
 		font-size: 1.25rem;
-		color: var(--color-primary);
+		color: #ffffff;
 	}
 
 	.logo-icon {
 		font-size: 1rem;
+		background: var(--gradient-primary);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 	}
 
 	.nav-list {
@@ -141,7 +151,7 @@
 		border-radius: var(--radius-md);
 		font-size: 0.9rem;
 		font-weight: 500;
-		color: var(--color-text-secondary);
+		color: var(--sidebar-text-muted);
 		transition: all var(--transition-fast);
 		border: none;
 		background: none;
@@ -151,13 +161,13 @@
 	}
 
 	.nav-link:hover {
-		background: var(--color-bg-secondary);
-		color: var(--color-text);
+		background: var(--sidebar-hover-bg);
+		color: var(--sidebar-text);
 	}
 
 	.nav-link.active {
-		background: var(--color-primary-light);
-		color: var(--color-primary);
+		background: var(--sidebar-active-bg);
+		color: var(--sidebar-active-text);
 	}
 
 	.nav-icon {
@@ -167,7 +177,7 @@
 	}
 
 	.sidebar-footer {
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--sidebar-border);
 		padding-top: var(--space-md);
 		display: flex;
 		flex-direction: column;
@@ -185,7 +195,7 @@
 		width: 2rem;
 		height: 2rem;
 		border-radius: 50%;
-		background: var(--color-primary);
+		background: var(--gradient-primary);
 		color: white;
 		display: flex;
 		align-items: center;
@@ -204,6 +214,7 @@
 	.user-name {
 		font-size: 0.85rem;
 		font-weight: 600;
+		color: var(--sidebar-text);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -211,20 +222,20 @@
 
 	.user-email {
 		font-size: 0.7rem;
-		color: var(--color-text-tertiary);
+		color: var(--sidebar-text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.logout-btn {
-		color: var(--color-text-tertiary);
+		color: var(--sidebar-text-muted);
 		font-size: 0.85rem;
 	}
 
 	.logout-btn:hover {
-		color: var(--color-danger);
-		background: var(--color-danger-light);
+		color: #FCA5A5;
+		background: rgba(239, 68, 68, 0.15);
 	}
 
 	.main-content {

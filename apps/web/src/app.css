@@ -1,24 +1,33 @@
 :root {
-	font-family: system-ui, -apple-system, sans-serif;
+	font-family: 'Inter', system-ui, -apple-system, sans-serif;
 
 	/* Colors */
-	--color-primary: #1E88E5;
-	--color-primary-hover: #1976D2;
-	--color-primary-light: rgba(30, 136, 229, 0.1);
-	--color-secondary: #43A047;
-	--color-secondary-hover: #388E3C;
-	--color-danger: #E53935;
-	--color-danger-light: rgba(229, 57, 53, 0.1);
-	--color-warning: #FB8C00;
+	--color-primary: #4F46E5;
+	--color-primary-hover: #4338CA;
+	--color-primary-light: rgba(79, 70, 229, 0.08);
+	--color-secondary: #10B981;
+	--color-secondary-hover: #059669;
+	--color-danger: #EF4444;
+	--color-danger-light: rgba(239, 68, 68, 0.08);
+	--color-warning: #F59E0B;
+
+	--color-accent-orange: #F97316;
+	--color-accent-pink: #EC4899;
+	--color-accent-cyan: #06B6D4;
 
 	--color-bg: #ffffff;
-	--color-bg-secondary: #f8f9fa;
-	--color-bg-tertiary: #f0f1f3;
+	--color-bg-secondary: #F8FAFC;
+	--color-bg-tertiary: #F1F5F9;
 	--color-surface: #ffffff;
-	--color-border: #e2e5e9;
-	--color-text: #1a1a2e;
-	--color-text-secondary: #6b7280;
-	--color-text-tertiary: #9ca3af;
+	--color-border: #E2E8F0;
+	--color-text: #0F172A;
+	--color-text-secondary: #64748B;
+	--color-text-tertiary: #94A3B8;
+
+	/* Gradients */
+	--gradient-primary: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);
+	--gradient-surface: linear-gradient(135deg, rgba(79, 70, 229, 0.03) 0%, rgba(236, 72, 153, 0.03) 100%);
+	--gradient-sidebar: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
 
 	/* Spacing */
 	--space-xs: 0.25rem;
@@ -35,9 +44,10 @@
 	--radius-xl: 1rem;
 
 	/* Shadows */
-	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-	--shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-	--shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+	--shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+	--shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+	--shadow-lg: 0 12px 24px rgba(15, 23, 42, 0.08), 0 4px 8px rgba(15, 23, 42, 0.04);
+	--shadow-glow: 0 0 20px rgba(79, 70, 229, 0.15);
 
 	/* Transitions */
 	--transition-fast: 150ms ease;
@@ -46,6 +56,41 @@
 	/* Nav */
 	--nav-height: 3.5rem;
 	--sidebar-width: 15rem;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-primary: #818CF8;
+		--color-primary-hover: #6366F1;
+		--color-primary-light: rgba(129, 140, 248, 0.12);
+		--color-secondary: #34D399;
+		--color-secondary-hover: #10B981;
+		--color-danger: #F87171;
+		--color-danger-light: rgba(248, 113, 113, 0.12);
+		--color-warning: #FBBF24;
+
+		--color-accent-orange: #FB923C;
+		--color-accent-pink: #F472B6;
+		--color-accent-cyan: #22D3EE;
+
+		--color-bg: #0F172A;
+		--color-bg-secondary: #0B1120;
+		--color-bg-tertiary: #1E293B;
+		--color-surface: #1E293B;
+		--color-border: #334155;
+		--color-text: #F1F5F9;
+		--color-text-secondary: #94A3B8;
+		--color-text-tertiary: #64748B;
+
+		--gradient-primary: linear-gradient(135deg, #818CF8 0%, #A78BFA 50%, #F472B6 100%);
+		--gradient-surface: linear-gradient(135deg, rgba(129, 140, 248, 0.05) 0%, rgba(244, 114, 182, 0.05) 100%);
+		--gradient-sidebar: linear-gradient(180deg, #020617 0%, #0F172A 100%);
+
+		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+		--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+		--shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3);
+		--shadow-glow: 0 0 20px rgba(129, 140, 248, 0.2);
+	}
 }
 
 *,
@@ -70,6 +115,16 @@ a {
 button {
 	font: inherit;
 	cursor: pointer;
+}
+
+input, select, textarea {
+	color: inherit;
+	font: inherit;
+}
+
+/* Smooth theme transition */
+body, .sidebar, .login-card {
+	transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Hide material icon text until font loads */

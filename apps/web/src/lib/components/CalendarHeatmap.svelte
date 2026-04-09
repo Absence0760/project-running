@@ -50,12 +50,12 @@
 	});
 
 	function intensity(distance: number): string {
-		if (distance === 0) return 'var(--color-bg-secondary)';
+		if (distance === 0) return 'var(--color-bg-tertiary)';
 		const ratio = Math.min(distance / maxDistance, 1);
-		if (ratio < 0.25) return '#c6e48b';
-		if (ratio < 0.5) return '#7bc96f';
-		if (ratio < 0.75) return '#239a3b';
-		return '#196127';
+		if (ratio < 0.25) return '#C7D2FE';
+		if (ratio < 0.5) return '#818CF8';
+		if (ratio < 0.75) return '#6366F1';
+		return '#4F46E5';
 	}
 
 	function formatTooltip(date: string, distance: number): string {

@@ -816,7 +816,7 @@
 	}
 
 	.target-btn:hover {
-		background: rgba(30, 136, 229, 0.15);
+		background: var(--color-primary-light);
 		border-style: solid;
 	}
 
