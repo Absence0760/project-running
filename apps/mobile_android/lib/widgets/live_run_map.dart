@@ -121,22 +121,26 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       widget.currentPosition ??
       (widget.track.isNotEmpty ? widget.track.last : null);
 
-  /// Apply a 1-2-1 weighted moving average to the track so GPS jitter
-  /// shows as a smoother line instead of a visible zig-zag. The first and
-  /// last points are preserved unchanged. Display-only — the stored run
-  /// keeps the raw waypoints.
+  /// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
+  /// shows as a smoother line instead of a visible zig-zag. The first two
+  /// and last two points are preserved unchanged. Display-only — the stored
+  /// run keeps the raw waypoints.
+  ///
+  /// This reduces noise but cannot correct systematic offset from the road
+  /// (i.e. when GPS reports you 5 m off the centreline). The real fix is
+  /// backend map matching — see docs/roadmap.md.
   static List<LatLng> _smoothTrack(List<LatLng> points) {
-    if (points.length < 3) return points;
-    final out = List<LatLng>.filled(points.length, points.first);
-    out[0] = points.first;
-    out[points.length - 1] = points.last;
-    for (int i = 1; i < points.length - 1; i++) {
-      final a = points[i - 1];
-      final b = points[i];
-      final c = points[i + 1];
+    if (points.length < 5) return points;
+    final out = List<LatLng>.from(points);
+    for (int i = 2; i < points.length - 2; i++) {
+      final a = points[i - 2];
+      final b = points[i - 1];
+      final c = points[i];
+      final d = points[i + 1];
+      final e = points[i + 2];
       out[i] = LatLng(
-        (a.latitude + b.latitude * 2 + c.latitude) / 4,
-        (a.longitude + b.longitude * 2 + c.longitude) / 4,
+        (a.latitude + b.latitude * 2 + c.latitude * 3 + d.latitude * 2 + e.latitude) / 9,
+        (a.longitude + b.longitude * 2 + c.longitude * 3 + d.longitude * 2 + e.longitude) / 9,
       );
     }
     return out;
@@ -195,8 +199,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     final rawTrack = widget.track
         .map((w) => LatLng(w.lat, w.lng))
         .toList();
-    // Smooth a couple of times so the rendered line reads cleanly even at
-    // walking pace where the signal-to-noise ratio is worst.
+    // Two 5-point smoothing passes — enough to tame walking-pace jitter
+    // without cutting corners on sharp turns. Doesn't snap to roads; that's
+    // blocked on backend map matching (see docs/roadmap.md).
     final trackLatLngs = _smoothTrack(_smoothTrack(rawTrack));
     final plannedLatLngs = widget.plannedRoute
             ?.map((w) => LatLng(w.lat, w.lng))

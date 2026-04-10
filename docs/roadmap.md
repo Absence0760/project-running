@@ -376,6 +376,34 @@ Migrate from MapTiler to self-hosted map tiles using Protomaps (PMTiles format o
 
 ---
 
+## Future — Map matching (Strava / Nike Run Club quality)
+
+Snap recorded tracks to the road/path network so the rendered line sits on the actual route rather than drifting with GPS noise. This is what Strava, Nike Run Club, and Google Fit do server-side to produce their clean, road-aligned traces. Consumer phone GPS is 3–8 m accurate on open sky and worse in urban areas — no amount of client-side smoothing can correct that bias, only map matching can.
+
+The target is **professional-grade Hidden Markov Model map matching**, the same family of algorithms used by Strava et al. Open-source reference implementations: [Valhalla Meili](https://github.com/valhalla/valhalla/tree/master/src/meili), [OSRM `/match`](https://project-osrm.org/docs/v5.24.0/api/#match-service), [GraphHopper map matching](https://github.com/graphhopper/graphhopper/tree/master/map-matching). All three take a raw GPS trace + OSM road data and return a snapped polyline.
+
+- [ ] Stand up a backend map-matching service:
+  - [ ] Pick one of Valhalla Meili, OSRM, or GraphHopper — evaluate on running-specific tracks (trails, parks, urban grid)
+  - [ ] Deploy alongside Supabase (Docker image + OSM extract for target region, start country-level then global)
+  - [ ] OSM extract refresh pipeline (monthly diffs from Geofabrik)
+  - [ ] Expose as an authenticated endpoint (`POST /runs/:id/match`)
+- [ ] Wire up sync path:
+  - [ ] `ApiClient.saveRun` triggers matching on the backend after upload
+  - [ ] Store both the raw and matched tracks (so future re-matching with better data/algorithms is possible)
+  - [ ] Return the matched geometry to the client for display
+- [ ] Client display:
+  - [ ] `run_detail_screen` prefers the matched track when available, falls back to raw
+  - [ ] `live_run_map` during recording still shows the raw track (live matching is out of scope — it's too slow and too expensive per fix)
+  - [ ] Toggle in settings to show raw vs matched (for debugging / verification)
+- [ ] Privacy & reliability:
+  - [ ] Graceful offline fallback — if the backend is unreachable, show the raw track and retry matching on next sync
+  - [ ] Self-hosted from day one to avoid sending user tracks to a third party
+- [ ] Stretch: on-device map matching for fully-offline users. Port or FFI-wrap one of the engines above — multi-week effort, revisit once the backend version is proven.
+
+Interim mitigation (shipped): polyline smoothing at render time in `LiveRunMap._smoothTrack`. Reduces GPS zig-zag but cannot correct systematic offset from the road — only map matching can.
+
+---
+
 ## Competitive positioning
 
 | Feature | Run App | Strava | Nike Run Club | Garmin Connect | AllTrails |

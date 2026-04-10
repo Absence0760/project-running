@@ -66,9 +66,23 @@ class _RunScreenState extends State<RunScreen> {
   // Pause state
   Timer? _autoPauseCheckTimer;
   DateTime? _lastMovementAt;
+  DateTime? _lastSnapshotAt;
+  DateTime? _recordingStartedAt;
   cm.Waypoint? _lastMovementCheckPosition;
   bool _autoPaused = false;
   bool _manualPaused = false;
+
+  // Grace period after _begin() during which auto-pause is suppressed, to
+  // give the GPS radio time to warm up without false-pausing the runner.
+  static const _autoPauseGracePeriod = Duration(seconds: 15);
+  // Maximum staleness of the last snapshot we'll trust when deciding to
+  // auto-pause. If GPS has been silent longer than this we don't know the
+  // runner's state, so we don't pause.
+  static const _autoPauseMaxSnapshotGap = Duration(seconds: 6);
+
+  // Reentrancy guard on start — prevents rapid taps from spawning
+  // multiple recorders.
+  bool _startRequested = false;
 
   // Laps
   int _lapCount = 0;
@@ -179,7 +193,12 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   Future<void> _beginCountdown() async {
-    if (!await _ensurePermission()) return;
+    if (_startRequested || _state != _ScreenState.idle) return;
+    _startRequested = true;
+    if (!await _ensurePermission()) {
+      _startRequested = false;
+      return;
+    }
     setState(() {
       _state = _ScreenState.countdown;
       _countdownValue = 3;
@@ -267,9 +286,26 @@ class _RunScreenState extends State<RunScreen> {
     // Auto-pause check (every 2s). Only meaningful once recording starts.
     _lastMovementAt = DateTime.now();
     _lastMovementCheckPosition = null;
+    _recordingStartedAt = DateTime.now();
     _autoPauseCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (!widget.preferences.autoPause ||
           _state != _ScreenState.recording) return;
+
+      // Grace period after start — GPS is still warming up, no false pause.
+      final startedAt = _recordingStartedAt;
+      if (startedAt != null &&
+          DateTime.now().difference(startedAt) < _autoPauseGracePeriod) {
+        return;
+      }
+
+      // Snapshot freshness gate — if we haven't received a GPS fix recently,
+      // we don't know whether the runner is moving, so don't pause.
+      final lastSnap = _lastSnapshotAt;
+      if (lastSnap == null ||
+          DateTime.now().difference(lastSnap) > _autoPauseMaxSnapshotGap) {
+        return;
+      }
+
       final last = _lastMovementAt;
       if (last == null) return;
       final stillFor = DateTime.now().difference(last);
@@ -286,6 +322,11 @@ class _RunScreenState extends State<RunScreen> {
 
   void _onSnapshot(RunSnapshot snapshot) {
       final unit = widget.preferences.unit;
+
+      // Record that a fresh GPS-backed snapshot arrived. Auto-pause uses
+      // this to avoid firing when GPS is silent (we don't know the runner's
+      // state, so pausing would be wrong).
+      _lastSnapshotAt = DateTime.now();
 
       // Detect movement for auto-pause. We compare raw waypoint positions
       // instead of the track's distanceMetres, because the track threshold
@@ -497,6 +538,9 @@ class _RunScreenState extends State<RunScreen> {
     _stepSamples.clear();
     _latestPedometerSteps = 0;
     _lastMovementCheckPosition = null;
+    _lastSnapshotAt = null;
+    _recordingStartedAt = null;
+    _startRequested = false;
     WakelockPlus.disable();
     setState(() {
       _state = _ScreenState.idle;
