@@ -121,6 +121,27 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       widget.currentPosition ??
       (widget.track.isNotEmpty ? widget.track.last : null);
 
+  /// Apply a 1-2-1 weighted moving average to the track so GPS jitter
+  /// shows as a smoother line instead of a visible zig-zag. The first and
+  /// last points are preserved unchanged. Display-only — the stored run
+  /// keeps the raw waypoints.
+  static List<LatLng> _smoothTrack(List<LatLng> points) {
+    if (points.length < 3) return points;
+    final out = List<LatLng>.filled(points.length, points.first);
+    out[0] = points.first;
+    out[points.length - 1] = points.last;
+    for (int i = 1; i < points.length - 1; i++) {
+      final a = points[i - 1];
+      final b = points[i];
+      final c = points[i + 1];
+      out[i] = LatLng(
+        (a.latitude + b.latitude * 2 + c.latitude) / 4,
+        (a.longitude + b.longitude * 2 + c.longitude) / 4,
+      );
+    }
+    return out;
+  }
+
   /// Offset (in logical pixels) to shift the camera by so the dot sits in the
   /// centre of the visible area above [LiveRunMap.bottomPadding]. flutter_map's
   /// positive dy moves the [center] down the screen, so we pass a negative
@@ -171,9 +192,12 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final trackLatLngs = widget.track
+    final rawTrack = widget.track
         .map((w) => LatLng(w.lat, w.lng))
         .toList();
+    // Smooth a couple of times so the rendered line reads cleanly even at
+    // walking pace where the signal-to-noise ratio is worst.
+    final trackLatLngs = _smoothTrack(_smoothTrack(rawTrack));
     final plannedLatLngs = widget.plannedRoute
             ?.map((w) => LatLng(w.lat, w.lng))
             .toList() ??
@@ -248,17 +272,46 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                 ],
               ),
 
-            // Recorded track (on top)
-            if (trackLatLngs.length >= 2)
+            // Recorded track — Nike-Run-Club-style glowing line.
+            // Three stacked layers give the line depth against the dark
+            // map: a soft halo, a thin dark underline for contrast, and a
+            // bright indigo gradient on top that fades from dim (oldest
+            // point) to almost white at the current position.
+            if (trackLatLngs.length >= 2) ...[
               PolylineLayer(
                 polylines: [
                   Polyline(
                     points: trackLatLngs,
-                    strokeWidth: 4.5,
-                    color: const Color(0xFF818CF8), // Indigo
+                    strokeWidth: 18,
+                    color: const Color(0xFF818CF8).withValues(alpha: 0.18),
                   ),
                 ],
               ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: trackLatLngs,
+                    strokeWidth: 10,
+                    color: const Color(0xFF818CF8).withValues(alpha: 0.35),
+                  ),
+                ],
+              ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: trackLatLngs,
+                    strokeWidth: 6,
+                    gradientColors: const [
+                      Color(0xFF4F46E5),
+                      Color(0xFF818CF8),
+                      Color(0xFFC7D2FE),
+                    ],
+                    borderStrokeWidth: 2,
+                    borderColor: const Color(0xFF1E1B4B),
+                  ),
+                ],
+              ),
+            ],
 
             // Current position marker — drawn from the raw latest fix so it
             // refreshes between track-append events.

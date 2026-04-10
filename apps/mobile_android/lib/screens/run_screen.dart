@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
@@ -65,6 +66,7 @@ class _RunScreenState extends State<RunScreen> {
   // Pause state
   Timer? _autoPauseCheckTimer;
   DateTime? _lastMovementAt;
+  cm.Waypoint? _lastMovementCheckPosition;
   bool _autoPaused = false;
   bool _manualPaused = false;
 
@@ -90,7 +92,13 @@ class _RunScreenState extends State<RunScreen> {
   int _startSteps = 0;
   int _steps = 0;
   int _cadence = 0;
+  int _latestPedometerSteps = 0;
   final List<_StepSample> _stepSamples = [];
+
+  // Prepare-phase state. The recorder, GPS stream, pedometer, and wakelock
+  // are warmed up at the start of the countdown so begin() is instant when
+  // the 3 seconds are up.
+  Future<void>? _prepareFuture;
 
   // Finished run
   cm.Run? _finishedRun;
@@ -176,27 +184,131 @@ class _RunScreenState extends State<RunScreen> {
       _state = _ScreenState.countdown;
       _countdownValue = 3;
     });
+
+    // Warm up everything that would otherwise delay the start of the run —
+    // GPS stream, pedometer sensor, wakelock — while the countdown ticks.
+    _preload();
+
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_countdownValue <= 1) {
         t.cancel();
-        _start();
+        _begin();
       } else {
         setState(() => _countdownValue--);
       }
     });
   }
 
-  void _start() {
+  /// Kick off all asynchronous setup that's needed before the run can start
+  /// cleanly. Runs during the countdown so the user doesn't see a delay when
+  /// it ends.
+  void _preload() {
     _recorder = RunRecorder();
-    _snapshotSub = _recorder!.snapshots.listen((snapshot) {
+    _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
+
+    // Pedometer sensor stream. We subscribe now, but don't count steps
+    // toward the run until _begin sets a baseline.
+    _stepSub = Pedometer.stepCountStream.listen((event) {
+      _latestPedometerSteps = event.steps;
+      if (_state != _ScreenState.recording) return;
+      if (_startSteps == 0) _startSteps = event.steps;
+      final newSteps = event.steps - _startSteps;
+      _stepSamples.add(_StepSample(DateTime.now(), newSteps));
+      final cutoff = DateTime.now().subtract(const Duration(seconds: 10));
+      _stepSamples.removeWhere((s) => s.time.isBefore(cutoff));
+      if (_stepSamples.length >= 2) {
+        final first = _stepSamples.first;
+        final last = _stepSamples.last;
+        final dt = last.time.difference(first.time).inMilliseconds / 1000.0;
+        if (dt > 1) {
+          _cadence = ((last.steps - first.steps) / dt * 60).round();
+        }
+      }
+      if (mounted) setState(() => _steps = newSteps);
+    }, onError: (_) {});
+
+    // Keep the screen awake from the start of the countdown onward.
+    WakelockPlus.enable();
+
+    // Open the GPS stream now so the first fix is already in hand when the
+    // run starts. Positions received during this phase drive the blue dot
+    // but don't accumulate into the track or distance.
+    _prepareFuture = _recorder!
+        .prepare(
+      route: _selectedRoute,
+      distanceFilterMetres: _activityType.gpsDistanceFilter,
+      minMovementMetres: _activityType.minMovementMetres,
+    )
+        .catchError((e, st) {
+      debugPrint('RunRecorder.prepare failed: $e');
+    });
+  }
+
+  /// Flip the run on. All expensive setup was already done in [_preload];
+  /// this is synchronous aside from a last-resort await on the prepare
+  /// future in case it hasn't completed yet.
+  Future<void> _begin() async {
+    // In the common case prepare has already completed during the 3-second
+    // countdown, so this await is a no-op. On a slow device it waits for
+    // the GPS stream to come up before starting the clock.
+    await _prepareFuture;
+
+    if (!mounted || _recorder == null) return;
+
+    _recorder!.begin();
+
+    // Reset the pedometer baseline so steps taken during the countdown
+    // don't count toward the run.
+    _startSteps = _latestPedometerSteps;
+    _steps = 0;
+    _cadence = 0;
+    _stepSamples.clear();
+
+    // Auto-pause check (every 2s). Only meaningful once recording starts.
+    _lastMovementAt = DateTime.now();
+    _lastMovementCheckPosition = null;
+    _autoPauseCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!widget.preferences.autoPause ||
+          _state != _ScreenState.recording) return;
+      final last = _lastMovementAt;
+      if (last == null) return;
+      final stillFor = DateTime.now().difference(last);
+      if (stillFor.inSeconds >= 10 && !_autoPaused) {
+        _recorder?.pause();
+        setState(() => _autoPaused = true);
+      }
+    });
+
+    if (widget.preferences.audioCues) widget.audioCues.announceStart();
+
+    setState(() => _state = _ScreenState.recording);
+  }
+
+  void _onSnapshot(RunSnapshot snapshot) {
       final unit = widget.preferences.unit;
 
-      // Detect movement for auto-pause
-      if (snapshot.distanceMetres > _distanceMetres) {
-        _lastMovementAt = DateTime.now();
-        if (_autoPaused) {
-          _recorder?.resume();
-          setState(() => _autoPaused = false);
+      // Detect movement for auto-pause. We compare raw waypoint positions
+      // instead of the track's distanceMetres, because the track threshold
+      // (3 m by default) can make distanceMetres look "stuck" for 10+ seconds
+      // at slow walking pace even though the runner is genuinely moving.
+      if (_state == _ScreenState.recording) {
+        final curr = snapshot.currentPosition;
+        final prev = _lastMovementCheckPosition;
+        if (prev == null) {
+          _lastMovementCheckPosition = curr;
+          _lastMovementAt = DateTime.now();
+        } else {
+          final moved = Geolocator.distanceBetween(
+            prev.lat, prev.lng, curr.lat, curr.lng,
+          );
+          if (moved > 1.5) {
+            _lastMovementAt = DateTime.now();
+            _lastMovementCheckPosition = curr;
+            if (_autoPaused) {
+              _recorder?.resume();
+              setState(() => _autoPaused = false);
+            }
+          }
         }
       }
 
@@ -245,7 +357,7 @@ class _RunScreenState extends State<RunScreen> {
       final currentTick = UnitFormat.activityTicks(_distanceMetres, tickInterval);
       if (currentTick > _lastTickNotified && currentTick > 0) {
         _lastTickNotified = currentTick;
-        final totalDistanceMetres = currentTick * tickInterval;
+        final totalDistanceMetres = (currentTick * tickInterval).toDouble();
         final tail = _activityType.usesSpeed
             ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
             : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
@@ -269,50 +381,6 @@ class _RunScreenState extends State<RunScreen> {
           );
         }
       }
-    });
-    _recorder!.start(
-      route: _selectedRoute,
-      distanceFilterMetres: _activityType.gpsDistanceFilter,
-      minMovementMetres: _activityType.minMovementMetres,
-    );
-
-    // Keep screen awake during run
-    WakelockPlus.enable();
-
-    // Step counter
-    _stepSub = Pedometer.stepCountStream.listen((event) {
-      if (_startSteps == 0) _startSteps = event.steps;
-      final newSteps = event.steps - _startSteps;
-      _stepSamples.add(_StepSample(DateTime.now(), newSteps));
-      final cutoff = DateTime.now().subtract(const Duration(seconds: 10));
-      _stepSamples.removeWhere((s) => s.time.isBefore(cutoff));
-      if (_stepSamples.length >= 2) {
-        final first = _stepSamples.first;
-        final last = _stepSamples.last;
-        final dt = last.time.difference(first.time).inMilliseconds / 1000.0;
-        if (dt > 1) {
-          _cadence = ((last.steps - first.steps) / dt * 60).round();
-        }
-      }
-      setState(() => _steps = newSteps);
-    }, onError: (_) {});
-
-    // Auto-pause check (every 2s)
-    _lastMovementAt = DateTime.now();
-    _autoPauseCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (!widget.preferences.autoPause || _state != _ScreenState.recording) return;
-      final last = _lastMovementAt;
-      if (last == null) return;
-      final stillFor = DateTime.now().difference(last);
-      if (stillFor.inSeconds >= 10 && !_autoPaused) {
-        _recorder?.pause();
-        setState(() => _autoPaused = true);
-      }
-    });
-
-    if (widget.preferences.audioCues) widget.audioCues.announceStart();
-
-    setState(() => _state = _ScreenState.recording);
   }
 
   void _toggleManualPause() {
@@ -425,6 +493,10 @@ class _RunScreenState extends State<RunScreen> {
     _countdownTimer?.cancel();
     _recorder?.dispose();
     _recorder = null;
+    _prepareFuture = null;
+    _stepSamples.clear();
+    _latestPedometerSteps = 0;
+    _lastMovementCheckPosition = null;
     WakelockPlus.disable();
     setState(() {
       _state = _ScreenState.idle;

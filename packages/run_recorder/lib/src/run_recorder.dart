@@ -59,17 +59,30 @@ class RunRecorder {
   Route? _route;
   double _trackThresholdMetres = 3;
 
-  /// Emits a [RunSnapshot] every second during recording.
+  /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
+  /// per second after [begin] starts recording time.
   Stream<RunSnapshot> get snapshots => _controller.stream;
 
-  /// Begin recording a run, optionally following a [route].
+  /// Whether [prepare] has completed and the position stream is running.
+  bool get prepared => _prepared;
+  bool _prepared = false;
+
+  /// Whether [begin] has been called and time/distance are accumulating.
+  bool get recording => _recording;
+
+  /// Open the GPS position stream and subscribe to it, without starting to
+  /// accumulate time or distance. Positions received in this phase still
+  /// drive the blue dot via [snapshots], so the map can show the runner's
+  /// location during a countdown before the run officially starts.
+  ///
+  /// Call [begin] when the countdown ends to flip on recording.
   ///
   /// [distanceFilterMetres] and [minMovementMetres] are combined into a single
   /// software threshold that gates when a GPS fix gets appended to the track
   /// and counted toward distance. The OS-level filter is always 0 so the blue
   /// dot can update at the GPS sensor's native rate, independent of this
   /// threshold.
-  Future<void> start({
+  Future<void> prepare({
     Route? route,
     int distanceFilterMetres = 3,
     double minMovementMetres = 2,
@@ -84,13 +97,13 @@ class RunRecorder {
       throw Exception('Location permission denied');
     }
 
-    _startTime = DateTime.now();
+    _startTime = null;
     _distanceMetres = 0;
     _track.clear();
     _laps.clear();
     _currentWaypoint = null;
     _lastTrackedPosition = null;
-    _recording = true;
+    _recording = false;
     _paused = false;
     _pausedTotal = Duration.zero;
     _pausedSince = null;
@@ -113,11 +126,46 @@ class RunRecorder {
       ),
     ).listen(_onPosition);
 
+    _prepared = true;
+  }
+
+  /// Flip the recorder into recording mode. Must be called after [prepare]
+  /// has completed. Starts the elapsed-time clock, clears any track built
+  /// before this point, and begins accumulating distance.
+  void begin() {
+    if (!_prepared) {
+      throw StateError('RunRecorder.begin() called before prepare() completed');
+    }
+    _startTime = DateTime.now();
+    _distanceMetres = 0;
+    _track.clear();
+    _laps.clear();
+    _lastTrackedPosition = null;
+    _recording = true;
+    _paused = false;
+    _pausedTotal = Duration.zero;
+    _pausedSince = null;
+
     // 1-second timer for elapsed time updates.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!_recording || _currentWaypoint == null) return;
       _emitSnapshot();
     });
+  }
+
+  /// Convenience: [prepare] + [begin] in one call. Kept for callers that
+  /// don't need the preload/countdown split.
+  Future<void> start({
+    Route? route,
+    int distanceFilterMetres = 3,
+    double minMovementMetres = 2,
+  }) async {
+    await prepare(
+      route: route,
+      distanceFilterMetres: distanceFilterMetres,
+      minMovementMetres: minMovementMetres,
+    );
+    begin();
   }
 
   /// Pause the timer and stop accumulating distance until [resume] is called.
@@ -139,13 +187,18 @@ class RunRecorder {
   }
 
   void _onPosition(Position pos) {
-    if (!_recording || _paused) return;
+    if (_paused) return;
 
-    // Filter inaccurate readings
-    if (pos.accuracy > 30) return;
+    // Filter inaccurate readings. 20 m is a compromise between rejecting
+    // clearly-bad fixes (especially indoors or in urban canyons) and
+    // keeping enough fixes to maintain a continuous track on phones with
+    // modest GPS antennas.
+    if (pos.accuracy > 20) return;
 
     // Always refresh the raw current position so the blue dot updates on
-    // every valid fix, independent of the track-append threshold.
+    // every valid fix, independent of the track-append threshold. This
+    // happens even before [begin] is called, so the map can show the runner
+    // during the countdown.
     _currentWaypoint = Waypoint(
       lat: pos.latitude,
       lng: pos.longitude,
@@ -153,23 +206,27 @@ class RunRecorder {
       timestamp: DateTime.now(),
     );
 
-    final last = _lastTrackedPosition;
-    if (last == null) {
-      _lastTrackedPosition = pos;
-      _track.add(_currentWaypoint!);
-    } else {
-      final delta = Geolocator.distanceBetween(
-        last.latitude,
-        last.longitude,
-        pos.latitude,
-        pos.longitude,
-      );
-      // Only grow the track + accumulate distance on real movement. Ignore
-      // GPS jitter below the threshold and implausible jumps (>100m).
-      if (delta > _trackThresholdMetres && delta < 100) {
-        _distanceMetres += delta;
+    // Only append to the track and accumulate distance once the run has
+    // officially started (post-[begin]).
+    if (_recording) {
+      final last = _lastTrackedPosition;
+      if (last == null) {
         _lastTrackedPosition = pos;
         _track.add(_currentWaypoint!);
+      } else {
+        final delta = Geolocator.distanceBetween(
+          last.latitude,
+          last.longitude,
+          pos.latitude,
+          pos.longitude,
+        );
+        // Only grow the track + accumulate distance on real movement. Ignore
+        // GPS jitter below the threshold and implausible jumps (>100m).
+        if (delta > _trackThresholdMetres && delta < 100) {
+          _distanceMetres += delta;
+          _lastTrackedPosition = pos;
+          _track.add(_currentWaypoint!);
+        }
       }
     }
 
@@ -178,13 +235,16 @@ class RunRecorder {
 
   void _emitSnapshot() {
     final current = _currentWaypoint;
-    if (_startTime == null || current == null) return;
+    if (current == null) return;
 
-    var elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
-    if (_paused && _pausedSince != null) {
-      elapsed -= DateTime.now().difference(_pausedSince!);
+    Duration elapsed = Duration.zero;
+    if (_startTime != null) {
+      elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
+      if (_paused && _pausedSince != null) {
+        elapsed -= DateTime.now().difference(_pausedSince!);
+      }
+      if (elapsed.isNegative) elapsed = Duration.zero;
     }
-    if (elapsed.isNegative) elapsed = Duration.zero;
     final pace = _calculatePace();
     final offRoute = _offRouteDistance(current);
     final remaining = _routeRemaining(current);
@@ -378,6 +438,7 @@ class RunRecorder {
   /// Stop recording and return the completed [Run].
   Future<Run> stop() async {
     _recording = false;
+    _prepared = false;
     _timer?.cancel();
     _timer = null;
     await _positionSub?.cancel();
