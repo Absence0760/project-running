@@ -161,9 +161,13 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                   value: _formatDuration(run.duration),
                 ),
                 _StatBig(
-                  label: 'Pace',
-                  value: UnitFormat.pace(_avgPaceSecPerKm, unit),
-                  unit: UnitFormat.paceLabel(unit),
+                  label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
+                  value: _activityType.usesSpeed
+                      ? UnitFormat.speed(_avgPaceSecPerKm, unit)
+                      : UnitFormat.pace(_avgPaceSecPerKm, unit),
+                  unit: _activityType.usesSpeed
+                      ? UnitFormat.speedLabel(unit)
+                      : UnitFormat.paceLabel(unit),
                 ),
               ],
             ),

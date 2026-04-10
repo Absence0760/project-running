@@ -52,12 +52,22 @@ class RunRecorder {
   Duration _pausedTotal = Duration.zero;
   DateTime? _pausedSince;
   Route? _route;
+  double _minMovementMetres = 2;
 
   /// Emits a [RunSnapshot] every second during recording.
   Stream<RunSnapshot> get snapshots => _controller.stream;
 
   /// Begin recording a run, optionally following a [route].
-  Future<void> start({Route? route}) async {
+  ///
+  /// [distanceFilterMetres] tunes the GPS update frequency — larger values
+  /// produce fewer updates and ignore more noise (good for cycling).
+  /// [minMovementMetres] is the smallest delta that counts toward distance —
+  /// anything smaller is treated as GPS jitter.
+  Future<void> start({
+    Route? route,
+    int distanceFilterMetres = 3,
+    double minMovementMetres = 2,
+  }) async {
     // Ensure location permission
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -78,13 +88,14 @@ class RunRecorder {
     _pausedTotal = Duration.zero;
     _pausedSince = null;
     _route = route;
+    _minMovementMetres = minMovementMetres;
 
     // GPS position stream with Android foreground service config
     // so recording continues when the app is backgrounded or screen is off.
     _positionSub = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 3, // metres between updates
+        distanceFilter: distanceFilterMetres,
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Run in progress',
           notificationText: 'Recording your run',
@@ -132,8 +143,8 @@ class RunRecorder {
         pos.latitude,
         pos.longitude,
       );
-      // Ignore GPS jitter (<2m) and implausible jumps (>100m)
-      if (delta > 2 && delta < 100) {
+      // Ignore GPS jitter and implausible jumps (>100m)
+      if (delta > _minMovementMetres && delta < 100) {
         _distanceMetres += delta;
       }
     }

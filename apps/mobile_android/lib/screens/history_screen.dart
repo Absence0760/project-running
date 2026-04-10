@@ -211,11 +211,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
           final paceSecPerKm = run.distanceMetres < 10
               ? null
               : run.duration.inSeconds / (run.distanceMetres / 1000);
-          final pace = '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
+          final activity = ActivityType.fromName(run.metadata?['activity_type'] as String?);
+          final trailingMetric = activity.usesSpeed
+              ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
+              : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
           final date = _formatDate(run.startedAt);
           final isUnsynced = unsyncedIds.contains(run.id);
-
-          final activity = ActivityType.fromName(run.metadata?['activity_type'] as String?);
           return Card(
             child: ListTile(
               leading: CircleAvatar(
@@ -227,7 +228,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(pace, style: theme.textTheme.bodySmall),
+                  Text(trailingMetric, style: theme.textTheme.bodySmall),
                   if (isUnsynced) ...[
                     const SizedBox(width: 8),
                     Icon(Icons.cloud_off, size: 16, color: theme.colorScheme.outline),

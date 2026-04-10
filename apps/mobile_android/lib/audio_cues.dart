@@ -16,17 +16,36 @@ class AudioCues {
   }
 
   /// Announce a split, e.g. "1 kilometre, pace 5 minutes 30 seconds".
+  ///
+  /// If [useSpeed] is true, announces speed in km/h or mph instead of pace.
+  /// [tickIntervalMetres] lets the cue describe non-1km intervals (e.g. 5km
+  /// for cycling): "5 kilometres" instead of "1 kilometre".
   Future<void> announceSplit({
     required int distanceTicks,
     required double? paceSecondsPerKm,
     required DistanceUnit unit,
+    bool useSpeed = false,
+    double tickIntervalMetres = 1000,
   }) async {
     await _init();
+    final totalUnits = (distanceTicks * tickIntervalMetres / 1000).round();
     final unitWord = unit == DistanceUnit.mi
-        ? (distanceTicks == 1 ? 'mile' : 'miles')
-        : (distanceTicks == 1 ? 'kilometre' : 'kilometres');
-    final paceText = _formatPace(paceSecondsPerKm, unit);
-    await _tts.speak('$distanceTicks $unitWord. $paceText');
+        ? (totalUnits == 1 ? 'mile' : 'miles')
+        : (totalUnits == 1 ? 'kilometre' : 'kilometres');
+    final tail = useSpeed
+        ? _formatSpeed(paceSecondsPerKm, unit)
+        : _formatPace(paceSecondsPerKm, unit);
+    await _tts.speak('$totalUnits $unitWord. $tail');
+  }
+
+  String _formatSpeed(double? secondsPerKm, DistanceUnit unit) {
+    if (secondsPerKm == null || secondsPerKm <= 0) return '';
+    final kmh = 3600 / secondsPerKm;
+    if (unit == DistanceUnit.mi) {
+      final mph = kmh / 1.609344;
+      return 'Speed, ${mph.toStringAsFixed(1)} miles per hour';
+    }
+    return 'Speed, ${kmh.toStringAsFixed(1)} kilometres per hour';
   }
 
   /// Announce that the run started.

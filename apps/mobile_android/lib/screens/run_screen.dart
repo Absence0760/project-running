@@ -211,9 +211,12 @@ class _RunScreenState extends State<RunScreen> {
         }
       }
 
-      // Pace alert
+      // Pace alert (skip for cycling — pace target doesn't apply)
       final target = widget.preferences.targetPaceSecPerKm;
-      if (target > 0 && _pace != null && widget.preferences.audioCues) {
+      if (!_activityType.usesSpeed &&
+          target > 0 &&
+          _pace != null &&
+          widget.preferences.audioCues) {
         final diff = _pace! - target;
         final lastAlert = _lastPaceAlertAt;
         final canAlert = lastAlert == null ||
@@ -225,15 +228,20 @@ class _RunScreenState extends State<RunScreen> {
       }
 
       // Distance tick notification + audio cue
-      final currentTick = UnitFormat.distanceTicks(_distanceMetres, unit);
+      // Use activity-aware interval: 5km for cycling, 1km/mi for everything else.
+      final tickInterval = _activityType.splitIntervalMetres;
+      final currentTick = UnitFormat.activityTicks(_distanceMetres, tickInterval);
       if (currentTick > _lastTickNotified && currentTick > 0) {
         _lastTickNotified = currentTick;
-        final paceLabel = UnitFormat.paceLabel(unit);
+        final totalDistanceMetres = currentTick * tickInterval;
+        final tail = _activityType.usesSpeed
+            ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
+            : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$currentTick ${UnitFormat.distanceLabel(unit)} — '
-                  '${UnitFormat.pace(_pace, unit)} $paceLabel'),
+              content: Text(
+                  '${UnitFormat.distance(totalDistanceMetres, unit)} — $tail'),
               duration: const Duration(seconds: 3),
               behavior: SnackBarBehavior.floating,
             ),
@@ -244,11 +252,17 @@ class _RunScreenState extends State<RunScreen> {
             distanceTicks: currentTick,
             paceSecondsPerKm: _pace,
             unit: unit,
+            useSpeed: _activityType.usesSpeed,
+            tickIntervalMetres: tickInterval,
           );
         }
       }
     });
-    _recorder!.start(route: _selectedRoute);
+    _recorder!.start(
+      route: _selectedRoute,
+      distanceFilterMetres: _activityType.gpsDistanceFilter,
+      minMovementMetres: _activityType.minMovementMetres,
+    );
 
     // Keep screen awake during run
     WakelockPlus.enable();
@@ -458,8 +472,15 @@ class _RunScreenState extends State<RunScreen> {
     return UnitFormat.pace(secPerKm, _unit);
   }
 
+  String get _formattedAvgSpeedValue {
+    if (_distanceMetres < 10 || _elapsed.inSeconds < 1) return '--';
+    final secPerKm = _elapsed.inSeconds / (_distanceMetres / 1000);
+    return UnitFormat.speed(secPerKm, _unit);
+  }
+
   String get _formattedCalories {
-    final cals = (70 * _distanceMetres / 1000).round();
+    // Assume 70 kg body weight; multiplier varies by activity.
+    final cals = (70 * _activityType.kcalPerKgPerKm * _distanceMetres / 1000).round();
     return '$cals';
   }
 
@@ -685,9 +706,17 @@ class _RunScreenState extends State<RunScreen> {
             time: _formattedTime,
             distanceValue: _formattedDistanceValue,
             distanceUnit: UnitFormat.distanceLabel(_unit),
-            pace: _formattedPaceValue,
-            paceUnit: UnitFormat.paceLabel(_unit),
-            avgPace: _formattedAvgPaceValue,
+            primaryValue: _activityType.usesSpeed
+                ? UnitFormat.speed(_pace, _unit)
+                : _formattedPaceValue,
+            primaryUnit: _activityType.usesSpeed
+                ? UnitFormat.speedLabel(_unit)
+                : UnitFormat.paceLabel(_unit),
+            primaryLabel: _activityType.usesSpeed ? 'Speed' : 'Pace',
+            secondaryValue: _activityType.usesSpeed
+                ? _formattedAvgSpeedValue
+                : _formattedAvgPaceValue,
+            secondaryLabel: _activityType.usesSpeed ? 'Avg Speed' : 'Avg Pace',
             calories: _formattedCalories,
             elevation: _formattedElevation,
             steps: '$_steps',
@@ -731,9 +760,13 @@ class _RunScreenState extends State<RunScreen> {
                       _StatColumn(label: 'Distance', value: _formattedDistance),
                       _StatColumn(label: 'Time', value: _formattedTime),
                       _StatColumn(
-                        label: 'Pace',
-                        value: _formattedAvgPaceValue,
-                        unit: UnitFormat.paceLabel(_unit),
+                        label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
+                        value: _activityType.usesSpeed
+                            ? _formattedAvgSpeedValue
+                            : _formattedAvgPaceValue,
+                        unit: _activityType.usesSpeed
+                            ? UnitFormat.speedLabel(_unit)
+                            : UnitFormat.paceLabel(_unit),
                       ),
                     ],
                   ),
@@ -773,9 +806,11 @@ class _StatsOverlay extends StatelessWidget {
   final String time;
   final String distanceValue;
   final String distanceUnit;
-  final String pace;
-  final String paceUnit;
-  final String avgPace;
+  final String primaryValue;
+  final String primaryUnit;
+  final String primaryLabel;
+  final String secondaryValue;
+  final String secondaryLabel;
   final String calories;
   final String elevation;
   final String steps;
@@ -791,9 +826,11 @@ class _StatsOverlay extends StatelessWidget {
     required this.time,
     required this.distanceValue,
     required this.distanceUnit,
-    required this.pace,
-    required this.paceUnit,
-    required this.avgPace,
+    required this.primaryValue,
+    required this.primaryUnit,
+    required this.primaryLabel,
+    required this.secondaryValue,
+    required this.secondaryLabel,
     required this.calories,
     required this.elevation,
     required this.steps,
@@ -847,9 +884,13 @@ class _StatsOverlay extends StatelessWidget {
                       child: _StatColumn(
                           label: 'Distance', value: distanceValue, unit: distanceUnit)),
                   _divider(theme),
-                  Expanded(child: _StatColumn(label: 'Pace', value: pace, unit: paceUnit)),
+                  Expanded(
+                      child: _StatColumn(
+                          label: primaryLabel, value: primaryValue, unit: primaryUnit)),
                   _divider(theme),
-                  Expanded(child: _StatColumn(label: 'Avg Pace', value: avgPace, unit: paceUnit)),
+                  Expanded(
+                      child: _StatColumn(
+                          label: secondaryLabel, value: secondaryValue, unit: primaryUnit)),
                 ],
               ),
               const SizedBox(height: 12),

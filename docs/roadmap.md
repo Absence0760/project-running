@@ -45,23 +45,32 @@ The primary differentiator. Users export a KML from Google My Maps or any other 
 - [x] Parse GPX, KML, KMZ, and GeoJSON formats (web)
 - [x] Display route with distance and elevation summary on import
 - [x] Save imported route to Supabase
-- [ ] Parse on mobile (iOS + Android)
+- [x] Parse on Android (file picker + LocalRouteStore)
+- [ ] Parse on iOS
 
 ### Live GPS run recording (phone)
 
 Track position, pace, distance, and elapsed time using device GPS. Runs saved to local storage first — no backend required at this stage.
 
-- [ ] Background location tracking (iOS + Android)
-- [ ] Real-time pace and distance display
-- [ ] Auto-pause on stop detection
+- [x] Background location tracking (Android — geolocator foreground service)
+- [ ] Background location tracking (iOS)
+- [x] Real-time pace and distance display (Android)
+- [x] Auto-pause on stop detection (Android, toggleable)
+- [x] Manual pause/resume (Android)
+- [x] Lap markers (Android)
+- [x] Wakelock during run (Android)
+- [x] Activity types — run, walk, cycle, hike — with per-type pace/speed display, calorie multipliers, split intervals, and GPS filters (Android)
+- [x] Audio cues for splits and pace alerts via TTS (Android)
+- [x] Step count and cadence via pedometer (Android)
+- [x] Live HTTP tile cache so revisited tiles work without network (Android)
 
 ### Route overlay during run
 
 Show the imported route on the map while running. Current position tracks against the planned line. Off-route haptic alerts when drifting more than 50m from the path.
 
-- [ ] Live position marker on route
+- [x] Live position marker on route (Android)
+- [x] Off-route detection and alert (Android — banner + TTS at >40m)
 - [ ] Distance remaining to end
-- [ ] Off-route detection and alert
 
 ### Run history + basic stats
 
@@ -70,12 +79,26 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Run list sorted by date
 - [x] Individual run detail view (map + stats)
 - [x] Weekly mileage summary on home screen
+- [x] Elevation chart on run detail (Android)
+- [x] Lap splits on run detail (Android)
+- [x] Edit run title and notes (Android)
+- [x] Share run as GPX (Android)
+- [x] Delete runs (Android)
+- [x] History sort by newest, oldest, longest, fastest (Android)
+- [x] Personal Bests on dashboard — longest run, fastest pace, fastest 5k (Android)
+- [x] Weekly distance goal with progress bar (Android)
 
 ### Cloud sync + auth
 
 - [x] Supabase Auth with email/password sign-in and sign-up
 - [x] Google and Apple OAuth scaffolded (needs provider credentials to enable)
 - [x] Auth callback route for OAuth redirect
+- [x] Onboarding flow on first launch with location permission request (Android)
+- [x] Offline-only mode — runs work without backend or auth (Android)
+- [x] UUID run IDs to avoid sync collisions across devices
+- [x] Pull remote runs from Supabase, merge with local store (Android)
+- [x] Bulk sync button for unsynced runs (Android)
+- [x] Backup all runs as JSON via system share sheet (Android)
 - [ ] Background sync on wifi (mobile)
 - [ ] Conflict resolution: device wins on merge
 
@@ -394,6 +417,21 @@ Migrate from MapTiler to self-hosted map tiles using Protomaps (PMTiles format o
 | 500K | $599 (Team) | $50 | $25 | **$674** |
 
 Map tile costs are minimal — MapTiler has a generous free tier, and Protomaps (self-hosted) eliminates tile costs entirely at scale. Budget for routing API costs (OSRM or Valhalla, both self-hostable).
+
+---
+
+## Deferred from Phase 1 (Android-specific)
+
+These were considered during Android implementation and intentionally pushed to a later phase because they need server-side credentials, OAuth flows, or device APIs that don't fit a quick incremental change:
+
+- **OAuth sign-in (Google/Apple)** on Android — only email/password works against the same Supabase backend as the web app. Needs deep link config and Android signing setup.
+- **Strava integration** — Settings has a placeholder button. Needs Strava developer account and OAuth flow.
+- **parkrun integration** — Settings has a placeholder button. Needs the scraping Edge Function wired up.
+- **Heart rate from Bluetooth devices** — needs flutter_blue_plus and per-device GATT characteristic handling.
+- **Persistent disk tile cache** — currently in-memory only via flutter_map_cache. Persistent caching needs Hive or sqlite init.
+- **Route detail "start with this route" already exists**, but route navigation overlay distance-remaining is still missing.
+- **Voice cues at custom intervals** — only fixed km/mi splits and pace alerts.
+- **History filter** by date range or activity type — only sort options exist.
 
 ---
 

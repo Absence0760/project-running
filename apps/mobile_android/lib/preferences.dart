@@ -35,6 +35,57 @@ enum ActivityType {
     }
   }
 
+  /// Cycling shows speed (km/h, mph) instead of pace (min/km, min/mi).
+  bool get usesSpeed => this == ActivityType.cycle;
+
+  /// Calories burned per kilogram of body weight per kilometre travelled.
+  /// Approximate metabolic equivalents.
+  double get kcalPerKgPerKm {
+    switch (this) {
+      case ActivityType.run:
+        return 1.0;
+      case ActivityType.walk:
+        return 0.5;
+      case ActivityType.cycle:
+        return 0.4;
+      case ActivityType.hike:
+        return 0.7;
+    }
+  }
+
+  /// Distance interval (metres) for split notifications. Larger for cycling
+  /// so a 30 km ride doesn't fire 30 announcements.
+  double get splitIntervalMetres {
+    switch (this) {
+      case ActivityType.cycle:
+        return 5000;
+      default:
+        return 1000;
+    }
+  }
+
+  /// GPS distance filter in metres — how far the runner must move before
+  /// the next position update is fired. Larger for cycling.
+  int get gpsDistanceFilter {
+    switch (this) {
+      case ActivityType.cycle:
+        return 5;
+      default:
+        return 3;
+    }
+  }
+
+  /// Minimum movement (metres) between GPS samples that counts as real
+  /// motion. Anything below this is treated as GPS jitter.
+  double get minMovementMetres {
+    switch (this) {
+      case ActivityType.cycle:
+        return 4;
+      default:
+        return 2;
+    }
+  }
+
   static ActivityType fromName(String? name) {
     return ActivityType.values.firstWhere(
       (a) => a.name == name,
@@ -166,4 +217,24 @@ class UnitFormat {
     }
     return (metres / 1000).floor();
   }
+
+  /// Number of activity-aware split ticks hit so far (e.g. 5km splits for cycle).
+  static int activityTicks(double metres, double intervalMetres) {
+    return (metres / intervalMetres).floor();
+  }
+
+  /// Format speed: "12.5 km/h" or "7.8 mph".
+  static String speed(double? secondsPerKm, DistanceUnit unit) {
+    if (secondsPerKm == null || secondsPerKm <= 0) return '--';
+    final kmh = 3600 / secondsPerKm;
+    if (unit == DistanceUnit.mi) {
+      final mph = kmh / 1.609344;
+      return mph.toStringAsFixed(1);
+    }
+    return kmh.toStringAsFixed(1);
+  }
+
+  /// Speed unit label e.g. "km/h" or "mph".
+  static String speedLabel(DistanceUnit unit) =>
+      unit == DistanceUnit.mi ? 'mph' : 'km/h';
 }

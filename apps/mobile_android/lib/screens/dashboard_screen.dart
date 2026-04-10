@@ -303,7 +303,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Run? _fastestPaceRun(List<Run> runs) {
-    final eligible = runs.where((r) => r.distanceMetres >= 1000).toList();
+    // Only running-style activities use pace as a PB metric.
+    final eligible = runs
+        .where((r) =>
+            r.distanceMetres >= 1000 &&
+            !ActivityType.fromName(r.metadata?['activity_type'] as String?).usesSpeed)
+        .toList();
     if (eligible.isEmpty) return null;
     return eligible.reduce((a, b) => _paceOf(a) <= _paceOf(b) ? a : b);
   }
@@ -311,7 +316,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _paceOf(Run r) => r.duration.inSeconds / (r.distanceMetres / 1000);
 
   Duration? _best5k(List<Run> runs) {
-    final eligible = runs.where((r) => r.distanceMetres >= 5000).toList();
+    final eligible = runs
+        .where((r) =>
+            r.distanceMetres >= 5000 &&
+            !ActivityType.fromName(r.metadata?['activity_type'] as String?).usesSpeed)
+        .toList();
     if (eligible.isEmpty) return null;
     final times = eligible.map((r) {
       final secPerMetre = r.duration.inSeconds / r.distanceMetres;

@@ -191,9 +191,22 @@ The Android app supports the following:
 - **Weekly goal** — set a kilometre target, track progress with a progress bar
 - **Personal bests** — longest run, fastest pace, fastest 5k
 
+### Activity types
+
+The activity type you pick on the idle screen genuinely changes how the run is recorded and displayed:
+
+| Type | Primary metric | Calorie multiplier | Split interval | GPS filter | Pace alerts |
+|---|---|---|---|---|---|
+| Run | Pace (min/km) | 1.0× | 1 km/mi | 3 m | Yes |
+| Walk | Pace (min/km) | 0.5× | 1 km/mi | 3 m | Yes |
+| Cycle | **Speed (km/h)** | 0.4× | **5 km** | 5 m | No |
+| Hike | Pace (min/km) | 0.7× | 1 km/mi | 3 m | Yes |
+
+When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Avg Speed, the audio cue announces speed instead of pace, and split notifications fire every 5 km instead of every km. The history list and run detail screen also adapt — cycling rides show speed in their trailing column. Personal bests for "Fastest pace" and "Fastest 5k" only consider running-style activities.
+
 ### Recording a run
 
-- **Activity types** — run, walk, cycle, hike (selectable from the idle screen)
+- **Activity types** — run, walk, cycle, hike (see table above)
 - **Countdown** — 3-2-1 before recording starts so you can put your phone away
 - **Live map** — full-screen dark map with your route as an indigo polyline, a pulsing blue dot, and HTTP tile caching so previously loaded tiles work offline
 - **Live stats** — time, distance, current pace, average pace, calories, elevation gain, steps, cadence
