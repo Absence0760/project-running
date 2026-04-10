@@ -5,6 +5,7 @@ export interface Run {
 	duration_s: number;
 	distance_m: number;
 	track: TrackPoint[] | null;
+	track_url: string | null;
 	route_id: string | null;
 	source: RunSource;
 	external_id: string | null;

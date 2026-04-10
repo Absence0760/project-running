@@ -7,6 +7,7 @@ function makeRun(overrides: Partial<Run> & { started_at: string; duration_s: num
 		id: crypto.randomUUID(),
 		user_id: 'mock-user',
 		track: null,
+		track_url: null,
 		route_id: null,
 		external_id: null,
 		metadata: null,

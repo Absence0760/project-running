@@ -16,7 +16,9 @@ export async function fetchRuns(): Promise<Run[]> {
 		.order('started_at', { ascending: false });
 
 	if (error || !data || data.length === 0) return mockRuns;
-	return data;
+	// List view never needs the GPS track — leave it null and fetch on demand
+	// when the user opens a single run.
+	return data.map((r: any) => ({ ...r, track: null }));
 }
 
 export async function fetchRunById(id: string): Promise<Run | null> {
@@ -26,9 +28,55 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 		.eq('id', id)
 		.single();
 
-	if (data) return data;
-	// Fall back to mock
-	return mockRuns.find((r) => r.id === id) ?? mockRuns[0];
+	if (!data) {
+		// Fall back to mock
+		return mockRuns.find((r) => r.id === id) ?? mockRuns[0];
+	}
+
+	// Lazy-load the GPS track from Storage when the run has one.
+	let track = null;
+	if (data.track_url) {
+		try {
+			track = await fetchTrack(data.track_url);
+		} catch (e) {
+			console.warn('Failed to fetch track', e);
+		}
+	}
+	return { ...data, track };
+}
+
+/**
+ * Download a gzipped GPS track from the `runs` Storage bucket.
+ * Throws if the path is invalid or the user can't read it.
+ */
+async function fetchTrack(path: string) {
+	const { data, error } = await supabase.storage.from('runs').download(path);
+	if (error || !data) throw error ?? new Error('No data');
+	const buf = await data.arrayBuffer();
+	const decompressed = await decompressGzip(buf);
+	const json = new TextDecoder().decode(decompressed);
+	return JSON.parse(json);
+}
+
+/** Decompress a gzipped ArrayBuffer using the browser's DecompressionStream. */
+async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
+	const ds = new (globalThis as any).DecompressionStream('gzip');
+	const stream = new Response(buf).body!.pipeThrough(ds);
+	const chunks: Uint8Array[] = [];
+	const reader = stream.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value);
+	}
+	const total = chunks.reduce((a, c) => a + c.length, 0);
+	const out = new Uint8Array(total);
+	let offset = 0;
+	for (const c of chunks) {
+		out.set(c, offset);
+		offset += c.length;
+	}
+	return out;
 }
 
 // --- Routes ---

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -15,12 +16,14 @@ class RunDetailScreen extends StatefulWidget {
   final Run run;
   final LocalRunStore runStore;
   final Preferences preferences;
+  final ApiClient? apiClient;
 
   const RunDetailScreen({
     super.key,
     required this.run,
     required this.runStore,
     required this.preferences,
+    this.apiClient,
   });
 
   @override
@@ -29,6 +32,50 @@ class RunDetailScreen extends StatefulWidget {
 
 class _RunDetailScreenState extends State<RunDetailScreen> {
   late Run run = widget.run;
+  bool _loadingTrack = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeFetchTrack();
+  }
+
+  /// If this run came from the cloud (track empty but track_url present),
+  /// download the GPS waypoints from Storage and update the local store so
+  /// next time we don't need to refetch.
+  Future<void> _maybeFetchTrack() async {
+    if (run.track.isNotEmpty) return;
+    final trackUrl = run.metadata?['track_url'] as String?;
+    if (trackUrl == null) return;
+    final api = widget.apiClient;
+    if (api == null) return;
+
+    setState(() => _loadingTrack = true);
+    try {
+      final track = await api.fetchTrack(run);
+      if (track.isEmpty) return;
+      final updated = Run(
+        id: run.id,
+        startedAt: run.startedAt,
+        duration: run.duration,
+        distanceMetres: run.distanceMetres,
+        track: track,
+        routeId: run.routeId,
+        source: run.source,
+        externalId: run.externalId,
+        metadata: run.metadata,
+        createdAt: run.createdAt,
+      );
+      // Persist the fetched track to the local store so subsequent opens are
+      // instant. saveFromRemote merges and marks synced.
+      await widget.runStore.saveFromRemote(updated);
+      if (mounted) setState(() => run = updated);
+    } catch (e) {
+      debugPrint('Failed to fetch track for ${run.id}: $e');
+    } finally {
+      if (mounted) setState(() => _loadingTrack = false);
+    }
+  }
 
   String get _title => (run.metadata?['title'] as String?) ?? _formatDate(run.startedAt);
   String get _notes => (run.metadata?['notes'] as String?) ?? '';
@@ -117,10 +164,37 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
       ),
       body: ListView(
         children: [
-          // Map
+          // Map (with a loading overlay while we fetch the cloud track)
           SizedBox(
             height: 280,
-            child: LiveRunMap(track: run.track, followRunner: false),
+            child: Stack(
+              children: [
+                LiveRunMap(track: run.track, followRunner: false),
+                if (_loadingTrack)
+                  const Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Loading GPS data...',
+                                style: TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
 
           // Activity type + notes

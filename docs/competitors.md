@@ -51,6 +51,17 @@ These are tracked in [roadmap.md](roadmap.md) and intentionally pushed to a late
 - **Live spectator tracking** — Phase 2, needs the Go service WebSocket.
 - **Social features, segments, leaderboards** — explicitly not in scope for v1. These are Strava's moat; we differentiate on free planning and watch parity.
 
+### Migration paths shipped today
+
+Bringing your existing run history with you is the single biggest barrier to switching apps. The Android app now ships with two paths:
+
+- **Strava ZIP import** — every Strava user can request a full data export from Settings → My Account → Download or Delete Your Account. The exporter unzips it, parses `activities.csv`, walks each `.gpx`/`.tcx`/`.gpx.gz` track file, and bulk-creates runs in the local store. Pushes to the cloud automatically if signed in. FIT files are skipped (re-export from Strava as GPX).
+- **Health Connect import** — on Android 14+, every fitness app syncs into Health Connect: Google Fit, Samsung Health, Garmin Connect, Fitbit, Runna, even Nike Run Club via the Strava bridge. The importer reads workout summaries from the last year. The trade-off is that Health Connect doesn't expose GPS routes for workouts written by other apps, so imported runs from this path don't have a map trace.
+
+Together these cover the realistic migration cases. A user migrating from Strava gets full GPS tracks; a user migrating from any other app gets workout summaries with no map. Either way, they walk in with their full history on day one.
+
+Storage was redesigned in the same release: GPS tracks now live as gzipped JSON files in Supabase Storage instead of inline `jsonb` columns. A 5-year power-user import (≈600 MB raw) compresses to ~75 MB and costs cents per user per year instead of dollars. **Bulk import would have been economically unviable on the old schema.**
+
 ### Lines worth defending
 
 Three differentiators are already real on Android and are the strongest pitches:

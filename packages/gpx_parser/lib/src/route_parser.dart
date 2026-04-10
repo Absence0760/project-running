@@ -76,6 +76,55 @@ class RouteParser {
     return _buildRoute(name, points);
   }
 
+  /// Parse a TCX (Training Center XML) string into a [Route]. Reads
+  /// `<Trackpoint>` elements from the first activity and uses
+  /// `<Position><LatitudeDegrees>` / `<LongitudeDegrees>` / `<AltitudeMeters>`.
+  ///
+  /// TCX is the format Garmin Connect, COROS, Suunto, and many fitness
+  /// devices export to. It can also include heart rate and cadence streams,
+  /// which we ignore here — we only care about the lat/lng/elevation track
+  /// for route purposes.
+  static Route fromTcx(String xmlString) {
+    final doc = XmlDocument.parse(xmlString);
+
+    final name = doc
+            .findAllElements('Name')
+            .firstOrNull
+            ?.innerText
+            .trim() ??
+        doc.findAllElements('Notes').firstOrNull?.innerText.trim() ??
+        'Imported route';
+
+    final points = <Waypoint>[];
+    for (final pt in doc.findAllElements('Trackpoint')) {
+      final position = pt.findElements('Position').firstOrNull;
+      if (position == null) continue;
+
+      final latNode = position.findElements('LatitudeDegrees').firstOrNull;
+      final lngNode = position.findElements('LongitudeDegrees').firstOrNull;
+      if (latNode == null || lngNode == null) continue;
+
+      final lat = double.tryParse(latNode.innerText);
+      final lng = double.tryParse(lngNode.innerText);
+      if (lat == null || lng == null) continue;
+
+      final eleNode = pt.findElements('AltitudeMeters').firstOrNull;
+      final ele = eleNode != null ? double.tryParse(eleNode.innerText) : null;
+
+      final timeNode = pt.findElements('Time').firstOrNull;
+      final time = timeNode != null ? DateTime.tryParse(timeNode.innerText) : null;
+
+      points.add(Waypoint(
+        lat: lat,
+        lng: lng,
+        elevationMetres: ele,
+        timestamp: time,
+      ));
+    }
+
+    return _buildRoute(name, points);
+  }
+
   /// Parse a GeoJSON map into a [Route]. Expects a `LineString` geometry.
   static Route fromGeoJson(Map<String, dynamic> json) {
     final name = (json['properties'] as Map?)?['name'] as String? ?? 'Imported route';

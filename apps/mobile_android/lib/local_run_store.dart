@@ -48,9 +48,13 @@ class LocalRunStore extends ChangeNotifier {
 
   /// Save a run that came from the backend. Marks it as already synced.
   ///
-  /// Conflict resolution: if a local copy already exists with a newer
-  /// `last_modified_at`, the remote copy is ignored. This prevents the cloud
-  /// from clobbering local edits that haven't been pushed yet.
+  /// Conflict resolution:
+  /// - If a local copy already exists with a newer `last_modified_at`, the
+  ///   remote copy is ignored. This prevents the cloud from clobbering local
+  ///   edits that haven't been pushed yet.
+  /// - Remote runs come back with an empty `track` (tracks are stored in
+  ///   Storage and lazy-loaded). If the local copy already has the full track,
+  ///   we preserve it so we don't drop GPS data when syncing.
   Future<void> saveFromRemote(Run run) async {
     final existing = _runs.where((r) => r.id == run.id).firstOrNull;
     if (existing != null) {
@@ -62,15 +66,32 @@ class LocalRunStore extends ChangeNotifier {
       }
     }
 
-    final file = File('${_dir.path}/${run.id}.json');
+    // Preserve the local track if the remote one is empty (tracks live in
+    // Storage now and aren't returned by getRuns).
+    final merged = (run.track.isEmpty && existing != null && existing.track.isNotEmpty)
+        ? Run(
+            id: run.id,
+            startedAt: run.startedAt,
+            duration: run.duration,
+            distanceMetres: run.distanceMetres,
+            track: existing.track,
+            routeId: run.routeId,
+            source: run.source,
+            externalId: run.externalId,
+            metadata: run.metadata,
+            createdAt: run.createdAt,
+          )
+        : run;
+
+    final file = File('${_dir.path}/${merged.id}.json');
     final data = {
-      'run': run.toJson(),
+      'run': merged.toJson(),
       'synced': true,
     };
     await file.writeAsString(jsonEncode(data));
-    _runs.removeWhere((r) => r.id == run.id);
-    _runs.insert(0, run);
-    _syncedIds.add(run.id);
+    _runs.removeWhere((r) => r.id == merged.id);
+    _runs.insert(0, merged);
+    _syncedIds.add(merged.id);
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     notifyListeners();
   }

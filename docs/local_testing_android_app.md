@@ -250,7 +250,18 @@ When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Av
 - **Auto-pause toggle** — disable if running on a treadmill
 - **Target pace** — m:ss per km/mi; voice alerts when off by 30s+
 - **Dark mode** — light/dark theme override
+- **Import from another app** — pull runs from Strava (data export ZIP) or Health Connect (Google Fit, Samsung Health, Garmin, Fitbit) — see "Migrating from another app" below
 - **Backup runs** — export every locally stored run as a single JSON file via the system share sheet
+
+### Migrating from another app
+
+The Settings → "Import from another app" screen offers two paths:
+
+**Strava ZIP import.** Strava lets every user request a full data export from Settings → My Account → Download or Delete Your Account. You get an email with a ZIP containing `activities.csv` and per-activity track files (`.gpx`, `.tcx`, or `.gpx.gz`). Pick the ZIP in the file picker and the app parses every track file, converts them to runs, saves them locally, and pushes them to the cloud if you're signed in. FIT files are skipped — Strava lets you re-export as GPX/TCX from the activity edit page.
+
+**Health Connect import.** On Android 14+, Google Fit, Samsung Health, Garmin Connect, Fitbit, and most other fitness apps sync into Health Connect. The importer reads workout summaries (date, distance, duration, type) for the last year and creates runs from them. The catch: Health Connect doesn't expose GPS routes for workouts written by other apps, so imported runs from this path won't have a map trace. They still count toward distance and weekly goals.
+
+Both importers save locally first and push to the cloud asynchronously, so they work offline (with the cloud push happening on next sync).
 
 ### Sync behaviour
 
@@ -300,6 +311,8 @@ What's actually wired up in [apps/mobile_android](../apps/mobile_android):
 | GPX/KML/GeoJSON parsing | `gpx_parser` (workspace package) | Implemented from scratch with `xml` |
 | User preferences | `shared_preferences` | Units, audio, auto-pause, target pace, weekly goal |
 | Permissions | `permission_handler` | Location + activity recognition |
+| Strava ZIP import | `archive` + `csv` + `gpx_parser` | Unzip, parse CSV index, parse GPX/TCX track files |
+| Health Connect import | `health` | Read workouts from Google Fit, Samsung Health, Garmin Connect, Fitbit |
 | Wake lock during run | `wakelock_plus` | Keep screen on |
 | Auto-sync triggers | `connectivity_plus` + `WidgetsBindingObserver` | Push runs on wifi/foreground |
 | Run sharing | `share_plus` | System share sheet for GPX export |

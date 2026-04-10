@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDuration, formatPace, formatDistance, formatDate, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { supabase } from '$lib/supabase';
+	import { fetchRunById } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Run } from '$lib/types';
@@ -13,18 +13,10 @@
 	let notFound = $state(false);
 
 	onMount(async () => {
-		// Public runs query — no RLS restriction needed if the user shared the link
-		const { data: runData } = await supabase
-			.from('runs')
-			.select('*')
-			.eq('id', data.id)
-			.single();
-
-		if (runData) {
-			run = runData;
-		} else {
-			notFound = true;
-		}
+		// Lazy-loads the GPS track from Storage if present.
+		const r = await fetchRunById(data.id);
+		if (r) run = r;
+		else notFound = true;
 		loading = false;
 	});
 

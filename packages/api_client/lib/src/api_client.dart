@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:core_models/core_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -38,32 +42,38 @@ class ApiClient {
     await _client.auth.signOut();
   }
 
-  /// Saves a completed [Run] to the backend.
+  /// Save a completed [Run] to the backend.
+  ///
+  /// The GPS track is uploaded as a gzipped JSON file to the `runs` Storage
+  /// bucket at `{user_id}/{run_id}.json.gz` and a reference to it is stored
+  /// in `runs.track_url`. The dashboard list never loads the track — it's
+  /// fetched on demand by [fetchTrack] when a run detail page is opened.
   Future<void> saveRun(Run run) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
 
-    // Map from Dart model to Supabase snake_case schema
-    final trackJson = run.track.map((w) => {
-      'lat': w.lat,
-      'lng': w.lng,
-      'ele': w.elevationMetres,
-      'ts': w.timestamp?.toIso8601String(),
-    }).toList();
+    String? trackUrl;
+    if (run.track.isNotEmpty) {
+      trackUrl = await _uploadTrack(userId: userId, runId: run.id, track: run.track);
+    }
 
-    await _client.from('runs').insert({
+    await _client.from('runs').upsert({
+      'id': run.id,
       'user_id': userId,
       'started_at': run.startedAt.toIso8601String(),
       'duration_s': run.duration.inSeconds,
       'distance_m': run.distanceMetres,
-      'track': trackJson,
+      'track_url': trackUrl,
       'source': run.source.name,
       'external_id': run.externalId,
       'metadata': run.metadata,
     });
   }
 
-  /// Fetches the user's runs, newest first.
+  /// Fetch the user's runs, newest first.
+  ///
+  /// Returned runs have an empty `track`. Use [fetchTrack] to download the
+  /// GPS waypoints for a single run when its detail page is opened.
   Future<List<Run>> getRuns({int limit = 50, DateTime? before}) async {
     var query = _client.from('runs').select();
 
@@ -77,6 +87,59 @@ class ApiClient {
 
     return data.map<Run>((row) => _runFromRow(row)).toList();
   }
+
+  /// Download and decode the GPS track for a single run.
+  ///
+  /// Reads the gzipped JSON from Supabase Storage at the path stored in
+  /// `metadata['track_url']` (returned by [getRuns] / [_runFromRow]).
+  /// Returns an empty list if the run has no track.
+  Future<List<Waypoint>> fetchTrack(Run run) async {
+    final url = run.metadata?['track_url'] as String?;
+    if (url == null || url.isEmpty) return const [];
+    return _downloadTrack(url);
+  }
+
+  // -- Storage helpers --
+
+  Future<String> _uploadTrack({
+    required String userId,
+    required String runId,
+    required List<Waypoint> track,
+  }) async {
+    final json = jsonEncode(track.map(_waypointToJson).toList());
+    final bytes = Uint8List.fromList(gzip.encode(utf8.encode(json)));
+    final path = '$userId/$runId.json.gz';
+    await _client.storage.from('runs').uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/json',
+            upsert: true,
+          ),
+        );
+    return path;
+  }
+
+  Future<List<Waypoint>> _downloadTrack(String path) async {
+    final bytes = await _client.storage.from('runs').download(path);
+    final json = utf8.decode(gzip.decode(bytes));
+    final list = jsonDecode(json) as List<dynamic>;
+    return list.map((t) => _waypointFromJson(t as Map<String, dynamic>)).toList();
+  }
+
+  static Map<String, dynamic> _waypointToJson(Waypoint w) => {
+        'lat': w.lat,
+        'lng': w.lng,
+        'ele': w.elevationMetres,
+        'ts': w.timestamp?.toIso8601String(),
+      };
+
+  static Waypoint _waypointFromJson(Map<String, dynamic> m) => Waypoint(
+        lat: (m['lat'] as num).toDouble(),
+        lng: (m['lng'] as num).toDouble(),
+        elevationMetres: (m['ele'] as num?)?.toDouble(),
+        timestamp: m['ts'] != null ? DateTime.tryParse(m['ts'] as String) : null,
+      );
 
   /// Saves a [Route] to the backend.
   Future<void> saveRoute(Route route) async {
@@ -110,27 +173,27 @@ class ApiClient {
   // -- Row mapping (Supabase snake_case → Dart models) --
 
   static Run _runFromRow(Map<String, dynamic> row) {
-    final trackList = (row['track'] as List<dynamic>?) ?? [];
+    // Stash the storage path on metadata so callers can pass the run back
+    // to fetchTrack() to lazy-load the GPS waypoints. The track field itself
+    // stays empty until fetched.
+    final metadata = Map<String, dynamic>.from(
+      (row['metadata'] as Map<String, dynamic>?) ?? const {},
+    );
+    final trackUrl = row['track_url'] as String?;
+    if (trackUrl != null) metadata['track_url'] = trackUrl;
+
     return Run(
       id: row['id'] as String,
       startedAt: DateTime.parse(row['started_at'] as String),
       duration: Duration(seconds: (row['duration_s'] as num).toInt()),
       distanceMetres: (row['distance_m'] as num).toDouble(),
-      track: trackList.map((t) {
-        final m = t as Map<String, dynamic>;
-        return Waypoint(
-          lat: (m['lat'] as num).toDouble(),
-          lng: (m['lng'] as num).toDouble(),
-          elevationMetres: (m['ele'] as num?)?.toDouble(),
-          timestamp: m['ts'] != null ? DateTime.tryParse(m['ts'] as String) : null,
-        );
-      }).toList(),
+      track: const [],
       source: RunSource.values.firstWhere(
         (s) => s.name == row['source'],
         orElse: () => RunSource.app,
       ),
       externalId: row['external_id'] as String?,
-      metadata: row['metadata'] as Map<String, dynamic>?,
+      metadata: metadata.isEmpty ? null : metadata,
       createdAt: row['created_at'] != null
           ? DateTime.parse(row['created_at'] as String)
           : null,

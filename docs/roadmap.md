@@ -45,7 +45,7 @@ The primary differentiator. Users export a KML from Google My Maps or any other 
 - [x] Parse GPX, KML, KMZ, and GeoJSON formats (web)
 - [x] Display route with distance and elevation summary on import
 - [x] Save imported route to Supabase
-- [x] Parse on Android (file picker + LocalRouteStore)
+- [x] Parse GPX, KML, GeoJSON, and TCX on Android (file picker + LocalRouteStore)
 - [ ] Parse on iOS
 
 ### Live GPS run recording (phone)
@@ -103,6 +103,10 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Auto-sync on connectivity change and app foreground (Android — via
       `connectivity_plus` + lifecycle observer)
 - [x] Conflict resolution: newer-wins by `last_modified_at` timestamp (Android)
+- [x] Strava data export ZIP import (Android — `activities.csv` + per-run
+      GPX/TCX track files, FIT skipped)
+- [x] Health Connect import — pulls workouts from Google Fit, Samsung Health,
+      Garmin Connect, Fitbit, Runna, etc. (Android, summary only — no GPS routes)
 - [ ] WorkManager-based periodic background sync (Android, when app is closed)
 
 ### Backend work (Phase 1)
@@ -112,7 +116,12 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Database functions (weekly_mileage, personal_records)
 - [x] Seed script with test user and mock data
 - [x] Edge Functions: parkrun-import, strava-import, strava-webhook, refresh-tokens, export-data
-- [ ] Move GPS tracks from JSONB `track` column to Supabase Storage (store `track_url` reference in row)
+- [x] Move GPS tracks from JSONB `track` column to Supabase Storage. Tracks
+      are now gzipped JSON files at `runs/{user_id}/{run_id}.json.gz` and the
+      row stores a `track_url` pointer. Cuts per-row size by ~99%, eliminates
+      jsonb column bloat on the dashboard query path, and lets bulk imports
+      (Strava, Health Connect) scale to 100K users on a $25/month Supabase
+      plan instead of needing the Team tier.
 - [ ] Encrypt OAuth tokens in `integrations` table with `pgcrypto`
 - [ ] Add rate limiting to Edge Function endpoints
 - [ ] Validate Strava webhook signatures
@@ -433,6 +442,26 @@ These were considered during Android implementation and intentionally pushed to 
 - **Persistent disk tile cache** — currently in-memory only via flutter_map_cache. Persistent caching needs Hive or sqlite init.
 - **Voice cues at custom intervals** — only fixed km/mi splits and pace alerts.
 - **History filter** by date range or activity type — only sort options exist.
+
+---
+
+## Known issues — runs storage + bulk import
+
+The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Connect bulk importers landed together. A few rough edges were left to fix in follow-up work:
+
+### Real bugs (fix before shipping the importer to real users)
+
+- [ ] **External ID collision on re-import.** `runs.external_id` is a unique index, but the Strava and Health Connect importers generate fresh run UUIDs each pass, so re-running an import will crash on the second Strava activity with a duplicate `external_id`. Fix: change `ApiClient.saveRun` to `upsert(..., onConflict: 'external_id')` when `externalId` is set, so re-imports update the existing row instead of inserting a duplicate.
+- [ ] **Storage object leak when runs are deleted.** `LocalRunStore.delete` and any future `ApiClient.deleteRun` currently remove the row but leave the gzipped track file in the `runs` bucket forever. Fix: add `deleteRun(id)` to `ApiClient` that deletes the row AND the Storage object, or add a Postgres trigger that calls `pg_net.http_delete` on row delete.
+- [ ] **Public share pages can't read GPS tracks.** The `/share/run/{id}` page on the web app is meant to be public, but the `runs` Storage bucket is private with owner-only RLS, so `fetchTrack()` returns 403 for anonymous viewers. Three fixes: make the bucket public (simplest, loses access control), generate signed URLs server-side for public runs (extra hop), or add an RLS policy that grants anonymous read when the run row has `is_public = true` (cleanest, most work — requires adding `is_public` to the `runs` table).
+
+### Performance / UX improvements
+
+- [ ] **Bulk import is N serial round trips.** The Strava importer uploads 2,000 tracks and upserts 2,000 rows one at a time. A power user re-import can take 10+ minutes and trip Supabase rate limits. Fix: batch row upserts in chunks of 100 via `insert([...])`, parallelise storage uploads in groups of 5–10 via `Future.wait`. Expected: ~5× throughput improvement.
+- [ ] **Redundant track re-uploads on edit.** When `LocalRunStore.update` marks a run unsynced and the sync service later calls `saveRun`, `saveRun` re-uploads the full gzipped track even though only the title/notes changed. Fix: skip the upload in `saveRun` when the run already has `metadata['track_url']` set and we're editing metadata, not recording.
+- [ ] **Local duplication of tracks.** After lazy-loading a cloud track into `RunDetailScreen`, the full track is saved back to `LocalRunStore` as plain JSON while the gzipped copy stays in Storage. Correct behaviour but a power user with 5 years of imported history has ~300 MB of duplicated tracks on device. Fix later: either gzip the local JSON files or keep the on-disk copy and drop it from the Storage cache eagerly.
+- [ ] **FIT file parsing** for Strava imports. FIT files (Garmin, Wahoo, COROS default exports) are skipped with an error. Users have to re-export as GPX/TCX from Strava. A `fit_parser` Dart package exists but is less polished than xml parsing. Lower priority — most Strava users get GPX/TCX anyway.
+- [ ] **WorkManager-based periodic background sync.** Current `SyncService` covers app foreground and connectivity change events. True-when-app-is-closed sync needs `workmanager` plus Android-specific setup for periodic work, network constraints, and Doze handling.
 
 ---
 

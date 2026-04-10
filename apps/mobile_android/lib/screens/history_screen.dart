@@ -243,6 +243,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       run: run,
                       runStore: widget.runStore,
                       preferences: widget.preferences,
+                      apiClient: widget.apiClient,
                     ),
                   ),
                 );

@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
+import 'import_screen.dart';
 import 'sign_in_screen.dart';
 
 /// Account settings, preferences, and integrations.
@@ -243,6 +244,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text('Data', style: theme.textTheme.titleSmall),
+            ),
+            ListTile(
+              leading: const Icon(Icons.move_to_inbox),
+              title: const Text('Import from another app'),
+              subtitle: const Text('Strava, GPX, TCX'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ImportScreen(
+                      apiClient: widget.apiClient,
+                      runStore: widget.runStore!,
+                    ),
+                  ),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.download),
