@@ -180,6 +180,16 @@ melos run analyze
 
 The Android app supports the following:
 
+### First launch
+
+- **Onboarding flow** — 3-page welcome tour with location permission request
+- **Offline ready** — no sign-in required to record and store runs locally
+
+### Dashboard
+
+- **Weekly, monthly, all-time stats** — total distance, run count, time
+- **Weekly goal** — set a kilometre target, track progress with a progress bar
+
 ### Recording a run
 
 - **Countdown** — 3-2-1 before recording starts so you can put your phone away
@@ -187,19 +197,24 @@ The Android app supports the following:
 - **Live stats** — time, distance, current pace, average pace, calories, elevation gain, steps, cadence
 - **Audio cues** — text-to-speech split announcements at each km/mi (toggle in Settings)
 - **Auto-pause** — timer pauses automatically when you stop moving for 10+ seconds (toggle in Settings)
+- **Background recording** — GPS tracking continues when screen is off or app is backgrounded, via a foreground service notification
 - **Km/mi splits** — snackbar notification at each distance tick
-- **Route following** — pick a saved route from the Routes tab before starting
+- **Route following** — pick a saved route before starting; the planned route shows underneath your live track
+- **Off-route alerts** — banner + TTS announcement when you drift more than 40m from the selected route
 
 ### Routes
 
 - **Import GPX/KML** files via the Import button on the Routes tab
 - **Sync from cloud** — pulls routes you created in the web app (when signed in)
 - **Local storage** — routes saved on the phone, available offline
+- **Route detail** — tap a route to see its map preview and stats
 - **Use during a run** — select a route on the run screen before pressing start
 
 ### History
 
 - **Tap a run** to see the route map, splits per km/mi, and full stats
+- **Edit run** — add a custom title and notes
+- **Share run** — exports as GPX and opens the system share sheet
 - **Delete runs** from the detail screen
 - **Sync button** — bulk-upload all unsynced runs (when signed in)
 - **Offline indicator** — runs saved offline show a cloud-off icon
@@ -215,6 +230,15 @@ The Android app supports the following:
 ### Offline mode
 
 If `.env.local` is missing, empty, or the backend is unreachable, the app starts in **offline mode**. All features work locally — you can record runs, view history, and import routes without ever signing in. Runs stay on the device until you sign in and tap **Sync**.
+
+### Not yet implemented
+
+A few items are deliberately out of scope for now:
+
+- **OAuth sign-in (Google/Apple)** — only email/password is supported on Android; the web app has OAuth
+- **Strava / parkrun sync** — the Settings buttons are placeholders
+- **Heart rate from Bluetooth devices** — no Bluetooth LE support yet
+- **Offline map tile caching** — the live map needs an internet connection to load tiles
 
 ---
 

@@ -38,6 +38,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _editGoal() async {
+    final current = widget.preferences.weeklyGoalKm;
+    final ctl = TextEditingController(
+      text: current > 0 ? current.toStringAsFixed(0) : '',
+    );
+    final result = await showDialog<double?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Weekly goal'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Set a weekly distance goal to track your progress.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Kilometres',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 0.0),
+            child: const Text('Clear'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = double.tryParse(ctl.text);
+              Navigator.pop(ctx, v ?? current);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) {
+      await widget.preferences.setWeeklyGoalKm(result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -57,11 +105,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final monthDistance =
         monthRuns.fold<double>(0, (s, r) => s + r.distanceMetres);
 
+    final goalKm = widget.preferences.weeklyGoalKm;
+    final weekKm = weekDistance / 1000;
+    final progress = goalKm > 0 ? (weekKm / goalKm).clamp(0.0, 1.0) : 0.0;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flag_outlined),
+            tooltip: 'Weekly goal',
+            onPressed: _editGoal,
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (goalKm > 0) ...[
+            Text('Weekly Goal', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${UnitFormat.distanceValue(weekDistance, unit)} / '
+                          '${UnitFormat.distance(goalKm * 1000, unit)}',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '${(progress * 100).round()}%',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 10,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
           Text('This Week', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(

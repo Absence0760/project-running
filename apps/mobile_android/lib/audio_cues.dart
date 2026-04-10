@@ -47,6 +47,12 @@ class AudioCues {
     await _tts.speak('Run complete. $distance in $mins minutes.');
   }
 
+  /// Warn that the runner has drifted off the selected route.
+  Future<void> announceOffRoute() async {
+    await _init();
+    await _tts.speak('Off route');
+  }
+
   Future<void> stop() async {
     await _tts.stop();
   }

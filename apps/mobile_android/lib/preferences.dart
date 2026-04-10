@@ -8,22 +8,32 @@ class Preferences extends ChangeNotifier {
   static const _kUseMiles = 'use_miles';
   static const _kAudioCues = 'audio_cues';
   static const _kAutoPause = 'auto_pause';
+  static const _kOnboarded = 'onboarded';
+  static const _kWeeklyGoalKm = 'weekly_goal_km';
 
   late SharedPreferences _prefs;
   bool _useMiles = false;
   bool _audioCues = true;
   bool _autoPause = true;
+  bool _onboarded = false;
+  double _weeklyGoalKm = 0;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
   bool get audioCues => _audioCues;
   bool get autoPause => _autoPause;
+  bool get onboarded => _onboarded;
+
+  /// Weekly distance goal stored in kilometres (0 means not set).
+  double get weeklyGoalKm => _weeklyGoalKm;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     _useMiles = _prefs.getBool(_kUseMiles) ?? false;
     _audioCues = _prefs.getBool(_kAudioCues) ?? true;
     _autoPause = _prefs.getBool(_kAutoPause) ?? true;
+    _onboarded = _prefs.getBool(_kOnboarded) ?? false;
+    _weeklyGoalKm = _prefs.getDouble(_kWeeklyGoalKm) ?? 0;
   }
 
   Future<void> setUseMiles(bool v) async {
@@ -41,6 +51,18 @@ class Preferences extends ChangeNotifier {
   Future<void> setAutoPause(bool v) async {
     _autoPause = v;
     await _prefs.setBool(_kAutoPause, v);
+    notifyListeners();
+  }
+
+  Future<void> setOnboarded(bool v) async {
+    _onboarded = v;
+    await _prefs.setBool(_kOnboarded, v);
+    notifyListeners();
+  }
+
+  Future<void> setWeeklyGoalKm(double v) async {
+    _weeklyGoalKm = v;
+    await _prefs.setDouble(_kWeeklyGoalKm, v);
     notifyListeners();
   }
 }

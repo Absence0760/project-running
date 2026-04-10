@@ -19,6 +19,10 @@ class RunRecorder {
   final List<Waypoint> _track = [];
   Position? _lastPosition;
   bool _recording = false;
+  bool _paused = false;
+  Duration _pausedTotal = Duration.zero;
+  DateTime? _pausedSince;
+  Route? _route;
 
   /// Emits a [RunSnapshot] every second during recording.
   Stream<RunSnapshot> get snapshots => _controller.stream;
@@ -40,12 +44,23 @@ class RunRecorder {
     _track.clear();
     _lastPosition = null;
     _recording = true;
+    _paused = false;
+    _pausedTotal = Duration.zero;
+    _pausedSince = null;
+    _route = route;
 
-    // GPS position stream
+    // GPS position stream with Android foreground service config
+    // so recording continues when the app is backgrounded or screen is off.
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
+      locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 3, // metres between updates
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'Run in progress',
+          notificationText: 'Recording your run',
+          enableWakeLock: true,
+          notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+        ),
       ),
     ).listen(_onPosition);
 
@@ -56,8 +71,26 @@ class RunRecorder {
     });
   }
 
+  /// Pause the timer and stop accumulating distance until [resume] is called.
+  void pause() {
+    if (!_recording || _paused) return;
+    _paused = true;
+    _pausedSince = DateTime.now();
+  }
+
+  /// Resume after a [pause]. Adds the paused interval to the total.
+  void resume() {
+    if (!_recording || !_paused) return;
+    if (_pausedSince != null) {
+      _pausedTotal += DateTime.now().difference(_pausedSince!);
+    }
+    _paused = false;
+    _pausedSince = null;
+    _lastPosition = null; // avoid a big jump after resume
+  }
+
   void _onPosition(Position pos) {
-    if (!_recording) return;
+    if (!_recording || _paused) return;
 
     // Filter inaccurate readings
     if (pos.accuracy > 30) return;
@@ -89,8 +122,13 @@ class RunRecorder {
   void _emitSnapshot() {
     if (_startTime == null || _track.isEmpty) return;
 
-    final elapsed = DateTime.now().difference(_startTime!);
+    var elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
+    if (_paused && _pausedSince != null) {
+      elapsed -= DateTime.now().difference(_pausedSince!);
+    }
+    if (elapsed.isNegative) elapsed = Duration.zero;
     final pace = _calculatePace();
+    final offRoute = _offRouteDistance();
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
@@ -98,7 +136,51 @@ class RunRecorder {
       currentPaceSecondsPerKm: pace,
       currentPosition: _track.last,
       track: List.unmodifiable(_track),
+      offRouteDistanceMetres: offRoute,
     ));
+  }
+
+  /// Minimum distance (in metres) from the current position to any segment
+  /// of the selected [Route]. Returns null if no route is selected.
+  double? _offRouteDistance() {
+    final route = _route;
+    if (route == null || route.waypoints.length < 2) return null;
+    final pos = _track.last;
+
+    double minDist = double.infinity;
+    for (int i = 1; i < route.waypoints.length; i++) {
+      final a = route.waypoints[i - 1];
+      final b = route.waypoints[i];
+      final d = _distanceToSegmentMetres(pos.lat, pos.lng, a.lat, a.lng, b.lat, b.lng);
+      if (d < minDist) minDist = d;
+    }
+    return minDist;
+  }
+
+  /// Shortest distance in metres from point P to segment A-B using equirectangular
+  /// projection (accurate enough for short running-route segments).
+  static double _distanceToSegmentMetres(
+      double pLat, double pLng, double aLat, double aLng, double bLat, double bLng) {
+    // Convert to metres using equirectangular projection centered on A
+    const metresPerDegreeLat = 111320.0;
+    final metresPerDegreeLng = 111320.0 * cos(_toRad(aLat));
+
+    final px = (pLng - aLng) * metresPerDegreeLng;
+    final py = (pLat - aLat) * metresPerDegreeLat;
+    final bx = (bLng - aLng) * metresPerDegreeLng;
+    final by = (bLat - aLat) * metresPerDegreeLat;
+
+    final lenSq = bx * bx + by * by;
+    if (lenSq == 0) return sqrt(px * px + py * py);
+
+    var t = (px * bx + py * by) / lenSq;
+    t = t.clamp(0.0, 1.0);
+
+    final cx = bx * t;
+    final cy = by * t;
+    final dx = px - cx;
+    final dy = py - cy;
+    return sqrt(dx * dx + dy * dy);
   }
 
   /// Calculate pace from the last ~200m of track.
@@ -148,7 +230,11 @@ class RunRecorder {
     _positionSub = null;
 
     final startedAt = _startTime ?? DateTime.now();
-    final elapsed = DateTime.now().difference(startedAt);
+    var elapsed = DateTime.now().difference(startedAt) - _pausedTotal;
+    if (_paused && _pausedSince != null) {
+      elapsed -= DateTime.now().difference(_pausedSince!);
+    }
+    if (elapsed.isNegative) elapsed = Duration.zero;
 
     return Run(
       id: DateTime.now().millisecondsSinceEpoch.toString(),

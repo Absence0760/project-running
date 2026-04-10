@@ -8,6 +8,7 @@ import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +66,7 @@ class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
 
 final themeModeNotifier = ThemeModeNotifier();
 
-class RunApp extends StatelessWidget {
+class RunApp extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
@@ -81,6 +82,11 @@ class RunApp extends StatelessWidget {
   });
 
   @override
+  State<RunApp> createState() => _RunAppState();
+}
+
+class _RunAppState extends State<RunApp> {
+  @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeModeNotifier,
@@ -90,13 +96,18 @@ class RunApp extends StatelessWidget {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
-          home: HomeScreen(
-            apiClient: apiClient,
-            runStore: runStore,
-            routeStore: routeStore,
-            preferences: preferences,
-            audioCues: audioCues,
-          ),
+          home: widget.preferences.onboarded
+              ? HomeScreen(
+                  apiClient: widget.apiClient,
+                  runStore: widget.runStore,
+                  routeStore: widget.routeStore,
+                  preferences: widget.preferences,
+                  audioCues: widget.audioCues,
+                )
+              : OnboardingScreen(
+                  preferences: widget.preferences,
+                  onDone: () => setState(() {}),
+                ),
         );
       },
     );

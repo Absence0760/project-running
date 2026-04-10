@@ -11,12 +11,16 @@ class LiveRunMap extends StatefulWidget {
   /// The GPS track recorded so far.
   final List<Waypoint> track;
 
+  /// Optional planned route to show underneath the live track.
+  final List<Waypoint>? plannedRoute;
+
   /// Whether to auto-follow the runner's position.
   final bool followRunner;
 
   const LiveRunMap({
     super.key,
     required this.track,
+    this.plannedRoute,
     this.followRunner = true,
   });
 
@@ -71,9 +75,13 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     final trackLatLngs = widget.track
         .map((w) => LatLng(w.lat, w.lng))
         .toList();
+    final plannedLatLngs = widget.plannedRoute
+            ?.map((w) => LatLng(w.lat, w.lng))
+            .toList() ??
+        [];
 
-    // Don't render until we have a GPS fix
-    if (trackLatLngs.isEmpty) {
+    // No track yet and no planned route — wait for GPS
+    if (trackLatLngs.isEmpty && plannedLatLngs.isEmpty) {
       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -86,7 +94,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       );
     }
 
-    final center = trackLatLngs.last;
+    final center = trackLatLngs.isNotEmpty
+        ? trackLatLngs.last
+        : plannedLatLngs.first;
 
     return Stack(
       children: [
@@ -111,7 +121,19 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
               maxZoom: 19,
             ),
 
-            // Route polyline
+            // Planned route (underneath) — dashed-looking with lighter color
+            if (plannedLatLngs.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: plannedLatLngs,
+                    strokeWidth: 6,
+                    color: const Color(0x80A78BFA), // Translucent violet
+                  ),
+                ],
+              ),
+
+            // Recorded track (on top)
             if (trackLatLngs.length >= 2)
               PolylineLayer(
                 polylines: [

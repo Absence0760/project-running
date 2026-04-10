@@ -22,6 +22,7 @@ class RunScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final AudioCues audioCues;
+  final cm.Route? initialRoute;
 
   const RunScreen({
     super.key,
@@ -30,6 +31,7 @@ class RunScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     required this.audioCues,
+    this.initialRoute,
   });
 
   @override
@@ -62,6 +64,11 @@ class _RunScreenState extends State<RunScreen> {
   DateTime? _lastMovementAt;
   bool _autoPaused = false;
 
+  // Off-route
+  double? _offRouteDistance;
+  bool _offRouteWarned = false;
+  static const double _offRouteThresholdMetres = 40;
+
   // Step tracking
   StreamSubscription<StepCount>? _stepSub;
   int _startSteps = 0;
@@ -78,6 +85,17 @@ class _RunScreenState extends State<RunScreen> {
   void initState() {
     super.initState();
     widget.preferences.addListener(_onPrefsChange);
+    _selectedRoute = widget.initialRoute;
+  }
+
+  @override
+  void didUpdateWidget(covariant RunScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialRoute != null &&
+        widget.initialRoute != oldWidget.initialRoute &&
+        _state == _ScreenState.idle) {
+      setState(() => _selectedRoute = widget.initialRoute);
+    }
   }
 
   void _onPrefsChange() {
@@ -155,7 +173,10 @@ class _RunScreenState extends State<RunScreen> {
       // Detect movement for auto-pause
       if (snapshot.distanceMetres > _distanceMetres) {
         _lastMovementAt = DateTime.now();
-        if (_autoPaused) setState(() => _autoPaused = false);
+        if (_autoPaused) {
+          _recorder?.resume();
+          setState(() => _autoPaused = false);
+        }
       }
 
       setState(() {
@@ -163,7 +184,21 @@ class _RunScreenState extends State<RunScreen> {
         _distanceMetres = snapshot.distanceMetres;
         _pace = snapshot.currentPaceSecondsPerKm;
         _track = snapshot.track;
+        _offRouteDistance = snapshot.offRouteDistanceMetres;
       });
+
+      // Off-route warning
+      final off = snapshot.offRouteDistanceMetres;
+      if (off != null) {
+        if (off > _offRouteThresholdMetres && !_offRouteWarned) {
+          _offRouteWarned = true;
+          if (widget.preferences.audioCues) {
+            widget.audioCues.announceOffRoute();
+          }
+        } else if (off < _offRouteThresholdMetres / 2) {
+          _offRouteWarned = false;
+        }
+      }
 
       // Distance tick notification + audio cue
       final currentTick = UnitFormat.distanceTicks(_distanceMetres, unit);
@@ -189,7 +224,7 @@ class _RunScreenState extends State<RunScreen> {
         }
       }
     });
-    _recorder!.start();
+    _recorder!.start(route: _selectedRoute);
 
     // Step counter
     _stepSub = Pedometer.stepCountStream.listen((event) {
@@ -217,6 +252,7 @@ class _RunScreenState extends State<RunScreen> {
       if (last == null) return;
       final stillFor = DateTime.now().difference(last);
       if (stillFor.inSeconds >= 10 && !_autoPaused) {
+        _recorder?.pause();
         setState(() => _autoPaused = true);
       }
     });
@@ -262,7 +298,33 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  Future<void> _confirmDiscardMidRun() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard run?'),
+        content: const Text('Your progress will be lost.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep running'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) _discard();
+  }
+
   void _discard() {
+    _snapshotSub?.cancel();
+    _stepSub?.cancel();
+    _autoPauseCheckTimer?.cancel();
+    _countdownTimer?.cancel();
     _recorder?.dispose();
     _recorder = null;
     setState(() {
@@ -279,6 +341,8 @@ class _RunScreenState extends State<RunScreen> {
       _synced = false;
       _syncError = null;
       _autoPaused = false;
+      _offRouteDistance = null;
+      _offRouteWarned = false;
     });
   }
 
@@ -477,7 +541,7 @@ class _RunScreenState extends State<RunScreen> {
   Widget _buildRecording(BuildContext context) {
     return Stack(
       children: [
-        LiveRunMap(track: _track),
+        LiveRunMap(track: _track, plannedRoute: _selectedRoute?.waypoints),
         if (_autoPaused)
           const Positioned(
             top: 60,
@@ -491,6 +555,26 @@ class _RunScreenState extends State<RunScreen> {
                   child: Text(
                     'Auto-paused — start moving to resume',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (_offRouteDistance != null &&
+            _offRouteDistance! > _offRouteThresholdMetres)
+          Positioned(
+            top: _autoPaused ? 110 : 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Card(
+                color: const Color(0xFFEF4444),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'Off route — ${_offRouteDistance!.round()}m away',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -512,6 +596,7 @@ class _RunScreenState extends State<RunScreen> {
             steps: '$_steps',
             cadence: '$_cadence',
             onStop: _stop,
+            onDiscard: _confirmDiscardMidRun,
           ),
         ),
       ],
@@ -595,6 +680,7 @@ class _StatsOverlay extends StatelessWidget {
   final String steps;
   final String cadence;
   final VoidCallback onStop;
+  final VoidCallback onDiscard;
 
   const _StatsOverlay({
     required this.time,
@@ -608,6 +694,7 @@ class _StatsOverlay extends StatelessWidget {
     required this.steps,
     required this.cadence,
     required this.onStop,
+    required this.onDiscard,
   });
 
   @override
@@ -669,26 +756,51 @@ class _StatsOverlay extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              GestureDetector(
-                onTap: onStop,
-                child: Container(
-                  width: 68,
-                  height: 68,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.red,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x40EF4444),
-                        blurRadius: 16,
-                        spreadRadius: 2,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Discard button
+                  GestureDetector(
+                    onTap: onDiscard,
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        border: Border.all(color: theme.dividerColor),
                       ),
-                    ],
+                      child: Icon(
+                        Icons.delete_outline,
+                        size: 26,
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
                   ),
-                  child: const Center(
-                    child: Icon(Icons.stop_rounded, size: 36, color: Colors.white),
+                  const SizedBox(width: 32),
+                  // Stop button
+                  GestureDetector(
+                    onTap: onStop,
+                    child: Container(
+                      width: 68,
+                      height: 68,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.red,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x40EF4444),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.stop_rounded, size: 36, color: Colors.white),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

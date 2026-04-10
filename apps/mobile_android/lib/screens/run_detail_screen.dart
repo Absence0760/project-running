@@ -1,14 +1,17 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../widgets/live_run_map.dart';
 
 /// Detail view for a completed run, showing the route map, splits, and stats.
-class RunDetailScreen extends StatelessWidget {
+class RunDetailScreen extends StatefulWidget {
   final Run run;
   final LocalRunStore runStore;
   final Preferences preferences;
@@ -21,14 +24,90 @@ class RunDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<RunDetailScreen> createState() => _RunDetailScreenState();
+}
+
+class _RunDetailScreenState extends State<RunDetailScreen> {
+  late Run run = widget.run;
+
+  String get _title => (run.metadata?['title'] as String?) ?? _formatDate(run.startedAt);
+  String get _notes => (run.metadata?['notes'] as String?) ?? '';
+
+  Future<void> _editDetails() async {
+    final titleCtl = TextEditingController(text: _title);
+    final notesCtl = TextEditingController(text: _notes);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit run'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtl,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: notesCtl,
+              decoration: const InputDecoration(labelText: 'Notes'),
+              maxLines: 4,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final metadata = Map<String, dynamic>.from(run.metadata ?? {});
+    metadata['title'] = titleCtl.text.trim();
+    metadata['notes'] = notesCtl.text.trim();
+
+    final updated = Run(
+      id: run.id,
+      startedAt: run.startedAt,
+      duration: run.duration,
+      distanceMetres: run.distanceMetres,
+      track: run.track,
+      routeId: run.routeId,
+      source: run.source,
+      externalId: run.externalId,
+      metadata: metadata,
+      createdAt: run.createdAt,
+    );
+    await widget.runStore.update(updated);
+    setState(() => run = updated);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final unit = preferences.unit;
+    final unit = widget.preferences.unit;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_formatDate(run.startedAt)),
+        title: Text(_title),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit run',
+            onPressed: _editDetails,
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            tooltip: 'Share run',
+            onPressed: _shareRun,
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Delete run',
@@ -145,6 +224,52 @@ class RunDetailScreen extends StatelessWidget {
     }).toList();
   }
 
+  /// Export this run as a GPX file and share via the system share sheet.
+  Future<void> _shareRun() async {
+    final gpx = _runToGpx(run);
+    final tmp = await getTemporaryDirectory();
+    final file = File('${tmp.path}/run-${run.id}.gpx');
+    await file.writeAsString(gpx);
+    final dist = UnitFormat.distance(run.distanceMetres, widget.preferences.unit);
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: '$_title — $dist in ${_formatDuration(run.duration)}',
+    );
+  }
+
+  String _runToGpx(Run r) {
+    final buf = StringBuffer();
+    buf.writeln('<?xml version="1.0" encoding="UTF-8"?>');
+    buf.writeln('<gpx version="1.1" creator="Run" xmlns="http://www.topografix.com/GPX/1/1">');
+    buf.writeln('  <metadata>');
+    buf.writeln('    <name>${_escape(_title)}</name>');
+    buf.writeln('    <time>${r.startedAt.toUtc().toIso8601String()}</time>');
+    buf.writeln('  </metadata>');
+    buf.writeln('  <trk>');
+    buf.writeln('    <name>${_escape(_title)}</name>');
+    buf.writeln('    <trkseg>');
+    for (final w in r.track) {
+      buf.write('      <trkpt lat="${w.lat}" lon="${w.lng}">');
+      if (w.elevationMetres != null) {
+        buf.write('<ele>${w.elevationMetres}</ele>');
+      }
+      if (w.timestamp != null) {
+        buf.write('<time>${w.timestamp!.toUtc().toIso8601String()}</time>');
+      }
+      buf.writeln('</trkpt>');
+    }
+    buf.writeln('    </trkseg>');
+    buf.writeln('  </trk>');
+    buf.writeln('</gpx>');
+    return buf.toString();
+  }
+
+  String _escape(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -165,7 +290,7 @@ class RunDetailScreen extends StatelessWidget {
       ),
     );
     if (ok == true) {
-      await runStore.delete(run.id);
+      await widget.runStore.delete(run.id);
       if (context.mounted) Navigator.pop(context);
     }
   }

@@ -8,18 +8,21 @@ import 'package:gpx_parser/gpx_parser.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
+import 'route_detail_screen.dart';
 
 /// Route library: imported and synced routes.
 class RoutesScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRouteStore routeStore;
   final Preferences preferences;
+  final void Function(cm.Route route)? onStartRun;
 
   const RoutesScreen({
     super.key,
     this.apiClient,
     required this.routeStore,
     required this.preferences,
+    this.onStartRun,
   });
 
   @override
@@ -165,10 +168,22 @@ class _RoutesScreenState extends State<RoutesScreen> {
                       '${UnitFormat.distance(route.distanceMetres, unit)}'
                       '  •  ${route.elevationGainMetres.round()}m gain',
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => widget.routeStore.delete(route.id),
-                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      final picked = await Navigator.push<cm.Route?>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RouteDetailScreen(
+                            route: route,
+                            routeStore: widget.routeStore,
+                            preferences: widget.preferences,
+                          ),
+                        ),
+                      );
+                      if (picked != null) {
+                        widget.onStartRun?.call(picked);
+                      }
+                    },
                   ),
                 );
               },

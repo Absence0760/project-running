@@ -43,6 +43,20 @@ class LocalRunStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replace an existing run with updated data (same id, new metadata).
+  Future<void> update(Run updated) async {
+    final file = File('${_dir.path}/${updated.id}.json');
+    if (!file.existsSync()) return;
+
+    final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    data['run'] = updated.toJson();
+    await file.writeAsString(jsonEncode(data));
+
+    final idx = _runs.indexWhere((r) => r.id == updated.id);
+    if (idx >= 0) _runs[idx] = updated;
+    notifyListeners();
+  }
+
   /// Delete a run from local storage.
   Future<void> delete(String runId) async {
     final file = File('${_dir.path}/$runId.json');
