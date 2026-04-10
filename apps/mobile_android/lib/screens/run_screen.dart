@@ -13,6 +13,7 @@ import '../audio_cues.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../widgets/collapsible_panel.dart';
 import '../widgets/live_run_map.dart';
 
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
@@ -765,32 +766,39 @@ class _RunScreenState extends State<RunScreen> {
           left: 0,
           right: 0,
           bottom: 0,
-          child: _StatsOverlay(
+          child: CollapsiblePanel(
             key: _statsOverlayKey,
-            time: _formattedTime,
-            distanceValue: _formattedDistanceValue,
-            distanceUnit: UnitFormat.distanceLabel(_unit),
-            primaryValue: _activityType.usesSpeed
-                ? UnitFormat.speed(_pace, _unit)
-                : _formattedPaceValue,
-            primaryUnit: _activityType.usesSpeed
-                ? UnitFormat.speedLabel(_unit)
-                : UnitFormat.paceLabel(_unit),
-            primaryLabel: _activityType.usesSpeed ? 'Speed' : 'Pace',
-            secondaryValue: _activityType.usesSpeed
-                ? _formattedAvgSpeedValue
-                : _formattedAvgPaceValue,
-            secondaryLabel: _activityType.usesSpeed ? 'Avg Speed' : 'Avg Pace',
-            calories: _formattedCalories,
-            elevation: _formattedElevation,
-            steps: '$_steps',
-            cadence: '$_cadence',
-            lapCount: _lapCount,
-            paused: _manualPaused,
-            onStop: _stop,
-            onDiscard: _confirmDiscardMidRun,
-            onPauseToggle: _toggleManualPause,
-            onLap: _markLap,
+            collapsedChild: _CollapsedStatsBar(
+              time: _formattedTime,
+              onStop: _stop,
+            ),
+            expandedChild: _StatsOverlay(
+              time: _formattedTime,
+              distanceValue: _formattedDistanceValue,
+              distanceUnit: UnitFormat.distanceLabel(_unit),
+              primaryValue: _activityType.usesSpeed
+                  ? UnitFormat.speed(_pace, _unit)
+                  : _formattedPaceValue,
+              primaryUnit: _activityType.usesSpeed
+                  ? UnitFormat.speedLabel(_unit)
+                  : UnitFormat.paceLabel(_unit),
+              primaryLabel: _activityType.usesSpeed ? 'Speed' : 'Pace',
+              secondaryValue: _activityType.usesSpeed
+                  ? _formattedAvgSpeedValue
+                  : _formattedAvgPaceValue,
+              secondaryLabel:
+                  _activityType.usesSpeed ? 'Avg Speed' : 'Avg Pace',
+              calories: _formattedCalories,
+              elevation: _formattedElevation,
+              steps: '$_steps',
+              cadence: '$_cadence',
+              lapCount: _lapCount,
+              paused: _manualPaused,
+              onStop: _stop,
+              onDiscard: _confirmDiscardMidRun,
+              onPauseToggle: _toggleManualPause,
+              onLap: _markLap,
+            ),
           ),
         ),
       ],
@@ -887,7 +895,6 @@ class _StatsOverlay extends StatelessWidget {
   final VoidCallback onLap;
 
   const _StatsOverlay({
-    super.key,
     required this.time,
     required this.distanceValue,
     required this.distanceUnit,
@@ -911,39 +918,20 @@ class _StatsOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-            20, 16, 20, MediaQuery.of(context).padding.bottom + 16,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            time,
+            style: theme.textTheme.displayMedium?.copyWith(
+              fontFeatures: [const FontFeature.tabularFigures()],
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withOpacity(0.85),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.dividerColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                time,
-                style: theme.textTheme.displayMedium?.copyWith(
-                  fontFeatures: [const FontFeature.tabularFigures()],
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
+          const SizedBox(height: 16),
+          Row(
                 children: [
                   Expanded(
                       child: _StatColumn(
@@ -1085,9 +1073,7 @@ class _StatsOverlay extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -1149,4 +1135,48 @@ class _StepSample {
   final DateTime time;
   final int steps;
   const _StepSample(this.time, this.steps);
+}
+
+/// Minimal stats bar shown when the overlay is collapsed. Keeps time visible
+/// plus a stop button so the runner can still abort without expanding first.
+class _CollapsedStatsBar extends StatelessWidget {
+  final String time;
+  final VoidCallback onStop;
+
+  const _CollapsedStatsBar({required this.time, required this.onStop});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              time,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontFeatures: [const FontFeature.tabularFigures()],
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onStop,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.red,
+              ),
+              child: const Center(
+                child: Icon(Icons.stop_rounded, size: 26, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
