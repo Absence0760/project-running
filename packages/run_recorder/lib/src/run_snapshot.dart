@@ -8,6 +8,10 @@ class RunSnapshot {
   final Waypoint currentPosition;
   final double? offRouteDistanceMetres;
 
+  /// Distance remaining to the end of the selected route, in metres.
+  /// Null when no route is selected.
+  final double? routeRemainingMetres;
+
   /// The full GPS track recorded so far (unmodifiable).
   final List<Waypoint> track;
 
@@ -17,6 +21,7 @@ class RunSnapshot {
     this.currentPaceSecondsPerKm,
     required this.currentPosition,
     this.offRouteDistanceMetres,
+    this.routeRemainingMetres,
     this.track = const [],
   });
 }

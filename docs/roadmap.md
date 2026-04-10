@@ -70,7 +70,8 @@ Show the imported route on the map while running. Current position tracks agains
 
 - [x] Live position marker on route (Android)
 - [x] Off-route detection and alert (Android — banner + TTS at >40m)
-- [ ] Distance remaining to end
+- [x] Distance remaining to end of route (Android — projects current position
+      onto the closest route segment, sums remaining segment lengths)
 
 ### Run history + basic stats
 
@@ -99,8 +100,10 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Pull remote runs from Supabase, merge with local store (Android)
 - [x] Bulk sync button for unsynced runs (Android)
 - [x] Backup all runs as JSON via system share sheet (Android)
-- [ ] Background sync on wifi (mobile)
-- [ ] Conflict resolution: device wins on merge
+- [x] Auto-sync on connectivity change and app foreground (Android — via
+      `connectivity_plus` + lifecycle observer)
+- [x] Conflict resolution: newer-wins by `last_modified_at` timestamp (Android)
+- [ ] WorkManager-based periodic background sync (Android, when app is closed)
 
 ### Backend work (Phase 1)
 
@@ -424,12 +427,10 @@ Map tile costs are minimal — MapTiler has a generous free tier, and Protomaps 
 
 These were considered during Android implementation and intentionally pushed to a later phase because they need server-side credentials, OAuth flows, or device APIs that don't fit a quick incremental change:
 
-- **OAuth sign-in (Google/Apple)** on Android — only email/password works against the same Supabase backend as the web app. Needs deep link config and Android signing setup.
-- **Strava integration** — Settings has a placeholder button. Needs Strava developer account and OAuth flow.
-- **parkrun integration** — Settings has a placeholder button. Needs the scraping Edge Function wired up.
+- **OAuth sign-in (Google/Apple)** on Android — only email/password works against the same Supabase backend as the web app. Needs deep link config and Android signing setup. Tracked under Phase 3 — see "External platform sync".
+- **Strava and parkrun integrations** — moved to Phase 3 ("External platform sync"). Removed from the Android Settings UI in the meantime to avoid placeholder buttons.
 - **Heart rate from Bluetooth devices** — needs flutter_blue_plus and per-device GATT characteristic handling.
 - **Persistent disk tile cache** — currently in-memory only via flutter_map_cache. Persistent caching needs Hive or sqlite init.
-- **Route detail "start with this route" already exists**, but route navigation overlay distance-remaining is still missing.
 - **Voice cues at custom intervals** — only fixed km/mi splits and pace alerts.
 - **History filter** by date range or activity type — only sort options exist.
 

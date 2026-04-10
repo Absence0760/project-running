@@ -170,6 +170,7 @@ class RunRecorder {
     if (elapsed.isNegative) elapsed = Duration.zero;
     final pace = _calculatePace();
     final offRoute = _offRouteDistance();
+    final remaining = _routeRemaining();
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
@@ -178,7 +179,81 @@ class RunRecorder {
       currentPosition: _track.last,
       track: List.unmodifiable(_track),
       offRouteDistanceMetres: offRoute,
+      routeRemainingMetres: remaining,
     ));
+  }
+
+  /// Distance from the runner's current position to the end of the route,
+  /// measured along the remaining route segments.
+  ///
+  /// Finds the closest point on the route to the runner, then sums the
+  /// distance from there to the final waypoint. Returns null if no route is
+  /// selected.
+  double? _routeRemaining() {
+    final route = _route;
+    if (route == null || route.waypoints.length < 2) return null;
+    final pos = _track.last;
+
+    // Find the segment closest to the runner.
+    int closestSegmentIdx = 0;
+    double minDist = double.infinity;
+    double tAtClosest = 0;
+    for (int i = 1; i < route.waypoints.length; i++) {
+      final a = route.waypoints[i - 1];
+      final b = route.waypoints[i];
+      final result = _projectPointOnSegment(
+        pos.lat,
+        pos.lng,
+        a.lat,
+        a.lng,
+        b.lat,
+        b.lng,
+      );
+      if (result.distance < minDist) {
+        minDist = result.distance;
+        closestSegmentIdx = i;
+        tAtClosest = result.t;
+      }
+    }
+
+    // Distance from closest projection to end of current segment, then sum
+    // the lengths of all subsequent segments.
+    final a = route.waypoints[closestSegmentIdx - 1];
+    final b = route.waypoints[closestSegmentIdx];
+    final segLen = _haversine(a.lat, a.lng, b.lat, b.lng);
+    double remaining = segLen * (1 - tAtClosest);
+
+    for (int i = closestSegmentIdx + 1; i < route.waypoints.length; i++) {
+      final p = route.waypoints[i - 1];
+      final q = route.waypoints[i];
+      remaining += _haversine(p.lat, p.lng, q.lat, q.lng);
+    }
+    return remaining;
+  }
+
+  /// Project a point onto a line segment using equirectangular coordinates.
+  /// Returns the perpendicular distance and t (0..1 along segment).
+  static _ProjectionResult _projectPointOnSegment(
+      double pLat, double pLng, double aLat, double aLng, double bLat, double bLng) {
+    const metresPerDegreeLat = 111320.0;
+    final metresPerDegreeLng = 111320.0 * cos(_toRad(aLat));
+
+    final px = (pLng - aLng) * metresPerDegreeLng;
+    final py = (pLat - aLat) * metresPerDegreeLat;
+    final bx = (bLng - aLng) * metresPerDegreeLng;
+    final by = (bLat - aLat) * metresPerDegreeLat;
+
+    final lenSq = bx * bx + by * by;
+    if (lenSq == 0) {
+      return _ProjectionResult(sqrt(px * px + py * py), 0);
+    }
+    var t = (px * bx + py * by) / lenSq;
+    t = t.clamp(0.0, 1.0);
+    final cx = bx * t;
+    final cy = by * t;
+    final dx = px - cx;
+    final dy = py - cy;
+    return _ProjectionResult(sqrt(dx * dx + dy * dy), t);
   }
 
   /// Minimum distance (in metres) from the current position to any segment
@@ -319,4 +394,10 @@ class RunRecorder {
     _positionSub?.cancel();
     _controller.close();
   }
+}
+
+class _ProjectionResult {
+  final double distance;
+  final double t;
+  const _ProjectionResult(this.distance, this.t);
 }

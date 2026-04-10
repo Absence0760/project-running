@@ -31,21 +31,37 @@ class LocalRunStore extends ChangeNotifier {
     await _loadAll();
   }
 
-  /// Save a run locally. Marks it as unsynced.
+  /// Save a freshly-recorded run locally. Stamps `last_modified_at` and marks
+  /// it as unsynced.
   Future<void> save(Run run) async {
-    final file = File('${_dir.path}/${run.id}.json');
+    final stamped = _withLastModified(run, DateTime.now());
+    final file = File('${_dir.path}/${stamped.id}.json');
     final data = {
-      'run': run.toJson(),
+      'run': stamped.toJson(),
       'synced': false,
     };
     await file.writeAsString(jsonEncode(data));
-    _runs.removeWhere((r) => r.id == run.id);
-    _runs.insert(0, run);
+    _runs.removeWhere((r) => r.id == stamped.id);
+    _runs.insert(0, stamped);
     notifyListeners();
   }
 
   /// Save a run that came from the backend. Marks it as already synced.
+  ///
+  /// Conflict resolution: if a local copy already exists with a newer
+  /// `last_modified_at`, the remote copy is ignored. This prevents the cloud
+  /// from clobbering local edits that haven't been pushed yet.
   Future<void> saveFromRemote(Run run) async {
+    final existing = _runs.where((r) => r.id == run.id).firstOrNull;
+    if (existing != null) {
+      final localTs = _lastModifiedOf(existing);
+      final remoteTs = _lastModifiedOf(run);
+      if (localTs.isAfter(remoteTs)) {
+        // Local is newer — keep it.
+        return;
+      }
+    }
+
     final file = File('${_dir.path}/${run.id}.json');
     final data = {
       'run': run.toJson(),
@@ -63,17 +79,48 @@ class LocalRunStore extends ChangeNotifier {
   bool contains(String runId) => _runs.any((r) => r.id == runId);
 
   /// Replace an existing run with updated data (same id, new metadata).
+  /// Stamps `last_modified_at = now` and marks the run unsynced so it gets
+  /// pushed on the next sync.
   Future<void> update(Run updated) async {
     final file = File('${_dir.path}/${updated.id}.json');
     if (!file.existsSync()) return;
 
+    final stamped = _withLastModified(updated, DateTime.now());
     final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    data['run'] = updated.toJson();
+    data['run'] = stamped.toJson();
+    data['synced'] = false;
     await file.writeAsString(jsonEncode(data));
 
-    final idx = _runs.indexWhere((r) => r.id == updated.id);
-    if (idx >= 0) _runs[idx] = updated;
+    final idx = _runs.indexWhere((r) => r.id == stamped.id);
+    if (idx >= 0) _runs[idx] = stamped;
+    _syncedIds.remove(stamped.id);
     notifyListeners();
+  }
+
+  Run _withLastModified(Run run, DateTime ts) {
+    final metadata = Map<String, dynamic>.from(run.metadata ?? {});
+    metadata['last_modified_at'] = ts.toIso8601String();
+    return Run(
+      id: run.id,
+      startedAt: run.startedAt,
+      duration: run.duration,
+      distanceMetres: run.distanceMetres,
+      track: run.track,
+      routeId: run.routeId,
+      source: run.source,
+      externalId: run.externalId,
+      metadata: metadata,
+      createdAt: run.createdAt,
+    );
+  }
+
+  static DateTime _lastModifiedOf(Run run) {
+    final raw = run.metadata?['last_modified_at'] as String?;
+    if (raw != null) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return parsed;
+    }
+    return run.createdAt ?? run.startedAt;
   }
 
   /// Delete a run from local storage.

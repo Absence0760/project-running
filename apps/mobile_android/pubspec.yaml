@@ -38,6 +38,7 @@ dependencies:
   flutter_map_cache: ^2.0.0
   dio: ^5.7.0
   dio_cache_interceptor: ^4.0.0
+  connectivity_plus: ^6.0.5
 
 dev_dependencies:
   flutter_test:

@@ -9,6 +9,7 @@ import 'local_run_store.dart';
 import 'preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,12 +52,16 @@ void main() async {
     }
   }
 
+  final syncService = SyncService(apiClient: api, runStore: store);
+  syncService.start();
+
   runApp(RunApp(
     apiClient: api,
     runStore: store,
     routeStore: routeStore,
     preferences: prefs,
     audioCues: audioCues,
+    syncService: syncService,
   ));
 }
 
@@ -72,6 +77,7 @@ class RunApp extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final AudioCues audioCues;
+  final SyncService syncService;
   const RunApp({
     super.key,
     this.apiClient,
@@ -79,6 +85,7 @@ class RunApp extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     required this.audioCues,
+    required this.syncService,
   });
 
   @override

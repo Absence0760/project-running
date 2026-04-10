@@ -80,6 +80,9 @@ class _RunScreenState extends State<RunScreen> {
   bool _offRouteWarned = false;
   static const double _offRouteThresholdMetres = 40;
 
+  // Distance remaining on selected route
+  double? _routeRemaining;
+
   // Step tracking
   StreamSubscription<StepCount>? _stepSub;
   int _startSteps = 0;
@@ -196,6 +199,7 @@ class _RunScreenState extends State<RunScreen> {
         _pace = snapshot.currentPaceSecondsPerKm;
         _track = snapshot.track;
         _offRouteDistance = snapshot.offRouteDistanceMetres;
+        _routeRemaining = snapshot.routeRemainingMetres;
       });
 
       // Off-route warning
@@ -432,6 +436,7 @@ class _RunScreenState extends State<RunScreen> {
       _lapCount = 0;
       _offRouteDistance = null;
       _offRouteWarned = false;
+      _routeRemaining = null;
       _lastPaceAlertAt = null;
     });
   }
@@ -660,6 +665,40 @@ class _RunScreenState extends State<RunScreen> {
     return Stack(
       children: [
         LiveRunMap(track: _track, plannedRoute: _selectedRoute?.waypoints),
+
+        // "X to go" badge — top right when a route is selected
+        if (_routeRemaining != null)
+          Positioned(
+            top: 56,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 8),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.flag_rounded,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${UnitFormat.distance(_routeRemaining!, _unit)} to go',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
         if (_autoPaused)
           const Positioned(
             top: 60,

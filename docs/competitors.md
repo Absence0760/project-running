@@ -2,6 +2,63 @@
 
 A reference for understanding the competitive landscape, where each major app falls short, and the strategic gaps this app is built to fill.
 
+> See also:
+> - [roadmap.md](roadmap.md) — what's planned per phase
+> - [local_testing_android_app.md](local_testing_android_app.md) — every feature actually shipped on Android today
+
+---
+
+## What's shipped today (Android)
+
+The Android app already covers a surprising amount of ground for an in-development product. The table below is "shipped right now", not aspirational.
+
+| Capability | Run app (Android) | Strava | Nike Run Club | Garmin Connect | Komoot | Runna |
+|---|---|---|---|---|---|---|
+| Free GPX/KML import | ✓ | Paywalled | — | ✓ | ✓ | — |
+| Free GPX export | ✓ | Paywalled | — | ✓ | ✓ | — |
+| Live GPS recording with map | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Background recording (foreground service) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Auto-pause | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Manual pause / resume | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Lap markers | ✓ | ✓ | ✓ | ✓ | — | Auto (workout-driven) |
+| Route following with off-route alerts | ✓ | Premium | — | ✓ | ✓ | — |
+| Distance remaining on route | ✓ | ✓ | — | ✓ | ✓ | — |
+| Audio cues (TTS splits + pace alerts) | ✓ | ✓ | ✓ | ✓ | Limited | ✓ (workout coaching) |
+| Activity types with per-type behaviour (run/walk/cycle/hike) | ✓ | ✓ | Run only | ✓ | ✓ | Run only |
+| Cadence and step count | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Elevation chart per run | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| Weekly distance goal with progress | ✓ | ✓ (Premium) | ✓ | ✓ | — | ✓ (plan-driven) |
+| Personal Bests (longest, fastest pace, fastest 5k) | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Map tile cache (in-memory) | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| **Fully offline mode — works with no account** | ✓ | — | — | — | — | — |
+| **JSON backup of all runs** | ✓ | CSV (Premium) | — | TCX export | GPX | — |
+| Auto-sync on wifi reconnect | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Conflict resolution (newer-wins) | ✓ | ✓ | ✓ | ✓ | ? | ✓ |
+| Edit run title and notes | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Share run as GPX via system share sheet | ✓ | Premium | — | ✓ | ✓ | — |
+| Dark mode + system theme | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Adaptive training plans | Phase 3 | Paywalled | Guided runs | ✓ | — | **Native** |
+
+### What's deliberately not in the app yet (and why)
+
+These are tracked in [roadmap.md](roadmap.md) and intentionally pushed to a later phase:
+
+- **OAuth sign-in (Google, Apple)** — only email/password right now. Needs deep link and signing config.
+- **Strava and parkrun sync** — placeholder buttons removed from Settings to avoid lying. Comes back in Phase 3 with real OAuth + scraping.
+- **Bluetooth heart rate strap** — needs flutter_blue_plus and per-device GATT handling.
+- **Persistent disk tile cache** — currently in-memory only; tiles re-download after app restart. Trail running with no signal still works during a single session.
+- **Premium training features** — Phase 3, requires the Go service for training-load and VDOT calculations.
+- **Live spectator tracking** — Phase 2, needs the Go service WebSocket.
+- **Social features, segments, leaderboards** — explicitly not in scope for v1. These are Strava's moat; we differentiate on free planning and watch parity.
+
+### Lines worth defending
+
+Three differentiators are already real on Android and are the strongest pitches:
+
+1. **Free GPX/KML import** — Strava paywalls this. Most runners who plan routes outside their app hit this wall.
+2. **Fully offline mode without an account** — every other major app forces sign-in before you can record. Run app records to local JSON, syncs later if you ever sign in.
+3. **Activity types that actually differ** — picking "Cycle" swaps pace for speed, switches calorie multipliers, uses 5km splits, and adapts the GPS jitter filter. Most apps treat activity type as a label only.
+
 ---
 
 ## Market overview
@@ -102,6 +159,34 @@ The running app market is dominated by a small number of well-funded incumbents.
 
 ---
 
+### Runna
+
+**Positioning:** Training plans first, GPS app second. The Strava acquisition target — Strava bought Runna in 2025. Aimed squarely at runners training for a specific race distance.
+
+**Strengths:**
+- Best-in-class adaptive training plans for 5k, 10k, half marathon, marathon, and ultras
+- Plans adjust automatically based on missed sessions and recent performance
+- Strong onboarding flow that captures fitness level, goals, and race date
+- Apple Watch app with workout-of-the-day push and live pacing prompts
+- Audio coaching during structured workouts (intervals, tempo, fartlek)
+- Strava sync built in (now official since the acquisition)
+- Garmin Connect sync (push planned workouts to the watch)
+- Clean, modern UI — clearly built with design as a priority
+
+**Weaknesses:**
+- Subscription-only — no free tier at all (~$19.99/month or ~$119.99/year)
+- Pricey relative to Strava Premium
+- Limited route planning — built for "follow the workout" not "follow the route"
+- No GPX import for ad-hoc runs
+- No Wear OS app — Android watch users get nothing
+- Heart-rate-zone training requires a chest strap or watch
+- Plans assume access to a track or measured loop — limited adaptation for trail or treadmill
+- No social features at all (deliberate, but a gap if Strava starts pulling features over)
+
+**Verdict:** The most credible threat in the "training plans" space and the closest analogue to what Phase 3 of this app aims at. Their weakness is the lack of free tier and no route planning — both of which this app addresses. Watch the Strava integration carefully: if Strava bundles Runna into Premium, the pricing argument changes overnight.
+
+---
+
 ### Komoot
 
 **Positioning:** Route discovery and turn-by-turn navigation for cycling, running, and hiking. Popular in Europe.
@@ -126,34 +211,35 @@ The running app market is dominated by a small number of well-funded incumbents.
 
 ## Platform coverage matrix
 
-| Feature | This app | Strava | Garmin Connect | Nike Run Club | AllTrails | Komoot |
-|---|---|---|---|---|---|---|
-| iOS app | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Android app | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Web app | ✓ | ✓ | Partial | — | ✓ | ✓ |
-| Apple Watch | ✓ | ✓ | — | ✓ | Limited | Limited |
-| Wear OS | ✓ | ✓ | — | — | — | — |
-| Garmin sync | ✓ | ✓ | Native | ✓ | Partial | ✓ |
+| Feature | This app | Strava | Garmin Connect | Nike Run Club | AllTrails | Komoot | Runna |
+|---|---|---|---|---|---|---|---|
+| iOS app | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Android app | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Web app | ✓ | ✓ | Partial | — | ✓ | ✓ | — |
+| Apple Watch | ✓ | ✓ | — | ✓ | Limited | Limited | ✓ |
+| Wear OS | ✓ | ✓ | — | — | — | — | — |
+| Garmin sync | ✓ | ✓ | Native | ✓ | Partial | ✓ | ✓ |
 
 ---
 
 ## Feature gap matrix
 
-| Feature | This app | Strava | Garmin Connect | Nike Run Club | AllTrails | Komoot |
-|---|---|---|---|---|---|---|
-| Route builder | ✓ Free | Paywalled | Web only | — | Limited | ✓ |
-| GPX import | ✓ Free | Paywalled | ✓ | — | ✓ | ✓ |
-| GPX export | ✓ | Paywalled | ✓ | — | Paywalled | ✓ |
-| Open-source maps (MapLibre) | ✓ | — | — | — | — | — |
-| Turn-by-turn navigation | ✓ | — | ✓ | — | Limited | ✓ |
-| parkrun sync | ✓ | — | — | — | — | — |
-| Strava import | ✓ | Native | ✓ | ✓ | Limited | ✓ |
-| HealthKit sync | ✓ | ✓ | ✓ | ✓ | — | — |
-| Health Connect sync | ✓ | ✓ | ✓ | — | — | — |
-| Coached running | Phase 3 | — | Training plans | ✓ | — | — |
-| Social segments | Phase 3 | ✓ | — | — | — | — |
-| Community routes | Phase 3 | ✓ | — | — | ✓ | ✓ |
-| Offline maps | Phase 3 | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ |
+| Feature | This app | Strava | Garmin Connect | Nike Run Club | AllTrails | Komoot | Runna |
+|---|---|---|---|---|---|---|---|
+| Route builder | ✓ Free | Paywalled | Web only | — | Limited | ✓ | — |
+| GPX import | ✓ Free | Paywalled | ✓ | — | ✓ | ✓ | — |
+| GPX export | ✓ | Paywalled | ✓ | — | Paywalled | ✓ | — |
+| Open-source maps (MapLibre) | ✓ | — | — | — | — | — | — |
+| Turn-by-turn navigation | ✓ | — | ✓ | — | Limited | ✓ | — |
+| parkrun sync | ✓ | — | — | — | — | — | — |
+| Strava import | ✓ | Native | ✓ | ✓ | Limited | ✓ | ✓ |
+| HealthKit sync | ✓ | ✓ | ✓ | ✓ | — | — | ✓ |
+| Health Connect sync | ✓ | ✓ | ✓ | — | — | — | Partial |
+| Coached running | Phase 3 | — | Training plans | ✓ | — | — | ✓ |
+| Adaptive training plans | Phase 3 | Paywalled | ✓ | — | — | — | **Native** |
+| Social segments | Phase 3 | ✓ | — | — | — | — | — |
+| Community routes | Phase 3 | ✓ | — | — | ✓ | ✓ | — |
+| Offline maps | Phase 3 | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — |
 
 ---
 
@@ -167,6 +253,7 @@ The running app market is dominated by a small number of well-funded incumbents.
 | Nike Run Club | Everything | N/A | Nothing |
 | AllTrails | Basic trails | ~$35.99/year | Offline maps, GPX downloads, detailed trail info |
 | Komoot | Local region free | ~$3.99/region | Maps in other regions |
+| Runna | None — 7-day trial | ~$19.99/month or ~$119.99/year | Everything |
 
 The pricing sweet spot is keeping everything Strava paywalls as free in this app, while monetising on coaching and intelligence that genuinely costs compute.
 
@@ -192,6 +279,8 @@ NRC dropping Wear OS support leaves a gap. Android users with a Pixel Watch or G
 ---
 
 ## Risks and watch items
+
+**Strava + Runna bundling.** Strava acquired Runna in 2025. The most likely move is bundling Runna into Strava Premium at the existing $11.99 price point, which would undercut a $19.99 Runna standalone subscription and pressure any independent training-plan competitor — including Phase 3 of this app. Counter-positioning: stay free for the core experience, charge less than Strava Premium for our training tier, and emphasise platform independence (Strava locks plans behind their account).
 
 **Strava could open their route builder to free users.** They've done it before on some features. Monitor announcements. If this happens, the free route builder is no longer a differentiator — lean harder on open-source maps and watch parity instead.
 

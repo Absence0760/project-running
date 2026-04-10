@@ -178,7 +178,7 @@ melos run analyze
 
 ## Features
 
-The Android app supports the following:
+The Android app supports the following. For a side-by-side view against Strava, Nike Run Club, Garmin Connect, and Komoot, see [competitors.md](competitors.md#whats-shipped-today-android).
 
 ### First launch
 
@@ -220,6 +220,7 @@ When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Av
 - **Km/mi splits** — snackbar notification at each distance tick
 - **Route following** — pick a saved route before starting; the planned route shows underneath your live track
 - **Off-route alerts** — banner + TTS announcement when you drift more than 40m from the selected route
+- **Distance remaining** — when following a route, a "X to go" badge in the top right shows distance to the end of the route, measured along the remaining segments
 
 ### Routes
 
@@ -251,18 +252,24 @@ When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Av
 - **Dark mode** — light/dark theme override
 - **Backup runs** — export every locally stored run as a single JSON file via the system share sheet
 
+### Sync behaviour
+
+- **Auto-sync** — runs sync to the backend automatically when connectivity comes back (wifi or mobile) and when the app comes to the foreground. Powered by `connectivity_plus` and the app lifecycle observer.
+- **Conflict resolution** — every save stamps a `last_modified_at` timestamp into the run metadata. When the cloud sends a remote run that conflicts with a local one, the newer copy wins. Editing a run locally also re-marks it as unsynced so the change gets pushed.
+- **Manual sync** — the History screen still has a sync button for unsynced runs and a refresh button to pull from the cloud.
+
 ### Offline mode
 
-If `.env.local` is missing, empty, or the backend is unreachable, the app starts in **offline mode**. All features work locally — you can record runs, view history, and import routes without ever signing in. Runs stay on the device until you sign in and tap **Sync**.
+If `.env.local` is missing, empty, or the backend is unreachable, the app starts in **offline mode**. All features work locally — you can record runs, view history, and import routes without ever signing in. Runs stay on the device until you sign in and the auto-sync picks them up.
 
 ### Not yet implemented
 
 A few items are deliberately out of scope for now:
 
 - **OAuth sign-in (Google/Apple)** — only email/password is supported on Android; the web app has OAuth
-- **Strava / parkrun sync** — the Settings buttons are placeholders
+- **Strava and parkrun sync** — see roadmap; need API credentials and OAuth/scraping work
 - **Heart rate from Bluetooth devices** — no Bluetooth LE support yet
-- **Offline map tile caching** — the live map needs an internet connection to load tiles
+- **Persistent offline map tile cache** — currently in-memory only; tiles re-download on app restart
 
 ---
 
@@ -275,6 +282,33 @@ In Android Studio's emulator controls (the `...` button on the emulator toolbar)
 3. **Location → Import GPX/KML** — replay a recorded route file
 
 Use route playback to test live run recording, auto-pause, and km splits. The step counter and cadence don't work on the emulator (no physical accelerometer); test those on a real device.
+
+---
+
+## Android tech stack
+
+What's actually wired up in [apps/mobile_android](../apps/mobile_android):
+
+| Concern | Package | Why |
+|---|---|---|
+| GPS recording with foreground service | `geolocator` | Continues tracking when screen is off |
+| Map rendering | `flutter_map` + `latlong2` | Open-source MapLibre stack |
+| Map tile cache (in-memory) | `flutter_map_cache` + `dio_cache_interceptor` | Reuse loaded tiles within a session |
+| Step count and cadence | `pedometer` | Reads the Android step sensor |
+| Audio cues | `flutter_tts` | TTS for splits and pace alerts |
+| File picker for GPX/KML import | `file_picker` | System file picker |
+| GPX/KML/GeoJSON parsing | `gpx_parser` (workspace package) | Implemented from scratch with `xml` |
+| User preferences | `shared_preferences` | Units, audio, auto-pause, target pace, weekly goal |
+| Permissions | `permission_handler` | Location + activity recognition |
+| Wake lock during run | `wakelock_plus` | Keep screen on |
+| Auto-sync triggers | `connectivity_plus` + `WidgetsBindingObserver` | Push runs on wifi/foreground |
+| Run sharing | `share_plus` | System share sheet for GPX export |
+| UUIDs for run IDs | `uuid` | Avoid sync collisions |
+| Env config | `flutter_dotenv` | Loads `.env.local` |
+| Local persistence | JSON files via `path_provider` | One file per run / per route — no sqlite or hive |
+| Backend client | `supabase_flutter` (via shared `api_client` package) | Same backend as the web app |
+
+The two local stores ([`LocalRunStore`](../apps/mobile_android/lib/local_run_store.dart) and [`LocalRouteStore`](../apps/mobile_android/lib/local_route_store.dart)) are intentionally simple — JSON files in the app's documents directory. No sqlite, no Hive. The whole point is that `cat ~/runs/*.json` is debuggable and the offline-first behaviour falls out for free.
 
 ---
 

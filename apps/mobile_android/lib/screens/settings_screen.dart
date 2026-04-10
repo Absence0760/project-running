@@ -238,39 +238,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // Integrations
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Integrations', style: theme.textTheme.titleSmall),
-          ),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: const Text('Strava'),
-            subtitle: const Text('Not connected'),
-            trailing: FilledButton.tonal(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Strava connect coming soon')),
-                );
-              },
-              child: const Text('Connect'),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.directions_run),
-            title: const Text('parkrun'),
-            subtitle: const Text('Not connected'),
-            trailing: FilledButton.tonal(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('parkrun connect coming soon')),
-                );
-              },
-              child: const Text('Connect'),
-            ),
-          ),
-          const Divider(),
-
           // Data
           if (widget.runStore != null) ...[
             Padding(
