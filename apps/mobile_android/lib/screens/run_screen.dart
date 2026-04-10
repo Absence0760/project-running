@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../audio_cues.dart';
 import '../local_route_store.dart';
@@ -59,10 +60,20 @@ class _RunScreenState extends State<RunScreen> {
   List<cm.Waypoint> _track = [];
   int _lastTickNotified = 0;
 
-  // Auto-pause
+  // Pause state
   Timer? _autoPauseCheckTimer;
   DateTime? _lastMovementAt;
   bool _autoPaused = false;
+  bool _manualPaused = false;
+
+  // Laps
+  int _lapCount = 0;
+
+  // Activity type
+  ActivityType _activityType = ActivityType.run;
+
+  // Pace alerts
+  DateTime? _lastPaceAlertAt;
 
   // Off-route
   double? _offRouteDistance;
@@ -200,6 +211,19 @@ class _RunScreenState extends State<RunScreen> {
         }
       }
 
+      // Pace alert
+      final target = widget.preferences.targetPaceSecPerKm;
+      if (target > 0 && _pace != null && widget.preferences.audioCues) {
+        final diff = _pace! - target;
+        final lastAlert = _lastPaceAlertAt;
+        final canAlert = lastAlert == null ||
+            DateTime.now().difference(lastAlert).inSeconds > 30;
+        if (canAlert && diff.abs() > 30) {
+          _lastPaceAlertAt = DateTime.now();
+          widget.audioCues.announcePaceAlert(tooSlow: diff > 0);
+        }
+      }
+
       // Distance tick notification + audio cue
       final currentTick = UnitFormat.distanceTicks(_distanceMetres, unit);
       if (currentTick > _lastTickNotified && currentTick > 0) {
@@ -225,6 +249,9 @@ class _RunScreenState extends State<RunScreen> {
       }
     });
     _recorder!.start(route: _selectedRoute);
+
+    // Keep screen awake during run
+    WakelockPlus.enable();
 
     // Step counter
     _stepSub = Pedometer.stepCountStream.listen((event) {
@@ -262,11 +289,56 @@ class _RunScreenState extends State<RunScreen> {
     setState(() => _state = _ScreenState.recording);
   }
 
+  void _toggleManualPause() {
+    if (_recorder == null) return;
+    if (_manualPaused) {
+      _recorder!.resume();
+      setState(() => _manualPaused = false);
+      _lastMovementAt = DateTime.now();
+    } else {
+      _recorder!.pause();
+      setState(() => _manualPaused = true);
+    }
+  }
+
+  void _markLap() {
+    if (_recorder == null) return;
+    final n = _recorder!.lap();
+    if (n > 0) {
+      setState(() => _lapCount = n);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lap $n marked'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _stop() async {
-    final run = await _recorder!.stop();
+    final raw = await _recorder!.stop();
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _autoPauseCheckTimer?.cancel();
+    WakelockPlus.disable();
+
+    // Tag the run with the chosen activity type
+    final metadata = Map<String, dynamic>.from(raw.metadata ?? {});
+    metadata['activity_type'] = _activityType.name;
+
+    final run = cm.Run(
+      id: raw.id,
+      startedAt: raw.startedAt,
+      duration: raw.duration,
+      distanceMetres: raw.distanceMetres,
+      track: raw.track,
+      routeId: raw.routeId,
+      source: raw.source,
+      externalId: raw.externalId,
+      metadata: metadata,
+      createdAt: raw.createdAt,
+    );
 
     setState(() {
       _finishedRun = run;
@@ -327,6 +399,7 @@ class _RunScreenState extends State<RunScreen> {
     _countdownTimer?.cancel();
     _recorder?.dispose();
     _recorder = null;
+    WakelockPlus.disable();
     setState(() {
       _state = _ScreenState.idle;
       _elapsed = Duration.zero;
@@ -341,8 +414,11 @@ class _RunScreenState extends State<RunScreen> {
       _synced = false;
       _syncError = null;
       _autoPaused = false;
+      _manualPaused = false;
+      _lapCount = 0;
       _offRouteDistance = null;
       _offRouteWarned = false;
+      _lastPaceAlertAt = null;
     });
   }
 
@@ -435,12 +511,12 @@ class _RunScreenState extends State<RunScreen> {
                     ],
                   ),
                 ),
-                child: Icon(Icons.directions_run,
+                child: Icon(_activityType.icon,
                     size: 48, color: theme.colorScheme.primary),
               ),
               const SizedBox(height: 24),
               Text(
-                'Ready to Run',
+                'Ready to ${_activityType.label}',
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -457,6 +533,27 @@ class _RunScreenState extends State<RunScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Activity type chips
+              Wrap(
+                spacing: 8,
+                children: ActivityType.values.map((t) {
+                  final selected = t == _activityType;
+                  return ChoiceChip(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(t.icon, size: 16),
+                        const SizedBox(width: 4),
+                        Text(t.label),
+                      ],
+                    ),
+                    selected: selected,
+                    onSelected: (_) => setState(() => _activityType = t),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
 
               // Route selector
               OutlinedButton.icon(
@@ -595,8 +692,12 @@ class _RunScreenState extends State<RunScreen> {
             elevation: _formattedElevation,
             steps: '$_steps',
             cadence: '$_cadence',
+            lapCount: _lapCount,
+            paused: _manualPaused,
             onStop: _stop,
             onDiscard: _confirmDiscardMidRun,
+            onPauseToggle: _toggleManualPause,
+            onLap: _markLap,
           ),
         ),
       ],
@@ -679,8 +780,12 @@ class _StatsOverlay extends StatelessWidget {
   final String elevation;
   final String steps;
   final String cadence;
+  final int lapCount;
+  final bool paused;
   final VoidCallback onStop;
   final VoidCallback onDiscard;
+  final VoidCallback onPauseToggle;
+  final VoidCallback onLap;
 
   const _StatsOverlay({
     required this.time,
@@ -693,8 +798,12 @@ class _StatsOverlay extends StatelessWidget {
     required this.elevation,
     required this.steps,
     required this.cadence,
+    required this.lapCount,
+    required this.paused,
     required this.onStop,
     required this.onDiscard,
+    required this.onPauseToggle,
+    required this.onLap,
   });
 
   @override
@@ -777,7 +886,27 @@ class _StatsOverlay extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 32),
+                  const SizedBox(width: 16),
+                  // Pause / Resume
+                  GestureDetector(
+                    onTap: onPauseToggle,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: paused ? const Color(0xFF22C55E) : const Color(0xFFF59E0B),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                   // Stop button
                   GestureDetector(
                     onTap: onStop,
@@ -797,6 +926,54 @@ class _StatsOverlay extends StatelessWidget {
                       ),
                       child: const Center(
                         child: Icon(Icons.stop_rounded, size: 36, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Lap button
+                  GestureDetector(
+                    onTap: onLap,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.colorScheme.primaryContainer,
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            Icons.flag_rounded,
+                            size: 28,
+                            color: theme.colorScheme.primary,
+                          ),
+                          if (lapCount > 0)
+                            Positioned(
+                              right: 6,
+                              top: 6,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.red,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 14,
+                                  minHeight: 14,
+                                ),
+                                child: Text(
+                                  '$lapCount',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),

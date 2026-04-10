@@ -189,14 +189,20 @@ The Android app supports the following:
 
 - **Weekly, monthly, all-time stats** — total distance, run count, time
 - **Weekly goal** — set a kilometre target, track progress with a progress bar
+- **Personal bests** — longest run, fastest pace, fastest 5k
 
 ### Recording a run
 
+- **Activity types** — run, walk, cycle, hike (selectable from the idle screen)
 - **Countdown** — 3-2-1 before recording starts so you can put your phone away
-- **Live map** — full-screen dark map with your route as an indigo polyline and a pulsing blue dot for your current position
+- **Live map** — full-screen dark map with your route as an indigo polyline, a pulsing blue dot, and HTTP tile caching so previously loaded tiles work offline
 - **Live stats** — time, distance, current pace, average pace, calories, elevation gain, steps, cadence
 - **Audio cues** — text-to-speech split announcements at each km/mi (toggle in Settings)
 - **Auto-pause** — timer pauses automatically when you stop moving for 10+ seconds (toggle in Settings)
+- **Manual pause/resume** — pause button on the recording overlay
+- **Lap markers** — flag button records a lap split mid-run
+- **Pace alerts** — set a target pace in Settings; TTS warns when you're 30s+ off
+- **Wake lock** — screen stays on during the entire run
 - **Background recording** — GPS tracking continues when screen is off or app is backgrounded, via a foreground service notification
 - **Km/mi splits** — snackbar notification at each distance tick
 - **Route following** — pick a saved route before starting; the planned route shows underneath your live track
@@ -212,7 +218,10 @@ The Android app supports the following:
 
 ### History
 
-- **Tap a run** to see the route map, splits per km/mi, and full stats
+- **Tap a run** to see the route map, elevation chart, lap splits, distance splits, and full stats
+- **Pull from cloud** — pulls runs created on other devices when signed in (also pull-to-refresh)
+- **Sort** — newest, oldest, longest distance, fastest pace
+- **Activity icons** — list items show the activity type icon
 - **Edit run** — add a custom title and notes
 - **Share run** — exports as GPX and opens the system share sheet
 - **Delete runs** from the detail screen
@@ -225,7 +234,9 @@ The Android app supports the following:
 - **Use miles / km** — switches all distance and pace displays
 - **Audio cues toggle** — silence TTS announcements
 - **Auto-pause toggle** — disable if running on a treadmill
+- **Target pace** — m:ss per km/mi; voice alerts when off by 30s+
 - **Dark mode** — light/dark theme override
+- **Backup runs** — export every locally stored run as a single JSON file via the system share sheet
 
 ### Offline mode
 

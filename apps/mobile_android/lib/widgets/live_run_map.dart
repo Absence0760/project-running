@@ -1,7 +1,10 @@
 import 'package:core_models/core_models.dart';
+import 'package:dio/dio.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 /// Live map shown during a run, displaying the GPS track and current position.
@@ -32,6 +35,18 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   bool _userPanned = false;
   bool _mapReady = false;
+
+  // Shared in-memory tile cache. Survives map rebuilds and tab switches
+  // within the same session.
+  static final _tileCacheStore = MemCacheStore(maxSize: 200 * 1024 * 1024);
+  static final _tileDio = Dio()
+    ..interceptors.add(DioCacheInterceptor(
+      options: CacheOptions(
+        store: _tileCacheStore,
+        maxStale: const Duration(days: 30),
+        policy: CachePolicy.forceCache,
+      ),
+    ));
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
@@ -114,11 +129,16 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             },
           ),
           children: [
-            // Dark map tiles
+            // Dark map tiles with HTTP cache
             TileLayer(
               urlTemplate: _tileUrl,
               userAgentPackageName: 'com.example.mobile_android',
               maxZoom: 19,
+              tileProvider: CachedTileProvider(
+                store: _tileCacheStore,
+                maxStale: const Duration(days: 30),
+                dio: _tileDio,
+              ),
             ),
 
             // Planned route (underneath) — dashed-looking with lighter color

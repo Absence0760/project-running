@@ -3,16 +3,45 @@ import 'dart:math';
 
 import 'package:core_models/core_models.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:uuid/uuid.dart';
 
 import 'run_snapshot.dart';
 
 /// Manages a live GPS recording session.
 ///
 /// Streams position updates, calculates pace, and accumulates distance.
+/// A single lap recorded mid-run.
+class LapSplit {
+  final int number;
+  final DateTime timestamp;
+  final double cumulativeDistanceMetres;
+  final Duration cumulativeDuration;
+
+  const LapSplit({
+    required this.number,
+    required this.timestamp,
+    required this.cumulativeDistanceMetres,
+    required this.cumulativeDuration,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'number': number,
+        'timestamp': timestamp.toIso8601String(),
+        'cumulative_distance_m': cumulativeDistanceMetres,
+        'cumulative_duration_s': cumulativeDuration.inSeconds,
+      };
+}
+
 class RunRecorder {
+  static const _uuid = Uuid();
+
   final _controller = StreamController<RunSnapshot>.broadcast();
   StreamSubscription<Position>? _positionSub;
   Timer? _timer;
+  final List<LapSplit> _laps = [];
+
+  /// All lap splits recorded so far.
+  List<LapSplit> get laps => List.unmodifiable(_laps);
 
   DateTime? _startTime;
   double _distanceMetres = 0;
@@ -42,6 +71,7 @@ class RunRecorder {
     _startTime = DateTime.now();
     _distanceMetres = 0;
     _track.clear();
+    _laps.clear();
     _lastPosition = null;
     _recording = true;
     _paused = false;
@@ -221,6 +251,29 @@ class RunRecorder {
 
   static double _toRad(double deg) => deg * pi / 180;
 
+  /// Mark a lap split at the current position. Returns the lap number.
+  int lap() {
+    if (!_recording) return 0;
+    final now = DateTime.now();
+    _laps.add(LapSplit(
+      number: _laps.length + 1,
+      timestamp: now,
+      cumulativeDistanceMetres: _distanceMetres,
+      cumulativeDuration: _currentElapsed(),
+    ));
+    return _laps.length;
+  }
+
+  Duration _currentElapsed() {
+    if (_startTime == null) return Duration.zero;
+    var elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
+    if (_paused && _pausedSince != null) {
+      elapsed -= DateTime.now().difference(_pausedSince!);
+    }
+    if (elapsed.isNegative) elapsed = Duration.zero;
+    return elapsed;
+  }
+
   /// Stop recording and return the completed [Run].
   Future<Run> stop() async {
     _recording = false;
@@ -237,12 +290,15 @@ class RunRecorder {
     if (elapsed.isNegative) elapsed = Duration.zero;
 
     return Run(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _uuid.v4(),
       startedAt: startedAt,
       duration: elapsed,
       distanceMetres: _distanceMetres,
       track: List.unmodifiable(_track),
       source: RunSource.app,
+      metadata: _laps.isEmpty
+          ? null
+          : {'laps': _laps.map((l) => l.toJson()).toList()},
     );
   }
 

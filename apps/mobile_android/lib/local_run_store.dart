@@ -39,9 +39,28 @@ class LocalRunStore extends ChangeNotifier {
       'synced': false,
     };
     await file.writeAsString(jsonEncode(data));
+    _runs.removeWhere((r) => r.id == run.id);
     _runs.insert(0, run);
     notifyListeners();
   }
+
+  /// Save a run that came from the backend. Marks it as already synced.
+  Future<void> saveFromRemote(Run run) async {
+    final file = File('${_dir.path}/${run.id}.json');
+    final data = {
+      'run': run.toJson(),
+      'synced': true,
+    };
+    await file.writeAsString(jsonEncode(data));
+    _runs.removeWhere((r) => r.id == run.id);
+    _runs.insert(0, run);
+    _syncedIds.add(run.id);
+    _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    notifyListeners();
+  }
+
+  /// Whether a run with this id already exists locally.
+  bool contains(String runId) => _runs.any((r) => r.id == runId);
 
   /// Replace an existing run with updated data (same id, new metadata).
   Future<void> update(Run updated) async {

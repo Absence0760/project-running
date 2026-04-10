@@ -1,7 +1,47 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum DistanceUnit { km, mi }
+
+enum ActivityType {
+  run,
+  walk,
+  cycle,
+  hike;
+
+  String get label {
+    switch (this) {
+      case ActivityType.run:
+        return 'Run';
+      case ActivityType.walk:
+        return 'Walk';
+      case ActivityType.cycle:
+        return 'Cycle';
+      case ActivityType.hike:
+        return 'Hike';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case ActivityType.run:
+        return Icons.directions_run;
+      case ActivityType.walk:
+        return Icons.directions_walk;
+      case ActivityType.cycle:
+        return Icons.directions_bike;
+      case ActivityType.hike:
+        return Icons.terrain;
+    }
+  }
+
+  static ActivityType fromName(String? name) {
+    return ActivityType.values.firstWhere(
+      (a) => a.name == name,
+      orElse: () => ActivityType.run,
+    );
+  }
+}
 
 /// App-wide user preferences (units, audio cues, etc.).
 class Preferences extends ChangeNotifier {
@@ -10,6 +50,7 @@ class Preferences extends ChangeNotifier {
   static const _kAutoPause = 'auto_pause';
   static const _kOnboarded = 'onboarded';
   static const _kWeeklyGoalKm = 'weekly_goal_km';
+  static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
 
   late SharedPreferences _prefs;
   bool _useMiles = false;
@@ -17,6 +58,7 @@ class Preferences extends ChangeNotifier {
   bool _autoPause = true;
   bool _onboarded = false;
   double _weeklyGoalKm = 0;
+  int _targetPaceSecPerKm = 0;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -27,6 +69,10 @@ class Preferences extends ChangeNotifier {
   /// Weekly distance goal stored in kilometres (0 means not set).
   double get weeklyGoalKm => _weeklyGoalKm;
 
+  /// Target pace in seconds per km (0 means no target). Audio cue triggers
+  /// when current pace is more than 30s off in either direction.
+  int get targetPaceSecPerKm => _targetPaceSecPerKm;
+
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     _useMiles = _prefs.getBool(_kUseMiles) ?? false;
@@ -34,6 +80,7 @@ class Preferences extends ChangeNotifier {
     _autoPause = _prefs.getBool(_kAutoPause) ?? true;
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _weeklyGoalKm = _prefs.getDouble(_kWeeklyGoalKm) ?? 0;
+    _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
   }
 
   Future<void> setUseMiles(bool v) async {
@@ -63,6 +110,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setWeeklyGoalKm(double v) async {
     _weeklyGoalKm = v;
     await _prefs.setDouble(_kWeeklyGoalKm, v);
+    notifyListeners();
+  }
+
+  Future<void> setTargetPaceSecPerKm(int v) async {
+    _targetPaceSecPerKm = v;
+    await _prefs.setInt(_kTargetPaceSecPerKm, v);
     notifyListeners();
   }
 }

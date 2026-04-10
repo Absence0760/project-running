@@ -120,7 +120,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: runs.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
+                  const SizedBox(height: 16),
+                  Text('Welcome!', style: theme.textTheme.headlineSmall),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Start your first run from the Run tab',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           if (goalKm > 0) ...[
@@ -214,6 +232,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 24),
 
+          if (runs.isNotEmpty) ...[
+            Text('Personal Bests', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    if (_longestRun(runs) != null)
+                      _PbRow(
+                        icon: Icons.straighten,
+                        label: 'Longest run',
+                        value: UnitFormat.distance(_longestRun(runs)!.distanceMetres, unit),
+                      ),
+                    if (_fastestPaceRun(runs) != null) ...[
+                      const SizedBox(height: 12),
+                      _PbRow(
+                        icon: Icons.speed,
+                        label: 'Fastest pace',
+                        value: '${UnitFormat.pace(_paceOf(_fastestPaceRun(runs)!), unit)} '
+                            '${UnitFormat.paceLabel(unit)}',
+                      ),
+                    ],
+                    if (_best5k(runs) != null) ...[
+                      const SizedBox(height: 12),
+                      _PbRow(
+                        icon: Icons.emoji_events,
+                        label: 'Fastest 5k',
+                        value: _formatDuration(_best5k(runs)!),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
           Text('All Time', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(
@@ -238,6 +294,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Run? _longestRun(List<Run> runs) {
+    if (runs.isEmpty) return null;
+    return runs.reduce((a, b) => a.distanceMetres >= b.distanceMetres ? a : b);
+  }
+
+  Run? _fastestPaceRun(List<Run> runs) {
+    final eligible = runs.where((r) => r.distanceMetres >= 1000).toList();
+    if (eligible.isEmpty) return null;
+    return eligible.reduce((a, b) => _paceOf(a) <= _paceOf(b) ? a : b);
+  }
+
+  double _paceOf(Run r) => r.duration.inSeconds / (r.distanceMetres / 1000);
+
+  Duration? _best5k(List<Run> runs) {
+    final eligible = runs.where((r) => r.distanceMetres >= 5000).toList();
+    if (eligible.isEmpty) return null;
+    final times = eligible.map((r) {
+      final secPerMetre = r.duration.inSeconds / r.distanceMetres;
+      return Duration(seconds: (secPerMetre * 5000).round());
+    }).toList();
+    return times.reduce((a, b) => a < b ? a : b);
+  }
+
+  static String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) return '${h}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    return '${m}:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class _PbRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _PbRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(icon, color: theme.colorScheme.primary, size: 22),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }

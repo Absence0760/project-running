@@ -22,14 +22,35 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
+enum _HistorySort { newest, oldest, longest, fastest }
+
 class _HistoryScreenState extends State<HistoryScreen> {
   bool _syncing = false;
+  bool _fetching = false;
+  _HistorySort _sort = _HistorySort.newest;
 
   @override
   void initState() {
     super.initState();
     widget.runStore.addListener(_onStoreChanged);
     widget.preferences.addListener(_onStoreChanged);
+    _fetchRemote();
+  }
+
+  Future<void> _fetchRemote() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    setState(() => _fetching = true);
+    try {
+      final remote = await api.getRuns(limit: 200);
+      for (final run in remote) {
+        await widget.runStore.saveFromRemote(run);
+      }
+    } catch (e) {
+      debugPrint('Fetch remote runs failed: $e');
+    } finally {
+      if (mounted) setState(() => _fetching = false);
+    }
   }
 
   @override
@@ -83,17 +104,62 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  List<Run> _sortedRuns(List<Run> runs) {
+    final list = [...runs];
+    switch (_sort) {
+      case _HistorySort.newest:
+        list.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+      case _HistorySort.oldest:
+        list.sort((a, b) => a.startedAt.compareTo(b.startedAt));
+      case _HistorySort.longest:
+        list.sort((a, b) => b.distanceMetres.compareTo(a.distanceMetres));
+      case _HistorySort.fastest:
+        double pace(Run r) => r.distanceMetres < 10
+            ? double.infinity
+            : r.duration.inSeconds / (r.distanceMetres / 1000);
+        list.sort((a, b) => pace(a).compareTo(pace(b)));
+    }
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final runs = widget.runStore.runs;
+    final runs = _sortedRuns(widget.runStore.runs);
     final unsyncedCount = widget.runStore.unsyncedCount;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('History'),
         actions: [
-          if (_syncing)
+          PopupMenuButton<_HistorySort>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sort',
+            onSelected: (v) => setState(() => _sort = v),
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                value: _HistorySort.newest,
+                checked: _sort == _HistorySort.newest,
+                child: const Text('Newest first'),
+              ),
+              CheckedPopupMenuItem(
+                value: _HistorySort.oldest,
+                checked: _sort == _HistorySort.oldest,
+                child: const Text('Oldest first'),
+              ),
+              CheckedPopupMenuItem(
+                value: _HistorySort.longest,
+                checked: _sort == _HistorySort.longest,
+                child: const Text('Longest distance'),
+              ),
+              CheckedPopupMenuItem(
+                value: _HistorySort.fastest,
+                checked: _sort == _HistorySort.fastest,
+                child: const Text('Fastest pace'),
+              ),
+            ],
+          ),
+          if (_fetching || _syncing)
             const Padding(
               padding: EdgeInsets.all(12),
               child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -107,20 +173,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 onPressed: _syncAll,
               ),
             )
-          else
+          else if (widget.apiClient?.userId != null)
             IconButton(
-              icon: const Icon(Icons.cloud_done),
-              tooltip: 'Nothing to sync',
+              icon: const Icon(Icons.cloud_download),
+              tooltip: 'Refresh from cloud',
+              onPressed: _fetchRemote,
+            )
+          else
+            const IconButton(
+              icon: Icon(Icons.cloud_off),
+              tooltip: 'Offline',
               onPressed: null,
             ),
         ],
       ),
       body: runs.isEmpty
-          ? Center(
-              child: Text('No runs yet',
-                  style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.outline)),
-            )
-          : _buildRunList(theme, runs),
+          ? _EmptyHistory(theme: theme)
+          : RefreshIndicator(
+              onRefresh: _fetchRemote,
+              child: _buildRunList(theme, runs),
+            ),
     );
   }
 
@@ -143,11 +215,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
           final date = _formatDate(run.startedAt);
           final isUnsynced = unsyncedIds.contains(run.id);
 
+          final activity = ActivityType.fromName(run.metadata?['activity_type'] as String?);
           return Card(
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: theme.colorScheme.primaryContainer,
-                child: Icon(Icons.directions_run, color: theme.colorScheme.primary),
+                child: Icon(activity.icon, color: theme.colorScheme.primary),
               ),
               title: Text(dist),
               subtitle: Text('$date  •  $dur'),
@@ -194,6 +267,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return '${dt.day} ${months[dt.month - 1]}';
+  }
+}
+
+class _EmptyHistory extends StatelessWidget {
+  final ThemeData theme;
+  const _EmptyHistory({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
+          const SizedBox(height: 16),
+          Text('No runs yet', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(
+            'Tap the Run tab to start your first run',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

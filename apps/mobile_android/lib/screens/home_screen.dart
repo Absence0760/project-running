@@ -77,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
         key: const PageStorageKey('settings'),
         apiClient: widget.apiClient,
         preferences: widget.preferences,
+        runStore: widget.runStore,
       ),
     ];
 

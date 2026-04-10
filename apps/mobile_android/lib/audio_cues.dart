@@ -53,6 +53,12 @@ class AudioCues {
     await _tts.speak('Off route');
   }
 
+  /// Tell the runner they're outside the target pace window.
+  Future<void> announcePaceAlert({required bool tooSlow}) async {
+    await _init();
+    await _tts.speak(tooSlow ? 'Pick up the pace' : 'Slow down');
+  }
+
   Future<void> stop() async {
     await _tts.stop();
   }

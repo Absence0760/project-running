@@ -123,6 +123,28 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             child: LiveRunMap(track: run.track, followRunner: false),
           ),
 
+          // Activity type + notes
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Row(
+              children: [
+                Icon(_activityType.icon, size: 18, color: theme.colorScheme.outline),
+                const SizedBox(width: 6),
+                Text(
+                  _activityType.label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_notes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Text(_notes, style: theme.textTheme.bodyMedium),
+            ),
+
           // Primary stats
           Padding(
             padding: const EdgeInsets.all(20),
@@ -149,6 +171,33 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
 
           const Divider(),
 
+          // Elevation chart
+          if (_hasElevation) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Elevation', style: theme.textTheme.titleMedium),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                height: 120,
+                child: _ElevationChart(track: run.track, theme: theme),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+          ],
+
+          // Laps
+          if (_laps.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Laps', style: theme.textTheme.titleMedium),
+            ),
+            ..._buildLaps(theme, unit),
+            const Divider(),
+          ],
+
           // Splits
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -160,6 +209,35 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
         ],
       ),
     );
+  }
+
+  ActivityType get _activityType =>
+      ActivityType.fromName(run.metadata?['activity_type'] as String?);
+
+  bool get _hasElevation =>
+      run.track.any((w) => w.elevationMetres != null);
+
+  List<Map<String, dynamic>> get _laps {
+    final laps = run.metadata?['laps'];
+    if (laps is List) return List<Map<String, dynamic>>.from(laps);
+    return const [];
+  }
+
+  List<Widget> _buildLaps(ThemeData theme, DistanceUnit unit) {
+    return _laps.map((lap) {
+      final number = lap['number'] as int;
+      final dist = (lap['cumulative_distance_m'] as num).toDouble();
+      final dur = Duration(seconds: (lap['cumulative_duration_s'] as num).toInt());
+      return ListTile(
+        leading: CircleAvatar(
+          backgroundColor: theme.colorScheme.tertiaryContainer,
+          child: Icon(Icons.flag, size: 18, color: theme.colorScheme.tertiary),
+        ),
+        title: Text('Lap $number'),
+        subtitle: Text(UnitFormat.distance(dist, unit)),
+        trailing: Text(_formatDuration(dur), style: theme.textTheme.titleMedium),
+      );
+    }).toList();
   }
 
   double? get _avgPaceSecPerKm {
@@ -373,4 +451,95 @@ class _StatBig extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Simple elevation profile rendered with a CustomPainter.
+class _ElevationChart extends StatelessWidget {
+  final List<Waypoint> track;
+  final ThemeData theme;
+  const _ElevationChart({required this.track, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ElevationPainter(
+        track: track,
+        lineColor: theme.colorScheme.primary,
+        fillColor: theme.colorScheme.primary.withOpacity(0.15),
+        gridColor: theme.dividerColor,
+      ),
+      size: Size.infinite,
+    );
+  }
+}
+
+class _ElevationPainter extends CustomPainter {
+  final List<Waypoint> track;
+  final Color lineColor;
+  final Color fillColor;
+  final Color gridColor;
+
+  _ElevationPainter({
+    required this.track,
+    required this.lineColor,
+    required this.fillColor,
+    required this.gridColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final elevations = track
+        .where((w) => w.elevationMetres != null)
+        .map((w) => w.elevationMetres!)
+        .toList();
+    if (elevations.length < 2) return;
+
+    final minEle = elevations.reduce(math.min);
+    final maxEle = elevations.reduce(math.max);
+    final range = (maxEle - minEle).abs() < 1 ? 1.0 : maxEle - minEle;
+
+    final path = Path();
+    final fillPath = Path();
+    for (int i = 0; i < elevations.length; i++) {
+      final x = i / (elevations.length - 1) * size.width;
+      final y = size.height - ((elevations[i] - minEle) / range) * size.height;
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+    }
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+
+    final fillPaint = Paint()..color = fillColor;
+    canvas.drawPath(fillPath, fillPaint);
+
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(path, linePaint);
+
+    // Min/max labels
+    final textStyle = TextStyle(color: gridColor, fontSize: 10);
+    final maxText = TextPainter(
+      text: TextSpan(text: '${maxEle.round()}m', style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    maxText.paint(canvas, const Offset(4, 0));
+
+    final minText = TextPainter(
+      text: TextSpan(text: '${minEle.round()}m', style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    minText.paint(canvas, Offset(4, size.height - minText.height));
+  }
+
+  @override
+  bool shouldRepaint(covariant _ElevationPainter old) =>
+      old.track != track || old.lineColor != lineColor;
 }
