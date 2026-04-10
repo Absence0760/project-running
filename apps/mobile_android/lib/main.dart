@@ -3,7 +3,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import 'audio_cues.dart';
+import 'local_route_store.dart';
 import 'local_run_store.dart';
+import 'preferences.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -12,6 +15,14 @@ void main() async {
 
   final store = LocalRunStore();
   await store.init();
+
+  final routeStore = LocalRouteStore();
+  await routeStore.init();
+
+  final prefs = Preferences();
+  await prefs.init();
+
+  final audioCues = AudioCues();
 
   // Try to initialize Supabase — skip if not configured or unreachable
   ApiClient? api;
@@ -39,7 +50,13 @@ void main() async {
     }
   }
 
-  runApp(RunApp(apiClient: api, runStore: store));
+  runApp(RunApp(
+    apiClient: api,
+    runStore: store,
+    routeStore: routeStore,
+    preferences: prefs,
+    audioCues: audioCues,
+  ));
 }
 
 class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
@@ -51,7 +68,17 @@ final themeModeNotifier = ThemeModeNotifier();
 class RunApp extends StatelessWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
-  const RunApp({super.key, this.apiClient, required this.runStore});
+  final LocalRouteStore routeStore;
+  final Preferences preferences;
+  final AudioCues audioCues;
+  const RunApp({
+    super.key,
+    this.apiClient,
+    required this.runStore,
+    required this.routeStore,
+    required this.preferences,
+    required this.audioCues,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +90,13 @@ class RunApp extends StatelessWidget {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
-          home: HomeScreen(apiClient: apiClient, runStore: runStore),
+          home: HomeScreen(
+            apiClient: apiClient,
+            runStore: runStore,
+            routeStore: routeStore,
+            preferences: preferences,
+            audioCues: audioCues,
+          ),
         );
       },
     );

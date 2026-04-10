@@ -33,6 +33,11 @@ class ApiClient {
   /// The current user's email, or null if not signed in.
   String? get userEmail => _client.auth.currentUser?.email;
 
+  /// Sign out the current user.
+  Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
   /// Saves a completed [Run] to the backend.
   Future<void> saveRun(Run run) async {
     final userId = _client.auth.currentUser?.id;

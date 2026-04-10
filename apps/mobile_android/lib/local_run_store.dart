@@ -43,6 +43,17 @@ class LocalRunStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Delete a run from local storage.
+  Future<void> delete(String runId) async {
+    final file = File('${_dir.path}/$runId.json');
+    if (file.existsSync()) {
+      await file.delete();
+    }
+    _runs.removeWhere((r) => r.id == runId);
+    _syncedIds.remove(runId);
+    notifyListeners();
+  }
+
   /// Mark a run as synced.
   Future<void> markSynced(String runId) async {
     final file = File('${_dir.path}/$runId.json');

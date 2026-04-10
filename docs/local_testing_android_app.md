@@ -44,7 +44,15 @@ Run `flutter doctor` and resolve any issues:
 
 In Android Studio: **Device Manager → Create Device → Phone → Pixel 8 → API 34** (or newer).
 
-Start the emulator before running the app.
+Start the emulator before running the app. You can launch it from the command line as well:
+
+```bash
+# List available emulators
+flutter emulators
+
+# Launch one by name
+flutter emulators --launch Pixel_10_Pro
+```
 
 ### 4. Bootstrap packages
 
@@ -91,6 +99,65 @@ flutter devices
 
 ---
 
+## Installing on a physical phone (APK)
+
+The app works fully offline, so you can install a release APK on your phone without any backend setup.
+
+### 1. Build the release APK
+
+```bash
+cd apps/mobile_android
+flutter build apk
+```
+
+The APK is output to `build/app/outputs/flutter-apk/app-release.apk`.
+
+### 2. Enable USB debugging on the phone
+
+**Samsung (S24 and similar):**
+
+1. **Settings → About Phone → Software Information** → tap **Build Number** 7 times until you see "Developer mode enabled"
+2. Go back to **Settings → Developer Options** → enable **USB Debugging**
+
+**Stock Android / Pixel:**
+
+1. **Settings → About Phone** → tap **Build Number** 7 times
+2. **Settings → System → Developer Options** → enable **USB Debugging**
+
+### 3. Connect via USB and install
+
+1. Plug the phone into your Mac with a **data-capable** USB cable (not a charge-only cable)
+2. Swipe down on the phone's notification shade and change USB mode from **Charging** to **File Transfer (MTP)**
+3. Tap **Allow** on the "Allow USB debugging?" prompt on the phone
+4. Verify the phone is detected:
+
+```bash
+adb devices
+```
+
+You should see your device ID listed. If the list is empty, try a different USB cable or port.
+
+5. Install the APK:
+
+```bash
+adb install build/app/outputs/flutter-apk/app-release.apk
+```
+
+If `adb` isn't on your PATH, add it to `~/.zshrc`:
+
+```bash
+echo 'export PATH="$PATH:$HOME/Library/Android/sdk/platform-tools"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+The app will appear in your app drawer. When prompted on the phone, allow **Install from unknown sources** for adb.
+
+### Offline mode
+
+Without `.env.local` credentials (or if the backend is unreachable), the app runs in **offline mode**: runs are recorded and stored locally on the phone. To sync runs across devices, fill in `DEV_USER_EMAIL` and `DEV_USER_PASSWORD` in `.env.local` before building the APK.
+
+---
+
 ## Running tests
 
 ```bash
@@ -109,6 +176,48 @@ melos run analyze
 
 ---
 
+## Features
+
+The Android app supports the following:
+
+### Recording a run
+
+- **Countdown** — 3-2-1 before recording starts so you can put your phone away
+- **Live map** — full-screen dark map with your route as an indigo polyline and a pulsing blue dot for your current position
+- **Live stats** — time, distance, current pace, average pace, calories, elevation gain, steps, cadence
+- **Audio cues** — text-to-speech split announcements at each km/mi (toggle in Settings)
+- **Auto-pause** — timer pauses automatically when you stop moving for 10+ seconds (toggle in Settings)
+- **Km/mi splits** — snackbar notification at each distance tick
+- **Route following** — pick a saved route from the Routes tab before starting
+
+### Routes
+
+- **Import GPX/KML** files via the Import button on the Routes tab
+- **Sync from cloud** — pulls routes you created in the web app (when signed in)
+- **Local storage** — routes saved on the phone, available offline
+- **Use during a run** — select a route on the run screen before pressing start
+
+### History
+
+- **Tap a run** to see the route map, splits per km/mi, and full stats
+- **Delete runs** from the detail screen
+- **Sync button** — bulk-upload all unsynced runs (when signed in)
+- **Offline indicator** — runs saved offline show a cloud-off icon
+
+### Settings
+
+- **Sign in / Sign out** — email/password against the same backend as the web app
+- **Use miles / km** — switches all distance and pace displays
+- **Audio cues toggle** — silence TTS announcements
+- **Auto-pause toggle** — disable if running on a treadmill
+- **Dark mode** — light/dark theme override
+
+### Offline mode
+
+If `.env.local` is missing, empty, or the backend is unreachable, the app starts in **offline mode**. All features work locally — you can record runs, view history, and import routes without ever signing in. Runs stay on the device until you sign in and tap **Sync**.
+
+---
+
 ## Simulating GPS
 
 In Android Studio's emulator controls (the `...` button on the emulator toolbar):
@@ -117,7 +226,7 @@ In Android Studio's emulator controls (the `...` button on the emulator toolbar)
 2. **Location → Routes** — draw a path and play it back to simulate movement
 3. **Location → Import GPX/KML** — replay a recorded route file
 
-Use route playback to test live run recording, auto-pause, and off-route detection.
+Use route playback to test live run recording, auto-pause, and km splits. The step counter and cadence don't work on the emulator (no physical accelerometer); test those on a real device.
 
 ---
 

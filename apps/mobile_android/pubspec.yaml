@@ -28,6 +28,10 @@ dependencies:
   flutter_map: ^8.0.0
   latlong2: ^0.9.1
   pedometer: ^4.0.2
+  flutter_tts: ^4.0.2
+  file_picker: ^8.1.0
+  shared_preferences: ^2.3.0
+  permission_handler: ^11.3.0
 
 dev_dependencies:
   flutter_test:
