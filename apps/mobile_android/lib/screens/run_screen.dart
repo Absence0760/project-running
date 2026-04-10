@@ -58,6 +58,7 @@ class _RunScreenState extends State<RunScreen> {
   double _distanceMetres = 0;
   double? _pace;
   List<cm.Waypoint> _track = [];
+  cm.Waypoint? _currentPosition;
   int _lastTickNotified = 0;
 
   // Pause state
@@ -94,6 +95,11 @@ class _RunScreenState extends State<RunScreen> {
   cm.Run? _finishedRun;
   bool _synced = false;
   String? _syncError;
+
+  // Measured height of the stats overlay — used to offset the map camera so
+  // the blue dot sits in the visible area above the overlay, not behind it.
+  final GlobalKey _statsOverlayKey = GlobalKey();
+  double _statsOverlayHeight = 300;
 
   @override
   void initState() {
@@ -198,6 +204,7 @@ class _RunScreenState extends State<RunScreen> {
         _distanceMetres = snapshot.distanceMetres;
         _pace = snapshot.currentPaceSecondsPerKm;
         _track = snapshot.track;
+        _currentPosition = snapshot.currentPosition;
         _offRouteDistance = snapshot.offRouteDistanceMetres;
         _routeRemaining = snapshot.routeRemainingMetres;
       });
@@ -424,6 +431,7 @@ class _RunScreenState extends State<RunScreen> {
       _distanceMetres = 0;
       _pace = null;
       _track = [];
+      _currentPosition = null;
       _lastTickNotified = 0;
       _steps = 0;
       _startSteps = 0;
@@ -662,9 +670,25 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   Widget _buildRecording(BuildContext context) {
+    // Measure the stats overlay after layout so the map can offset its
+    // follow-cam by the real height rather than a hard-coded guess.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final box = _statsOverlayKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) return;
+      final h = box.size.height;
+      if ((h - _statsOverlayHeight).abs() > 1 && mounted) {
+        setState(() => _statsOverlayHeight = h);
+      }
+    });
+
     return Stack(
       children: [
-        LiveRunMap(track: _track, plannedRoute: _selectedRoute?.waypoints),
+        LiveRunMap(
+          track: _track,
+          currentPosition: _currentPosition,
+          plannedRoute: _selectedRoute?.waypoints,
+          bottomPadding: _statsOverlayHeight,
+        ),
 
         // "X to go" badge — top right when a route is selected
         if (_routeRemaining != null)
@@ -742,6 +766,7 @@ class _RunScreenState extends State<RunScreen> {
           right: 0,
           bottom: 0,
           child: _StatsOverlay(
+            key: _statsOverlayKey,
             time: _formattedTime,
             distanceValue: _formattedDistanceValue,
             distanceUnit: UnitFormat.distanceLabel(_unit),
@@ -862,6 +887,7 @@ class _StatsOverlay extends StatelessWidget {
   final VoidCallback onLap;
 
   const _StatsOverlay({
+    super.key,
     required this.time,
     required this.distanceValue,
     required this.distanceUnit,

@@ -46,23 +46,29 @@ class RunRecorder {
   DateTime? _startTime;
   double _distanceMetres = 0;
   final List<Waypoint> _track = [];
-  Position? _lastPosition;
+  /// Latest raw GPS fix — drives the blue dot on the live map and updates
+  /// on every fix, independent of the track-append threshold.
+  Waypoint? _currentWaypoint;
+  /// Last position that was appended to [_track]. Used to gate the next
+  /// track append + distance accumulation on real movement.
+  Position? _lastTrackedPosition;
   bool _recording = false;
   bool _paused = false;
   Duration _pausedTotal = Duration.zero;
   DateTime? _pausedSince;
   Route? _route;
-  double _minMovementMetres = 2;
+  double _trackThresholdMetres = 3;
 
   /// Emits a [RunSnapshot] every second during recording.
   Stream<RunSnapshot> get snapshots => _controller.stream;
 
   /// Begin recording a run, optionally following a [route].
   ///
-  /// [distanceFilterMetres] tunes the GPS update frequency — larger values
-  /// produce fewer updates and ignore more noise (good for cycling).
-  /// [minMovementMetres] is the smallest delta that counts toward distance —
-  /// anything smaller is treated as GPS jitter.
+  /// [distanceFilterMetres] and [minMovementMetres] are combined into a single
+  /// software threshold that gates when a GPS fix gets appended to the track
+  /// and counted toward distance. The OS-level filter is always 0 so the blue
+  /// dot can update at the GPS sensor's native rate, independent of this
+  /// threshold.
   Future<void> start({
     Route? route,
     int distanceFilterMetres = 3,
@@ -82,20 +88,22 @@ class RunRecorder {
     _distanceMetres = 0;
     _track.clear();
     _laps.clear();
-    _lastPosition = null;
+    _currentWaypoint = null;
+    _lastTrackedPosition = null;
     _recording = true;
     _paused = false;
     _pausedTotal = Duration.zero;
     _pausedSince = null;
     _route = route;
-    _minMovementMetres = minMovementMetres;
+    _trackThresholdMetres =
+        max(distanceFilterMetres.toDouble(), minMovementMetres);
 
-    // GPS position stream with Android foreground service config
-    // so recording continues when the app is backgrounded or screen is off.
     _positionSub = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: distanceFilterMetres,
+        // Receive every fix from the OS; movement filtering happens in
+        // software so the blue dot can refresh without inflating the track.
+        distanceFilter: 0,
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Run in progress',
           notificationText: 'Recording your run',
@@ -105,9 +113,9 @@ class RunRecorder {
       ),
     ).listen(_onPosition);
 
-    // 1-second timer for elapsed time updates
+    // 1-second timer for elapsed time updates.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_recording || _track.isEmpty) return;
+      if (!_recording || _currentWaypoint == null) return;
       _emitSnapshot();
     });
   }
@@ -127,7 +135,7 @@ class RunRecorder {
     }
     _paused = false;
     _pausedSince = null;
-    _lastPosition = null; // avoid a big jump after resume
+    _lastTrackedPosition = null; // avoid a big jump after resume
   }
 
   void _onPosition(Position pos) {
@@ -136,32 +144,41 @@ class RunRecorder {
     // Filter inaccurate readings
     if (pos.accuracy > 30) return;
 
-    if (_lastPosition != null) {
-      final delta = Geolocator.distanceBetween(
-        _lastPosition!.latitude,
-        _lastPosition!.longitude,
-        pos.latitude,
-        pos.longitude,
-      );
-      // Ignore GPS jitter and implausible jumps (>100m)
-      if (delta > _minMovementMetres && delta < 100) {
-        _distanceMetres += delta;
-      }
-    }
-
-    _lastPosition = pos;
-    _track.add(Waypoint(
+    // Always refresh the raw current position so the blue dot updates on
+    // every valid fix, independent of the track-append threshold.
+    _currentWaypoint = Waypoint(
       lat: pos.latitude,
       lng: pos.longitude,
       elevationMetres: pos.altitude != 0 ? pos.altitude : null,
       timestamp: DateTime.now(),
-    ));
+    );
+
+    final last = _lastTrackedPosition;
+    if (last == null) {
+      _lastTrackedPosition = pos;
+      _track.add(_currentWaypoint!);
+    } else {
+      final delta = Geolocator.distanceBetween(
+        last.latitude,
+        last.longitude,
+        pos.latitude,
+        pos.longitude,
+      );
+      // Only grow the track + accumulate distance on real movement. Ignore
+      // GPS jitter below the threshold and implausible jumps (>100m).
+      if (delta > _trackThresholdMetres && delta < 100) {
+        _distanceMetres += delta;
+        _lastTrackedPosition = pos;
+        _track.add(_currentWaypoint!);
+      }
+    }
 
     _emitSnapshot();
   }
 
   void _emitSnapshot() {
-    if (_startTime == null || _track.isEmpty) return;
+    final current = _currentWaypoint;
+    if (_startTime == null || current == null) return;
 
     var elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
     if (_paused && _pausedSince != null) {
@@ -169,14 +186,14 @@ class RunRecorder {
     }
     if (elapsed.isNegative) elapsed = Duration.zero;
     final pace = _calculatePace();
-    final offRoute = _offRouteDistance();
-    final remaining = _routeRemaining();
+    final offRoute = _offRouteDistance(current);
+    final remaining = _routeRemaining(current);
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
       distanceMetres: _distanceMetres,
       currentPaceSecondsPerKm: pace,
-      currentPosition: _track.last,
+      currentPosition: current,
       track: List.unmodifiable(_track),
       offRouteDistanceMetres: offRoute,
       routeRemainingMetres: remaining,
@@ -189,10 +206,9 @@ class RunRecorder {
   /// Finds the closest point on the route to the runner, then sums the
   /// distance from there to the final waypoint. Returns null if no route is
   /// selected.
-  double? _routeRemaining() {
+  double? _routeRemaining(Waypoint pos) {
     final route = _route;
     if (route == null || route.waypoints.length < 2) return null;
-    final pos = _track.last;
 
     // Find the segment closest to the runner.
     int closestSegmentIdx = 0;
@@ -258,10 +274,9 @@ class RunRecorder {
 
   /// Minimum distance (in metres) from the current position to any segment
   /// of the selected [Route]. Returns null if no route is selected.
-  double? _offRouteDistance() {
+  double? _offRouteDistance(Waypoint pos) {
     final route = _route;
     if (route == null || route.waypoints.length < 2) return null;
-    final pos = _track.last;
 
     double minDist = double.infinity;
     for (int i = 1; i < route.waypoints.length; i++) {

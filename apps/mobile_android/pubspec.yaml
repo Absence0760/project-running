@@ -41,7 +41,7 @@ dependencies:
   connectivity_plus: ^6.0.5
   archive: ^3.6.1
   csv: ^6.0.0
-  health: ^10.0.0
+  health: ^13.0.0
 
 dev_dependencies:
   flutter_test:
