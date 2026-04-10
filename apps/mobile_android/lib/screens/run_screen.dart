@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
+import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../audio_cues.dart';
@@ -83,6 +84,40 @@ class _RunScreenState extends State<RunScreen> {
   // Reentrancy guard on start — prevents rapid taps from spawning
   // multiple recorders.
   bool _startRequested = false;
+
+  // Crash-safe incremental persistence. A partial Run is serialised every
+  // [_incrementalSaveInterval] during a recording; the id is generated at
+  // _begin() so the saved run has a stable identity across ticks and across
+  // a crash+recover cycle.
+  static const _incrementalSaveInterval = Duration(seconds: 10);
+  static const _uuid = Uuid();
+  Timer? _incrementalSaveTimer;
+  String? _runId;
+  DateTime? _runStartedAtWall;
+
+  // GPS signal state. If snapshots stop arriving for > _gpsLostThreshold we
+  // show a banner warning the runner so they're not surprised at stop time.
+  static const _gpsLostThreshold = Duration(seconds: 10);
+  bool _gpsLost = false;
+  Timer? _gpsLostCheckTimer;
+
+  // Permission watchdog — polls Geolocator.checkPermission() so we can
+  // warn the runner if location permission is revoked mid-run in Android
+  // settings.
+  Timer? _permissionWatchdogTimer;
+  bool _permissionLost = false;
+
+  // Pedometer resubscribe back-off — if the stream errors we wait a bit,
+  // then try again. Failures during a run shouldn't silently drop the
+  // cadence widget forever.
+  int _pedometerRetries = 0;
+  static const _pedometerMaxRetries = 5;
+
+  // Hold-to-stop progress (0..1) — drives the circular progress ring on
+  // the big red stop button, preventing accidental one-tap stops.
+  static const _holdToStopDuration = Duration(milliseconds: 800);
+  Timer? _holdToStopTicker;
+  double _holdToStopProgress = 0.0;
 
   // Laps
   int _lapCount = 0;
@@ -227,7 +262,33 @@ class _RunScreenState extends State<RunScreen> {
 
     // Pedometer sensor stream. We subscribe now, but don't count steps
     // toward the run until _begin sets a baseline.
+    _subscribeToPedometer();
+
+    // Keep the screen awake from the start of the countdown onward.
+    WakelockPlus.enable();
+
+    // Open the GPS stream now so the first fix is already in hand when the
+    // run starts. Positions received during this phase drive the blue dot
+    // but don't accumulate into the track or distance.
+    _prepareFuture = _recorder!
+        .prepare(
+      route: _selectedRoute,
+      distanceFilterMetres: _activityType.gpsDistanceFilter,
+      minMovementMetres: _activityType.minMovementMetres,
+      maxSpeedMps: _activityType.maxSpeedMps,
+    )
+        .catchError((e, st) {
+      debugPrint('RunRecorder.prepare failed: $e');
+    });
+  }
+
+  /// Subscribe to the pedometer stream. On error, wait a bit and retry —
+  /// a transient sensor glitch shouldn't kill the cadence widget for the
+  /// rest of the run.
+  void _subscribeToPedometer() {
+    _stepSub?.cancel();
     _stepSub = Pedometer.stepCountStream.listen((event) {
+      _pedometerRetries = 0; // reset back-off on successful event
       _latestPedometerSteps = event.steps;
       if (_state != _ScreenState.recording) return;
       if (_startSteps == 0) _startSteps = event.steps;
@@ -244,22 +305,18 @@ class _RunScreenState extends State<RunScreen> {
         }
       }
       if (mounted) setState(() => _steps = newSteps);
-    }, onError: (_) {});
-
-    // Keep the screen awake from the start of the countdown onward.
-    WakelockPlus.enable();
-
-    // Open the GPS stream now so the first fix is already in hand when the
-    // run starts. Positions received during this phase drive the blue dot
-    // but don't accumulate into the track or distance.
-    _prepareFuture = _recorder!
-        .prepare(
-      route: _selectedRoute,
-      distanceFilterMetres: _activityType.gpsDistanceFilter,
-      minMovementMetres: _activityType.minMovementMetres,
-    )
-        .catchError((e, st) {
-      debugPrint('RunRecorder.prepare failed: $e');
+    }, onError: (e) {
+      debugPrint('Pedometer stream error: $e');
+      if (_pedometerRetries >= _pedometerMaxRetries) return;
+      _pedometerRetries++;
+      // Exponential-ish backoff capped at 16s.
+      final delay = Duration(seconds: (1 << _pedometerRetries).clamp(1, 16));
+      Future.delayed(delay, () {
+        if (!mounted) return;
+        if (_state == _ScreenState.idle ||
+            _state == _ScreenState.finished) return;
+        _subscribeToPedometer();
+      });
     });
   }
 
@@ -276,12 +333,32 @@ class _RunScreenState extends State<RunScreen> {
 
     _recorder!.begin();
 
+    // Stable run id + wall-clock start time for incremental persistence.
+    _runId = _uuid.v4();
+    _runStartedAtWall = DateTime.now();
+
     // Reset the pedometer baseline so steps taken during the countdown
     // don't count toward the run.
     _startSteps = _latestPedometerSteps;
     _steps = 0;
     _cadence = 0;
     _stepSamples.clear();
+
+    // Crash-safe incremental persistence — every 10s, write the current
+    // track + stats to a separate file so a force-kill mid-run is recoverable.
+    _incrementalSaveTimer =
+        Timer.periodic(_incrementalSaveInterval, (_) => _saveInProgress());
+
+    // GPS-lost banner watchdog — flag stale signal in the UI.
+    _gpsLostCheckTimer =
+        Timer.periodic(const Duration(seconds: 2), (_) => _checkGpsHealth());
+
+    // Location permission watchdog — catch cases where the runner toggles
+    // permission off in Android settings while the run is in flight.
+    _permissionWatchdogTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _checkPermission(),
+    );
 
     // Auto-pause check (every 2s). Only meaningful once recording starts.
     _lastMovementAt = DateTime.now();
@@ -424,6 +501,63 @@ class _RunScreenState extends State<RunScreen> {
       }
   }
 
+  /// Serialise the in-progress run to disk. Runs every 10s via
+  /// [_incrementalSaveTimer] so a crash mid-run is recoverable.
+  Future<void> _saveInProgress() async {
+    final id = _runId;
+    final startedAt = _runStartedAtWall;
+    if (id == null || startedAt == null) return;
+    if (_state != _ScreenState.recording) return;
+
+    final metadata = <String, dynamic>{
+      'activity_type': _activityType.name,
+      'in_progress_saved_at': DateTime.now().toIso8601String(),
+    };
+    final run = cm.Run(
+      id: id,
+      startedAt: startedAt,
+      duration: _elapsed,
+      distanceMetres: _distanceMetres,
+      track: List.unmodifiable(_track),
+      source: cm.RunSource.app,
+      metadata: metadata,
+    );
+    try {
+      await widget.runStore.saveInProgress(run);
+    } catch (e) {
+      debugPrint('Incremental save failed: $e');
+    }
+  }
+
+  /// Update [_gpsLost] based on snapshot freshness. Drives the warning
+  /// banner rendered in [_buildRecording].
+  void _checkGpsHealth() {
+    if (_state != _ScreenState.recording) return;
+    final last = _lastSnapshotAt;
+    final lost = last == null ||
+        DateTime.now().difference(last) > _gpsLostThreshold;
+    if (lost != _gpsLost && mounted) {
+      setState(() => _gpsLost = lost);
+    }
+  }
+
+  /// Poll location permission so we can surface a banner if the runner
+  /// toggles it off in Android settings mid-run. The recorder's position
+  /// stream will silently stall otherwise.
+  Future<void> _checkPermission() async {
+    if (_state != _ScreenState.recording) return;
+    try {
+      final p = await Geolocator.checkPermission();
+      final lost = p == LocationPermission.denied ||
+          p == LocationPermission.deniedForever;
+      if (lost != _permissionLost && mounted) {
+        setState(() => _permissionLost = lost);
+      }
+    } catch (e) {
+      debugPrint('Permission check failed: $e');
+    }
+  }
+
   void _toggleManualPause() {
     if (_recorder == null) return;
     if (_manualPaused) {
@@ -433,6 +567,38 @@ class _RunScreenState extends State<RunScreen> {
     } else {
       _recorder!.pause();
       setState(() => _manualPaused = true);
+    }
+  }
+
+  // Hold-to-stop gesture: ticker animates a progress ring around the stop
+  // button, calling _stop() when the full duration elapses. Cancelled if
+  // the user lifts their finger early.
+  void _startHoldToStop() {
+    _holdToStopTicker?.cancel();
+    final start = DateTime.now();
+    _holdToStopTicker = Timer.periodic(const Duration(milliseconds: 16), (t) {
+      final elapsed = DateTime.now().difference(start);
+      final progress =
+          (elapsed.inMilliseconds / _holdToStopDuration.inMilliseconds)
+              .clamp(0.0, 1.0);
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _holdToStopProgress = progress);
+      if (progress >= 1.0) {
+        t.cancel();
+        _holdToStopProgress = 0;
+        _stop();
+      }
+    });
+  }
+
+  void _cancelHoldToStop() {
+    _holdToStopTicker?.cancel();
+    _holdToStopTicker = null;
+    if (_holdToStopProgress != 0 && mounted) {
+      setState(() => _holdToStopProgress = 0);
     }
   }
 
@@ -456,15 +622,23 @@ class _RunScreenState extends State<RunScreen> {
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _autoPauseCheckTimer?.cancel();
+    _incrementalSaveTimer?.cancel();
+    _gpsLostCheckTimer?.cancel();
+    _permissionWatchdogTimer?.cancel();
+    _holdToStopTicker?.cancel();
     WakelockPlus.disable();
 
     // Tag the run with the chosen activity type
     final metadata = Map<String, dynamic>.from(raw.metadata ?? {});
     metadata['activity_type'] = _activityType.name;
 
+    // Prefer the stable id generated at _begin() over the recorder's
+    // stop-time uuid so the saved run matches any incremental in-progress
+    // file that may have been written while recording.
+    final runId = _runId ?? raw.id;
     final run = cm.Run(
-      id: raw.id,
-      startedAt: raw.startedAt,
+      id: runId,
+      startedAt: _runStartedAtWall ?? raw.startedAt,
       duration: raw.duration,
       distanceMetres: raw.distanceMetres,
       track: raw.track,
@@ -474,6 +648,9 @@ class _RunScreenState extends State<RunScreen> {
       metadata: metadata,
       createdAt: raw.createdAt,
     );
+
+    // Clear the in-progress file now that we've got the authoritative run.
+    await widget.runStore.clearInProgress();
 
     setState(() {
       _finishedRun = run;
@@ -532,6 +709,10 @@ class _RunScreenState extends State<RunScreen> {
     _stepSub?.cancel();
     _autoPauseCheckTimer?.cancel();
     _countdownTimer?.cancel();
+    _incrementalSaveTimer?.cancel();
+    _gpsLostCheckTimer?.cancel();
+    _permissionWatchdogTimer?.cancel();
+    _holdToStopTicker?.cancel();
     _recorder?.dispose();
     _recorder = null;
     _prepareFuture = null;
@@ -541,6 +722,14 @@ class _RunScreenState extends State<RunScreen> {
     _lastSnapshotAt = null;
     _recordingStartedAt = null;
     _startRequested = false;
+    _runId = null;
+    _runStartedAtWall = null;
+    _pedometerRetries = 0;
+    _gpsLost = false;
+    _permissionLost = false;
+    _holdToStopProgress = 0;
+    // Fire-and-forget — if we discarded mid-run, drop the in-progress file.
+    widget.runStore.clearInProgress();
     WakelockPlus.disable();
     setState(() {
       _state = _ScreenState.idle;
@@ -573,6 +762,10 @@ class _RunScreenState extends State<RunScreen> {
     _stepSub?.cancel();
     _countdownTimer?.cancel();
     _autoPauseCheckTimer?.cancel();
+    _incrementalSaveTimer?.cancel();
+    _gpsLostCheckTimer?.cancel();
+    _permissionWatchdogTimer?.cancel();
+    _holdToStopTicker?.cancel();
     _recorder?.dispose();
     super.dispose();
   }
@@ -700,7 +893,10 @@ class _RunScreenState extends State<RunScreen> {
                       ],
                     ),
                     selected: selected,
-                    onSelected: (_) => setState(() => _activityType = t),
+                    onSelected: (_) {
+                      if (_state != _ScreenState.idle) return;
+                      setState(() => _activityType = t);
+                    },
                   );
                 }).toList(),
               ),
@@ -878,6 +1074,58 @@ class _RunScreenState extends State<RunScreen> {
               ),
             ),
           ),
+        if (_permissionLost)
+          const Positioned(
+            top: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Card(
+                color: Color(0xFFDC2626),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.location_off, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Location permission revoked',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          )
+        else if (_gpsLost)
+          const Positioned(
+            top: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Card(
+                color: Color(0xFFEF4444),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.gps_off, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'GPS signal lost — move to open sky',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           left: 0,
           right: 0,
@@ -886,7 +1134,9 @@ class _RunScreenState extends State<RunScreen> {
             key: _statsOverlayKey,
             collapsedChild: _CollapsedStatsBar(
               time: _formattedTime,
-              onStop: _stop,
+              holdProgress: _holdToStopProgress,
+              onHoldStart: _startHoldToStop,
+              onHoldCancel: _cancelHoldToStop,
             ),
             expandedChild: _StatsOverlay(
               time: _formattedTime,
@@ -910,7 +1160,9 @@ class _RunScreenState extends State<RunScreen> {
               cadence: '$_cadence',
               lapCount: _lapCount,
               paused: _manualPaused,
-              onStop: _stop,
+              holdProgress: _holdToStopProgress,
+              onHoldStart: _startHoldToStop,
+              onHoldCancel: _cancelHoldToStop,
               onDiscard: _confirmDiscardMidRun,
               onPauseToggle: _toggleManualPause,
               onLap: _markLap,
@@ -1005,7 +1257,9 @@ class _StatsOverlay extends StatelessWidget {
   final String cadence;
   final int lapCount;
   final bool paused;
-  final VoidCallback onStop;
+  final double holdProgress;
+  final VoidCallback onHoldStart;
+  final VoidCallback onHoldCancel;
   final VoidCallback onDiscard;
   final VoidCallback onPauseToggle;
   final VoidCallback onLap;
@@ -1025,7 +1279,9 @@ class _StatsOverlay extends StatelessWidget {
     required this.cadence,
     required this.lapCount,
     required this.paused,
-    required this.onStop,
+    required this.holdProgress,
+    required this.onHoldStart,
+    required this.onHoldCancel,
     required this.onDiscard,
     required this.onPauseToggle,
     required this.onLap,
@@ -1117,27 +1373,12 @@ class _StatsOverlay extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Stop button
-                  GestureDetector(
-                    onTap: onStop,
-                    child: Container(
-                      width: 68,
-                      height: 68,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.red,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0x40EF4444),
-                            blurRadius: 16,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.stop_rounded, size: 36, color: Colors.white),
-                      ),
-                    ),
+                  // Stop button — hold-to-stop, 800ms. Prevents accidental
+                  // one-tap stops mid-run.
+                  _HoldToStopButton(
+                    progress: holdProgress,
+                    onHoldStart: onHoldStart,
+                    onHoldCancel: onHoldCancel,
                   ),
                   const SizedBox(width: 16),
                   // Lap button
@@ -1254,12 +1495,20 @@ class _StepSample {
 }
 
 /// Minimal stats bar shown when the overlay is collapsed. Keeps time visible
-/// plus a stop button so the runner can still abort without expanding first.
+/// plus a hold-to-stop button so the runner can still abort without
+/// expanding first.
 class _CollapsedStatsBar extends StatelessWidget {
   final String time;
-  final VoidCallback onStop;
+  final double holdProgress;
+  final VoidCallback onHoldStart;
+  final VoidCallback onHoldCancel;
 
-  const _CollapsedStatsBar({required this.time, required this.onStop});
+  const _CollapsedStatsBar({
+    required this.time,
+    required this.holdProgress,
+    required this.onHoldStart,
+    required this.onHoldCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1277,21 +1526,81 @@ class _CollapsedStatsBar extends StatelessWidget {
               ),
             ),
           ),
-          GestureDetector(
-            onTap: onStop,
-            child: Container(
-              width: 48,
-              height: 48,
+          _HoldToStopButton(
+            progress: holdProgress,
+            size: 48,
+            iconSize: 24,
+            onHoldStart: onHoldStart,
+            onHoldCancel: onHoldCancel,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Big red stop button that must be *held* for ~800 ms before the run is
+/// actually stopped. The circular progress ring grows during the hold so
+/// the user gets clear visual feedback. Cancels cleanly on release.
+class _HoldToStopButton extends StatelessWidget {
+  final double progress;
+  final double size;
+  final double iconSize;
+  final VoidCallback onHoldStart;
+  final VoidCallback onHoldCancel;
+
+  const _HoldToStopButton({
+    required this.progress,
+    required this.onHoldStart,
+    required this.onHoldCancel,
+    this.size = 68,
+    this.iconSize = 36,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => onHoldStart(),
+      onPointerUp: (_) => onHoldCancel(),
+      onPointerCancel: (_) => onHoldCancel(),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: size,
+              height: size,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.red,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x40EF4444),
+                    blurRadius: 16,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
-              child: const Center(
-                child: Icon(Icons.stop_rounded, size: 26, color: Colors.white),
+              child: Center(
+                child: Icon(Icons.stop_rounded,
+                    size: iconSize, color: Colors.white),
               ),
             ),
-          ),
-        ],
+            if (progress > 0)
+              SizedBox(
+                width: size,
+                height: size,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 4,
+                  color: Colors.white,
+                  backgroundColor: Colors.transparent,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

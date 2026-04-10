@@ -44,6 +44,10 @@ class RunRecorder {
   List<LapSplit> get laps => List.unmodifiable(_laps);
 
   DateTime? _startTime;
+  /// Monotonic clock for elapsed time. Unlike `DateTime.now()`, [Stopwatch]
+  /// is unaffected by wall-clock jumps (NTP sync, manual time change,
+  /// timezone change) — the run duration stays correct.
+  final Stopwatch _stopwatch = Stopwatch();
   double _distanceMetres = 0;
   final List<Waypoint> _track = [];
   /// Latest raw GPS fix — drives the blue dot on the live map and updates
@@ -52,12 +56,12 @@ class RunRecorder {
   /// Last position that was appended to [_track]. Used to gate the next
   /// track append + distance accumulation on real movement.
   Position? _lastTrackedPosition;
+  DateTime? _lastTrackedPositionAt;
   bool _recording = false;
   bool _paused = false;
-  Duration _pausedTotal = Duration.zero;
-  DateTime? _pausedSince;
   Route? _route;
   double _trackThresholdMetres = 3;
+  double _maxSpeedMps = 10;
 
   /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
   /// per second after [begin] starts recording time.
@@ -86,6 +90,7 @@ class RunRecorder {
     Route? route,
     int distanceFilterMetres = 3,
     double minMovementMetres = 2,
+    double maxSpeedMps = 10,
   }) async {
     // Ensure location permission
     var permission = await Geolocator.checkPermission();
@@ -98,18 +103,21 @@ class RunRecorder {
     }
 
     _startTime = null;
+    _stopwatch
+      ..stop()
+      ..reset();
     _distanceMetres = 0;
     _track.clear();
     _laps.clear();
     _currentWaypoint = null;
     _lastTrackedPosition = null;
+    _lastTrackedPositionAt = null;
     _recording = false;
     _paused = false;
-    _pausedTotal = Duration.zero;
-    _pausedSince = null;
     _route = route;
     _trackThresholdMetres =
         max(distanceFilterMetres.toDouble(), minMovementMetres);
+    _maxSpeedMps = maxSpeedMps;
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
@@ -137,14 +145,16 @@ class RunRecorder {
       throw StateError('RunRecorder.begin() called before prepare() completed');
     }
     _startTime = DateTime.now();
+    _stopwatch
+      ..reset()
+      ..start();
     _distanceMetres = 0;
     _track.clear();
     _laps.clear();
     _lastTrackedPosition = null;
+    _lastTrackedPositionAt = null;
     _recording = true;
     _paused = false;
-    _pausedTotal = Duration.zero;
-    _pausedSince = null;
 
     // 1-second timer for elapsed time updates.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -159,11 +169,13 @@ class RunRecorder {
     Route? route,
     int distanceFilterMetres = 3,
     double minMovementMetres = 2,
+    double maxSpeedMps = 10,
   }) async {
     await prepare(
       route: route,
       distanceFilterMetres: distanceFilterMetres,
       minMovementMetres: minMovementMetres,
+      maxSpeedMps: maxSpeedMps,
     );
     begin();
   }
@@ -172,18 +184,16 @@ class RunRecorder {
   void pause() {
     if (!_recording || _paused) return;
     _paused = true;
-    _pausedSince = DateTime.now();
+    _stopwatch.stop();
   }
 
-  /// Resume after a [pause]. Adds the paused interval to the total.
+  /// Resume after a [pause].
   void resume() {
     if (!_recording || !_paused) return;
-    if (_pausedSince != null) {
-      _pausedTotal += DateTime.now().difference(_pausedSince!);
-    }
     _paused = false;
-    _pausedSince = null;
+    _stopwatch.start();
     _lastTrackedPosition = null; // avoid a big jump after resume
+    _lastTrackedPositionAt = null;
   }
 
   void _onPosition(Position pos) {
@@ -210,8 +220,11 @@ class RunRecorder {
     // officially started (post-[begin]).
     if (_recording) {
       final last = _lastTrackedPosition;
-      if (last == null) {
+      final lastAt = _lastTrackedPositionAt;
+      final now = DateTime.now();
+      if (last == null || lastAt == null) {
         _lastTrackedPosition = pos;
+        _lastTrackedPositionAt = now;
         _track.add(_currentWaypoint!);
       } else {
         final delta = Geolocator.distanceBetween(
@@ -220,11 +233,21 @@ class RunRecorder {
           pos.latitude,
           pos.longitude,
         );
+        // Implausible-speed clamp: compare the delta to the elapsed time
+        // since the last accepted fix. A corrupt GPS fix can easily imply
+        // 50+ m/s — dropping those here stops one bad sample from inflating
+        // total distance.
+        final dtSec = now.difference(lastAt).inMilliseconds / 1000.0;
+        final implausible =
+            dtSec > 0 && (delta / dtSec) > _maxSpeedMps;
+
         // Only grow the track + accumulate distance on real movement. Ignore
-        // GPS jitter below the threshold and implausible jumps (>100m).
-        if (delta > _trackThresholdMetres && delta < 100) {
+        // GPS jitter below the threshold, implausible jumps (>100m in one
+        // hop), and anything faster than the activity's max plausible speed.
+        if (delta > _trackThresholdMetres && delta < 100 && !implausible) {
           _distanceMetres += delta;
           _lastTrackedPosition = pos;
+          _lastTrackedPositionAt = now;
           _track.add(_currentWaypoint!);
         }
       }
@@ -237,14 +260,7 @@ class RunRecorder {
     final current = _currentWaypoint;
     if (current == null) return;
 
-    Duration elapsed = Duration.zero;
-    if (_startTime != null) {
-      elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
-      if (_paused && _pausedSince != null) {
-        elapsed -= DateTime.now().difference(_pausedSince!);
-      }
-      if (elapsed.isNegative) elapsed = Duration.zero;
-    }
+    final elapsed = _stopwatch.elapsed;
     final pace = _calculatePace();
     final offRoute = _offRouteDistance(current);
     final remaining = _routeRemaining(current);
@@ -425,31 +441,20 @@ class RunRecorder {
     return _laps.length;
   }
 
-  Duration _currentElapsed() {
-    if (_startTime == null) return Duration.zero;
-    var elapsed = DateTime.now().difference(_startTime!) - _pausedTotal;
-    if (_paused && _pausedSince != null) {
-      elapsed -= DateTime.now().difference(_pausedSince!);
-    }
-    if (elapsed.isNegative) elapsed = Duration.zero;
-    return elapsed;
-  }
+  Duration _currentElapsed() => _stopwatch.elapsed;
 
   /// Stop recording and return the completed [Run].
   Future<Run> stop() async {
     _recording = false;
     _prepared = false;
+    _stopwatch.stop();
     _timer?.cancel();
     _timer = null;
     await _positionSub?.cancel();
     _positionSub = null;
 
     final startedAt = _startTime ?? DateTime.now();
-    var elapsed = DateTime.now().difference(startedAt) - _pausedTotal;
-    if (_paused && _pausedSince != null) {
-      elapsed -= DateTime.now().difference(_pausedSince!);
-    }
-    if (elapsed.isNegative) elapsed = Duration.zero;
+    final elapsed = _stopwatch.elapsed;
 
     return Run(
       id: _uuid.v4(),

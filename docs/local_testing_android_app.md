@@ -195,32 +195,47 @@ The Android app supports the following. For a side-by-side view against Strava, 
 
 The activity type you pick on the idle screen genuinely changes how the run is recorded and displayed:
 
-| Type | Primary metric | Calorie multiplier | Split interval | GPS filter | Pace alerts |
-|---|---|---|---|---|---|
-| Run | Pace (min/km) | 1.0× | 1 km/mi | 3 m | Yes |
-| Walk | Pace (min/km) | 0.5× | 1 km/mi | 3 m | Yes |
-| Cycle | **Speed (km/h)** | 0.4× | **5 km** | 5 m | No |
-| Hike | Pace (min/km) | 0.7× | 1 km/mi | 3 m | Yes |
+| Type | Primary metric | Calorie × | Split interval | GPS filter | Min move | Max speed | Pace alerts |
+|---|---|---|---|---|---|---|---|
+| Run | Pace (min/km) | 1.0× | 1 km/mi | 3 m | 2 m | 10 m/s | Yes |
+| Walk | Pace (min/km) | 0.5× | 1 km/mi | 3 m | 2 m | 5 m/s | Yes |
+| Cycle | **Speed (km/h)** | 0.4× | **5 km** | 5 m | 4 m | 25 m/s | No |
+| Hike | Pace (min/km) | 0.7× | 1 km/mi | 3 m | 2 m | 6 m/s | Yes |
+
+- **GPS filter + Min move**: software movement thresholds — a new GPS fix is appended to the track only when it's more than `max(GPS filter, Min move)` metres from the last tracked point. Filters out jitter.
+- **Max speed**: corrupted GPS fixes implying faster than this are dropped (a single teleport can't inflate total distance). See [run_recording.md](run_recording.md#per-activity-tuning) for the full filter chain.
 
 When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Avg Speed, the audio cue announces speed instead of pace, and split notifications fire every 5 km instead of every km. The history list and run detail screen also adapt — cycling rides show speed in their trailing column. Personal bests for "Fastest pace" and "Fastest 5k" only consider running-style activities.
+
+Activity type is locked once you tap Start — it can't change mid-run.
 
 ### Recording a run
 
 - **Activity types** — run, walk, cycle, hike (see table above)
-- **Countdown** — 3-2-1 before recording starts so you can put your phone away
-- **Live map** — full-screen dark map with your route as an indigo polyline, a pulsing blue dot, and HTTP tile caching so previously loaded tiles work offline
-- **Live stats** — time, distance, current pace, average pace, calories, elevation gain, steps, cadence
+- **Countdown with preload** — 3-2-1 before recording starts. All expensive setup (GPS stream, foreground service, pedometer, wakelock) runs *during* the countdown so recording begins instantly when the timer hits zero. Steps and GPS track captured during the countdown are discarded on begin.
+- **Live map — Nike Run Club-style glowing line** — dark MapTiler tiles, three stacked polyline layers for a gradient halo effect, and a pulsing blue dot. The track is smoothed at render time (1-2-3-2-1 weighted moving average) to tame walking-pace GPS jitter. The smoothing is display-only; the stored track keeps the raw waypoints.
+- **Buttery dot** — the blue dot is tweened between GPS fixes at 60 fps over 900 ms, so it glides rather than hops on each new fix. The map camera (in follow mode) rides the interpolated value too, so everything stays in lockstep.
+- **Collapsible stats panel** — tap or flick down the drag handle to shrink the bottom stats panel to a minimal bar showing time + a stop button. The map's follow-cam automatically recentres the blue dot in the freed visible area. Tap or flick up to expand.
+- **Live stats** (expanded) — time, distance, current pace / speed, average pace / speed, calories, elevation gain, steps, cadence, lap count
 - **Audio cues** — text-to-speech split announcements at each km/mi (toggle in Settings)
-- **Auto-pause** — timer pauses automatically when you stop moving for 10+ seconds (toggle in Settings)
-- **Manual pause/resume** — pause button on the recording overlay
+- **Auto-pause** — timer pauses automatically when you stop moving for 10+ seconds. Several hardening gates apply: 15-second grace period after start (GPS warmup), 6-second snapshot-freshness requirement (no pause if GPS is silent), and movement detection based on *raw* position change rather than accumulated track distance so slow walking doesn't false-pause. Toggleable in Settings.
+- **Hold-to-stop** — the big red stop button requires an **800 ms hold** before the run ends. A circular progress ring animates around the button during the hold; releasing early cancels. Prevents accidental one-tap stops. Works from both the expanded and collapsed stats panel.
+- **Manual pause/resume** — pause button on the expanded stats panel. Uses the recorder's Stopwatch so resumed elapsed time is exact.
 - **Lap markers** — flag button records a lap split mid-run
 - **Pace alerts** — set a target pace in Settings; TTS warns when you're 30s+ off
 - **Wake lock** — screen stays on during the entire run
-- **Background recording** — GPS tracking continues when screen is off or app is backgrounded, via a foreground service notification
-- **Km/mi splits** — snackbar notification at each distance tick
+- **Background recording** — GPS tracking continues when the screen is off or the app is backgrounded, via a foreground service notification ("Run in progress"). Requires location permission granted as **"Allow all the time"** and battery optimisation disabled for the app.
+- **Km/mi splits** — snackbar notification at each distance tick (every 1 km / 1 mi for run/walk/hike, every 5 km for cycle)
 - **Route following** — pick a saved route before starting; the planned route shows underneath your live track
 - **Off-route alerts** — banner + TTS announcement when you drift more than 40m from the selected route
 - **Distance remaining** — when following a route, a "X to go" badge in the top right shows distance to the end of the route, measured along the remaining segments
+- **GPS-lost banner** — if no GPS fix arrives for 10 seconds, a red banner appears at the top: *"GPS signal lost — move to open sky"*. Dismisses when fixes resume.
+- **Permission-revoked banner** — if location permission is toggled off in Android settings during a run, a red banner warns you immediately.
+- **Crash-safe persistence** — the current run state is serialised to disk every 10 seconds. If the app is killed mid-run, the next launch promotes the partial data to a completed run tagged `recovered_from_crash` and shows a snackbar. Tiny runs (< 3 waypoints or < 50 m) are dropped silently.
+- **Monotonic clock** — elapsed time uses `Stopwatch`, so wall-clock jumps (NTP sync, DST, timezone change, manual time change) can't corrupt the duration.
+- **Speed clamp** — a single corrupt GPS fix implying a speed faster than the activity's maximum (see table) is discarded so it can't inflate total distance.
+
+See [run_recording.md](run_recording.md) for the architecture behind all of the above — state machine, filter chain, hardening gates, and tunable constants.
 
 ### Routes
 
@@ -318,7 +333,7 @@ What's actually wired up in [apps/mobile_android](../apps/mobile_android):
 | Run sharing | `share_plus` | System share sheet for GPX export |
 | UUIDs for run IDs | `uuid` | Avoid sync collisions |
 | Env config | `flutter_dotenv` | Loads `.env.local` |
-| Local persistence | JSON files via `path_provider` | One file per run / per route — no sqlite or hive |
+| Local persistence | JSON files via `path_provider` | One file per run / per route — no sqlite or hive. Plus a single `in_progress.json` rewritten every 10s during a recording for crash-safe recovery. |
 | Backend client | `supabase_flutter` (via shared `api_client` package) | Same backend as the web app |
 
 The two local stores ([`LocalRunStore`](../apps/mobile_android/lib/local_run_store.dart) and [`LocalRouteStore`](../apps/mobile_android/lib/local_route_store.dart)) are intentionally simple — JSON files in the app's documents directory. No sqlite, no Hive. The whole point is that `cat ~/runs/*.json` is debuggable and the offline-first behaviour falls out for free.
@@ -336,7 +351,6 @@ The two local stores ([`LocalRunStore`](../apps/mobile_android/lib/local_run_sto
 ### Map showing blank/grey
 
 Ensure your MapTiler API key is valid and passed correctly via `--dart-define=MAPTILER_KEY=<key>`.
-```
 
 ### Health Connect not available
 
@@ -368,4 +382,4 @@ If it persists, try invalidating caches in Android Studio: **File → Invalidate
 
 ---
 
-*Last updated: April 2026*
+*Last updated: April 2026 — hardening sweep (crash-safe persistence, hold-to-stop, speed clamp, monotonic clock, GPS + permission watchdogs).*

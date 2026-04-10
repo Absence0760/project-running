@@ -54,26 +54,41 @@ Routes are stored locally in SQLite (mobile) and synced to Supabase in the backg
 
 **Spec:**
 
-User taps Start on the home screen. The app requests location permission if not already granted (always-on for background tracking). Recording begins immediately — no countdown.
+On the idle screen the user picks an activity type (run / walk / cycle / hike) and optionally a saved route, then taps Start. If this is the first launch the app walks through the Android location + activity-recognition + notifications permission dialogs.
 
-During recording, the screen shows:
-- Elapsed time (large, centre)
-- Distance covered (km or miles, based on user preference)
-- Current pace (per km or mile, rolling 30-second average)
-- Heart rate (if a connected watch is providing data)
-- A live map with the user's position and trace
+Tapping Start kicks off a **3-second countdown**. All expensive setup runs *during* the countdown so the run starts instantly when the timer ends: the `RunRecorder` is created, the pedometer sensor is subscribed, the wakelock is enabled, and the GPS position stream is opened via a foreground service (which posts a persistent "Run in progress" notification). Positions received during the countdown drive the live-map blue dot so the user sees their location immediately, but do not accumulate into the track or distance until the countdown ends.
 
-Auto-pause activates when speed drops below 1 km/h for more than 10 seconds (walking to cross a road). Haptic feedback on pause/resume. Auto-pause can be toggled off in settings.
+When the countdown ticks to zero, recording flips on synchronously: a monotonic `Stopwatch` starts, a stable run id is generated, the pedometer baseline is reset so steps taken during the countdown don't count, the auto-pause / GPS-lost / incremental-save / permission watchdogs start, and the "Run started" TTS cue plays.
 
-Background location tracking keeps recording if the user locks their phone or switches apps.
+During recording, the screen shows a dark full-screen map with:
+- A Nike-Run-Club-style glowing polyline for the recorded track (three stacked layers, gradient from dim indigo to bright lavender, smoothed at render time to reduce GPS jitter)
+- A pulsing blue dot for the current position, **tweened between GPS fixes at 60 fps** so it glides rather than hops
+- The planned route underneath if one is selected, with a "X to go" badge and off-route alerts at 40 m of drift
+- A collapsible glass-blur stats panel at the bottom containing elapsed time, distance, primary metric (pace for run/walk/hike, speed for cycle), average pace/speed, calories, elevation, steps, cadence, and a button row (discard / pause / hold-to-stop / lap)
+- Status banners at the top for auto-pause, off-route, GPS lost, and location permission revoked
 
-On Stop: user sees a summary (distance, time, pace, map of the run). They can discard or save. Save writes to local SQLite and queues a sync to Supabase.
+**Collapsible stats panel**: tap or flick down the drag handle to collapse the panel to a minimal bar showing the time and a stop button. The map's follow-cam automatically offsets the blue dot by half the panel height so the dot sits in the centre of the *visible* map area above the panel, and re-centres itself when the panel is collapsed.
+
+**Auto-pause** activates when the runner has been still for 10+ seconds. Gated by several conditions to avoid false pauses: a 15-second grace period after start (GPS warmup), a 6-second snapshot-freshness requirement (no pause if GPS has gone silent), and movement detection based on raw position change rather than accumulated track distance. Toggleable in Settings.
+
+**Hold-to-stop**: the red stop button requires an 800 ms press before the run ends. A circular progress ring animates around the button during the hold; releasing early cancels. Prevents accidental one-tap stops mid-run.
+
+**Background recording**: GPS tracking continues when the screen is off or the user switches apps, via the foreground service notification. Requires the user to grant location permission as "Allow all the time" and to disable battery optimisation for the app.
+
+**Crash-safe persistence**: the current run state is serialised to disk every 10 seconds. If the app is killed mid-run (OOM, force-stop, battery), the next launch promotes the partial data to a completed run tagged `recovered_from_crash` and shows a snackbar: *"Recovered unfinished run — X.XX km, Y min"*. Tiny runs (< 3 waypoints or < 50 m) are dropped silently.
+
+**Hardening**: the GPS filter chain rejects fixes with accuracy > 20 m, implausible speeds (per-activity, e.g. > 10 m/s for run), and single-hop jumps > 100 m. The elapsed-time clock is a monotonic `Stopwatch` so NTP sync or timezone changes can't corrupt the duration. The pedometer stream auto-resubscribes on error with exponential backoff. A permission watchdog polls `Geolocator.checkPermission()` every 5 seconds and surfaces a banner if the user revokes location mid-run. Activity type is locked once the user has tapped Start.
+
+On hold-to-stop: the run finalises, the in-progress save file is cleared, and the user sees a summary (distance, time, pace, map of the run) on a finished screen. The run is written to local JSON storage and auto-synced to Supabase if signed in, or stored offline otherwise.
 
 **Done when:**
-- Recording continues accurately through a 10km run with the screen locked
-- Auto-pause triggers reliably at traffic lights
-- GPS trace is accurate to within 5 metres on open streets
-- Run appears in history immediately after saving
+- Recording continues accurately through a 10km run with the screen locked and the app backgrounded
+- Auto-pause triggers reliably at traffic lights but never falsely during GPS warmup
+- Hold-to-stop prevents accidental ends and the user can still reach it from the collapsed stats bar
+- A force-killed run is recovered on next launch with all its data
+- The "Run in progress" foreground service notification appears for the entire duration of the run
+
+See [run_recording.md](run_recording.md) for the full technical reference.
 
 ---
 

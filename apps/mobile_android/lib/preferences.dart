@@ -86,6 +86,25 @@ enum ActivityType {
     }
   }
 
+  /// Maximum plausible speed (metres/second). Position deltas implying
+  /// anything faster than this are discarded as GPS corruption — the line
+  /// shouldn't teleport across town because of one bad fix.
+  ///
+  /// Values are deliberately generous (faster than realistic peak) to avoid
+  /// dropping genuine fast segments, while still catching outright glitches.
+  double get maxSpeedMps {
+    switch (this) {
+      case ActivityType.run:
+        return 10; // ~2:45/km, faster than world records — pure corruption above this
+      case ActivityType.walk:
+        return 5; // brisk walk ~1.7 m/s; 5 gives headroom
+      case ActivityType.cycle:
+        return 25; // 90 km/h — higher than any sane cyclist
+      case ActivityType.hike:
+        return 6; // slow running overlap for scrambling / downhill
+    }
+  }
+
   static ActivityType fromName(String? name) {
     return ActivityType.values.firstWhere(
       (a) => a.name == name,

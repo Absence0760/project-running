@@ -1,3 +1,4 @@
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
@@ -17,6 +18,39 @@ void main() async {
 
   final store = LocalRunStore();
   await store.init();
+
+  // Recover a run that was in progress when the app was last killed
+  // (crash, force-stop, OOM). We promote the partial data to a regular
+  // completed run so at least the user keeps whatever was captured. Only
+  // runs with meaningful content are kept — tiny "I tapped start then
+  // backgrounded" runs are dropped silently.
+  cm.Run? recoveredRun;
+  try {
+    final partial = await store.loadInProgress();
+    if (partial != null &&
+        partial.track.length >= 3 &&
+        partial.distanceMetres >= 50) {
+      final metadata = Map<String, dynamic>.from(partial.metadata ?? {});
+      metadata['recovered_from_crash'] = true;
+      final recovered = cm.Run(
+        id: partial.id,
+        startedAt: partial.startedAt,
+        duration: partial.duration,
+        distanceMetres: partial.distanceMetres,
+        track: partial.track,
+        routeId: partial.routeId,
+        source: partial.source,
+        externalId: partial.externalId,
+        metadata: metadata,
+        createdAt: partial.createdAt,
+      );
+      await store.save(recovered);
+      recoveredRun = recovered;
+    }
+    await store.clearInProgress();
+  } catch (e) {
+    debugPrint('In-progress recovery failed: $e');
+  }
 
   final routeStore = LocalRouteStore();
   await routeStore.init();
@@ -62,6 +96,7 @@ void main() async {
     preferences: prefs,
     audioCues: audioCues,
     syncService: syncService,
+    recoveredRun: recoveredRun,
   ));
 }
 
@@ -78,6 +113,7 @@ class RunApp extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SyncService syncService;
+  final cm.Run? recoveredRun;
   const RunApp({
     super.key,
     this.apiClient,
@@ -86,6 +122,7 @@ class RunApp extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.syncService,
+    this.recoveredRun,
   });
 
   @override
@@ -93,6 +130,39 @@ class RunApp extends StatefulWidget {
 }
 
 class _RunAppState extends State<RunApp> {
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
+  @override
+  void initState() {
+    super.initState();
+    final recovered = widget.recoveredRun;
+    if (recovered != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _messengerKey.currentState?.showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 6),
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Recovered unfinished run — '
+              '${(recovered.distanceMetres / 1000).toStringAsFixed(2)} km, '
+              '${recovered.duration.inMinutes} min',
+            ),
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () {
+                // Navigating from a root snackbar action is app-specific —
+                // for now the run is already in history, surfaced by the
+                // default list view. Dismiss the snackbar.
+                _messengerKey.currentState?.hideCurrentSnackBar();
+              },
+            ),
+          ),
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -103,6 +173,7 @@ class _RunAppState extends State<RunApp> {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
+          scaffoldMessengerKey: _messengerKey,
           home: widget.preferences.onboarded
               ? HomeScreen(
                   apiClient: widget.apiClient,

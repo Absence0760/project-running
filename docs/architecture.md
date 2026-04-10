@@ -246,15 +246,34 @@ class RouteParser {
 
 ### `run_recorder`
 
-Manages a live GPS recording session. Streams position updates, calculates pace, detects off-route deviation, handles auto-pause.
+Manages a live GPS recording session. Streams position updates, calculates pace, detects off-route deviation, and exposes the state machine used by the phone app's pre-run countdown.
 
 ```dart
 class RunRecorder {
-  Stream<RunSnapshot> get snapshots;   // emits every GPS update
-  Future<void> start({Route? route});  // begin recording
-  Future<Run> stop();                  // finalise and return completed Run
+  Stream<RunSnapshot> get snapshots;       // emits on every valid GPS fix once prepared
+  bool get prepared;                        // GPS stream open, not yet accumulating
+  bool get recording;                       // time + distance are accumulating
+
+  Future<void> prepare({                   // open GPS, foreground service, no-op clock
+    Route? route,
+    int distanceFilterMetres,
+    double minMovementMetres,
+    double maxSpeedMps,
+  });
+  void begin();                             // sync — flip recording on; start Stopwatch
+  Future<void> start({...});                // convenience: prepare() + begin()
+
+  void pause();                             // stop the Stopwatch, hold distance
+  void resume();                            // restart the Stopwatch
+  int lap();                                // mark a lap split
+  Future<Run> stop();                       // close stream, return completed Run
+  void dispose();
 }
 ```
+
+The `prepare`/`begin` split is what lets all the expensive GPS setup happen during the 3-second countdown so the run starts instantly when the timer ends. Position fixes received during `prepared` drive the live-map blue dot but do not accumulate into the track or distance. Elapsed time is tracked with a `Stopwatch` so wall-clock jumps (NTP, DST, timezone) can't corrupt it.
+
+See [run_recording.md](run_recording.md) for the full subsystem reference — state machine, filter chain, auto-pause gates, crash-safe persistence, background-recording requirements, and tunable constants.
 
 ### `api_client`
 
@@ -418,19 +437,31 @@ Requires business approval from Garmin. Integrate in Phase 3.
 
 ## Data flow: recording a run
 
+High-level sequence on the phone. The full detail — filter chain, auto-pause gates, hardening timers, crash recovery — lives in [run_recording.md](run_recording.md#data-flow-recording-a-run).
+
 ```
-1. User taps Start (phone or watch)
-2. RunRecorder begins GPS location stream
-3. Each position update → RunSnapshot emitted
-4. UI updates pace, distance, map position in real time
-5. If route loaded → RouteNavigator checks deviation
-6. Off-route (>50m) → haptic alert
-7. User taps Stop
-8. RunRecorder.stop() → returns completed Run
-9. Run saved to local SQLite (drift package)
-10. ApiClient.saveRun() → POST to Supabase (background)
-11. If watch recording → WCSession transfers data to phone
-12. Phone merges watch run into local store
+1.  User taps Start on the idle screen
+2.  Permission check (request FINE_LOCATION + ACTIVITY_RECOGNITION if needed)
+3.  3-second countdown begins; _preload() runs asynchronously:
+      RunRecorder created; pedometer subscribed; wakelock enabled;
+      RunRecorder.prepare() opens the GPS stream + foreground service
+4.  GPS fixes during countdown drive the blue dot but don't accumulate
+5.  Countdown reaches 0 → _begin():
+      awaits _prepareFuture (no-op in the common case);
+      RunRecorder.begin() flips on recording, starts the Stopwatch;
+      stable run id generated; pedometer baseline reset;
+      auto-pause, GPS-lost, incremental-save, permission watchdogs start
+6.  While recording, each GPS fix:
+      accuracy > 20 m  → dropped
+      delta/dt > maxSpeedMps → dropped (implausible speed)
+      delta > threshold → appended to track, added to distance
+      Every fix → RunSnapshot emitted → screen updates, auto-pause checks
+7.  Every 10s: incremental save to runs/in_progress.json (crash recovery)
+8.  User holds Stop for 800 ms → _stop():
+      RunRecorder.stop(); in-progress file cleared;
+      Run assembled with stable id; saved locally; pushed to Supabase if signed in
+9.  If the app is killed mid-run: next launch reads in_progress.json,
+    promotes the partial to a completed run, snackbar confirms recovery
 ```
 
 ## Data flow: importing a GPX route

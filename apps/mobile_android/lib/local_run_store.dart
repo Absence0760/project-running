@@ -9,10 +9,18 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// Each run is stored as a separate file: `<run-id>.json`.
 /// Unsynced runs have `"synced": false` in the JSON.
+///
+/// An in-progress run is stored separately as `in_progress.json` and is
+/// rewritten every few seconds during a recording, so a crash mid-run can
+/// be recovered on next launch.
 class LocalRunStore extends ChangeNotifier {
   late Directory _dir;
   List<Run> _runs = [];
   final Set<String> _syncedIds = {};
+
+  static const _inProgressFilename = 'in_progress.json';
+
+  File get _inProgressFile => File('${_dir.path}/$_inProgressFilename');
 
   List<Run> get runs => List.unmodifiable(_runs);
 
@@ -155,6 +163,49 @@ class LocalRunStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Persist the current state of an in-progress recording. Called
+  /// periodically during a run so a crash or force-kill doesn't lose
+  /// everything.
+  Future<void> saveInProgress(Run run) async {
+    final file = _inProgressFile;
+    final data = {
+      'run': run.toJson(),
+      'saved_at': DateTime.now().toIso8601String(),
+    };
+    await file.writeAsString(jsonEncode(data));
+  }
+
+  /// Load an in-progress run left over from a previous session, if any.
+  /// Returns null when there's nothing to recover.
+  Future<Run?> loadInProgress() async {
+    final file = _inProgressFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      return Run.fromJson(data['run'] as Map<String, dynamic>);
+    } catch (e) {
+      debugPrint('Failed to load in-progress run: $e');
+      // Corrupt file — remove it so we don't keep tripping over it.
+      try {
+        await file.delete();
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  /// Remove the in-progress save file. Called on successful [stop] and on
+  /// successful recovery (after promoting the partial run into the list).
+  Future<void> clearInProgress() async {
+    final file = _inProgressFile;
+    if (file.existsSync()) {
+      try {
+        await file.delete();
+      } catch (e) {
+        debugPrint('Failed to delete in-progress run: $e');
+      }
+    }
+  }
+
   /// Mark a run as synced.
   Future<void> markSynced(String runId) async {
     final file = File('${_dir.path}/$runId.json');
@@ -175,6 +226,7 @@ class LocalRunStore extends ChangeNotifier {
         .listSync()
         .whereType<File>()
         .where((f) => f.path.endsWith('.json'))
+        .where((f) => !f.path.endsWith(_inProgressFilename))
         .toList();
 
     for (final file in files) {
