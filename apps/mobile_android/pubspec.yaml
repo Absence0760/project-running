@@ -22,31 +22,31 @@ dependencies:
   ui_kit:
     path: ../../packages/ui_kit
   supabase_flutter: ^2.3.0
-  geolocator: ^12.0.0
+  geolocator: ^14.0.0
   path_provider: ^2.1.0
-  flutter_dotenv: ^5.2.1
+  flutter_dotenv: ^6.0.0
   flutter_map: ^8.0.0
   latlong2: ^0.9.1
   pedometer: ^4.0.2
   flutter_tts: ^4.0.2
-  file_picker: ^8.1.0
+  file_picker: ^11.0.0
   shared_preferences: ^2.3.0
-  permission_handler: ^11.3.0
-  share_plus: ^10.0.2
+  permission_handler: ^12.0.0
+  share_plus: ^12.0.0
   uuid: ^4.5.0
   wakelock_plus: ^1.2.8
   flutter_map_cache: ^2.0.0
   dio: ^5.7.0
   dio_cache_interceptor: ^4.0.0
-  connectivity_plus: ^6.0.5
-  archive: ^3.6.1
-  csv: ^6.0.0
+  connectivity_plus: ^7.0.0
+  archive: ^4.0.0
+  csv: ^8.0.0
   health: ^13.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

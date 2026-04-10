@@ -108,7 +108,7 @@ class _ImportScreenState extends State<ImportScreen> {
   }
 
   Future<void> _importStrava() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );

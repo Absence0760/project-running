@@ -68,7 +68,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
   }
 
   Future<void> _importFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['gpx', 'kml'],
     );

@@ -39,8 +39,8 @@ class StravaImporter {
       throw const FormatException('Not a Strava export — no activities.csv found');
     }
 
-    final csvText = utf8.decode(csvFile.content as List<int>);
-    final rows = const CsvToListConverter(eol: '\n').convert(csvText);
+    final csvText = utf8.decode(csvFile.content);
+    final rows = const CsvDecoder().convert(csvText);
     if (rows.isEmpty) return StravaImportResult([], []);
 
     // First row is the header — find column indices.
