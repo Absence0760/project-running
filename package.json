@@ -9,6 +9,8 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build:web": "npm run build --workspace=apps/web",
     "lint:web": "npm run lint --workspace=apps/web",
-    "check:web": "npm run check --workspace=apps/web"
+    "check:web": "npm run check --workspace=apps/web",
+    "gen:types": "npm run gen:types --workspace=apps/backend",
+    "gen:types:check": "npm run gen:types:check --workspace=apps/backend"
   }
 }

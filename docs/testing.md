@@ -267,6 +267,49 @@ melos run test
 
 ---
 
+## Schema codegen — how to test the drift detector
+
+The `database.types.ts` (TypeScript) and `db_rows.dart` (Dart) row classes are regenerated from the Supabase migrations on every schema change. The point of generating them is to force a compile error if a client drifts. To verify the safety net still works:
+
+```bash
+# 1. Create a scratch migration that renames a column
+cd apps/backend
+supabase migration new scratch_rename_distance
+echo "alter table runs rename column distance_m to total_distance_m;" \
+    >> supabase/migrations/*_scratch_rename_distance.sql
+supabase db reset
+
+# 2. Regenerate both row files
+cd ../..
+npm run gen:types
+dart run scripts/gen_dart_models.dart
+
+# 3. Expect both clients to fail their builds with useful errors
+cd apps/web && npm run check          # errors in mock-data.ts, data.ts, etc.
+cd ../.. && melos exec -- dart analyze # errors in api_client.dart
+
+# 4. Roll back — delete the scratch migration and reset
+rm apps/backend/supabase/migrations/*_scratch_rename_distance.sql
+cd apps/backend && supabase db reset
+cd ../..
+npm run gen:types
+dart run scripts/gen_dart_models.dart
+git status                             # should show no diff on the generated files
+```
+
+If step 3 produces a clean build, something in the generator pipeline has broken and drift is no longer being caught — treat this as a test failure and investigate before merging anything else.
+
+To test just the TypeScript side of the CI gate locally:
+
+```bash
+cd apps/backend
+npm run gen:types:check   # exit 0 = in sync, non-zero = drift with a diff printed
+```
+
+Full reference for the generators, workflow, and troubleshooting in [schema_codegen.md](schema_codegen.md).
+
+---
+
 ## What's *not* covered (honest)
 
 - **Widget tests.** `RunScreen`, `LiveRunMap`, `CollapsiblePanel`, the finished-run view, the stats panels, hold-to-stop gesture — all rendered UI is uncovered. `apps/mobile_android/test/widget_test.dart` used to be a `flutter create` stub; it's been deleted. Widget tests using `WidgetTester.pumpWidget` + `find.byType` would be the right level.

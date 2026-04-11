@@ -203,7 +203,9 @@ Key modules:
 
 ### `core_models`
 
-Dart data classes shared across all Flutter apps. No business logic — pure data types with JSON serialisation.
+Dart data classes shared across all Flutter apps. Two layers:
+
+**Domain classes** (hand-written) — rich types with `Duration`, `DateTime`, `RunSource` enum, camelCase fields. What app code holds in memory.
 
 ```dart
 class Run {
@@ -231,6 +233,8 @@ class Waypoint {
   final DateTime? timestamp;
 }
 ```
+
+**Generated row classes** (`src/generated/db_rows.dart`) — `RunRow`, `RouteRow`, `IntegrationRow`, `UserProfileRow`. Snake-case field names that mirror the Supabase schema exactly, plus column-name constants (e.g. `RunRow.colStartedAt = 'started_at'`). Produced by `scripts/gen_dart_models.dart`, which parses `apps/backend/supabase/migrations/*.sql` and must be rerun after every migration. `ApiClient` marshals between domain classes and row classes, so a column rename forces a recompile at the mapping site instead of silently serialising to a dead field. See [schema_codegen.md](schema_codegen.md) for the full flow.
 
 ### `gpx_parser`
 
@@ -277,16 +281,19 @@ See [run_recording.md](run_recording.md) for the full subsystem reference — st
 
 ### `api_client`
 
-Typed HTTP client for the Supabase REST API. Handles token refresh, retry logic, and offline queuing.
+Typed Supabase client. Handles auth (email/password + Google ID token), run/route CRUD, and gzipped track upload/download.
 
 ```dart
 class ApiClient {
   Future<void> saveRun(Run run);
-  Future<List<Run>> getRuns({int limit = 20, DateTime? before});
+  Future<List<Run>> getRuns({int limit = 50, DateTime? before});
+  Future<List<Waypoint>> fetchTrack(Run run);
   Future<void> saveRoute(Route route);
   Future<List<Route>> getRoutes();
 }
 ```
+
+All row marshalling goes through the generated `RunRow` / `RouteRow` classes in `core_models` — the upsert body is `row.toJson()` and `_runFromRow` / `_routeFromRow` call `RunRow.fromJson(row)` before constructing the domain `Run`. Column names are referenced via generated constants (`RunRow.colStartedAt`), never string literals. A column rename in a migration propagates through regeneration into a Dart compile error here.
 
 ### `ui_kit`
 

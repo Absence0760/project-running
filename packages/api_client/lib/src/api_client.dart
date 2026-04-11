@@ -69,6 +69,10 @@ class ApiClient {
   /// bucket at `{user_id}/{run_id}.json.gz` and a reference to it is stored
   /// in `runs.track_url`. The dashboard list never loads the track — it's
   /// fetched on demand by [fetchTrack] when a run detail page is opened.
+  ///
+  /// The upsert body is built from a generated [RunRow], so renaming a column
+  /// in a migration forces `scripts/gen_dart_models.dart` to regenerate the
+  /// row class — any stale field reference fails to compile here.
   Future<void> saveRun(Run run) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
@@ -78,17 +82,18 @@ class ApiClient {
       trackUrl = await _uploadTrack(userId: userId, runId: run.id, track: run.track);
     }
 
-    await _client.from('runs').upsert({
-      'id': run.id,
-      'user_id': userId,
-      'started_at': run.startedAt.toIso8601String(),
-      'duration_s': run.duration.inSeconds,
-      'distance_m': run.distanceMetres,
-      'track_url': trackUrl,
-      'source': run.source.name,
-      'external_id': run.externalId,
-      'metadata': run.metadata,
-    });
+    final row = RunRow(
+      id: run.id,
+      userId: userId,
+      startedAt: run.startedAt,
+      durationS: run.duration.inSeconds,
+      distanceM: run.distanceMetres,
+      source: run.source.name,
+      externalId: run.externalId,
+      metadata: run.metadata,
+      trackUrl: trackUrl,
+    );
+    await _client.from(RunRow.table).upsert(row.toJson());
   }
 
   /// Fetch the user's runs, newest first.
@@ -96,14 +101,14 @@ class ApiClient {
   /// Returned runs have an empty `track`. Use [fetchTrack] to download the
   /// GPS waypoints for a single run when its detail page is opened.
   Future<List<Run>> getRuns({int limit = 50, DateTime? before}) async {
-    var query = _client.from('runs').select();
+    var query = _client.from(RunRow.table).select();
 
     if (before != null) {
-      query = query.lt('started_at', before.toIso8601String());
+      query = query.lt(RunRow.colStartedAt, before.toIso8601String());
     }
 
     final data = await query
-        .order('started_at', ascending: false)
+        .order(RunRow.colStartedAt, ascending: false)
         .limit(limit);
 
     return data.map<Run>((row) => _runFromRow(row)).toList();
@@ -167,81 +172,84 @@ class ApiClient {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
 
-    await _client.from('routes').insert({
-      'user_id': userId,
-      'name': route.name,
-      'waypoints': route.waypoints.map((w) => {
-        'lat': w.lat,
-        'lng': w.lng,
-        'ele': w.elevationMetres,
-      }).toList(),
-      'distance_m': route.distanceMetres,
-      'elevation_m': route.elevationGainMetres,
-      'is_public': route.isPublic,
-      if (route.surface != null) 'surface': route.surface,
-    });
+    final row = RouteRow(
+      id: route.id,
+      userId: userId,
+      name: route.name,
+      waypoints: route.waypoints
+          .map((w) => <String, dynamic>{
+                'lat': w.lat,
+                'lng': w.lng,
+                'ele': w.elevationMetres,
+              })
+          .toList(),
+      distanceM: route.distanceMetres,
+      elevationM: route.elevationGainMetres,
+      isPublic: route.isPublic,
+      surface: route.surface,
+    );
+    // Drop null / server-default columns so Postgres fills them in.
+    final body = Map<String, dynamic>.from(row.toJson())
+      ..removeWhere((k, v) => v == null);
+    body.remove(RouteRow.colId);
+    await _client.from(RouteRow.table).insert(body);
   }
 
   /// Fetches the user's saved routes.
   Future<List<Route>> getRoutes() async {
     final data = await _client
-        .from('routes')
+        .from(RouteRow.table)
         .select()
-        .order('created_at', ascending: false);
+        .order(RouteRow.colCreatedAt, ascending: false);
 
     return data.map<Route>((row) => _routeFromRow(row)).toList();
   }
 
-  // -- Row mapping (Supabase snake_case → Dart models) --
+  // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
+  //
+  // These go through the generated row classes so that column renames surface
+  // as compile errors on the consuming fields below, not as silent runtime
+  // drift.
 
   static Run _runFromRow(Map<String, dynamic> row) {
+    final r = RunRow.fromJson(row);
     // Stash the storage path on metadata so callers can pass the run back
     // to fetchTrack() to lazy-load the GPS waypoints. The track field itself
     // stays empty until fetched.
-    final metadata = Map<String, dynamic>.from(
-      (row['metadata'] as Map<String, dynamic>?) ?? const {},
-    );
-    final trackUrl = row['track_url'] as String?;
-    if (trackUrl != null) metadata['track_url'] = trackUrl;
+    final metadata = Map<String, dynamic>.from(r.metadata ?? const {});
+    if (r.trackUrl != null) metadata['track_url'] = r.trackUrl;
 
     return Run(
-      id: row['id'] as String,
-      startedAt: DateTime.parse(row['started_at'] as String),
-      duration: Duration(seconds: (row['duration_s'] as num).toInt()),
-      distanceMetres: (row['distance_m'] as num).toDouble(),
+      id: r.id,
+      startedAt: r.startedAt,
+      duration: Duration(seconds: r.durationS),
+      distanceMetres: r.distanceM,
       track: const [],
       source: RunSource.values.firstWhere(
-        (s) => s.name == row['source'],
+        (s) => s.name == r.source,
         orElse: () => RunSource.app,
       ),
-      externalId: row['external_id'] as String?,
+      externalId: r.externalId,
       metadata: metadata.isEmpty ? null : metadata,
-      createdAt: row['created_at'] != null
-          ? DateTime.parse(row['created_at'] as String)
-          : null,
+      createdAt: r.createdAt,
     );
   }
 
   static Route _routeFromRow(Map<String, dynamic> row) {
-    final wpList = (row['waypoints'] as List<dynamic>?) ?? [];
+    final r = RouteRow.fromJson(row);
     return Route(
-      id: row['id'] as String,
-      name: row['name'] as String,
-      waypoints: wpList.map((w) {
-        final m = w as Map<String, dynamic>;
-        return Waypoint(
-          lat: (m['lat'] as num).toDouble(),
-          lng: (m['lng'] as num).toDouble(),
-          elevationMetres: (m['ele'] as num?)?.toDouble(),
-        );
-      }).toList(),
-      distanceMetres: (row['distance_m'] as num).toDouble(),
-      elevationGainMetres: (row['elevation_m'] as num?)?.toDouble() ?? 0,
-      isPublic: row['is_public'] as bool? ?? false,
-      surface: row['surface'] as String?,
-      createdAt: row['created_at'] != null
-          ? DateTime.parse(row['created_at'] as String)
-          : null,
+      id: r.id,
+      name: r.name,
+      waypoints: r.waypoints.map((m) => Waypoint(
+            lat: (m['lat'] as num).toDouble(),
+            lng: (m['lng'] as num).toDouble(),
+            elevationMetres: (m['ele'] as num?)?.toDouble(),
+          )).toList(),
+      distanceMetres: r.distanceM,
+      elevationGainMetres: r.elevationM ?? 0,
+      isPublic: r.isPublic ?? false,
+      surface: r.surface,
+      createdAt: r.createdAt,
     );
   }
 }

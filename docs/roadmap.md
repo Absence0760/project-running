@@ -414,10 +414,10 @@ Three layers, in priority order — each is self-contained, you can ship one wit
 
 The database schema is the single source of truth. Today, each client hand-writes its own row-to-model mapping (`ApiClient._runFromRow` in Dart, `Run` interface + `fetchRunById` in TypeScript) and they silently diverge when the schema changes. Replace hand-written types with generated ones.
 
-- [ ] **Web**: wire `supabase gen types typescript` into a script. After every `supabase db reset` or migration, regenerate `apps/web/src/lib/database.types.ts`. Import `Database['public']['Tables']['runs']['Row']` instead of the hand-written `Run` interface. Compiler enforces schema match.
-- [ ] **CI check**: after regeneration, fail the build if `git diff` is non-empty — schema changes can't merge unless types are refreshed.
-- [ ] **Mobile (Dart)**: evaluate `supadart` or `supabase_codegen` from pub.dev. Less mature than the TS generator but workable. Fallback: a small `scripts/gen_dart_models.dart` that parses `supabase/migrations/*.sql` and emits Dart classes.
-- [ ] Remove hand-written `Run`, `Route`, `Waypoint` DTOs from `packages/core_models` once the generator is trusted. Keep only the derived helpers (`movingTimeOf`, etc.) there.
+- [x] **Web**: `npm run gen:types` (in `apps/backend`) runs `supabase gen types typescript --local` and writes `apps/web/src/lib/database.types.ts`. `apps/web/src/lib/types.ts` derives `Run` / `Route` / `Integration` / `UserProfile` from `Database['public']['Tables'][...]['Row']`, overriding only the client-side augmentations (narrow unions for `source`/`surface`/`provider`, lazy `track` field, looser `metadata`).
+- [x] **CI check**: new `parity-types` job in `.github/workflows/ci.yml` starts local Supabase, runs `npm run gen:types:check`, and fails the build when the committed `database.types.ts` diverges from the schema.
+- [x] **Mobile (Dart)**: shipped a local generator (`scripts/gen_dart_models.dart`) that parses `apps/backend/supabase/migrations/*.sql` and emits `packages/core_models/lib/src/generated/db_rows.dart` with `RunRow` / `RouteRow` / `IntegrationRow` / `UserProfileRow` classes plus column-name constants. Chose the custom script over `supadart` / `supabase_codegen` to avoid a dependency-evaluation rabbit-hole on a 4-table schema.
+- [x] `ApiClient.saveRun` / `saveRoute` / `_runFromRow` / `_routeFromRow` now route through the generated row classes and column constants, so a column rename in a migration surfaces as a compile error in Dart after regeneration. The hand-written domain `Run` / `Route` / `Waypoint` classes stay for their richer ergonomics (`Duration`, `RunSource` enum, camelCase), but are constructed from / serialized through the generated rows.
 
 **Expected effect**: adding `metadata.steps` on mobile last week would have caused an immediate TypeScript compile error on the web until it was consumed there. Schema-level drift becomes structurally impossible.
 

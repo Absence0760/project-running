@@ -12,6 +12,7 @@ function makeRun(overrides: Partial<Run> & { started_at: string; duration_s: num
 		external_id: null,
 		metadata: null,
 		created_at: overrides.started_at,
+		updated_at: overrides.started_at,
 		...overrides,
 	};
 }
@@ -43,6 +44,7 @@ function makeRoute(overrides: Partial<Route> & { name: string; distance_m: numbe
 		is_public: false,
 		slug: null,
 		created_at: '2026-03-01T00:00:00Z',
+		updated_at: '2026-03-01T00:00:00Z',
 		...overrides,
 	};
 }

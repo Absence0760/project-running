@@ -54,6 +54,18 @@ This drops and recreates the local database using the migration files in `supaba
 
 The seed includes 12 runs (across app, Strava, parkrun, HealthKit sources), 5 routes, a user profile, and 2 connected integrations. This is enough to test the dashboard, run history, route library, and all other pages with real data.
 
+### Regenerate client row types
+
+After `supabase db reset` picks up a new migration, refresh the generated row classes both clients depend on:
+
+```bash
+# From repo root
+npm run gen:types                       # writes apps/web/src/lib/database.types.ts
+dart run scripts/gen_dart_models.dart   # writes packages/core_models/lib/src/generated/db_rows.dart
+```
+
+`npm run gen:types:check` is the exact command CI runs in the `parity-types` job — use it to verify your committed types match the schema before pushing. Full reference in [schema_codegen.md](schema_codegen.md).
+
 ---
 
 ## Start Edge Functions

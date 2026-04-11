@@ -388,6 +388,19 @@ melos exec -- flutter pub upgrade
 cd apps/web && pnpm update
 ```
 
+### Regenerate schema types after a migration
+
+```bash
+# TypeScript — requires `supabase start` running in apps/backend
+npm run gen:types
+
+# Dart — reads SQL from apps/backend/supabase/migrations/*.sql
+dart run scripts/gen_dart_models.dart
+
+# Verify the TS file is in sync with the local DB (matches the CI check)
+npm run gen:types:check
+```
+
 ### Deploy Edge Functions
 
 ```bash
@@ -399,17 +412,35 @@ supabase functions deploy refresh-tokens --project-ref {project-ref}
 
 ### Apply a database migration
 
+Every schema change has to flow through both client type generators so the TypeScript and Dart row classes stay in sync. The workflow is:
+
 ```bash
-# Create migration file
+# 1. Create migration file
+cd apps/backend
 supabase migration new add_metadata_to_runs
 
-# Edit the generated SQL file in supabase/migrations/
-# Then apply locally
+# 2. Edit the generated SQL file in apps/backend/supabase/migrations/
+# 3. Apply locally
 supabase db reset
 
-# Push to production
+# 4. Regenerate the TypeScript row types for the web app
+npm run gen:types                       # from repo root, or
+npm run gen:types --workspace=apps/backend
+
+# 5. Regenerate the Dart row classes for the mobile apps
+dart run scripts/gen_dart_models.dart   # from repo root
+
+# 6. Commit the migration SQL + both regenerated files together
+git add apps/backend/supabase/migrations apps/web/src/lib/database.types.ts \
+        packages/core_models/lib/src/generated/db_rows.dart
+
+# 7. Push to production
 supabase db push --project-ref {project-ref}
 ```
+
+CI runs `npm run gen:types:check` in the `parity-types` job; if you forget to regenerate, the build fails with a diff against the committed `database.types.ts`. There is no equivalent CI gate for the Dart generator yet — it's on the roadmap but, for now, `dart analyze` will flag any stale column references you left behind in `api_client`.
+
+See [schema_codegen.md](schema_codegen.md) for how the generators work, when they trip, and how to test drift detection.
 
 ---
 
