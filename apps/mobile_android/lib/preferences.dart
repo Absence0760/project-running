@@ -117,7 +117,6 @@ enum ActivityType {
 class Preferences extends ChangeNotifier {
   static const _kUseMiles = 'use_miles';
   static const _kAudioCues = 'audio_cues';
-  static const _kAutoPause = 'auto_pause';
   static const _kOnboarded = 'onboarded';
   static const _kWeeklyGoalKm = 'weekly_goal_km';
   static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
@@ -125,7 +124,6 @@ class Preferences extends ChangeNotifier {
   late SharedPreferences _prefs;
   bool _useMiles = false;
   bool _audioCues = true;
-  bool _autoPause = true;
   bool _onboarded = false;
   double _weeklyGoalKm = 0;
   int _targetPaceSecPerKm = 0;
@@ -133,7 +131,6 @@ class Preferences extends ChangeNotifier {
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
   bool get audioCues => _audioCues;
-  bool get autoPause => _autoPause;
   bool get onboarded => _onboarded;
 
   /// Weekly distance goal stored in kilometres (0 means not set).
@@ -147,7 +144,6 @@ class Preferences extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     _useMiles = _prefs.getBool(_kUseMiles) ?? false;
     _audioCues = _prefs.getBool(_kAudioCues) ?? true;
-    _autoPause = _prefs.getBool(_kAutoPause) ?? true;
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _weeklyGoalKm = _prefs.getDouble(_kWeeklyGoalKm) ?? 0;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
@@ -162,12 +158,6 @@ class Preferences extends ChangeNotifier {
   Future<void> setAudioCues(bool v) async {
     _audioCues = v;
     await _prefs.setBool(_kAudioCues, v);
-    notifyListeners();
-  }
-
-  Future<void> setAutoPause(bool v) async {
-    _autoPause = v;
-    await _prefs.setBool(_kAutoPause, v);
     notifyListeners();
   }
 

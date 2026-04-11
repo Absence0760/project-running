@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../run_stats.dart';
 import '../widgets/live_run_map.dart';
 
 /// Detail view for a completed run, showing the route map, splits, and stats.
@@ -235,10 +236,14 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                   value: _formatDuration(run.duration),
                 ),
                 _StatBig(
+                  label: 'Moving',
+                  value: _formatDuration(_movingTime),
+                ),
+                _StatBig(
                   label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
                   value: _activityType.usesSpeed
-                      ? UnitFormat.speed(_avgPaceSecPerKm, unit)
-                      : UnitFormat.pace(_avgPaceSecPerKm, unit),
+                      ? UnitFormat.speed(_movingPaceSecPerKm, unit)
+                      : UnitFormat.pace(_movingPaceSecPerKm, unit),
                   unit: _activityType.usesSpeed
                       ? UnitFormat.speedLabel(unit)
                       : UnitFormat.paceLabel(unit),
@@ -321,6 +326,23 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
   double? get _avgPaceSecPerKm {
     if (run.distanceMetres < 10) return null;
     return run.duration.inSeconds / (run.distanceMetres / 1000);
+  }
+
+  /// Moving time — elapsed with stops excluded, derived from the GPS track.
+  /// Falls back to the full duration when the track is missing or too
+  /// sparse to compute a meaningful value (e.g. imported runs without GPS).
+  Duration get _movingTime {
+    if (run.track.length < 2) return run.duration;
+    final computed = movingTimeOf(run.track);
+    if (computed.inSeconds == 0) return run.duration;
+    return computed;
+  }
+
+  double? get _movingPaceSecPerKm {
+    if (run.distanceMetres < 10) return null;
+    final seconds = _movingTime.inSeconds;
+    if (seconds < 1) return null;
+    return seconds / (run.distanceMetres / 1000);
   }
 
   List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {

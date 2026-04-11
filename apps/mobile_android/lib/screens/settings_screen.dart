@@ -211,12 +211,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: prefs.audioCues,
             onChanged: prefs.setAudioCues,
           ),
-          SwitchListTile(
-            title: const Text('Auto-pause'),
-            subtitle: const Text('Pause timer when not moving'),
-            value: prefs.autoPause,
-            onChanged: prefs.setAutoPause,
-          ),
           ListTile(
             title: const Text('Target pace'),
             subtitle: Text(

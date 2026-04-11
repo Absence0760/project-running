@@ -218,7 +218,8 @@ Activity type is locked once you tap Start — it can't change mid-run.
 - **Collapsible stats panel** — tap or flick down the drag handle to shrink the bottom stats panel to a minimal bar showing time + a stop button. The map's follow-cam automatically recentres the blue dot in the freed visible area. Tap or flick up to expand.
 - **Live stats** (expanded) — time, distance, current pace / speed, average pace / speed, calories, elevation gain, steps, cadence, lap count
 - **Audio cues** — text-to-speech split announcements at each km/mi (toggle in Settings)
-- **Auto-pause** — timer pauses automatically when you stop moving for 10+ seconds. Several hardening gates apply: 15-second grace period after start (GPS warmup), 6-second snapshot-freshness requirement (no pause if GPS is silent), and movement detection based on *raw* position change rather than accumulated track distance so slow walking doesn't false-pause. Toggleable in Settings.
+- **Manual pause only — no live auto-pause** — the elapsed clock runs continuously during a run and only stops when the user explicitly taps the pause button on the expanded stats panel. Live auto-pause was removed because it was the single most bug-prone feature (false pauses during GPS warmup, slow walking, urban-canyon signal gaps). Instead, the finished-run screen computes **moving time** as a derived metric from the GPS track — the sum of segments where speed was ≥ 0.5 m/s — and shows it alongside elapsed time.
+- **Moving time + pace on summary screens** — both the finished-run screen and the historical run detail screen display four primary stats: Distance, Time (elapsed), Moving (derived), and Pace (computed against moving time so it excludes stops at traffic lights). Imported runs without GPS fall back to the full duration.
 - **Hold-to-stop** — the big red stop button requires an **800 ms hold** before the run ends. A circular progress ring animates around the button during the hold; releasing early cancels. Prevents accidental one-tap stops. Works from both the expanded and collapsed stats panel.
 - **Manual pause/resume** — pause button on the expanded stats panel. Uses the recorder's Stopwatch so resumed elapsed time is exact.
 - **Lap markers** — flag button records a lap split mid-run
@@ -262,7 +263,6 @@ See [run_recording.md](run_recording.md) for the architecture behind all of the 
 - **Sign in / Sign out** — email/password against the same backend as the web app
 - **Use miles / km** — switches all distance and pace displays
 - **Audio cues toggle** — silence TTS announcements
-- **Auto-pause toggle** — disable if running on a treadmill
 - **Target pace** — m:ss per km/mi; voice alerts when off by 30s+
 - **Dark mode** — light/dark theme override
 - **Import from another app** — pull runs from Strava (data export ZIP) or Health Connect (Google Fit, Samsung Health, Garmin, Fitbit) — see "Migrating from another app" below
@@ -382,4 +382,4 @@ If it persists, try invalidating caches in Android Studio: **File → Invalidate
 
 ---
 
-*Last updated: April 2026 — hardening sweep (crash-safe persistence, hold-to-stop, speed clamp, monotonic clock, GPS + permission watchdogs).*
+*Last updated: April 2026 — hardening sweep (crash-safe persistence, hold-to-stop, speed clamp, monotonic clock, GPS + permission watchdogs); auto-pause removed in favour of derived moving time on summary screens.*

@@ -15,6 +15,7 @@ import '../audio_cues.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../run_stats.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/live_run_map.dart';
 
@@ -64,22 +65,12 @@ class _RunScreenState extends State<RunScreen> {
   cm.Waypoint? _currentPosition;
   int _lastTickNotified = 0;
 
-  // Pause state
-  Timer? _autoPauseCheckTimer;
-  DateTime? _lastMovementAt;
-  DateTime? _lastSnapshotAt;
-  DateTime? _recordingStartedAt;
-  cm.Waypoint? _lastMovementCheckPosition;
-  bool _autoPaused = false;
+  // Manual pause only — there is no longer any auto-pause layer. The clock
+  // runs continuously during a run (except when the user explicitly taps
+  // pause), and "moving time" is computed as a derived metric on the
+  // finished-run screen from the GPS track.
   bool _manualPaused = false;
-
-  // Grace period after _begin() during which auto-pause is suppressed, to
-  // give the GPS radio time to warm up without false-pausing the runner.
-  static const _autoPauseGracePeriod = Duration(seconds: 15);
-  // Maximum staleness of the last snapshot we'll trust when deciding to
-  // auto-pause. If GPS has been silent longer than this we don't know the
-  // runner's state, so we don't pause.
-  static const _autoPauseMaxSnapshotGap = Duration(seconds: 6);
+  DateTime? _lastSnapshotAt;
 
   // Reentrancy guard on start — prevents rapid taps from spawning
   // multiple recorders.
@@ -360,38 +351,6 @@ class _RunScreenState extends State<RunScreen> {
       (_) => _checkPermission(),
     );
 
-    // Auto-pause check (every 2s). Only meaningful once recording starts.
-    _lastMovementAt = DateTime.now();
-    _lastMovementCheckPosition = null;
-    _recordingStartedAt = DateTime.now();
-    _autoPauseCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (!widget.preferences.autoPause ||
-          _state != _ScreenState.recording) return;
-
-      // Grace period after start — GPS is still warming up, no false pause.
-      final startedAt = _recordingStartedAt;
-      if (startedAt != null &&
-          DateTime.now().difference(startedAt) < _autoPauseGracePeriod) {
-        return;
-      }
-
-      // Snapshot freshness gate — if we haven't received a GPS fix recently,
-      // we don't know whether the runner is moving, so don't pause.
-      final lastSnap = _lastSnapshotAt;
-      if (lastSnap == null ||
-          DateTime.now().difference(lastSnap) > _autoPauseMaxSnapshotGap) {
-        return;
-      }
-
-      final last = _lastMovementAt;
-      if (last == null) return;
-      final stillFor = DateTime.now().difference(last);
-      if (stillFor.inSeconds >= 10 && !_autoPaused) {
-        _recorder?.pause();
-        setState(() => _autoPaused = true);
-      }
-    });
-
     if (widget.preferences.audioCues) widget.audioCues.announceStart();
 
     setState(() => _state = _ScreenState.recording);
@@ -400,35 +359,9 @@ class _RunScreenState extends State<RunScreen> {
   void _onSnapshot(RunSnapshot snapshot) {
       final unit = widget.preferences.unit;
 
-      // Record that a fresh GPS-backed snapshot arrived. Auto-pause uses
-      // this to avoid firing when GPS is silent (we don't know the runner's
-      // state, so pausing would be wrong).
+      // Record that a fresh GPS-backed snapshot arrived. The GPS-lost
+      // banner uses this to know whether the sensor is alive.
       _lastSnapshotAt = DateTime.now();
-
-      // Detect movement for auto-pause. We compare raw waypoint positions
-      // instead of the track's distanceMetres, because the track threshold
-      // (3 m by default) can make distanceMetres look "stuck" for 10+ seconds
-      // at slow walking pace even though the runner is genuinely moving.
-      if (_state == _ScreenState.recording) {
-        final curr = snapshot.currentPosition;
-        final prev = _lastMovementCheckPosition;
-        if (prev == null) {
-          _lastMovementCheckPosition = curr;
-          _lastMovementAt = DateTime.now();
-        } else {
-          final moved = Geolocator.distanceBetween(
-            prev.lat, prev.lng, curr.lat, curr.lng,
-          );
-          if (moved > 1.5) {
-            _lastMovementAt = DateTime.now();
-            _lastMovementCheckPosition = curr;
-            if (_autoPaused) {
-              _recorder?.resume();
-              setState(() => _autoPaused = false);
-            }
-          }
-        }
-      }
 
       setState(() {
         _elapsed = snapshot.elapsed;
@@ -563,7 +496,6 @@ class _RunScreenState extends State<RunScreen> {
     if (_manualPaused) {
       _recorder!.resume();
       setState(() => _manualPaused = false);
-      _lastMovementAt = DateTime.now();
     } else {
       _recorder!.pause();
       setState(() => _manualPaused = true);
@@ -621,7 +553,6 @@ class _RunScreenState extends State<RunScreen> {
     final raw = await _recorder!.stop();
     _snapshotSub?.cancel();
     _stepSub?.cancel();
-    _autoPauseCheckTimer?.cancel();
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
@@ -707,7 +638,6 @@ class _RunScreenState extends State<RunScreen> {
   void _discard() {
     _snapshotSub?.cancel();
     _stepSub?.cancel();
-    _autoPauseCheckTimer?.cancel();
     _countdownTimer?.cancel();
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
@@ -718,9 +648,7 @@ class _RunScreenState extends State<RunScreen> {
     _prepareFuture = null;
     _stepSamples.clear();
     _latestPedometerSteps = 0;
-    _lastMovementCheckPosition = null;
     _lastSnapshotAt = null;
-    _recordingStartedAt = null;
     _startRequested = false;
     _runId = null;
     _runStartedAtWall = null;
@@ -745,7 +673,6 @@ class _RunScreenState extends State<RunScreen> {
       _finishedRun = null;
       _synced = false;
       _syncError = null;
-      _autoPaused = false;
       _manualPaused = false;
       _lapCount = 0;
       _offRouteDistance = null;
@@ -761,7 +688,6 @@ class _RunScreenState extends State<RunScreen> {
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _countdownTimer?.cancel();
-    _autoPauseCheckTimer?.cancel();
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
@@ -774,11 +700,15 @@ class _RunScreenState extends State<RunScreen> {
 
   DistanceUnit get _unit => widget.preferences.unit;
 
-  String get _formattedTime {
-    final h = _elapsed.inHours;
-    final m = _elapsed.inMinutes % 60;
-    final s = _elapsed.inSeconds % 60;
-    if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  String get _formattedTime => _formatDuration(_elapsed);
+
+  static String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
@@ -792,6 +722,15 @@ class _RunScreenState extends State<RunScreen> {
   String get _formattedAvgPaceValue {
     if (_distanceMetres < 10 || _elapsed.inSeconds < 1) return '--:--';
     final secPerKm = _elapsed.inSeconds / (_distanceMetres / 1000);
+    return UnitFormat.pace(secPerKm, _unit);
+  }
+
+  /// Average pace computed against a supplied moving time rather than the
+  /// full elapsed time. Used on the finished-run screen so the headline
+  /// pace excludes stops.
+  String _formattedAvgPaceValueFromMoving(Duration movingTime) {
+    if (_distanceMetres < 10 || movingTime.inSeconds < 1) return '--:--';
+    final secPerKm = movingTime.inSeconds / (_distanceMetres / 1000);
     return UnitFormat.pace(secPerKm, _unit);
   }
 
@@ -1036,28 +975,10 @@ class _RunScreenState extends State<RunScreen> {
             ),
           ),
 
-        if (_autoPaused)
-          const Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Card(
-                color: Color(0xFFF59E0B),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'Auto-paused — start moving to resume',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ),
-          ),
         if (_offRouteDistance != null &&
             _offRouteDistance! > _offRouteThresholdMetres)
           Positioned(
-            top: _autoPaused ? 110 : 60,
+            top: 60,
             left: 0,
             right: 0,
             child: Center(
@@ -1176,6 +1097,9 @@ class _RunScreenState extends State<RunScreen> {
   Widget _buildFinished(BuildContext context) {
     final theme = Theme.of(context);
     final track = _finishedRun?.track ?? <cm.Waypoint>[];
+    // Derived metric: "moving time" — elapsed with stops excluded, computed
+    // from the GPS track. Replaces the old live auto-pause.
+    final movingTime = movingTimeOf(track);
 
     return Column(
       children: [
@@ -1200,10 +1124,14 @@ class _RunScreenState extends State<RunScreen> {
                       _StatColumn(label: 'Distance', value: _formattedDistance),
                       _StatColumn(label: 'Time', value: _formattedTime),
                       _StatColumn(
+                        label: 'Moving',
+                        value: _formatDuration(movingTime),
+                      ),
+                      _StatColumn(
                         label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
                         value: _activityType.usesSpeed
                             ? _formattedAvgSpeedValue
-                            : _formattedAvgPaceValue,
+                            : _formattedAvgPaceValueFromMoving(movingTime),
                         unit: _activityType.usesSpeed
                             ? UnitFormat.speedLabel(_unit)
                             : UnitFormat.paceLabel(_unit),

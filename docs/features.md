@@ -69,7 +69,7 @@ During recording, the screen shows a dark full-screen map with:
 
 **Collapsible stats panel**: tap or flick down the drag handle to collapse the panel to a minimal bar showing the time and a stop button. The map's follow-cam automatically offsets the blue dot by half the panel height so the dot sits in the centre of the *visible* map area above the panel, and re-centres itself when the panel is collapsed.
 
-**Auto-pause** activates when the runner has been still for 10+ seconds. Gated by several conditions to avoid false pauses: a 15-second grace period after start (GPS warmup), a 6-second snapshot-freshness requirement (no pause if GPS has gone silent), and movement detection based on raw position change rather than accumulated track distance. Toggleable in Settings.
+**Manual pause only — no live auto-pause.** The clock runs continuously during a run. If the runner stops at a traffic light, the elapsed clock keeps ticking. An earlier version had live auto-pause with several layers of hardening, but it was the single most bug-prone feature in the recorder and still produced occasional false pauses at slow walking pace. It was removed in favour of the approach Strava and Nike Run Club use: compute **moving time** as a derived metric on the finished-run screen by walking the GPS track and excluding segments where speed fell below ~0.5 m/s. The user can still manually tap pause/resume mid-run.
 
 **Hold-to-stop**: the red stop button requires an 800 ms press before the run ends. A circular progress ring animates around the button during the hold; releasing early cancels. Prevents accidental one-tap stops mid-run.
 
@@ -83,7 +83,8 @@ On hold-to-stop: the run finalises, the in-progress save file is cleared, and th
 
 **Done when:**
 - Recording continues accurately through a 10km run with the screen locked and the app backgrounded
-- Auto-pause triggers reliably at traffic lights but never falsely during GPS warmup
+- The elapsed clock never stops unless the user taps manual pause
+- The finished-run screen shows both Time (elapsed) and Moving (derived from the track), with pace computed against moving time
 - Hold-to-stop prevents accidental ends and the user can still reach it from the collapsed stats bar
 - A force-killed run is recovered on next launch with all its data
 - The "Run in progress" foreground service notification appears for the entire duration of the run

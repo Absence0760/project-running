@@ -241,23 +241,33 @@ The first fix snaps (no animation). Same-target fixes are ignored.
 
 ---
 
-## Auto-pause
+## Pause: manual only, moving time derived
 
-Auto-pause is the feature most likely to misbehave, and the hardening reflects that. Four gates must all be cleared before a pause fires.
+The app does **not** have live auto-pause. An earlier version did, and it was the single most bug-prone feature in the recorder — false pauses during GPS warmup, slow walking, urban-canyon signal gaps, and edge cases around the track movement threshold. Each round of hardening fixed one class of false-positive and revealed another.
 
-Timer: `_autoPauseCheckTimer` runs every 2 seconds during `recording`. Inside:
+Modern Strava and Nike Run Club handle this differently, and so do we: the clock runs **continuously** during a recording (except when the user explicitly taps the manual pause button), and **moving time** is computed as a *derived metric* on the finished-run screen from the GPS track.
 
-1. **User opt-in** — `preferences.autoPause == true`.
-2. **State gate** — `_state == _ScreenState.recording`.
-3. **Grace period** — `_recordingStartedAt` must be more than **15 seconds** ago. GPS needs time to warm up; false-pausing during warmup is the biggest UX regression.
-4. **Snapshot freshness** — `_lastSnapshotAt` must be within **6 seconds**. If GPS has been silent (tunnel, pocket), we have no signal about the runner's state and must not pause.
-5. **Still-for threshold** — `_lastMovementAt` must be more than **10 seconds** ago.
+### Manual pause
 
-If all five pass: `_recorder.pause()` and `_autoPaused = true`. Resume is automatic: the next `_onSnapshot` that detects movement (distance > 1.5 m from `_lastMovementCheckPosition`) calls `_recorder.resume()`.
+`_StatsOverlay` still has a pause/resume button. Tapping it calls `RunRecorder.pause()` / `resume()`, which stops and restarts the internal `Stopwatch`. Elapsed time stops advancing while paused. This path is deliberately explicit — the user chose to pause, so the user can unambiguously resume.
 
-### Why movement is measured on raw position, not track distance
+### Moving time (derived)
 
-The movement detector in `_onSnapshot` compares `snapshot.currentPosition` against `_lastMovementCheckPosition`, not `snapshot.distanceMetres`. The track's 3 m movement threshold can leave `distanceMetres` stuck for 10+ seconds at slow walking pace even though the runner is moving. Using the raw current position — which updates on every GPS fix — decouples auto-pause from the track threshold.
+See `apps/mobile_android/lib/run_stats.dart`. The `movingTimeOf(List<Waypoint>)` function walks consecutive waypoint pairs:
+
+- For each pair, compute `speed = distance / time`.
+- If `speed >= 0.5 m/s` (~1.8 km/h, slower than a slow walk), count the segment's time toward moving time.
+- Otherwise, exclude it (standing still or drifting at GPS-jitter speeds).
+
+This is called once when a run finishes — in `_buildFinished` (freshly-completed run) and in `run_detail_screen` (historical runs). It's O(n) in track length, so cheap enough to run on every render without caching.
+
+The finished-run UI shows **Time** (elapsed clock) alongside **Moving** (derived), and the **Pace** column is computed against moving time so the headline pace excludes stops. Historical runs in `run_detail_screen` get the same treatment, with a fallback to the full duration when the track is missing or too sparse (e.g. imported runs without GPS).
+
+### What's gone
+
+Because auto-pause is removed entirely, all of the following no longer exist: `_autoPauseCheckTimer`, `_lastMovementAt`, `_lastMovementCheckPosition`, `_autoPaused`, `_recordingStartedAt`, `_autoPauseGracePeriod`, `_autoPauseMaxSnapshotGap`, `Preferences.autoPause` (getter + setter + SharedPreferences key), and the auto-pause banner in the recording UI. Around 80 lines of code and its entire edge-case surface.
+
+The GPS-lost banner, permission watchdog, and snapshot freshness tracking (`_lastSnapshotAt`) all remain — they serve a different purpose (observability) and don't touch the clock.
 
 ---
 
@@ -276,8 +286,7 @@ Each of these is a self-contained piece with its own purpose. Most can be tuned 
 | 7 | Permission watchdog | Poll `Geolocator.checkPermission()` every 5 s; banner if revoked | — |
 | 8 | Activity-type lock | Guard in `onSelected` to reject changes unless state is idle | — |
 | + | Reentrancy guard on Start | `_startRequested` flag prevents double-taps from spawning multiple recorders | — |
-| + | Auto-pause grace period | 15-second suppression after `_begin` so GPS warmup doesn't false-pause | `_autoPauseGracePeriod` |
-| + | Auto-pause snapshot freshness | Don't pause if no GPS fix in the last 6 seconds | `_autoPauseMaxSnapshotGap` |
+| + | No live auto-pause | Clock runs continuously; "moving time" computed as a derived metric at summary time instead | — |
 
 ---
 
@@ -334,14 +343,13 @@ All in `apps/mobile_android/lib/screens/run_screen.dart` unless noted.
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `_autoPauseGracePeriod` | 15 s | Auto-pause suppressed this long after `_begin` |
-| `_autoPauseMaxSnapshotGap` | 6 s | Max snapshot staleness for auto-pause to fire |
 | `_incrementalSaveInterval` | 10 s | Cadence of crash-safe persistence writes |
 | `_gpsLostThreshold` | 10 s | Snapshot staleness that triggers the GPS-lost banner |
 | `_holdToStopDuration` | 800 ms | Hold time before the stop button fires |
 | `_pedometerMaxRetries` | 5 | Exponential-backoff cap before giving up on pedometer |
 | `_offRouteThresholdMetres` | 40 m | Distance from selected route that triggers off-route warning |
 | `_positionTweenDuration` (in `live_run_map.dart`) | 900 ms | Dot interpolation tween length |
+| `movingTimeOf`'s `minSpeedMps` (in `run_stats.dart`) | 0.5 m/s | Minimum speed to count toward derived moving time |
 | `ActivityType.maxSpeedMps` (per-activity, in `preferences.dart`) | run 10 / walk 5 / cycle 25 / hike 6 | Speed clamp for dropping bad GPS fixes |
 | `ActivityType.gpsDistanceFilter` (m) | run 3 / cycle 5 | Software track-append threshold |
 | `ActivityType.minMovementMetres` (m) | run 2 / cycle 4 | Minimum delta to count as real motion |
