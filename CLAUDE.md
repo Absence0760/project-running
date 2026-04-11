@@ -11,8 +11,11 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Anything at all, first time in a session | [docs/architecture.md](docs/architecture.md) — the map |
 | Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned |
 | Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
+| Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
 | Touching the recording pipeline | [docs/run_recording.md](docs/run_recording.md) — state machine, filters, auto-pause |
 | Touching the web auth flow | [docs/web_app_auth.md](docs/web_app_auth.md) |
+| Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |
+| Understanding an end-to-end user journey | [docs/flows.md](docs/flows.md) — sign-in, record, sync, spectator |
 | Adding a test | [docs/testing.md](docs/testing.md) — what's covered, patterns, how to run |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
 | Running one of the apps locally | [docs/local_testing_*.md](docs/) — one per platform |
