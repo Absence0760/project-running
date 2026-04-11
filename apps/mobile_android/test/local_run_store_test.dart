@@ -81,6 +81,36 @@ void main() {
       expect(store.runs, isEmpty);
       expect(File('${tempDir.path}/run-1.json').existsSync(), isFalse);
     });
+
+    test('deleteMany removes a batch and fires one notification', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'run-1'));
+      await store.save(makeRun(id: 'run-2'));
+      await store.save(makeRun(id: 'run-3'));
+
+      var notifications = 0;
+      store.addListener(() => notifications++);
+
+      await store.deleteMany(['run-1', 'run-3']);
+
+      expect(store.runs.map((r) => r.id), ['run-2']);
+      expect(File('${tempDir.path}/run-1.json').existsSync(), isFalse);
+      expect(File('${tempDir.path}/run-2.json').existsSync(), isTrue);
+      expect(File('${tempDir.path}/run-3.json').existsSync(), isFalse);
+      expect(notifications, 1);
+    });
+
+    test('deleteMany with no ids is a no-op', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun());
+      var notifications = 0;
+      store.addListener(() => notifications++);
+      await store.deleteMany(const []);
+      expect(store.runs.length, 1);
+      expect(notifications, 0);
+    });
   });
 
   group('in-progress save', () {

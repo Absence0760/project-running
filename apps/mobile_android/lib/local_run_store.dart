@@ -169,6 +169,26 @@ class LocalRunStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Delete a batch of runs in one shot. Removes each run's file from disk,
+  /// updates the in-memory list, and notifies listeners exactly **once** at
+  /// the end — so a bulk delete of N runs doesn't trigger N UI rebuilds.
+  Future<void> deleteMany(Iterable<String> runIds) async {
+    final ids = runIds.toSet();
+    if (ids.isEmpty) return;
+    for (final id in ids) {
+      final file = File('${_dir.path}/$id.json');
+      if (!file.existsSync()) continue;
+      try {
+        await file.delete();
+      } catch (e) {
+        debugPrint('Failed to delete run $id: $e');
+      }
+    }
+    _runs.removeWhere((r) => ids.contains(r.id));
+    _syncedIds.removeAll(ids);
+    notifyListeners();
+  }
+
   /// Persist the current state of an in-progress recording. Called
   /// periodically during a run so a crash or force-kill doesn't lose
   /// everything.

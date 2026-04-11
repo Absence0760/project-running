@@ -26,7 +26,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - OAuth sign-in for providers other than Google (Apple, Strava, parkrun) — UI removed from Settings in the meantime. See the "Deferred from Phase 1" section in `roadmap.md`.
 - WorkManager-based periodic background sync (current sync covers foreground + connectivity change only).
 - Heart-rate from Bluetooth devices.
-- History filter by date / activity type.
+- History filter by activity type (date-range filter shipped).
 
 ## Files
 

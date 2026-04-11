@@ -86,7 +86,9 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Share run as GPX (Android)
 - [x] Share run as image card — map + headline stats (Android)
 - [x] Delete runs (Android)
+- [x] Multi-select runs in history and bulk delete (Android)
 - [x] History sort by newest, oldest, longest, fastest (Android)
+- [x] History date filter — today, this week (default), last 30 days, this year, all time (Android)
 - [x] Personal Bests on dashboard — longest run, fastest pace, fastest 5k (Android)
 - [x] Weekly distance goal with progress bar (Android)
 
@@ -522,7 +524,7 @@ These were considered during Android implementation and intentionally pushed to 
 - **Heart rate from Bluetooth devices** — needs flutter_blue_plus and per-device GATT characteristic handling.
 - **Persistent disk tile cache** — currently in-memory only via flutter_map_cache. Persistent caching needs Hive or sqlite init.
 - **Voice cues at custom intervals** — only fixed km/mi splits and pace alerts.
-- **History filter** by date range or activity type — only sort options exist.
+- **History filter by activity type** — date-range filter shipped; activity-type filter still TODO.
 
 ---
 
