@@ -50,11 +50,13 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `tile_cache.dart` — disk-backed map tile cache glue
 - `audio_cues.dart` — TTS for splits and pace alerts
 - `run_stats.dart` — pace/distance/split formatting helpers (tested)
+- `goals.dart` — `RunGoal` model + pure `evaluateGoal` for dashboard goal cards (tested)
 - `health_connect_importer.dart` / `strava_importer.dart` — bulk importers
 - `mock_data.dart` — fallback data when Supabase returns nothing (dev only)
 - `widgets/live_run_map.dart` — live map with route overlay, off-route banner
 - `widgets/collapsible_panel.dart` — the run screen's expandable stats panel
 - `widgets/run_share_card.dart` — portrait share card + modal sheet; captures a PNG via `RepaintBoundary.toImage` and hands it to `share_plus`
+- `widgets/goal_editor_sheet.dart` — modal bottom sheet for creating/editing/deleting a `RunGoal` (type + period + target)
 
 ## Dart analyzer policy — treat `info` as noise
 

@@ -776,12 +776,17 @@ class _RunScreenState extends State<RunScreen> {
   Widget _buildIdle(BuildContext context) {
     final theme = Theme.of(context);
     return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 32,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
               Container(
                 width: 100,
                 height: 100,
@@ -897,6 +902,7 @@ class _RunScreenState extends State<RunScreen> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

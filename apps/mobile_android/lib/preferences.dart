@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'goals.dart';
 
 enum DistanceUnit { km, mi }
 
@@ -118,35 +122,66 @@ class Preferences extends ChangeNotifier {
   static const _kUseMiles = 'use_miles';
   static const _kAudioCues = 'audio_cues';
   static const _kOnboarded = 'onboarded';
-  static const _kWeeklyGoalKm = 'weekly_goal_km';
   static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
+  static const _kGoalsJson = 'goals_json';
+
+  // Legacy key — a single weekly distance goal in km. Migrated into the
+  // richer [goals] list on first launch of the new build, then removed.
+  static const _kLegacyWeeklyGoalKm = 'weekly_goal_km';
 
   late SharedPreferences _prefs;
   bool _useMiles = false;
   bool _audioCues = true;
   bool _onboarded = false;
-  double _weeklyGoalKm = 0;
   int _targetPaceSecPerKm = 0;
+  List<RunGoal> _goals = [];
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
   bool get audioCues => _audioCues;
   bool get onboarded => _onboarded;
 
-  /// Weekly distance goal stored in kilometres (0 means not set).
-  double get weeklyGoalKm => _weeklyGoalKm;
-
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
   /// when current pace is more than 30s off in either direction.
   int get targetPaceSecPerKm => _targetPaceSecPerKm;
+
+  /// The user's configured training goals. Immutable view — mutate via
+  /// [upsertGoal] / [removeGoal].
+  List<RunGoal> get goals => List.unmodifiable(_goals);
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     _useMiles = _prefs.getBool(_kUseMiles) ?? false;
     _audioCues = _prefs.getBool(_kAudioCues) ?? true;
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
-    _weeklyGoalKm = _prefs.getDouble(_kWeeklyGoalKm) ?? 0;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
+
+    final rawGoals = _prefs.getString(_kGoalsJson);
+    if (rawGoals != null && rawGoals.isNotEmpty) {
+      try {
+        final list = jsonDecode(rawGoals) as List;
+        _goals = list
+            .map((e) => RunGoal.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        debugPrint('Failed to parse goals JSON: $e');
+      }
+    }
+
+    // One-shot migration: promote the legacy single weekly-km goal into
+    // the new goals list, then drop the legacy key.
+    final legacyKm = _prefs.getDouble(_kLegacyWeeklyGoalKm);
+    if (legacyKm != null && legacyKm > 0 && _goals.isEmpty) {
+      _goals.add(RunGoal(
+        id: newGoalId(),
+        period: GoalPeriod.week,
+        distanceMetres: legacyKm * 1000,
+      ));
+      await _persistGoals();
+    }
+    if (_prefs.containsKey(_kLegacyWeeklyGoalKm)) {
+      await _prefs.remove(_kLegacyWeeklyGoalKm);
+    }
   }
 
   Future<void> setUseMiles(bool v) async {
@@ -167,16 +202,36 @@ class Preferences extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setWeeklyGoalKm(double v) async {
-    _weeklyGoalKm = v;
-    await _prefs.setDouble(_kWeeklyGoalKm, v);
-    notifyListeners();
-  }
-
   Future<void> setTargetPaceSecPerKm(int v) async {
     _targetPaceSecPerKm = v;
     await _prefs.setInt(_kTargetPaceSecPerKm, v);
     notifyListeners();
+  }
+
+  /// Create or update a goal by id.
+  Future<void> upsertGoal(RunGoal goal) async {
+    final idx = _goals.indexWhere((g) => g.id == goal.id);
+    if (idx >= 0) {
+      _goals[idx] = goal;
+    } else {
+      _goals.add(goal);
+    }
+    await _persistGoals();
+    notifyListeners();
+  }
+
+  /// Remove the goal with the given id. No-op if not present.
+  Future<void> removeGoal(String id) async {
+    final before = _goals.length;
+    _goals.removeWhere((g) => g.id == id);
+    if (_goals.length == before) return;
+    await _persistGoals();
+    notifyListeners();
+  }
+
+  Future<void> _persistGoals() async {
+    final payload = jsonEncode(_goals.map((g) => g.toJson()).toList());
+    await _prefs.setString(_kGoalsJson, payload);
   }
 }
 

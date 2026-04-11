@@ -1,10 +1,12 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../goals.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../widgets/goal_editor_sheet.dart';
 
-/// Dashboard with weekly stats and recent runs summary.
+/// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final Preferences preferences;
@@ -38,262 +40,204 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _editGoal() async {
-    final current = widget.preferences.weeklyGoalKm;
-    final ctl = TextEditingController(
-      text: current > 0 ? current.toStringAsFixed(0) : '',
-    );
-    final result = await showDialog<double?>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Weekly goal'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Set a weekly distance goal to track your progress.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Kilometres',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 0.0),
-            child: const Text('Clear'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final v = double.tryParse(ctl.text);
-              Navigator.pop(ctx, v ?? current);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (result != null) {
-      await widget.preferences.setWeeklyGoalKm(result);
-    }
-  }
+  Future<void> _newGoal() => showGoalEditorSheet(
+        context,
+        preferences: widget.preferences,
+      );
+
+  Future<void> _editGoal(RunGoal goal) => showGoalEditorSheet(
+        context,
+        preferences: widget.preferences,
+        existing: goal,
+      );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
     final runs = widget.runStore.runs;
+    final goals = widget.preferences.goals;
 
     final now = DateTime.now();
-    final weekStart =
-        DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    final weekStart = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
 
     final weekRuns = runs.where((r) => r.startedAt.isAfter(weekStart)).toList();
-    final weekDistance = weekRuns.fold<double>(0, (s, r) => s + r.distanceMetres);
-    final weekDuration = weekRuns.fold<Duration>(Duration.zero, (s, r) => s + r.duration);
+    final weekDistance =
+        weekRuns.fold<double>(0, (s, r) => s + r.distanceMetres);
+    final weekDuration =
+        weekRuns.fold<Duration>(Duration.zero, (s, r) => s + r.duration);
 
     final monthStart = DateTime(now.year, now.month, 1);
-    final monthRuns = runs.where((r) => r.startedAt.isAfter(monthStart)).toList();
+    final monthRuns =
+        runs.where((r) => r.startedAt.isAfter(monthStart)).toList();
     final monthDistance =
         monthRuns.fold<double>(0, (s, r) => s + r.distanceMetres);
 
-    final goalKm = widget.preferences.weeklyGoalKm;
-    final weekKm = weekDistance / 1000;
-    final progress = goalKm > 0 ? (weekKm / goalKm).clamp(0.0, 1.0) : 0.0;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.flag_outlined),
-            tooltip: 'Weekly goal',
-            onPressed: _editGoal,
-          ),
-        ],
-      ),
-      body: runs.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
-                  const SizedBox(height: 16),
-                  Text('Welcome!', style: theme.textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Start your first run from the Run tab',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            )
+      appBar: AppBar(title: const Text('Dashboard')),
+      body: runs.isEmpty && goals.isEmpty
+          ? _WelcomeEmpty(theme: theme, onAddGoal: _newGoal)
           : ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (goalKm > 0) ...[
-            Text('Weekly Goal', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.all(16),
+              children: [
+                _goalsSection(theme, unit, runs, goals, now),
+                const SizedBox(height: 24),
+                Text('This Week', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        Text(
-                          '${UnitFormat.distanceValue(weekDistance, unit)} / '
-                          '${UnitFormat.distance(goalKm * 1000, unit)}',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        _SummaryStat(
+                          label: 'Distance',
+                          value: UnitFormat.distanceValue(weekDistance, unit),
+                          unit: UnitFormat.distanceLabel(unit),
                         ),
-                        Text(
-                          '${(progress * 100).round()}%',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
+                        _SummaryStat(
+                          label: 'Runs',
+                          value: '${weekRuns.length}',
+                        ),
+                        _SummaryStat(
+                          label: 'Time',
+                          value: '${weekDuration.inMinutes}',
+                          unit: 'min',
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 10,
-                      borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text('This Month', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _SummaryStat(
+                          label: 'Distance',
+                          value: UnitFormat.distanceValue(monthDistance, unit),
+                          unit: UnitFormat.distanceLabel(unit),
+                        ),
+                        _SummaryStat(
+                          label: 'Runs',
+                          value: '${monthRuns.length}',
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (runs.isNotEmpty) ...[
+                  Text('Personal Bests', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          if (_longestRun(runs) != null)
+                            _PbRow(
+                              icon: Icons.straighten,
+                              label: 'Longest run',
+                              value: UnitFormat.distance(
+                                  _longestRun(runs)!.distanceMetres, unit),
+                            ),
+                          if (_fastestPaceRun(runs) != null) ...[
+                            const SizedBox(height: 12),
+                            _PbRow(
+                              icon: Icons.speed,
+                              label: 'Fastest pace',
+                              value:
+                                  '${UnitFormat.pace(_paceOf(_fastestPaceRun(runs)!), unit)} '
+                                  '${UnitFormat.paceLabel(unit)}',
+                            ),
+                          ],
+                          if (_best5k(runs) != null) ...[
+                            const SizedBox(height: 12),
+                            _PbRow(
+                              icon: Icons.emoji_events,
+                              label: 'Fastest 5k',
+                              value: _formatDuration(_best5k(runs)!),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                Text('All Time', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _SummaryStat(
+                          label: 'Distance',
+                          value: UnitFormat.distanceValue(
+                              runs.fold<double>(
+                                  0, (s, r) => s + r.distanceMetres),
+                              unit),
+                          unit: UnitFormat.distanceLabel(unit),
+                        ),
+                        _SummaryStat(
+                          label: 'Runs',
+                          value: '${runs.length}',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _goalsSection(
+    ThemeData theme,
+    DistanceUnit unit,
+    List<Run> runs,
+    List<RunGoal> goals,
+    DateTime now,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text('Goals', style: theme.textTheme.titleMedium),
+            const Spacer(),
+            if (goals.isNotEmpty)
+              TextButton.icon(
+                onPressed: _newGoal,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
           ],
-
-          Text('This Week', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _SummaryStat(
-                    label: 'Distance',
-                    value: UnitFormat.distanceValue(weekDistance, unit),
-                    unit: UnitFormat.distanceLabel(unit),
-                  ),
-                  _SummaryStat(
-                    label: 'Runs',
-                    value: '${weekRuns.length}',
-                  ),
-                  _SummaryStat(
-                    label: 'Time',
-                    value: '${weekDuration.inMinutes}',
-                    unit: 'min',
-                  ),
-                ],
-              ),
+        ),
+        const SizedBox(height: 8),
+        if (goals.isEmpty)
+          _EmptyGoalsCta(onAdd: _newGoal)
+        else
+          for (final goal in goals)
+            _GoalCard(
+              goal: goal,
+              progress: evaluateGoal(goal, runs, now),
+              unit: unit,
+              onTap: () => _editGoal(goal),
             ),
-          ),
-          const SizedBox(height: 24),
-
-          Text('This Month', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _SummaryStat(
-                    label: 'Distance',
-                    value: UnitFormat.distanceValue(monthDistance, unit),
-                    unit: UnitFormat.distanceLabel(unit),
-                  ),
-                  _SummaryStat(
-                    label: 'Runs',
-                    value: '${monthRuns.length}',
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          if (runs.isNotEmpty) ...[
-            Text('Personal Bests', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    if (_longestRun(runs) != null)
-                      _PbRow(
-                        icon: Icons.straighten,
-                        label: 'Longest run',
-                        value: UnitFormat.distance(_longestRun(runs)!.distanceMetres, unit),
-                      ),
-                    if (_fastestPaceRun(runs) != null) ...[
-                      const SizedBox(height: 12),
-                      _PbRow(
-                        icon: Icons.speed,
-                        label: 'Fastest pace',
-                        value: '${UnitFormat.pace(_paceOf(_fastestPaceRun(runs)!), unit)} '
-                            '${UnitFormat.paceLabel(unit)}',
-                      ),
-                    ],
-                    if (_best5k(runs) != null) ...[
-                      const SizedBox(height: 12),
-                      _PbRow(
-                        icon: Icons.emoji_events,
-                        label: 'Fastest 5k',
-                        value: _formatDuration(_best5k(runs)!),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          Text('All Time', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _SummaryStat(
-                    label: 'Distance',
-                    value: UnitFormat.distanceValue(
-                        runs.fold<double>(0, (s, r) => s + r.distanceMetres), unit),
-                    unit: UnitFormat.distanceLabel(unit),
-                  ),
-                  _SummaryStat(
-                    label: 'Runs',
-                    value: '${runs.length}',
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -303,11 +247,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Run? _fastestPaceRun(List<Run> runs) {
-    // Only running-style activities use pace as a PB metric.
     final eligible = runs
         .where((r) =>
             r.distanceMetres >= 1000 &&
-            !ActivityType.fromName(r.metadata?['activity_type'] as String?).usesSpeed)
+            !ActivityType.fromName(r.metadata?['activity_type'] as String?)
+                .usesSpeed)
         .toList();
     if (eligible.isEmpty) return null;
     return eligible.reduce((a, b) => _paceOf(a) <= _paceOf(b) ? a : b);
@@ -319,7 +263,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final eligible = runs
         .where((r) =>
             r.distanceMetres >= 5000 &&
-            !ActivityType.fromName(r.metadata?['activity_type'] as String?).usesSpeed)
+            !ActivityType.fromName(r.metadata?['activity_type'] as String?)
+                .usesSpeed)
         .toList();
     if (eligible.isEmpty) return null;
     final times = eligible.map((r) {
@@ -333,8 +278,300 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final h = d.inHours;
     final m = d.inMinutes % 60;
     final s = d.inSeconds % 60;
-    if (h > 0) return '${h}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    return '${m}:${s.toString().padLeft(2, '0')}';
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class _WelcomeEmpty extends StatelessWidget {
+  final ThemeData theme;
+  final VoidCallback onAddGoal;
+  const _WelcomeEmpty({required this.theme, required this.onAddGoal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
+          const SizedBox(height: 16),
+          Text('Welcome!', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(
+            'Start your first run from the Run tab',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: onAddGoal,
+            icon: const Icon(Icons.flag_outlined),
+            label: const Text('Set a goal'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyGoalsCta extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyGoalsCta({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        onTap: onAdd,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: theme.colorScheme.primaryContainer,
+                ),
+                child: Icon(Icons.flag_outlined,
+                    color: theme.colorScheme.primary),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Set your first goal',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Track distance, time, pace, or number of runs each week or month.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: theme.colorScheme.outline),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoalCard extends StatelessWidget {
+  final RunGoal goal;
+  final GoalProgress progress;
+  final DistanceUnit unit;
+  final VoidCallback onTap;
+  const _GoalCard({
+    required this.goal,
+    required this.progress,
+    required this.unit,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final completeColor = Colors.green.shade600;
+    final accent =
+        progress.complete ? completeColor : theme.colorScheme.primary;
+    final title =
+        goal.period == GoalPeriod.week ? 'WEEKLY GOAL' : 'MONTHLY GOAL';
+
+    // Look up per-kind progress so the card can render every kind in order,
+    // with unset targets shown as muted "-" rows. Keeps the layout stable
+    // regardless of which targets the user has configured.
+    final byKind = <GoalTargetKind, TargetProgress>{
+      for (final t in progress.targets) t.kind: t,
+    };
+
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${(progress.overallPercent * 100).round()}%',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.edit_outlined,
+                      size: 14, color: theme.colorScheme.outline),
+                ],
+              ),
+              const SizedBox(height: 14),
+              for (int i = 0; i < GoalTargetKind.values.length; i++) ...[
+                if (i > 0) const SizedBox(height: 12),
+                _TargetRow(
+                  kind: GoalTargetKind.values[i],
+                  target: byKind[GoalTargetKind.values[i]],
+                  unit: unit,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TargetRow extends StatelessWidget {
+  final GoalTargetKind kind;
+  final TargetProgress? target;
+  final DistanceUnit unit;
+  const _TargetRow({
+    required this.kind,
+    required this.target,
+    required this.unit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final t = target;
+
+    if (t == null) {
+      // Unset target — single muted line, no bar, no feedback.
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                goalKindLabel(kind),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+            Text(
+              '—',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final accent =
+        t.complete ? Colors.green.shade600 : theme.colorScheme.primary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(
+                goalKindLabel(kind),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ),
+            Text(
+              _valueText(t, unit),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: t.percent,
+            minHeight: 6,
+            color: accent,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Icon(
+              t.complete ? Icons.check_circle : Icons.trending_up,
+              size: 12,
+              color: accent,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                t.feedback,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String _valueText(TargetProgress t, DistanceUnit unit) {
+    switch (t.kind) {
+      case GoalTargetKind.distance:
+        final c = UnitFormat.distanceValue(t.current, unit);
+        final tgt = UnitFormat.distanceValue(t.target, unit);
+        return '$c / $tgt ${UnitFormat.distanceLabel(unit)}';
+      case GoalTargetKind.time:
+        return '${_coarseDuration(t.current)} / ${_coarseDuration(t.target)}';
+      case GoalTargetKind.avgPace:
+        final c =
+            t.current > 0 ? UnitFormat.pace(t.current, unit) : '--:--';
+        final tgt = UnitFormat.pace(t.target, unit);
+        return '$c / $tgt ${UnitFormat.paceLabel(unit)}';
+      case GoalTargetKind.runCount:
+        return '${t.current.toInt()} / ${t.target.toInt()}';
+    }
+  }
+
+  static String _coarseDuration(double seconds) {
+    final totalMin = (seconds / 60).round();
+    if (totalMin >= 60) {
+      final h = totalMin ~/ 60;
+      final m = totalMin % 60;
+      return m > 0 ? '${h}h ${m}m' : '${h}h';
+    }
+    return '${totalMin}m';
   }
 }
 

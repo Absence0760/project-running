@@ -81,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final mCtl = TextEditingController(text: '$minutes');
         final sCtl = TextEditingController(text: '$seconds');
         return AlertDialog(
-          title: const Text('Target pace per km'),
+          title: const Text('Live pace alert'),
           content: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -212,13 +212,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: prefs.setAudioCues,
           ),
           ListTile(
-            title: const Text('Target pace'),
+            title: const Text('Live pace alert'),
             subtitle: Text(
               prefs.targetPaceSecPerKm > 0
                   ? '${UnitFormat.pace(prefs.targetPaceSecPerKm.toDouble(), prefs.unit)} '
                       '${UnitFormat.paceLabel(prefs.unit)} '
-                      '— alerts when 30s+ off'
-                  : 'Not set',
+                      '— spoken alert during a run when 30s+ off'
+                  : 'Off — set a pace to get spoken alerts during a run',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _editTargetPace,
