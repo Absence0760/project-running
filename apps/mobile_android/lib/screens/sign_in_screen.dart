@@ -49,8 +49,12 @@ class _SignInScreenState extends State<SignInScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Sign In')),
+      // Scaffold already inherits resizeToAvoidBottomInset: true, so the
+      // body gets shrunk by the keyboard — the Column inside has to be
+      // scrollable to absorb the remaining content, otherwise Flutter's
+      // debug overlay shows "BOTTOM OVERFLOWED BY N PIXELS".
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,3 +128,4 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 }
+
