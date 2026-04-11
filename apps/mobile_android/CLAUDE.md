@@ -54,6 +54,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `mock_data.dart` — fallback data when Supabase returns nothing (dev only)
 - `widgets/live_run_map.dart` — live map with route overlay, off-route banner
 - `widgets/collapsible_panel.dart` — the run screen's expandable stats panel
+- `widgets/run_share_card.dart` — portrait share card + modal sheet; captures a PNG via `RepaintBoundary.toImage` and hands it to `share_plus`
 
 ## Dart analyzer policy — treat `info` as noise
 

@@ -84,6 +84,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Lap splits on run detail (Android)
 - [x] Edit run title and notes (Android)
 - [x] Share run as GPX (Android)
+- [x] Share run as image card — map + headline stats (Android)
 - [x] Delete runs (Android)
 - [x] History sort by newest, oldest, longest, fastest (Android)
 - [x] Personal Bests on dashboard — longest run, fastest pace, fastest 5k (Android)

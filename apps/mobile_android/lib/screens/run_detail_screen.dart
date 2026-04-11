@@ -1,16 +1,14 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/run_share_card.dart';
 
 /// Detail view for a completed run, showing the route map, splits, and stats.
 class RunDetailScreen extends StatefulWidget {
@@ -402,51 +400,16 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     }).toList();
   }
 
-  /// Export this run as a GPX file and share via the system share sheet.
+  /// Open the share sheet — lets the user share an image of the run card or
+  /// the raw GPX trace.
   Future<void> _shareRun() async {
-    final gpx = _runToGpx(run);
-    final tmp = await getTemporaryDirectory();
-    final file = File('${tmp.path}/run-${run.id}.gpx');
-    await file.writeAsString(gpx);
-    final dist = UnitFormat.distance(run.distanceMetres, widget.preferences.unit);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: '$_title — $dist in ${_formatDuration(run.duration)}',
+    await showRunShareSheet(
+      context,
+      run: run,
+      preferences: widget.preferences,
+      title: _title,
     );
   }
-
-  String _runToGpx(Run r) {
-    final buf = StringBuffer();
-    buf.writeln('<?xml version="1.0" encoding="UTF-8"?>');
-    buf.writeln('<gpx version="1.1" creator="Run" xmlns="http://www.topografix.com/GPX/1/1">');
-    buf.writeln('  <metadata>');
-    buf.writeln('    <name>${_escape(_title)}</name>');
-    buf.writeln('    <time>${r.startedAt.toUtc().toIso8601String()}</time>');
-    buf.writeln('  </metadata>');
-    buf.writeln('  <trk>');
-    buf.writeln('    <name>${_escape(_title)}</name>');
-    buf.writeln('    <trkseg>');
-    for (final w in r.track) {
-      buf.write('      <trkpt lat="${w.lat}" lon="${w.lng}">');
-      if (w.elevationMetres != null) {
-        buf.write('<ele>${w.elevationMetres}</ele>');
-      }
-      if (w.timestamp != null) {
-        buf.write('<time>${w.timestamp!.toUtc().toIso8601String()}</time>');
-      }
-      buf.writeln('</trkpt>');
-    }
-    buf.writeln('    </trkseg>');
-    buf.writeln('  </trk>');
-    buf.writeln('</gpx>');
-    return buf.toString();
-  }
-
-  String _escape(String s) => s
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;');
 
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
