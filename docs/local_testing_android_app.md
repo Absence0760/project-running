@@ -161,12 +161,19 @@ Without `.env.local` credentials (or if the backend is unreachable), the app run
 ## Running tests
 
 ```bash
-# All Flutter packages
+# All Flutter packages in the workspace
 melos run test
 
 # Single package
-cd packages/core_models && flutter test
+cd apps/mobile_android && flutter test
+cd packages/run_recorder && flutter test
+
+# Single file / test name
+flutter test test/run_stats_test.dart
+flutter test --plain-name "speed clamp"
 ```
+
+See [testing.md](testing.md) for the complete testing reference — what's covered, how to add a new test, the `@visibleForTesting` / override-directory / synthetic-`Position` patterns, and what's still uncovered.
 
 ## Lint
 

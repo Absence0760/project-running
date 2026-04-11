@@ -29,10 +29,16 @@ class LocalRunStore extends ChangeNotifier {
 
   int get unsyncedCount => _runs.length - _syncedIds.length;
 
-  /// Call once at startup.
-  Future<void> init() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    _dir = Directory('${appDir.path}/runs');
+  /// Call once at startup. Pass [overrideDirectory] in tests to avoid the
+  /// `path_provider` plugin channel — the store will write runs to the
+  /// supplied directory instead of the platform documents dir.
+  Future<void> init({Directory? overrideDirectory}) async {
+    if (overrideDirectory != null) {
+      _dir = overrideDirectory;
+    } else {
+      final appDir = await getApplicationDocumentsDirectory();
+      _dir = Directory('${appDir.path}/runs');
+    }
     if (!_dir.existsSync()) {
       _dir.createSync(recursive: true);
     }

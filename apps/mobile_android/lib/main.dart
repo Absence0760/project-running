@@ -11,10 +11,15 @@ import 'preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'sync_service.dart';
+import 'tile_cache.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env.local');
+
+  // Disk-backed map tile cache. Survives app restarts so repeated runs in
+  // the same area render the basemap from disk instead of re-downloading.
+  await TileCache.init();
 
   final store = LocalRunStore();
   await store.init();

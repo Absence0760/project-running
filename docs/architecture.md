@@ -502,6 +502,8 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 
 ## CI/CD pipeline
 
+Tests and analysis run via Melos scripts — see [testing.md](testing.md) for how to run the suite locally, what's covered today, and the patterns used to make platform-channel-heavy code unit-testable.
+
 ```yaml
 # .github/workflows/ci.yml
 jobs:
@@ -511,8 +513,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: dart pub global activate melos
       - run: melos bootstrap
-      - run: melos run test
-      - run: melos run analyze
+      - run: melos run test      # flutter test in every package with a test/ dir
+      - run: melos run analyze   # flutter analyze in every package
 
   build-ios:
     runs-on: macos-latest

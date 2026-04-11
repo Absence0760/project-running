@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:core_models/core_models.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 
@@ -180,6 +181,57 @@ class RunRecorder {
     begin();
   }
 
+  /// Test-only: skip the real geolocator subscription and flip the recorder
+  /// into a prepared state with the supplied filter parameters. Tests can
+  /// then call [debugInjectPosition] directly to feed simulated GPS fixes
+  /// through the same `_onPosition` pipeline the live stream uses.
+  @visibleForTesting
+  void debugPrepareWithoutStream({
+    Route? route,
+    int distanceFilterMetres = 3,
+    double minMovementMetres = 2,
+    double maxSpeedMps = 10,
+  }) {
+    _startTime = null;
+    _stopwatch
+      ..stop()
+      ..reset();
+    _distanceMetres = 0;
+    _track.clear();
+    _laps.clear();
+    _currentWaypoint = null;
+    _lastTrackedPosition = null;
+    _lastTrackedPositionAt = null;
+    _recording = false;
+    _paused = false;
+    _route = route;
+    _trackThresholdMetres =
+        max(distanceFilterMetres.toDouble(), minMovementMetres);
+    _maxSpeedMps = maxSpeedMps;
+    _prepared = true;
+  }
+
+  /// Test-only: push a simulated [Position] through the same filter chain
+  /// the live geolocator subscription would use.
+  @visibleForTesting
+  void debugInjectPosition(Position pos) => _onPosition(pos);
+
+  /// Test-only: read-only view of the track built so far.
+  @visibleForTesting
+  List<Waypoint> get debugTrack => List.unmodifiable(_track);
+
+  /// Test-only: current accumulated distance.
+  @visibleForTesting
+  double get debugDistanceMetres => _distanceMetres;
+
+  /// Test-only: elapsed time as seen by the monotonic stopwatch.
+  @visibleForTesting
+  Duration get debugElapsed => _stopwatch.elapsed;
+
+  /// Test-only: latest raw waypoint (drives the blue dot).
+  @visibleForTesting
+  Waypoint? get debugCurrentWaypoint => _currentWaypoint;
+
   /// Pause the timer and stop accumulating distance until [resume] is called.
   void pause() {
     if (!_recording || _paused) return;
@@ -221,10 +273,9 @@ class RunRecorder {
     if (_recording) {
       final last = _lastTrackedPosition;
       final lastAt = _lastTrackedPositionAt;
-      final now = DateTime.now();
       if (last == null || lastAt == null) {
         _lastTrackedPosition = pos;
-        _lastTrackedPositionAt = now;
+        _lastTrackedPositionAt = pos.timestamp;
         _track.add(_currentWaypoint!);
       } else {
         final delta = Geolocator.distanceBetween(
@@ -233,11 +284,13 @@ class RunRecorder {
           pos.latitude,
           pos.longitude,
         );
-        // Implausible-speed clamp: compare the delta to the elapsed time
-        // since the last accepted fix. A corrupt GPS fix can easily imply
-        // 50+ m/s — dropping those here stops one bad sample from inflating
-        // total distance.
-        final dtSec = now.difference(lastAt).inMilliseconds / 1000.0;
+        // Implausible-speed clamp: compare the delta to the GPS-reported
+        // time between the two fixes (not wall-clock) so batched/queued
+        // positions processed in a tight loop still get clamped correctly.
+        // A corrupt GPS fix can easily imply 50+ m/s — dropping those here
+        // stops one bad sample from inflating total distance.
+        final dtSec =
+            pos.timestamp.difference(lastAt).inMilliseconds / 1000.0;
         final implausible =
             dtSec > 0 && (delta / dtSec) > _maxSpeedMps;
 
@@ -247,7 +300,7 @@ class RunRecorder {
         if (delta > _trackThresholdMetres && delta < 100 && !implausible) {
           _distanceMetres += delta;
           _lastTrackedPosition = pos;
-          _lastTrackedPositionAt = now;
+          _lastTrackedPositionAt = pos.timestamp;
           _track.add(_currentWaypoint!);
         }
       }
