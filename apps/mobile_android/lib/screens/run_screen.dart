@@ -559,9 +559,11 @@ class _RunScreenState extends State<RunScreen> {
     _holdToStopTicker?.cancel();
     WakelockPlus.disable();
 
-    // Tag the run with the chosen activity type
+    // Tag the run with the chosen activity type + step count so the web
+    // and future mobile views can display a consistent summary.
     final metadata = Map<String, dynamic>.from(raw.metadata ?? {});
     metadata['activity_type'] = _activityType.name;
+    if (_steps > 0) metadata['steps'] = _steps;
 
     // Prefer the stable id generated at _begin() over the recorder's
     // stop-time uuid so the saved run matches any incremental in-progress

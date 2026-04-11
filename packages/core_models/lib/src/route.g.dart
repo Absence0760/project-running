@@ -19,6 +19,7 @@ Route _$RouteFromJson(Map<String, dynamic> json) => Route(
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
+      surface: json['surface'] as String?,
     );
 
 Map<String, dynamic> _$RouteToJson(Route instance) => <String, dynamic>{
@@ -29,4 +30,5 @@ Map<String, dynamic> _$RouteToJson(Route instance) => <String, dynamic>{
       'elevationGainMetres': instance.elevationGainMetres,
       'isPublic': instance.isPublic,
       'createdAt': instance.createdAt?.toIso8601String(),
+      'surface': instance.surface,
     };

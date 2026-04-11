@@ -84,6 +84,48 @@ Get your Supabase anon key from `supabase status`. Get a free MapTiler key at [m
 
 > **Important:** Use `10.0.2.2` instead of `localhost`. The Android emulator's `localhost` refers to the emulator itself, not your host machine. `10.0.2.2` is a special alias that routes to the host's loopback address.
 
+## Google Sign-In (optional)
+
+Email/password sign-in works out of the box against any Supabase instance with no extra setup. Google Sign-In requires a one-time Google Cloud Console + Supabase dashboard configuration because Supabase validates the Google ID token against a specific OAuth client.
+
+Skip this section if you're only using email/password.
+
+### 1. Create Google Cloud OAuth credentials
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → your project (create one if needed) → **Credentials** → **Create credentials** → **OAuth client ID**.
+2. Create a **Web application** client. Name it "Run app — Supabase". No redirect URI is required for the native-ID-token flow, but Supabase needs this client's ID for token validation. Copy the **Client ID** — this is your `GOOGLE_WEB_CLIENT_ID`.
+3. Create a second OAuth client, this time **Android**. You need:
+   - **Package name**: `com.example.mobile_android` (see `apps/mobile_android/android/app/build.gradle.kts`)
+   - **SHA-1 certificate fingerprint**: for debug builds, run:
+     ```bash
+     keytool -keystore ~/.android/debug.keystore -list -v \
+       -alias androiddebugkey -storepass android -keypass android
+     ```
+     and copy the SHA1 line. For release builds, use your release keystore.
+   No Client ID is stored for this one — it's matched by package + SHA alone.
+
+### 2. Configure Supabase
+
+1. Supabase dashboard → **Authentication → Providers → Google** → **Enable**.
+2. Paste the **Web** Client ID from step 1.2 into the **Authorized Client IDs** field.
+3. Save.
+
+### 3. Add the client ID to `.env.local`
+
+```
+GOOGLE_WEB_CLIENT_ID=<your-web-client-id>.apps.googleusercontent.com
+```
+
+### 4. Test
+
+Run the app, open the Sign In screen, tap **Sign in with Google**. The system Google chooser appears; pick an account, and the sign-in dialog closes and returns you to the app as an authenticated user.
+
+If the sign-in fails with "Google sign-in did not return an ID token" or similar, the most common causes are:
+
+- The Web Client ID in `.env.local` doesn't match what's configured in Supabase → triple-check both values.
+- The Android OAuth client's package name or SHA-1 doesn't match the APK that's installed → rerun `keytool` and compare to what's in Google Cloud Console.
+- You're testing on an emulator without Google Play services → use a Google Play system image, not the stock AOSP one.
+
 ## Running
 
 ```bash

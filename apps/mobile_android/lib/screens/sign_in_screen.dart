@@ -1,5 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Email/password sign-in screen.
 ///
@@ -35,6 +37,52 @@ class _SignInScreenState extends State<SignInScreen> {
       await widget.apiClient.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Google Sign-In via the native Android flow. Requires:
+  /// - `GOOGLE_WEB_CLIENT_ID` in `.env.local` — the Web client ID from the
+  ///   same Google Cloud Console project configured in Supabase's Google
+  ///   auth provider.
+  /// - Android OAuth 2.0 client configured with the app's SHA-1
+  ///   fingerprint.
+  /// See docs/local_testing_android_app.md for the full setup walkthrough.
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+      if (webClientId == null || webClientId.isEmpty) {
+        throw Exception(
+          'Google Sign-In not configured — set GOOGLE_WEB_CLIENT_ID in .env.local. '
+          'See docs/local_testing_android_app.md.',
+        );
+      }
+
+      final googleSignIn = GoogleSignIn(serverClientId: webClientId);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        // User cancelled — not an error.
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        throw Exception('Google sign-in did not return an ID token');
+      }
+
+      await widget.apiClient.signInWithGoogleIdToken(
+        idToken: idToken,
+        accessToken: auth.accessToken,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -115,6 +163,31 @@ class _SignInScreenState extends State<SignInScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Sign In'),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'OR',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _signInWithGoogle,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                icon: const Icon(Icons.login, size: 18),
+                label: const Text('Sign in with Google'),
               ),
               const SizedBox(height: 16),
               TextButton(

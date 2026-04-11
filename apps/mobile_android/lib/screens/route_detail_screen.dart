@@ -69,6 +69,29 @@ class RouteDetailScreen extends StatelessWidget {
               ],
             ),
           ),
+          if (route.surface != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _surfaceIcon(route.surface!),
+                    size: 14,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _surfaceLabel(route.surface!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           const Spacer(),
 
@@ -117,6 +140,30 @@ class RouteDetailScreen extends StatelessWidget {
     if (ok == true) {
       await routeStore.delete(route.id);
       if (context.mounted) Navigator.pop(context);
+    }
+  }
+
+  static IconData _surfaceIcon(String surface) {
+    switch (surface) {
+      case 'trail':
+        return Icons.terrain;
+      case 'mixed':
+        return Icons.alt_route;
+      case 'road':
+      default:
+        return Icons.add_road;
+    }
+  }
+
+  static String _surfaceLabel(String surface) {
+    switch (surface) {
+      case 'trail':
+        return 'TRAIL';
+      case 'mixed':
+        return 'MIXED';
+      case 'road':
+      default:
+        return 'ROAD';
     }
   }
 }

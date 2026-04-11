@@ -14,6 +14,11 @@ class Route {
   final bool isPublic;
   final DateTime? createdAt;
 
+  /// Predominant ground type: `road`, `trail`, or `mixed`. Web's route
+  /// builder populates this; mobile imports preserve whatever the backend
+  /// returns and default to null for GPX/KML imports that don't know.
+  final String? surface;
+
   const Route({
     required this.id,
     required this.name,
@@ -22,6 +27,7 @@ class Route {
     this.elevationGainMetres = 0,
     this.isPublic = false,
     this.createdAt,
+    this.surface,
   });
 
   factory Route.fromJson(Map<String, dynamic> json) => _$RouteFromJson(json);

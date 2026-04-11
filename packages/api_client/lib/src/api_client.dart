@@ -31,6 +31,27 @@ class ApiClient {
     return response.user!.id;
   }
 
+  /// Exchange a Google ID token (obtained by the host app via the native
+  /// Android `google_sign_in` flow) for a Supabase session. Returns the
+  /// user ID.
+  ///
+  /// Host app is responsible for driving the Google Sign-In UI and
+  /// capturing the ID token — this keeps `api_client` platform-agnostic.
+  /// See `mobile_android/lib/screens/sign_in_screen.dart` for the caller
+  /// and `docs/local_testing_android_app.md` for Google Cloud Console +
+  /// Supabase dashboard setup instructions.
+  Future<String> signInWithGoogleIdToken({
+    required String idToken,
+    String? accessToken,
+  }) async {
+    final response = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+    return response.user!.id;
+  }
+
   /// The current user ID, or null if not signed in.
   String? get userId => _client.auth.currentUser?.id;
 
@@ -157,6 +178,7 @@ class ApiClient {
       'distance_m': route.distanceMetres,
       'elevation_m': route.elevationGainMetres,
       'is_public': route.isPublic,
+      if (route.surface != null) 'surface': route.surface,
     });
   }
 
@@ -216,6 +238,7 @@ class ApiClient {
       distanceMetres: (row['distance_m'] as num).toDouble(),
       elevationGainMetres: (row['elevation_m'] as num?)?.toDouble() ?? 0,
       isPublic: row['is_public'] as bool? ?? false,
+      surface: row['surface'] as String?,
       createdAt: row['created_at'] != null
           ? DateTime.parse(row['created_at'] as String)
           : null,

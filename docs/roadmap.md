@@ -404,6 +404,58 @@ Interim mitigation (shipped): polyline smoothing at render time in `LiveRunMap._
 
 ---
 
+## Future — Cross-platform parity enforcement
+
+A structural fix for the ongoing problem of Android, iOS, web, and watch clients silently drifting out of sync. We've already paid the cost several times — `activity_type` stored on mobile but not displayed on web, `surface` stored by web but dropped by mobile, `moving_time` computed on one platform but not the others, Google Sign-In on web but not Android. Each one was a manual hunt to find and patch. The goal of this initiative is to make drift **impossible to merge without noticing**.
+
+Three layers, in priority order — each is self-contained, you can ship one without the others.
+
+### 1. Auto-generate DTO types from the Supabase schema
+
+The database schema is the single source of truth. Today, each client hand-writes its own row-to-model mapping (`ApiClient._runFromRow` in Dart, `Run` interface + `fetchRunById` in TypeScript) and they silently diverge when the schema changes. Replace hand-written types with generated ones.
+
+- [ ] **Web**: wire `supabase gen types typescript` into a script. After every `supabase db reset` or migration, regenerate `apps/web/src/lib/database.types.ts`. Import `Database['public']['Tables']['runs']['Row']` instead of the hand-written `Run` interface. Compiler enforces schema match.
+- [ ] **CI check**: after regeneration, fail the build if `git diff` is non-empty — schema changes can't merge unless types are refreshed.
+- [ ] **Mobile (Dart)**: evaluate `supadart` or `supabase_codegen` from pub.dev. Less mature than the TS generator but workable. Fallback: a small `scripts/gen_dart_models.dart` that parses `supabase/migrations/*.sql` and emits Dart classes.
+- [ ] Remove hand-written `Run`, `Route`, `Waypoint` DTOs from `packages/core_models` once the generator is trusted. Keep only the derived helpers (`movingTimeOf`, etc.) there.
+
+**Expected effect**: adding `metadata.steps` on mobile last week would have caused an immediate TypeScript compile error on the web until it was consumed there. Schema-level drift becomes structurally impossible.
+
+### 2. Living feature parity matrix
+
+A single markdown table that lists every user-visible feature with a checkmark per platform. Reviewed during every PR that adds or changes a feature.
+
+- [ ] New section in `docs/features.md` (or a new `docs/parity.md`) with a table: **Feature × [Android, iOS, Web, Wear OS, Apple Watch]**, each cell `✓` / `✗` / `Partial` / `N/A`.
+- [ ] Link from each feature's "Phase X" entry in `docs/features.md` to its row in the matrix.
+- [ ] PR template checkbox: "Updated the feature parity matrix if this PR adds or changes a user-visible feature."
+- [ ] Periodically audit: grep the matrix for rows with mismatched ticks, confirm each asymmetry is intentional (e.g. Android has a pedometer, web can't have one — that's a permanent `✗`), and open follow-up tickets for unintentional gaps.
+
+**Expected effect**: the `activity_type` / `surface` / `moving_time` drift we spent hours hunting becomes visible on page load. Asymmetries are either documented-as-intentional or immediately visible as bugs.
+
+### 3. Cross-client integration test in CI
+
+Single automated test that writes a run via one client and reads it via another, asserting round-trip equality on every field.
+
+- [ ] Start local Supabase (`supabase start`) in CI.
+- [ ] Dart integration test: `api_client.saveRun(<fixture>)` against the local instance.
+- [ ] Node script: fetch the same run via the web's `fetchRunById` and `parseInt(run.metadata?.steps)` etc., assert deep equality with the fixture.
+- [ ] Run on every PR. Red if any field round-trips incorrectly.
+- [ ] Extend to `routes`, in-progress runs, auth flows, and sync paths over time.
+
+**Expected effect**: the last line of defence — catches drift that slips past type generation (e.g. metadata fields that are untyped `Json` on both sides) and past the human parity matrix check.
+
+### Non-goal: full backend rewrite
+
+A proper backend API (Go / Node / Rust) where all business logic lives server-side would structurally prevent most of this drift by giving clients nothing to drift *from*. But it's a 2–4 week refactor and only pays off with 3+ actively-developed clients. Revisit if the app ever has a paying user base large enough to justify the engineering spend.
+
+### Recommended order
+
+Do **#1 first** — it's a 15-minute setup per client and removes a whole class of bugs permanently.
+Then **#2** — 30-minute doc edit, self-correcting via reviews.
+Then **#3** when the first two catch enough to prove their value but leave residual drift worth automating away.
+
+---
+
 ## Competitive positioning
 
 | Feature | Run App | Strava | Nike Run Club | Garmin Connect | AllTrails |

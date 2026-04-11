@@ -43,6 +43,7 @@ dependencies:
   archive: ^4.0.0
   csv: ^8.0.0
   health: ^13.0.0
+  google_sign_in: ^6.2.0
 
 dev_dependencies:
   flutter_test:

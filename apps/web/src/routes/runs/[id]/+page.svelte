@@ -11,6 +11,7 @@
 		sourceColor,
 	} from '$lib/mock-data';
 	import { fetchRunById } from '$lib/data';
+	import { movingTimeSeconds, elevationGainMetres } from '$lib/run_stats';
 	import type { Run } from '$lib/types';
 
 	let { data } = $props();
@@ -21,6 +22,46 @@
 	onMount(async () => {
 		run = await fetchRunById(data.id);
 		loading = false;
+	});
+
+	/**
+	 * Mobile-recorded runs stamp the activity into `metadata.activity_type`.
+	 * Map to a human label + Material Symbols icon.
+	 */
+	const activityMeta: Record<
+		string,
+		{ label: string; icon: string }
+	> = {
+		run: { label: 'Run', icon: 'directions_run' },
+		walk: { label: 'Walk', icon: 'directions_walk' },
+		cycle: { label: 'Cycle', icon: 'directions_bike' },
+		hike: { label: 'Hike', icon: 'terrain' },
+	};
+
+	let activity = $derived.by(() => {
+		const key = run?.metadata?.['activity_type'];
+		if (typeof key !== 'string') return null;
+		return activityMeta[key] ?? { label: key, icon: 'directions_run' };
+	});
+
+	/** Derived from the GPS track rather than stored, matching mobile. */
+	let movingSeconds = $derived(run?.track ? movingTimeSeconds(run.track) : 0);
+
+	/** Prefer a real track-based elevation gain over the randomly-generated
+	 *  mock value. Falls back to 0 for runs without elevation data. */
+	let realElevationGain = $derived(run?.track ? elevationGainMetres(run.track) : 0);
+
+	/** Total steps are stored on mobile save in `metadata.steps`. */
+	let totalSteps = $derived.by(() => {
+		const v = run?.metadata?.['steps'];
+		return typeof v === 'number' ? v : null;
+	});
+
+	/** Average cadence = steps / moving_time_minutes. Null when we don't
+	 *  have enough data to compute meaningfully. */
+	let avgCadence = $derived.by(() => {
+		if (totalSteps == null || movingSeconds < 30) return null;
+		return Math.round((totalSteps / (movingSeconds / 60)) || 0);
 	});
 
 	const hrZones = [
@@ -79,9 +120,17 @@
 		<header class="detail-header">
 			<div>
 				<h1>{formatDate(run.started_at)}</h1>
-				<a href="/runs" class="back-link">
-					<span class="material-symbols">arrow_back</span> All runs
-				</a>
+				<div class="detail-meta">
+					<a href="/runs" class="back-link">
+						<span class="material-symbols">arrow_back</span> All runs
+					</a>
+					{#if activity}
+						<span class="activity-badge">
+							<span class="material-symbols">{activity.icon}</span>
+							{activity.label}
+						</span>
+					{/if}
+				</div>
 			</div>
 			<span class="source-badge" style="background: {sourceColor(run.source)}"
 				>{sourceLabel(run.source)}</span
@@ -96,20 +145,39 @@
 			</div>
 			<div class="key-stat">
 				<span class="key-stat-value">{formatDuration(run.duration_s)}</span>
-				<span class="key-stat-label">Duration</span>
+				<span class="key-stat-label">Time</span>
 			</div>
+			{#if movingSeconds > 0 && movingSeconds !== run.duration_s}
+				<div class="key-stat">
+					<span class="key-stat-value">{formatDuration(movingSeconds)}</span>
+					<span class="key-stat-label">Moving</span>
+				</div>
+			{/if}
 			<div class="key-stat">
-				<span class="key-stat-value">{formatPace(run.duration_s, run.distance_m)} /km</span>
+				<span class="key-stat-value"
+					>{formatPace(
+						movingSeconds > 0 ? movingSeconds : run.duration_s,
+						run.distance_m
+					)} /km</span
+				>
 				<span class="key-stat-label">Avg Pace</span>
 			</div>
 			<div class="key-stat">
-				<span class="key-stat-value">152 bpm</span>
-				<span class="key-stat-label">Avg HR</span>
-			</div>
-			<div class="key-stat">
-				<span class="key-stat-value">42 m</span>
+				<span class="key-stat-value">{realElevationGain} m</span>
 				<span class="key-stat-label">Elevation</span>
 			</div>
+			{#if totalSteps != null}
+				<div class="key-stat">
+					<span class="key-stat-value">{totalSteps.toLocaleString()}</span>
+					<span class="key-stat-label">Steps</span>
+				</div>
+			{/if}
+			{#if avgCadence != null}
+				<div class="key-stat">
+					<span class="key-stat-value">{avgCadence}</span>
+					<span class="key-stat-label">Cadence spm</span>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Elevation Profile -->
@@ -208,17 +276,40 @@
 		font-weight: 700;
 	}
 
+	.detail-meta {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		margin-top: var(--space-xs);
+		flex-wrap: wrap;
+	}
+
 	.back-link {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-xs);
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
-		margin-top: var(--space-xs);
 	}
 
 	.back-link:hover {
 		color: var(--color-primary);
+	}
+
+	.activity-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.2rem 0.6rem;
+		border-radius: 9999px;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+		font-weight: 600;
+	}
+
+	.activity-badge .material-symbols {
+		font-size: 0.95rem;
 	}
 
 	h2 {
