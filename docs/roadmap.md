@@ -85,6 +85,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Edit run title and notes (Android)
 - [x] Share run as GPX (Android)
 - [x] Share run as image card — map + headline stats (Android)
+- [x] Save a history run as a reusable route (Douglas–Peucker simplified track) (Android)
 - [x] Delete runs (Android)
 - [x] Multi-select runs in history and bulk delete (Android)
 - [x] History sort by newest, oldest, longest, fastest (Android)

@@ -64,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
         key: const PageStorageKey('history'),
         apiClient: widget.apiClient,
         runStore: widget.runStore,
+        routeStore: widget.routeStore,
         preferences: widget.preferences,
       ),
       RoutesScreen(

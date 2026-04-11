@@ -51,6 +51,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `audio_cues.dart` — TTS for splits and pace alerts
 - `run_stats.dart` — pace/distance/split formatting helpers (tested)
 - `goals.dart` — `RunGoal` model + pure `evaluateGoal` for dashboard goal cards (tested)
+- `route_simplify.dart` — Ramer–Douglas–Peucker track simplifier used when saving a run as a route (tested)
 - `health_connect_importer.dart` / `strava_importer.dart` — bulk importers
 - `mock_data.dart` — fallback data when Supabase returns nothing (dev only)
 - `widgets/live_run_map.dart` — live map with route overlay, off-route banner

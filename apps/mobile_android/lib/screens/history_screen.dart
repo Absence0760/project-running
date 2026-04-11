@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
+import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import 'run_detail_screen.dart';
@@ -14,11 +15,13 @@ import 'run_detail_screen.dart';
 class HistoryScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
+  final LocalRouteStore routeStore;
   final Preferences preferences;
   const HistoryScreen({
     super.key,
     this.apiClient,
     required this.runStore,
+    required this.routeStore,
     required this.preferences,
   });
 
@@ -462,6 +465,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 builder: (_) => RunDetailScreen(
                   run: run,
                   runStore: widget.runStore,
+                  routeStore: widget.routeStore,
                   preferences: widget.preferences,
                   apiClient: widget.apiClient,
                 ),

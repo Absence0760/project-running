@@ -2,10 +2,13 @@ import 'dart:math' as math;
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Route;
+import 'package:uuid/uuid.dart';
 
+import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../route_simplify.dart';
 import '../run_stats.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/run_share_card.dart';
@@ -14,6 +17,7 @@ import '../widgets/run_share_card.dart';
 class RunDetailScreen extends StatefulWidget {
   final Run run;
   final LocalRunStore runStore;
+  final LocalRouteStore routeStore;
   final Preferences preferences;
   final ApiClient? apiClient;
 
@@ -21,6 +25,7 @@ class RunDetailScreen extends StatefulWidget {
     super.key,
     required this.run,
     required this.runStore,
+    required this.routeStore,
     required this.preferences,
     this.apiClient,
   });
@@ -148,6 +153,11 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Edit run',
             onPressed: _editDetails,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_road_outlined),
+            tooltip: 'Save as route',
+            onPressed: _saveAsRoute,
           ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
@@ -398,6 +408,84 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
         ),
       );
     }).toList();
+  }
+
+  /// Save this run's GPS track as a reusable route. Prompts for a name
+  /// (default: the run's title) and simplifies the track via
+  /// Ramer–Douglas–Peucker so the saved route isn't noisy.
+  Future<void> _saveAsRoute() async {
+    if (run.track.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("This run has no GPS track to save as a route"),
+        ),
+      );
+      return;
+    }
+
+    final nameCtl = TextEditingController(text: _title);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save as route'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Save this GPS trace as a route you can follow again.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameCtl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Route name',
+                border: OutlineInputBorder(),
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => Navigator.pop(ctx, true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved != true) return;
+
+    final name = nameCtl.text.trim().isEmpty ? _title : nameCtl.text.trim();
+    final simplified = simplifyTrack(run.track, epsilonMetres: 10);
+    final gain = computeElevationGain(run.track);
+
+    final route = Route(
+      id: const Uuid().v4(),
+      name: name,
+      waypoints: simplified,
+      distanceMetres: run.distanceMetres,
+      elevationGainMetres: gain,
+      createdAt: DateTime.now(),
+    );
+    await widget.routeStore.save(route);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Saved "$name" — ${simplified.length} waypoints '
+          '(${run.track.length - simplified.length} smoothed out)',
+        ),
+      ),
+    );
   }
 
   /// Open the share sheet — lets the user share an image of the run card or
