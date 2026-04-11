@@ -15,6 +15,7 @@
 	let builder: RouteBuilder;
 	let saving = $state(false);
 	let saveError = $state('');
+	let routingError = $state<string | null>(null);
 
 	function handleUpdate(data: {
 		waypoints: number;
@@ -28,6 +29,11 @@
 		elevation = data.elevation;
 		elevations = data.elevations;
 		coordinates = data.coordinates;
+	}
+
+	function handleRoutingError(message: string | null) {
+		routingError = message;
+		if (message) routed = false;
 	}
 
 	// Lap detection: count how many times the route returns to the start point
@@ -431,7 +437,26 @@
 	</aside>
 
 	<main class="map-area">
-		<RouteBuilder bind:this={builder} {mode} onupdate={handleUpdate} onmapclick={handleMapPick} />
+		<RouteBuilder
+			bind:this={builder}
+			{mode}
+			onupdate={handleUpdate}
+			onmapclick={handleMapPick}
+			onerror={handleRoutingError}
+		/>
+		{#if routingError}
+			<div class="routing-error" role="alert">
+				<span class="material-symbols">error</span>
+				<div class="routing-error-text">{routingError}</div>
+				<button
+					class="btn-ghost routing-error-dismiss"
+					aria-label="Dismiss"
+					onclick={() => (routingError = null)}
+				>
+					<span class="material-symbols">close</span>
+				</button>
+			</div>
+		{/if}
 	</main>
 </div>
 
@@ -439,6 +464,39 @@
 	.builder-layout {
 		display: flex;
 		height: 100vh;
+	}
+
+	.routing-error {
+		position: absolute;
+		top: 1rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		max-width: 28rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+		background: #dc2626;
+		color: white;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+		font-size: 0.9rem;
+	}
+
+	.routing-error-text {
+		flex: 1;
+		line-height: 1.35;
+	}
+
+	.routing-error-dismiss {
+		background: transparent;
+		border: 0;
+		color: white;
+		cursor: pointer;
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.sidebar {
@@ -934,6 +992,7 @@
 	.map-area {
 		flex: 1;
 		background: var(--color-bg-tertiary);
+		position: relative;
 	}
 
 	.material-symbols {

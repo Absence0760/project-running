@@ -16,7 +16,8 @@
 			elevations: number[];
 			coordinates: [number, number][];
 		}) => {},
-		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false
+		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
+		onerror = (_message: string | null) => {}
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -27,6 +28,12 @@
 			coordinates: [number, number][];
 		}) => void;
 		onmapclick?: (lngLat: { lng: number; lat: number }) => boolean;
+		/**
+		 * Called with a non-null message when routing fails (upstream
+		 * unreachable, all segments returned errors, etc.), and with null
+		 * when the next successful calculation clears the error.
+		 */
+		onerror?: (message: string | null) => void;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -203,10 +210,17 @@
 		isRouting = true;
 		routeVersion++;
 		const currentVersion = routeVersion;
+		// Clear any stale error from a previous failed attempt.
+		onerror(null);
 
 		try {
 			// Route each segment — batched in groups of 3 to avoid OSRM rate limits
 			const BATCH_SIZE = 3;
+			// Per-fetch timeout. The public OSRM demo server is frequently
+			// overloaded and can hang for 30s+ before returning a 504; we
+			// bail out aggressively so the spinner never lasts longer than
+			// (FETCH_TIMEOUT_MS * retries * segments) in the worst case.
+			const FETCH_TIMEOUT_MS = 8000;
 			const segments: { from: TrackPoint; to: TrackPoint }[] = [];
 			for (let i = 0; i < waypoints.length - 1; i++) {
 				segments.push({ from: waypoints[i], to: waypoints[i + 1] });
@@ -217,10 +231,13 @@
 				const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=geojson`;
 				for (let attempt = 0; attempt <= retries; attempt++) {
 					try {
-						const res = await fetch(url);
+						const res = await fetch(url, {
+							signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+						});
 						if (res.ok) return res.json();
 						if (attempt < retries) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
 					} catch {
+						// Timeouts land here as AbortError; network errors too.
 						if (attempt < retries) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
 					}
 				}
@@ -245,10 +262,13 @@
 
 			if (currentVersion !== routeVersion) return;
 
-			// Stitch segments together
+			// Stitch segments together. Count how many succeeded so we can
+			// surface an error when the upstream is completely unreachable.
 			const allCoords: [number, number][] = [];
+			let okSegments = 0;
 			for (const data of results as { code: string; routes?: { geometry: { coordinates: [number, number][] } }[] }[]) {
 				if (data.code !== 'Ok' || !data.routes?.[0]) continue;
+				okSegments++;
 				const segCoords = data.routes[0].geometry.coordinates;
 				if (allCoords.length > 0 && segCoords.length > 0) {
 					allCoords.push(...segCoords.slice(1));
@@ -258,6 +278,19 @@
 			}
 
 			if (currentVersion !== routeVersion) return;
+
+			if (okSegments === 0) {
+				throw new Error(
+					'Routing service unavailable — all segment requests timed out or failed. The public OSRM demo server is unreliable; see docs/roadmap.md.'
+				);
+			}
+			if (okSegments < segments.length) {
+				// Partial success — show a softer warning but keep the route.
+				onerror(
+					`Routed ${okSegments} of ${segments.length} segments — some requests failed. The line is incomplete.`
+				);
+			}
+
 			routeCoordinates = allCoords;
 
 			const { sampled } = sampleCoordinates(routeCoordinates, 100);
@@ -281,6 +314,17 @@
 		} catch (err) {
 			if (currentVersion === routeVersion) {
 				console.error('Routing failed:', err);
+				onerror(
+					err instanceof Error
+						? err.message
+						: 'Routing failed — the routing service is unreachable.'
+				);
+				// Clear the stale in-flight route so the UI doesn't show a
+				// partial or empty line.
+				routeCoordinates = [];
+				routeElevations = [];
+				updateRouteLine();
+				emitUpdate();
 			}
 		} finally {
 			if (currentVersion === routeVersion) {
