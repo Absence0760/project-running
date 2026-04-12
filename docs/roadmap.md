@@ -321,12 +321,46 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Premium tier — training and coaching (~$6/month)
 
+**Structured training plan runner (workout execution):**
+
+The foundation under both the generator and any hand-built plan: a data model for a *plan* (goal race + weeks + per-day planned workouts), the surfaces that render "today's workout" to the runner, and the execution loop that drives live pace targets from the planned workout and auto-matches recorded runs back to it. This unlocks the use case where the runner pastes a plan from a coach or a book (e.g. a 32-week marathon plan with phase-banded paces) and the app walks them through it day by day. Own feature because it's valuable with or without plan *generation* — a generated plan is just one of several inputs to the runner.
+
+- [ ] Data model:
+  - [ ] `training_plans` table: `id`, `user_id`, `name`, `goal_event_id` (nullable FK to `events`), `goal_time_seconds`, `start_date`, `end_date`, `status` (`active` / `completed` / `abandoned`), `notes`
+  - [ ] `plan_weeks`: `id`, `plan_id`, `week_index`, `phase_label` (`base` / `build` / `race_specific` / `taper` — free-form string), `target_volume_metres`, `notes`
+  - [ ] `plan_workouts`: `id`, `week_id`, `scheduled_date`, `kind` (enum: `easy` / `long` / `recovery` / `tempo` / `interval` / `marathon_pace` / `race` / `rest`), `target_distance_metres`, `target_duration_seconds`, `target_pace_sec_per_km` (nullable), `target_pace_tolerance_sec` (nullable), `structure_json` (for structured workouts like `4×1 mi @ 7:00 w/ 1 mi easy`), `notes`, `completed_run_id` (nullable FK to `runs` once matched)
+  - [ ] Dart + TS type regeneration via the existing `gen:types` flow — see `docs/schema_codegen.md`
+- [ ] Plan editor (web-first, mobile read-only in v1):
+  - [ ] Create a plan from scratch: set goal race, date, target time, number of weeks
+  - [ ] Import from templates: paste markdown table, parse into weeks/workouts, or import from a small built-in library (generic 16-week marathon / 12-week half / C25K)
+  - [ ] Edit per-day workouts inline: kind, distance, target pace, notes
+  - [ ] Bulk operations: duplicate a week, shift the plan forward/back by N days, mark a week as recovery
+- [ ] Dashboard + run-tab surfaces:
+  - [ ] "Today's workout" card on the dashboard: type, distance, target pace, quick "Start workout" button
+  - [ ] This-week view: 7-day strip with planned vs completed state per day
+  - [ ] Plan progress: weeks completed, adherence % (planned miles vs actual), long-run longest, phase marker
+- [ ] Execution loop:
+  - [ ] "Start workout" opens the run screen pre-configured: activity type from workout kind, target pace locked in, audio cues tuned to the workout's tolerance (e.g. tight band for intervals, loose band for easy runs)
+  - [ ] Live "workout progress" overlay during structured workouts — shows the current rep / recovery, upcoming target, reps remaining
+  - [ ] Post-run: the completed `run_id` auto-links to the planned workout (same day, same activity) and the workout card flips to "done" with a side-by-side comparison of planned vs actual
+  - [ ] Manual override: runner can un-link, re-link to a different planned workout, or mark a workout as skipped without deleting it
+- [ ] Adherence feedback:
+  - [ ] "N of M workouts completed this week" summary
+  - [ ] Flag when weekly mileage drifts >20% under or over plan (both directions matter — over-running the easy weeks is a real failure mode)
+  - [ ] Missed-workout recovery: suggest whether to make up a missed long run or skip it, driven by simple rules (phase + proximity to recovery week)
+- [ ] Sharing and handoff:
+  - [ ] Export a plan as markdown or JSON (round-trip with the paste-import path)
+  - [ ] Public plan library — users can publish a plan they followed and others can clone it into their own account (deferred until community infra lands, see § Community)
+
+**Scope note:** this is the single largest feature on the Phase 3 list. Budget weeks, not days. Build in this order: data model + web plan editor first (read-heavy), then dashboard "today's workout" card, then the run-tab execution loop. Structured-workout execution (intervals with live rep tracking) is the final layer and can be skipped in v1 if it blocks ship.
+
 **Training plan generator:**
 - [ ] Adaptive weekly plans for 5k, 10k, half marathon, full marathon
 - [ ] VDOT calculation using Daniels' Running Formula
 - [ ] Training phase determination (base → build → peak → taper)
 - [ ] Workout generation: easy, tempo, interval, long run with target paces
 - [ ] Adjustment based on missed sessions and recovery patterns
+- [ ] Output plugs into the plan-runner data model above — the generator produces `training_plans` + `plan_weeks` + `plan_workouts` rows, same as a hand-built plan
 
 **VO2 max estimation:**
 - [ ] Estimate from pace and heart rate data (Cooper formula)
