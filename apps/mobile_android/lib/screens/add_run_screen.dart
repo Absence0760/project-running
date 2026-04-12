@@ -113,6 +113,18 @@ class _AddRunScreenState extends State<AddRunScreen> {
     });
   }
 
+  Future<void> _pickRoute(List<Route> routes, DistanceUnit unit) async {
+    final picked = await showModalBottomSheet<_RoutePick>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => _RoutePickerSheet(routes: routes, unit: unit),
+    );
+    if (picked == null) return;
+    _onRouteSelected(picked.route);
+  }
+
   String _formatDistanceForInput(double metres) {
     final unit = widget.preferences.unit;
     if (unit == DistanceUnit.mi) {
@@ -255,29 +267,33 @@ class _AddRunScreenState extends State<AddRunScreen> {
             if (routes.isNotEmpty) ...[
               Text('Route (optional)', style: theme.textTheme.labelLarge),
               const SizedBox(height: 8),
-              DropdownButtonFormField<Route?>(
-                initialValue: _selectedRoute,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Pick a saved route',
+              InkWell(
+                onTap: () => _pickRoute(routes, unit),
+                borderRadius: BorderRadius.circular(4),
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _selectedRoute == null
+                        ? const Icon(Icons.search)
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            tooltip: 'Clear route',
+                            onPressed: () => _onRouteSelected(null),
+                          ),
+                  ),
+                  child: Text(
+                    _selectedRoute == null
+                        ? 'Search saved routes'
+                        : '${_selectedRoute!.name} • '
+                            '${UnitFormat.distance(_selectedRoute!.distanceMetres, unit)}',
+                    style: _selectedRoute == null
+                        ? theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.outline,
+                          )
+                        : theme.textTheme.bodyLarge,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                items: [
-                  const DropdownMenuItem<Route?>(
-                    value: null,
-                    child: Text('No route'),
-                  ),
-                  ...routes.map(
-                    (r) => DropdownMenuItem<Route?>(
-                      value: r,
-                      child: Text(
-                        '${r.name} • ${UnitFormat.distance(r.distanceMetres, unit)}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: _onRouteSelected,
               ),
               const SizedBox(height: 20),
             ],
@@ -397,5 +413,127 @@ class _AddRunScreenState extends State<AddRunScreen> {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+}
+
+/// Result wrapper so `Navigator.pop(null)` (dismiss) is distinguishable
+/// from "the user picked the No route option" — the latter pops a
+/// [_RoutePick] whose `route` field is null.
+class _RoutePick {
+  final Route? route;
+  const _RoutePick(this.route);
+}
+
+class _RoutePickerSheet extends StatefulWidget {
+  final List<Route> routes;
+  final DistanceUnit unit;
+  const _RoutePickerSheet({required this.routes, required this.unit});
+
+  @override
+  State<_RoutePickerSheet> createState() => _RoutePickerSheetState();
+}
+
+class _RoutePickerSheetState extends State<_RoutePickerSheet> {
+  final _searchCtl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final q = _query.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? widget.routes
+        : widget.routes
+            .where((r) => r.name.toLowerCase().contains(q))
+            .toList();
+
+    final mq = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+      child: FractionallySizedBox(
+        heightFactor: 0.85,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: TextField(
+                controller: _searchCtl,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Search routes',
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchCtl.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No routes match "$_query"',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtered.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return ListTile(
+                            leading: const Icon(Icons.block),
+                            title: const Text('No route'),
+                            onTap: () =>
+                                Navigator.pop(context, const _RoutePick(null)),
+                          );
+                        }
+                        final route = filtered[index - 1];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: theme.colorScheme.primaryContainer,
+                            child: Icon(
+                              Icons.route,
+                              color: theme.colorScheme.primary,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            route.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            UnitFormat.distance(
+                              route.distanceMetres,
+                              widget.unit,
+                            ),
+                          ),
+                          onTap: () =>
+                              Navigator.pop(context, _RoutePick(route)),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
