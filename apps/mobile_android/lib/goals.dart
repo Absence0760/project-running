@@ -25,6 +25,12 @@ String goalKindLabel(GoalTargetKind kind) {
 class RunGoal {
   final String id;
   final GoalPeriod period;
+
+  /// Optional display name. Null means "auto-label from targets" — see
+  /// [displayTitle]. Exists so a user with two goals in the same period
+  /// can tell them apart ("Base miles" vs "Speed work").
+  final String? title;
+
   final double? distanceMetres;
   final double? timeSeconds;
   final double? avgPaceSecPerKm;
@@ -33,6 +39,7 @@ class RunGoal {
   const RunGoal({
     required this.id,
     required this.period,
+    this.title,
     this.distanceMetres,
     this.timeSeconds,
     this.avgPaceSecPerKm,
@@ -52,6 +59,7 @@ class RunGoal {
   Map<String, dynamic> toJson() => {
         'id': id,
         'period': period.name,
+        if (title != null && title!.isNotEmpty) 'title': title,
         if (distanceMetres != null) 'distance_m': distanceMetres,
         if (timeSeconds != null) 'time_s': timeSeconds,
         if (avgPaceSecPerKm != null) 'pace_s_per_km': avgPaceSecPerKm,
@@ -82,9 +90,11 @@ class RunGoal {
       );
     }
 
+    final rawTitle = json['title'] as String?;
     return RunGoal(
       id: json['id'] as String,
       period: period,
+      title: (rawTitle != null && rawTitle.isNotEmpty) ? rawTitle : null,
       distanceMetres: (json['distance_m'] as num?)?.toDouble(),
       timeSeconds: (json['time_s'] as num?)?.toDouble(),
       avgPaceSecPerKm: (json['pace_s_per_km'] as num?)?.toDouble(),

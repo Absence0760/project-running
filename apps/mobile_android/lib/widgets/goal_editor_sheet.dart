@@ -37,6 +37,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   static const _metresPerMile = 1609.344;
 
   late GoalPeriod _period;
+  late final TextEditingController _titleCtl;
   late final TextEditingController _distanceCtl;
   late final TextEditingController _timeCtl;
   late final TextEditingController _paceCtl;
@@ -50,6 +51,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     _period = existing?.period ?? GoalPeriod.week;
     final unit = widget.preferences.unit;
 
+    _titleCtl = TextEditingController(text: existing?.title ?? '');
     _distanceCtl = TextEditingController(
       text: existing?.distanceMetres != null
           ? _distanceToInput(existing!.distanceMetres!, unit)
@@ -74,6 +76,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
 
   @override
   void dispose() {
+    _titleCtl.dispose();
     _distanceCtl.dispose();
     _timeCtl.dispose();
     _paceCtl.dispose();
@@ -110,6 +113,22 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 20),
+            _sectionLabel(theme, 'Name (optional)'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _titleCtl,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(),
+                hintText: 'e.g. Base miles',
+              ),
+            ),
+            const SizedBox(height: 24),
             _sectionLabel(theme, 'Period'),
             const SizedBox(height: 8),
             SegmentedButton<GoalPeriod>(
@@ -322,9 +341,11 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
       return;
     }
 
+    final trimmedTitle = _titleCtl.text.trim();
     final goal = RunGoal(
       id: widget.existing?.id ?? newGoalId(),
       period: _period,
+      title: trimmedTitle.isEmpty ? null : trimmedTitle,
       distanceMetres: distance,
       timeSeconds: time,
       avgPaceSecPerKm: pace,

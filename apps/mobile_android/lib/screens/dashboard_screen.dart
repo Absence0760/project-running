@@ -407,8 +407,9 @@ class _GoalCard extends StatelessWidget {
     final completeColor = Colors.green.shade600;
     final accent =
         progress.complete ? completeColor : theme.colorScheme.primary;
-    final title =
-        goal.period == GoalPeriod.week ? 'WEEKLY GOAL' : 'MONTHLY GOAL';
+    final periodLabel =
+        goal.period == GoalPeriod.week ? 'WEEKLY' : 'MONTHLY';
+    final customTitle = goal.title;
 
     // Look up per-kind progress so the card can render every kind in order,
     // with unset targets shown as muted "-" rows. Keeps the layout stable
@@ -427,14 +428,38 @@ class _GoalCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: theme.colorScheme.outline,
-                        letterSpacing: 1.1,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          customTitle ?? '$periodLabel GOAL',
+                          style: (customTitle != null
+                                  ? theme.textTheme.titleMedium
+                                  : theme.textTheme.labelMedium)
+                              ?.copyWith(
+                            color: customTitle != null
+                                ? null
+                                : theme.colorScheme.outline,
+                            letterSpacing: customTitle != null ? 0 : 1.1,
+                            fontWeight: customTitle != null
+                                ? FontWeight.w700
+                                : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (customTitle != null)
+                          Text(
+                            periodLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   Text(
