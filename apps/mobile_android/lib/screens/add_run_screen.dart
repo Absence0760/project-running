@@ -114,12 +114,12 @@ class _AddRunScreenState extends State<AddRunScreen> {
   }
 
   Future<void> _pickRoute(List<Route> routes, DistanceUnit unit) async {
-    final picked = await showModalBottomSheet<_RoutePick>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (_) => _RoutePickerSheet(routes: routes, unit: unit),
+    final picked = await Navigator.push<_RoutePick>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _RoutePickerPage(routes: routes, unit: unit),
+      ),
     );
     if (picked == null) return;
     _onRouteSelected(picked.route);
@@ -424,18 +424,35 @@ class _RoutePick {
   const _RoutePick(this.route);
 }
 
-class _RoutePickerSheet extends StatefulWidget {
+/// Full-screen searchable route picker. Pushed as a Material full-screen
+/// dialog rather than a modal bottom sheet — sheets fight the keyboard
+/// animation (viewInsets + FractionallySizedBox both reflow during open),
+/// which is the "slow and glitchy" feel users notice. A pushed Scaffold
+/// has the OS soft keyboard, AppBar, and list layout all playing by
+/// their normal rules.
+class _RoutePickerPage extends StatefulWidget {
   final List<Route> routes;
   final DistanceUnit unit;
-  const _RoutePickerSheet({required this.routes, required this.unit});
+  const _RoutePickerPage({required this.routes, required this.unit});
 
   @override
-  State<_RoutePickerSheet> createState() => _RoutePickerSheetState();
+  State<_RoutePickerPage> createState() => _RoutePickerPageState();
 }
 
-class _RoutePickerSheetState extends State<_RoutePickerSheet> {
+class _RoutePickerPageState extends State<_RoutePickerPage> {
   final _searchCtl = TextEditingController();
   String _query = '';
+
+  /// Lowercased route names, indexed parallel to `widget.routes`. Filled
+  /// once in `initState` so typing a 6-character query doesn't re-allocate
+  /// N lowercase strings per keystroke.
+  late final List<String> _lowerNames;
+
+  @override
+  void initState() {
+    super.initState();
+    _lowerNames = widget.routes.map((r) => r.name.toLowerCase()).toList();
+  }
 
   @override
   void dispose() {
@@ -443,96 +460,99 @@ class _RoutePickerSheetState extends State<_RoutePickerSheet> {
     super.dispose();
   }
 
+  List<Route> _filtered() {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.routes;
+    final out = <Route>[];
+    for (var i = 0; i < widget.routes.length; i++) {
+      if (_lowerNames[i].contains(q)) out.add(widget.routes[i]);
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final q = _query.trim().toLowerCase();
-    final filtered = q.isEmpty
-        ? widget.routes
-        : widget.routes
-            .where((r) => r.name.toLowerCase().contains(q))
-            .toList();
+    final filtered = _filtered();
 
-    final mq = MediaQuery.of(context);
-    return Padding(
-      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-      child: FractionallySizedBox(
-        heightFactor: 0.85,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: TextField(
-                controller: _searchCtl,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: 'Search routes',
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchCtl.clear();
-                            setState(() => _query = '');
-                          },
-                        ),
-                ),
-                onChanged: (v) => setState(() => _query = v),
-              ),
-            ),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No routes match "$_query"',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: filtered.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return ListTile(
-                            leading: const Icon(Icons.block),
-                            title: const Text('No route'),
-                            onTap: () =>
-                                Navigator.pop(context, const _RoutePick(null)),
-                          );
-                        }
-                        final route = filtered[index - 1];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: theme.colorScheme.primaryContainer,
-                            child: Icon(
-                              Icons.route,
-                              color: theme.colorScheme.primary,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            route.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            UnitFormat.distance(
-                              route.distanceMetres,
-                              widget.unit,
-                            ),
-                          ),
-                          onTap: () =>
-                              Navigator.pop(context, _RoutePick(route)),
-                        );
-                      },
-                    ),
-            ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Cancel',
+          onPressed: () => Navigator.pop(context),
         ),
+        title: TextField(
+          controller: _searchCtl,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          style: theme.textTheme.titleMedium,
+          decoration: const InputDecoration(
+            hintText: 'Search routes',
+            border: InputBorder.none,
+          ),
+          onChanged: (v) => setState(() => _query = v),
+        ),
+        actions: [
+          if (_query.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.clear),
+              tooltip: 'Clear',
+              onPressed: () {
+                _searchCtl.clear();
+                setState(() => _query = '');
+              },
+            ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: filtered.isEmpty
+            ? Center(
+                child: Text(
+                  'No routes match "$_query"',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              )
+            : ListView.builder(
+                // `+1` for the leading "No route" row.
+                itemCount: filtered.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return ListTile(
+                      leading: const Icon(Icons.block),
+                      title: const Text('No route'),
+                      onTap: () =>
+                          Navigator.pop(context, const _RoutePick(null)),
+                    );
+                  }
+                  final route = filtered[index - 1];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.route,
+                        color: theme.colorScheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      route.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      UnitFormat.distance(
+                        route.distanceMetres,
+                        widget.unit,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(context, _RoutePick(route)),
+                  );
+                },
+              ),
       ),
     );
   }
