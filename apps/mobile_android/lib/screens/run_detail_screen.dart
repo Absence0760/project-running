@@ -171,7 +171,9 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: SafeArea(
+        top: false,
+        child: ListView(
         children: [
           // Map (with a loading overlay while we fetch the cloud track)
           SizedBox(
@@ -298,6 +300,7 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
 
           const SizedBox(height: 32),
         ],
+        ),
       ),
     );
   }

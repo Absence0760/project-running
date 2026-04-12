@@ -34,7 +34,9 @@ class RouteDetailScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           // Map preview
           SizedBox(
@@ -114,6 +116,7 @@ class RouteDetailScreen extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

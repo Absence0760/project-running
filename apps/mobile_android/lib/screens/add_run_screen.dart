@@ -362,6 +362,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               label: const Text('Save run'),
             ),
           ],
+          ),
         ),
       ),
     );

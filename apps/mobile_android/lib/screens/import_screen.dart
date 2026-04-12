@@ -146,7 +146,9 @@ class _ImportScreenState extends State<ImportScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Import runs')),
-      body: ListView(
+      body: SafeArea(
+        top: false,
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
@@ -328,6 +330,7 @@ class _ImportScreenState extends State<ImportScreen> {
             ),
           ],
         ],
+        ),
       ),
     );
   }
