@@ -35,7 +35,8 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `sign_in_screen.dart` — email/password + Google sign-in
 - `home_screen.dart` — the dashboard + nav tabs host
 - `dashboard_screen.dart` — weekly mileage, PBs, goal progress
-- `history_screen.dart` — run list with sorting
+- `history_screen.dart` — run list with sorting, FAB opens `add_run_screen`
+- `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
 - `run_detail_screen.dart` — single run map + stats + splits + elevation
 - `import_screen.dart` — GPX / KML / KMZ / GeoJSON / TCX file picker
 - `routes_screen.dart` — saved routes list

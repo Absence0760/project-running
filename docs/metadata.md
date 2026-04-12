@@ -55,6 +55,7 @@ Keys that carry transient or platform-internal state. Treat these as implementat
 | `last_modified_at` | `string` (ISO 8601) | `mobile_android/lib/local_run_store.dart` (on every `update()`) | `mobile_android/lib/local_run_store.dart` (newer-wins conflict resolution during sync) | Optional, but **required for correct sync conflict resolution** | Set by the local store, not by the user. The sync service compares this against the cloud row's value and keeps the newer one. Android-only today. |
 | `recovered_from_crash` | `bool` — always `true` when present | `mobile_android/lib/main.dart` (app launch, when it detects an in-progress crash-time save) | — | Optional | Marks a run that was reconstructed from the incremental-save snapshot after a crash mid-recording. No UI consumer yet — would be useful for a "we saved what we had" toast. |
 | `in_progress_saved_at` | `string` (ISO 8601) | `mobile_android/lib/screens/run_screen.dart` (periodic incremental save during recording) | — | Optional | Timestamp of the last incremental save. Cleared when the run is finalised. Survival indicator for crash recovery. |
+| `manual_entry` | `bool` — always `true` when present | `mobile_android/lib/screens/add_run_screen.dart` | — | Optional | Marks a run created via the "Add run" form rather than a live recording or an import. Present on runs with an empty `track` and a `routeId` that the user picked by hand. No UI consumer yet — useful when computing PBs, since a user-estimated time shouldn't outrank a GPS-recorded one. |
 
 ### Client-side synthetic
 

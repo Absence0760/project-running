@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import 'add_run_screen.dart';
 import 'run_detail_screen.dart';
 
 /// Run history showing local runs with sync status.
@@ -282,6 +283,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Scaffold(
         appBar: _selecting ? _selectionAppBar() : _normalAppBar(),
         body: _buildBody(theme, unit, totalCount),
+        floatingActionButton: _selecting
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _openAddRun,
+                icon: const Icon(Icons.add),
+                label: const Text('Add run'),
+                tooltip: 'Add a run manually',
+              ),
+      ),
+    );
+  }
+
+  void _openAddRun() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddRunScreen(
+          runStore: widget.runStore,
+          routeStore: widget.routeStore,
+          preferences: widget.preferences,
+        ),
       ),
     );
   }
