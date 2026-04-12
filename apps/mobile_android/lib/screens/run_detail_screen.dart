@@ -37,11 +37,27 @@ class RunDetailScreen extends StatefulWidget {
 class _RunDetailScreenState extends State<RunDetailScreen> {
   late Run run = widget.run;
   bool _loadingTrack = false;
+  Route? _linkedRoute;
 
   @override
   void initState() {
     super.initState();
+    _loadLinkedRoute();
     _maybeFetchTrack();
+  }
+
+  /// If the run is attached to a saved route (manual-entry runs usually
+  /// are), resolve it from the local route store so we can show its planned
+  /// path on the map when the run itself has no GPS track.
+  void _loadLinkedRoute() {
+    final id = run.routeId;
+    if (id == null) return;
+    try {
+      _linkedRoute =
+          widget.routeStore.routes.where((r) => r.id == id).firstOrNull;
+    } catch (_) {
+      _linkedRoute = null;
+    }
   }
 
   /// If this run came from the cloud (track empty but track_url present),
@@ -175,38 +191,46 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
         top: false,
         child: ListView(
         children: [
-          // Map (with a loading overlay while we fetch the cloud track)
-          SizedBox(
-            height: 280,
-            child: Stack(
-              children: [
-                LiveRunMap(track: run.track, followRunner: false),
-                if (_loadingTrack)
-                  const Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            SizedBox(width: 8),
-                            Text('Loading GPS data...',
-                                style: TextStyle(fontSize: 12)),
-                          ],
+          // Map: show the recorded track if we have one; otherwise fall back
+          // to the linked route's planned path. Manual-entry runs with no
+          // route attached skip the map entirely.
+          if (run.track.isNotEmpty || _linkedRoute != null)
+            SizedBox(
+              height: 280,
+              child: Stack(
+                children: [
+                  LiveRunMap(
+                    track: run.track,
+                    plannedRoute:
+                        run.track.isEmpty ? _linkedRoute?.waypoints : null,
+                    followRunner: false,
+                  ),
+                  if (_loadingTrack)
+                    const Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(width: 8),
+                              Text('Loading GPS data...',
+                                  style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
 
           // Activity type + notes
           Padding(
@@ -230,33 +254,41 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
               child: Text(_notes, style: theme.textTheme.bodyMedium),
             ),
 
-          // Primary stats
+          // Primary stats — each cell is Expanded so a long value like
+          // "1:15:30" can't push the row past the screen edge.
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _StatBig(
-                  label: 'Distance',
-                  value: UnitFormat.distanceValue(run.distanceMetres, unit),
-                  unit: UnitFormat.distanceLabel(unit),
+                Expanded(
+                  child: _StatBig(
+                    label: 'Distance',
+                    value: UnitFormat.distanceValue(run.distanceMetres, unit),
+                    unit: UnitFormat.distanceLabel(unit),
+                  ),
                 ),
-                _StatBig(
-                  label: 'Time',
-                  value: _formatDuration(run.duration),
+                Expanded(
+                  child: _StatBig(
+                    label: 'Time',
+                    value: _formatDuration(run.duration),
+                  ),
                 ),
-                _StatBig(
-                  label: 'Moving',
-                  value: _formatDuration(_movingTime),
+                Expanded(
+                  child: _StatBig(
+                    label: 'Moving',
+                    value: _formatDuration(_movingTime),
+                  ),
                 ),
-                _StatBig(
-                  label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
-                  value: _activityType.usesSpeed
-                      ? UnitFormat.speed(_movingPaceSecPerKm, unit)
-                      : UnitFormat.pace(_movingPaceSecPerKm, unit),
-                  unit: _activityType.usesSpeed
-                      ? UnitFormat.speedLabel(unit)
-                      : UnitFormat.paceLabel(unit),
+                Expanded(
+                  child: _StatBig(
+                    label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
+                    value: _activityType.usesSpeed
+                        ? UnitFormat.speed(_movingPaceSecPerKm, unit)
+                        : UnitFormat.pace(_movingPaceSecPerKm, unit),
+                    unit: _activityType.usesSpeed
+                        ? UnitFormat.speedLabel(unit)
+                        : UnitFormat.paceLabel(unit),
+                  ),
                 ),
               ],
             ),
@@ -573,27 +605,30 @@ class _StatBig extends StatelessWidget {
     final theme = Theme.of(context);
     return Column(
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              value,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (unit != null) ...[
-              const SizedBox(width: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
               Text(
-                unit!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                value,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
+              if (unit != null) ...[
+                const SizedBox(width: 4),
+                Text(
+                  unit!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -601,6 +636,8 @@ class _StatBig extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.outline,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
