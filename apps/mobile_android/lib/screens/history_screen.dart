@@ -286,6 +286,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         floatingActionButton: _selecting
             ? null
             : FloatingActionButton.extended(
+                heroTag: 'history_add_run_fab',
                 onPressed: _openAddRun,
                 icon: const Icon(Icons.add),
                 label: const Text('Add run'),

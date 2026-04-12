@@ -128,6 +128,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'routes_import_fab',
         onPressed: _importFile,
         icon: const Icon(Icons.upload_file),
         label: const Text('Import'),
