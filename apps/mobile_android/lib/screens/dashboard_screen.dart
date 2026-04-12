@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../goals.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../run_stats.dart';
 import '../widgets/goal_editor_sheet.dart';
 
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
@@ -241,17 +242,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Personal-best cards are running-only. Cycles, walks, and hikes have
+  /// their own pace/distance scales and would otherwise starve the run PBs
+  /// (a 40 km ride as "longest run", a brisk walk as "fastest pace"). Legacy
+  /// runs with no `activity_type` in metadata default to run.
+  static bool _isRunActivity(Run r) {
+    final raw = r.metadata?['activity_type'] as String?;
+    return raw == null || raw == 'run';
+  }
+
   Run? _longestRun(List<Run> runs) {
-    if (runs.isEmpty) return null;
-    return runs.reduce((a, b) => a.distanceMetres >= b.distanceMetres ? a : b);
+    final eligible = runs.where(_isRunActivity).toList();
+    if (eligible.isEmpty) return null;
+    return eligible
+        .reduce((a, b) => a.distanceMetres >= b.distanceMetres ? a : b);
   }
 
   Run? _fastestPaceRun(List<Run> runs) {
     final eligible = runs
-        .where((r) =>
-            r.distanceMetres >= 1000 &&
-            !ActivityType.fromName(r.metadata?['activity_type'] as String?)
-                .usesSpeed)
+        .where((r) => _isRunActivity(r) && r.distanceMetres >= 1000)
         .toList();
     if (eligible.isEmpty) return null;
     return eligible.reduce((a, b) => _paceOf(a) <= _paceOf(b) ? a : b);
@@ -259,19 +268,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   double _paceOf(Run r) => r.duration.inSeconds / (r.distanceMetres / 1000);
 
+  /// Fastest continuous 5 km across every running activity with a GPS
+  /// track — a rolling-window scan per run, not a scaled average. Runs
+  /// without a track (manual entries, summary-only imports) are ignored
+  /// here because there's no way to know the runner's pace over any
+  /// specific 5 km segment.
   Duration? _best5k(List<Run> runs) {
-    final eligible = runs
-        .where((r) =>
-            r.distanceMetres >= 5000 &&
-            !ActivityType.fromName(r.metadata?['activity_type'] as String?)
-                .usesSpeed)
-        .toList();
-    if (eligible.isEmpty) return null;
-    final times = eligible.map((r) {
-      final secPerMetre = r.duration.inSeconds / r.distanceMetres;
-      return Duration(seconds: (secPerMetre * 5000).round());
-    }).toList();
-    return times.reduce((a, b) => a < b ? a : b);
+    Duration? best;
+    for (final r in runs) {
+      if (!_isRunActivity(r) || r.distanceMetres < 5000) continue;
+      final window = fastestWindowOf(r.track, 5000);
+      if (window == null) continue;
+      if (best == null || window < best) best = window;
+    }
+    return best;
   }
 
   static String _formatDuration(Duration d) {
