@@ -255,7 +255,10 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             ),
 
           // Primary stats — each cell is Expanded so a long value like
-          // "1:15:30" can't push the row past the screen edge.
+          // "1:15:30" can't push the row past the screen edge. For runs
+          // with no GPS track (manual entries, summary imports) the
+          // "Moving" column is dropped — it's identical to "Time" and
+          // four cells are too tight on a phone.
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(
@@ -273,12 +276,13 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                     value: _formatDuration(run.duration),
                   ),
                 ),
-                Expanded(
-                  child: _StatBig(
-                    label: 'Moving',
-                    value: _formatDuration(_movingTime),
+                if (_showMovingTime)
+                  Expanded(
+                    child: _StatBig(
+                      label: 'Moving',
+                      value: _formatDuration(_movingTime),
+                    ),
                   ),
-                ),
                 Expanded(
                   child: _StatBig(
                     label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
@@ -379,6 +383,15 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     final computed = movingTimeOf(run.track);
     if (computed.inSeconds == 0) return run.duration;
     return computed;
+  }
+
+  /// Whether to render the "Moving" stat cell. Hidden when the value is
+  /// going to equal the total duration anyway — either because there's no
+  /// GPS track to compute it from, or because the runner never stopped.
+  /// Avoids a fourth stat cramping the row on a phone.
+  bool get _showMovingTime {
+    if (run.track.length < 2) return false;
+    return _movingTime.inSeconds != run.duration.inSeconds;
   }
 
   double? get _movingPaceSecPerKm {
