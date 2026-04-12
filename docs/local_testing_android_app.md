@@ -237,8 +237,8 @@ The Android app supports the following. For a side-by-side view against Strava, 
 ### Dashboard
 
 - **Weekly, monthly, all-time stats** — total distance, run count, time
-- **Weekly goal** — set a kilometre target, track progress with a progress bar
-- **Personal bests** — longest run, fastest pace, fastest 5k
+- **Training goals** — one or more weekly/monthly goals, each with any combination of distance, time, avg-pace, and run-count targets. Progress is tracked per-target with an aggregate bar.
+- **Personal bests** — longest run, fastest pace, fastest 5k. All three are **running-only** (walks, hikes, and cycles don't starve the run PBs). **Fastest 5k** is the fastest rolling 5 km window inside any recorded GPS track, not `total_time × 5 / total_distance` — so a 10 km at even pace does *not* show up as a half-time 5k. Manual runs and summary-only imports don't have a track and are excluded from this card.
 
 ### Activity types
 
@@ -254,7 +254,7 @@ The activity type you pick on the idle screen genuinely changes how the run is r
 - **GPS filter + Min move**: software movement thresholds — a new GPS fix is appended to the track only when it's more than `max(GPS filter, Min move)` metres from the last tracked point. Filters out jitter.
 - **Max speed**: corrupted GPS fixes implying faster than this are dropped (a single teleport can't inflate total distance). See [run_recording.md](run_recording.md#per-activity-tuning) for the full filter chain.
 
-When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Avg Speed, the audio cue announces speed instead of pace, and split notifications fire every 5 km instead of every km. The history list and run detail screen also adapt — cycling rides show speed in their trailing column. Personal bests for "Fastest pace" and "Fastest 5k" only consider running-style activities.
+When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Avg Speed, the audio cue announces speed instead of pace, and split notifications fire every 5 km instead of every km. The history list and run detail screen also adapt — cycling rides show speed in their trailing column. All three Personal Bests cards (including "Longest run") are running-only — see the Dashboard section above.
 
 Activity type is locked once you tap Start — it can't change mid-run.
 
@@ -301,11 +301,15 @@ See [run_recording.md](run_recording.md) for the architecture behind all of the 
 - **Pull from cloud** — pulls runs created on other devices when signed in (also pull-to-refresh)
 - **Sort** — newest, oldest, longest distance, fastest pace
 - **Activity icons** — list items show the activity type icon
-- **Edit run** — add a custom title and notes
+- **Edit run** — add a custom title and notes. For manual-entry runs (no GPS track), the edit dialog also lets you correct distance and duration; recorded runs keep those derived from the track to avoid desyncing splits / map / PBs from the headline stats.
+- **Add run manually** — the FAB on the History tab opens a form to log a run you did without the recorder. Date/time, activity type, duration, distance, optional saved route (searchable picker that pre-fills the distance), and optional title/notes. The run is saved with `metadata.manual_entry = true` and an empty GPS track.
 - **Share run** — exports as GPX and opens the system share sheet
 - **Delete runs** from the detail screen
+- **Multi-select & bulk delete** — long-press to enter selection mode, tap to add more, delete from the app bar
 - **Sync button** — bulk-upload all unsynced runs (when signed in)
 - **Offline indicator** — runs saved offline show a cloud-off icon
+
+The run detail screen adapts to runs without a track: the map shows the linked route's planned path if one is attached (or is hidden entirely if not), the "Moving" stat column is dropped (it would equal Time), and the Splits section is hidden.
 
 ### Settings
 

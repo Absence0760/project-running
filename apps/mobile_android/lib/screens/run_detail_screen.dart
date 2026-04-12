@@ -438,12 +438,14 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             const Divider(),
           ],
 
-          // Splits
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text('Splits', style: theme.textTheme.titleMedium),
-          ),
-          ..._buildSplits(theme, unit),
+          // Splits — only when there's a track to compute them from.
+          if (run.track.length >= 2) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Splits', style: theme.textTheme.titleMedium),
+            ),
+            ..._buildSplits(theme, unit),
+          ],
 
           const SizedBox(height: 32),
         ],
@@ -479,11 +481,6 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
         trailing: Text(_formatDuration(dur), style: theme.textTheme.titleMedium),
       );
     }).toList();
-  }
-
-  double? get _avgPaceSecPerKm {
-    if (run.distanceMetres < 10) return null;
-    return run.duration.inSeconds / (run.distanceMetres / 1000);
   }
 
   /// Moving time — elapsed with stops excluded, derived from the GPS track.

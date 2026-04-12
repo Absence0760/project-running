@@ -20,7 +20,6 @@ class RouteDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final unit = preferences.unit;
 
     return Scaffold(

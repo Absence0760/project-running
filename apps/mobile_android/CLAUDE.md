@@ -62,20 +62,18 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Dart analyzer policy — treat `info` as noise
 
-`dart analyze` on this package reports ~76 issues. All but three are `info`-level:
+`dart analyze` on this package reports ~90 issues. **Every remaining entry is `info`-level** — the package is clean of `warning`/`error` as of this pass. The noise buckets:
 
 - `always_use_package_imports` — pervasive; every screen imports relative. Not being fixed in a sweep.
-- `deprecated_member_use` — mostly `withOpacity` → `withValues`. Deferred until we do a theme pass.
+- `deprecated_member_use` — mostly `withOpacity` → `withValues` and `share_plus` v13 (`Share.shareXFiles` → `SharePlus.instance.share`). Deferred until we do a theme/deps pass.
 - `dangling_library_doc_comments`, `unnecessary_brace_in_string_interps`, `unnecessary_import` — stragglers.
 
-The three `warning`-level entries (unused `theme` local, unused `_avgPaceSecPerKm` field, unused `flutter/foundation.dart` import) are also acknowledged tech debt, not regressions.
-
-**Do not waste a turn on these.** Only act on `info`/`warning` if your change touched that specific file. The CI `test-packages` job runs `melos run analyze` via `dart analyze`; the exit code is ignored for this package (per roadmap intent, not per CI config — verify before relying on this).
+**Do not waste a turn on these.** Only act on `info` if your change touched that specific file. **Do act on any new `warning`/`error`** — the bar is "zero warnings", so a fresh one is a regression your change introduced. The CI `test-packages` job runs `melos run analyze` via `dart analyze`; the exit code is ignored for this package (per roadmap intent, not per CI config — verify before relying on this).
 
 ## Tests
 
 Three test files in `test/`:
-- `run_stats_test.dart` — 8 tests for pace / distance / split formatting helpers
+- `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner (the one behind the dashboard "Fastest 5k" PB)
 - `local_run_store_test.dart` — 14 tests exercising the store with a `Directory.systemTemp` tempDir injection
 - plus `run_recorder`'s own 14 tests in `packages/run_recorder/test/`
 

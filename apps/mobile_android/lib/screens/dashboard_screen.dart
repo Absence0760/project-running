@@ -23,18 +23,30 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  /// Memoised fastest-5k window per run id. Rescanning a 200-run history
+  /// with several thousand waypoints each on every rebuild (and the
+  /// dashboard rebuilds every time a listener fires) is the hottest loop
+  /// in the app — this cache flattens it to O(1) on subsequent builds.
+  /// Invalidated wholesale when the run store changes.
+  final Map<String, Duration?> _best5kCache = {};
+
   @override
   void initState() {
     super.initState();
-    widget.runStore.addListener(_onChange);
+    widget.runStore.addListener(_onRunStoreChanged);
     widget.preferences.addListener(_onChange);
   }
 
   @override
   void dispose() {
-    widget.runStore.removeListener(_onChange);
+    widget.runStore.removeListener(_onRunStoreChanged);
     widget.preferences.removeListener(_onChange);
     super.dispose();
+  }
+
+  void _onRunStoreChanged() {
+    _best5kCache.clear();
+    if (mounted) setState(() {});
   }
 
   void _onChange() {
@@ -60,20 +72,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final goals = widget.preferences.goals;
 
     final now = DateTime.now();
-    final weekStart = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-
-    final weekRuns = runs.where((r) => r.startedAt.isAfter(weekStart)).toList();
-    final weekDistance =
-        weekRuns.fold<double>(0, (s, r) => s + r.distanceMetres);
-    final weekDuration =
-        weekRuns.fold<Duration>(Duration.zero, (s, r) => s + r.duration);
-
+    final weekStart = weekStartLocal(now);
     final monthStart = DateTime(now.year, now.month, 1);
-    final monthRuns =
-        runs.where((r) => r.startedAt.isAfter(monthStart)).toList();
-    final monthDistance =
-        monthRuns.fold<double>(0, (s, r) => s + r.distanceMetres);
+
+    // One pass over the runs list collects everything every card needs —
+    // week totals, month totals, all-time totals, and the PB candidates.
+    // Replaces four separate `.where().fold()` chains. Matters at 10k+ runs.
+    var weekRunCount = 0;
+    var weekDistance = 0.0;
+    var weekDurationSec = 0;
+    var monthRunCount = 0;
+    var monthDistance = 0.0;
+    var allDistance = 0.0;
+    Run? longest;
+    Run? fastestPace;
+    Duration? best5k;
+    for (final r in runs) {
+      allDistance += r.distanceMetres;
+      if (!r.startedAt.isBefore(weekStart)) {
+        weekRunCount++;
+        weekDistance += r.distanceMetres;
+        weekDurationSec += r.duration.inSeconds;
+      }
+      if (!r.startedAt.isBefore(monthStart)) {
+        monthRunCount++;
+        monthDistance += r.distanceMetres;
+      }
+      if (!_isRunActivity(r)) continue;
+      if (longest == null || r.distanceMetres > longest.distanceMetres) {
+        longest = r;
+      }
+      if (r.distanceMetres >= 1000) {
+        if (fastestPace == null || _paceOf(r) < _paceOf(fastestPace)) {
+          fastestPace = r;
+        }
+      }
+      if (r.distanceMetres >= 5000) {
+        final cached =
+            _best5kCache.putIfAbsent(r.id, () => fastestWindowOf(r.track, 5000));
+        if (cached != null && (best5k == null || cached < best5k)) {
+          best5k = cached;
+        }
+      }
+    }
+    final hasAnyPb = longest != null || fastestPace != null || best5k != null;
+    final weekDurationMin = Duration(seconds: weekDurationSec).inMinutes;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
@@ -99,11 +142,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         _SummaryStat(
                           label: 'Runs',
-                          value: '${weekRuns.length}',
+                          value: '$weekRunCount',
                         ),
                         _SummaryStat(
                           label: 'Time',
-                          value: '${weekDuration.inMinutes}',
+                          value: '$weekDurationMin',
                           unit: 'min',
                         ),
                       ],
@@ -126,14 +169,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         _SummaryStat(
                           label: 'Runs',
-                          value: '${monthRuns.length}',
+                          value: '$monthRunCount',
                         ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 24),
-                if (runs.isNotEmpty) ...[
+                if (hasAnyPb) ...[
                   Text('Personal Bests', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Card(
@@ -141,29 +184,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          if (_longestRun(runs) != null)
+                          if (longest != null)
                             _PbRow(
                               icon: Icons.straighten,
                               label: 'Longest run',
                               value: UnitFormat.distance(
-                                  _longestRun(runs)!.distanceMetres, unit),
+                                  longest.distanceMetres, unit),
                             ),
-                          if (_fastestPaceRun(runs) != null) ...[
+                          if (fastestPace != null) ...[
                             const SizedBox(height: 12),
                             _PbRow(
                               icon: Icons.speed,
                               label: 'Fastest pace',
                               value:
-                                  '${UnitFormat.pace(_paceOf(_fastestPaceRun(runs)!), unit)} '
+                                  '${UnitFormat.pace(_paceOf(fastestPace), unit)} '
                                   '${UnitFormat.paceLabel(unit)}',
                             ),
                           ],
-                          if (_best5k(runs) != null) ...[
+                          if (best5k != null) ...[
                             const SizedBox(height: 12),
                             _PbRow(
                               icon: Icons.emoji_events,
                               label: 'Fastest 5k',
-                              value: _formatDuration(_best5k(runs)!),
+                              value: _formatDuration(best5k),
                             ),
                           ],
                         ],
@@ -182,10 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         _SummaryStat(
                           label: 'Distance',
-                          value: UnitFormat.distanceValue(
-                              runs.fold<double>(
-                                  0, (s, r) => s + r.distanceMetres),
-                              unit),
+                          value: UnitFormat.distanceValue(allDistance, unit),
                           unit: UnitFormat.distanceLabel(unit),
                         ),
                         _SummaryStat(
@@ -251,38 +291,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return raw == null || raw == 'run';
   }
 
-  Run? _longestRun(List<Run> runs) {
-    final eligible = runs.where(_isRunActivity).toList();
-    if (eligible.isEmpty) return null;
-    return eligible
-        .reduce((a, b) => a.distanceMetres >= b.distanceMetres ? a : b);
-  }
-
-  Run? _fastestPaceRun(List<Run> runs) {
-    final eligible = runs
-        .where((r) => _isRunActivity(r) && r.distanceMetres >= 1000)
-        .toList();
-    if (eligible.isEmpty) return null;
-    return eligible.reduce((a, b) => _paceOf(a) <= _paceOf(b) ? a : b);
-  }
-
   double _paceOf(Run r) => r.duration.inSeconds / (r.distanceMetres / 1000);
-
-  /// Fastest continuous 5 km across every running activity with a GPS
-  /// track — a rolling-window scan per run, not a scaled average. Runs
-  /// without a track (manual entries, summary-only imports) are ignored
-  /// here because there's no way to know the runner's pace over any
-  /// specific 5 km segment.
-  Duration? _best5k(List<Run> runs) {
-    Duration? best;
-    for (final r in runs) {
-      if (!_isRunActivity(r) || r.distanceMetres < 5000) continue;
-      final window = fastestWindowOf(r.track, 5000);
-      if (window == null) continue;
-      if (best == null || window < best) best = window;
-    }
-    return best;
-  }
 
   static String _formatDuration(Duration d) {
     final h = d.inHours;

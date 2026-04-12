@@ -40,11 +40,13 @@ flutter test --name "^position filter chain"
 
 ## What's covered today
 
-Total: **36 tests across 3 files**, all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
+Total: **41 tests across 3 files**, all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
 
-### `apps/mobile_android/test/run_stats_test.dart` — 8 tests
+### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
-Pure-function tests for `movingTimeOf(track, {minSpeedMps})`. The moving-time calculation is the replacement for live auto-pause, so it's the most behaviourally important helper in the app. Covers:
+Pure-function tests for two helpers in `lib/run_stats.dart`:
+
+**`movingTimeOf(track, {minSpeedMps})`** — the replacement for live auto-pause, so it's the most behaviourally important helper in the app. Covers:
 
 - Empty / single-point tracks → `Duration.zero`
 - Fast segments (≥ threshold) counted
@@ -54,6 +56,14 @@ Pure-function tests for `movingTimeOf(track, {minSpeedMps})`. The moving-time ca
 - Waypoints without timestamps skipped
 - Same-timestamp pairs (`dt == 0`) skipped
 - Multi-segment summation
+
+**`fastestWindowOf(track, windowMetres)`** — rolling-window scan behind the dashboard "Fastest 5k" PB. Regression-tests the scaled-average-pace bug it replaced (see `decisions.md`). Covers:
+
+- Empty / short tracks → `null`
+- Track shorter than window → `null`
+- Even-paced 10 km → exact half-time (with 1 s interpolation slack)
+- Slow → fast → slow run → picks the fast middle 5 km
+- Regression: a 10 km in 1:14:34 does **not** surface as a 37:17 fastest 5k
 
 ### `packages/run_recorder/test/run_recorder_test.dart` — 14 tests
 

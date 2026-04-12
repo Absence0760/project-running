@@ -82,7 +82,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Weekly mileage summary on home screen
 - [x] Elevation chart on run detail (Android)
 - [x] Lap splits on run detail (Android)
-- [x] Edit run title and notes (Android)
+- [x] Edit run title and notes (Android); manual-entry runs also let the user correct distance + duration in the same dialog
 - [x] Share run as GPX (Android)
 - [x] Share run as image card — map + headline stats (Android)
 - [x] Save a history run as a reusable route (Douglas–Peucker simplified track) (Android)

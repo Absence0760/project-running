@@ -343,13 +343,21 @@ String _formatSecondsCoarse(double seconds) {
   return '${totalMin}m';
 }
 
+/// Monday 00:00 local time of the ISO week containing [now]. The single
+/// source of truth for "this week" across goals, the history filter, and
+/// the dashboard summary cards — keeping them in lockstep so a future
+/// change of convention (e.g. Sunday-start) is a one-file edit.
+DateTime weekStartLocal(DateTime now) {
+  final startOfToday = DateTime(now.year, now.month, now.day);
+  final daysFromMonday = (now.weekday - DateTime.monday) % 7;
+  return startOfToday.subtract(Duration(days: daysFromMonday));
+}
+
 /// Start of the period containing [now], inclusive, in local time.
 DateTime goalPeriodStart(GoalPeriod period, DateTime now) {
   switch (period) {
     case GoalPeriod.week:
-      final startOfToday = DateTime(now.year, now.month, now.day);
-      final daysFromMonday = (now.weekday - DateTime.monday) % 7;
-      return startOfToday.subtract(Duration(days: daysFromMonday));
+      return weekStartLocal(now);
     case GoalPeriod.month:
       return DateTime(now.year, now.month, 1);
   }

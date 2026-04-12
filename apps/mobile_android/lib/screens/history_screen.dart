@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
+import '../goals.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -111,10 +112,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       case _HistoryRange.today:
         return DateTime(now.year, now.month, now.day);
       case _HistoryRange.week:
-        // Start of the current ISO week (Monday 00:00 local).
-        final startOfToday = DateTime(now.year, now.month, now.day);
-        final daysFromMonday = (now.weekday - DateTime.monday) % 7;
-        return startOfToday.subtract(Duration(days: daysFromMonday));
+        return weekStartLocal(now);
       case _HistoryRange.month:
         return DateTime(now.year, now.month, now.day)
             .subtract(const Duration(days: 30));

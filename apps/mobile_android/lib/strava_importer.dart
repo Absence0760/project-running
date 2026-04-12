@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:core_models/core_models.dart';
 import 'package:csv/csv.dart';
-import 'package:flutter/foundation.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:uuid/uuid.dart';
 
