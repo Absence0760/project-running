@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart' hide Route;
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../local_route_store.dart';
@@ -100,27 +101,79 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
   String get _title => (run.metadata?['title'] as String?) ?? _formatDate(run.startedAt);
   String get _notes => (run.metadata?['notes'] as String?) ?? '';
 
+  static const _metresPerMile = 1609.344;
+
   Future<void> _editDetails() async {
+    final unit = widget.preferences.unit;
     final titleCtl = TextEditingController(text: _title);
     final notesCtl = TextEditingController(text: _notes);
+
+    // Distance + duration are editable only when there's no GPS track to
+    // contradict the typed values. Recorded runs derive these from the
+    // waypoints and editing them here would desync the map, splits, and
+    // the fastest-5k PB from the headline numbers.
+    final canEditStats = run.track.isEmpty;
+    final distanceCtl = TextEditingController(
+      text: canEditStats ? _distanceToInput(run.distanceMetres, unit) : '',
+    );
+    final hoursCtl = TextEditingController(
+      text: canEditStats ? run.duration.inHours.toString() : '',
+    );
+    final minutesCtl = TextEditingController(
+      text: canEditStats ? (run.duration.inMinutes % 60).toString() : '',
+    );
+    final secondsCtl = TextEditingController(
+      text: canEditStats ? (run.duration.inSeconds % 60).toString() : '',
+    );
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Edit run'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtl,
-              decoration: const InputDecoration(labelText: 'Title'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesCtl,
-              decoration: const InputDecoration(labelText: 'Notes'),
-              maxLines: 4,
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: titleCtl,
+                decoration: const InputDecoration(labelText: 'Title'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesCtl,
+                decoration: const InputDecoration(labelText: 'Notes'),
+                maxLines: 4,
+              ),
+              if (canEditStats) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: distanceCtl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'Distance',
+                    suffixText: UnitFormat.distanceLabel(unit),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Duration'),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: _durationSubField(hoursCtl, 'h')),
+                    const SizedBox(width: 8),
+                    Expanded(child: _durationSubField(minutesCtl, 'm')),
+                    const SizedBox(width: 8),
+                    Expanded(child: _durationSubField(secondsCtl, 's')),
+                  ],
+                ),
+              ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -136,6 +189,28 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     );
     if (ok != true) return;
 
+    double newDistance = run.distanceMetres;
+    Duration newDuration = run.duration;
+    if (canEditStats) {
+      final parsedDistance = _parseDistanceMetres(distanceCtl.text, unit);
+      final parsedDuration = _parseDuration(
+        hoursCtl.text,
+        minutesCtl.text,
+        secondsCtl.text,
+      );
+      if (parsedDistance == null || parsedDuration == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enter a valid distance and duration'),
+          ),
+        );
+        return;
+      }
+      newDistance = parsedDistance;
+      newDuration = parsedDuration;
+    }
+
     final metadata = Map<String, dynamic>.from(run.metadata ?? {});
     metadata['title'] = titleCtl.text.trim();
     metadata['notes'] = notesCtl.text.trim();
@@ -143,8 +218,8 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     final updated = Run(
       id: run.id,
       startedAt: run.startedAt,
-      duration: run.duration,
-      distanceMetres: run.distanceMetres,
+      duration: newDuration,
+      distanceMetres: newDistance,
       track: run.track,
       routeId: run.routeId,
       source: run.source,
@@ -154,6 +229,42 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     );
     await widget.runStore.update(updated);
     setState(() => run = updated);
+  }
+
+  Widget _durationSubField(TextEditingController ctl, String suffix) {
+    return TextField(
+      controller: ctl,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      decoration: InputDecoration(
+        isDense: true,
+        suffixText: suffix,
+      ),
+    );
+  }
+
+  static String _distanceToInput(double metres, DistanceUnit unit) {
+    if (unit == DistanceUnit.mi) {
+      return (metres / _metresPerMile).toStringAsFixed(2);
+    }
+    return (metres / 1000).toStringAsFixed(2);
+  }
+
+  static double? _parseDistanceMetres(String raw, DistanceUnit unit) {
+    final v = double.tryParse(raw.trim());
+    if (v == null || v <= 0) return null;
+    return unit == DistanceUnit.mi ? v * _metresPerMile : v * 1000;
+  }
+
+  static Duration? _parseDuration(String h, String m, String s) {
+    final hi = int.tryParse(h.trim().isEmpty ? '0' : h.trim());
+    final mi = int.tryParse(m.trim().isEmpty ? '0' : m.trim());
+    final si = int.tryParse(s.trim().isEmpty ? '0' : s.trim());
+    if (hi == null || mi == null || si == null) return null;
+    if (hi < 0 || mi < 0 || si < 0) return null;
+    final total = Duration(hours: hi, minutes: mi, seconds: si);
+    if (total.inSeconds <= 0) return null;
+    return total;
   }
 
   @override
