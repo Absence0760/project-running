@@ -105,8 +105,9 @@ docs/                → The canonical reference — read these first
 scripts/
   gen_dart_models.dart  → Dart row-class generator
 .github/workflows/
-  ci.yml             → test-packages, build-ios, build-android, build-watch-swift,
-                       build-web, parity-types, deploy-functions
+  ci.yml             → PR: test-packages, build-web, parity-types
+                       Push to main: + build-ios, build-android, build-watch-swift
+                       Release: deploy-functions
 ```
 
 ## If something in this file is wrong

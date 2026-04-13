@@ -178,7 +178,7 @@ For Phase 1, option 4 is what's been done (or nothing). If you're about to write
 
 ### Deploying functions to production
 
-Handled by CI in `.github/workflows/ci.yml`'s `deploy-functions` job on push to `main`. Do not deploy manually in dev — you'll clobber whatever's live. If you need to run a one-off deploy, ask first.
+Handled by CI in `.github/workflows/ci.yml`'s `deploy-functions` job on GitHub release (published). Do not deploy manually in dev — you'll clobber whatever's live. If you need to run a one-off deploy, ask first.
 
 Manual deploy syntax (for reference):
 

@@ -511,47 +511,36 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 
 Tests and analysis run via Melos scripts — see [testing.md](testing.md) for how to run the suite locally, what's covered today, and the patterns used to make platform-channel-heavy code unit-testable.
 
+Three trigger tiers:
+
+- **PR to main** — fast feedback: `test-packages`, `build-web` (lint + build), `parity-types` (schema drift).
+- **Push to main** (after merge) — platform compilation checks: `build-ios`, `build-android`, `build-watch-swift`.
+- **Release** (published) — `deploy-functions` deploys all Edge Functions to production.
+
 ```yaml
-# .github/workflows/ci.yml
+# .github/workflows/ci.yml  (abbreviated)
 jobs:
-  test-packages:
-    runs-on: ubuntu-latest
+  test-packages:          # PR + push + release
     steps:
-      - uses: actions/checkout@v4
-      - run: dart pub global activate melos
-      - run: melos bootstrap
-      - run: melos run test      # flutter test in every package with a test/ dir
-      - run: melos run analyze   # flutter analyze in every package
+      - run: melos run test
+      - run: melos run analyze
 
-  build-ios:
-    runs-on: macos-latest
+  build-web:              # PR + push + release
     steps:
-      - run: flutter build ipa --no-codesign
+      - run: npm run lint --workspace=apps/web
+      - run: npm run build --workspace=apps/web
 
-  build-android:
-    runs-on: ubuntu-latest
+  parity-types:           # PR + push + release
     steps:
-      - run: flutter build appbundle
+      - run: supabase start
+      - run: npm run gen:types:check
 
-  build-watch-swift:
-    runs-on: macos-latest
-    steps:
-      - run: |
-          xcodebuild -scheme WatchApp \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
-            build
+  build-ios:              # push to main only
+  build-android:          # push to main only
+  build-watch-swift:      # push to main only
 
-  build-web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: cd apps/web && pnpm install
-      - run: cd apps/web && pnpm check
-      - run: cd apps/web && pnpm build
-      # Vercel deployment handled automatically on push to main
+  deploy-functions:       # release only
+    needs: [test-packages, build-web]
 ```
 
 Web app deploys to Vercel via the Vercel GitHub integration — no manual deploy step needed. Preview deployments are created automatically for every pull request.

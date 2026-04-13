@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  release:
+    types: [published]
 
 jobs:
   test-packages:
@@ -19,41 +21,6 @@ jobs:
       - run: melos bootstrap
       - run: melos run test
       - run: melos run analyze
-
-  build-ios:
-    name: Build iOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - run: melos bootstrap
-      - working-directory: apps/mobile_ios
-        run: flutter build ipa --no-codesign
-
-  build-android:
-    name: Build Android
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - run: melos bootstrap
-      - working-directory: apps/mobile_android
-        run: flutter build appbundle
-
-  build-watch-swift:
-    name: Build Apple Watch
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
-            -scheme WatchApp \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
-            build
 
   build-web:
     name: Build Web (SvelteKit)
@@ -81,9 +48,47 @@ jobs:
           echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
           echo "Run 'npm run gen:types' locally and commit the result."
 
+  build-ios:
+    name: Build iOS
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: melos bootstrap
+      - working-directory: apps/mobile_ios
+        run: flutter build ipa --no-codesign
+
+  build-android:
+    name: Build Android
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: melos bootstrap
+      - working-directory: apps/mobile_android
+        run: flutter build appbundle
+
+  build-watch-swift:
+    name: Build Apple Watch
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
+            -scheme WatchApp \
+            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
+            build
+
   deploy-functions:
     name: Deploy Edge Functions
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     needs: [test-packages, build-web]
     steps:

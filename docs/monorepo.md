@@ -349,13 +349,13 @@ Full pipeline defined in `.github/workflows/ci.yml`. Key jobs:
 
 | Job | Runner | Trigger | What it does |
 |---|---|---|---|
-| `test-packages` | ubuntu-latest | All PRs | `melos bootstrap` → `melos run test` → `melos run analyze` |
-| `build-ios` | macos-latest | All PRs | `flutter build ipa --no-codesign` |
-| `build-android` | ubuntu-latest | All PRs | `flutter build appbundle` |
-| `build-watch-swift` | macos-latest | All PRs | `xcodebuild` for WatchKit scheme |
-| `build-web` | ubuntu-latest | All PRs | `pnpm install` → `pnpm check` → `pnpm build` |
-| `deploy-web` | Via Vercel | Push to `main` | Automatic via Vercel GitHub integration |
-| `deploy-functions` | ubuntu-latest | Push to `main` | `supabase functions deploy --all` |
+| `test-packages` | ubuntu-latest | PR + push to main + release | `melos bootstrap` → `melos run test` → `melos run analyze` |
+| `build-web` | ubuntu-latest | PR + push to main + release | `npm ci` → `npm run lint` → `npm run build` |
+| `parity-types` | ubuntu-latest | PR + push to main + release | `supabase start` → `npm run gen:types:check` |
+| `build-ios` | macos-latest | Push to main | `flutter build ipa --no-codesign` |
+| `build-android` | ubuntu-latest | Push to main | `flutter build appbundle` |
+| `build-watch-swift` | macos-latest | Push to main | `xcodebuild` for WatchKit scheme |
+| `deploy-functions` | ubuntu-latest | Release (published) | `supabase functions deploy` per function |
 
 ---
 
