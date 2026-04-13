@@ -19,8 +19,8 @@ jobs:
           channel: stable
       - run: dart pub global activate melos
       - run: melos bootstrap
-      - run: melos run test
-      - run: melos run analyze
+      - run: melos exec -- flutter test
+      - run: melos exec -- dart analyze
 
   build-web:
     name: Build Web (SvelteKit)
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci --workspace=apps/web
+      - run: npm install --workspace=apps/web
       - run: npm run lint --workspace=apps/web
       - run: npm run build --workspace=apps/web
 
@@ -40,6 +40,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
       - working-directory: apps/backend
         run: supabase start
       - run: npm run gen:types:check --workspace=apps/backend
@@ -94,6 +96,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
       - run: |
           supabase functions deploy strava-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
           supabase functions deploy strava-import --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
