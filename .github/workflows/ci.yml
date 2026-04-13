@@ -19,6 +19,7 @@ jobs:
           channel: stable
       - run: dart pub global activate melos
       - run: melos bootstrap
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
       - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
       - run: melos exec -- dart analyze
 
