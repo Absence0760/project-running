@@ -22,7 +22,7 @@
 
 	let track = $derived(run?.track ?? []);
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
-	let pageTitle = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km Run — Run App` : 'Run — Run App');
+	let pageTitle = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km Run — Better Runner` : 'Run — Better Runner');
 	let pageDesc = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km in ${formatDuration(run.duration_s)} — ${formatPace(run.duration_s, run.distance_m)} /km` : '');
 </script>
 

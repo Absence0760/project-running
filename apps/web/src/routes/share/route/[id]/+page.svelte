@@ -19,7 +19,7 @@
 	});
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
-	let pageTitle = $derived(route ? `${route.name} — Run App` : 'Route — Run App');
+	let pageTitle = $derived(route ? `${route.name} — Better Runner` : 'Route — Better Runner');
 	let pageDesc = $derived(route ? `${(route.distance_m / 1000).toFixed(1)} km ${route.surface} route${route.elevation_m ? ` with ${route.elevation_m} m elevation` : ''}` : '');
 </script>
 

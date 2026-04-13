@@ -13,7 +13,7 @@
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <application
-        android:label="mobile_android"
+        android:label="Better Runner"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

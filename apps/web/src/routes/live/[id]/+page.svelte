@@ -88,9 +88,9 @@
 </script>
 
 <svelte:head>
-	<title>Live Run — Run App</title>
+	<title>Live Run — Better Runner</title>
 	<meta name="description" content="Watch a runner's progress in real time" />
-	<meta property="og:title" content="Live Run — Run App" />
+	<meta property="og:title" content="Live Run — Better Runner" />
 	<meta property="og:description" content="Watch a runner's progress in real time" />
 	<meta property="og:type" content="website" />
 </svelte:head>

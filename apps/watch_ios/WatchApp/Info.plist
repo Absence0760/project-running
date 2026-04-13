@@ -19,11 +19,11 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>RunApp needs access to your health data to record workout metrics like heart rate and calories burned during your runs.</string>
+	<string>Better Runner needs access to your health data to record workout metrics like heart rate and calories burned during your runs.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>RunApp needs to save workout data to Health so your runs are tracked alongside your other fitness activities.</string>
+	<string>Better Runner needs to save workout data to Health so your runs are tracked alongside your other fitness activities.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>RunApp needs your location to track your running route, calculate distance, and provide pace information.</string>
+	<string>Better Runner needs your location to track your running route, calculate distance, and provide pace information.</string>
 	<key>WKApplication</key>
 	<true/>
 </dict>
