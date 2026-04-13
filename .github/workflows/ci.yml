@@ -31,6 +31,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install --workspace=apps/web
+      - run: cp apps/web/.env.example apps/web/.env
       - run: npm run check --workspace=apps/web
       - run: npm run build --workspace=apps/web
 
