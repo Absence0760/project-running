@@ -94,6 +94,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Personal Bests on dashboard — longest run, fastest pace, fastest 5k (Android)
 - [x] Weekly distance goal with progress bar (Android)
 - [x] Multi-goal dashboard — distance / time / avg-pace / run-count, weekly or monthly, with per-goal progress feedback (Android)
+- [x] Browsable weekly/monthly summary — navigate to previous periods from dashboard, share as text or screenshot (Android)
 
 ### Cloud sync + auth
 

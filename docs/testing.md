@@ -40,7 +40,7 @@ flutter test --name "^position filter chain"
 
 ## What's covered today
 
-Total: **41 tests across 3 files**, all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
+Total: **64 tests across 4 files**, all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -112,6 +112,37 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 **Edge cases (2 tests):**
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
+
+### `apps/mobile_android/test/period_summary_test.dart` — 23 tests
+
+Pure-function tests for the period summary screen's extracted helpers in `lib/screens/period_summary_screen.dart`:
+
+**`periodStart` / `periodEnd` (5 tests):**
+- Week: Monday 00:00 for any day in the week
+- Month: 1st of the month; end is 1st of next month
+- December → January year rollover
+
+**`periodTitle` / `periodLabel` (4 tests):**
+- Week: "Week of 13 Apr" format
+- Month: "November 2026" format
+- Label date ranges
+
+**`computePeriodStats` (4 tests):**
+- Empty list → zeroes and null pace
+- Single run → correct totals and pace
+- Multiple runs → aggregated correctly
+- Very short distance → null pace (below 10 m threshold)
+
+**`buildPeriodShareText` (4 tests):**
+- Includes title, count, distance, pace, per-run lines
+- Singular "run" for count of 1
+- Empty runs omits per-run section and pace
+- Respects miles unit preference
+
+**Formatting helpers (6 tests):**
+- `formatDurationCoarse`: minutes+seconds, hours+minutes, exact hours, zero
+- `shortDate`: day + abbreviated month
+- `monthName`: full month name for all positions
 
 ---
 

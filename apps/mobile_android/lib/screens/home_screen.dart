@@ -63,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: DashboardScreen(
           key: const PageStorageKey('dashboard'),
           runStore: widget.runStore,
+          routeStore: widget.routeStore,
           preferences: widget.preferences,
         ),
       ),

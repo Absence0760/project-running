@@ -2,19 +2,23 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../goals.dart';
+import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../widgets/goal_editor_sheet.dart';
+import 'period_summary_screen.dart';
 
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
   final LocalRunStore runStore;
+  final LocalRouteStore routeStore;
   final Preferences preferences;
 
   const DashboardScreen({
     super.key,
     required this.runStore,
+    required this.routeStore,
     required this.preferences,
   });
 
@@ -63,6 +67,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         preferences: widget.preferences,
         existing: goal,
       );
+
+  void _openPeriodSummary(PeriodType period) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PeriodSummaryScreen(
+          initialPeriod: period,
+          initialAnchor: DateTime.now(),
+          runStore: widget.runStore,
+          routeStore: widget.routeStore,
+          preferences: widget.preferences,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,26 +149,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text('This Week', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _SummaryStat(
-                          label: 'Distance',
-                          value: UnitFormat.distanceValue(weekDistance, unit),
-                          unit: UnitFormat.distanceLabel(unit),
-                        ),
-                        _SummaryStat(
-                          label: 'Runs',
-                          value: '$weekRunCount',
-                        ),
-                        _SummaryStat(
-                          label: 'Time',
-                          value: '$weekDurationMin',
-                          unit: 'min',
-                        ),
-                      ],
+                  child: InkWell(
+                    onTap: () => _openPeriodSummary(PeriodType.week),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _SummaryStat(
+                            label: 'Distance',
+                            value: UnitFormat.distanceValue(weekDistance, unit),
+                            unit: UnitFormat.distanceLabel(unit),
+                          ),
+                          _SummaryStat(
+                            label: 'Runs',
+                            value: '$weekRunCount',
+                          ),
+                          _SummaryStat(
+                            label: 'Time',
+                            value: '$weekDurationMin',
+                            unit: 'min',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -157,21 +180,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text('This Month', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _SummaryStat(
-                          label: 'Distance',
-                          value: UnitFormat.distanceValue(monthDistance, unit),
-                          unit: UnitFormat.distanceLabel(unit),
-                        ),
-                        _SummaryStat(
-                          label: 'Runs',
-                          value: '$monthRunCount',
-                        ),
-                      ],
+                  child: InkWell(
+                    onTap: () => _openPeriodSummary(PeriodType.month),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _SummaryStat(
+                            label: 'Distance',
+                            value: UnitFormat.distanceValue(monthDistance, unit),
+                            unit: UnitFormat.distanceLabel(unit),
+                          ),
+                          _SummaryStat(
+                            label: 'Runs',
+                            value: '$monthRunCount',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

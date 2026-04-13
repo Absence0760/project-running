@@ -41,6 +41,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `import_screen.dart` — GPX / KML / KMZ / GeoJSON / TCX file picker
 - `routes_screen.dart` — saved routes list
 - `route_detail_screen.dart` — route map + metadata
+- `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
 - `settings_screen.dart` — preferences, integrations, data export
 
 **Top-level (`lib/`):**
@@ -72,9 +73,10 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Tests
 
-Three test files in `test/`:
+Test files in `test/`:
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner (the one behind the dashboard "Fastest 5k" PB)
 - `local_run_store_test.dart` — 14 tests exercising the store with a `Directory.systemTemp` tempDir injection
+- `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
 - plus `run_recorder`'s own 14 tests in `packages/run_recorder/test/`
 
 See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
