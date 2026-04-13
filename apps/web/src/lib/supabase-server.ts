@@ -6,8 +6,8 @@ export function createClient(cookies: Cookies) {
 	return createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 		cookies: {
 			getAll: () => cookies.getAll(),
-			setAll: (cookiesToSet) => {
-				cookiesToSet.forEach(({ name, value, options }) => {
+			setAll: (cookiesToSet: { name: string; value: string; options: Record<string, unknown> }[]) => {
+				cookiesToSet.forEach(({ name, value, options }: { name: string; value: string; options: Record<string, unknown> }) => {
 					cookies.set(name, value, { ...options, path: '/' });
 				});
 			},

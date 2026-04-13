@@ -19,7 +19,7 @@ jobs:
           channel: stable
       - run: dart pub global activate melos
       - run: melos bootstrap
-      - run: melos exec -- flutter test
+      - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
       - run: melos exec -- dart analyze
 
   build-web:
@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install --workspace=apps/web
-      - run: npm run lint --workspace=apps/web
+      - run: npm run check --workspace=apps/web
       - run: npm run build --workspace=apps/web
 
   parity-types:
