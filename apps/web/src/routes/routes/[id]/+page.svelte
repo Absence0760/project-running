@@ -2,8 +2,9 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById } from '$lib/data';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview } from '$lib/data';
 	import { supabase } from '$lib/supabase';
+	import { auth } from '$lib/stores/auth.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Route } from '$lib/types';
@@ -12,11 +13,42 @@
 
 	let route = $state<Route | null>(null);
 	let loading = $state(true);
+	let reviews = $state<any[]>([]);
+	let showReviewForm = $state(false);
+	let reviewRating = $state(4);
+	let reviewComment = $state('');
+
+	let avgRating = $derived(
+		reviews.length > 0
+			? (reviews.reduce((a: number, r: any) => a + r.rating, 0) / reviews.length).toFixed(1)
+			: null,
+	);
 
 	onMount(async () => {
 		route = await fetchRouteById(data.id);
 		loading = false;
+		if (route) {
+			try {
+				reviews = await getRouteReviews(route.id);
+			} catch (_) {}
+		}
 	});
+
+	async function submitReview() {
+		if (!route) return;
+		try {
+			await upsertRouteReview({
+				route_id: route.id,
+				rating: reviewRating,
+				comment: reviewComment.trim() || null,
+			});
+			reviews = await getRouteReviews(route.id);
+			showReviewForm = false;
+			reviewComment = '';
+		} catch (e) {
+			alert(`Failed to submit review: ${e}`);
+		}
+	}
 
 	let shareLink = $state('');
 	let shareCopied = $state(false);
@@ -114,6 +146,68 @@
 				</div>
 			</div>
 		{/if}
+
+		<!-- Reviews -->
+		<section class="card reviews-section">
+			<div class="reviews-header">
+				<h2>
+					Reviews
+					{#if avgRating}
+						<span class="avg-rating">({avgRating} / 5)</span>
+					{/if}
+				</h2>
+				{#if auth.loggedIn}
+					<button class="btn btn-outline btn-sm" onclick={() => showReviewForm = !showReviewForm}>
+						{showReviewForm ? 'Cancel' : 'Rate'}
+					</button>
+				{/if}
+			</div>
+
+			{#if showReviewForm}
+				<div class="review-form">
+					<div class="star-row">
+						{#each [1, 2, 3, 4, 5] as star}
+							<button
+								class="star-btn"
+								class:filled={star <= reviewRating}
+								onclick={() => reviewRating = star}
+							>
+								<span class="material-symbols">{star <= reviewRating ? 'star' : 'star_border'}</span>
+							</button>
+						{/each}
+					</div>
+					<textarea
+						bind:value={reviewComment}
+						placeholder="Comment (optional)"
+						class="review-textarea"
+						rows="2"
+					></textarea>
+					<button class="btn btn-primary btn-sm" onclick={submitReview}>Submit</button>
+				</div>
+			{/if}
+
+			{#if reviews.length === 0}
+				<p class="no-reviews">No reviews yet</p>
+			{:else}
+				{#each reviews as review}
+					<div class="review-card">
+						<div class="review-stars">
+							{#each [1, 2, 3, 4, 5] as star}
+								<span class="material-symbols star-display" class:filled={star <= review.rating}>
+									{star <= review.rating ? 'star' : 'star_border'}
+								</span>
+							{/each}
+							{#if review.created_at}
+								<span class="review-date">{new Date(review.created_at).toLocaleDateString()}</span>
+							{/if}
+						</div>
+						{#if review.comment}
+							<p class="review-comment">{review.comment}</p>
+						{/if}
+					</div>
+				{/each}
+			{/if}
+		</section>
 	</div>
 {/if}
 
@@ -262,6 +356,103 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
+	}
+
+	.reviews-section {
+		margin-top: var(--space-xl);
+	}
+
+	.reviews-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.avg-rating {
+		font-size: 0.75rem;
+		font-weight: 400;
+		color: var(--color-text-tertiary);
+		text-transform: none;
+		letter-spacing: 0;
+	}
+
+	.btn-sm {
+		padding: var(--space-xs) var(--space-md);
+		font-size: 0.8rem;
+	}
+
+	.review-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+
+	.star-row {
+		display: flex;
+		gap: var(--space-xs);
+	}
+
+	.star-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		color: var(--color-text-tertiary);
+	}
+
+	.star-btn.filled, .star-display.filled {
+		color: #EAB308;
+	}
+
+	.star-display {
+		font-size: 0.9rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.review-textarea {
+		padding: var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+
+	.no-reviews {
+		color: var(--color-text-tertiary);
+		font-size: 0.85rem;
+	}
+
+	.review-card {
+		padding: var(--space-sm) 0;
+		border-bottom: 1px solid var(--color-bg-secondary);
+	}
+
+	.review-card:last-child {
+		border-bottom: none;
+	}
+
+	.review-stars {
+		display: flex;
+		align-items: center;
+		gap: 0.15rem;
+	}
+
+	.review-date {
+		margin-left: var(--space-sm);
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.review-comment {
+		margin-top: var(--space-xs);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
 	}
 
 	.material-symbols {

@@ -100,6 +100,74 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 	return { ...data, track };
 }
 
+export async function deleteRun(id: string): Promise<void> {
+	// Delete the track file from Storage first (best-effort).
+	const { data: run } = await supabase
+		.from('runs')
+		.select('track_url')
+		.eq('id', id)
+		.single();
+	if (run?.track_url) {
+		try {
+			await supabase.storage.from('runs').remove([run.track_url]);
+		} catch (_) {}
+	}
+	const { error } = await supabase.from('runs').delete().eq('id', id);
+	if (error) throw error;
+}
+
+export async function makeRunPublic(id: string): Promise<void> {
+	const { error } = await supabase
+		.from('runs')
+		.update({ is_public: true })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+export async function updateRunMetadata(
+	id: string,
+	fields: { title?: string; notes?: string },
+): Promise<void> {
+	const { data: run } = await supabase
+		.from('runs')
+		.select('metadata')
+		.eq('id', id)
+		.single();
+	if (!run) throw new Error('Run not found');
+	const metadata = { ...(run.metadata as Record<string, unknown> ?? {}), ...fields };
+	const { error } = await supabase
+		.from('runs')
+		.update({ metadata })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+// --- Route reviews ---
+
+export async function getRouteReviews(routeId: string) {
+	const { data, error } = await supabase
+		.from('route_reviews')
+		.select('*')
+		.eq('route_id', routeId)
+		.order('created_at', { ascending: false });
+	if (error) throw error;
+	return data ?? [];
+}
+
+export async function upsertRouteReview(review: {
+	route_id: string;
+	rating: number;
+	comment?: string | null;
+}): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase.from('route_reviews').upsert(
+		{ ...review, user_id: userId },
+		{ onConflict: 'route_id,user_id' },
+	);
+	if (error) throw error;
+}
+
 // --- Routes ---
 
 export async function nearbyPublicRoutes(options: {

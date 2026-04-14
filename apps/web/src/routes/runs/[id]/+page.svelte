@@ -10,19 +10,68 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRunById } from '$lib/data';
+	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata } from '$lib/data';
 	import { movingTimeSeconds, elevationGainMetres } from '$lib/run_stats';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
 	import type { Run } from '$lib/types';
 
-	let { data } = $props();
+	let { data: pageData } = $props();
 
 	let run = $state<Run | null>(null);
 	let loading = $state(true);
+	let editing = $state(false);
+	let editTitle = $state('');
+	let editNotes = $state('');
 
 	onMount(async () => {
-		run = await fetchRunById(data.id);
+		run = await fetchRunById(pageData.id);
 		loading = false;
 	});
+
+	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
+	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
+	let estimatedCalories = $derived(run ? Math.round(70 * 1.0 * run.distance_m / 1000) : 0);
+
+	function startEdit() {
+		editTitle = runTitle;
+		editNotes = runNotes;
+		editing = true;
+	}
+
+	async function saveEdit() {
+		if (!run) return;
+		try {
+			await updateRunMetadata(run.id, { title: editTitle, notes: editNotes });
+			const metadata = { ...(run.metadata as Record<string, unknown> ?? {}), title: editTitle, notes: editNotes };
+			run = { ...run, metadata } as Run;
+			editing = false;
+		} catch (e) {
+			alert(`Save failed: ${e}`);
+		}
+	}
+
+	async function handleDelete() {
+		if (!run || !confirm('Delete this run? This cannot be undone.')) return;
+		try {
+			await deleteRun(run.id);
+			goto('/runs');
+		} catch (e) {
+			alert(`Delete failed: ${e}`);
+		}
+	}
+
+	async function handleShare() {
+		if (!run) return;
+		try {
+			await makeRunPublic(run.id);
+			const url = `${window.location.origin}/share/run/${run.id}`;
+			await navigator.clipboard.writeText(url);
+			alert('Share link copied to clipboard');
+		} catch (e) {
+			alert(`Share failed: ${e}`);
+		}
+	}
 
 	/**
 	 * Mobile-recorded runs stamp the activity into `metadata.activity_type`.
@@ -119,7 +168,13 @@
 	<aside class="stats-panel">
 		<header class="detail-header">
 			<div>
-				<h1>{formatDate(run.started_at)}</h1>
+				<h1>{runTitle || formatDate(run.started_at)}</h1>
+				{#if runTitle}
+					<div class="run-date-sub">{formatDate(run.started_at)}</div>
+				{/if}
+				{#if runNotes}
+					<p class="run-notes">{runNotes}</p>
+				{/if}
 				<div class="detail-meta">
 					<a href="/runs" class="back-link">
 						<span class="material-symbols">arrow_back</span> All runs
@@ -132,10 +187,35 @@
 					{/if}
 				</div>
 			</div>
-			<span class="source-badge" style="background: {sourceColor(run.source)}"
-				>{sourceLabel(run.source)}</span
-			>
+			<div class="header-actions">
+				<span class="source-badge" style="background: {sourceColor(run.source)}"
+					>{sourceLabel(run.source)}</span>
+				{#if auth.loggedIn}
+					<div class="action-btns">
+						<button class="icon-btn" title="Edit" onclick={startEdit}>
+							<span class="material-symbols">edit</span>
+						</button>
+						<button class="icon-btn" title="Share link" onclick={handleShare}>
+							<span class="material-symbols">share</span>
+						</button>
+						<button class="icon-btn danger" title="Delete" onclick={handleDelete}>
+							<span class="material-symbols">delete</span>
+						</button>
+					</div>
+				{/if}
+			</div>
 		</header>
+
+		{#if editing}
+			<div class="edit-form">
+				<input type="text" bind:value={editTitle} placeholder="Run title" class="edit-input" />
+				<textarea bind:value={editNotes} placeholder="Notes" class="edit-textarea" rows="2"></textarea>
+				<div class="edit-actions">
+					<button class="btn-sm btn-outline-sm" onclick={() => editing = false}>Cancel</button>
+					<button class="btn-sm btn-primary-sm" onclick={saveEdit}>Save</button>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Key stats -->
 		<div class="key-stats">
@@ -166,6 +246,12 @@
 				<span class="key-stat-value">{realElevationGain} m</span>
 				<span class="key-stat-label">Elevation</span>
 			</div>
+			{#if estimatedCalories > 0}
+				<div class="key-stat">
+					<span class="key-stat-value">{estimatedCalories}</span>
+					<span class="key-stat-label">Calories kcal</span>
+				</div>
+			{/if}
 			{#if totalSteps != null}
 				<div class="key-stat">
 					<span class="key-stat-value">{totalSteps.toLocaleString()}</span>
@@ -441,6 +527,96 @@
 		font-weight: 600;
 		font-family: 'SF Mono', 'Menlo', monospace;
 		font-size: 0.75rem;
+	}
+
+	.run-date-sub {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+
+	.run-notes {
+		margin-top: var(--space-xs);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
+	}
+
+	.header-actions {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: var(--space-sm);
+	}
+
+	.action-btns {
+		display: flex;
+		gap: var(--space-xs);
+	}
+
+	.icon-btn {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: var(--space-xs);
+		cursor: pointer;
+		color: var(--color-text-secondary);
+		display: flex;
+		align-items: center;
+	}
+
+	.icon-btn:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.icon-btn.danger:hover {
+		border-color: var(--color-danger, #ef4444);
+		color: var(--color-danger, #ef4444);
+	}
+
+	.edit-form {
+		margin-bottom: var(--space-lg);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.edit-input, .edit-textarea {
+		padding: var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: var(--space-sm);
+		justify-content: flex-end;
+	}
+
+	.btn-sm {
+		padding: var(--space-xs) var(--space-md);
+		border-radius: var(--radius-sm);
+		font-size: 0.8rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.btn-outline-sm {
+		background: none;
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+	}
+
+	.btn-primary-sm {
+		background: var(--color-primary);
+		border: none;
+		color: white;
 	}
 
 	.material-symbols {
