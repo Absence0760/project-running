@@ -97,6 +97,8 @@ create index routes_user_id on routes (user_id, created_at desc);
 create index routes_public on routes (is_public, created_at desc) where is_public = true;
 ```
 
+**`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
+
 ---
 
 ### `integrations`
@@ -448,6 +450,21 @@ as $$
   having count(*) > 0;
 $$;
 ```
+
+### `nearby_routes(lat, lng, radius_m, max_results)`
+
+Returns public routes within a radius of a geographic point, sorted by distance. Requires PostGIS.
+
+```sql
+select * from nearby_routes(51.5074, -0.1278, 50000, 50);
+```
+
+**Parameters:**
+- `lat` / `lng` — center point (WGS84 degrees)
+- `radius_m` — search radius in metres (default 50000 = 50 km)
+- `max_results` — maximum rows returned (default 50)
+
+**Returns:** same columns as `routes` table, ordered by distance from the center point.
 
 ---
 

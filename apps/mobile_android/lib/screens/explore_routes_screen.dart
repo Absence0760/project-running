@@ -1,10 +1,13 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
 import 'route_detail_screen.dart';
+
+enum _ExploreMode { search, nearMe }
 
 enum _DistanceFilter { any, short, medium, long, ultra }
 
@@ -39,6 +42,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
 
   _DistanceFilter _distanceFilter = _DistanceFilter.any;
   _SurfaceFilter _surfaceFilter = _SurfaceFilter.any;
+  _ExploreMode _mode = _ExploreMode.search;
 
   static const _pageSize = 30;
 
@@ -140,6 +144,63 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
     }
   }
 
+  Future<void> _searchNearby() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      setState(() => _error = 'Sign in and connect to the internet to explore routes');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _results = [];
+      _hasMore = false;
+    });
+
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() {
+            _error = 'Location permission required to find nearby routes';
+            _loading = false;
+          });
+        }
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+
+      final results = await api.nearbyPublicRoutes(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        radiusM: 50000,
+        limit: 50,
+      );
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not find nearby routes: $e';
+        _loading = false;
+      });
+    }
+  }
+
   static const _metresPerMile = 1609.344;
 
   // Thresholds in metres — adapt to the user's unit so the buckets feel
@@ -209,7 +270,36 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
       appBar: AppBar(title: const Text('Explore Routes')),
       body: Column(
         children: [
-          // Search bar
+          // Mode toggle
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: SegmentedButton<_ExploreMode>(
+              segments: const [
+                ButtonSegment(
+                  value: _ExploreMode.search,
+                  icon: Icon(Icons.search, size: 18),
+                  label: Text('Search'),
+                ),
+                ButtonSegment(
+                  value: _ExploreMode.nearMe,
+                  icon: Icon(Icons.near_me, size: 18),
+                  label: Text('Near Me'),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (s) {
+                setState(() => _mode = s.first);
+                if (_mode == _ExploreMode.nearMe) {
+                  _searchNearby();
+                } else {
+                  _search();
+                }
+              },
+            ),
+          ),
+
+          // Search bar (only in search mode)
+          if (_mode == _ExploreMode.search)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
@@ -236,7 +326,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
             ),
           ),
 
-          // Filter chips
+          // Filter chips (search mode only)
+          if (_mode == _ExploreMode.search)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: SingleChildScrollView(

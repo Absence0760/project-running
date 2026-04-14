@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { searchPublicRoutes } from '$lib/data';
+	import { searchPublicRoutes, nearbyPublicRoutes } from '$lib/data';
 	import type { Route } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
@@ -12,6 +12,8 @@
 	let query = $state('');
 	let distanceFilter = $state<string>('any');
 	let surfaceFilter = $state<string>('any');
+	let mode = $state<'search' | 'nearby'>('search');
+	let locationError = $state<string | null>(null);
 
 	const PAGE_SIZE = 30;
 
@@ -81,8 +83,40 @@
 		}
 	}
 
+	async function searchNearby() {
+		loading = true;
+		locationError = null;
+		routes = [];
+		hasMore = false;
+		try {
+			const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+				navigator.geolocation.getCurrentPosition(resolve, reject, {
+					enableHighAccuracy: false,
+					timeout: 10000,
+				});
+			});
+			routes = await nearbyPublicRoutes({
+				lat: pos.coords.latitude,
+				lng: pos.coords.longitude,
+				radiusM: 50000,
+				limit: 50,
+			});
+		} catch (e) {
+			locationError = e instanceof GeolocationPositionError
+				? 'Location access denied — enable it in your browser settings'
+				: `Could not get location: ${e}`;
+		}
+		loading = false;
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') search();
+	}
+
+	function switchMode(newMode: 'search' | 'nearby') {
+		mode = newMode;
+		if (mode === 'nearby') searchNearby();
+		else search();
 	}
 
 	onMount(() => search());
@@ -99,6 +133,23 @@
 		<p class="subtitle">Discover routes shared by the community</p>
 	</header>
 
+	<div class="mode-tabs">
+		<button class="mode-tab" class:active={mode === 'search'} onclick={() => switchMode('search')}>
+			<span class="material-symbols">search</span> Search
+		</button>
+		<button class="mode-tab" class:active={mode === 'nearby'} onclick={() => switchMode('nearby')}>
+			<span class="material-symbols">near_me</span> Near Me
+		</button>
+	</div>
+
+	{#if locationError}
+		<div class="location-error">
+			<span class="material-symbols">location_off</span>
+			<span>{locationError}</span>
+		</div>
+	{/if}
+
+	{#if mode === 'search'}
 	<div class="search-bar">
 		<span class="material-symbols search-icon">search</span>
 		<input
@@ -127,6 +178,7 @@
 		</select>
 		<button class="btn btn-outline" onclick={() => search()}>Search</button>
 	</div>
+	{/if}
 
 	{#if routes.length === 0 && !loading}
 		<div class="empty">
@@ -199,6 +251,51 @@
 		font-size: 1.5rem;
 		font-weight: 700;
 		margin-bottom: var(--space-xs);
+	}
+
+	.mode-tabs {
+		display: flex;
+		gap: var(--space-xs);
+		margin-bottom: var(--space-md);
+	}
+
+	.mode-tab {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+		padding: var(--space-sm) var(--space-lg);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.mode-tab:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.mode-tab.active {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: white;
+	}
+
+	.location-error {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		margin-bottom: var(--space-md);
+		background: rgba(239, 68, 68, 0.1);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		font-size: 0.85rem;
 	}
 
 	.subtitle {

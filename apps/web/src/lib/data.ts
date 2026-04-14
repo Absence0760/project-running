@@ -102,6 +102,23 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 
 // --- Routes ---
 
+export async function nearbyPublicRoutes(options: {
+	lat: number;
+	lng: number;
+	radiusM?: number;
+	limit?: number;
+}): Promise<Route[]> {
+	const { lat, lng, radiusM = 50000, limit = 50 } = options;
+	const { data, error } = await supabase.rpc('nearby_routes', {
+		lat,
+		lng,
+		radius_m: radiusM,
+		max_results: limit,
+	});
+	if (error || !data) return [];
+	return data as Route[];
+}
+
 export async function searchPublicRoutes(options?: {
 	query?: string;
 	minDistanceM?: number;

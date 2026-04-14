@@ -341,6 +341,25 @@ class ApiClient {
     return data.map<Route>((row) => _routeFromRow(row)).toList();
   }
 
+  /// Find public routes near a geographic point, sorted by distance.
+  /// Uses the PostGIS-backed `nearby_routes` RPC.
+  Future<List<Route>> nearbyPublicRoutes({
+    required double lat,
+    required double lng,
+    double radiusM = 50000,
+    int limit = 50,
+  }) async {
+    final data = await _client.rpc('nearby_routes', params: {
+      'lat': lat,
+      'lng': lng,
+      'radius_m': radiusM,
+      'max_results': limit,
+    });
+    return (data as List)
+        .map<Route>((row) => _routeFromRow(row as Map<String, dynamic>))
+        .toList();
+  }
+
   // -- Route reviews --
 
   /// Fetch all reviews for a route, newest first.

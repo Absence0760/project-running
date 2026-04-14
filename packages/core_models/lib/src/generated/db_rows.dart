@@ -148,6 +148,7 @@ class RouteRow {
   static const String colSlug = 'slug';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colStartPoint = 'start_point';
 
   final String id;
   final String userId;
@@ -160,6 +161,7 @@ class RouteRow {
   final String? slug;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final dynamic? startPoint;
 
   const RouteRow({
     required this.id,
@@ -173,6 +175,7 @@ class RouteRow {
     this.slug,
     this.createdAt,
     this.updatedAt,
+    this.startPoint,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -187,6 +190,7 @@ class RouteRow {
     slug: json['slug'] as String?,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    startPoint: json['start_point'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -201,6 +205,7 @@ class RouteRow {
     colSlug: slug,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
+    colStartPoint: startPoint,
   };
 }
 
