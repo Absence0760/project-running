@@ -41,7 +41,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `run_detail_screen.dart` — single run map + stats (primary + secondary) + interactive elevation/pace chart + best efforts + pace-bar splits + laps
 - `import_screen.dart` — GPX / KML / KMZ / GeoJSON / TCX file picker
 - `routes_screen.dart` — saved routes list
-- `route_detail_screen.dart` — route map + metadata
+- `route_detail_screen.dart` — route map + metadata + reviews + public/private toggle
 - `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
 - `explore_routes_screen.dart` — search and browse public routes with filters (distance, surface), save to library
 - `settings_screen.dart` — preferences, integrations, data export
@@ -76,10 +76,12 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Tests
 
-Test files in `test/`:
-- `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner (the one behind the dashboard "Fastest 5k" PB)
-- `local_run_store_test.dart` — 14 tests exercising the store with a `Directory.systemTemp` tempDir injection
+Test files in `test/` (80 tests total):
+- `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
+- `local_run_store_test.dart` — 16 tests: store persistence, sync state, in-progress save/load, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
+- `goals_test.dart` — 20 tests: goal evaluation (distance/time/pace/run-count, weekly/monthly, multi-target)
+- `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
 - plus `run_recorder`'s own 14 tests in `packages/run_recorder/test/`
 
 See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.

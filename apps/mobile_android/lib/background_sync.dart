@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:workmanager/workmanager.dart';
@@ -32,13 +33,20 @@ void callbackDispatcher() {
       final unsynced = store.unsyncedRuns;
       if (unsynced.isEmpty) return true;
 
+      int pushed = 0;
       for (final run in unsynced) {
         try {
           await api.saveRun(run);
           await store.markSynced(run.id);
-        } catch (_) {}
+          pushed++;
+        } catch (e) {
+          debugPrint('Background sync failed for ${run.id}: $e');
+        }
       }
-    } catch (_) {}
+      debugPrint('Background sync: pushed $pushed/${unsynced.length}');
+    } catch (e) {
+      debugPrint('Background sync error: $e');
+    }
     return true;
   });
 }

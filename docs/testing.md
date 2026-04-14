@@ -40,7 +40,7 @@ flutter test --name "^position filter chain"
 
 ## What's covered today
 
-Total: **64 tests across 4 files**, all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
+Total: **94 tests across 6 files** (80 in mobile_android + 14 in run_recorder), all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -89,7 +89,7 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 - Resume clears `_lastTrackedPosition` so the pause-duration gap isn't counted
 - `Stopwatch` stops during pause — asserted with `Future.delayed(50ms)` on both sides
 
-### `apps/mobile_android/test/local_run_store_test.dart` — 14 tests
+### `apps/mobile_android/test/local_run_store_test.dart` — 16 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
 
@@ -143,6 +143,25 @@ Pure-function tests for the period summary screen's extracted helpers in `lib/sc
 - `formatDurationCoarse`: minutes+seconds, hours+minutes, exact hours, zero
 - `shortDate`: day + abbreviated month
 - `monthName`: full month name for all positions
+
+### `apps/mobile_android/test/goals_test.dart` — 20 tests
+
+Pure-function tests for `evaluateGoal` and `RunGoal` JSON serialisation in `lib/goals.dart`:
+
+- Period bounds (week start = Monday 00:00, month end wraps to next year)
+- Distance target: empty list, runs outside period, sum, goal reached, ahead/behind pace
+- Avg pace target: cycling-only runs excluded, meeting/exceeding/missing target, distance-weighted
+- Run count and time targets
+- Multi-target goal: each target evaluated independently, overall complete only when all met
+- `RunGoal.toJson` / `fromJson` round-trip, legacy single-target migration
+
+### `apps/mobile_android/test/route_simplify_test.dart` — 8 tests
+
+Tests for Ramer-Douglas-Peucker track simplification in `lib/route_simplify.dart`:
+
+- Fewer than 3 points returned unchanged
+- Collinear points dropped
+- `computeElevationGain` accumulates only positive deltas
 
 ---
 

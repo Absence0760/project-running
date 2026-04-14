@@ -158,6 +158,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       }
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not refresh — check your connection')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _fetching = false);
     }

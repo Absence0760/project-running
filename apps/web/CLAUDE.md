@@ -16,15 +16,31 @@ This is a SvelteKit web template deployed to GitHub Pages.
 
 ```
 src/
-  routes/         # SvelteKit file-based routes
-    +layout.svelte
-    +page.svelte
-  app.css         # Global styles
-  app.d.ts        # App-level TypeScript declarations
-.github/
-  workflows/
-    deploy.yml    # Builds and deploys to GitHub Pages on push to main
-    claude.yml    # Claude Code automation (this workflow)
+  lib/
+    components/     # RunMap, ElevationProfile, ImportRoute, RouteBuilder
+    stores/         # auth.svelte.ts (Supabase Auth store)
+    data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
+    types.ts        # Run, Route, Integration type overlays on generated DB types
+    database.types.ts  # Generated Supabase types (regenerate after migrations)
+    supabase.ts     # Supabase client init
+    mock-data.ts    # Fallback data when Supabase is empty
+  routes/
+    +layout.svelte  # App shell with sidebar nav (auth guard)
+    dashboard/      # Weekly mileage, PBs, calendar heatmap
+    runs/           # Run history with source + activity type filters
+    runs/[id]/      # Run detail with map, elevation, splits
+    routes/         # User's saved routes
+    routes/new/     # Route builder (MapLibre + OSRM)
+    routes/[id]/    # Route detail
+    explore/        # Public route discovery (search, distance/surface filters)
+    settings/       # Account, integrations, preferences
+    share/run/[id]/ # Public run share page (no auth required)
+    share/route/[id]/ # Public route share page (no auth required)
+    live/[id]/      # Live spectator tracking (simulated)
+    login/          # Email/password + OAuth sign-in
+    auth/callback/  # OAuth redirect handler
+  app.css           # Global styles + CSS variables
+  app.d.ts          # App-level TypeScript declarations
 ```
 
 ## Development

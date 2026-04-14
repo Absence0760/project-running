@@ -67,8 +67,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
 
   Future<void> _search() async {
     final api = widget.apiClient;
-    if (api == null) {
-      setState(() => _error = 'Sign in to explore routes');
+    if (api == null || api.userId == null) {
+      setState(() => _error = 'Sign in and connect to the internet to explore routes');
       return;
     }
 
@@ -128,7 +128,15 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         _loading = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _hasMore = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load more — check your connection')),
+        );
+      }
     }
   }
 
@@ -385,6 +393,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
                   route: route,
                   routeStore: widget.routeStore,
                   preferences: widget.preferences,
+                  apiClient: widget.apiClient,
                 ),
               ),
             );

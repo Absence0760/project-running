@@ -65,7 +65,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _signOut() async {
     final api = widget.apiClient;
     if (api == null) return;
-    await api.signOut();
+    try {
+      await api.signOut();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign out failed — check your connection')),
+        );
+        return;
+      }
+    }
     if (mounted) setState(() {});
   }
 

@@ -196,6 +196,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
                             route: route,
                             routeStore: widget.routeStore,
                             preferences: widget.preferences,
+                            apiClient: widget.apiClient,
                           ),
                         ),
                       );

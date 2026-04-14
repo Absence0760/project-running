@@ -82,6 +82,57 @@ class IntegrationRow {
   };
 }
 
+/// Row shape for the `route_reviews` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RouteReviewRow {
+  static const String table = 'route_reviews';
+  static const String colId = 'id';
+  static const String colRouteId = 'route_id';
+  static const String colUserId = 'user_id';
+  static const String colRating = 'rating';
+  static const String colComment = 'comment';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String routeId;
+  final String userId;
+  final int rating;
+  final String? comment;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const RouteReviewRow({
+    required this.id,
+    required this.routeId,
+    required this.userId,
+    required this.rating,
+    this.comment,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory RouteReviewRow.fromJson(Map<String, dynamic> json) => RouteReviewRow(
+    id: json['id'] as String,
+    routeId: json['route_id'] as String,
+    userId: json['user_id'] as String,
+    rating: (json['rating'] as num).toInt(),
+    comment: json['comment'] as String?,
+    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRouteId: routeId,
+    colUserId: userId,
+    colRating: rating,
+    colComment: comment,
+    colCreatedAt: createdAt?.toIso8601String(),
+    colUpdatedAt: updatedAt?.toIso8601String(),
+  };
+}
+
 /// Row shape for the `routes` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RouteRow {

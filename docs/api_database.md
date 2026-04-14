@@ -19,11 +19,12 @@ create table runs (
   started_at    timestamptz not null,
   duration_s    integer not null,           -- elapsed seconds
   distance_m    numeric(10, 2) not null,    -- metres
-  track         jsonb,                      -- [{lat, lng, ele, ts}, ...]
   route_id      uuid references routes,     -- linked planned route, if any
   source        text not null,              -- see RunSource enum below
   external_id   text unique,               -- deduplication key
   metadata      jsonb,                     -- source-specific extra fields
+  track_url     text,                      -- Storage path: {user_id}/{run_id}.json.gz
+  is_public     boolean default false,     -- visible at /share/run/{id}
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
@@ -33,7 +34,12 @@ create index runs_user_started_at on runs (user_id, started_at desc);
 
 -- Index for deduplication upserts
 create unique index runs_external_id on runs (external_id) where external_id is not null;
+
+-- Index for public share pages
+create index runs_public on runs (is_public, started_at desc) where is_public = true;
 ```
+
+**GPS tracks** are stored as gzipped JSON files in the `runs` Storage bucket at `{user_id}/{run_id}.json.gz`. The `track_url` column points to the file. Tracks are never returned by list queries -- they are fetched on demand when the run detail screen is opened.
 
 **`source` values:**
 
@@ -117,6 +123,27 @@ create table integrations (
 
 ---
 
+### `route_reviews`
+
+User ratings and comments on public routes. One review per user per route.
+
+```sql
+create table route_reviews (
+  id          uuid primary key default gen_random_uuid(),
+  route_id    uuid references routes not null,
+  user_id     uuid references auth.users not null,
+  rating      smallint not null check (rating >= 1 and rating <= 5),
+  comment     text,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now(),
+  unique (route_id, user_id)
+);
+
+create index route_reviews_route on route_reviews (route_id, created_at desc);
+```
+
+---
+
 ### `user_profiles`
 
 Supplementary user data not stored in `auth.users`.
@@ -148,6 +175,10 @@ create policy "users own their runs"
   on runs for all
   using (auth.uid() = user_id);
 
+create policy "public runs are readable by anyone"
+  on runs for select
+  using (is_public = true);
+
 -- routes
 alter table routes enable row level security;
 
@@ -172,6 +203,20 @@ alter table user_profiles enable row level security;
 create policy "users own their profile"
   on user_profiles for all
   using (auth.uid() = id);
+
+-- route_reviews
+alter table route_reviews enable row level security;
+
+create policy "reviews on public routes are readable by anyone"
+  on route_reviews for select
+  using (
+    exists (select 1 from routes where routes.id = route_reviews.route_id and routes.is_public = true)
+  );
+
+create policy "users manage their own reviews"
+  on route_reviews for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 ```
 
 ---
@@ -414,6 +459,7 @@ Used for GPX file storage and data exports.
 
 | Bucket | Access | Purpose |
 |---|---|---|
+| `runs` | Private (RLS) | Gzipped GPS tracks (`{user_id}/{run_id}.json.gz`). Public read via RLS when `runs.is_public = true`. |
 | `routes` | Private (RLS) | Uploaded GPX/KML files |
 | `exports` | Private (signed URLs) | User data export files |
 | `avatars` | Public | User profile photos |

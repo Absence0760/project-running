@@ -79,6 +79,44 @@ export type Database = {
         }
         Relationships: []
       }
+      route_reviews: {
+        Row: {
+          id: string
+          route_id: string
+          user_id: string
+          rating: number
+          comment: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          route_id: string
+          user_id: string
+          rating: number
+          comment?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          route_id?: string
+          user_id?: string
+          rating?: number
+          comment?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_reviews_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routes: {
         Row: {
           created_at: string | null

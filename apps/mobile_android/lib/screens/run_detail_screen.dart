@@ -38,6 +38,7 @@ class RunDetailScreen extends StatefulWidget {
 class _RunDetailScreenState extends State<RunDetailScreen> {
   late Run run = widget.run;
   bool _loadingTrack = false;
+  bool _trackFetchFailed = false;
   Route? _linkedRoute;
 
   @override
@@ -96,6 +97,7 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
       if (mounted) setState(() => run = updated);
     } catch (e) {
       debugPrint('Failed to fetch track for ${run.id}: $e');
+      if (mounted) setState(() => _trackFetchFailed = true);
     } finally {
       if (mounted) setState(() => _loadingTrack = false);
     }
@@ -336,6 +338,26 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                               ),
                               SizedBox(width: 8),
                               Text('Loading GPS data...',
+                                  style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_trackFetchFailed && run.track.isEmpty)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.cloud_off, size: 14,
+                                  color: Theme.of(context).colorScheme.outline),
+                              const SizedBox(width: 8),
+                              const Text('GPS track unavailable offline',
                                   style: TextStyle(fontSize: 12)),
                             ],
                           ),

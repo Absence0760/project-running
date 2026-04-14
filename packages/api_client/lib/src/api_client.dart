@@ -341,6 +341,57 @@ class ApiClient {
     return data.map<Route>((row) => _routeFromRow(row)).toList();
   }
 
+  // -- Route reviews --
+
+  /// Fetch all reviews for a route, newest first.
+  Future<List<RouteReviewRow>> getRouteReviews(String routeId) async {
+    final data = await _client
+        .from(RouteReviewRow.table)
+        .select()
+        .eq(RouteReviewRow.colRouteId, routeId)
+        .order(RouteReviewRow.colCreatedAt, ascending: false);
+    return data
+        .map<RouteReviewRow>(
+            (row) => RouteReviewRow.fromJson(row))
+        .toList();
+  }
+
+  /// Submit or update a review for a route (one per user per route).
+  Future<void> upsertRouteReview({
+    required String routeId,
+    required int rating,
+    String? comment,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    await _client.from(RouteReviewRow.table).upsert({
+      RouteReviewRow.colRouteId: routeId,
+      RouteReviewRow.colUserId: userId,
+      RouteReviewRow.colRating: rating,
+      RouteReviewRow.colComment: comment,
+    }, onConflict: '${RouteReviewRow.colRouteId},${RouteReviewRow.colUserId}');
+  }
+
+  /// Delete the current user's review of a route.
+  Future<void> deleteRouteReview(String routeId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    await _client
+        .from(RouteReviewRow.table)
+        .delete()
+        .eq(RouteReviewRow.colRouteId, routeId)
+        .eq(RouteReviewRow.colUserId, userId);
+  }
+
+  /// Update a route's is_public flag.
+  Future<void> setRoutePublic(String routeId, bool isPublic) async {
+    await _client
+        .from(RouteRow.table)
+        .update({RouteRow.colIsPublic: isPublic})
+        .eq(RouteRow.colId, routeId);
+  }
+
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
   //
   // These go through the generated row classes so that column renames surface

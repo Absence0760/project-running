@@ -99,11 +99,22 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
     }
   }
 
-  Future<void> _shareGpx() async {
-    final gpx = _runToGpx(widget.run, widget.title);
+  Future<void> _shareFile(String format) async {
     final tmp = await getTemporaryDirectory();
-    final file = File('${tmp.path}/run-${widget.run.id}.gpx');
-    await file.writeAsString(gpx);
+    final run = widget.run;
+    final title = widget.title;
+    File file;
+    switch (format) {
+      case 'tcx':
+        file = File('${tmp.path}/run-${run.id}.tcx');
+        await file.writeAsString(_runToTcx(run, title));
+      case 'fit':
+        file = File('${tmp.path}/run-${run.id}.fit');
+        await file.writeAsBytes(_runToFitBytes(run));
+      default:
+        file = File('${tmp.path}/run-${run.id}.gpx');
+        await file.writeAsString(_runToGpx(run, title));
+    }
     await Share.shareXFiles([XFile(file.path)], text: _caption);
   }
 
@@ -144,10 +155,18 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _capturing ? null : _shareGpx,
-                      icon: const Icon(Icons.route_outlined),
-                      label: const Text('GPX'),
+                    child: PopupMenuButton<String>(
+                      onSelected: _capturing ? null : _shareFile,
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'gpx', child: Text('GPX')),
+                        PopupMenuItem(value: 'tcx', child: Text('TCX')),
+                        PopupMenuItem(value: 'fit', child: Text('FIT')),
+                      ],
+                      child: OutlinedButton.icon(
+                        onPressed: null,
+                        icon: const Icon(Icons.route_outlined),
+                        label: const Text('Export'),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -519,6 +538,168 @@ String _runToGpx(Run r, String title) {
   buf.writeln('  </trk>');
   buf.writeln('</gpx>');
   return buf.toString();
+}
+
+String _runToTcx(Run r, String title) {
+  String esc(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+
+  final buf = StringBuffer();
+  buf.writeln('<?xml version="1.0" encoding="UTF-8"?>');
+  buf.writeln(
+      '<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">');
+  buf.writeln('  <Activities>');
+  buf.writeln('    <Activity Sport="Running">');
+  buf.writeln(
+      '      <Id>${r.startedAt.toUtc().toIso8601String()}</Id>');
+  buf.writeln('      <Notes>${esc(title)}</Notes>');
+  buf.writeln('      <Lap StartTime="${r.startedAt.toUtc().toIso8601String()}">');
+  buf.writeln(
+      '        <TotalTimeSeconds>${r.duration.inSeconds}</TotalTimeSeconds>');
+  buf.writeln(
+      '        <DistanceMeters>${r.distanceMetres.toStringAsFixed(1)}</DistanceMeters>');
+  buf.writeln('        <Track>');
+  for (final w in r.track) {
+    buf.writeln('          <Trackpoint>');
+    if (w.timestamp != null) {
+      buf.writeln(
+          '            <Time>${w.timestamp!.toUtc().toIso8601String()}</Time>');
+    }
+    buf.writeln('            <Position>');
+    buf.writeln('              <LatitudeDegrees>${w.lat}</LatitudeDegrees>');
+    buf.writeln('              <LongitudeDegrees>${w.lng}</LongitudeDegrees>');
+    buf.writeln('            </Position>');
+    if (w.elevationMetres != null) {
+      buf.writeln(
+          '            <AltitudeMeters>${w.elevationMetres}</AltitudeMeters>');
+    }
+    buf.writeln('          </Trackpoint>');
+  }
+  buf.writeln('        </Track>');
+  buf.writeln('      </Lap>');
+  buf.writeln('    </Activity>');
+  buf.writeln('  </Activities>');
+  buf.writeln('</TrainingCenterDatabase>');
+  return buf.toString();
+}
+
+List<int> _runToFitBytes(Run r) {
+  // FIT epoch: 1989-12-31 00:00:00 UTC
+  final fitEpoch = DateTime.utc(1989, 12, 31);
+  int fitTimestamp(DateTime dt) => dt.difference(fitEpoch).inSeconds;
+  int semicircles(double degrees) => (degrees * (1 << 31) / 180).round();
+
+  final out = <int>[];
+
+  void writeU8(int v) => out.add(v & 0xFF);
+  void writeU16LE(int v) {
+    out.add(v & 0xFF);
+    out.add((v >> 8) & 0xFF);
+  }
+  void writeU32LE(int v) {
+    out.add(v & 0xFF);
+    out.add((v >> 8) & 0xFF);
+    out.add((v >> 16) & 0xFF);
+    out.add((v >> 24) & 0xFF);
+  }
+  void writeSint32LE(int v) => writeU32LE(v < 0 ? v + 0x100000000 : v);
+
+  // Definition message helper. Returns the local message type used.
+  void writeDefinition({
+    required int localType,
+    required int globalMesgNum,
+    required List<List<int>> fields,
+  }) {
+    writeU8(0x40 | (localType & 0x0F)); // definition header
+    writeU8(0); // reserved
+    writeU8(0); // little-endian
+    writeU16LE(globalMesgNum);
+    writeU8(fields.length);
+    for (final f in fields) {
+      writeU8(f[0]); // field num
+      writeU8(f[1]); // size
+      writeU8(f[2]); // base type
+    }
+  }
+
+  // Data message helper.
+  void writeDataHeader(int localType) {
+    writeU8(localType & 0x0F);
+  }
+
+  // -- File header (14 bytes, written at the end with correct data size) --
+  for (var i = 0; i < 14; i++) out.add(0); // placeholder
+
+  // -- File ID message (mesg 0) --
+  writeDefinition(localType: 0, globalMesgNum: 0, fields: [
+    [0, 1, 0],   // type: enum (4=activity)
+    [1, 2, 132], // manufacturer: uint16
+    [3, 4, 134], // serial: uint32z
+    [4, 4, 134], // time_created: uint32
+  ]);
+  writeDataHeader(0);
+  writeU8(4); // type = activity
+  writeU16LE(1); // manufacturer = 1 (Garmin, generic)
+  writeU32LE(12345); // serial
+  writeU32LE(fitTimestamp(r.startedAt));
+
+  // -- Record messages (mesg 20) --
+  writeDefinition(localType: 1, globalMesgNum: 20, fields: [
+    [253, 4, 134], // timestamp: uint32
+    [0, 4, 133],   // position_lat: sint32
+    [1, 4, 133],   // position_lng: sint32
+    [2, 2, 132],   // altitude: uint16 (scale 5, offset 500)
+  ]);
+  for (final w in r.track) {
+    writeDataHeader(1);
+    writeU32LE(fitTimestamp(w.timestamp ?? r.startedAt));
+    writeSint32LE(semicircles(w.lat));
+    writeSint32LE(semicircles(w.lng));
+    final alt = w.elevationMetres ?? 0;
+    writeU16LE(((alt + 500) * 5).round().clamp(0, 0xFFFF));
+  }
+
+  // -- Patch file header --
+  final dataSize = out.length - 14;
+  out[0] = 14; // header size
+  out[1] = 20; // protocol version (2.0)
+  out[2] = 0x08; // profile version low
+  out[3] = 0x08; // profile version high
+  out[4] = dataSize & 0xFF;
+  out[5] = (dataSize >> 8) & 0xFF;
+  out[6] = (dataSize >> 16) & 0xFF;
+  out[7] = (dataSize >> 24) & 0xFF;
+  // ".FIT" signature
+  out[8] = 0x2E; // '.'
+  out[9] = 0x46; // 'F'
+  out[10] = 0x49; // 'I'
+  out[11] = 0x54; // 'T'
+  // Header CRC (2 bytes) — set to 0 (optional per spec)
+  out[12] = 0;
+  out[13] = 0;
+
+  // -- Data CRC --
+  var crc = 0;
+  for (var i = 0; i < out.length; i++) {
+    crc = _fitCrc(crc, out[i]);
+  }
+  out.add(crc & 0xFF);
+  out.add((crc >> 8) & 0xFF);
+
+  return out;
+}
+
+int _fitCrc(int crc, int byte) {
+  const table = [
+    0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
+    0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
+  ];
+  var tmp = table[crc & 0xF] ^ table[byte & 0xF];
+  crc = (crc >> 4) & 0x0FFF;
+  crc = crc ^ tmp ^ table[(byte >> 4) & 0xF];
+  return crc;
 }
 
 String _formatDuration(Duration d) {

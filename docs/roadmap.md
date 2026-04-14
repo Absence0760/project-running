@@ -307,7 +307,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Public / private toggle per route
 - [x] Explore Routes screen — search public routes by name (full-text), filter by distance range and surface type, save to library, paginated results (Android)
 - [ ] "Popular near me" discovery feed (PostGIS `ST_DWithin` queries)
-- [ ] Route ratings and comments
+- [x] Route ratings and comments — `route_reviews` table (1-5 stars + optional comment, one per user per route), reviews section on route detail screen, avg rating in stats row, submit/edit review dialog
 - [ ] Share to social (image card with map + stats)
 - [ ] SEO-indexed public route pages
 
