@@ -43,6 +43,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `routes_screen.dart` — saved routes list
 - `route_detail_screen.dart` — route map + metadata
 - `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
+- `explore_routes_screen.dart` — search and browse public routes with filters (distance, surface), save to library
 - `settings_screen.dart` — preferences, integrations, data export
 
 **Top-level (`lib/`):**

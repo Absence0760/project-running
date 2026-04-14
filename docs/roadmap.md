@@ -303,7 +303,8 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Community route library
 
-- [ ] Public / private toggle per route
+- [x] Public / private toggle per route
+- [x] Explore Routes screen — search public routes by name (full-text), filter by distance range and surface type, save to library, paginated results (Android)
 - [ ] "Popular near me" discovery feed (PostGIS `ST_DWithin` queries)
 - [ ] Route ratings and comments
 - [ ] Share to social (image card with map + stats)

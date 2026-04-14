@@ -305,6 +305,42 @@ class ApiClient {
     return data.map<Route>((row) => _routeFromRow(row)).toList();
   }
 
+  /// Search public routes. Supports full-text name search, distance range
+  /// filtering, and surface type filtering. Uses the `routes_public` partial
+  /// index and `routes_name_search` GIN index.
+  Future<List<Route>> searchPublicRoutes({
+    String? query,
+    double? minDistanceM,
+    double? maxDistanceM,
+    String? surface,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    var q = _client
+        .from(RouteRow.table)
+        .select()
+        .eq(RouteRow.colIsPublic, true);
+
+    if (query != null && query.trim().isNotEmpty) {
+      q = q.textSearch(RouteRow.colName, "'${query.trim()}'");
+    }
+    if (minDistanceM != null) {
+      q = q.gte(RouteRow.colDistanceM, minDistanceM);
+    }
+    if (maxDistanceM != null) {
+      q = q.lte(RouteRow.colDistanceM, maxDistanceM);
+    }
+    if (surface != null && surface.isNotEmpty) {
+      q = q.eq(RouteRow.colSurface, surface);
+    }
+
+    final data = await q
+        .order(RouteRow.colCreatedAt, ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return data.map<Route>((row) => _routeFromRow(row)).toList();
+  }
+
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
   //
   // These go through the generated row classes so that column renames surface

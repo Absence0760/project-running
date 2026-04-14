@@ -8,6 +8,7 @@ import 'package:gpx_parser/gpx_parser.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
+import 'explore_routes_screen.dart';
 import 'route_detail_screen.dart';
 
 /// Route library: imported and synced routes.
@@ -110,6 +111,23 @@ class _RoutesScreenState extends State<RoutesScreen> {
       appBar: AppBar(
         title: const Text('Routes'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.explore),
+            tooltip: 'Explore public routes',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ExploreRoutesScreen(
+                    apiClient: widget.apiClient,
+                    routeStore: widget.routeStore,
+                    preferences: widget.preferences,
+                    onStartRun: widget.onStartRun,
+                  ),
+                ),
+              );
+            },
+          ),
           if (_syncing)
             const Padding(
               padding: EdgeInsets.all(12),
