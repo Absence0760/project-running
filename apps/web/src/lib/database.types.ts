@@ -81,31 +81,31 @@ export type Database = {
       }
       route_reviews: {
         Row: {
-          id: string
-          route_id: string
-          user_id: string
-          rating: number
           comment: string | null
           created_at: string | null
+          id: string
+          rating: number
+          route_id: string
           updated_at: string | null
+          user_id: string
         }
         Insert: {
-          id?: string
-          route_id: string
-          user_id: string
-          rating: number
           comment?: string | null
           created_at?: string | null
+          id?: string
+          rating: number
+          route_id: string
           updated_at?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          route_id?: string
-          user_id?: string
-          rating?: number
           comment?: string | null
           created_at?: string | null
+          id?: string
+          rating?: number
+          route_id?: string
           updated_at?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -126,6 +126,7 @@ export type Database = {
           is_public: boolean | null
           name: string
           slug: string | null
+          start_point: unknown
           surface: string | null
           updated_at: string | null
           user_id: string
@@ -139,6 +140,7 @@ export type Database = {
           is_public?: boolean | null
           name: string
           slug?: string | null
+          start_point?: unknown
           surface?: string | null
           updated_at?: string | null
           user_id: string
@@ -152,6 +154,7 @@ export type Database = {
           is_public?: boolean | null
           name?: string
           slug?: string | null
+          start_point?: unknown
           surface?: string | null
           updated_at?: string | null
           user_id?: string
@@ -261,6 +264,34 @@ export type Database = {
       }
     }
     Functions: {
+      nearby_routes: {
+        Args: {
+          lat: number
+          lng: number
+          max_results?: number
+          radius_m?: number
+        }
+        Returns: {
+          created_at: string | null
+          distance_m: number
+          elevation_m: number | null
+          id: string
+          is_public: boolean | null
+          name: string
+          slug: string | null
+          start_point: unknown
+          surface: string | null
+          updated_at: string | null
+          user_id: string
+          waypoints: Json
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "routes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       personal_records: {
         Args: never
         Returns: {
