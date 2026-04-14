@@ -68,13 +68,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _onStoreChanged() {
     if (!mounted) return;
-    _recompute();
-    // A run we had selected may have been deleted / replaced — drop any
-    // dangling ids so the "N selected" count stays honest.
-    final existing = widget.runStore.runs.map((r) => r.id).toSet();
-    _selected.removeWhere((id) => !existing.contains(id));
-    if (_selected.isEmpty) _selecting = false;
-    setState(() {});
+    setState(() {
+      _recompute();
+      final existing = widget.runStore.runs.map((r) => r.id).toSet();
+      _selected.removeWhere((id) => !existing.contains(id));
+      if (_selected.isEmpty) _selecting = false;
+    });
   }
 
   void _recompute() {
@@ -377,7 +376,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             CheckedPopupMenuItem(
               value: _HistorySort.fastest,
               checked: _sort == _HistorySort.fastest,
-              child: const Text('Fastest pace'),
+              child: const Text('Best pace'),
             ),
           ],
         ),
@@ -540,7 +539,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           );
         }
-        final run = _visible[index - 1];
+        final runIndex = index - 1;
+        if (runIndex < 0 || runIndex >= _visible.length) {
+          return const SizedBox.shrink();
+        }
+        final run = _visible[runIndex];
         return _RunTile(
           key: ValueKey(run.id),
           run: run,

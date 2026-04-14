@@ -32,7 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// dashboard rebuilds every time a listener fires) is the hottest loop
   /// in the app — this cache flattens it to O(1) on subsequent builds.
   /// Invalidated wholesale when the run store changes.
-  final Map<String, Duration?> _best5kCache = {};
+  final Map<String, Map<double, Duration?>> _bestEffortCache = {};
 
   @override
   void initState() {
@@ -49,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _onRunStoreChanged() {
-    _best5kCache.clear();
+    _bestEffortCache.clear();
     if (mounted) setState(() {});
   }
 
@@ -104,8 +104,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     var monthDistance = 0.0;
     var allDistance = 0.0;
     Run? longest;
-    Run? fastestPace;
-    Duration? best5k;
+    const pbDistances = <String, double>{
+      '5 km': 5000,
+      '10 km': 10000,
+      'Half Marathon': 21097,
+      'Marathon': 42195,
+    };
+    final bestEfforts = <String, Duration>{};
     for (final r in runs) {
       allDistance += r.distanceMetres;
       if (!r.startedAt.isBefore(weekStart)) {
@@ -121,20 +126,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (longest == null || r.distanceMetres > longest.distanceMetres) {
         longest = r;
       }
-      if (r.distanceMetres >= 1000) {
-        if (fastestPace == null || _paceOf(r) < _paceOf(fastestPace)) {
-          fastestPace = r;
-        }
-      }
-      if (r.distanceMetres >= 5000) {
+      final runCache = _bestEffortCache.putIfAbsent(r.id, () => {});
+      for (final e in pbDistances.entries) {
+        if (r.distanceMetres < e.value) continue;
         final cached =
-            _best5kCache.putIfAbsent(r.id, () => fastestWindowOf(r.track, 5000));
-        if (cached != null && (best5k == null || cached < best5k)) {
-          best5k = cached;
+            runCache.putIfAbsent(e.value, () => fastestWindowOf(r.track, e.value));
+        if (cached != null &&
+            (!bestEfforts.containsKey(e.key) || cached < bestEfforts[e.key]!)) {
+          bestEfforts[e.key] = cached;
         }
       }
     }
-    final hasAnyPb = longest != null || fastestPace != null || best5k != null;
+    final hasAnyPb = longest != null || bestEfforts.isNotEmpty;
     final weekDurationMin = Duration(seconds: weekDurationSec).inMinutes;
 
     return Scaffold(
@@ -218,22 +221,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               value: UnitFormat.distance(
                                   longest.distanceMetres, unit),
                             ),
-                          if (fastestPace != null) ...[
-                            const SizedBox(height: 12),
-                            _PbRow(
-                              icon: Icons.speed,
-                              label: 'Fastest pace',
-                              value:
-                                  '${UnitFormat.pace(_paceOf(fastestPace), unit)} '
-                                  '${UnitFormat.paceLabel(unit)}',
-                            ),
-                          ],
-                          if (best5k != null) ...[
+                          for (final e in bestEfforts.entries) ...[
                             const SizedBox(height: 12),
                             _PbRow(
                               icon: Icons.emoji_events,
-                              label: 'Fastest 5k',
-                              value: _formatDuration(best5k),
+                              label: 'Fastest ${e.key}',
+                              value: _formatDuration(e.value),
                             ),
                           ],
                         ],
@@ -318,7 +311,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return raw == null || raw == 'run';
   }
 
-  double _paceOf(Run r) => r.duration.inSeconds / (r.distanceMetres / 1000);
 
   static String _formatDuration(Duration d) {
     final h = d.inHours;

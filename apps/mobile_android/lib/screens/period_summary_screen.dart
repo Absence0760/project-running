@@ -78,8 +78,18 @@ PeriodStats computePeriodStats(List<Run> runs) {
     totalDistance += r.distanceMetres;
     totalDurationSec += r.duration.inSeconds;
   }
-  final avgPace = totalDistance > 10
-      ? totalDurationSec / (totalDistance / 1000)
+  // Compute avg pace from running/walking/hiking only — mixing in cycling
+  // distances and durations produces a nonsensical pace figure.
+  var paceDistance = 0.0;
+  var paceDurationSec = 0;
+  for (final r in runs) {
+    final activity = r.metadata?['activity_type'] as String?;
+    if (activity == 'cycle') continue;
+    paceDistance += r.distanceMetres;
+    paceDurationSec += r.duration.inSeconds;
+  }
+  final avgPace = paceDistance > 10
+      ? paceDurationSec / (paceDistance / 1000)
       : null;
   return PeriodStats(
     runCount: runs.length,

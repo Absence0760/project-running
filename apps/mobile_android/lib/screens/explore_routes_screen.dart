@@ -132,31 +132,40 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
     }
   }
 
+  static const _metresPerMile = 1609.344;
+
+  // Thresholds in metres — adapt to the user's unit so the buckets feel
+  // natural in both km and miles.
+  List<double> get _thresholds => widget.preferences.useMiles
+      ? [3 * _metresPerMile, 6 * _metresPerMile, 13 * _metresPerMile]
+      : [5000, 10000, 21000];
+
   double? get _minDistance {
+    final t = _thresholds;
     switch (_distanceFilter) {
       case _DistanceFilter.any:
-        return null;
       case _DistanceFilter.short:
         return null;
       case _DistanceFilter.medium:
-        return 5000;
+        return t[0];
       case _DistanceFilter.long:
-        return 10000;
+        return t[1];
       case _DistanceFilter.ultra:
-        return 21000;
+        return t[2];
     }
   }
 
   double? get _maxDistance {
+    final t = _thresholds;
     switch (_distanceFilter) {
       case _DistanceFilter.any:
         return null;
       case _DistanceFilter.short:
-        return 5000;
+        return t[0];
       case _DistanceFilter.medium:
-        return 10000;
+        return t[1];
       case _DistanceFilter.long:
-        return 21000;
+        return t[2];
       case _DistanceFilter.ultra:
         return null;
     }
@@ -244,12 +253,13 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   }
 
   Widget _buildDistanceChip(ThemeData theme) {
+    final mi = widget.preferences.useMiles;
     final labels = {
       _DistanceFilter.any: 'Any distance',
-      _DistanceFilter.short: 'Under 5 km',
-      _DistanceFilter.medium: '5-10 km',
-      _DistanceFilter.long: '10-21 km',
-      _DistanceFilter.ultra: '21 km+',
+      _DistanceFilter.short: mi ? 'Under 3 mi' : 'Under 5 km',
+      _DistanceFilter.medium: mi ? '3-6 mi' : '5-10 km',
+      _DistanceFilter.long: mi ? '6-13 mi' : '10-21 km',
+      _DistanceFilter.ultra: mi ? '13 mi+' : '21 km+',
     };
     return PopupMenuButton<_DistanceFilter>(
       onSelected: (v) {

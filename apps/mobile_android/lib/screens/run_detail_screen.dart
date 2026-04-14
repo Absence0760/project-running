@@ -438,7 +438,7 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                     child: _StatSmall(
                       icon: Icons.local_fire_department,
                       label: 'Calories',
-                      value: '$_estimatedCalories',
+                      value: '$_estimatedCalories kcal',
                     ),
                   ),
                   if (_steps > 0)
@@ -643,8 +643,9 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                 size: 18, color: theme.colorScheme.tertiary),
           ),
           title: Text(e.key),
-          subtitle: Text(UnitFormat.pace(paceSecPerKm, unit) +
-              ' ${UnitFormat.paceLabel(unit)}'),
+          subtitle: Text(_activityType.usesSpeed
+              ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
+              : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}'),
           trailing: Text(
             _formatDuration(e.value),
             style: theme.textTheme.titleMedium,
@@ -658,8 +659,12 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
   List<Widget> _buildRouteComparison(ThemeData theme, DistanceUnit unit) {
     if (run.routeId == null) return const [];
 
+    final thisActivity = run.metadata?['activity_type'] as String? ?? 'run';
     final attempts = widget.runStore.runs
-        .where((r) => r.routeId == run.routeId && r.distanceMetres > 100)
+        .where((r) =>
+            r.routeId == run.routeId &&
+            r.distanceMetres > 100 &&
+            (r.metadata?['activity_type'] as String? ?? 'run') == thisActivity)
         .toList()
       ..sort((a, b) => a.duration.compareTo(b.duration));
 
@@ -835,7 +840,9 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Text(
-                      UnitFormat.pace(paceSecPerKm, unit),
+                      _activityType.usesSpeed
+                          ? UnitFormat.speed(paceSecPerKm, unit)
+                          : UnitFormat.pace(paceSecPerKm, unit),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,

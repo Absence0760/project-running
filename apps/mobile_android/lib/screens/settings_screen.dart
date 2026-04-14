@@ -257,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(
               prefs.splitIntervalMetres > 0
                   ? _splitIntervalLabel(prefs.splitIntervalMetres, prefs.unit)
-                  : 'Default (1 km / 5 km cycling)',
+                  : 'Default (1 km for running, 5 km for cycling)',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _editSplitInterval,
