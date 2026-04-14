@@ -220,13 +220,25 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
     final center = currentLatLng ?? plannedLatLngs.first;
 
+    // When not following the runner (detail screen), fit the camera to the
+    // full track so the user sees the whole run at a glance.
+    final allPoints = trackLatLngs.isNotEmpty ? trackLatLngs : plannedLatLngs;
+    final fitBounds = !widget.followRunner &&
+        allPoints.length >= 2;
+
     return Stack(
       children: [
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: center,
-            initialZoom: 19,
+            initialCenter: fitBounds ? allPoints.first : center,
+            initialZoom: fitBounds ? 14 : 19,
+            initialCameraFit: fitBounds
+                ? CameraFit.bounds(
+                    bounds: LatLngBounds.fromPoints(allPoints),
+                    padding: const EdgeInsets.all(32),
+                  )
+                : null,
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
             ),

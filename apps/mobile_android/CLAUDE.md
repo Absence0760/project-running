@@ -38,7 +38,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `dashboard_screen.dart` — weekly mileage, PBs, goal progress
 - `history_screen.dart` — run list with sorting, FAB opens `add_run_screen`
 - `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
-- `run_detail_screen.dart` — single run map + stats + splits + elevation
+- `run_detail_screen.dart` — single run map + stats (primary + secondary) + interactive elevation/pace chart + best efforts + pace-bar splits + laps
 - `import_screen.dart` — GPX / KML / KMZ / GeoJSON / TCX file picker
 - `routes_screen.dart` — saved routes list
 - `route_detail_screen.dart` — route map + metadata

@@ -409,6 +409,56 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             ),
           ),
 
+          // Secondary stats
+          if (run.track.length >= 2 || _hasElevation) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Row(
+                children: [
+                  if (_hasElevation) ...[
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.trending_up,
+                        label: 'Elev Gain',
+                        value: '${_elevationGain.round()}m',
+                      ),
+                    ),
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.trending_down,
+                        label: 'Elev Loss',
+                        value: '${_elevationLoss.round()}m',
+                      ),
+                    ),
+                  ],
+                  Expanded(
+                    child: _StatSmall(
+                      icon: Icons.local_fire_department,
+                      label: 'Calories',
+                      value: '$_estimatedCalories',
+                    ),
+                  ),
+                  if (_steps > 0)
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.directions_walk,
+                        label: 'Steps',
+                        value: '$_steps',
+                      ),
+                    ),
+                  if (_cadence > 0)
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.speed,
+                        label: 'Cadence',
+                        value: '$_cadence spm',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+
           const Divider(),
 
           // Elevation chart
@@ -419,9 +469,10 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
-                height: 120,
-                child: _ElevationChart(track: run.track, theme: theme),
+              child: _ElevationChart(
+                track: run.track,
+                theme: theme,
+                unit: unit,
               ),
             ),
             const SizedBox(height: 16),
@@ -436,6 +487,11 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             ),
             ..._buildLaps(theme, unit),
             const Divider(),
+          ],
+
+          // Best efforts — auto-detect fastest 1k, 1mi, 5k, 10k, HM, M
+          if (run.track.length >= 2) ...[
+            ..._buildBestEfforts(theme, unit),
           ],
 
           // Splits — only when there's a track to compute them from.
@@ -509,6 +565,89 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     return seconds / (run.distanceMetres / 1000);
   }
 
+  double get _elevationGain {
+    double gain = 0;
+    for (int i = 1; i < run.track.length; i++) {
+      final prev = run.track[i - 1].elevationMetres;
+      final curr = run.track[i].elevationMetres;
+      if (prev != null && curr != null && curr > prev) gain += curr - prev;
+    }
+    return gain;
+  }
+
+  double get _elevationLoss {
+    double loss = 0;
+    for (int i = 1; i < run.track.length; i++) {
+      final prev = run.track[i - 1].elevationMetres;
+      final curr = run.track[i].elevationMetres;
+      if (prev != null && curr != null && curr < prev) loss += prev - curr;
+    }
+    return loss;
+  }
+
+  int get _estimatedCalories {
+    return (70 * _activityType.kcalPerKgPerKm * run.distanceMetres / 1000)
+        .round();
+  }
+
+  int get _steps {
+    final s = run.metadata?['steps'];
+    if (s is int) return s;
+    if (s is num) return s.toInt();
+    return 0;
+  }
+
+  int get _cadence {
+    final c = run.metadata?['cadence'];
+    if (c is int) return c;
+    if (c is num) return c.toInt();
+    return 0;
+  }
+
+  List<Widget> _buildBestEfforts(ThemeData theme, DistanceUnit unit) {
+    const distances = <String, double>{
+      '1 km': 1000,
+      '1 mi': 1609.344,
+      '5 km': 5000,
+      '10 km': 10000,
+      'Half Marathon': 21097,
+      'Marathon': 42195,
+    };
+
+    final efforts = <MapEntry<String, Duration>>[];
+    for (final e in distances.entries) {
+      final best = fastestWindowOf(run.track, e.value);
+      if (best != null) efforts.add(MapEntry(e.key, best));
+    }
+    if (efforts.isEmpty) return const [];
+
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: Text('Best Efforts', style: theme.textTheme.titleMedium),
+      ),
+      ...efforts.map((e) {
+        final paceSecPerKm =
+            e.value.inSeconds / (distances[e.key]! / 1000);
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: theme.colorScheme.tertiaryContainer,
+            child: Icon(Icons.emoji_events,
+                size: 18, color: theme.colorScheme.tertiary),
+          ),
+          title: Text(e.key),
+          subtitle: Text(UnitFormat.pace(paceSecPerKm, unit) +
+              ' ${UnitFormat.paceLabel(unit)}'),
+          trailing: Text(
+            _formatDuration(e.value),
+            style: theme.textTheme.titleMedium,
+          ),
+        );
+      }),
+      const Divider(),
+    ];
+  }
+
   List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {
     if (run.track.length < 2) {
       return const [
@@ -551,16 +690,83 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
       ];
     }
 
+    // Find fastest and slowest for highlighting + bar scaling.
+    final splitSeconds = splits.map((s) => s.duration.inSeconds).toList();
+    final fastestSec = splitSeconds.reduce(math.min);
+    final slowestSec = splitSeconds.reduce(math.max);
+    final secRange = slowestSec - fastestSec;
+
     return splits.map((s) {
-      return ListTile(
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Text('${s.tick}'),
-        ),
-        title: Text('$unitLabel ${s.tick}'),
-        trailing: Text(
-          _formatDuration(s.duration),
-          style: theme.textTheme.titleMedium,
+      final sec = s.duration.inSeconds;
+      final paceSecPerKm = sec / (tickLength / 1000);
+      final isFastest = sec == fastestSec && secRange > 0;
+      final isSlowest = sec == slowestSec && secRange > 0;
+
+      // Bar width: fastest = 100%, slowest = 40%, others proportional.
+      final barFraction = secRange > 0
+          ? 1.0 - ((sec - fastestSec) / secRange) * 0.6
+          : 0.7;
+
+      final barColor = isFastest
+          ? const Color(0xFF34D399)
+          : isSlowest
+              ? const Color(0xFFF87171)
+              : theme.colorScheme.primary.withOpacity(0.5);
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 36,
+              child: Text(
+                '${s.tick}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.outline,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: barFraction.clamp(0.1, 1.0),
+                  child: Container(
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: barColor,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      UnitFormat.pace(paceSecPerKm, unit),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 54,
+              child: Text(
+                _formatDuration(s.duration),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
         ),
       );
     }).toList();
@@ -729,6 +935,41 @@ class _Split {
   const _Split(this.tick, this.duration);
 }
 
+class _StatSmall extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _StatSmall({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Icon(icon, size: 16, color: theme.colorScheme.outline),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.outline,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _StatBig extends StatelessWidget {
   final String label;
   final String value;
@@ -779,93 +1020,316 @@ class _StatBig extends StatelessWidget {
   }
 }
 
-/// Simple elevation profile rendered with a CustomPainter.
-class _ElevationChart extends StatelessWidget {
+/// Interactive elevation + pace chart. Drag or tap to see elevation and
+/// pace at any point along the run. The fill is colored by pace zones:
+/// green for fast segments, amber for average, red for slow.
+class _ElevationChart extends StatefulWidget {
   final List<Waypoint> track;
   final ThemeData theme;
-  const _ElevationChart({required this.track, required this.theme});
+  final DistanceUnit unit;
+  const _ElevationChart({
+    required this.track,
+    required this.theme,
+    required this.unit,
+  });
+
+  @override
+  State<_ElevationChart> createState() => _ElevationChartState();
+}
+
+class _ElevationChartState extends State<_ElevationChart> {
+  double? _touchFraction;
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ElevationPainter(
-        track: track,
-        lineColor: theme.colorScheme.primary,
-        fillColor: theme.colorScheme.primary.withOpacity(0.15),
-        gridColor: theme.dividerColor,
-      ),
-      size: Size.infinite,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_touchFraction != null) _buildCrosshairLabel(),
+        SizedBox(
+          height: 120,
+          child: GestureDetector(
+            onPanStart: (d) => _onTouch(d.localPosition),
+            onPanUpdate: (d) => _onTouch(d.localPosition),
+            onPanEnd: (_) => setState(() => _touchFraction = null),
+            onTapDown: (d) => _onTouch(d.localPosition),
+            onTapUp: (_) => setState(() => _touchFraction = null),
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                return CustomPaint(
+                  painter: _ElevationPacePainter(
+                    track: widget.track,
+                    theme: widget.theme,
+                    touchFraction: _touchFraction,
+                  ),
+                  size: Size(constraints.maxWidth, 120),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  void _onTouch(Offset local) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final chartWidth = box.size.width;
+    if (chartWidth <= 0) return;
+    setState(() {
+      _touchFraction = (local.dx / chartWidth).clamp(0.0, 1.0);
+    });
+  }
+
+  Widget _buildCrosshairLabel() {
+    final frac = _touchFraction!;
+    final idx = (frac * (widget.track.length - 1)).round()
+        .clamp(0, widget.track.length - 1);
+    final w = widget.track[idx];
+    final ele = w.elevationMetres;
+
+    // Compute cumulative distance to this point.
+    double cumDist = 0;
+    for (var i = 1; i <= idx; i++) {
+      cumDist += _haversine(
+        widget.track[i - 1].lat,
+        widget.track[i - 1].lng,
+        widget.track[i].lat,
+        widget.track[i].lng,
+      );
+    }
+
+    // Local pace: compute from a ~200m window around this point.
+    String paceStr = '--';
+    if (idx >= 2 && idx < widget.track.length - 1) {
+      final windowStart = (idx - 5).clamp(0, widget.track.length - 1);
+      final windowEnd = (idx + 5).clamp(0, widget.track.length - 1);
+      final a = widget.track[windowStart];
+      final b = widget.track[windowEnd];
+      if (a.timestamp != null && b.timestamp != null) {
+        double segDist = 0;
+        for (var i = windowStart + 1; i <= windowEnd; i++) {
+          segDist += _haversine(
+            widget.track[i - 1].lat, widget.track[i - 1].lng,
+            widget.track[i].lat, widget.track[i].lng,
+          );
+        }
+        if (segDist > 10) {
+          final dtSec =
+              b.timestamp!.difference(a.timestamp!).inMilliseconds / 1000.0;
+          if (dtSec > 0) {
+            final secPerKm = dtSec / segDist * 1000;
+            paceStr = UnitFormat.pace(secPerKm, widget.unit);
+          }
+        }
+      }
+    }
+
+    final theme = widget.theme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            UnitFormat.distance(cumDist, widget.unit),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 16),
+          if (ele != null)
+            Text(
+              '${ele.round()}m',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          const SizedBox(width: 16),
+          Text(
+            '$paceStr ${UnitFormat.paceLabel(widget.unit)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371000.0;
+    final dLat = (lat2 - lat1) * math.pi / 180;
+    final dLng = (lng2 - lng1) * math.pi / 180;
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1 * math.pi / 180) *
+            math.cos(lat2 * math.pi / 180) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return 2 * r * math.asin(math.sqrt(a));
   }
 }
 
-class _ElevationPainter extends CustomPainter {
+class _ElevationPacePainter extends CustomPainter {
   final List<Waypoint> track;
-  final Color lineColor;
-  final Color fillColor;
-  final Color gridColor;
+  final ThemeData theme;
+  final double? touchFraction;
 
-  _ElevationPainter({
+  _ElevationPacePainter({
     required this.track,
-    required this.lineColor,
-    required this.fillColor,
-    required this.gridColor,
+    required this.theme,
+    this.touchFraction,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final elevations = track
-        .where((w) => w.elevationMetres != null)
-        .map((w) => w.elevationMetres!)
-        .toList();
+    final elevations = <double>[];
+    final paces = <double?>[];
+
+    for (int i = 0; i < track.length; i++) {
+      elevations.add(track[i].elevationMetres ?? 0);
+
+      if (i == 0) {
+        paces.add(null);
+        continue;
+      }
+      final a = track[i - 1];
+      final b = track[i];
+      if (a.timestamp == null || b.timestamp == null) {
+        paces.add(null);
+        continue;
+      }
+      final dt = b.timestamp!.difference(a.timestamp!).inMilliseconds / 1000.0;
+      final dist = _haversine(a.lat, a.lng, b.lat, b.lng);
+      if (dt <= 0 || dist < 1) {
+        paces.add(null);
+      } else {
+        paces.add(dt / dist * 1000);
+      }
+    }
+
     if (elevations.length < 2) return;
 
     final minEle = elevations.reduce(math.min);
     final maxEle = elevations.reduce(math.max);
     final range = (maxEle - minEle).abs() < 1 ? 1.0 : maxEle - minEle;
 
-    final path = Path();
-    final fillPath = Path();
+    // Compute pace percentiles for coloring.
+    final validPaces =
+        paces.where((p) => p != null && p > 60 && p < 1200).toList();
+    final medianPace = validPaces.isNotEmpty
+        ? (validPaces.cast<double>()..sort())[validPaces.length ~/ 2]
+        : 300.0;
+
+    // Draw filled segments colored by pace.
+    for (int i = 1; i < elevations.length; i++) {
+      final x0 = (i - 1) / (elevations.length - 1) * size.width;
+      final x1 = i / (elevations.length - 1) * size.width;
+      final y0 =
+          size.height - ((elevations[i - 1] - minEle) / range) * size.height;
+      final y1 =
+          size.height - ((elevations[i] - minEle) / range) * size.height;
+
+      final p = paces[i];
+      Color segColor;
+      if (p == null || p < 60 || p > 1200) {
+        segColor = theme.colorScheme.primary.withOpacity(0.15);
+      } else if (p < medianPace * 0.9) {
+        segColor = const Color(0xFF34D399).withOpacity(0.35);
+      } else if (p > medianPace * 1.1) {
+        segColor = const Color(0xFFF87171).withOpacity(0.35);
+      } else {
+        segColor = const Color(0xFFFBBF24).withOpacity(0.25);
+      }
+
+      final fill = Path()
+        ..moveTo(x0, size.height)
+        ..lineTo(x0, y0)
+        ..lineTo(x1, y1)
+        ..lineTo(x1, size.height)
+        ..close();
+      canvas.drawPath(fill, Paint()..color = segColor);
+    }
+
+    // Elevation line.
+    final linePath = Path();
     for (int i = 0; i < elevations.length; i++) {
       final x = i / (elevations.length - 1) * size.width;
-      final y = size.height - ((elevations[i] - minEle) / range) * size.height;
+      final y =
+          size.height - ((elevations[i] - minEle) / range) * size.height;
       if (i == 0) {
-        path.moveTo(x, y);
-        fillPath.moveTo(x, size.height);
-        fillPath.lineTo(x, y);
+        linePath.moveTo(x, y);
       } else {
-        path.lineTo(x, y);
-        fillPath.lineTo(x, y);
+        linePath.lineTo(x, y);
       }
     }
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
+    canvas.drawPath(
+      linePath,
+      Paint()
+        ..color = theme.colorScheme.primary
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke,
+    );
 
-    final fillPaint = Paint()..color = fillColor;
-    canvas.drawPath(fillPath, fillPaint);
-
-    final linePaint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path, linePaint);
-
-    // Min/max labels
-    final textStyle = TextStyle(color: gridColor, fontSize: 10);
+    // Min/max labels.
+    final labelStyle = TextStyle(color: theme.dividerColor, fontSize: 10);
     final maxText = TextPainter(
-      text: TextSpan(text: '${maxEle.round()}m', style: textStyle),
+      text: TextSpan(text: '${maxEle.round()}m', style: labelStyle),
       textDirection: TextDirection.ltr,
     )..layout();
     maxText.paint(canvas, const Offset(4, 0));
 
     final minText = TextPainter(
-      text: TextSpan(text: '${minEle.round()}m', style: textStyle),
+      text: TextSpan(text: '${minEle.round()}m', style: labelStyle),
       textDirection: TextDirection.ltr,
     )..layout();
     minText.paint(canvas, Offset(4, size.height - minText.height));
+
+    // Touch crosshair.
+    if (touchFraction != null) {
+      final tx = touchFraction! * size.width;
+      final tIdx =
+          (touchFraction! * (elevations.length - 1)).round().clamp(0, elevations.length - 1);
+      final ty = size.height -
+          ((elevations[tIdx] - minEle) / range) * size.height;
+
+      canvas.drawLine(
+        Offset(tx, 0),
+        Offset(tx, size.height),
+        Paint()
+          ..color = theme.colorScheme.onSurface.withOpacity(0.4)
+          ..strokeWidth = 1,
+      );
+      canvas.drawCircle(
+        Offset(tx, ty),
+        5,
+        Paint()..color = theme.colorScheme.primary,
+      );
+      canvas.drawCircle(
+        Offset(tx, ty),
+        5,
+        Paint()
+          ..color = theme.colorScheme.surface
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke,
+      );
+    }
+  }
+
+  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371000.0;
+    final dLat = (lat2 - lat1) * math.pi / 180;
+    final dLng = (lng2 - lng1) * math.pi / 180;
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1 * math.pi / 180) *
+            math.cos(lat2 * math.pi / 180) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return 2 * r * math.asin(math.sqrt(a));
   }
 
   @override
-  bool shouldRepaint(covariant _ElevationPainter old) =>
-      old.track != track || old.lineColor != lineColor;
+  bool shouldRepaint(covariant _ElevationPacePainter old) =>
+      old.track != track || old.touchFraction != touchFraction;
 }

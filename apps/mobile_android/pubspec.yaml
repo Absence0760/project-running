@@ -44,7 +44,7 @@ dependencies:
   csv: ^8.0.0
   health: ^13.0.0
   google_sign_in: ^6.2.0
-  workmanager: ^0.5.2
+  workmanager: ^0.9.0
 
 dev_dependencies:
   flutter_test:

@@ -383,8 +383,8 @@ The foundation under both the generator and any hand-built plan: a data model fo
 
 - [x] Elevation profile with chart
 - [x] Split table (pace, elevation per km)
-- [ ] Interactive elevation chart with pace overlay
-- [ ] Best effort tracking on named segments
+- [x] Interactive elevation chart with pace overlay — tap/drag crosshair shows elevation, distance, and local pace; fill colored by pace zones (green fast, amber avg, red slow)
+- [x] Best effort tracking — auto-detect fastest 1k, 1mi, 5k, 10k, half marathon, marathon within a single run
 - [ ] Compare against personal best on same route
 
 ### Backend work (Phase 3)
