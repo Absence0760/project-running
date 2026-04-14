@@ -645,8 +645,16 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
   }
 
   /// Open the share sheet — lets the user share an image of the run card or
-  /// the raw GPX trace.
+  /// the raw GPX trace. Also marks the run as public so the web share page
+  /// at /share/run/{id} can display it without authentication.
   Future<void> _shareRun() async {
+    final api = widget.apiClient;
+    if (api != null && api.userId != null) {
+      try {
+        await api.makeRunPublic(run.id);
+      } catch (_) {}
+    }
+    if (!mounted) return;
     await showRunShareSheet(
       context,
       run: run,
@@ -675,6 +683,12 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
       ),
     );
     if (ok == true) {
+      final api = widget.apiClient;
+      if (api != null && api.userId != null) {
+        try {
+          await api.deleteRun(run);
+        } catch (_) {}
+      }
       await widget.runStore.delete(run.id);
       if (context.mounted) Navigator.pop(context);
     }

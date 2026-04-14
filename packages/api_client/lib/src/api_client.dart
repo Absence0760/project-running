@@ -78,8 +78,11 @@ class ApiClient {
     if (userId == null) throw Exception('Not authenticated');
 
     String? trackUrl;
+    final existingTrackUrl = run.metadata?['track_url'] as String?;
     if (run.track.isNotEmpty) {
       trackUrl = await _uploadTrack(userId: userId, runId: run.id, track: run.track);
+    } else if (existingTrackUrl != null && existingTrackUrl.isNotEmpty) {
+      trackUrl = existingTrackUrl;
     }
 
     final row = RunRow(
@@ -93,7 +96,104 @@ class ApiClient {
       metadata: run.metadata,
       trackUrl: trackUrl,
     );
-    await _client.from(RunRow.table).upsert(row.toJson());
+    final json = row.toJson();
+    if (run.externalId != null && run.externalId!.isNotEmpty) {
+      await _client
+          .from(RunRow.table)
+          .upsert(json, onConflict: RunRow.colExternalId);
+    } else {
+      await _client.from(RunRow.table).upsert(json);
+    }
+  }
+
+  /// Mark a run as publicly visible so it can be viewed at
+  /// `/share/run/{id}` without authentication.
+  Future<void> makeRunPublic(String runId) async {
+    await _client
+        .from(RunRow.table)
+        .update({RunRow.colIsPublic: true})
+        .eq(RunRow.colId, runId);
+  }
+
+  /// Batch-save a list of runs. Uploads tracks in parallel groups of
+  /// [uploadConcurrency] and upserts rows in chunks of [rowChunkSize].
+  ///
+  /// [onProgress] is called after each row chunk is saved, with the number
+  /// of runs saved so far.
+  Future<void> saveRunsBatch(
+    List<Run> runs, {
+    int uploadConcurrency = 8,
+    int rowChunkSize = 100,
+    void Function(int saved)? onProgress,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    if (runs.isEmpty) return;
+
+    // Upload tracks in parallel groups.
+    final trackUrls = <String, String>{};
+    final runsWithTracks = runs.where((r) => r.track.isNotEmpty).toList();
+    for (var i = 0; i < runsWithTracks.length; i += uploadConcurrency) {
+      final batch = runsWithTracks.skip(i).take(uploadConcurrency);
+      final futures = batch.map((r) async {
+        final url = await _uploadTrack(
+            userId: userId, runId: r.id, track: r.track);
+        trackUrls[r.id] = url;
+      });
+      await Future.wait(futures);
+    }
+
+    // Build rows and upsert in chunks.
+    final rows = runs.map((r) {
+      final trackUrl = trackUrls[r.id] ??
+          (r.metadata?['track_url'] as String?) ??
+          '';
+      return RunRow(
+        id: r.id,
+        userId: userId,
+        startedAt: r.startedAt,
+        durationS: r.duration.inSeconds,
+        distanceM: r.distanceMetres,
+        source: r.source.name,
+        externalId: r.externalId,
+        metadata: r.metadata,
+        trackUrl: trackUrl.isEmpty ? null : trackUrl,
+      ).toJson();
+    }).toList();
+
+    final hasExternalIds =
+        runs.any((r) => r.externalId != null && r.externalId!.isNotEmpty);
+
+    int saved = 0;
+    for (var i = 0; i < rows.length; i += rowChunkSize) {
+      final chunk = rows.skip(i).take(rowChunkSize).toList();
+      if (hasExternalIds) {
+        await _client
+            .from(RunRow.table)
+            .upsert(chunk, onConflict: RunRow.colExternalId);
+      } else {
+        await _client.from(RunRow.table).upsert(chunk);
+      }
+      saved += chunk.length;
+      onProgress?.call(saved);
+    }
+  }
+
+  /// Delete a run from the backend, including its gzipped track file in
+  /// Storage.
+  Future<void> deleteRun(Run run) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final trackPath = run.metadata?['track_url'] as String?;
+    if (trackPath != null && trackPath.isNotEmpty) {
+      try {
+        await _client.storage.from('runs').remove([trackPath]);
+      } catch (e) {
+        // Best-effort — the row delete is more important than the file cleanup.
+      }
+    }
+    await _client.from(RunRow.table).delete().eq(RunRow.colId, run.id);
   }
 
   /// Fetch the user's runs, newest first.

@@ -69,6 +69,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() {});
   }
 
+  static String _splitIntervalLabel(int metres, DistanceUnit unit) {
+    if (unit == DistanceUnit.mi) {
+      final miles = metres / 1609.344;
+      if ((miles - miles.roundToDouble()).abs() < 0.01) {
+        return '${miles.round()} mi';
+      }
+      return '${miles.toStringAsFixed(1)} mi';
+    }
+    if (metres >= 1000 && metres % 1000 == 0) {
+      return '${metres ~/ 1000} km';
+    }
+    return '${metres}m';
+  }
+
+  Future<void> _editSplitInterval() async {
+    final prefs = widget.preferences;
+    final options = prefs.useMiles
+        ? <int>[0, 805, 1609, 3219, 8047]   // ~0.5 mi, 1 mi, 2 mi, 5 mi
+        : <int>[0, 500, 1000, 2000, 5000];
+    final labels = prefs.useMiles
+        ? ['Default', '0.5 mi', '1 mi', '2 mi', '5 mi']
+        : ['Default', '500m', '1 km', '2 km', '5 km'];
+
+    final result = await showDialog<int?>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Split interval'),
+        children: [
+          for (var i = 0; i < options.length; i++)
+            RadioListTile<int>(
+              title: Text(labels[i]),
+              value: options[i],
+              groupValue: prefs.splitIntervalMetres,
+              onChanged: (v) => Navigator.pop(ctx, v),
+            ),
+        ],
+      ),
+    );
+    if (result != null) await prefs.setSplitIntervalMetres(result);
+  }
+
   Future<void> _editTargetPace() async {
     final prefs = widget.preferences;
     final current = prefs.targetPaceSecPerKm;
@@ -210,6 +251,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Spoken split announcements'),
             value: prefs.audioCues,
             onChanged: prefs.setAudioCues,
+          ),
+          ListTile(
+            title: const Text('Split interval'),
+            subtitle: Text(
+              prefs.splitIntervalMetres > 0
+                  ? _splitIntervalLabel(prefs.splitIntervalMetres, prefs.unit)
+                  : 'Default (1 km / 5 km cycling)',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _editSplitInterval,
           ),
           ListTile(
             title: const Text('Live pace alert'),

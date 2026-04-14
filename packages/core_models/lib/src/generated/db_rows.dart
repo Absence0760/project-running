@@ -169,6 +169,7 @@ class RunRow {
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
   static const String colTrackUrl = 'track_url';
+  static const String colIsPublic = 'is_public';
 
   final String id;
   final String userId;
@@ -182,6 +183,7 @@ class RunRow {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? trackUrl;
+  final bool? isPublic;
 
   const RunRow({
     required this.id,
@@ -196,6 +198,7 @@ class RunRow {
     this.createdAt,
     this.updatedAt,
     this.trackUrl,
+    this.isPublic,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -211,6 +214,7 @@ class RunRow {
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     trackUrl: json['track_url'] as String?,
+    isPublic: json['is_public'] as bool?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -226,6 +230,7 @@ class RunRow {
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
     colTrackUrl: trackUrl,
+    colIsPublic: isPublic,
   };
 }
 

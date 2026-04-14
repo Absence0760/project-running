@@ -17,16 +17,17 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 **Live and working:**
 - All of the `lib/screens/` files in the list below are wired to real data.
 - Background GPS recording with foreground service, auto-pause, lap markers, wakelock.
-- Offline-first: runs save to `LocalRunStore` → sync on connectivity change / app foreground → reconcile via `last_modified_at` timestamps.
-- Strava ZIP import and Health Connect import. FIT files are skipped (GPX/TCX only).
+- Offline-first: runs save to `LocalRunStore` → sync on connectivity change / app foreground / WorkManager periodic background sync → reconcile via `last_modified_at` timestamps.
+- Strava ZIP import (GPX/TCX/FIT) and Health Connect import. Batch cloud push via `saveRunsBatch`.
 - Disk-backed tile cache.
 - Personal bests, weekly goals, edit title/notes, share as GPX, delete.
+- History filter by activity type (run/walk/cycle/hike filter chips).
+- Configurable split interval for voice cues (Settings > Split interval).
+- Advanced GPS mode (Settings > Advanced GPS) for higher accuracy under tree cover.
 
 **Stubbed or deferred:**
 - OAuth sign-in for providers other than Google (Apple, Strava, parkrun) — UI removed from Settings in the meantime. See the "Deferred from Phase 1" section in `roadmap.md`.
-- WorkManager-based periodic background sync (current sync covers foreground + connectivity change only).
 - Heart-rate from Bluetooth devices.
-- History filter by activity type (date-range filter shipped).
 
 ## Files
 
@@ -47,6 +48,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 **Top-level (`lib/`):**
 - `main.dart` — app entry, Supabase init, service wiring
 - `sync_service.dart` — bulk-sync button, auto-sync on connectivity/foreground, conflict resolution
+- `background_sync.dart` — WorkManager periodic background sync (hourly, network-connected)
 - `local_run_store.dart` / `local_route_store.dart` — `ChangeNotifier`-style on-disk stores
 - `preferences.dart` — SharedPreferences wrapper for settings
 - `tile_cache.dart` — disk-backed map tile cache glue

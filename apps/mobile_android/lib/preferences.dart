@@ -125,6 +125,7 @@ class Preferences extends ChangeNotifier {
   static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
+  static const _kSplitIntervalMetres = 'split_interval_metres';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -137,12 +138,17 @@ class Preferences extends ChangeNotifier {
   int _targetPaceSecPerKm = 0;
   List<RunGoal> _goals = [];
   bool _advancedGps = false;
+  int _splitIntervalMetres = 0;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
   bool get audioCues => _audioCues;
   bool get onboarded => _onboarded;
   bool get advancedGps => _advancedGps;
+
+  /// Custom split interval in metres. 0 means use the activity-type default
+  /// (1 km for run/walk/hike, 5 km for cycling).
+  int get splitIntervalMetres => _splitIntervalMetres;
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
   /// when current pace is more than 30s off in either direction.
@@ -159,6 +165,7 @@ class Preferences extends ChangeNotifier {
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
+    _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
 
     final rawGoals = _prefs.getString(_kGoalsJson);
     if (rawGoals != null && rawGoals.isNotEmpty) {
@@ -215,6 +222,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setAdvancedGps(bool v) async {
     _advancedGps = v;
     await _prefs.setBool(_kAdvancedGps, v);
+    notifyListeners();
+  }
+
+  Future<void> setSplitIntervalMetres(int v) async {
+    _splitIntervalMetres = v;
+    await _prefs.setInt(_kSplitIntervalMetres, v);
     notifyListeners();
   }
 

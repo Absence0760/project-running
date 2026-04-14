@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import 'audio_cues.dart';
+import 'background_sync.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
@@ -93,6 +94,8 @@ void main() async {
 
   final syncService = SyncService(apiClient: api, runStore: store);
   syncService.start();
+
+  registerBackgroundSync();
 
   runApp(RunApp(
     apiClient: api,

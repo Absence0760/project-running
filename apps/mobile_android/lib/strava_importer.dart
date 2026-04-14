@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:core_models/core_models.dart';
@@ -127,8 +128,7 @@ class StravaImporter {
     } else if (lower.contains('.tcx')) {
       parsedRoute = RouteParser.fromTcx(utf8.decode(content));
     } else if (lower.contains('.fit')) {
-      throw const FormatException(
-          'FIT file not supported — re-export from Strava as GPX/TCX');
+      parsedRoute = FitParser.parse(Uint8List.fromList(content));
     } else {
       throw FormatException('Unknown track format: $path');
     }

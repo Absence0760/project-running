@@ -63,37 +63,51 @@ class _ImportScreenState extends State<ImportScreen> {
   }
 
   /// Common save loop used by both Strava and Health Connect imports.
-  /// Saves each run locally first, then pushes to the cloud if signed in.
+  /// Saves each run locally, then batch-pushes to the cloud if signed in.
   Future<void> _saveImportedRuns(List<Run> runs, {required String label}) async {
     setState(() {
       _total = runs.length;
-      _status = 'Saving runs...';
+      _status = 'Saving locally...';
     });
 
-    final api = widget.apiClient;
-    final canSync = api != null && api.userId != null;
     final localErrors = <StravaImportError>[];
+    final savedRuns = <Run>[];
 
     for (var i = 0; i < runs.length; i++) {
       final run = runs[i];
       try {
         await widget.runStore.save(run);
-        if (canSync) {
-          try {
-            await api.saveRun(run);
-            await widget.runStore.markSynced(run.id);
-          } catch (e) {
-            debugPrint('Cloud push failed for ${run.id}: $e');
-          }
-        }
+        savedRuns.add(run);
       } catch (e) {
         localErrors.add(StravaImportError(run.id, e.toString()));
       }
       if (mounted) {
         setState(() {
           _imported = i + 1;
-          _status = 'Saved ${i + 1} of ${runs.length}';
+          _status = 'Saved ${i + 1} of ${runs.length} locally';
         });
+      }
+    }
+
+    final api = widget.apiClient;
+    final canSync = api != null && api.userId != null;
+    if (canSync && savedRuns.isNotEmpty) {
+      if (mounted) setState(() => _status = 'Syncing to cloud...');
+      try {
+        await api.saveRunsBatch(
+          savedRuns,
+          onProgress: (saved) {
+            if (mounted) {
+              setState(
+                  () => _status = 'Synced $saved of ${savedRuns.length}');
+            }
+          },
+        );
+        for (final run in savedRuns) {
+          await widget.runStore.markSynced(run.id);
+        }
+      } catch (e) {
+        debugPrint('Batch cloud push failed: $e');
       }
     }
 
@@ -102,8 +116,8 @@ class _ImportScreenState extends State<ImportScreen> {
       _busy = false;
       _errors = localErrors.map((e) => '${e.filename}: ${e.message}').toList();
       _status = localErrors.isEmpty
-          ? 'Imported $_imported runs from $label'
-          : 'Imported $_imported runs ($_imported succeeded, ${localErrors.length} failed)';
+          ? 'Imported ${savedRuns.length} runs from $label'
+          : 'Imported ${savedRuns.length} runs (${localErrors.length} failed)';
     });
   }
 

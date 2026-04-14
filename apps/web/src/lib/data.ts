@@ -79,6 +79,27 @@ async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 	return out;
 }
 
+export async function fetchPublicRun(id: string): Promise<Run | null> {
+	const { data } = await supabase
+		.from('runs')
+		.select('*')
+		.eq('id', id)
+		.eq('is_public', true)
+		.single();
+
+	if (!data) return null;
+
+	let track = null;
+	if (data.track_url) {
+		try {
+			track = await fetchTrack(data.track_url);
+		} catch (e) {
+			console.warn('Failed to fetch public run track', e);
+		}
+	}
+	return { ...data, track };
+}
+
 // --- Routes ---
 
 export async function fetchRoutes(): Promise<Route[]> {

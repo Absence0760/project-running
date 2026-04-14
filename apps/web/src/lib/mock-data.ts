@@ -10,6 +10,7 @@ function makeRun(overrides: Partial<Run> & { started_at: string; duration_s: num
 		track_url: null,
 		route_id: null,
 		external_id: null,
+		is_public: false,
 		metadata: null,
 		created_at: overrides.started_at,
 		updated_at: overrides.started_at,

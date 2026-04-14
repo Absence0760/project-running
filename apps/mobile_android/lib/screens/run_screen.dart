@@ -405,9 +405,12 @@ class _RunScreenState extends State<RunScreen> {
         }
       }
 
-      // Distance tick notification + audio cue
-      // Use activity-aware interval: 5km for cycling, 1km/mi for everything else.
-      final tickInterval = _activityType.splitIntervalMetres;
+      // Distance tick notification + audio cue.
+      // Custom interval from preferences overrides the activity-type default.
+      final customInterval = widget.preferences.splitIntervalMetres;
+      final tickInterval = customInterval > 0
+          ? customInterval.toDouble()
+          : _activityType.splitIntervalMetres;
       final currentTick = UnitFormat.activityTicks(_distanceMetres, tickInterval);
       if (currentTick > _lastTickNotified && currentTick > 0) {
         _lastTickNotified = currentTick;

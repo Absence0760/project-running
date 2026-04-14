@@ -128,6 +128,7 @@ export type Database = {
           duration_s: number
           external_id: string | null
           id: string
+          is_public: boolean | null
           metadata: Json | null
           route_id: string | null
           source: string
@@ -142,6 +143,7 @@ export type Database = {
           duration_s: number
           external_id?: string | null
           id?: string
+          is_public?: boolean | null
           metadata?: Json | null
           route_id?: string | null
           source: string
@@ -156,6 +158,7 @@ export type Database = {
           duration_s?: number
           external_id?: string | null
           id?: string
+          is_public?: boolean | null
           metadata?: Json | null
           route_id?: string | null
           source?: string

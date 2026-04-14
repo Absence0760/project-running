@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDuration, formatPace, formatDistance, formatDate, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { fetchRunById } from '$lib/data';
+	import { fetchPublicRun } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Run } from '$lib/types';
@@ -13,8 +13,7 @@
 	let notFound = $state(false);
 
 	onMount(async () => {
-		// Lazy-loads the GPS track from Storage if present.
-		const r = await fetchRunById(data.id);
+		const r = await fetchPublicRun(data.id);
 		if (r) run = r;
 		else notFound = true;
 		loading = false;

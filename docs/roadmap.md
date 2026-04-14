@@ -111,10 +111,10 @@ Persist completed runs locally with distance, duration, average pace, and a map 
       `connectivity_plus` + lifecycle observer)
 - [x] Conflict resolution: newer-wins by `last_modified_at` timestamp (Android)
 - [x] Strava data export ZIP import (Android — `activities.csv` + per-run
-      GPX/TCX track files, FIT skipped)
+      GPX/TCX/FIT track files)
 - [x] Health Connect import — pulls workouts from Google Fit, Samsung Health,
       Garmin Connect, Fitbit, Runna, etc. (Android, summary only — no GPS routes)
-- [ ] WorkManager-based periodic background sync (Android, when app is closed)
+- [x] WorkManager-based periodic background sync (Android, when app is closed)
 
 ### Backend work (Phase 1)
 
@@ -561,8 +561,8 @@ These were considered during Android implementation and intentionally pushed to 
 - **Strava and parkrun integrations** — moved to Phase 3 ("External platform sync"). Removed from the Android Settings UI in the meantime to avoid placeholder buttons.
 - **Heart rate from Bluetooth devices** — needs flutter_blue_plus and per-device GATT characteristic handling.
 - **Persistent disk tile cache** — currently in-memory only via flutter_map_cache. Persistent caching needs Hive or sqlite init.
-- **Voice cues at custom intervals** — only fixed km/mi splits and pace alerts.
-- **History filter by activity type** — date-range filter shipped; activity-type filter still TODO.
+- ~~**Voice cues at custom intervals**~~ — shipped: configurable split interval in Settings (500m, 1km, 2km, 5km, or 0.5/1/2/5 mi).
+- ~~**History filter by activity type**~~ — shipped: filter chips on the History screen (All / Run / Walk / Cycle / Hike).
 
 ---
 
@@ -572,17 +572,17 @@ The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Conne
 
 ### Real bugs (fix before shipping the importer to real users)
 
-- [ ] **External ID collision on re-import.** `runs.external_id` is a unique index, but the Strava and Health Connect importers generate fresh run UUIDs each pass, so re-running an import will crash on the second Strava activity with a duplicate `external_id`. Fix: change `ApiClient.saveRun` to `upsert(..., onConflict: 'external_id')` when `externalId` is set, so re-imports update the existing row instead of inserting a duplicate.
-- [ ] **Storage object leak when runs are deleted.** `LocalRunStore.delete` and any future `ApiClient.deleteRun` currently remove the row but leave the gzipped track file in the `runs` bucket forever. Fix: add `deleteRun(id)` to `ApiClient` that deletes the row AND the Storage object, or add a Postgres trigger that calls `pg_net.http_delete` on row delete.
-- [ ] **Public share pages can't read GPS tracks.** The `/share/run/{id}` page on the web app is meant to be public, but the `runs` Storage bucket is private with owner-only RLS, so `fetchTrack()` returns 403 for anonymous viewers. Three fixes: make the bucket public (simplest, loses access control), generate signed URLs server-side for public runs (extra hop), or add an RLS policy that grants anonymous read when the run row has `is_public = true` (cleanest, most work — requires adding `is_public` to the `runs` table).
+- [x] **External ID collision on re-import.** `ApiClient.saveRun` now upserts with `onConflict: 'external_id'` when `externalId` is set, so re-imports update the existing row.
+- [x] **Storage object leak when runs are deleted.** `ApiClient.deleteRun` now deletes both the row and the gzipped track file from the `runs` Storage bucket. Wired into `RunDetailScreen` and `HistoryScreen` bulk-delete flows.
+- [x] **Public share pages can't read GPS tracks.** Added `is_public` column to `runs` table (migration `20260413_001_public_runs.sql`), RLS policy for anonymous read of public runs, Storage RLS policy for anonymous track download. Web share page uses `fetchPublicRun()`. Mobile share flow calls `makeRunPublic()` before opening the share sheet.
 
 ### Performance / UX improvements
 
-- [ ] **Bulk import is N serial round trips.** The Strava importer uploads 2,000 tracks and upserts 2,000 rows one at a time. A power user re-import can take 10+ minutes and trip Supabase rate limits. Fix: batch row upserts in chunks of 100 via `insert([...])`, parallelise storage uploads in groups of 5–10 via `Future.wait`. Expected: ~5× throughput improvement.
-- [ ] **Redundant track re-uploads on edit.** When `LocalRunStore.update` marks a run unsynced and the sync service later calls `saveRun`, `saveRun` re-uploads the full gzipped track even though only the title/notes changed. Fix: skip the upload in `saveRun` when the run already has `metadata['track_url']` set and we're editing metadata, not recording.
+- [x] **Bulk import is N serial round trips.** `ApiClient.saveRunsBatch` uploads tracks in parallel groups of 8 and upserts rows in chunks of 100. `ImportScreen` saves locally first, then batch-pushes to the cloud.
+- [x] **Redundant track re-uploads on edit.** `saveRun` now preserves the existing `track_url` from metadata when the track list is empty, skipping the storage upload for metadata-only edits.
 - [ ] **Local duplication of tracks.** After lazy-loading a cloud track into `RunDetailScreen`, the full track is saved back to `LocalRunStore` as plain JSON while the gzipped copy stays in Storage. Correct behaviour but a power user with 5 years of imported history has ~300 MB of duplicated tracks on device. Fix later: either gzip the local JSON files or keep the on-disk copy and drop it from the Storage cache eagerly.
-- [ ] **FIT file parsing** for Strava imports. FIT files (Garmin, Wahoo, COROS default exports) are skipped with an error. Users have to re-export as GPX/TCX from Strava. A `fit_parser` Dart package exists but is less polished than xml parsing. Lower priority — most Strava users get GPX/TCX anyway.
-- [ ] **WorkManager-based periodic background sync.** Current `SyncService` covers app foreground and connectivity change events. True-when-app-is-closed sync needs `workmanager` plus Android-specific setup for periodic work, network constraints, and Doze handling.
+- [x] **FIT file parsing** for Strava imports. A custom `FitParser` in `packages/gpx_parser` reads GPS record messages from FIT binary files. Strava importer now handles GPX, TCX, and FIT tracks.
+- [x] **WorkManager-based periodic background sync.** `background_sync.dart` registers a periodic WorkManager task (hourly, network-connected constraint) that pushes unsynced runs when the app is closed.
 
 ---
 

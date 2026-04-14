@@ -40,6 +40,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool _fetching = false;
   _HistorySort _sort = _HistorySort.newest;
   _HistoryRange _range = _HistoryRange.week;
+  ActivityType? _activityFilter;
 
   // Derived view — recomputed when the store, filter, or sort changes,
   // never on an unrelated rebuild. Keeps scroll jank down at 10k+ runs.
@@ -77,7 +78,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _recompute() {
-    _visible = _filterAndSort(widget.runStore.runs, _range, _sort);
+    _visible =
+        _filterAndSort(widget.runStore.runs, _range, _sort, _activityFilter);
     _unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
   }
 
@@ -85,11 +87,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
     List<Run> all,
     _HistoryRange range,
     _HistorySort sort,
+    ActivityType? activityFilter,
   ) {
     final cutoff = _rangeCutoff(range);
-    final filtered = cutoff == null
+    var filtered = cutoff == null
         ? List<Run>.from(all)
         : all.where((r) => !r.startedAt.isBefore(cutoff)).toList();
+    if (activityFilter != null) {
+      filtered = filtered.where((r) {
+        final type = ActivityType.fromName(
+            r.metadata?['activity_type'] as String?);
+        return type == activityFilter;
+      }).toList();
+    }
     switch (sort) {
       case _HistorySort.newest:
         filtered.sort((a, b) => b.startedAt.compareTo(a.startedAt));
@@ -254,6 +264,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
     if (ok != true) return;
     final ids = Set<String>.from(_selected);
+    final api = widget.apiClient;
+    if (api != null && api.userId != null) {
+      final runsToDelete =
+          widget.runStore.runs.where((r) => ids.contains(r.id));
+      for (final run in runsToDelete) {
+        try {
+          await api.deleteRun(run);
+        } catch (_) {}
+      }
+    }
     await widget.runStore.deleteMany(ids);
     if (!mounted) return;
     setState(() {
@@ -450,20 +470,56 @@ class _HistoryScreenState extends State<HistoryScreen> {
       itemCount: _visible.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(_rangeLabel(_range), style: theme.textTheme.titleMedium),
-                Text(
-                  '${_visible.length} run${_visible.length == 1 ? '' : 's'}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(_rangeLabel(_range), style: theme.textTheme.titleMedium),
+                  Text(
+                    '${_visible.length} run${_visible.length == 1 ? '' : 's'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('All'),
+                      selected: _activityFilter == null,
+                      onSelected: (_) {
+                        setState(() {
+                          _activityFilter = null;
+                          _recompute();
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    for (final type in ActivityType.values) ...[
+                      FilterChip(
+                        avatar: Icon(type.icon, size: 18),
+                        label: Text(type.label),
+                        selected: _activityFilter == type,
+                        onSelected: (_) {
+                          setState(() {
+                            _activityFilter = type;
+                            _recompute();
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+            ],
           );
         }
         final run = _visible[index - 1];
