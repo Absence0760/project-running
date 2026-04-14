@@ -161,7 +161,7 @@ class RouteRow {
   final String? slug;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  final dynamic? startPoint;
+  final dynamic startPoint;
 
   const RouteRow({
     required this.id,

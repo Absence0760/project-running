@@ -325,7 +325,8 @@ void _emitClass(StringBuffer out, String table, Map<String, _Column> cols) {
   // Fields
   for (final c in cols.values) {
     final dartType = _dartType(c);
-    final nullable = c.nullable ? '?' : '';
+    // `dynamic` is already nullable — adding `?` triggers a warning.
+    final nullable = c.nullable && dartType != 'dynamic' ? '?' : '';
     out.writeln('  final $dartType$nullable ${_camel(c.name)};');
   }
   out.writeln();
