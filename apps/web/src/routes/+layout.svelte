@@ -9,6 +9,7 @@
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
 		{ href: '/runs', label: 'Runs', icon: 'directions_run' },
 		{ href: '/routes', label: 'Routes', icon: 'route' },
+		{ href: '/explore', label: 'Explore', icon: 'explore' },
 		{ href: '/settings/integrations', label: 'Settings', icon: 'settings' },
 	];
 

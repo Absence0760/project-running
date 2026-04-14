@@ -102,6 +102,42 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 
 // --- Routes ---
 
+export async function searchPublicRoutes(options?: {
+	query?: string;
+	minDistanceM?: number;
+	maxDistanceM?: number;
+	surface?: string;
+	limit?: number;
+	offset?: number;
+}): Promise<Route[]> {
+	const { query, minDistanceM, maxDistanceM, surface, limit = 50, offset = 0 } = options ?? {};
+
+	let q = supabase
+		.from('routes')
+		.select('*')
+		.eq('is_public', true);
+
+	if (query && query.trim()) {
+		q = q.textSearch('name', `'${query.trim()}'`);
+	}
+	if (minDistanceM != null) {
+		q = q.gte('distance_m', minDistanceM);
+	}
+	if (maxDistanceM != null) {
+		q = q.lte('distance_m', maxDistanceM);
+	}
+	if (surface) {
+		q = q.eq('surface', surface);
+	}
+
+	const { data, error } = await q
+		.order('created_at', { ascending: false })
+		.range(offset, offset + limit - 1);
+
+	if (error || !data) return [];
+	return data;
+}
+
 export async function fetchRoutes(): Promise<Route[]> {
 	const { data, error } = await supabase
 		.from('routes')
