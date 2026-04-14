@@ -581,7 +581,7 @@ class _RunScreenState extends State<RunScreen> {
       duration: raw.duration,
       distanceMetres: raw.distanceMetres,
       track: raw.track,
-      routeId: raw.routeId,
+      routeId: _selectedRoute?.id ?? raw.routeId,
       source: raw.source,
       externalId: raw.externalId,
       metadata: metadata,

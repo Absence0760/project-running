@@ -14,9 +14,17 @@
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
 	let sourceFilter = $state<RunSource | 'all'>('all');
+	let activityFilter = $state<string>('all');
 
 	let filteredRuns = $derived(
-		sourceFilter === 'all' ? runs : runs.filter((r) => r.source === sourceFilter),
+		runs.filter((r) => {
+			if (sourceFilter !== 'all' && r.source !== sourceFilter) return false;
+			if (activityFilter !== 'all') {
+				const type = (r.metadata as Record<string, unknown> | null)?.activity_type ?? 'run';
+				if (type !== activityFilter) return false;
+			}
+			return true;
+		}),
 	);
 
 	const sources: { value: RunSource | 'all'; label: string }[] = [
@@ -25,6 +33,14 @@
 		{ value: 'strava', label: 'Strava' },
 		{ value: 'parkrun', label: 'parkrun' },
 		{ value: 'healthkit', label: 'HealthKit' },
+	];
+
+	const activities: { value: string; label: string; icon: string }[] = [
+		{ value: 'all', label: 'All', icon: 'apps' },
+		{ value: 'run', label: 'Run', icon: 'directions_run' },
+		{ value: 'walk', label: 'Walk', icon: 'directions_walk' },
+		{ value: 'cycle', label: 'Cycle', icon: 'directions_bike' },
+		{ value: 'hike', label: 'Hike', icon: 'terrain' },
 	];
 
 	onMount(async () => {
@@ -44,6 +60,18 @@
 					onclick={() => (sourceFilter = src.value)}
 				>
 					{src.label}
+				</button>
+			{/each}
+		</div>
+		<div class="filters" style="margin-top: var(--space-xs)">
+			{#each activities as act}
+				<button
+					class="filter-btn"
+					class:active={activityFilter === act.value}
+					onclick={() => (activityFilter = act.value)}
+				>
+					<span class="material-symbols" style="font-size: 0.9rem; vertical-align: middle">{act.icon}</span>
+					{act.label}
 				</button>
 			{/each}
 		</div>

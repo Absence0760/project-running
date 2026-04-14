@@ -75,6 +75,12 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     try {
       final track = await api.fetchTrack(run);
       if (track.isEmpty) return;
+      // Update the in-memory run for display but don't persist the full
+      // track back to LocalRunStore — it's already stored gzipped in
+      // Supabase Storage and re-saving it as uncompressed JSON would
+      // duplicate ~80 KB per run on disk (~300 MB for a power user with
+      // years of history). Next open re-fetches from Storage (fast — dio
+      // HTTP cache).
       final updated = Run(
         id: run.id,
         startedAt: run.startedAt,
@@ -87,9 +93,6 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
         metadata: run.metadata,
         createdAt: run.createdAt,
       );
-      // Persist the fetched track to the local store so subsequent opens are
-      // instant. saveFromRemote merges and marks synced.
-      await widget.runStore.saveFromRemote(updated);
       if (mounted) setState(() => run = updated);
     } catch (e) {
       debugPrint('Failed to fetch track for ${run.id}: $e');
@@ -461,6 +464,10 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
 
           const Divider(),
 
+          // Route comparison — show PB and attempt history when this run
+          // was done on a saved route.
+          ..._buildRouteComparison(theme, unit),
+
           // Elevation chart
           if (_hasElevation) ...[
             Padding(
@@ -646,6 +653,90 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
       }),
       const Divider(),
     ];
+  }
+
+  List<Widget> _buildRouteComparison(ThemeData theme, DistanceUnit unit) {
+    if (run.routeId == null) return const [];
+
+    final attempts = widget.runStore.runs
+        .where((r) => r.routeId == run.routeId && r.distanceMetres > 100)
+        .toList()
+      ..sort((a, b) => a.duration.compareTo(b.duration));
+
+    if (attempts.length < 2) return const [];
+
+    final best = attempts.first;
+    final isBest = best.id == run.id;
+    final delta = run.duration - best.duration;
+    final rank = attempts.indexWhere((r) => r.id == run.id) + 1;
+
+    final routeName = _linkedRoute?.name ?? 'this route';
+
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: Text('Route History', style: theme.textTheme.titleMedium),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isBest ? Icons.emoji_events : Icons.timer,
+                      size: 20,
+                      color: isBest
+                          ? const Color(0xFFEAB308)
+                          : theme.colorScheme.outline,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isBest
+                            ? 'Personal best on $routeName'
+                            : '${_formatDeltaDuration(delta)} behind PB',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: isBest
+                              ? const Color(0xFFEAB308)
+                              : theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Attempt $rank of ${attempts.length}  '
+                  '—  PB: ${_formatDuration(best.duration)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      const Divider(),
+    ];
+  }
+
+  static String _formatDeltaDuration(Duration d) {
+    final total = d.abs();
+    final h = total.inHours;
+    final m = total.inMinutes % 60;
+    final s = total.inSeconds % 60;
+    final prefix = d.isNegative ? '-' : '+';
+    if (h > 0) return '$prefix${h}h ${m}m';
+    if (m > 0) return '$prefix${m}m ${s}s';
+    return '$prefix${s}s';
   }
 
   List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {

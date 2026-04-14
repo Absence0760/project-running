@@ -227,6 +227,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] All data fetched from Supabase (mock fallback for empty tables)
 - [x] Monthly and yearly mileage toggle (week/month/year view)
 - [x] Filter by source (All, Recorded, Strava, parkrun, HealthKit)
+- [x] Filter by activity type (All, Run, Walk, Cycle, Hike)
 
 ### Deep run analysis
 
@@ -386,7 +387,7 @@ The foundation under both the generator and any hand-built plan: a data model fo
 - [x] Split table (pace, elevation per km)
 - [x] Interactive elevation chart with pace overlay — tap/drag crosshair shows elevation, distance, and local pace; fill colored by pace zones (green fast, amber avg, red slow)
 - [x] Best effort tracking — auto-detect fastest 1k, 1mi, 5k, 10k, half marathon, marathon within a single run
-- [ ] Compare against personal best on same route
+- [x] Compare against personal best on same route — Route History section shows PB, time delta, and attempt ranking when run has a routeId
 
 ### Backend work (Phase 3)
 
@@ -581,7 +582,7 @@ The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Conne
 
 - [x] **Bulk import is N serial round trips.** `ApiClient.saveRunsBatch` uploads tracks in parallel groups of 8 and upserts rows in chunks of 100. `ImportScreen` saves locally first, then batch-pushes to the cloud.
 - [x] **Redundant track re-uploads on edit.** `saveRun` now preserves the existing `track_url` from metadata when the track list is empty, skipping the storage upload for metadata-only edits.
-- [ ] **Local duplication of tracks.** After lazy-loading a cloud track into `RunDetailScreen`, the full track is saved back to `LocalRunStore` as plain JSON while the gzipped copy stays in Storage. Correct behaviour but a power user with 5 years of imported history has ~300 MB of duplicated tracks on device. Fix later: either gzip the local JSON files or keep the on-disk copy and drop it from the Storage cache eagerly.
+- [x] **Local duplication of tracks.** `RunDetailScreen._maybeFetchTrack` no longer persists the fetched track back to `LocalRunStore` — the track stays in Supabase Storage and is re-fetched on demand (fast via dio HTTP cache). Eliminates the ~300 MB on-device bloat.
 - [x] **FIT file parsing** for Strava imports. A custom `FitParser` in `packages/gpx_parser` reads GPS record messages from FIT binary files. Strava importer now handles GPX, TCX, and FIT tracks.
 - [x] **WorkManager-based periodic background sync.** `background_sync.dart` registers a periodic WorkManager task (hourly, network-connected constraint) that pushes unsynced runs when the app is closed.
 
