@@ -1,0 +1,41 @@
+name: mobile_ios
+description: Run app - iOS target.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.11.4
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  core_models:
+    path: ../../packages/core_models
+  gpx_parser:
+    path: ../../packages/gpx_parser
+  run_recorder:
+    path: ../../packages/run_recorder
+  api_client:
+    path: ../../packages/api_client
+  ui_kit:
+    path: ../../packages/ui_kit
+  supabase_flutter: ^2.3.0
+  flutter_map: ^8.0.0
+  flutter_map_maplibre: ^0.0.5
+  geolocator: ^14.0.0
+  health: ^13.0.0
+  drift: ^2.14.0
+  sqlite3_flutter_libs: ^0.6.0
+  path_provider: ^2.1.0
+  file_picker: ^11.0.0
+  share_handler: ^0.0.19
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

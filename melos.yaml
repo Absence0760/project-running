@@ -1,0 +1,38 @@
+name: run-app
+
+packages:
+  - apps/mobile_ios
+  - apps/mobile_android
+  - apps/watch_wear
+  - packages/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  test:
+    run: melos exec -- flutter test
+    description: Run tests in all Flutter packages
+
+  analyze:
+    run: melos exec -- flutter analyze
+    description: Dart analysis across all packages
+
+  build:ios:
+    run: flutter build ipa --no-codesign
+    packageFilters:
+      scope: mobile_ios
+
+  build:android:
+    run: flutter build appbundle
+    packageFilters:
+      scope: mobile_android
+
+  build:wear:
+    run: flutter build apk
+    packageFilters:
+      scope: watch_wear
+
+  format:
+    run: melos exec -- dart format .

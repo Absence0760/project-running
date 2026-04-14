@@ -1,0 +1,461 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:core_models/core_models.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Typed client for the Supabase REST API.
+///
+/// Must call [initialize] before using any methods.
+class ApiClient {
+  static SupabaseClient get _client => Supabase.instance.client;
+
+  /// Initialize Supabase. Call once at app startup.
+  static Future<void> initialize({
+    required String url,
+    required String anonKey,
+  }) async {
+    await Supabase.initialize(url: url, anonKey: anonKey);
+  }
+
+  /// Sign in with email/password. Returns the user ID.
+  Future<String> signIn({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _client.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+    return response.user!.id;
+  }
+
+  /// Exchange a Google ID token (obtained by the host app via the native
+  /// Android `google_sign_in` flow) for a Supabase session. Returns the
+  /// user ID.
+  ///
+  /// Host app is responsible for driving the Google Sign-In UI and
+  /// capturing the ID token — this keeps `api_client` platform-agnostic.
+  /// See `mobile_android/lib/screens/sign_in_screen.dart` for the caller
+  /// and `docs/local_testing_android_app.md` for Google Cloud Console +
+  /// Supabase dashboard setup instructions.
+  Future<String> signInWithGoogleIdToken({
+    required String idToken,
+    String? accessToken,
+  }) async {
+    final response = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+    return response.user!.id;
+  }
+
+  /// The current user ID, or null if not signed in.
+  String? get userId => _client.auth.currentUser?.id;
+
+  /// The current user's email, or null if not signed in.
+  String? get userEmail => _client.auth.currentUser?.email;
+
+  /// Sign out the current user.
+  Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
+  /// Save a completed [Run] to the backend.
+  ///
+  /// The GPS track is uploaded as a gzipped JSON file to the `runs` Storage
+  /// bucket at `{user_id}/{run_id}.json.gz` and a reference to it is stored
+  /// in `runs.track_url`. The dashboard list never loads the track — it's
+  /// fetched on demand by [fetchTrack] when a run detail page is opened.
+  ///
+  /// The upsert body is built from a generated [RunRow], so renaming a column
+  /// in a migration forces `scripts/gen_dart_models.dart` to regenerate the
+  /// row class — any stale field reference fails to compile here.
+  Future<void> saveRun(Run run) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    String? trackUrl;
+    final existingTrackUrl = run.metadata?['track_url'] as String?;
+    if (run.track.isNotEmpty) {
+      trackUrl = await _uploadTrack(userId: userId, runId: run.id, track: run.track);
+    } else if (existingTrackUrl != null && existingTrackUrl.isNotEmpty) {
+      trackUrl = existingTrackUrl;
+    }
+
+    final row = RunRow(
+      id: run.id,
+      userId: userId,
+      startedAt: run.startedAt,
+      durationS: run.duration.inSeconds,
+      distanceM: run.distanceMetres,
+      source: run.source.name,
+      externalId: run.externalId,
+      metadata: run.metadata,
+      trackUrl: trackUrl,
+    );
+    final json = row.toJson();
+    if (run.externalId != null && run.externalId!.isNotEmpty) {
+      await _client
+          .from(RunRow.table)
+          .upsert(json, onConflict: RunRow.colExternalId);
+    } else {
+      await _client.from(RunRow.table).upsert(json);
+    }
+  }
+
+  /// Mark a run as publicly visible so it can be viewed at
+  /// `/share/run/{id}` without authentication.
+  Future<void> makeRunPublic(String runId) async {
+    await _client
+        .from(RunRow.table)
+        .update({RunRow.colIsPublic: true})
+        .eq(RunRow.colId, runId);
+  }
+
+  /// Batch-save a list of runs. Uploads tracks in parallel groups of
+  /// [uploadConcurrency] and upserts rows in chunks of [rowChunkSize].
+  ///
+  /// [onProgress] is called after each row chunk is saved, with the number
+  /// of runs saved so far.
+  Future<void> saveRunsBatch(
+    List<Run> runs, {
+    int uploadConcurrency = 8,
+    int rowChunkSize = 100,
+    void Function(int saved)? onProgress,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    if (runs.isEmpty) return;
+
+    // Upload tracks in parallel groups.
+    final trackUrls = <String, String>{};
+    final runsWithTracks = runs.where((r) => r.track.isNotEmpty).toList();
+    for (var i = 0; i < runsWithTracks.length; i += uploadConcurrency) {
+      final batch = runsWithTracks.skip(i).take(uploadConcurrency);
+      final futures = batch.map((r) async {
+        final url = await _uploadTrack(
+            userId: userId, runId: r.id, track: r.track);
+        trackUrls[r.id] = url;
+      });
+      await Future.wait(futures);
+    }
+
+    // Build rows and upsert in chunks.
+    final rows = runs.map((r) {
+      final trackUrl = trackUrls[r.id] ??
+          (r.metadata?['track_url'] as String?) ??
+          '';
+      return RunRow(
+        id: r.id,
+        userId: userId,
+        startedAt: r.startedAt,
+        durationS: r.duration.inSeconds,
+        distanceM: r.distanceMetres,
+        source: r.source.name,
+        externalId: r.externalId,
+        metadata: r.metadata,
+        trackUrl: trackUrl.isEmpty ? null : trackUrl,
+      ).toJson();
+    }).toList();
+
+    final hasExternalIds =
+        runs.any((r) => r.externalId != null && r.externalId!.isNotEmpty);
+
+    int saved = 0;
+    for (var i = 0; i < rows.length; i += rowChunkSize) {
+      final chunk = rows.skip(i).take(rowChunkSize).toList();
+      if (hasExternalIds) {
+        await _client
+            .from(RunRow.table)
+            .upsert(chunk, onConflict: RunRow.colExternalId);
+      } else {
+        await _client.from(RunRow.table).upsert(chunk);
+      }
+      saved += chunk.length;
+      onProgress?.call(saved);
+    }
+  }
+
+  /// Delete a run from the backend, including its gzipped track file in
+  /// Storage.
+  Future<void> deleteRun(Run run) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final trackPath = run.metadata?['track_url'] as String?;
+    if (trackPath != null && trackPath.isNotEmpty) {
+      try {
+        await _client.storage.from('runs').remove([trackPath]);
+      } catch (e) {
+        // Best-effort — the row delete is more important than the file cleanup.
+      }
+    }
+    await _client.from(RunRow.table).delete().eq(RunRow.colId, run.id);
+  }
+
+  /// Fetch the user's runs, newest first.
+  ///
+  /// Returned runs have an empty `track`. Use [fetchTrack] to download the
+  /// GPS waypoints for a single run when its detail page is opened.
+  Future<List<Run>> getRuns({int limit = 50, DateTime? before}) async {
+    var query = _client.from(RunRow.table).select();
+
+    if (before != null) {
+      query = query.lt(RunRow.colStartedAt, before.toIso8601String());
+    }
+
+    final data = await query
+        .order(RunRow.colStartedAt, ascending: false)
+        .limit(limit);
+
+    return data.map<Run>((row) => _runFromRow(row)).toList();
+  }
+
+  /// Download and decode the GPS track for a single run.
+  ///
+  /// Reads the gzipped JSON from Supabase Storage at the path stored in
+  /// `metadata['track_url']` (returned by [getRuns] / [_runFromRow]).
+  /// Returns an empty list if the run has no track.
+  Future<List<Waypoint>> fetchTrack(Run run) async {
+    final url = run.metadata?['track_url'] as String?;
+    if (url == null || url.isEmpty) return const [];
+    return _downloadTrack(url);
+  }
+
+  // -- Storage helpers --
+
+  Future<String> _uploadTrack({
+    required String userId,
+    required String runId,
+    required List<Waypoint> track,
+  }) async {
+    final json = jsonEncode(track.map(_waypointToJson).toList());
+    final bytes = Uint8List.fromList(gzip.encode(utf8.encode(json)));
+    final path = '$userId/$runId.json.gz';
+    await _client.storage.from('runs').uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/json',
+            upsert: true,
+          ),
+        );
+    return path;
+  }
+
+  Future<List<Waypoint>> _downloadTrack(String path) async {
+    final bytes = await _client.storage.from('runs').download(path);
+    final json = utf8.decode(gzip.decode(bytes));
+    final list = jsonDecode(json) as List<dynamic>;
+    return list.map((t) => _waypointFromJson(t as Map<String, dynamic>)).toList();
+  }
+
+  static Map<String, dynamic> _waypointToJson(Waypoint w) => {
+        'lat': w.lat,
+        'lng': w.lng,
+        'ele': w.elevationMetres,
+        'ts': w.timestamp?.toIso8601String(),
+      };
+
+  static Waypoint _waypointFromJson(Map<String, dynamic> m) => Waypoint(
+        lat: (m['lat'] as num).toDouble(),
+        lng: (m['lng'] as num).toDouble(),
+        elevationMetres: (m['ele'] as num?)?.toDouble(),
+        timestamp: m['ts'] != null ? DateTime.tryParse(m['ts'] as String) : null,
+      );
+
+  /// Saves a [Route] to the backend.
+  Future<void> saveRoute(Route route) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final row = RouteRow(
+      id: route.id,
+      userId: userId,
+      name: route.name,
+      waypoints: route.waypoints
+          .map((w) => <String, dynamic>{
+                'lat': w.lat,
+                'lng': w.lng,
+                'ele': w.elevationMetres,
+              })
+          .toList(),
+      distanceM: route.distanceMetres,
+      elevationM: route.elevationGainMetres,
+      isPublic: route.isPublic,
+      surface: route.surface,
+    );
+    // Drop null / server-default columns so Postgres fills them in.
+    final body = Map<String, dynamic>.from(row.toJson())
+      ..removeWhere((k, v) => v == null);
+    body.remove(RouteRow.colId);
+    await _client.from(RouteRow.table).insert(body);
+  }
+
+  /// Fetches the user's saved routes.
+  Future<List<Route>> getRoutes() async {
+    final data = await _client
+        .from(RouteRow.table)
+        .select()
+        .order(RouteRow.colCreatedAt, ascending: false);
+
+    return data.map<Route>((row) => _routeFromRow(row)).toList();
+  }
+
+  /// Search public routes. Supports full-text name search, distance range
+  /// filtering, and surface type filtering. Uses the `routes_public` partial
+  /// index and `routes_name_search` GIN index.
+  Future<List<Route>> searchPublicRoutes({
+    String? query,
+    double? minDistanceM,
+    double? maxDistanceM,
+    String? surface,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    var q = _client
+        .from(RouteRow.table)
+        .select()
+        .eq(RouteRow.colIsPublic, true);
+
+    if (query != null && query.trim().isNotEmpty) {
+      q = q.textSearch(RouteRow.colName, "'${query.trim()}'");
+    }
+    if (minDistanceM != null) {
+      q = q.gte(RouteRow.colDistanceM, minDistanceM);
+    }
+    if (maxDistanceM != null) {
+      q = q.lte(RouteRow.colDistanceM, maxDistanceM);
+    }
+    if (surface != null && surface.isNotEmpty) {
+      q = q.eq(RouteRow.colSurface, surface);
+    }
+
+    final data = await q
+        .order(RouteRow.colCreatedAt, ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return data.map<Route>((row) => _routeFromRow(row)).toList();
+  }
+
+  /// Find public routes near a geographic point, sorted by distance.
+  /// Uses the PostGIS-backed `nearby_routes` RPC.
+  Future<List<Route>> nearbyPublicRoutes({
+    required double lat,
+    required double lng,
+    double radiusM = 50000,
+    int limit = 50,
+  }) async {
+    final data = await _client.rpc('nearby_routes', params: {
+      'lat': lat,
+      'lng': lng,
+      'radius_m': radiusM,
+      'max_results': limit,
+    });
+    return (data as List)
+        .map<Route>((row) => _routeFromRow(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  // -- Route reviews --
+
+  /// Fetch all reviews for a route, newest first.
+  Future<List<RouteReviewRow>> getRouteReviews(String routeId) async {
+    final data = await _client
+        .from(RouteReviewRow.table)
+        .select()
+        .eq(RouteReviewRow.colRouteId, routeId)
+        .order(RouteReviewRow.colCreatedAt, ascending: false);
+    return data
+        .map<RouteReviewRow>(
+            (row) => RouteReviewRow.fromJson(row))
+        .toList();
+  }
+
+  /// Submit or update a review for a route (one per user per route).
+  Future<void> upsertRouteReview({
+    required String routeId,
+    required int rating,
+    String? comment,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    await _client.from(RouteReviewRow.table).upsert({
+      RouteReviewRow.colRouteId: routeId,
+      RouteReviewRow.colUserId: userId,
+      RouteReviewRow.colRating: rating,
+      RouteReviewRow.colComment: comment,
+    }, onConflict: '${RouteReviewRow.colRouteId},${RouteReviewRow.colUserId}');
+  }
+
+  /// Delete the current user's review of a route.
+  Future<void> deleteRouteReview(String routeId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    await _client
+        .from(RouteReviewRow.table)
+        .delete()
+        .eq(RouteReviewRow.colRouteId, routeId)
+        .eq(RouteReviewRow.colUserId, userId);
+  }
+
+  /// Update a route's is_public flag.
+  Future<void> setRoutePublic(String routeId, bool isPublic) async {
+    await _client
+        .from(RouteRow.table)
+        .update({RouteRow.colIsPublic: isPublic})
+        .eq(RouteRow.colId, routeId);
+  }
+
+  // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
+  //
+  // These go through the generated row classes so that column renames surface
+  // as compile errors on the consuming fields below, not as silent runtime
+  // drift.
+
+  static Run _runFromRow(Map<String, dynamic> row) {
+    final r = RunRow.fromJson(row);
+    // Stash the storage path on metadata so callers can pass the run back
+    // to fetchTrack() to lazy-load the GPS waypoints. The track field itself
+    // stays empty until fetched.
+    final metadata = Map<String, dynamic>.from(r.metadata ?? const {});
+    if (r.trackUrl != null) metadata['track_url'] = r.trackUrl;
+
+    return Run(
+      id: r.id,
+      startedAt: r.startedAt,
+      duration: Duration(seconds: r.durationS),
+      distanceMetres: r.distanceM,
+      track: const [],
+      source: RunSource.values.firstWhere(
+        (s) => s.name == r.source,
+        orElse: () => RunSource.app,
+      ),
+      externalId: r.externalId,
+      metadata: metadata.isEmpty ? null : metadata,
+      createdAt: r.createdAt,
+    );
+  }
+
+  static Route _routeFromRow(Map<String, dynamic> row) {
+    final r = RouteRow.fromJson(row);
+    return Route(
+      id: r.id,
+      name: r.name,
+      waypoints: r.waypoints.map((m) => Waypoint(
+            lat: (m['lat'] as num).toDouble(),
+            lng: (m['lng'] as num).toDouble(),
+            elevationMetres: (m['ele'] as num?)?.toDouble(),
+          )).toList(),
+      distanceMetres: r.distanceM,
+      elevationGainMetres: r.elevationM ?? 0,
+      isPublic: r.isPublic ?? false,
+      surface: r.surface,
+      createdAt: r.createdAt,
+    );
+  }
+}

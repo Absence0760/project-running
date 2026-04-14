@@ -1,0 +1,55 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.pub-cache/
+.pub/
+pubspec.lock
+
+# Node.js
+node_modules/
+.next/
+out/
+.vercel
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcworkspace
+!*.xcodeproj/project.xcworkspace
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Android
+*.apk
+*.aab
+*.jks
+*.keystore
+local.properties
+key.properties
+
+# Supabase
+.supabase/
+/supabase/
+apps/backend/supabase/.branches/
+apps/backend/supabase/.temp/

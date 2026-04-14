@@ -1,0 +1,24 @@
+name: Release Web
+
+on:
+  push:
+    tags:
+      - 'web/v*'
+
+jobs:
+  build:
+    name: Build Web (SvelteKit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --workspace=apps/web
+      - run: cp apps/web/.env.example apps/web/.env
+      - run: npm run check --workspace=apps/web
+      - run: npm run build --workspace=apps/web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: apps/web/build/

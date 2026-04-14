@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-packages:
+    name: Test Flutter packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: dart pub global activate melos
+      - run: melos bootstrap
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
+      - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
+      - run: melos exec -- dart analyze
+
+  parity-types:
+    name: Schema / type drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      - working-directory: apps/backend
+        run: supabase start
+      - run: npm run gen:types:check --workspace=apps/backend
+      - if: failure()
+        run: |
+          echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
+          echo "Run 'npm run gen:types' locally and commit the result."

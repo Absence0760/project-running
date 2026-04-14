@@ -1,0 +1,18 @@
+name: Release Apple Watch
+
+on:
+  push:
+    tags:
+      - 'watch/v*'
+
+jobs:
+  build:
+    name: Build Apple Watch
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
+            -scheme WatchApp \
+            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
+            build

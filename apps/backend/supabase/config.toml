@@ -1,0 +1,19 @@
+[api]
+port = 54321
+
+[db]
+port = 54322
+
+[auth]
+site_url = "http://localhost:7777"
+additional_redirect_urls = ["http://localhost:7777/auth/callback"]
+enable_signup = true
+
+[auth.email]
+enable_confirmations = false
+
+[auth.external.google]
+enabled = false
+
+[auth.external.apple]
+enabled = false

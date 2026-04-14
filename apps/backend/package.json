@@ -1,0 +1,10 @@
+{
+  "name": "run-app-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen:types": "supabase gen types typescript --local 2>/dev/null | grep -v '^Connecting to db' > ../web/src/lib/database.types.ts",
+    "gen:types:check": "supabase gen types typescript --local 2>/dev/null | grep -v '^Connecting to db' | diff -u ../web/src/lib/database.types.ts -"
+  }
+}
