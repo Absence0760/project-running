@@ -1,4 +1,4 @@
-package com.example.mobile_android
+package com.betterrunner.app
 
 import io.flutter.embedding.android.FlutterActivity
 

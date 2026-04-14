@@ -1,9 +1,7 @@
 /**
  * Data access layer — all Supabase queries in one place.
- * Falls back to mock data when Supabase returns nothing (e.g. empty tables).
  */
 import { supabase } from './supabase';
-import { mockRuns, mockRoutes, mockWeeklyMileage, mockPersonalRecords } from './mock-data';
 import type { Run, Route, Integration } from './types';
 import { auth } from './stores/auth.svelte';
 
@@ -15,9 +13,7 @@ export async function fetchRuns(): Promise<Run[]> {
 		.select('*')
 		.order('started_at', { ascending: false });
 
-	if (error || !data || data.length === 0) return mockRuns;
-	// List view never needs the GPS track — leave it null and fetch on demand
-	// when the user opens a single run.
+	if (error || !data) return [];
 	return data.map((r: any) => ({ ...r, track: null }));
 }
 
@@ -28,10 +24,7 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 		.eq('id', id)
 		.single();
 
-	if (!data) {
-		// Fall back to mock
-		return mockRuns.find((r) => r.id === id) ?? mockRuns[0];
-	}
+	if (!data) return null;
 
 	// Lazy-load the GPS track from Storage when the run has one.
 	let track = null;
@@ -229,7 +222,7 @@ export async function fetchRoutes(): Promise<Route[]> {
 		.select('*')
 		.order('created_at', { ascending: false });
 
-	if (error || !data || data.length === 0) return mockRoutes;
+	if (error || !data) return [];
 	return data;
 }
 
@@ -241,7 +234,7 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		.single();
 
 	if (data) return data;
-	return mockRoutes.find((r) => r.id === id) ?? mockRoutes[0];
+	return null;
 }
 
 export async function fetchPublicRoute(id: string): Promise<Route | null> {
@@ -298,7 +291,7 @@ export async function fetchWeeklyMileage() {
 		.select('started_at, distance_m')
 		.order('started_at', { ascending: true });
 
-	if (!runs || runs.length === 0) return mockWeeklyMileage;
+	if (!runs || runs.length === 0) return [];
 
 	// Group by ISO week
 	const weeks = new Map<string, number>();
@@ -321,7 +314,7 @@ export async function fetchPersonalRecords() {
 		.select('started_at, duration_s, distance_m')
 		.order('started_at', { ascending: false });
 
-	if (!runs || runs.length === 0) return mockPersonalRecords;
+	if (!runs || runs.length === 0) return [];
 
 	const distances = [
 		{ label: '5k', target: 5000, tolerance: 200 },
@@ -346,7 +339,7 @@ export async function fetchPersonalRecords() {
 		}
 	}
 
-	return records.length > 0 ? records : mockPersonalRecords;
+	return records;
 }
 
 // --- Integrations ---

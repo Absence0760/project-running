@@ -46,6 +46,7 @@ DerivedData/
 *.jks
 *.keystore
 local.properties
+key.properties
 
 # Supabase
 .supabase/

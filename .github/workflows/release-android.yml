@@ -1,0 +1,36 @@
+name: Release Android
+
+on:
+  push:
+    tags:
+      - 'android/v*'
+
+jobs:
+  build:
+    name: Build Android (signed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: dart pub global activate melos
+      - run: melos bootstrap
+      - name: Decode keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > apps/mobile_android/android/app/upload-keystore.jks
+          cat > apps/mobile_android/android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=app/upload-keystore.jks
+          EOF
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
+      - working-directory: apps/mobile_android
+        run: flutter build appbundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release.aab
+          path: apps/mobile_android/build/app/outputs/bundle/release/app-release.aab

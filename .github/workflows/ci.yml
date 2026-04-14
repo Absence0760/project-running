@@ -5,8 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  release:
-    types: [published]
 
 jobs:
   test-packages:
@@ -23,19 +21,6 @@ jobs:
       - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
       - run: melos exec -- dart analyze
 
-  build-web:
-    name: Build Web (SvelteKit)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install --workspace=apps/web
-      - run: cp apps/web/.env.example apps/web/.env
-      - run: npm run check --workspace=apps/web
-      - run: npm run build --workspace=apps/web
-
   parity-types:
     name: Schema / type drift
     runs-on: ubuntu-latest
@@ -51,60 +36,3 @@ jobs:
         run: |
           echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
           echo "Run 'npm run gen:types' locally and commit the result."
-
-  build-ios:
-    name: Build iOS
-    if: github.event_name == 'push'
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - run: melos bootstrap
-      - working-directory: apps/mobile_ios
-        run: flutter build ipa --no-codesign
-
-  build-android:
-    name: Build Android
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - run: melos bootstrap
-      - working-directory: apps/mobile_android
-        run: flutter build appbundle
-
-  build-watch-swift:
-    name: Build Apple Watch
-    if: github.event_name == 'push'
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
-            -scheme WatchApp \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
-            build
-
-  deploy-functions:
-    name: Deploy Edge Functions
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    needs: [test-packages, build-web]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 2.84.2
-      - run: |
-          supabase functions deploy strava-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy strava-import --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy parkrun-import --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy refresh-tokens --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy export-data --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
