@@ -50,3 +50,6 @@ key.properties
 
 # Supabase
 .supabase/
+/supabase/
+apps/backend/supabase/.branches/
+apps/backend/supabase/.temp/
