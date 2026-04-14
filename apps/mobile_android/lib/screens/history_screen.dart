@@ -446,18 +446,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (totalCount == 0) {
       return _EmptyHistory(theme: theme);
     }
-    if (_visible.isEmpty) {
-      return _EmptyFilter(
-        theme: theme,
-        label: _rangeLabel(_range),
-        onShowAll: () {
-          setState(() {
-            _range = _HistoryRange.all;
-            _recompute();
-          });
-        },
-      );
-    }
     return RefreshIndicator(
       onRefresh: _fetchRemote,
       child: _buildRunList(theme, unit),
@@ -465,9 +453,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildRunList(ThemeData theme, DistanceUnit unit) {
+    // +1 for the header row; +1 for the empty-state message when filters
+    // match nothing (so the filter chips stay visible and tappable).
+    final emptyAfterFilter = _visible.isEmpty;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _visible.length + 1,
+      itemCount: _visible.length + 1 + (emptyAfterFilter ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == 0) {
           return Column(
@@ -520,6 +511,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               const SizedBox(height: 8),
             ],
+          );
+        }
+        if (emptyAfterFilter && index == 1) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            child: Column(
+              children: [
+                Icon(Icons.event_busy,
+                    size: 48, color: theme.colorScheme.outline),
+                const SizedBox(height: 12),
+                Text(
+                  'No runs match these filters',
+                  style: theme.textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _activityFilter = null;
+                      _range = _HistoryRange.all;
+                      _recompute();
+                    });
+                  },
+                  child: const Text('Clear filters'),
+                ),
+              ],
+            ),
           );
         }
         final run = _visible[index - 1];
@@ -675,32 +693,3 @@ class _EmptyHistory extends StatelessWidget {
   }
 }
 
-class _EmptyFilter extends StatelessWidget {
-  final ThemeData theme;
-  final String label;
-  final VoidCallback onShowAll;
-  const _EmptyFilter({
-    required this.theme,
-    required this.label,
-    required this.onShowAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_busy, size: 64, color: theme.colorScheme.outline),
-          const SizedBox(height: 16),
-          Text('No runs in $label', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: onShowAll,
-            child: const Text('Show all time'),
-          ),
-        ],
-      ),
-    );
-  }
-}
