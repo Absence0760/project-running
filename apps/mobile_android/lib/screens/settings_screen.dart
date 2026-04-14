@@ -231,6 +231,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               themeModeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
             },
           ),
+          SwitchListTile(
+            title: const Text('Advanced GPS'),
+            subtitle: const Text(
+              'Higher accuracy, finer track detail, more battery usage',
+            ),
+            value: prefs.advancedGps,
+            onChanged: prefs.setAdvancedGps,
+          ),
           const Divider(),
 
           // Data

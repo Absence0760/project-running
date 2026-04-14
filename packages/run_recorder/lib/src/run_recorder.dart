@@ -63,6 +63,7 @@ class RunRecorder {
   Route? _route;
   double _trackThresholdMetres = 3;
   double _maxSpeedMps = 10;
+  double _accuracyGateMetres = 20;
 
   /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
   /// per second after [begin] starts recording time.
@@ -92,6 +93,8 @@ class RunRecorder {
     int distanceFilterMetres = 3,
     double minMovementMetres = 2,
     double maxSpeedMps = 10,
+    LocationAccuracy accuracy = LocationAccuracy.high,
+    double accuracyGateMetres = 20,
   }) async {
     // Ensure location permission
     var permission = await Geolocator.checkPermission();
@@ -119,10 +122,11 @@ class RunRecorder {
     _trackThresholdMetres =
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
+    _accuracyGateMetres = accuracyGateMetres;
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.high,
+        accuracy: accuracy,
         // Receive every fix from the OS; movement filtering happens in
         // software so the blue dot can refresh without inflating the track.
         distanceFilter: 0,
@@ -171,12 +175,16 @@ class RunRecorder {
     int distanceFilterMetres = 3,
     double minMovementMetres = 2,
     double maxSpeedMps = 10,
+    LocationAccuracy accuracy = LocationAccuracy.high,
+    double accuracyGateMetres = 20,
   }) async {
     await prepare(
       route: route,
       distanceFilterMetres: distanceFilterMetres,
       minMovementMetres: minMovementMetres,
       maxSpeedMps: maxSpeedMps,
+      accuracy: accuracy,
+      accuracyGateMetres: accuracyGateMetres,
     );
     begin();
   }
@@ -191,6 +199,7 @@ class RunRecorder {
     int distanceFilterMetres = 3,
     double minMovementMetres = 2,
     double maxSpeedMps = 10,
+    double accuracyGateMetres = 20,
   }) {
     _startTime = null;
     _stopwatch
@@ -208,6 +217,7 @@ class RunRecorder {
     _trackThresholdMetres =
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
+    _accuracyGateMetres = accuracyGateMetres;
     _prepared = true;
   }
 
@@ -251,11 +261,7 @@ class RunRecorder {
   void _onPosition(Position pos) {
     if (_paused) return;
 
-    // Filter inaccurate readings. 20 m is a compromise between rejecting
-    // clearly-bad fixes (especially indoors or in urban canyons) and
-    // keeping enough fixes to maintain a continuous track on phones with
-    // modest GPS antennas.
-    if (pos.accuracy > 20) return;
+    if (pos.accuracy > _accuracyGateMetres) return;
 
     // Always refresh the raw current position so the blue dot updates on
     // every valid fix, independent of the track-append threshold. This

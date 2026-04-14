@@ -261,12 +261,15 @@ class _RunScreenState extends State<RunScreen> {
     // Open the GPS stream now so the first fix is already in hand when the
     // run starts. Positions received during this phase drive the blue dot
     // but don't accumulate into the track or distance.
+    final adv = widget.preferences.advancedGps;
     _prepareFuture = _recorder!
         .prepare(
       route: _selectedRoute,
-      distanceFilterMetres: _activityType.gpsDistanceFilter,
-      minMovementMetres: _activityType.minMovementMetres,
+      distanceFilterMetres: adv ? 2 : _activityType.gpsDistanceFilter,
+      minMovementMetres: adv ? 1 : _activityType.minMovementMetres,
       maxSpeedMps: _activityType.maxSpeedMps,
+      accuracy: adv ? LocationAccuracy.best : LocationAccuracy.high,
+      accuracyGateMetres: adv ? 10 : 20,
     )
         .catchError((e, st) {
       debugPrint('RunRecorder.prepare failed: $e');

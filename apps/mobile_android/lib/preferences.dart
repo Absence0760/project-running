@@ -124,6 +124,7 @@ class Preferences extends ChangeNotifier {
   static const _kOnboarded = 'onboarded';
   static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
   static const _kGoalsJson = 'goals_json';
+  static const _kAdvancedGps = 'advanced_gps';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -135,11 +136,13 @@ class Preferences extends ChangeNotifier {
   bool _onboarded = false;
   int _targetPaceSecPerKm = 0;
   List<RunGoal> _goals = [];
+  bool _advancedGps = false;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
   bool get audioCues => _audioCues;
   bool get onboarded => _onboarded;
+  bool get advancedGps => _advancedGps;
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
   /// when current pace is more than 30s off in either direction.
@@ -155,6 +158,7 @@ class Preferences extends ChangeNotifier {
     _audioCues = _prefs.getBool(_kAudioCues) ?? true;
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
+    _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
 
     final rawGoals = _prefs.getString(_kGoalsJson);
     if (rawGoals != null && rawGoals.isNotEmpty) {
@@ -205,6 +209,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setTargetPaceSecPerKm(int v) async {
     _targetPaceSecPerKm = v;
     await _prefs.setInt(_kTargetPaceSecPerKm, v);
+    notifyListeners();
+  }
+
+  Future<void> setAdvancedGps(bool v) async {
+    _advancedGps = v;
+    await _prefs.setBool(_kAdvancedGps, v);
     notifyListeners();
   }
 
