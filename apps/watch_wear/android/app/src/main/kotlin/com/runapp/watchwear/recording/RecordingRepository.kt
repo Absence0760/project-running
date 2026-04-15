@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /// or low memory.
 object RecordingRepository {
 
-    enum class Stage { Idle, Recording, Finished }
+    enum class Stage { Idle, Recording, Paused, Finished }
 
     data class Metrics(
         val stage: Stage = Stage.Idle,
@@ -26,7 +26,9 @@ object RecordingRepository {
         val avgBpm: Double? = null,
         val track: List<GpsPoint> = emptyList(),
         val locationAvailable: Boolean = true,
-    )
+    ) {
+        val isActive: Boolean get() = stage == Stage.Recording || stage == Stage.Paused
+    }
 
     private val _metrics = MutableStateFlow(Metrics())
     val metrics: StateFlow<Metrics> = _metrics.asStateFlow()

@@ -5,6 +5,7 @@ import android.content.Context
 import android.location.Location
 import android.os.Looper
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationAvailability
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -16,15 +17,24 @@ import kotlinx.coroutines.flow.callbackFlow
 
 data class GpsPoint(val lat: Double, val lng: Double, val ele: Double?, val epochMs: Long)
 
+/// Shape of each emission from [GpsRecorder.stream]. Either a new GPS
+/// point arrived, or the underlying provider flipped availability (GPS
+/// signal lost / regained / permission revoked).
+sealed class GpsEvent {
+    data class Point(val point: GpsPoint) : GpsEvent()
+    data class Availability(val available: Boolean) : GpsEvent()
+}
+
 class GpsRecorder(context: Context) {
     private val client: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
 
     /// Open a position stream at high accuracy with a 1-second update target.
-    /// Callers are responsible for holding `ACCESS_FINE_LOCATION` — the
-    /// Compose UI asks the runtime permission before the first `start`.
+    /// Emits [GpsEvent.Availability] when the provider's usable-signal state
+    /// changes, so the caller can surface "GPS lost" to the user instead
+    /// of showing stale distance silently.
     @SuppressLint("MissingPermission")
-    fun stream(): Flow<GpsPoint> = callbackFlow {
+    fun stream(): Flow<GpsEvent> = callbackFlow {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
             .setMinUpdateIntervalMillis(500L)
             .build()
@@ -34,14 +44,20 @@ class GpsRecorder(context: Context) {
                 for (loc: Location in result.locations) {
                     if (!loc.hasAccuracy() || loc.accuracy > 30f) continue
                     trySend(
-                        GpsPoint(
-                            lat = loc.latitude,
-                            lng = loc.longitude,
-                            ele = if (loc.hasAltitude()) loc.altitude else null,
-                            epochMs = loc.time,
+                        GpsEvent.Point(
+                            GpsPoint(
+                                lat = loc.latitude,
+                                lng = loc.longitude,
+                                ele = if (loc.hasAltitude()) loc.altitude else null,
+                                epochMs = loc.time,
+                            )
                         )
                     )
                 }
+            }
+
+            override fun onLocationAvailability(availability: LocationAvailability) {
+                trySend(GpsEvent.Availability(availability.isLocationAvailable))
             }
         }
 

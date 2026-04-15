@@ -75,7 +75,7 @@ import com.runapp.watchwear.system.BatteryOptimization
 import android.app.Activity
 
 @Composable
-fun RunWatchApp(vm: RunViewModel, activity: Activity) {
+fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false) {
     val state by vm.state.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -111,6 +111,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity) {
                             queuedCount = state.queuedCount,
                             authed = state.authed,
                             authError = state.authError,
+                            online = state.online,
                             batteryOptimised = state.batteryOptimised,
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
                             onStart = {
@@ -135,11 +136,16 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity) {
                     onSubmit = vm::signInWithEmail,
                     onCancel = vm::cancelSignIn,
                 )
-                Stage.Running -> RunningScreen(
+                Stage.Running, Stage.Paused -> RunningScreen(
                     elapsedMs = state.elapsedMs,
                     distanceM = state.distanceM,
                     paceSecPerKm = state.paceSecPerKm,
                     bpm = state.bpm,
+                    paused = state.stage == Stage.Paused,
+                    locationAvailable = state.locationAvailable,
+                    ambient = isAmbient,
+                    onPause = vm::pause,
+                    onResume = vm::resume,
                     onStop = vm::stop,
                 )
                 Stage.PostRun -> PostRunScreen(
@@ -229,6 +235,7 @@ private fun PreRunScreen(
     queuedCount: Int,
     authed: Boolean,
     authError: String?,
+    online: Boolean,
     batteryOptimised: Boolean,
     pendingRecoveryDistance: Double?,
     onStart: () -> Unit,
@@ -283,10 +290,18 @@ private fun PreRunScreen(
             // is self-explanatory and removing the heading frees the
             // top-right area for the sign-out icon to live alone.
             if (queuedCount > 0) {
+                val suffix = if (online) "" else " · offline"
                 Text(
-                    "$queuedCount run${if (queuedCount == 1) "" else "s"} to sync",
+                    "$queuedCount run${if (queuedCount == 1) "" else "s"} to sync$suffix",
                     style = MaterialTheme.typography.caption3,
-                    color = DuskPalette.haze,
+                    color = if (online) DuskPalette.haze else DuskPalette.warning,
+                )
+                Spacer(Modifier.height(4.dp))
+            } else if (!online && authed) {
+                Text(
+                    "Offline",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.warning,
                 )
                 Spacer(Modifier.height(4.dp))
             }
@@ -604,46 +619,106 @@ private fun RunningScreen(
     distanceM: Double,
     paceSecPerKm: Double?,
     bpm: Int?,
+    paused: Boolean,
+    locationAvailable: Boolean,
+    ambient: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onStop: () -> Unit,
 ) {
+    // Ambient mode: dim, greyscale, no buttons. The foreground service
+    // keeps recording regardless — this is purely a lower-power render.
+    if (ambient) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                formatElapsed(elapsedMs),
+                style = MaterialTheme.typography.display2,
+                color = DuskPalette.haze,
+            )
+            Text(
+                "%.2f km".format(distanceM / 1000.0),
+                style = MaterialTheme.typography.body2,
+                color = DuskPalette.haze,
+            )
+            if (paused) {
+                Text(
+                    "paused",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.haze,
+                )
+            }
+        }
+        return
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        if (!locationAvailable) {
+            Text(
+                "GPS lost",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.warning,
+            )
+            Spacer(Modifier.height(2.dp))
+        }
         Text(
             formatElapsed(elapsedMs),
             style = MaterialTheme.typography.display2,
+            color = if (paused) DuskPalette.haze else DuskPalette.parchment,
         )
         Spacer(Modifier.height(2.dp))
         Text(
             "%.2f km".format(distanceM / 1000.0),
             style = MaterialTheme.typography.body2,
         )
-        // Hide the pace row until the recorder has enough distance to
-        // compute one — a "--:-- /km" placeholder looked enough like an
-        // HR placeholder to be confusing.
-        if (paceSecPerKm != null && paceSecPerKm > 0) {
+        if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
             Text(
                 "${formatPace(paceSecPerKm)} /km",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.haze,
             )
         }
-        // Only render the HR row when we actually got a sample. With
-        // ENABLE_HR off (the default), the ViewModel never starts the
-        // sensor and `bpm` stays null — so the row vanishes entirely
-        // rather than teaching the user to trust a "— bpm" placeholder.
         if (bpm != null) {
             Text(
                 "$bpm bpm",
                 style = MaterialTheme.typography.caption3,
-                color = DuskPalette.error,
+                color = DuskPalette.coral,
             )
         }
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onStop) {
-            Text("Stop")
+        androidx.compose.foundation.layout.Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (paused) {
+                Button(
+                    onClick = onResume,
+                    modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
+                ) {
+                    Text("Go")
+                }
+            } else {
+                Button(
+                    onClick = onPause,
+                    modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
+                    colors = ButtonDefaults.secondaryButtonColors(),
+                ) {
+                    Text("||")
+                }
+            }
+            Button(
+                onClick = onStop,
+                modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
+                colors = ButtonDefaults.primaryButtonColors(),
+            ) {
+                Text("Stop")
+            }
         }
     }
 }

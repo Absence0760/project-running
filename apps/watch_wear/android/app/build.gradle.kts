@@ -89,6 +89,8 @@ dependencies {
     implementation("androidx.wear.compose:compose-foundation:1.6.1")
     implementation("androidx.wear.compose:compose-navigation:1.6.1")
     implementation("androidx.wear:wear-ongoing:1.1.0")
+    // AmbientLifecycleObserver + AmbientAware lives here.
+    implementation("androidx.wear:wear:1.3.0")
 
     // Health Services (live HR). 1.1.0-rc01 is the latest pre-stable; 1.0.0
     // is the last stable tag but lacks the flow helpers we want. Move to

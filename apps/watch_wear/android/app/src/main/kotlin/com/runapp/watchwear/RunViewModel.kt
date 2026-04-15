@@ -24,7 +24,7 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.UUID
 
-enum class Stage { PreRun, Running, PostRun, SignIn }
+enum class Stage { PreRun, Running, Paused, PostRun, SignIn }
 
 data class UiState(
     val stage: Stage = Stage.PreRun,
@@ -33,6 +33,7 @@ data class UiState(
     val paceSecPerKm: Double? = null,
     val bpm: Int? = null,
     val locationAvailable: Boolean = true,
+    val online: Boolean = true,
     val queuedCount: Int = 0,
     val authed: Boolean = false,
     val authError: String? = null,
@@ -89,9 +90,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         recordingObserverJob = viewModelScope.launch {
             RecordingRepository.metrics.collect { m ->
                 when (m.stage) {
-                    RecordingRepository.Stage.Recording -> {
+                    RecordingRepository.Stage.Recording,
+                    RecordingRepository.Stage.Paused -> {
                         _state.value = _state.value.copy(
-                            stage = Stage.Running,
+                            stage = if (m.stage == RecordingRepository.Stage.Paused)
+                                Stage.Paused else Stage.Running,
                             elapsedMs = m.elapsedMs,
                             distanceM = m.distanceM,
                             paceSecPerKm = m.paceSecPerKm,
@@ -121,10 +124,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeConnectivity() {
         connectivityJob = viewModelScope.launch {
-            // Skip the seed "true" emission so we don't fire drainQueue
-            // duplicately with the auth bootstrap path.
             var seeded = false
             networkWatcher.availability().collect { online ->
+                _state.value = _state.value.copy(online = online)
                 if (!seeded) { seeded = true; return@collect }
                 if (online && _state.value.authed) drainQueue()
             }
@@ -273,8 +275,18 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stop() {
-        if (_state.value.stage != Stage.Running) return
+        if (_state.value.stage != Stage.Running && _state.value.stage != Stage.Paused) return
         RunRecordingService.stop(getApplication())
+    }
+
+    fun pause() {
+        if (_state.value.stage != Stage.Running) return
+        RunRecordingService.pause(getApplication())
+    }
+
+    fun resume() {
+        if (_state.value.stage != Stage.Paused) return
+        RunRecordingService.resume(getApplication())
     }
 
     /// Called from the recording observer when the service publishes a
@@ -407,18 +419,33 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun drainQueue() {
-        if (!awaitAuth()) {
-            // Not signed in yet — runs stay queued; next signal (network
-            // online, sign-in success, app foreground) will retry.
-            return
-        }
+        if (!awaitAuth()) return
         val snapshot = store.queue.first()
+        var lastError: String? = null
+        var anyAuthFailure = false
         for (run in snapshot) {
             try {
                 pushRun(run)
                 store.remove(run.id)
+                lastError = null
             } catch (e: Throwable) {
-                if (e.message?.contains("HTTP 401") == true) {
+                val msg = e.message.orEmpty()
+                // Permanent-ish errors: 400/404/409/422 — the run is
+                // malformed or already exists. Leave it queued (the user
+                // can Discard from the UI if they want) but move on.
+                val permanent = Regex("HTTP 4(00|04|09|22)").containsMatchIn(msg)
+                // Transient: timeouts, 5xx, network loss. Stop iterating
+                // so we don't hammer the backend, but keep the queue
+                // intact. Next drain trigger (network-back-online,
+                // manual sync) retries.
+                val transient = Regex("HTTP 5\\d\\d").containsMatchIn(msg) ||
+                    msg.contains("timeout", ignoreCase = true) ||
+                    msg.contains("Unable to resolve", ignoreCase = true) ||
+                    msg.contains("Software caused", ignoreCase = true)
+
+                if (msg.contains("HTTP 401")) {
+                    anyAuthFailure = true
+                    // One 401 retry: refresh token + try this run again.
                     try {
                         val refreshed = supabase.refreshAccessToken()
                         val cached = sessionStore.current()
@@ -433,13 +460,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         pushRun(run)
                         store.remove(run.id)
+                        lastError = null
                         continue
-                    } catch (_: Throwable) { /* fall through */ }
+                    } catch (inner: Throwable) {
+                        lastError = inner.message ?: msg
+                        break  // refresh failed → stop, next auth signal retries
+                    }
                 }
-                _state.value = _state.value.copy(syncError = e.message)
-                break
+
+                lastError = msg
+                when {
+                    transient -> break  // try again later; don't thrash
+                    permanent -> continue  // skip to next; this one is stuck
+                    else -> continue  // unknown — optimistically try next
+                }
             }
         }
+        _state.value = _state.value.copy(syncError = lastError)
     }
 
     private suspend fun pushRun(run: QueuedRun) {
