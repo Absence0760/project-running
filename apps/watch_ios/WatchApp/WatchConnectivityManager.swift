@@ -1,13 +1,24 @@
 import Foundation
 import WatchConnectivity
 
-/// Syncs recorded runs and routes between Apple Watch and iPhone, and receives
-/// the current Supabase auth state (access token, user id, base URL, anon key)
-/// from the phone over `WCSession.updateApplicationContext(_:)`.
+/// Transfers completed runs from the Apple Watch to the paired iPhone over
+/// `WCSession.transferFile(_:metadata:)`. The phone owns the Supabase write —
+/// the watch just hands over the gzipped track file + a metadata dict.
+/// WCSession picks the transport (Bluetooth / Wi-Fi P2P / iCloud relay),
+/// queues across app launches, and retries on its own.
 class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnectivityManager()
 
-    @Published var hasPhoneCredentials = false
+    enum TransferState: Equatable {
+        case idle
+        case pending
+        case completed
+        case failed(String)
+    }
+
+    @Published var transferState: TransferState = .idle
+
+    private var pendingTransfer: WCSessionFileTransfer?
 
     override init() {
         super.init()
@@ -17,47 +28,43 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    /// Send a completed run to the iPhone for syncing to Supabase.
-    func transferRun(_ runData: [String: Any]) {
-        guard WCSession.default.isReachable else {
-            WCSession.default.transferUserInfo(runData)
+    /// Hand a finished run off to the phone. The phone syncs it to Supabase
+    /// the next time it's reachable and online.
+    func transferRun(fileURL: URL, metadata: [String: Any]) {
+        guard WCSession.default.activationState == .activated else {
+            DispatchQueue.main.async { self.transferState = .failed("WCSession not activated") }
             return
         }
-        WCSession.default.sendMessage(runData, replyHandler: nil)
+        DispatchQueue.main.async { self.transferState = .pending }
+        pendingTransfer = WCSession.default.transferFile(fileURL, metadata: metadata)
+    }
+
+    func cancelPendingTransfer() {
+        pendingTransfer?.cancel()
+        pendingTransfer = nil
+        DispatchQueue.main.async { self.transferState = .idle }
     }
 
     // MARK: - WCSessionDelegate
 
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        guard activationState == .activated else { return }
-        apply(session.receivedApplicationContext)
+        // No-op — the watch no longer receives credentials over the session.
     }
 
-    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        apply(applicationContext)
+    func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        let next: TransferState
+        if let error = error {
+            next = .failed(error.localizedDescription)
+        } else {
+            next = .completed
+        }
+        DispatchQueue.main.async {
+            self.pendingTransfer = nil
+            self.transferState = next
+        }
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         // Future: handle route pushes from phone.
-    }
-
-    private func apply(_ ctx: [String: Any]) {
-        guard let token = ctx["access_token"] as? String, !token.isEmpty,
-              let userId = ctx["user_id"] as? String, !userId.isEmpty,
-              let baseURL = ctx["base_url"] as? String, !baseURL.isEmpty,
-              let anonKey = ctx["anon_key"] as? String, !anonKey.isEmpty else {
-            return
-        }
-        Task {
-            await SupabaseService.shared.applyCredentials(
-                accessToken: token,
-                userId: userId,
-                baseURL: baseURL,
-                anonKey: anonKey
-            )
-            await MainActor.run {
-                WatchConnectivityManager.shared.hasPhoneCredentials = true
-            }
-        }
     }
 }

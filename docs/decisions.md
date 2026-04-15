@@ -178,17 +178,19 @@ Secrets for `flutter run` pass through `apps/mobile_ios/dart_defines.json` (giti
 
 ---
 
-## 14. Watch auth is a phone handoff over `WCSession.updateApplicationContext`
+## 14. Watch syncs runs via phone-as-proxy over `WCSession.transferFile`
 
 **Decided:** April 2026
 
-`watch_ios` has its own hand-rolled Supabase REST client (see decision 1), so it needs credentials somehow. Three options: bake credentials into the app (unacceptable — leaks per-user state into the binary), present a sign-in UI on the watch (rejected — credential entry on a 46mm screen is hostile), or have the paired iPhone push the current session over Watch Connectivity.
+`watch_ios` originally talked directly to Supabase (see decision 1), with a hand-rolled REST client, gzip helper, and a token-handoff flow over Watch Connectivity so the phone could push `{access_token, user_id, base_url, anon_key}`. This kept colliding with schema drift: when migration `20260410_001_runs_to_storage.sql` moved the GPS trace out of a `runs.track` jsonb column and into Storage, the watch client still posted the old column and every sync silently failed. The parity-enforcement layer (`packages/core_models` codegen) doesn't reach Swift, so every schema change demanded a manual port.
 
-We went with the last. `WatchConnectivityManager` listens on `session(_:didReceiveApplicationContext:)` for `{access_token, user_id, base_url, anon_key}` and calls `SupabaseService.applyCredentials(...)`. `updateApplicationContext(_:)` is the right API because auth state is latest-value-wins — a refreshed token fully supersedes the old one, and the watch only ever needs the most recent value, not a log.
+The cleaner shape: watch never writes to Supabase. On run finish, `WorkoutManager.writeTrackJSON()` dumps the raw points array to a file in Caches and `WatchConnectivityManager.transferRun(fileURL:metadata:)` hands it to the iPhone via `WCSession.transferFile(_:metadata:)`. The phone gzips, uploads to the `runs` bucket, and inserts the row via the shared `packages/api_client`. `WCSession.transferFile` is the right API: it picks the transport automatically (Bluetooth when close, Wi-Fi P2P on the same network, iCloud relay when the phone is far away), queues across app launches, and retries on its own. The watch has no anon key, no token, no Supabase model code at all in the Release binary — the entire `SupabaseService.swift` is wrapped in `#if DEBUG` and compiles out.
 
-**Trade-off:** The phone-side sender is blocked on `mobile_ios` gaining real Supabase auth (currently a scaffold). Until then the watch can't receive anything on device. For local watch-sim dev we preserve the old seed-creds auto-sign-in behind `#if DEBUG` as a 2-second timeout fallback — Release builds never reach it. This leaves a half-wired integration on purpose; the alternative (blocking watch dev until phone auth lands) costs more than the `#if DEBUG` shim.
+**Trade-off:** The phone-side receiver is blocked on `mobile_ios` gaining real Supabase auth (currently a scaffold). Until then the watch can't sync anything on device. For watch-sim-alone dev we keep `SupabaseService.swift` alive under `#if DEBUG` and surface a "DEBUG: Sync Direct" button that signs in with seed creds — Release never compiles that file. The acknowledgment semantics are weaker than the old path: `session(_:didFinish:)` only confirms the phone received the file, not that Supabase accepted the write. Good enough to start; a future roundtrip ack can tighten it.
 
-**Don't re-litigate unless:** the phone app adopts a non-Flutter architecture that can't cleanly run `WCSession` methods, or we find `updateApplicationContext` drops messages in practice.
+We rejected "any device via CoreBluetooth peripheral mode": watchOS restricts background advertising and there's no receiver on the other end of that pipe that isn't the phone anyway. WCSession covers every real pairing.
+
+**Don't re-litigate unless:** the phone app moves off Flutter in a way that makes `WCSessionDelegate` hard to implement, or we find `WCSession.transferFile` is unreliable in practice for large runs (50KB JSON is trivial today).
 
 ---
 

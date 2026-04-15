@@ -1,8 +1,11 @@
+#if DEBUG
 import Foundation
 import Compression
 
-/// Lightweight Supabase client for the watch app.
-/// Authenticates with email/password and syncs runs via the REST API.
+/// DEBUG-only direct-to-Supabase path for watch-simulator-alone dev.
+/// Release builds ship without this file — the watch transfers runs to the
+/// paired iPhone via `WCSession.transferFile` and the phone owns the Supabase
+/// write. See `ContentView.syncRunDirect()`.
 actor SupabaseService {
     static let shared = SupabaseService()
 
@@ -65,8 +68,7 @@ actor SupabaseService {
             throw SupabaseError.notAuthenticated
         }
 
-        let runId = UUID().uuidString.lowercased()
-        let objectPath = "\(userId)/\(runId).json.gz"
+        let objectPath = "\(userId)/\(run.id).json.gz"
 
         let trackJson = try JSONEncoder().encode(run.track)
         let gzipped = try gzip(trackJson)
@@ -76,7 +78,7 @@ actor SupabaseService {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         let runPayload = RunPayload(
-            id: runId,
+            id: run.id,
             user_id: userId,
             started_at: formatter.string(from: run.startedAt),
             duration_s: run.durationSeconds,
@@ -202,3 +204,14 @@ private func crc32(_ data: Data) -> UInt32 {
     }
     return ~crc
 }
+
+/// Convenience for the DEBUG fallback: sign in with the seed user and sync
+/// the finished run directly to the local Supabase instance, bypassing the
+/// phone. Used when the watch simulator is running alone.
+func syncRunDirectDebug(_ run: WorkoutManager.FinishedRun) async throws {
+    if await !SupabaseService.shared.isAuthenticated {
+        _ = try await SupabaseService.shared.signIn(email: "runner@test.com", password: "testtest")
+    }
+    try await SupabaseService.shared.syncRun(run)
+}
+#endif

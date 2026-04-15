@@ -27,7 +27,7 @@ Android-specific concerns that don't port:
 - Disk-backed tile cache → the same `flutter_map_cache` + `dio_cache_interceptor` combo works.
 
 iOS-only concerns with no Android analogue:
-- **Watch credential handoff.** The `watch_ios` app can't do credential entry, so it expects the phone to push `{access_token, user_id, base_url, anon_key}` over `WCSession.updateApplicationContext(_:)` whenever the Supabase session changes (sign-in, refresh, sign-out). The watch-side receiver is wired up (`WatchConnectivityManager.apply(_:)`); the phone-side sender is a TODO, blocked on Supabase auth landing here first. Plan: a native Swift `WCSession` helper in `ios/Runner/` exposed to Flutter via a method channel, called from whatever auth wrapper supersedes `main.dart`'s current `// TODO: Initialize Supabase`.
+- **Watch run ingest.** The `watch_ios` app records runs but doesn't sync them directly; it calls `WCSession.transferFile(_:metadata:)` on finish, expecting this app to receive the JSON track + metadata dict and write to Supabase on the watch's behalf. The watch-side sender is wired up (`WatchConnectivityManager.transferRun(fileURL:metadata:)`); the phone-side receiver is a TODO, blocked on Supabase auth landing here first. Plan: a native Swift `WCSessionDelegate` in `ios/Runner/` exposed via a method channel — implements `session(_:didReceive file:)`, gzips the JSON payload, uploads to the `runs` Storage bucket at `{user_id}/{metadata.id}.json.gz`, and inserts the row via the shared `packages/api_client`. Metadata keys to expect: `id`, `started_at`, `duration_s`, `distance_m`, `source`.
 
 ## Recommended approach for a new task here
 

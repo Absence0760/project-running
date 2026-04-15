@@ -25,6 +25,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var startDate: Date?
 
     struct FinishedRun {
+        let id: String
         let startedAt: Date
         let durationSeconds: Int
         let distanceMetres: Double
@@ -36,6 +37,19 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let lng: Double
         let ele: Double?
         let ts: String?
+    }
+
+    /// Write the finished run's track to a JSON file in the app's caches
+    /// directory and return the URL, suitable for `WCSession.transferFile`.
+    /// The phone gzips + uploads to Supabase Storage on receipt.
+    func writeTrackJSON() throws -> URL {
+        guard let run = finishedRun else {
+            throw NSError(domain: "WorkoutManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "No finished run"])
+        }
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let url = caches.appendingPathComponent("\(run.id).json")
+        try JSONEncoder().encode(run.track).write(to: url, options: .atomic)
+        return url
     }
 
     override init() {
@@ -82,6 +96,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
 
         finishedRun = FinishedRun(
+            id: UUID().uuidString.lowercased(),
             startedAt: startDate ?? Date(),
             durationSeconds: duration,
             distanceMetres: distanceMetres,
