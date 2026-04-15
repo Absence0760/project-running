@@ -1189,3 +1189,42 @@ export async function autoMatchRunToPlanWorkout(
 	await markWorkoutCompleted(match.id, runId);
 	return match.id;
 }
+
+/**
+ * Patch a single plan workout — supports the inline editor. Only the
+ * provided fields are updated; leave others out of the `patch` map to keep
+ * them untouched.
+ */
+export async function updatePlanWorkout(
+	id: string,
+	patch: Partial<{
+		kind: string;
+		target_distance_m: number | null;
+		target_duration_seconds: number | null;
+		target_pace_sec_per_km: number | null;
+		target_pace_end_sec_per_km: number | null;
+		target_pace_tolerance_sec: number | null;
+		pace_zone: string | null;
+		notes: string | null;
+		scheduled_date: string;
+	}>
+): Promise<void> {
+	const { error } = await supabase.from('plan_workouts').update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+export async function updatePlanWeek(
+	id: string,
+	patch: Partial<{ phase: string; target_volume_m: number | null; notes: string | null }>
+): Promise<void> {
+	const { error } = await supabase.from('plan_weeks').update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+export async function updatePlanMeta(
+	id: string,
+	patch: Partial<{ name: string; notes: string | null }>
+): Promise<void> {
+	const { error } = await supabase.from('training_plans').update(patch).eq('id', id);
+	if (error) throw error;
+}

@@ -42,6 +42,7 @@ src/
     plans/new/      # New-plan wizard with live preview
     plans/[id]/     # Plan detail: progress ring, today card, week grid
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
+    api/coach/+server.ts         # Claude coach — prompt-cached over plan + recent runs. Needs a server adapter + ANTHROPIC_API_KEY
     explore/        # Public route discovery (search, distance/surface filters)
     settings/       # Account, integrations, preferences
     share/run/[id]/ # Public run share page (no auth required)

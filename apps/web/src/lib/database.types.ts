@@ -369,10 +369,12 @@ export type Database = {
           id: string
           kind: Database["public"]["Enums"]["workout_kind"]
           notes: string | null
+          pace_zone: string | null
           scheduled_date: string
           structure: Json | null
           target_distance_m: number | null
           target_duration_seconds: number | null
+          target_pace_end_sec_per_km: number | null
           target_pace_sec_per_km: number | null
           target_pace_tolerance_sec: number | null
           week_id: string
@@ -383,10 +385,12 @@ export type Database = {
           id?: string
           kind: Database["public"]["Enums"]["workout_kind"]
           notes?: string | null
+          pace_zone?: string | null
           scheduled_date: string
           structure?: Json | null
           target_distance_m?: number | null
           target_duration_seconds?: number | null
+          target_pace_end_sec_per_km?: number | null
           target_pace_sec_per_km?: number | null
           target_pace_tolerance_sec?: number | null
           week_id: string
@@ -397,10 +401,12 @@ export type Database = {
           id?: string
           kind?: Database["public"]["Enums"]["workout_kind"]
           notes?: string | null
+          pace_zone?: string | null
           scheduled_date?: string
           structure?: Json | null
           target_distance_m?: number | null
           target_duration_seconds?: number | null
+          target_pace_end_sec_per_km?: number | null
           target_pace_sec_per_km?: number | null
           target_pace_tolerance_sec?: number | null
           week_id?: string
@@ -573,6 +579,8 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          rules: Json | null
+          source: string
           start_date: string
           status: string
           updated_at: string | null
@@ -590,6 +598,8 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          rules?: Json | null
+          source?: string
           start_date: string
           status?: string
           updated_at?: string | null
@@ -607,6 +617,8 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          rules?: Json | null
+          source?: string
           start_date?: string
           status?: string
           updated_at?: string | null

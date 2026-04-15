@@ -2,6 +2,34 @@
 
 Runna / Garmin-Coach parity. Web-first in v1. The data model is shared so the Android app and the structured-workout execution loop can land without a schema change.
 
+## Plan editor (web)
+
+The plan detail page now supports inline workout edits. Hovering a day-tile reveals an edit button (`apps/web/src/lib/components/WorkoutEditor.svelte`) that opens a side-drawer: kind, distance, target pace (single value or a start → end progression for phase-based pace bumps), tolerance, zone label, and notes. Backed by `updatePlanWorkout` in `data.ts`.
+
+Migration `20260420_001_plan_editor.sql` adds:
+- `plan_workouts.pace_zone` — free-text label (E, T, I, MP, etc.) for UI colouring
+- `plan_workouts.target_pace_end_sec_per_km` — for pace progressions (null = flat pace)
+- `training_plans.source` — `'generated' | 'imported' | 'manual'`
+- `training_plans.rules` — jsonb array of plan-wide guidance strings rendered in the hero
+
+Week-level and plan-level editing (`updatePlanWeek`, `updatePlanMeta`) are exposed in `data.ts` but aren't wired to the UI yet — a plan-meta drawer is the natural follow-up.
+
+## Coach chat (web)
+
+A Claude-powered second-opinion chat embedded below the week grid on the plan detail page (`apps/web/src/lib/components/CoachChat.svelte` + `src/routes/api/coach/+server.ts`).
+
+**What it does**: critiques adherence, answers "should I run tomorrow?", explains what a workout is designed for, flags red-flag patterns in recent runs.
+
+**What it explicitly doesn't do** — captured in the system prompt and `decisions.md #12`: generate new plans, prescribe medical or nutrition changes, invent stats it doesn't have in context.
+
+**Architecture**:
+- Server endpoint `POST /api/coach` — runs per-request (`prerender = false`), reads the caller's Supabase JWT to scope context pulls via RLS.
+- Context = user profile + active (or specified) plan + `plan_weeks` + `plan_workouts` + last 20 runs, serialised as JSON.
+- **Prompt caching at two breakpoints**: (1) coach system prompt, (2) first user message carrying the context dump. Subsequent chat turns hit the cache for ~95% of input tokens. `cache_control: { type: 'ephemeral' }` on both blocks. The UI surfaces `cache_read` / `cache_creation` / `input` / `output` token counts below the composer for verification.
+- Model: `claude-sonnet-4-5`, 1024 output tokens.
+
+**Deploy requirement**: the endpoint needs a server adapter. Under the default `adapter-static` the route returns 404 and the UI shows a helpful message pointing at `adapter-vercel` (already a dep). Set `ANTHROPIC_API_KEY` in the server env — missing key returns 503.
+
 ## Surfaces (Android, v1)
 
 | Screen | Purpose |

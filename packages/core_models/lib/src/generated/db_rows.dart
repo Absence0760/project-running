@@ -474,6 +474,7 @@ class PlanWorkoutRow {
   static const String colNotes = 'notes';
   static const String colCompletedRunId = 'completed_run_id';
   static const String colCompletedAt = 'completed_at';
+  static const String colPaceZone = 'pace_zone';
 
   final String id;
   final String weekId;
@@ -487,6 +488,7 @@ class PlanWorkoutRow {
   final String? notes;
   final String? completedRunId;
   final DateTime? completedAt;
+  final String? paceZone;
 
   const PlanWorkoutRow({
     required this.id,
@@ -501,6 +503,7 @@ class PlanWorkoutRow {
     this.notes,
     this.completedRunId,
     this.completedAt,
+    this.paceZone,
   });
 
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
@@ -516,6 +519,7 @@ class PlanWorkoutRow {
     notes: json['notes'] as String?,
     completedRunId: json['completed_run_id'] as String?,
     completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
+    paceZone: json['pace_zone'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -531,6 +535,7 @@ class PlanWorkoutRow {
     colNotes: notes,
     colCompletedRunId: completedRunId,
     colCompletedAt: completedAt?.toIso8601String(),
+    colPaceZone: paceZone,
   };
 }
 
@@ -761,6 +766,7 @@ class TrainingPlanRow {
   static const String colNotes = 'notes';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colSource = 'source';
 
   final String id;
   final String userId;
@@ -777,6 +783,7 @@ class TrainingPlanRow {
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String source;
 
   const TrainingPlanRow({
     required this.id,
@@ -794,6 +801,7 @@ class TrainingPlanRow {
     this.notes,
     this.createdAt,
     this.updatedAt,
+    required this.source,
   });
 
   factory TrainingPlanRow.fromJson(Map<String, dynamic> json) => TrainingPlanRow(
@@ -812,6 +820,7 @@ class TrainingPlanRow {
     notes: json['notes'] as String?,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    source: json['source'] as String,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -830,6 +839,7 @@ class TrainingPlanRow {
     colNotes: notes,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
+    colSource: source,
   };
 }
 

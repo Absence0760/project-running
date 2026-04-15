@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { fetchPlan } from '$lib/data';
+	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
+	import CoachChat from '$lib/components/CoachChat.svelte';
 	import {
 		fmtPace,
 		fmtKm,
@@ -17,6 +19,7 @@
 	let weeks = $state<PlanWeek[]>([]);
 	let workouts = $state<PlanWorkout[]>([]);
 	let loading = $state(true);
+	let editing = $state<PlanWorkout | null>(null);
 
 	async function load() {
 		loading = true;
@@ -173,31 +176,56 @@
 					{/if}
 					<div class="day-grid">
 						{#each workoutsByWeek.get(w.id) ?? [] as wo (wo.id)}
-							<a
+							<div
 								class="day"
 								class:today={wo.scheduled_date === today}
 								class:completed={!!wo.completed_run_id}
 								class:rest={wo.kind === 'rest'}
-								href="/plans/{plan.id}/workouts/{wo.id}"
 								style="--kind-color: {kindColor[wo.kind] ?? 'var(--color-text-secondary)'}"
 							>
-								<span class="dow">{dayOfWeek(wo.scheduled_date)}</span>
-								<span class="kind">
-									{WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ?? wo.kind}
-								</span>
-								{#if wo.target_distance_m != null && wo.kind !== 'rest'}
-									<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>
-								{/if}
-								{#if wo.completed_run_id}
-									<span class="material-symbols check">check_circle</span>
-								{/if}
-							</a>
+								<a class="day-link" href="/plans/{plan.id}/workouts/{wo.id}">
+									<span class="dow">{dayOfWeek(wo.scheduled_date)}</span>
+									<span class="kind">
+										{WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ??
+											wo.kind}
+									</span>
+									{#if wo.target_distance_m != null && wo.kind !== 'rest'}
+										<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>
+									{/if}
+									{#if wo.completed_run_id}
+										<span class="material-symbols check">check_circle</span>
+									{/if}
+								</a>
+								<button
+									class="edit"
+									aria-label="Edit workout"
+									onclick={() => (editing = wo)}
+								>
+									<span class="material-symbols">edit</span>
+								</button>
+							</div>
 						{/each}
 					</div>
 				</article>
 			{/each}
 		</section>
+
+		<section class="coach-section">
+			<h2 class="section-title">Coach</h2>
+			<CoachChat planId={plan.id} />
+		</section>
 	</div>
+{/if}
+
+{#if editing}
+	<WorkoutEditor
+		workout={editing}
+		onClose={() => (editing = null)}
+		onSaved={async () => {
+			editing = null;
+			await load();
+		}}
+	/>
 {/if}
 
 <style>
@@ -377,6 +405,33 @@
 	.day:hover {
 		border-color: var(--color-primary);
 	}
+	.day-link {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		color: inherit;
+	}
+	.edit {
+		position: absolute;
+		right: 0.2rem;
+		bottom: 0.2rem;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		color: var(--color-text-tertiary);
+		padding: 0.1rem;
+		opacity: 0;
+		transition: opacity 0.15s ease;
+	}
+	.day:hover .edit {
+		opacity: 1;
+	}
+	.edit:hover {
+		color: var(--color-primary);
+	}
+	.edit .material-symbols {
+		font-size: 0.95rem;
+	}
 	.day.rest {
 		opacity: 0.5;
 	}
@@ -406,6 +461,16 @@
 		right: 0.3rem;
 		color: var(--color-primary);
 		font-size: 1rem;
+	}
+	.coach-section {
+		margin-top: var(--space-xl);
+	}
+	.section-title {
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-sm) 0;
 	}
 	.centered {
 		text-align: center;
