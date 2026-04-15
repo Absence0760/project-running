@@ -143,13 +143,15 @@ WatchKit Extension
 
 ### Wear OS app (Flutter)
 
-Flutter runs natively on Wear OS. Uses `compose_for_wear` plugin for watch-appropriate UI components (rounded layouts, rotary input, swipe-to-dismiss).
+Flutter runs natively on Wear OS. Phase 1 uses Material Flutter widgets; Phase 3 will rewrite the UI in Compose-for-Wear for idiomatic watch chrome.
+
+Talks to Supabase **directly** via the shared `packages/api_client` (same Dart client as `mobile_android` and the web), so schema drift is caught by `packages/core_models` codegen instead of silently breaking sync — the thing that bit `watch_ios`'s hand-rolled REST client.
 
 **Key responsibilities:**
-- Standalone GPS workout recording
-- Live metrics display (Tiles API for glanceable data)
-- Route navigation synced from phone via Data Layer
-- Sync to phone via `wear` Flutter plugin
+- Standalone GPS workout recording via `packages/run_recorder`
+- Local persistence of unsynced runs in `SharedPreferences`; manual "Sync" button uploads via `ApiClient.saveRun`
+- Live metrics display (Tiles API for glanceable data — deferred)
+- Route navigation synced from phone via Data Layer (deferred)
 
 ### Web app (SvelteKit)
 

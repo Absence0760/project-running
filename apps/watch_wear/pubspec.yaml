@@ -19,6 +19,10 @@ dependencies:
     path: ../../packages/api_client
   ui_kit:
     path: ../../packages/ui_kit
+  shared_preferences: ^2.3.0
+  wakelock_plus: ^1.2.8
+  supabase_flutter: ^2.3.0
+  connectivity_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:

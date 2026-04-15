@@ -1,15 +1,40 @@
-import 'dart:async';
-import 'dart:math';
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart';
 
-void main() {
+import 'local_run_store.dart';
+import 'run_watch_screen.dart';
+
+/// Point the watch at a different Supabase by passing
+/// `--dart-define SUPABASE_URL=... --dart-define SUPABASE_ANON_KEY=...`
+/// to `flutter run` / `flutter build`. Defaults match the local stack
+/// so `flutter run` on a dev machine Just Works.
+const _supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'http://127.0.0.1:54321',
+);
+const _supabaseAnonKey = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
+);
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const WearRunApp());
+  await ApiClient.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
+  final store = LocalRunStore();
+  await store.load();
+  runApp(WearRunApp(apiClient: ApiClient(), runStore: store));
 }
 
 class WearRunApp extends StatelessWidget {
-  const WearRunApp({super.key});
+  final ApiClient apiClient;
+  final LocalRunStore runStore;
+
+  const WearRunApp({
+    super.key,
+    required this.apiClient,
+    required this.runStore,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,228 +43,7 @@ class WearRunApp extends StatelessWidget {
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
-      home: const RunWatchScreen(),
-    );
-  }
-}
-
-enum RunState { preRun, running, postRun }
-
-/// Main watch screen showing start button and live metrics.
-class RunWatchScreen extends StatefulWidget {
-  const RunWatchScreen({super.key});
-
-  @override
-  State<RunWatchScreen> createState() => _RunWatchScreenState();
-}
-
-class _RunWatchScreenState extends State<RunWatchScreen> {
-  RunState _state = RunState.preRun;
-  Timer? _timer;
-  int _elapsedSeconds = 0;
-  double _distanceMetres = 0.0;
-  final Random _random = Random();
-
-  String get _formattedTime {
-    final minutes = _elapsedSeconds ~/ 60;
-    final seconds = _elapsedSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  String get _formattedDistance {
-    return '${(_distanceMetres / 1000).toStringAsFixed(2)} km';
-  }
-
-  String get _formattedPace {
-    if (_distanceMetres < 10) return '--:-- /km';
-    final secondsPerKm = _elapsedSeconds / (_distanceMetres / 1000);
-    final paceMinutes = secondsPerKm ~/ 60;
-    final paceSeconds = (secondsPerKm % 60).toInt();
-    return '$paceMinutes:${paceSeconds.toString().padLeft(2, '0')} /km';
-  }
-
-  void _startRun() {
-    setState(() {
-      _state = RunState.running;
-      _elapsedSeconds = 0;
-      _distanceMetres = 0.0;
-    });
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() {
-        _elapsedSeconds++;
-        // Simulate running: add 2-5 metres per second (~7-18 km/h)
-        _distanceMetres += 2.0 + _random.nextDouble() * 3.0;
-      });
-    });
-  }
-
-  void _stopRun() {
-    _timer?.cancel();
-    _timer = null;
-    setState(() {
-      _state = RunState.postRun;
-    });
-  }
-
-  void _reset() {
-    setState(() {
-      _state = RunState.preRun;
-      _elapsedSeconds = 0;
-      _distanceMetres = 0.0;
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: switch (_state) {
-            RunState.preRun => _buildPreRun(),
-            RunState.running => _buildRunning(),
-            RunState.postRun => _buildPostRun(),
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreRun() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Ready to Run',
-          style: TextStyle(
-            fontSize: 18,
-            color: AppTheme.parchment.withOpacity(0.7),
-          ),
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: 96,
-          height: 96,
-          child: ElevatedButton(
-            onPressed: _startRun,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.coral,
-              foregroundColor: AppTheme.midnight,
-              shape: const CircleBorder(),
-              padding: EdgeInsets.zero,
-            ),
-            child: const Text(
-              'Start',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRunning() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          _formattedTime,
-          style: const TextStyle(
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-            color: AppTheme.parchment,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _formattedDistance,
-          style: const TextStyle(
-            fontSize: 20,
-            color: AppTheme.parchment,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _formattedPace,
-          style: TextStyle(
-            fontSize: 16,
-            color: AppTheme.parchment.withOpacity(0.6),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: 72,
-          height: 72,
-          child: ElevatedButton(
-            onPressed: _stopRun,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.error,
-              foregroundColor: AppTheme.parchment,
-              shape: const CircleBorder(),
-              padding: EdgeInsets.zero,
-            ),
-            child: const Text(
-              'Stop',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPostRun() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Text(
-          'Run Complete!',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.coral,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          _formattedTime,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-            color: AppTheme.parchment,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _formattedDistance,
-          style: const TextStyle(fontSize: 16, color: AppTheme.parchment),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _formattedPace,
-          style: TextStyle(
-            fontSize: 14,
-            color: AppTheme.parchment.withOpacity(0.6),
-          ),
-        ),
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: _reset,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.duskDeep,
-            foregroundColor: AppTheme.parchment,
-          ),
-          child: const Text('Done'),
-        ),
-      ],
+      home: RunWatchScreen(apiClient: apiClient, runStore: runStore),
     );
   }
 }
