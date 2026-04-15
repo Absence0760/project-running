@@ -11,7 +11,7 @@ The Apple Watch app is a native Swift + SwiftUI project at `apps/watch_ios/`.
 | Xcode 15+ | Mac App Store |
 | iOS Simulator | Included with Xcode |
 | watchOS Simulator | Included with Xcode |
-| iOS app running | The watch syncs data via the iOS app — see `local_testing_ios_app.md` |
+| iOS app running | The watch syncs data via the iOS app — see [../mobile_ios/local_testing.md](../mobile_ios/local_testing.md) |
 
 No Supabase connection is needed directly from the watch — it syncs through the iOS app via WatchConnectivity.
 

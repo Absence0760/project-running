@@ -48,7 +48,7 @@ Metadata dict sent with each run file: `{id, started_at, duration_s, distance_m,
 
 ## Building and testing
 
-See [../../docs/local_testing_apple_watch.md](../../docs/local_testing_apple_watch.md). You need:
+See [local_testing.md](local_testing.md). You need:
 
 - Xcode with watchOS simulators installed
 - A paired iOS simulator + Apple Watch simulator, or a physical paired pair

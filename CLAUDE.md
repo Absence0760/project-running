@@ -20,7 +20,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
 | Touching training plans (VDOT, Riegel, generator, week grid) | [docs/training.md](docs/training.md) — engine shape, pace derivation, what's deferred |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
-| Running one of the apps locally | [docs/local_testing_*.md](docs/) — one per platform |
+| Running one of the apps locally | `apps/<app>/local_testing.md` — one per app (e.g. [apps/mobile_android/local_testing.md](apps/mobile_android/local_testing.md), [apps/backend/local_testing.md](apps/backend/local_testing.md)) |
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |
 | Setting up the monorepo / melos / workspaces | [docs/monorepo.md](docs/monorepo.md) |
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
@@ -46,7 +46,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 
 Concretely, before you report a task as done:
 
-1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `architecture.md`, the matching `local_testing_*.md`, and the per-app CLAUDE.md.
+1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
 2. **Schema change** — regenerate both type files (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`). Update `api_database.md` if a column, index, or RLS policy moved. See [schema_codegen.md](docs/schema_codegen.md).
 3. **New convention or house rule** — add it to `docs/conventions.md`.
 4. **Non-obvious decision or trade-off** — append an entry to `docs/decisions.md`. One paragraph. Don't rewrite history entries.

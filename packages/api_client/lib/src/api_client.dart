@@ -38,7 +38,7 @@ class ApiClient {
   /// Host app is responsible for driving the Google Sign-In UI and
   /// capturing the ID token — this keeps `api_client` platform-agnostic.
   /// See `mobile_android/lib/screens/sign_in_screen.dart` for the caller
-  /// and `docs/local_testing_android_app.md` for Google Cloud Console +
+  /// and `apps/mobile_android/local_testing.md` for Google Cloud Console +
   /// Supabase dashboard setup instructions.
   Future<String> signInWithGoogleIdToken({
     required String idToken,

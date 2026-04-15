@@ -2,7 +2,7 @@
 
 Authoritative reference for the test suite — where tests live, how to run them, patterns we use, and when to run what.
 
-For the behaviour being tested, see [run_recording.md](run_recording.md). For how to run the app itself, see [local_testing_android_app.md](local_testing_android_app.md).
+For the behaviour being tested, see [run_recording.md](run_recording.md). For how to run the app itself, see [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md).
 
 ---
 

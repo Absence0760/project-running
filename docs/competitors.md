@@ -4,7 +4,7 @@ A reference for understanding the competitive landscape, where each major app fa
 
 > See also:
 > - [roadmap.md](roadmap.md) — what's planned per phase
-> - [local_testing_android_app.md](local_testing_android_app.md) — every feature actually shipped on Android today
+> - [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md) — every feature actually shipped on Android today
 
 ---
 

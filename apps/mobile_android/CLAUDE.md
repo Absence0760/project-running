@@ -101,7 +101,7 @@ See [../../docs/testing.md](../../docs/testing.md) for how to run them and the p
 
 ## Running it locally
 
-See [../../docs/local_testing_android_app.md](../../docs/local_testing_android_app.md). Short version: `cd apps/mobile_android && flutter run -d <device>`. The seed user in local Supabase is `runner@test.com` / `testtest`.
+See [local_testing.md](local_testing.md). Short version: `cd apps/mobile_android && flutter run -d <device>`. The seed user in local Supabase is `runner@test.com` / `testtest`.
 
 ## Before reporting a task done
 

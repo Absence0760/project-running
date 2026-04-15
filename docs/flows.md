@@ -77,7 +77,7 @@ User → SignInScreen                  apps/mobile_android/lib/screens/sign_in_s
 
 ### Watch out
 
-- The platform channel for `google_sign_in` requires a Google Cloud Console OAuth client matching the app's package signature. See `docs/local_testing_android_app.md` for the setup steps.
+- The platform channel for `google_sign_in` requires a Google Cloud Console OAuth client matching the app's package signature. See [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md) for the setup steps.
 - The `ApiClient` is a **static singleton** after `ApiClient.initialize(url: ..., anonKey: ...)` runs in `main.dart`. Do not instantiate `ApiClient()` and pass it around — all screens read the same global session via `Supabase.instance.client`.
 - When the user signs out, `ApiClient.signOut()` just calls `supabase.auth.signOut()`. It does **not** clear the local `LocalRunStore` — offline data survives sign-out by design.
 

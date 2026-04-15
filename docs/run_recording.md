@@ -2,7 +2,7 @@
 
 Authoritative reference for how the app records a run — the state machine, the data flow, the hardening that keeps a run from being lost when the real world goes wrong, and the knobs you can tune without redesigning anything.
 
-For a high-level view of where this fits in the repo see [architecture.md](architecture.md). For user-facing feature behaviour see [features.md](features.md). For testing instructions on a real device see [local_testing_android_app.md](local_testing_android_app.md).
+For a high-level view of where this fits in the repo see [architecture.md](architecture.md). For user-facing feature behaviour see [features.md](features.md). For testing instructions on a real device see [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md).
 
 ---
 
@@ -333,7 +333,7 @@ From `apps/mobile_android/pubspec.yaml` — major-version baseline after the dep
 | Stable run ids | `uuid` | ^4.5 |
 | Local persistence | `path_provider` (+ JSON via `dart:convert`) | ^2.1 |
 
-See [local_testing_android_app.md](local_testing_android_app.md#android-tech-stack) for the full stack.
+See [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md#android-tech-stack) for the full stack.
 
 ---
 

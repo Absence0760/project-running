@@ -12,7 +12,7 @@ The Android app is a Flutter target at `apps/mobile_android/`.
 | Melos 7.x | `dart pub global activate melos` |
 | Android Studio Hedgehog+ | `developer.android.com/studio` |
 | Android emulator | Created via Android Studio Device Manager |
-| Local backend running | See `local_testing_backend.md` |
+| Local backend running | See [../backend/local_testing.md](../backend/local_testing.md) |
 | MapTiler API key | Free at maptiler.com/cloud |
 
 ---

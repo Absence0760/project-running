@@ -77,7 +77,7 @@ registers the key.
 
 ## Running it locally
 
-See [../../docs/local_testing_wear_os.md](../../docs/local_testing_wear_os.md).
+See [local_testing.md](local_testing.md).
 
 Build and install on a Wear OS emulator:
 

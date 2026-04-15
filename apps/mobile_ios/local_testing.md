@@ -12,7 +12,7 @@ The iOS app is a Flutter target at `apps/mobile_ios/`.
 | Melos 3.x | `dart pub global activate melos` |
 | Xcode 15+ | Mac App Store |
 | iOS Simulator | Included with Xcode |
-| Local backend running | See `local_testing_backend.md` |
+| Local backend running | See [../backend/local_testing.md](../backend/local_testing.md) |
 | MapTiler API key | Free at maptiler.com/cloud |
 
 ---
@@ -109,7 +109,7 @@ Use **Freeway Drive** or **City Run** to test the live recording screen, auto-pa
 
 ### "Connection refused" when app launches
 
-The local Supabase backend isn't running. Start it first — see `local_testing_backend.md`. Verify the URL and publishable key match the output of `supabase status`.
+The local Supabase backend isn't running. Start it first — see [../backend/local_testing.md](../backend/local_testing.md). Verify the URL and publishable key match the output of `supabase status`.
 
 ### Map showing blank/grey
 

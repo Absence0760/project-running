@@ -10,7 +10,7 @@ The web app is a SvelteKit 2 + Svelte 5 project at `apps/web/`. It uses pnpm as 
 |---|---|
 | Node.js 20 LTS | `nodejs.org` |
 | pnpm 9.x | `npm install -g pnpm` |
-| Local backend running | See `local_testing_backend.md` |
+| Local backend running | See [../backend/local_testing.md](../backend/local_testing.md) |
 | MapTiler API key | Free at maptiler.com/cloud (for map tiles) |
 
 ---
@@ -51,7 +51,7 @@ This creates a test user and populates all tables. Log in with:
 - **Email:** `runner@test.com`
 - **Password:** `testtest`
 
-See `local_testing_backend.md` for details on what the seed includes.
+See [../backend/local_testing.md](../backend/local_testing.md) for details on what the seed includes.
 
 ---
 
@@ -145,7 +145,7 @@ Your MapTiler API key is missing or invalid. Sign up at maptiler.com/cloud for a
 
 ### "Failed to fetch" errors in the browser
 
-The local Supabase backend isn't running. Start it first — see `local_testing_backend.md`.
+The local Supabase backend isn't running. Start it first — see [../backend/local_testing.md](../backend/local_testing.md).
 
 ### Type errors after pulling changes
 
