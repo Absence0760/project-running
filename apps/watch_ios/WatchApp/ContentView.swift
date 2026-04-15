@@ -2,17 +2,23 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var workoutManager = WorkoutManager()
+    @StateObject private var connectivity = WatchConnectivityManager.shared
     @State private var syncing = false
     @State private var synced = false
     @State private var syncError: String?
     @State private var authenticated = false
+    @State private var awaitingPhone = true
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 switch workoutManager.state {
                 case .idle:
-                    PreRunView(workoutManager: workoutManager, authenticated: authenticated)
+                    PreRunView(
+                        workoutManager: workoutManager,
+                        authenticated: authenticated,
+                        awaitingPhone: awaitingPhone
+                    )
                 case .recording:
                     RunningView(workoutManager: workoutManager)
                 case .finished:
@@ -27,12 +33,29 @@ struct ContentView: View {
                 }
             }
         }
-        .task {
-            await autoSignIn()
+        .task { await waitForCredentials() }
+        .onChange(of: connectivity.hasPhoneCredentials) { _, hasCreds in
+            if hasCreds {
+                authenticated = true
+                awaitingPhone = false
+            }
         }
     }
 
-    private func autoSignIn() async {
+    /// Wait briefly for the paired iPhone to hand over Supabase credentials
+    /// via WCSession. In DEBUG, fall back to the seed user so the watch sim
+    /// can be exercised without a phone. In Release, leave the UI in the
+    /// "Not signed in" state until the phone responds.
+    private func waitForCredentials() async {
+        if connectivity.hasPhoneCredentials {
+            authenticated = true
+            awaitingPhone = false
+            return
+        }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        if connectivity.hasPhoneCredentials { return }
+        awaitingPhone = false
+        #if DEBUG
         do {
             _ = try await SupabaseService.shared.signIn(
                 email: "runner@test.com",
@@ -40,9 +63,9 @@ struct ContentView: View {
             )
             authenticated = true
         } catch {
-            // Will show "not signed in" in UI
             authenticated = false
         }
+        #endif
     }
 
     private func syncRun() {
@@ -79,13 +102,18 @@ struct ContentView: View {
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
     let authenticated: Bool
+    let awaitingPhone: Bool
 
     var body: some View {
         VStack(spacing: 12) {
             Text("Ready to Run")
                 .font(.headline)
 
-            if !authenticated {
+            if awaitingPhone {
+                Text("Waiting for phone…")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            } else if !authenticated {
                 Text("Not signed in")
                     .font(.caption2)
                     .foregroundColor(AppTheme.coral)

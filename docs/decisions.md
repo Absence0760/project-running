@@ -178,6 +178,20 @@ Secrets for `flutter run` pass through `apps/mobile_ios/dart_defines.json` (giti
 
 ---
 
+## 14. Watch auth is a phone handoff over `WCSession.updateApplicationContext`
+
+**Decided:** April 2026
+
+`watch_ios` has its own hand-rolled Supabase REST client (see decision 1), so it needs credentials somehow. Three options: bake credentials into the app (unacceptable — leaks per-user state into the binary), present a sign-in UI on the watch (rejected — credential entry on a 46mm screen is hostile), or have the paired iPhone push the current session over Watch Connectivity.
+
+We went with the last. `WatchConnectivityManager` listens on `session(_:didReceiveApplicationContext:)` for `{access_token, user_id, base_url, anon_key}` and calls `SupabaseService.applyCredentials(...)`. `updateApplicationContext(_:)` is the right API because auth state is latest-value-wins — a refreshed token fully supersedes the old one, and the watch only ever needs the most recent value, not a log.
+
+**Trade-off:** The phone-side sender is blocked on `mobile_ios` gaining real Supabase auth (currently a scaffold). Until then the watch can't receive anything on device. For local watch-sim dev we preserve the old seed-creds auto-sign-in behind `#if DEBUG` as a 2-second timeout fallback — Release builds never reach it. This leaves a half-wired integration on purpose; the alternative (blocking watch dev until phone auth lands) costs more than the `#if DEBUG` shim.
+
+**Don't re-litigate unless:** the phone app adopts a non-Flutter architecture that can't cleanly run `WCSession` methods, or we find `updateApplicationContext` drops messages in practice.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

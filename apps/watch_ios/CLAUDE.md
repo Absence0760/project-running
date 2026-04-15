@@ -43,7 +43,11 @@ If you change a column name or a table shape, grep `WatchApp/` for the old colum
 
 ## Auth on the watch
 
-The watch defers auth to the phone app via Watch Connectivity. It receives the Supabase access token from the iPhone over `WCSession` and uses it directly. **Don't** try to bring up a sign-in UI on the watch — the device is too small for credential entry, and the account is already active on the paired phone.
+The watch defers auth to the phone app via Watch Connectivity. `WatchConnectivityManager` listens on `WCSession.didReceiveApplicationContext` for a dict with `{access_token, user_id, base_url, anon_key}`; when it arrives it calls `SupabaseService.applyCredentials(...)` and publishes `hasPhoneCredentials = true`. `ContentView` observes that flag and unlocks the UI. **Don't** try to bring up a sign-in UI on the watch — the device is too small for credential entry, and the account is already active on the paired phone.
+
+The phone-side sender is **not yet built** — it needs to call `WCSession.default.updateApplicationContext(_:)` every time the Supabase session changes. That work lives with `mobile_ios` and is blocked on the Flutter app gaining real Supabase auth.
+
+Until then, `ContentView.waitForCredentials()` falls back under `#if DEBUG` only: after a 2-second wait with no phone context, it signs in as `runner@test.com` against `http://127.0.0.1:54321` so the watch simulator can be exercised standalone. Release builds never hit that path — they stay in "Not signed in" until the phone responds.
 
 ## Building and testing
 

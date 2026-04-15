@@ -1,9 +1,13 @@
 import Foundation
 import WatchConnectivity
 
-/// Syncs recorded runs and routes between Apple Watch and iPhone.
+/// Syncs recorded runs and routes between Apple Watch and iPhone, and receives
+/// the current Supabase auth state (access token, user id, base URL, anon key)
+/// from the phone over `WCSession.updateApplicationContext(_:)`.
 class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnectivityManager()
+
+    @Published var hasPhoneCredentials = false
 
     override init() {
         super.init()
@@ -16,7 +20,6 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     /// Send a completed run to the iPhone for syncing to Supabase.
     func transferRun(_ runData: [String: Any]) {
         guard WCSession.default.isReachable else {
-            // Queue for transfer when connection is restored
             WCSession.default.transferUserInfo(runData)
             return
         }
@@ -26,10 +29,35 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     // MARK: - WCSessionDelegate
 
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        // TODO: Handle activation state
+        guard activationState == .activated else { return }
+        apply(session.receivedApplicationContext)
+    }
+
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        apply(applicationContext)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        // TODO: Handle incoming route data from iPhone
+        // Future: handle route pushes from phone.
+    }
+
+    private func apply(_ ctx: [String: Any]) {
+        guard let token = ctx["access_token"] as? String, !token.isEmpty,
+              let userId = ctx["user_id"] as? String, !userId.isEmpty,
+              let baseURL = ctx["base_url"] as? String, !baseURL.isEmpty,
+              let anonKey = ctx["anon_key"] as? String, !anonKey.isEmpty else {
+            return
+        }
+        Task {
+            await SupabaseService.shared.applyCredentials(
+                accessToken: token,
+                userId: userId,
+                baseURL: baseURL,
+                anonKey: anonKey
+            )
+            await MainActor.run {
+                WatchConnectivityManager.shared.hasPhoneCredentials = true
+            }
+        }
     }
 }

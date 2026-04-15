@@ -26,6 +26,9 @@ Android-specific concerns that don't port:
 - Google Sign-In flow → replaced by Apple Sign-In.
 - Disk-backed tile cache → the same `flutter_map_cache` + `dio_cache_interceptor` combo works.
 
+iOS-only concerns with no Android analogue:
+- **Watch credential handoff.** The `watch_ios` app can't do credential entry, so it expects the phone to push `{access_token, user_id, base_url, anon_key}` over `WCSession.updateApplicationContext(_:)` whenever the Supabase session changes (sign-in, refresh, sign-out). The watch-side receiver is wired up (`WatchConnectivityManager.apply(_:)`); the phone-side sender is a TODO, blocked on Supabase auth landing here first. Plan: a native Swift `WCSession` helper in `ios/Runner/` exposed to Flutter via a method channel, called from whatever auth wrapper supersedes `main.dart`'s current `// TODO: Initialize Supabase`.
+
 ## Recommended approach for a new task here
 
 1. **Don't mirror Android file-by-file.** Port only what the task needs. The gap is large enough that a greenfield port of every screen is more churn than the task is worth.
