@@ -12,7 +12,10 @@ struct ContentView: View {
                 case .idle:
                     PreRunView(workoutManager: workoutManager)
                 case .recording:
-                    RunningView(workoutManager: workoutManager)
+                    RunningView(
+                        workoutManager: workoutManager,
+                        healthKit: workoutManager.healthKit
+                    )
                 case .finished:
                     PostRunView(
                         workoutManager: workoutManager,
@@ -25,6 +28,7 @@ struct ContentView: View {
                 }
             }
         }
+        .task { await workoutManager.healthKit.requestAuthorization() }
     }
 
     private func syncRun() {
@@ -34,13 +38,14 @@ struct ContentView: View {
             let fileURL = try workoutManager.writeTrackJSON()
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let metadata: [String: Any] = [
+            var metadata: [String: Any] = [
                 "id": run.id,
                 "started_at": formatter.string(from: run.startedAt),
                 "duration_s": run.durationSeconds,
                 "distance_m": run.distanceMetres,
                 "source": "app"
             ]
+            if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
             connectivity.transferRun(fileURL: fileURL, metadata: metadata)
         } catch {
             syncError = error.localizedDescription
@@ -98,6 +103,7 @@ struct PreRunView: View {
 
 struct RunningView: View {
     @ObservedObject var workoutManager: WorkoutManager
+    @ObservedObject var healthKit: HealthKitManager
 
     var body: some View {
         VStack(spacing: 8) {
@@ -118,6 +124,14 @@ struct RunningView: View {
                         .foregroundColor(.secondary)
                     Text(workoutManager.formattedPace)
                         .font(.headline)
+                }
+                VStack {
+                    Text("HR")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(healthKit.currentBPM.map { "\($0)" } ?? "—")
+                        .font(.headline)
+                        .foregroundColor(AppTheme.coral)
                 }
             }
 
@@ -161,7 +175,11 @@ struct PostRunView: View {
                     HStack {
                         Label(workoutManager.formattedPace, systemImage: "speedometer")
                         Spacer()
-                        Label("\(workoutManager.track.count) pts", systemImage: "mappin.and.ellipse")
+                        if let bpm = workoutManager.finishedRun?.averageBPM {
+                            Label("\(Int(bpm.rounded())) bpm", systemImage: "heart.fill")
+                        } else {
+                            Label("\(workoutManager.track.count) pts", systemImage: "mappin.and.ellipse")
+                        }
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)

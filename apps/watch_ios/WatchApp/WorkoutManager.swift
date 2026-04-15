@@ -20,6 +20,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// The completed run data, available after stop().
     private(set) var finishedRun: FinishedRun?
 
+    let healthKit = HealthKitManager()
+
     private let locationManager = CLLocationManager()
     private var timer: Timer?
     private var startDate: Date?
@@ -30,6 +32,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let durationSeconds: Int
         let distanceMetres: Double
         let track: [TrackPoint]
+        let averageBPM: Double?
     }
 
     struct TrackPoint: Codable {
@@ -67,9 +70,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
+        healthKit.reset()
 
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
+        healthKit.startWorkout()
 
         startDate = Date()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -84,6 +89,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         timer?.invalidate()
         timer = nil
         locationManager.stopUpdatingLocation()
+        healthKit.stopWorkout()
 
         let duration = Int(elapsedSeconds)
         let trackPoints = track.map { loc in
@@ -100,7 +106,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             startedAt: startDate ?? Date(),
             durationSeconds: duration,
             distanceMetres: distanceMetres,
-            track: trackPoints
+            track: trackPoints,
+            averageBPM: healthKit.averageBPM
         )
 
         state = .finished

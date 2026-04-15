@@ -16,7 +16,8 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 - `LocationManager.swift` — `CLLocationManager` wrapper, background location updates
 - `WatchConnectivityManager.swift` — Watch Connectivity framework, two-way messaging with the iOS phone app
 - `RouteNavigator.swift` — route preview and off-route detection on the watch
-- `SupabaseService.swift` — direct Supabase REST calls from the watch (no shared Dart/JS code)
+- `HealthKitManager.swift` — `HKWorkoutSession` + `HKLiveWorkoutBuilder` wrapper that publishes live heart rate from the watch's sensor
+- `SupabaseService.swift` — DEBUG-only direct Supabase REST calls from the watch (no shared Dart/JS code)
 
 ## What's real vs stubbed
 
@@ -25,7 +26,7 @@ More than a stub — there's a multi-file architecture with `@StateObject` / `@O
 Per [`roadmap.md` § Phase 2](../../docs/roadmap.md), the boxes still unchecked are:
 
 - [ ] Standalone workout session (no phone required)
-- [ ] Heart rate via HealthKit sensor
+- [x] Heart rate via HealthKit sensor
 - [ ] Haptic pace alerts
 - [ ] Syncs run data via Watch Connectivity framework
 - [ ] Route preview on watch face before starting
