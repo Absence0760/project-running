@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,9 +15,9 @@ class WearRunApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Run',
-      theme: ThemeData.dark(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: Colors.black,
-      ),
+      theme: AppTheme.dark,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.dark,
       home: const RunWatchScreen(),
     );
   }
@@ -114,11 +115,11 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           'Ready to Run',
           style: TextStyle(
             fontSize: 18,
-            color: Colors.white70,
+            color: AppTheme.parchment.withOpacity(0.7),
           ),
         ),
         const SizedBox(height: 20),
@@ -128,8 +129,8 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
           child: ElevatedButton(
             onPressed: _startRun,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
+              backgroundColor: AppTheme.coral,
+              foregroundColor: AppTheme.midnight,
               shape: const CircleBorder(),
               padding: EdgeInsets.zero,
             ),
@@ -153,7 +154,7 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
             fontSize: 36,
             fontWeight: FontWeight.bold,
             fontFamily: 'monospace',
-            color: Colors.white,
+            color: AppTheme.parchment,
           ),
         ),
         const SizedBox(height: 8),
@@ -161,15 +162,15 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
           _formattedDistance,
           style: const TextStyle(
             fontSize: 20,
-            color: Colors.white,
+            color: AppTheme.parchment,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           _formattedPace,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
-            color: Colors.white60,
+            color: AppTheme.parchment.withOpacity(0.6),
           ),
         ),
         const SizedBox(height: 16),
@@ -179,8 +180,8 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
           child: ElevatedButton(
             onPressed: _stopRun,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: AppTheme.error,
+              foregroundColor: AppTheme.parchment,
               shape: const CircleBorder(),
               padding: EdgeInsets.zero,
             ),
@@ -203,7 +204,7 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.greenAccent,
+            color: AppTheme.coral,
           ),
         ),
         const SizedBox(height: 12),
@@ -213,25 +214,28 @@ class _RunWatchScreenState extends State<RunWatchScreen> {
             fontSize: 28,
             fontWeight: FontWeight.bold,
             fontFamily: 'monospace',
-            color: Colors.white,
+            color: AppTheme.parchment,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           _formattedDistance,
-          style: const TextStyle(fontSize: 16, color: Colors.white),
+          style: const TextStyle(fontSize: 16, color: AppTheme.parchment),
         ),
         const SizedBox(height: 4),
         Text(
           _formattedPace,
-          style: const TextStyle(fontSize: 14, color: Colors.white60),
+          style: TextStyle(
+            fontSize: 14,
+            color: AppTheme.parchment.withOpacity(0.6),
+          ),
         ),
         const SizedBox(height: 16),
         ElevatedButton(
           onPressed: _reset,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey[800],
-            foregroundColor: Colors.white,
+            backgroundColor: AppTheme.duskDeep,
+            foregroundColor: AppTheme.parchment,
           ),
           child: const Text('Done'),
         ),

@@ -154,6 +154,7 @@ class _RunScreenState extends State<RunScreen> {
   void initState() {
     super.initState();
     widget.preferences.addListener(_onPrefsChange);
+    widget.runStore.addListener(_onPrefsChange);
     _selectedRoute = widget.initialRoute;
   }
 
@@ -693,6 +694,7 @@ class _RunScreenState extends State<RunScreen> {
   @override
   void dispose() {
     widget.preferences.removeListener(_onPrefsChange);
+    widget.runStore.removeListener(_onPrefsChange);
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _countdownTimer?.cancel();
@@ -781,138 +783,128 @@ class _RunScreenState extends State<RunScreen> {
 
   Widget _buildIdle(BuildContext context) {
     final theme = Theme.of(context);
+    final lastRun = _mostRecentRun();
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: constraints.maxHeight - 32,
             ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               mainAxisSize: MainAxisSize.min,
               children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.primary.withOpacity(0.15),
-                      theme.colorScheme.tertiary.withOpacity(0.1),
-                    ],
-                  ),
-                ),
-                child: Icon(_activityType.icon,
-                    size: 48, color: theme.colorScheme.primary),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Ready to ${_activityType.label}',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _selectedRoute != null
-                    ? 'Following: ${_selectedRoute!.name}'
-                    : 'GPS tracking and live map will activate\nwhen you press start',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Activity type chips
-              Wrap(
-                spacing: 8,
-                children: ActivityType.values.map((t) {
-                  final selected = t == _activityType;
-                  return ChoiceChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(t.icon, size: 16),
-                        const SizedBox(width: 4),
-                        Text(t.label),
-                      ],
-                    ),
-                    selected: selected,
-                    onSelected: (_) {
-                      if (_state != _ScreenState.idle) return;
-                      setState(() => _activityType = t);
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-
-              // Route selector
-              OutlinedButton.icon(
-                onPressed: _selectRoute,
-                icon: const Icon(Icons.route),
-                label: Text(_selectedRoute == null ? 'Choose route' : 'Change route'),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Start button
-              GestureDetector(
-                onTap: _beginCountdown,
-                child: Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF22C55E).withOpacity(0.3),
-                      width: 3,
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(8),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 4),
+                    Center(
+                      child: Wrap(
+                        spacing: 8,
+                        children: ActivityType.values.map((t) {
+                          final selected = t == _activityType;
+                          return ChoiceChip(
+                            showCheckmark: false,
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(t.icon, size: 16),
+                                const SizedBox(width: 4),
+                                Text(t.label),
+                              ],
+                            ),
+                            selected: selected,
+                            onSelected: (_) {
+                              if (_state != _ScreenState.idle) return;
+                              setState(() => _activityType = t);
+                            },
+                          );
+                        }).toList(),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x4022C55E),
-                          blurRadius: 24,
-                          spreadRadius: 4,
-                        ),
-                      ],
                     ),
-                    child: const Center(
-                      child: Text(
-                        'START',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
+                    const SizedBox(height: 12),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _selectRoute,
+                        icon: const Icon(Icons.route),
+                        label: Text(
+                          _selectedRoute == null
+                              ? 'Choose route'
+                              : 'Change route',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_selectedRoute != null)
+                      _RoutePreviewCard(route: _selectedRoute!)
+                    else if (lastRun != null)
+                      _LastRunCard(run: lastRun)
+                    else
+                      _FirstRunPrompt(theme: theme),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: GestureDetector(
+                    onTap: _beginCountdown,
+                    child: Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF22C55E).withOpacity(0.3),
+                          width: 3,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x4022C55E),
+                              blurRadius: 24,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'START',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  cm.Run? _mostRecentRun() {
+    final runs = widget.runStore.runs;
+    if (runs.isEmpty) return null;
+    final sorted = [...runs]
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    return sorted.first;
   }
 
   Widget _buildCountdown(BuildContext context) {
@@ -1546,4 +1538,322 @@ class _HoldToStopButton extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatAgo(DateTime when) {
+  final diff = DateTime.now().difference(when);
+  if (diff.inMinutes < 60) {
+    return diff.inMinutes <= 1 ? 'Just now' : '${diff.inMinutes} min ago';
+  }
+  if (diff.inHours < 24) {
+    return diff.inHours == 1 ? '1 hour ago' : '${diff.inHours} hours ago';
+  }
+  if (diff.inDays == 1) return 'Yesterday';
+  if (diff.inDays < 7) return '${diff.inDays} days ago';
+  if (diff.inDays < 30) {
+    final weeks = (diff.inDays / 7).floor();
+    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+  }
+  final months = (diff.inDays / 30).floor();
+  return months == 1 ? '1 month ago' : '$months months ago';
+}
+
+String _formatKm(double metres) => (metres / 1000).toStringAsFixed(2);
+
+String _formatPace(Duration duration, double metres) {
+  if (metres < 10) return '--:--';
+  final secondsPerKm = duration.inSeconds / (metres / 1000);
+  final m = secondsPerKm ~/ 60;
+  final s = (secondsPerKm % 60).round();
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
+class _LastRunCard extends StatelessWidget {
+  final cm.Run run;
+  const _LastRunCard({required this.run});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        children: [
+          if (run.track.length >= 2)
+            SizedBox(
+              width: 72,
+              height: 56,
+              child: CustomPaint(
+                painter: _TrackSparkPainter(
+                  track: run.track,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            )
+          else
+            Container(
+              width: 72,
+              height: 56,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.directions_run,
+                color: theme.colorScheme.primary.withOpacity(0.6),
+              ),
+            ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Last ${run.distanceMetres < 50 ? "activity" : "run"}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _formatAgo(run.startedAt),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    _metricPill(
+                      theme,
+                      '${_formatKm(run.distanceMetres)} km',
+                    ),
+                    const SizedBox(width: 6),
+                    _metricPill(
+                      theme,
+                      '${_formatPace(run.duration, run.distanceMetres)} /km',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricPill(ThemeData theme, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _RoutePreviewCard extends StatelessWidget {
+  final cm.Route route;
+  const _RoutePreviewCard({required this.route});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            height: 56,
+            child: route.waypoints.length >= 2
+                ? CustomPaint(
+                    painter: _TrackSparkPainter(
+                      track: route.waypoints,
+                      color: theme.colorScheme.secondary,
+                    ),
+                  )
+                : Icon(Icons.route, color: theme.colorScheme.secondary),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'FOLLOWING',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  route.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.straighten,
+                      size: 14,
+                      color: theme.colorScheme.outline,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_formatKm(route.distanceMetres)} km',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    if (route.elevationGainMetres > 0) ...[
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.terrain,
+                        size: 14,
+                        color: theme.colorScheme.outline,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${route.elevationGainMetres.round()} m',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirstRunPrompt extends StatelessWidget {
+  final ThemeData theme;
+  const _FirstRunPrompt({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.primary.withOpacity(0.18),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.rocket_launch, color: theme.colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Your first run is one tap away.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Scales a waypoint list to fit a small rect and paints a rounded polyline.
+/// Cheap — used for last-run and route-preview cards on the Run tab idle view.
+class _TrackSparkPainter extends CustomPainter {
+  final List<cm.Waypoint> track;
+  final Color color;
+
+  _TrackSparkPainter({required this.track, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (track.length < 2) return;
+    double minLat = track.first.lat, maxLat = track.first.lat;
+    double minLng = track.first.lng, maxLng = track.first.lng;
+    for (final w in track) {
+      if (w.lat < minLat) minLat = w.lat;
+      if (w.lat > maxLat) maxLat = w.lat;
+      if (w.lng < minLng) minLng = w.lng;
+      if (w.lng > maxLng) maxLng = w.lng;
+    }
+    final dLat = (maxLat - minLat).abs();
+    final dLng = (maxLng - minLng).abs();
+    if (dLat == 0 && dLng == 0) return;
+
+    const pad = 4.0;
+    final w = size.width - pad * 2;
+    final h = size.height - pad * 2;
+    final scale = dLat == 0
+        ? w / dLng
+        : dLng == 0
+            ? h / dLat
+            : (w / dLng < h / dLat ? w / dLng : h / dLat);
+    final xOff = pad + (w - dLng * scale) / 2;
+    final yOff = pad + (h - dLat * scale) / 2;
+
+    final path = Path();
+    for (int i = 0; i < track.length; i++) {
+      final x = xOff + (track[i].lng - minLng) * scale;
+      final y = yOff + (maxLat - track[i].lat) * scale;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+
+    final bg = Paint()
+      ..color = color.withOpacity(0.08)
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        const Radius.circular(10),
+      ),
+      bg,
+    );
+
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, line);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrackSparkPainter old) =>
+      old.track != track || old.color != color;
 }

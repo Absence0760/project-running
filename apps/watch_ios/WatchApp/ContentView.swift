@@ -88,14 +88,14 @@ struct PreRunView: View {
             if !authenticated {
                 Text("Not signed in")
                     .font(.caption2)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppTheme.coral)
             }
 
             Button("Start") {
                 workoutManager.start()
             }
             .buttonStyle(.borderedProminent)
-            .tint(.green)
+            .tint(AppTheme.coralDeep)
         }
     }
 }
@@ -135,7 +135,7 @@ struct RunningView: View {
                 workoutManager.stop()
             }
             .buttonStyle(.borderedProminent)
-            .tint(.red)
+            .tint(AppTheme.error)
         }
     }
 }
@@ -177,18 +177,19 @@ struct PostRunView: View {
 
                 if synced {
                     Label("Synced", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(AppTheme.coral)
                         .font(.body)
 
                     Button("Done") {
                         onDiscard()
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.duskDeep)
                 } else {
                     if let error = syncError {
                         Text(error)
                             .font(.caption2)
-                            .foregroundColor(.red)
+                            .foregroundColor(AppTheme.error)
                             .multilineTextAlignment(.center)
                     }
 
@@ -202,7 +203,7 @@ struct PostRunView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.blue)
+                    .tint(AppTheme.coralDeep)
                     .disabled(syncing)
 
                     Button("Discard", role: .destructive) {

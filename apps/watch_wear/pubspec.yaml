@@ -17,6 +17,8 @@ dependencies:
     path: ../../packages/run_recorder
   api_client:
     path: ../../packages/api_client
+  ui_kit:
+    path: ../../packages/ui_kit
 
 dev_dependencies:
   flutter_test:
