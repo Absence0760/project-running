@@ -11,6 +11,39 @@
 	let saved = $state(false);
 	let exporting = $state(false);
 
+	// Password management. Lets a user who signed up with Google / Apple
+	// add a password so they can also sign in via email+password on the
+	// Wear OS app (whose sign-in form uses Supabase's password grant).
+	let newPassword = $state('');
+	let confirmPassword = $state('');
+	let passwordSaving = $state(false);
+	let passwordStatus = $state<string | null>(null);
+	let passwordError = $state<string | null>(null);
+
+	async function handleSavePassword() {
+		if (newPassword.length < 6) {
+			passwordError = 'Password must be at least 6 characters.';
+			return;
+		}
+		if (newPassword !== confirmPassword) {
+			passwordError = 'Passwords do not match.';
+			return;
+		}
+		passwordSaving = true;
+		passwordError = null;
+		passwordStatus = null;
+		const { error } = await supabase.auth.updateUser({ password: newPassword });
+		passwordSaving = false;
+		if (error) {
+			passwordError = error.message;
+		} else {
+			passwordStatus = 'Password saved. You can now sign in with your email on any device.';
+			newPassword = '';
+			confirmPassword = '';
+			setTimeout(() => (passwordStatus = null), 5000);
+		}
+	}
+
 	async function handleSave() {
 		if (!auth.user) return;
 		saving = true;
@@ -88,6 +121,48 @@
 		</label>
 	</section>
 
+	<!-- Sign-in password -->
+	<section class="card">
+		<h2>Sign-in Password</h2>
+		<p class="section-desc">
+			Set or change the password for signing in with your email. If you signed up via Google
+			or Apple, set one here to enable email+password sign-in on devices that don't support
+			social login (e.g. the Wear OS watch app).
+		</p>
+		<div class="form-grid">
+			<label>
+				<span class="label-text">New Password</span>
+				<input
+					type="password"
+					autocomplete="new-password"
+					bind:value={newPassword}
+					placeholder="At least 6 characters"
+				/>
+			</label>
+			<label>
+				<span class="label-text">Confirm Password</span>
+				<input
+					type="password"
+					autocomplete="new-password"
+					bind:value={confirmPassword}
+				/>
+			</label>
+		</div>
+		{#if passwordError}
+			<p class="password-error">{passwordError}</p>
+		{/if}
+		{#if passwordStatus}
+			<p class="password-ok">{passwordStatus}</p>
+		{/if}
+		<button
+			class="btn btn-primary btn-save"
+			onclick={handleSavePassword}
+			disabled={passwordSaving || !newPassword || !confirmPassword}
+		>
+			{passwordSaving ? 'Saving...' : 'Save Password'}
+		</button>
+	</section>
+
 	<!-- Data -->
 	<section class="card">
 		<h2>Data Export</h2>
@@ -140,6 +215,18 @@
 
 	.card-danger {
 		border-color: rgba(229, 57, 53, 0.3);
+	}
+
+	.password-error {
+		color: #ef5350;
+		font-size: 0.85rem;
+		margin-top: var(--space-sm);
+	}
+
+	.password-ok {
+		color: #66bb6a;
+		font-size: 0.85rem;
+		margin-top: var(--space-sm);
 	}
 
 	.form-grid {

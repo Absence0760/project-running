@@ -1,6 +1,8 @@
 package com.runapp.watchwear
 
 import com.runapp.watchwear.generated.RunRow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -178,7 +180,7 @@ class SupabaseClient(
         execute(req)
     }
 
-    private fun uploadTrack(path: String, bytes: ByteArray, token: String) {
+    private suspend fun uploadTrack(path: String, bytes: ByteArray, token: String) {
         val req = Request.Builder()
             .url("$baseUrl/storage/v1/object/runs/$path")
             .header("apikey", anonKey)
@@ -190,13 +192,17 @@ class SupabaseClient(
         execute(req)
     }
 
-    private fun execute(req: Request): String {
+    /// Always suspends onto the IO dispatcher — OkHttp's `newCall().execute()`
+    /// is a blocking call, and the ViewModel's `viewModelScope.launch {}`
+    /// defaults to the Main dispatcher, which throws
+    /// `NetworkOnMainThreadException` on any blocking network op.
+    private suspend fun execute(req: Request): String = withContext(Dispatchers.IO) {
         http.newCall(req).execute().use { resp ->
             val body = resp.body.string()
             if (!resp.isSuccessful) {
                 throw RuntimeException("HTTP ${resp.code}: $body")
             }
-            return body
+            body
         }
     }
 
