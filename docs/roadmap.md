@@ -156,6 +156,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Compose-for-Wear UI (pure Kotlin rewrite — see [decisions.md § 15](decisions.md))
 - [x] GPS recording independent of phone (`FusedLocationProviderClient` in `GpsRecorder.kt`)
 - [x] HR recording via Health Services (`MeasureClient` in `HeartRateMonitor.kt`, average pushed to `run.metadata.avg_bpm`)
+- [x] Ultra-length (10h+) recording: streaming on-disk track writer, rolling-HR aggregation, checkpoint-by-reference, throttled notification refresh, streamed gzip upload, low-battery pre-run warning
 - [ ] Auto-sync on reconnect (today `drainQueue` fires on app start + after stop; connectivity-change listener is a TODO)
 
 ### Route navigation on watch

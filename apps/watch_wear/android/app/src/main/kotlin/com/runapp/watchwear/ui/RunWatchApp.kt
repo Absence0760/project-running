@@ -113,6 +113,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             authError = state.authError,
                             online = state.online,
                             batteryOptimised = state.batteryOptimised,
+                            batteryPercent = state.batteryPercent,
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
                             activityType = state.activityType,
                             onCycleActivity = {
@@ -254,6 +255,7 @@ private fun PreRunScreen(
     authError: String?,
     online: Boolean,
     batteryOptimised: Boolean,
+    batteryPercent: Int?,
     pendingRecoveryDistance: Double?,
     activityType: String,
     onCycleActivity: () -> Unit,
@@ -338,6 +340,16 @@ private fun PreRunScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
+                Spacer(Modifier.height(4.dp))
+            }
+            if (batteryPercent != null &&
+                batteryPercent < com.runapp.watchwear.system.BatteryStatus.LOW_THRESHOLD_PERCENT) {
+                Text(
+                    "Battery $batteryPercent% · consider charging",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.warning,
+                    textAlign = TextAlign.Center,
+                )
                 Spacer(Modifier.height(4.dp))
             }
             // Activity chip — tap cycles through run / walk / hike / cycle.

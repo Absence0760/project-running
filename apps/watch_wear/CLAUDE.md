@@ -186,6 +186,29 @@ backgrounding, low-memory kills).
   authenticated". Kills the cold-start race that previously surfaced a
   spurious sync error after a quick start/stop.
 
+### Ultra-length runs (10+ hours)
+
+The recording loop was engineered for marathon scale (4–6 h); these
+pieces extend that to all-day efforts without drifting into O(n) memory
+or hammering the NotificationManager:
+
+- `recording/TrackWriter.kt` streams GPS points to a JSON array on disk
+  (cache dir, `tracks/{runId}.json`) with a flush every 32 points. The
+  in-memory point list is gone — `RecordingRepository.Metrics` carries
+  only `trackPointCount` + `latestPoint` + `trackFilePath`.
+- Rolling HR. `RunRecordingService` tracks `bpmSum: Long` + `bpmCount:
+  Long` instead of a list; avg is O(1) regardless of sample count.
+  `Checkpoint` carries the same rolling pair, so recovery works without
+  replaying 36,000 samples.
+- Notification refresh is throttled to every 10 tickerJob iterations (~5s).
+  The UI still gets its 500ms elapsed tick, but NotificationManager only
+  sees a fraction of the churn.
+- `SupabaseClient.saveRun` takes a `File` and gzips disk-to-disk into a
+  sibling temp file before uploading — peak memory is one 8 KiB buffer.
+- `system/BatteryStatus.kt` reads `BATTERY_PROPERTY_CAPACITY` and the
+  pre-run screen surfaces a warning below 40%. A 10-hour run on a half-
+  charged watch is the single most common way to lose an ultra attempt.
+
 Permissions added in the manifest: `FOREGROUND_SERVICE`,
 `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`,
 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.

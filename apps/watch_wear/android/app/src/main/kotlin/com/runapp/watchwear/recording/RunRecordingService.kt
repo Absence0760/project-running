@@ -36,10 +36,19 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /// Foreground service that owns the GPS + HR streams during a run.
-/// Handles Start, Stop, Pause, and Resume intents. Paused intervals are
-/// excluded from both the elapsed-time clock (so pace stays honest when
-/// the user stops at a traffic light) and the distance accumulator (so
-/// any GPS drift while standing still doesn't inflate the run).
+///
+/// Engineered for ultra-marathon duration:
+///   - Track points stream to a file on disk (`TrackWriter`) rather
+///     than into an unbounded in-memory list.
+///   - HR uses a running sum/count, not a list, so 10 hours of 1Hz
+///     samples is O(1) memory instead of 36,000 allocations.
+///   - Checkpoints save only a small summary — the actual track data
+///     is already on disk via the streaming writer.
+///   - Notification refresh throttles to every 5s instead of every
+///     500ms, so a 10h run is ~7,200 refreshes, not 72,000.
+///
+/// State machine (Start → Recording → [Pause → Paused → Resume →
+/// Recording]* → Stop → Finished) plus lap markers.
 class RunRecordingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -52,21 +61,27 @@ class RunRecordingService : Service() {
     private lateinit var hr: HeartRateMonitor
     private lateinit var checkpoints: CheckpointStore
     private var wakeLock: PowerManager.WakeLock? = null
+    private var trackWriter: TrackWriter? = null
 
     private var lastLocation: Location? = null
-    private val track = mutableListOf<GpsPoint>()
-    private val bpmSamples = mutableListOf<Int>()
     private val laps = mutableListOf<RecordingRepository.Lap>()
     private var startedAtMs = 0L
     private var runId: String = ""
     private var activityType: String = "run"
 
-    // Paused-interval accounting. `pausedAccumulatedMs` is the sum of
-    // previous pause intervals; `pausedSinceMs` is the start of the
-    // current pause (0 when not paused). Active elapsed =
-    // `(now - startedAtMs) - pausedAccumulatedMs - (now - pausedSinceMs)`.
+    // Rolling HR aggregation instead of a list of every sample.
+    // `bpmSum` / `bpmCount` let us compute avg in O(1) regardless of
+    // how many samples have arrived.
+    private var bpmSum = 0L
+    private var bpmCount = 0L
+
     private var pausedAccumulatedMs = 0L
     private var pausedSinceMs = 0L
+
+    // Tick counter for notification throttling — we update the repo
+    // every 500ms (UI needs live elapsed), but the notification only
+    // every 10 ticks (5s).
+    private var tickIndex = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -96,6 +111,7 @@ class RunRecordingService : Service() {
         super.onDestroy()
         scope.cancel()
         releaseWakeLock()
+        trackWriter?.close()
     }
 
     // ----- Lifecycle -----
@@ -108,10 +124,14 @@ class RunRecordingService : Service() {
         startedAtMs = System.currentTimeMillis()
         pausedAccumulatedMs = 0
         pausedSinceMs = 0
-        track.clear()
-        bpmSamples.clear()
         laps.clear()
         lastLocation = null
+        bpmSum = 0
+        bpmCount = 0
+        tickIndex = 0
+
+        val file = TrackWriter.fileFor(applicationContext, runId)
+        trackWriter = TrackWriter(file).also { it.open() }
 
         startForegroundCompat(buildNotification(elapsedMs = 0L, distanceM = 0.0, paused = false))
         acquireWakeLock()
@@ -123,6 +143,7 @@ class RunRecordingService : Service() {
                 startedAtMs = startedAtMs,
                 elapsedMs = 0L,
                 activityType = activityType,
+                trackFilePath = file.absolutePath,
             )
         }
 
@@ -140,8 +161,9 @@ class RunRecordingService : Service() {
             hrJob = scope.launch {
                 hr.stream().collect { bpm ->
                     if (isPaused()) return@collect
-                    bpmSamples.add(bpm)
-                    val avg = bpmSamples.sum().toDouble() / bpmSamples.size
+                    bpmSum += bpm
+                    bpmCount++
+                    val avg = bpmSum.toDouble() / bpmCount
                     RecordingRepository.update { it.copy(bpm = bpm, avgBpm = avg) }
                 }
             }
@@ -151,7 +173,10 @@ class RunRecordingService : Service() {
                 delay(500)
                 val elapsed = activeElapsedMs()
                 RecordingRepository.update { it.copy(elapsedMs = elapsed) }
-                refreshNotification(elapsed, RecordingRepository.metrics.value.distanceM)
+                tickIndex++
+                if (tickIndex % NOTIFICATION_THROTTLE_TICKS == 0) {
+                    refreshNotification(elapsed, RecordingRepository.metrics.value.distanceM)
+                }
             }
         }
         checkpointJob = scope.launch {
@@ -161,14 +186,6 @@ class RunRecordingService : Service() {
                 delay(CHECKPOINT_INTERVAL_MS)
             }
         }
-    }
-
-    private fun pauseRecording() {
-        if (RecordingRepository.metrics.value.stage != RecordingRepository.Stage.Recording) return
-        pausedSinceMs = System.currentTimeMillis()
-        RecordingRepository.update { it.copy(stage = RecordingRepository.Stage.Paused) }
-        val elapsed = activeElapsedMs()
-        refreshNotification(elapsed, RecordingRepository.metrics.value.distanceM, paused = true)
     }
 
     private fun markLap() {
@@ -182,15 +199,20 @@ class RunRecordingService : Service() {
         RecordingRepository.update { it.copy(laps = laps.toList()) }
     }
 
+    private fun pauseRecording() {
+        if (RecordingRepository.metrics.value.stage != RecordingRepository.Stage.Recording) return
+        pausedSinceMs = System.currentTimeMillis()
+        RecordingRepository.update { it.copy(stage = RecordingRepository.Stage.Paused) }
+        val elapsed = activeElapsedMs()
+        refreshNotification(elapsed, RecordingRepository.metrics.value.distanceM, paused = true)
+    }
+
     private fun resumeRecording() {
         if (RecordingRepository.metrics.value.stage != RecordingRepository.Stage.Paused) return
         if (pausedSinceMs > 0) {
             pausedAccumulatedMs += System.currentTimeMillis() - pausedSinceMs
             pausedSinceMs = 0
         }
-        // After a pause, the previous lastLocation is stale — discarding
-        // it prevents a large haversine jump on the first fix after
-        // resume, which would incorrectly inflate distance.
         lastLocation = null
         RecordingRepository.update { it.copy(stage = RecordingRepository.Stage.Recording) }
     }
@@ -201,24 +223,25 @@ class RunRecordingService : Service() {
         tickerJob?.cancel(); tickerJob = null
         checkpointJob?.cancel(); checkpointJob = null
 
-        // Capture any in-progress pause into the accumulator so the
-        // final duration honours the full pause history.
         if (pausedSinceMs > 0) {
             pausedAccumulatedMs += System.currentTimeMillis() - pausedSinceMs
             pausedSinceMs = 0
         }
         val finalElapsed = activeElapsedMs()
         val finalDistance = RecordingRepository.metrics.value.distanceM
-        val avgBpm = if (bpmSamples.isEmpty()) null
-            else bpmSamples.sum().toDouble() / bpmSamples.size
+        val avgBpm = if (bpmCount == 0L) null else bpmSum.toDouble() / bpmCount
+
+        val file = trackWriter?.close()
+        trackWriter = null
 
         RecordingRepository.update {
             it.copy(
                 stage = RecordingRepository.Stage.Finished,
                 elapsedMs = finalElapsed,
                 distanceM = finalDistance,
-                track = track.toList(),
                 avgBpm = avgBpm,
+                trackFilePath = file?.absolutePath,
+                trackPointCount = it.trackPointCount,
                 laps = laps.toList(),
                 activityType = activityType,
             )
@@ -244,7 +267,7 @@ class RunRecordingService : Service() {
     // ----- GPS handler -----
 
     private fun onGps(p: GpsPoint) {
-        track.add(p)
+        trackWriter?.append(p)
         val asLoc = Location("").apply {
             latitude = p.lat; longitude = p.lng; time = p.epochMs
         }
@@ -262,21 +285,27 @@ class RunRecordingService : Service() {
             it.copy(
                 distanceM = newDistance,
                 paceSecPerKm = pace,
-                track = track.toList(),
+                latestPoint = p,
+                trackPointCount = trackWriter?.pointCount ?: 0,
             )
         }
     }
 
     private suspend fun writeCheckpoint() {
-        if (track.isEmpty() && bpmSamples.isEmpty()) return
+        val file = trackWriter ?: return
+        if (file.pointCount == 0 && bpmCount == 0L) return
         checkpoints.save(
             Checkpoint(
                 runId = runId,
                 startedAtMs = startedAtMs,
                 savedAtMs = System.currentTimeMillis(),
                 distanceM = RecordingRepository.metrics.value.distanceM,
-                track = track.map { CheckpointPoint.from(it) },
-                bpmSamples = bpmSamples.toList(),
+                trackFilePath = file.path,
+                trackPointCount = file.pointCount,
+                bpmSum = bpmSum,
+                bpmCount = bpmCount,
+                activityType = activityType,
+                laps = laps.map { CheckpointLap(it.number, it.atMs, it.distanceM) },
             )
         )
     }
@@ -291,7 +320,7 @@ class RunRecordingService : Service() {
         return r * 2 * Math.asin(sqrt(a))
     }
 
-    // ----- Foreground notification -----
+    // ----- Notifications -----
 
     private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -333,11 +362,6 @@ class RunRecordingService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(tapIntent)
 
-        // Wrap in an `OngoingActivity` so the system treats the run as
-        // a first-class ongoing Wear activity — visible from the watch
-        // face's ongoing-activity indicator and accessible from the
-        // Tile picker. Falls back to a regular notification if the
-        // Wear ongoing library isn't resolved at runtime.
         return runCatching {
             OngoingActivity.Builder(applicationContext, NOTIFICATION_ID, baseBuilder)
                 .setStaticIcon(R.mipmap.ic_launcher)
@@ -405,6 +429,10 @@ class RunRecordingService : Service() {
         private const val CHANNEL_ID = "run_recording"
         private const val CHECKPOINT_INITIAL_DELAY_MS = 30_000L
         private const val CHECKPOINT_INTERVAL_MS = 15_000L
+        // Ticker runs every 500ms for UI, but notifications only update
+        // every Nth tick to avoid hammering NotificationManager over a
+        // 10-hour run (72,000 → 7,200 refreshes).
+        private const val NOTIFICATION_THROTTLE_TICKS = 10
 
         fun start(context: Context, runId: String, activityType: String) {
             val intent = Intent(context, RunRecordingService::class.java).apply {

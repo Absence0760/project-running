@@ -5,25 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.runapp.watchwear.GpsPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-
-@Serializable
-data class CheckpointPoint(
-    val lat: Double,
-    val lng: Double,
-    val ele: Double?,
-    val epochMs: Long,
-) {
-    fun toGps() = GpsPoint(lat, lng, ele, epochMs)
-    companion object {
-        fun from(p: GpsPoint) = CheckpointPoint(p.lat, p.lng, p.ele, p.epochMs)
-    }
-}
 
 @Serializable
 data class Checkpoint(
@@ -31,20 +15,32 @@ data class Checkpoint(
     val startedAtMs: Long,
     val savedAtMs: Long,
     val distanceM: Double,
-    val track: List<CheckpointPoint>,
-    val bpmSamples: List<Int>,
+    /// Path to the JSON-array track file on disk. `TrackWriter` owns the
+    /// file; checkpoints just reference it. Full track is never stored
+    /// in DataStore — which is critical for a 10-hour run because
+    /// DataStore rewrites its full backing file on every commit.
+    val trackFilePath: String,
+    val trackPointCount: Int,
+    val bpmSum: Long,
+    val bpmCount: Long,
+    val activityType: String,
+    val laps: List<CheckpointLap>,
 )
 
-private val Context.checkpointDataStore by preferencesDataStore(name = "watch_wear_checkpoint")
-private val KEY_CHECKPOINT: Preferences.Key<String> = stringPreferencesKey("checkpoint_v1")
+@Serializable
+data class CheckpointLap(val number: Int, val atMs: Long, val distanceM: Double)
 
-/// Periodic snapshot of an in-progress run. Written by the recording
-/// service every ~15s and on every GPS sample after the first 30s. If
-/// the process is killed mid-run, the next launch finds the checkpoint
-/// and the user can recover the partial recording instead of losing it.
+private val Context.checkpointDataStore by preferencesDataStore(name = "watch_wear_checkpoint")
+private val KEY_CHECKPOINT: Preferences.Key<String> = stringPreferencesKey("checkpoint_v2")
+
+/// Periodic snapshot metadata of an in-progress run. The track itself
+/// lives in a streaming file written by `TrackWriter`; the checkpoint
+/// just captures the summary every 15s so a crashed process can be
+/// recovered. DataStore writes stay tiny (< 1KB) regardless of run
+/// length — a 10-hour run checkpoints with the same payload size as a
+/// 10-minute one.
 class CheckpointStore(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val pointSerializer = ListSerializer(CheckpointPoint.serializer())
 
     suspend fun current(): Checkpoint? {
         val raw = context.checkpointDataStore.data.first()[KEY_CHECKPOINT] ?: return null

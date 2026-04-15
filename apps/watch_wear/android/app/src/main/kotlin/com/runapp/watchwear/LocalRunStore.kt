@@ -21,14 +21,18 @@ data class QueuedRun(
     val startedAtIso: String,
     val durationS: Int,
     val distanceM: Double,
-    val trackJson: String,
+    /// Absolute path on local disk to the streamed track file produced by
+    /// `TrackWriter`. Holding only the path (not the JSON body) keeps the
+    /// DataStore payload tiny regardless of run length — critical for
+    /// ultra-length runs where the track file can be multiple megabytes.
+    val trackFilePath: String,
     val avgBpm: Double? = null,
     val activityType: String = "run",
     val laps: List<QueuedLap> = emptyList(),
 )
 
 private val Context.dataStore by preferencesDataStore(name = "watch_wear")
-private val KEY_QUEUE: Preferences.Key<String> = stringPreferencesKey("queued_runs_v1")
+private val KEY_QUEUE: Preferences.Key<String> = stringPreferencesKey("queued_runs_v2")
 
 /// DataStore-backed queue of finished runs awaiting upload.
 class LocalRunStore(private val context: Context) {

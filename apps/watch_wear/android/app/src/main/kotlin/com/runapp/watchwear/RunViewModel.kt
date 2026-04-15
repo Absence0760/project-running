@@ -9,12 +9,12 @@ import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RunRecordingService
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import com.runapp.watchwear.system.BatteryOptimization
+import com.runapp.watchwear.system.BatteryStatus
 import com.runapp.watchwear.system.NetworkWatcher
+import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +48,7 @@ data class UiState(
     val thisRunSynced: Boolean = false,
     val lastRunSummary: FinishedSummary? = null,
     val batteryOptimised: Boolean = true,
+    val batteryPercent: Int? = null,
     val pendingRecovery: Checkpoint? = null,
     val activityType: String = "run",
     val lapCount: Int = 0,
@@ -100,6 +101,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         observeConnectivity()
         bootstrapAuth()
         checkBatteryOptimisation()
+        checkBatteryLevel()
         checkRecovery()
     }
 
@@ -194,7 +196,16 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun refreshBatteryOptimisation() = checkBatteryOptimisation()
+    fun refreshBatteryOptimisation() {
+        checkBatteryOptimisation()
+        checkBatteryLevel()
+    }
+
+    private fun checkBatteryLevel() {
+        _state.value = _state.value.copy(
+            batteryPercent = BatteryStatus.percent(getApplication()),
+        )
+    }
 
     private fun checkRecovery() {
         viewModelScope.launch {
@@ -206,28 +217,39 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /// User accepted the recovery prompt. Treat the checkpointed run as
-    /// finished-as-of-savedAt and queue it for upload.
+    /// finished-as-of-savedAt and queue it for upload. The track file is
+    /// already sealed on disk (the writer closes on service destroy), but
+    /// may be an unclosed JSON array if the process was killed mid-flush;
+    /// we re-seal it defensively before queueing.
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
         viewModelScope.launch {
             val durationS = ((cp.savedAtMs - cp.startedAtMs) / 1000).toInt()
-            val avgBpm = if (cp.bpmSamples.isEmpty()) null
-                else cp.bpmSamples.sum().toDouble() / cp.bpmSamples.size
-            val trackJson = encodeCheckpointTrack(cp)
+            val avgBpm = if (cp.bpmCount == 0L) null
+                else cp.bpmSum.toDouble() / cp.bpmCount
+            val sealed = sealTrackFile(cp.trackFilePath)
             store.save(
                 QueuedRun(
                     id = cp.runId,
                     startedAtIso = Instant.ofEpochMilli(cp.startedAtMs).toString(),
                     durationS = durationS,
                     distanceM = cp.distanceM,
-                    trackJson = trackJson,
+                    trackFilePath = sealed.absolutePath,
                     avgBpm = avgBpm,
+                    activityType = cp.activityType,
+                    laps = cp.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                 )
             )
             checkpoints.clear()
             _state.value = _state.value.copy(
                 pendingRecovery = null,
-                lastRunSummary = FinishedSummary(cp.distanceM, durationS, avgBpm),
+                lastRunSummary = FinishedSummary(
+                    distanceM = cp.distanceM,
+                    durationS = durationS,
+                    avgBpm = avgBpm,
+                    lapCount = cp.laps.size,
+                    activityType = cp.activityType,
+                ),
                 stage = Stage.PostRun,
                 thisRunId = cp.runId,
                 thisRunSynced = false,
@@ -235,6 +257,31 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             drainQueue()
         }
     }
+
+    /// If a track file is missing a closing `]` (process killed before
+    /// `TrackWriter.close` ran), append one so it parses as JSON. Missing
+    /// file → write an empty array stub so downstream code still has a
+    /// path to upload.
+    private suspend fun sealTrackFile(path: String): File =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val f = File(path)
+            if (!f.exists()) {
+                f.parentFile?.mkdirs()
+                f.writeText("[]")
+                return@withContext f
+            }
+            val len = f.length()
+            if (len == 0L) {
+                f.writeText("[]")
+                return@withContext f
+            }
+            val last = java.io.RandomAccessFile(f, "r").use { raf ->
+                raf.seek((len - 1).coerceAtLeast(0))
+                raf.read()
+            }
+            if (last != ']'.code) f.appendText("]")
+            f
+        }
 
     fun discardCheckpoint() {
         viewModelScope.launch {
@@ -279,6 +326,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     fun start() {
         if (_state.value.stage != Stage.PreRun) return
+        checkBatteryLevel()
         val runId = UUID.randomUUID().toString()
         _state.value = _state.value.copy(
             stage = Stage.Running,
@@ -323,8 +371,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// `Finished` state. Persists the run to LocalRunStore + drains.
     private fun handleFinishedRun(m: RecordingRepository.Metrics) {
         val runId = m.runId ?: return
+        val trackPath = m.trackFilePath ?: return
         val durationS = (m.elapsedMs / 1000).toInt()
-        val trackJson = encodeTrack(m.track)
         val laps = buildFinishedLaps(m, durationS)
         val summary = FinishedSummary(
             distanceM = m.distanceM,
@@ -347,7 +395,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     startedAtIso = Instant.ofEpochMilli(m.startedAtMs).toString(),
                     durationS = durationS,
                     distanceM = m.distanceM,
-                    trackJson = trackJson,
+                    trackFilePath = trackPath,
                     avgBpm = m.avgBpm,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
@@ -534,14 +582,19 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 })
             }
         }
+        val trackFile = File(run.trackFilePath)
         supabase.saveRun(
             runId = run.id,
             startedAtIso = run.startedAtIso,
             durationS = run.durationS,
             distanceM = run.distanceM,
-            trackJson = run.trackJson,
+            trackFile = trackFile,
             metadata = metadata,
         )
+        // Once the track is safely in Storage, clear the cache file. On
+        // retry paths we'll already be past this line (pushRun threw) so
+        // the file stays on disk until the next successful drain.
+        runCatching { trackFile.delete() }
     }
 
     /// Turn the service's raw lap list (cumulative marks) into split-per-lap
@@ -581,32 +634,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         return out
-    }
-
-    private fun encodeTrack(points: List<GpsPoint>): String {
-        val sb = StringBuilder("[")
-        points.forEachIndexed { i, p ->
-            if (i > 0) sb.append(",")
-            sb.append("{\"lat\":").append(p.lat)
-                .append(",\"lng\":").append(p.lng)
-                .append(",\"ele\":").append(p.ele ?: "null")
-                .append(",\"ts\":\"").append(Instant.ofEpochMilli(p.epochMs)).append("\"}")
-        }
-        sb.append("]")
-        return sb.toString()
-    }
-
-    private fun encodeCheckpointTrack(cp: Checkpoint): String {
-        val sb = StringBuilder("[")
-        cp.track.forEachIndexed { i, p ->
-            if (i > 0) sb.append(",")
-            sb.append("{\"lat\":").append(p.lat)
-                .append(",\"lng\":").append(p.lng)
-                .append(",\"ele\":").append(p.ele ?: "null")
-                .append(",\"ts\":\"").append(Instant.ofEpochMilli(p.epochMs)).append("\"}")
-        }
-        sb.append("]")
-        return sb.toString()
     }
 
     companion object {

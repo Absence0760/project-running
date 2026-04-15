@@ -11,13 +11,15 @@ import kotlinx.coroutines.flow.asStateFlow
 /// service). Decoupling recording from UI lifecycle is what lets a
 /// run survive the activity being destroyed for ambient, screen off,
 /// or low memory.
+///
+/// The full GPS track is *not* held here — it's streamed to disk by
+/// `TrackWriter`. Only the latest point (for map/UI display) and a
+/// count live in `Metrics`. This is what lets a 10-hour run fit in
+/// constant memory instead of growing linearly with every GPS fix.
 object RecordingRepository {
 
     enum class Stage { Idle, Recording, Paused, Finished }
 
-    /// A manual lap marker. Written whenever the user taps Lap during a
-    /// run. `atMs` is active-elapsed-time (paused intervals excluded);
-    /// `distanceM` is cumulative distance at the moment of the tap.
     data class Lap(
         val number: Int,
         val atMs: Long,
@@ -33,7 +35,9 @@ object RecordingRepository {
         val paceSecPerKm: Double? = null,
         val bpm: Int? = null,
         val avgBpm: Double? = null,
-        val track: List<GpsPoint> = emptyList(),
+        val trackPointCount: Int = 0,
+        val latestPoint: GpsPoint? = null,
+        val trackFilePath: String? = null,
         val locationAvailable: Boolean = true,
         val activityType: String = "run",
         val laps: List<Lap> = emptyList(),

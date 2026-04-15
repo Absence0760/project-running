@@ -11,8 +11,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.zip.GZIPOutputStream
 
 /// Minimal Supabase REST client for the Wear OS app.
@@ -147,55 +148,64 @@ class SupabaseClient(
     /// [StoredSession] after a direct watch sign-in.
     val environment: Pair<String, String> get() = baseUrl to anonKey
 
-    /// Upload a run: gzip the track JSON into the `runs` bucket at
+    /// Upload a run: gzip the track file into the `runs` bucket at
     /// `{userId}/{runId}.json.gz`, then insert the row.
+    ///
+    /// The track file is streamed disk→gzip→disk (a sibling `.gz` temp file)
+    /// rather than buffered into a `ByteArray`. For an ultra-length run the
+    /// raw track can be several MB; holding the full gzipped payload in
+    /// memory is a hazard we don't need to take.
     suspend fun saveRun(
         runId: String,
         startedAtIso: String,
         durationS: Int,
         distanceM: Double,
-        trackJson: String,
+        trackFile: File,
         metadata: JsonObject?,
     ) {
         val token = accessToken ?: throw IllegalStateException("not authenticated")
         val uid = userId ?: throw IllegalStateException("not authenticated")
 
-        val gz = gzip(trackJson.toByteArray(Charsets.UTF_8))
-        val path = "$uid/$runId.json.gz"
-        uploadTrack(path, gz, token)
+        val gzFile = withContext(Dispatchers.IO) { gzipToTempFile(trackFile) }
+        try {
+            val path = "$uid/$runId.json.gz"
+            uploadTrack(path, gzFile, token)
 
-        val rowMap = mapOf(
-            RunRow.COL_ID to runId,
-            RunRow.COL_USER_ID to uid,
-            RunRow.COL_STARTED_AT to startedAtIso,
-            RunRow.COL_DURATION_S to durationS,
-            RunRow.COL_DISTANCE_M to distanceM,
-            RunRow.COL_SOURCE to "app",
-            RunRow.COL_TRACK_URL to path,
-            RunRow.COL_METADATA to metadata,
-        )
-        val body = encodeJsonMap(rowMap).toRequestBody(jsonMedia)
+            val rowMap = mapOf(
+                RunRow.COL_ID to runId,
+                RunRow.COL_USER_ID to uid,
+                RunRow.COL_STARTED_AT to startedAtIso,
+                RunRow.COL_DURATION_S to durationS,
+                RunRow.COL_DISTANCE_M to distanceM,
+                RunRow.COL_SOURCE to "app",
+                RunRow.COL_TRACK_URL to path,
+                RunRow.COL_METADATA to metadata,
+            )
+            val body = encodeJsonMap(rowMap).toRequestBody(jsonMedia)
 
-        val req = Request.Builder()
-            .url("$baseUrl/rest/v1/${RunRow.TABLE}")
-            .header("apikey", anonKey)
-            .header("Authorization", "Bearer $token")
-            .header("Content-Type", "application/json")
-            .header("Prefer", "return=minimal")
-            .post(body)
-            .build()
+            val req = Request.Builder()
+                .url("$baseUrl/rest/v1/${RunRow.TABLE}")
+                .header("apikey", anonKey)
+                .header("Authorization", "Bearer $token")
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=minimal")
+                .post(body)
+                .build()
 
-        execute(req)
+            execute(req)
+        } finally {
+            gzFile.delete()
+        }
     }
 
-    private suspend fun uploadTrack(path: String, bytes: ByteArray, token: String) {
+    private suspend fun uploadTrack(path: String, gzFile: File, token: String) {
         val req = Request.Builder()
             .url("$baseUrl/storage/v1/object/runs/$path")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $token")
             .header("Content-Type", "application/json")
             .header("Content-Encoding", "gzip")
-            .post(bytes.toRequestBody("application/json".toMediaType()))
+            .post(gzFile.asRequestBody("application/json".toMediaType()))
             .build()
         execute(req)
     }
@@ -229,10 +239,17 @@ class SupabaseClient(
         }
     }
 
-    private fun gzip(data: ByteArray): ByteArray {
-        val out = ByteArrayOutputStream()
-        GZIPOutputStream(out).use { it.write(data) }
-        return out.toByteArray()
+    /// Gzip `src` into a sibling temp file and return the temp file. Caller
+    /// owns the returned file and must delete it. Streams 8 KiB at a time
+    /// so peak memory is O(buffer) regardless of track size.
+    private fun gzipToTempFile(src: File): File {
+        val out = File.createTempFile("track_", ".gz", src.parentFile)
+        src.inputStream().use { input ->
+            GZIPOutputStream(out.outputStream().buffered()).use { gz ->
+                input.copyTo(gz, bufferSize = 8192)
+            }
+        }
+        return out
     }
 
     /// Encode a `Map<String, Any?>` from [RunRow.toJsonMap] to a JSON string.
