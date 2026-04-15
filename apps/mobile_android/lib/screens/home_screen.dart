@@ -7,6 +7,7 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
+import '../training_service.dart';
 import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
 import 'history_screen.dart';
@@ -21,6 +22,7 @@ class HomeScreen extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SocialService social;
+  final TrainingService training;
 
   const HomeScreen({
     super.key,
@@ -30,6 +32,7 @@ class HomeScreen extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.social,
+    required this.training,
   });
 
   @override
@@ -80,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
           preferences: widget.preferences,
           audioCues: widget.audioCues,
           social: widget.social,
+          training: widget.training,
           initialRoute: _preselectedRoute,
         ),
       ),

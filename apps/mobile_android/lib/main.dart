@@ -14,6 +14,7 @@ import 'screens/onboarding_screen.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
 import 'tile_cache.dart';
+import 'training_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,6 +100,7 @@ void main() async {
   registerBackgroundSync();
 
   final social = SocialService();
+  final training = TrainingService();
 
   runApp(RunApp(
     apiClient: api,
@@ -108,6 +110,7 @@ void main() async {
     audioCues: audioCues,
     syncService: syncService,
     social: social,
+    training: training,
     recoveredRun: recoveredRun,
   ));
 }
@@ -126,6 +129,7 @@ class RunApp extends StatefulWidget {
   final AudioCues audioCues;
   final SyncService syncService;
   final SocialService social;
+  final TrainingService training;
   final cm.Run? recoveredRun;
   const RunApp({
     super.key,
@@ -136,6 +140,7 @@ class RunApp extends StatefulWidget {
     required this.audioCues,
     required this.syncService,
     required this.social,
+    required this.training,
     this.recoveredRun,
   });
 
@@ -196,6 +201,7 @@ class _RunAppState extends State<RunApp> {
                   preferences: widget.preferences,
                   audioCues: widget.audioCues,
                   social: widget.social,
+                  training: widget.training,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,

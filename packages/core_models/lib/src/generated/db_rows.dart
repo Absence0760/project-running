@@ -412,6 +412,128 @@ class IntegrationRow {
   };
 }
 
+/// Row shape for the `plan_weeks` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class PlanWeekRow {
+  static const String table = 'plan_weeks';
+  static const String colId = 'id';
+  static const String colPlanId = 'plan_id';
+  static const String colWeekIndex = 'week_index';
+  static const String colPhase = 'phase';
+  static const String colTargetVolumeM = 'target_volume_m';
+  static const String colNotes = 'notes';
+
+  final String id;
+  final String planId;
+  final int weekIndex;
+  final dynamic phase;
+  final double? targetVolumeM;
+  final String? notes;
+
+  const PlanWeekRow({
+    required this.id,
+    required this.planId,
+    required this.weekIndex,
+    required this.phase,
+    this.targetVolumeM,
+    this.notes,
+  });
+
+  factory PlanWeekRow.fromJson(Map<String, dynamic> json) => PlanWeekRow(
+    id: json['id'] as String,
+    planId: json['plan_id'] as String,
+    weekIndex: (json['week_index'] as num).toInt(),
+    phase: json['phase'],
+    targetVolumeM: (json['target_volume_m'] as num?)?.toDouble(),
+    notes: json['notes'] as String?,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colPlanId: planId,
+    colWeekIndex: weekIndex,
+    colPhase: phase,
+    colTargetVolumeM: targetVolumeM,
+    colNotes: notes,
+  };
+}
+
+/// Row shape for the `plan_workouts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class PlanWorkoutRow {
+  static const String table = 'plan_workouts';
+  static const String colId = 'id';
+  static const String colWeekId = 'week_id';
+  static const String colScheduledDate = 'scheduled_date';
+  static const String colKind = 'kind';
+  static const String colTargetDistanceM = 'target_distance_m';
+  static const String colTargetDurationSeconds = 'target_duration_seconds';
+  static const String colTargetPaceSecPerKm = 'target_pace_sec_per_km';
+  static const String colTargetPaceToleranceSec = 'target_pace_tolerance_sec';
+  static const String colStructure = 'structure';
+  static const String colNotes = 'notes';
+  static const String colCompletedRunId = 'completed_run_id';
+  static const String colCompletedAt = 'completed_at';
+
+  final String id;
+  final String weekId;
+  final DateTime scheduledDate;
+  final dynamic kind;
+  final double? targetDistanceM;
+  final int? targetDurationSeconds;
+  final int? targetPaceSecPerKm;
+  final int? targetPaceToleranceSec;
+  final Map<String, dynamic>? structure;
+  final String? notes;
+  final String? completedRunId;
+  final DateTime? completedAt;
+
+  const PlanWorkoutRow({
+    required this.id,
+    required this.weekId,
+    required this.scheduledDate,
+    required this.kind,
+    this.targetDistanceM,
+    this.targetDurationSeconds,
+    this.targetPaceSecPerKm,
+    this.targetPaceToleranceSec,
+    this.structure,
+    this.notes,
+    this.completedRunId,
+    this.completedAt,
+  });
+
+  factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
+    id: json['id'] as String,
+    weekId: json['week_id'] as String,
+    scheduledDate: DateTime.parse(json['scheduled_date'] as String),
+    kind: json['kind'],
+    targetDistanceM: (json['target_distance_m'] as num?)?.toDouble(),
+    targetDurationSeconds: (json['target_duration_seconds'] as num?)?.toInt(),
+    targetPaceSecPerKm: (json['target_pace_sec_per_km'] as num?)?.toInt(),
+    targetPaceToleranceSec: (json['target_pace_tolerance_sec'] as num?)?.toInt(),
+    structure: json['structure'] as Map<String, dynamic>?,
+    notes: json['notes'] as String?,
+    completedRunId: json['completed_run_id'] as String?,
+    completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colWeekId: weekId,
+    colScheduledDate: scheduledDate.toIso8601String(),
+    colKind: kind,
+    colTargetDistanceM: targetDistanceM,
+    colTargetDurationSeconds: targetDurationSeconds,
+    colTargetPaceSecPerKm: targetPaceSecPerKm,
+    colTargetPaceToleranceSec: targetPaceToleranceSec,
+    colStructure: structure,
+    colNotes: notes,
+    colCompletedRunId: completedRunId,
+    colCompletedAt: completedAt?.toIso8601String(),
+  };
+}
+
 /// Row shape for the `route_reviews` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RouteReviewRow {
@@ -617,6 +739,97 @@ class RunRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colTrackUrl: trackUrl,
     colIsPublic: isPublic,
+  };
+}
+
+/// Row shape for the `training_plans` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class TrainingPlanRow {
+  static const String table = 'training_plans';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colName = 'name';
+  static const String colGoalEvent = 'goal_event';
+  static const String colGoalDistanceM = 'goal_distance_m';
+  static const String colGoalTimeSeconds = 'goal_time_seconds';
+  static const String colStartDate = 'start_date';
+  static const String colEndDate = 'end_date';
+  static const String colDaysPerWeek = 'days_per_week';
+  static const String colVdot = 'vdot';
+  static const String colCurrent5kSeconds = 'current_5k_seconds';
+  static const String colStatus = 'status';
+  static const String colNotes = 'notes';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String userId;
+  final String name;
+  final dynamic goalEvent;
+  final double goalDistanceM;
+  final int? goalTimeSeconds;
+  final DateTime startDate;
+  final DateTime endDate;
+  final int daysPerWeek;
+  final double? vdot;
+  final int? current5kSeconds;
+  final String status;
+  final String? notes;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const TrainingPlanRow({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.goalEvent,
+    required this.goalDistanceM,
+    this.goalTimeSeconds,
+    required this.startDate,
+    required this.endDate,
+    required this.daysPerWeek,
+    this.vdot,
+    this.current5kSeconds,
+    required this.status,
+    this.notes,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory TrainingPlanRow.fromJson(Map<String, dynamic> json) => TrainingPlanRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    name: json['name'] as String,
+    goalEvent: json['goal_event'],
+    goalDistanceM: (json['goal_distance_m'] as num).toDouble(),
+    goalTimeSeconds: (json['goal_time_seconds'] as num?)?.toInt(),
+    startDate: DateTime.parse(json['start_date'] as String),
+    endDate: DateTime.parse(json['end_date'] as String),
+    daysPerWeek: (json['days_per_week'] as num).toInt(),
+    vdot: (json['vdot'] as num?)?.toDouble(),
+    current5kSeconds: (json['current_5k_seconds'] as num?)?.toInt(),
+    status: json['status'] as String,
+    notes: json['notes'] as String?,
+    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colName: name,
+    colGoalEvent: goalEvent,
+    colGoalDistanceM: goalDistanceM,
+    colGoalTimeSeconds: goalTimeSeconds,
+    colStartDate: startDate.toIso8601String(),
+    colEndDate: endDate.toIso8601String(),
+    colDaysPerWeek: daysPerWeek,
+    colVdot: vdot,
+    colCurrent5kSeconds: current5kSeconds,
+    colStatus: status,
+    colNotes: notes,
+    colCreatedAt: createdAt?.toIso8601String(),
+    colUpdatedAt: updatedAt?.toIso8601String(),
   };
 }
 

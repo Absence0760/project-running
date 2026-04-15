@@ -58,6 +58,9 @@ const _tables = <String>{
   'events',
   'event_attendees',
   'club_posts',
+  'training_plans',
+  'plan_weeks',
+  'plan_workouts',
 };
 
 class _Column {

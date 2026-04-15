@@ -48,6 +48,10 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `clubs_screen.dart` — Browse / My clubs, 6th bottom-nav tab
 - `club_detail_screen.dart` — feed (threaded), upcoming events, members, join/leave
 - `event_detail_screen.dart` — per-instance RSVP + admin update composer
+- `plans_screen.dart` — Training plans list (accessed from Run tab idle button)
+- `plan_new_screen.dart` — Wizard with live pace + week-outline preview
+- `plan_detail_screen.dart` — Hero + progress ring + today card + week grid
+- `workout_detail_screen.dart` — Structured-interval breakdown + per-kind advice
 
 **Top-level (`lib/`):**
 - `main.dart` — app entry, Supabase init, service wiring
@@ -67,8 +71,11 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `widgets/run_share_card.dart` — portrait share card + modal sheet; captures a PNG via `RepaintBoundary.toImage` and hands it to `share_plus`
 - `widgets/goal_editor_sheet.dart` — modal bottom sheet for creating/editing/deleting a `RunGoal` (type + period + target)
 - `widgets/upcoming_event_card.dart` — Run tab idle-state card shown when the user has a `going` RSVP within 48h
+- `widgets/todays_workout_card.dart` — Run tab idle-state priority card when an active plan has a workout scheduled today
 - `social_service.dart` — `ChangeNotifier` wrapping all Supabase calls for clubs / events / posts
+- `training_service.dart` — `ChangeNotifier` wrapping Supabase calls for training plans + workouts
 - `recurrence.dart` — Dart port of `apps/web/src/lib/recurrence.ts`, keep in sync
+- `training.dart` — Dart port of `apps/web/src/lib/training.ts` (VDOT, Riegel, plan generator); keep in sync, 17-test mirror suite in `test/training_test.dart`
 
 ## Dart analyzer policy — treat `info` as noise
 

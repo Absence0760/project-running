@@ -17,10 +17,15 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
+import '../training_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/todays_workout_card.dart';
 import '../widgets/upcoming_event_card.dart';
 import 'event_detail_screen.dart';
+import 'plan_detail_screen.dart';
+import 'plans_screen.dart';
+import 'workout_detail_screen.dart';
 
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
 /// auto-pause, countdown, and optional route following.
@@ -31,6 +36,7 @@ class RunScreen extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SocialService social;
+  final TrainingService training;
   final cm.Route? initialRoute;
 
   const RunScreen({
@@ -41,6 +47,7 @@ class RunScreen extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.social,
+    required this.training,
     this.initialRoute,
   });
 
@@ -154,6 +161,9 @@ class _RunScreenState extends State<RunScreen> {
   // the idle Run tab as a priority card above the last-run summary.
   EventView? _upcomingEvent;
 
+  // Active-plan overview; drives the today's-workout card on idle.
+  ActivePlanOverview? _planOverview;
+
   // Measured height of the stats overlay — used to offset the map camera so
   // the blue dot sits in the visible area above the overlay, not behind it.
   final GlobalKey _statsOverlayKey = GlobalKey();
@@ -165,8 +175,10 @@ class _RunScreenState extends State<RunScreen> {
     widget.preferences.addListener(_onPrefsChange);
     widget.runStore.addListener(_onPrefsChange);
     widget.social.addListener(_onSocialChange);
+    widget.training.addListener(_onTrainingChange);
     _selectedRoute = widget.initialRoute;
     _refreshUpcomingEvent();
+    _refreshPlanOverview();
   }
 
   Future<void> _refreshUpcomingEvent() async {
@@ -178,8 +190,21 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  Future<void> _refreshPlanOverview() async {
+    try {
+      final p = await widget.training.fetchActiveOverview();
+      if (mounted) setState(() => _planOverview = p);
+    } catch (_) {
+      // Non-critical.
+    }
+  }
+
   void _onSocialChange() {
     _refreshUpcomingEvent();
+  }
+
+  void _onTrainingChange() {
+    _refreshPlanOverview();
   }
 
   @override
@@ -720,6 +745,7 @@ class _RunScreenState extends State<RunScreen> {
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
     widget.social.removeListener(_onSocialChange);
+    widget.training.removeListener(_onTrainingChange);
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _countdownTimer?.cancel();
@@ -851,18 +877,69 @@ class _RunScreenState extends State<RunScreen> {
                     ),
                     const SizedBox(height: 12),
                     Center(
-                      child: OutlinedButton.icon(
-                        onPressed: _selectRoute,
-                        icon: const Icon(Icons.route),
-                        label: Text(
-                          _selectedRoute == null
-                              ? 'Choose route'
-                              : 'Change route',
-                        ),
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _selectRoute,
+                            icon: const Icon(Icons.route),
+                            label: Text(
+                              _selectedRoute == null
+                                  ? 'Choose route'
+                                  : 'Change route',
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () async {
+                              final overview = _planOverview;
+                              if (overview != null) {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => PlanDetailScreen(
+                                      training: widget.training,
+                                      planId: overview.plan.id,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => PlansScreen(
+                                      training: widget.training,
+                                    ),
+                                  ),
+                                );
+                              }
+                              _refreshPlanOverview();
+                            },
+                            icon: const Icon(Icons.calendar_month),
+                            label: Text(_planOverview == null
+                                ? 'Training plans'
+                                : _planOverview!.plan.name),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),
-                    if (_upcomingEvent != null && _selectedRoute == null)
+                    if (_planOverview?.todayWorkout != null &&
+                        _selectedRoute == null)
+                      TodaysWorkoutCard(
+                        overview: _planOverview!,
+                        onTap: () async {
+                          final overview = _planOverview!;
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => WorkoutDetailScreen(
+                                training: widget.training,
+                                planId: overview.plan.id,
+                                workoutId: overview.todayWorkout!.id,
+                              ),
+                            ),
+                          );
+                          _refreshPlanOverview();
+                        },
+                      )
+                    else if (_upcomingEvent != null && _selectedRoute == null)
                       UpcomingEventCard(
                         event: _upcomingEvent!,
                         onTap: () async {

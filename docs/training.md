@@ -2,6 +2,18 @@
 
 Runna / Garmin-Coach parity. Web-first in v1. The data model is shared so the Android app and the structured-workout execution loop can land without a schema change.
 
+## Surfaces (Android, v1)
+
+| Screen | Purpose |
+|---|---|
+| `plans_screen.dart` | Reached from the Run tab idle state (`Training plans` button when no active plan, `<plan name>` chip when one is active). Lists all plans with status chips and per-card Abandon / Delete actions. |
+| `plan_new_screen.dart` | Wizard mirror of the web `/plans/new` page: goal race, start date, days/week, optional goal time and recent 5K, week override. Live preview of paces + the first six weeks' outline updates as inputs change. |
+| `plan_detail_screen.dart` | Plan home. Progress ring in the hero, today-card when applicable, week cards with per-workout rows. Current week gets a primary-colour border. |
+| `workout_detail_screen.dart` | Structured-interval breakdown (warmup / repeats / steady / cooldown), target metrics, per-kind "how to run it" advice, unlink control when the workout is matched to a completed run. |
+| `widgets/todays_workout_card.dart` | Priority card on the Run tab idle state — sits above `UpcomingEventCard`. Tapping opens the workout detail. |
+
+Plan + event creation flows intentionally stay on mobile (unlike clubs, where web is the admin surface) because plans are personal: the user in front of the phone is the one who cares about start date + fitness inputs.
+
 ## Surfaces (web, v1)
 
 | Route | Purpose |
@@ -66,5 +78,5 @@ Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will gro
 - **Structured-interval execution on the Android run screen** — no code yet; `plan_workouts.structure` is the handoff.
 - **Paste-a-template import** — markdown table → weeks/workouts.
 - **Export as markdown / JSON** — round-trips through the paste path above.
-- **Dart port of the engine** — Android read-only for v1; when execution lands, the engine is ported the same way `recurrence.ts` → `recurrence.dart` was for clubs.
+- **Dart port of the engine** — *Shipped in Phase 3 Android port* via `apps/mobile_android/lib/training.dart` with 17 mirror tests in `test/training_test.dart`. Must stay in sync with `apps/web/src/lib/training.ts`; any change to pace multipliers, phase breakdown, or mileage fractions requires updating both files and re-running both test suites.
 - **Premium gating** — the plans surface is free in v1. A later Stripe migration gates whichever features turn out to need it.
