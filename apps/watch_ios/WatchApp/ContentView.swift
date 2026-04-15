@@ -4,13 +4,17 @@ struct ContentView: View {
     @StateObject private var workoutManager = WorkoutManager()
     @StateObject private var connectivity = WatchConnectivityManager.shared
     @State private var syncError: String?
+    @State private var thisRunSynced = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 switch workoutManager.state {
                 case .idle:
-                    PreRunView(workoutManager: workoutManager)
+                    PreRunView(
+                        workoutManager: workoutManager,
+                        queuedCount: connectivity.queuedCount
+                    )
                 case .recording:
                     RunningView(
                         workoutManager: workoutManager,
@@ -20,10 +24,11 @@ struct ContentView: View {
                     PostRunView(
                         workoutManager: workoutManager,
                         transferState: connectivity.transferState,
+                        thisRunSynced: thisRunSynced,
                         syncError: syncError,
                         onSync: syncRun,
                         onSyncDirect: syncRunDirect,
-                        onDiscard: discardRun
+                        onDiscard: startNextRun
                     )
                 }
             }
@@ -47,6 +52,7 @@ struct ContentView: View {
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
             connectivity.transferRun(fileURL: fileURL, metadata: metadata)
+            thisRunSynced = true
         } catch {
             syncError = error.localizedDescription
         }
@@ -62,6 +68,7 @@ struct ContentView: View {
             do {
                 try await syncRunDirectDebug(run)
                 await MainActor.run {
+                    thisRunSynced = true
                     connectivity.transferState = .completed
                 }
             } catch {
@@ -73,9 +80,12 @@ struct ContentView: View {
         #endif
     }
 
-    private func discardRun() {
-        connectivity.cancelPendingTransfer()
+    /// Return to the idle screen. Leaves any WCSession-queued transfers
+    /// intact — they continue delivering in the background when the phone
+    /// is next reachable.
+    private func startNextRun() {
         syncError = nil
+        thisRunSynced = false
         workoutManager.reset()
     }
 }
@@ -84,11 +94,18 @@ struct ContentView: View {
 
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
+    let queuedCount: Int
 
     var body: some View {
         VStack(spacing: 12) {
             Text("Ready to Run")
                 .font(.headline)
+
+            if queuedCount > 0 {
+                Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
 
             Button("Start") {
                 workoutManager.start()
@@ -153,6 +170,7 @@ struct RunningView: View {
 struct PostRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
     let transferState: WatchConnectivityManager.TransferState
+    let thisRunSynced: Bool
     let syncError: String?
     let onSync: () -> Void
     let onSyncDirect: () -> Void
@@ -186,12 +204,13 @@ struct PostRunView: View {
                 }
                 .padding(.vertical, 4)
 
-                if case .completed = transferState {
-                    Label("Sent to phone", systemImage: "checkmark.circle.fill")
+                if thisRunSynced {
+                    Label(syncedStatusText, systemImage: syncedStatusIcon)
                         .foregroundColor(AppTheme.coral)
                         .font(.body)
+                        .multilineTextAlignment(.center)
 
-                    Button("Done") {
+                    Button("Start next run") {
                         onDiscard()
                     }
                     .buttonStyle(.borderedProminent)
@@ -212,15 +231,10 @@ struct PostRunView: View {
                     Button {
                         onSync()
                     } label: {
-                        if case .pending = transferState {
-                            ProgressView()
-                        } else {
-                            Label("Sync Run", systemImage: "arrow.up.circle")
-                        }
+                        Label("Sync Run", systemImage: "arrow.up.circle")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.coralDeep)
-                    .disabled(transferState == .pending)
 
                     #if DEBUG
                     Button("DEBUG: Sync Direct") {
@@ -236,5 +250,18 @@ struct PostRunView: View {
                 }
             }
         }
+    }
+
+    private var syncedStatusText: String {
+        switch transferState {
+        case .completed: return "Sent to phone"
+        case .failed: return "Queued — will retry"
+        default: return "Queued for sync"
+        }
+    }
+
+    private var syncedStatusIcon: String {
+        if case .completed = transferState { return "checkmark.circle.fill" }
+        return "clock.arrow.circlepath"
     }
 }
