@@ -16,6 +16,7 @@ import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../race_controller.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -37,6 +38,7 @@ class RunScreen extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SocialService social;
+  final RaceController? raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
   final cm.Route? initialRoute;
@@ -49,6 +51,7 @@ class RunScreen extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.social,
+    this.raceController,
     required this.training,
     required this.heartRate,
     this.initialRoute,
@@ -429,6 +432,16 @@ class _RunScreenState extends State<RunScreen> {
     if (widget.preferences.audioCues) widget.audioCues.announceStart();
 
     setState(() => _state = _ScreenState.recording);
+
+    // If a live race is running, attach this recorder so pings flow and
+    // the finished run auto-submits to the leaderboard.
+    final race = widget.raceController?.active;
+    if (race != null && race.isRunning) {
+      widget.raceController!.attachRecorder(
+        eventId: race.eventId,
+        instance: race.instanceStart,
+      );
+    }
   }
 
   void _onSnapshot(RunSnapshot snapshot) {
@@ -447,6 +460,17 @@ class _RunScreenState extends State<RunScreen> {
         _offRouteDistance = snapshot.offRouteDistanceMetres;
         _routeRemaining = snapshot.routeRemainingMetres;
       });
+
+      // Ping the live race spectator feed. RaceController enforces a
+      // 10s cadence so this is safe to fire on every snapshot.
+      final pos = snapshot.currentPosition;
+      widget.raceController?.pushPing(
+        lat: pos.lat,
+        lng: pos.lng,
+        distanceM: snapshot.distanceMetres,
+        elapsedS: snapshot.elapsed.inSeconds,
+        bpm: _currentBpm,
+      );
 
       // Off-route warning
       final off = snapshot.offRouteDistanceMetres;
@@ -698,6 +722,14 @@ class _RunScreenState extends State<RunScreen> {
     } else {
       if (mounted) setState(() => _syncError = 'Saved offline.');
     }
+
+    // If this run was hosting a live race, submit the finisher time so
+    // the leaderboard updates without the user having to remember to.
+    await widget.raceController?.submitResult(
+      runId: run.id,
+      durationS: run.duration.inSeconds,
+      distanceM: run.distanceMetres,
+    );
   }
 
   Future<void> _confirmDiscardMidRun() async {
@@ -958,6 +990,18 @@ class _RunScreenState extends State<RunScreen> {
                     // button. If a route is selected for this specific
                     // run, suppress the social/plan cards and show only
                     // the route preview since that's the active context.
+                    if (widget.raceController != null)
+                      ListenableBuilder(
+                        listenable: widget.raceController!,
+                        builder: (_, __) {
+                          final race = widget.raceController!.active;
+                          if (race == null) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _RaceBanner(race: race),
+                          );
+                        },
+                      ),
                     if (_selectedRoute != null)
                       _RoutePreviewCard(route: _selectedRoute!)
                     else ...[
@@ -1859,6 +1903,112 @@ class _LastRunCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Idle-state banner that surfaces a live race. Armed → tells the user
+/// to get ready; running → shows elapsed since the server's start and a
+/// prompt to tap Start.
+class _RaceBanner extends StatefulWidget {
+  final ActiveRace race;
+  const _RaceBanner({required this.race});
+
+  @override
+  State<_RaceBanner> createState() => _RaceBannerState();
+}
+
+class _RaceBannerState extends State<_RaceBanner> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.race.isRunning) {
+      _tick = Timer.periodic(
+        const Duration(milliseconds: 500),
+        (_) { if (mounted) setState(() {}); },
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RaceBanner old) {
+    super.didUpdateWidget(old);
+    if (!old.race.isRunning && widget.race.isRunning) {
+      _tick = Timer.periodic(
+        const Duration(milliseconds: 500),
+        (_) { if (mounted) setState(() {}); },
+      );
+    } else if (old.race.isRunning && !widget.race.isRunning) {
+      _tick?.cancel();
+      _tick = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final race = widget.race;
+    final isRunning = race.isRunning && race.startedAt != null;
+    final elapsed = isRunning
+        ? DateTime.now().difference(race.startedAt!).inSeconds
+        : 0;
+    final label = race.eventTitle ?? 'Race';
+    final primary = theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: 0.08),
+        border: Border.all(color: primary, width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            race.isArmed ? Icons.sports_score : Icons.directions_run,
+            color: primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  race.isArmed ? 'Race armed' : 'Race LIVE',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: primary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Text(
+                  race.isArmed
+                      ? '$label — waiting for GO'
+                      : '$label — ${_fmt(elapsed)} elapsed · tap Start',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _fmt(int s) {
+    final h = s ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    final sec = s % 60;
+    if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
+    return '$m:${sec.toString().padLeft(2, '0')}';
   }
 }
 

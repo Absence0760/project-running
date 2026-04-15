@@ -208,6 +208,9 @@ export type Database = {
           finisher_status: string
           instance_start: string
           note: string | null
+          organiser_approved: boolean
+          organiser_approved_at: string | null
+          organiser_approved_by: string | null
           rank: number | null
           run_id: string | null
           updated_at: string
@@ -222,6 +225,9 @@ export type Database = {
           finisher_status?: string
           instance_start: string
           note?: string | null
+          organiser_approved?: boolean
+          organiser_approved_at?: string | null
+          organiser_approved_by?: string | null
           rank?: number | null
           run_id?: string | null
           updated_at?: string
@@ -236,6 +242,9 @@ export type Database = {
           finisher_status?: string
           instance_start?: string
           note?: string | null
+          organiser_approved?: boolean
+          organiser_approved_at?: string | null
+          organiser_approved_by?: string | null
           rank?: number | null
           run_id?: string | null
           updated_at?: string
@@ -484,6 +493,97 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "plan_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      race_pings: {
+        Row: {
+          at: string
+          bpm: number | null
+          distance_m: number | null
+          elapsed_s: number | null
+          event_id: string
+          id: number
+          instance_start: string
+          lat: number
+          lng: number
+          user_id: string
+        }
+        Insert: {
+          at?: string
+          bpm?: number | null
+          distance_m?: number | null
+          elapsed_s?: number | null
+          event_id: string
+          id?: number
+          instance_start: string
+          lat: number
+          lng: number
+          user_id: string
+        }
+        Update: {
+          at?: string
+          bpm?: number | null
+          distance_m?: number | null
+          elapsed_s?: number | null
+          event_id?: string
+          id?: number
+          instance_start?: string
+          lat?: number
+          lng?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_pings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      race_sessions: {
+        Row: {
+          auto_approve: boolean
+          created_at: string
+          event_id: string
+          finished_at: string | null
+          instance_start: string
+          started_at: string | null
+          started_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auto_approve?: boolean
+          created_at?: string
+          event_id: string
+          finished_at?: string | null
+          instance_start: string
+          started_at?: string | null
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_approve?: boolean
+          created_at?: string
+          event_id?: string
+          finished_at?: string | null
+          instance_start?: string
+          started_at?: string | null
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_sessions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -791,6 +891,37 @@ export type Database = {
       }
     }
     Functions: {
+      approve_event_result: {
+        Args: {
+          p_approve: boolean
+          p_event_id: string
+          p_instance_start: string
+          p_user_id: string
+        }
+        Returns: {
+          age_grade_pct: number | null
+          created_at: string
+          distance_m: number
+          duration_s: number
+          event_id: string
+          finisher_status: string
+          instance_start: string
+          note: string | null
+          organiser_approved: boolean
+          organiser_approved_at: string | null
+          organiser_approved_by: string | null
+          rank: number | null
+          run_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "event_results"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }
       join_club_by_token: { Args: { token: string }; Returns: string }

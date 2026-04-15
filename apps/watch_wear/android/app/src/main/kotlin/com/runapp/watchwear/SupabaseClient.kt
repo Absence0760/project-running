@@ -35,6 +35,9 @@ class SupabaseClient(
     private var userId: String? = null
 
     val authedUserId: String? get() = userId
+    /// Exposed for the race-session client which issues requests on the
+    /// same REST surface without owning the auth state itself.
+    val currentAccessToken: String? get() = accessToken
 
     /// Drop the in-memory session. Caller is also responsible for clearing
     /// `SessionStore` so a cold restart doesn't restore it.

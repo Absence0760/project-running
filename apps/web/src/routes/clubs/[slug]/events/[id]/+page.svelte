@@ -18,8 +18,14 @@
 		submitEventResult,
 		removeEventResult,
 		fetchRecentRunsForPicker,
+		fetchRaceSession,
+		armRace,
+		startRace,
+		endRace,
+		approveEventResult,
 		type EventResultWithUser,
-		type RecentRunOption
+		type RecentRunOption,
+		type RaceSessionRow
 	} from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
@@ -48,6 +54,10 @@
 	let showResultPicker = $state(false);
 	let runOptions = $state<RecentRunOption[]>([]);
 	let submitting = $state(false);
+	let raceSession = $state<RaceSessionRow | null>(null);
+	let raceBusy = $state(false);
+	let nowTick = $state(Date.now());
+	let autoApproveOnArm = $state(true);
 
 	/** The instance the user is currently RSVPing to. For one-off events this
 	 * stays equal to `event.starts_at`; for recurring events, the user can
@@ -90,7 +100,8 @@
 			fetchEventAttendees(event.id, activeInstance),
 			event.route_id ? fetchRouteById(event.route_id) : Promise.resolve(null),
 			fetchClubPosts(club.id, 50),
-			fetchEventResults(event.id, activeInstance)
+			fetchEventResults(event.id, activeInstance),
+			fetchRaceSession(event.id, activeInstance)
 		]);
 		attendees = res[0];
 		route = res[1];
@@ -98,7 +109,73 @@
 			(p) => p.event_id === event!.id && (!p.event_instance_start || p.event_instance_start === activeInstance)
 		);
 		results = res[3];
+		raceSession = res[4];
 	}
+
+	async function handleArm() {
+		if (!event || !activeInstance || raceBusy) return;
+		raceBusy = true;
+		try {
+			raceSession = await armRace(event.id, activeInstance, autoApproveOnArm);
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Arm failed';
+		} finally {
+			raceBusy = false;
+		}
+	}
+
+	async function handleStart() {
+		if (!event || !activeInstance || raceBusy) return;
+		raceBusy = true;
+		try {
+			raceSession = await startRace(event.id, activeInstance);
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Start failed';
+		} finally {
+			raceBusy = false;
+		}
+	}
+
+	async function handleEnd(status: 'finished' | 'cancelled') {
+		if (!event || !activeInstance || raceBusy) return;
+		if (!confirm(status === 'cancelled' ? 'Cancel the race?' : 'End the race?')) return;
+		raceBusy = true;
+		try {
+			raceSession = await endRace(event.id, activeInstance, status);
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'End failed';
+		} finally {
+			raceBusy = false;
+		}
+	}
+
+	async function handleApprove(userId: string, approve: boolean) {
+		if (!event || !activeInstance) return;
+		try {
+			await approveEventResult(event.id, activeInstance, userId, approve);
+			await reloadInstance();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Approval failed';
+		}
+	}
+
+	// Tick for the live elapsed display during a race.
+	let tickTimer: ReturnType<typeof setInterval> | null = null;
+	$effect(() => {
+		if (raceSession?.status === 'running') {
+			tickTimer = setInterval(() => (nowTick = Date.now()), 500);
+			return () => {
+				if (tickTimer) clearInterval(tickTimer);
+				tickTimer = null;
+			};
+		}
+	});
+
+	let raceElapsedS = $derived(
+		raceSession?.status === 'running' && raceSession.started_at
+			? Math.max(0, Math.floor((nowTick - new Date(raceSession.started_at).getTime()) / 1000))
+			: 0
+	);
 
 	async function openResultPicker() {
 		if (runOptions.length === 0) {
@@ -229,6 +306,26 @@
 					schema: 'public',
 					table: 'club_posts',
 					filter: `club_id=eq.${club.id}`
+				},
+				scheduleReload
+			)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'race_sessions',
+					filter: `event_id=eq.${event.id}`
+				},
+				scheduleReload
+			)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'event_results',
+					filter: `event_id=eq.${event.id}`
 				},
 				scheduleReload
 			)
@@ -493,6 +590,64 @@
 			</section>
 		{/if}
 
+		{#if isAdmin}
+			<section class="card race-panel">
+				<div class="results-head">
+					<h3>Race control</h3>
+					<a class="btn-link" href={`/live/event/${event.id}/${encodeURIComponent(activeInstance ?? '')}`} target="_blank" rel="noopener">
+						Spectator view ↗
+					</a>
+				</div>
+				{#if !raceSession || raceSession.status === 'finished' || raceSession.status === 'cancelled'}
+					<p class="muted">
+						{raceSession?.status === 'finished'
+							? 'This race is finished. Arm a new session to start another run.'
+							: raceSession?.status === 'cancelled'
+							? 'Previous race cancelled.'
+							: 'Arm the race when everyone is ready to go — attendees see an armed screen on their watch and phone.'}
+					</p>
+					<label class="auto-approve">
+						<input type="checkbox" bind:checked={autoApproveOnArm} />
+						<span>Auto-approve submitted results</span>
+					</label>
+					<button type="button" class="btn btn-primary-sm" onclick={handleArm} disabled={raceBusy}>
+						Arm race
+					</button>
+				{:else if raceSession.status === 'armed'}
+					<p class="race-state armed">
+						<span class="dot armed-dot"></span>
+						<strong>Armed</strong> — attendees are waiting for your Start.
+					</p>
+					<div class="race-actions">
+						<button type="button" class="btn btn-primary-sm big" onclick={handleStart} disabled={raceBusy}>
+							GO
+						</button>
+						<button type="button" class="btn-link" onclick={() => handleEnd('cancelled')} disabled={raceBusy}>
+							Cancel
+						</button>
+					</div>
+				{:else if raceSession.status === 'running'}
+					<p class="race-state running">
+						<span class="dot running-dot"></span>
+						<strong>Running</strong> — elapsed {formatDuration(raceElapsedS)}
+					</p>
+					<div class="race-actions">
+						<button type="button" class="btn btn-danger" onclick={() => handleEnd('finished')} disabled={raceBusy}>
+							End race
+						</button>
+					</div>
+				{/if}
+			</section>
+		{:else if raceSession && (raceSession.status === 'armed' || raceSession.status === 'running')}
+			<section class="card race-banner">
+				{#if raceSession.status === 'armed'}
+					<p><span class="dot armed-dot"></span><strong>Race armed</strong> — the organiser will start shortly. Your watch / phone will begin recording automatically.</p>
+				{:else}
+					<p><span class="dot running-dot"></span><strong>Race running</strong> — {formatDuration(raceElapsedS)} elapsed. Keep moving!</p>
+				{/if}
+			</section>
+		{/if}
+
 		<section class="card">
 			<div class="results-head">
 				<h3>Results ({results.length})</h3>
@@ -511,14 +666,15 @@
 			{:else}
 				<ol class="results">
 					{#each results as r (r.user_id)}
-						<li class="result" class:me={r.user_id === myUserId}>
-							<span class="rank">{r.rank ?? '—'}</span>
+						<li class="result" class:me={r.user_id === myUserId} class:pending={!r.organiser_approved}>
+							<span class="rank">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
 							<div class="avatar-sm" style="--seed: {hashHue(r.user_id)}">
 								{initial(r.display_name)}
 							</div>
 							<div class="res-info">
 								<strong>{r.display_name ?? 'Runner'}</strong>
 								{#if r.user_id === myUserId}<span class="you">(you)</span>{/if}
+								{#if !r.organiser_approved}<span class="pending-tag">PENDING</span>{/if}
 								{#if r.finisher_status !== 'finished'}
 									<span class="dnf-tag">{r.finisher_status.toUpperCase()}</span>
 								{/if}
@@ -526,6 +682,11 @@
 							{#if r.finisher_status === 'finished'}
 								<span class="time">{formatDuration(r.duration_s)}</span>
 								<span class="dist muted">{(r.distance_m / 1000).toFixed(2)} km</span>
+							{/if}
+							{#if isAdmin && !r.organiser_approved}
+								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id, true)}>Approve</button>
+							{:else if isAdmin && r.organiser_approved && r.user_id !== myUserId}
+								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id, false)}>Unverify</button>
 							{/if}
 						</li>
 					{/each}
@@ -1043,4 +1204,75 @@
 		gap: 0.4rem;
 		margin-top: var(--space-md);
 	}
+	.race-panel {
+		border: 1.5px solid var(--color-primary);
+	}
+	.race-banner {
+		background: var(--color-primary-light);
+		border-color: var(--color-primary);
+	}
+	.race-state {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: 0.3rem 0;
+	}
+	.race-state.armed { color: var(--color-primary); }
+	.race-state.running { color: #2e7d32; }
+	.dot {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		display: inline-block;
+	}
+	.armed-dot { background: var(--color-primary); }
+	.running-dot {
+		background: #2e7d32;
+		animation: pulse 1s infinite;
+	}
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.4; }
+	}
+	.race-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		margin-top: var(--space-sm);
+	}
+	.btn-primary-sm.big {
+		font-size: 1.4rem;
+		padding: 0.6rem 2rem;
+		letter-spacing: 0.1em;
+	}
+	.btn-danger {
+		padding: 0.35rem 0.75rem;
+		font-size: 0.85rem;
+		border-radius: var(--radius-md);
+		background: var(--color-danger);
+		color: white;
+		border: none;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.auto-approve {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		margin: 0.4rem 0 0.6rem;
+	}
+	.result.pending { opacity: 0.7; }
+	.result.pending .rank { color: var(--color-text-tertiary); }
+	.pending-tag {
+		background: #fff3cd;
+		color: #856404;
+		font-size: 0.7rem;
+		font-weight: 700;
+		padding: 0.1rem 0.35rem;
+		border-radius: var(--radius-sm);
+		letter-spacing: 0.04em;
+	}
+	.btn-link.approve { color: #2e7d32; }
+	.btn-link.reject { color: var(--color-danger); }
 </style>

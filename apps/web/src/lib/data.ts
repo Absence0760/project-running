@@ -881,6 +881,9 @@ export interface EventResultRow {
 	age_grade_pct: number | null;
 	note: string | null;
 	created_at: string;
+	organiser_approved: boolean;
+	organiser_approved_by: string | null;
+	organiser_approved_at: string | null;
 }
 
 export interface EventResultWithUser extends EventResultRow {
@@ -895,7 +898,7 @@ export async function fetchEventResults(
 	const { data: results } = await supabase
 		.from('event_results')
 		.select(
-			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at'
+			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved, organiser_approved_by, organiser_approved_at'
 		)
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
@@ -1000,6 +1003,183 @@ export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOpt
 				? ((r.metadata as Record<string, unknown>).activity_type as string)
 				: null) ?? 'run',
 	}));
+}
+
+// --- Race sessions (live race mode) ---
+
+export interface RaceSessionRow {
+	event_id: string;
+	instance_start: string;
+	status: 'armed' | 'running' | 'finished' | 'cancelled';
+	started_at: string | null;
+	started_by: string | null;
+	finished_at: string | null;
+	auto_approve: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+export async function fetchRaceSession(
+	eventId: string,
+	instanceStart: string
+): Promise<RaceSessionRow | null> {
+	const { data } = await supabase
+		.from('race_sessions')
+		.select('*')
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.maybeSingle();
+	return (data as RaceSessionRow | null) ?? null;
+}
+
+export async function armRace(
+	eventId: string,
+	instanceStart: string,
+	autoApprove: boolean
+): Promise<RaceSessionRow> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { data, error } = await supabase
+		.from('race_sessions')
+		.upsert(
+			{
+				event_id: eventId,
+				instance_start: instanceStart,
+				status: 'armed',
+				started_at: null,
+				started_by: null,
+				finished_at: null,
+				auto_approve: autoApprove,
+				updated_at: new Date().toISOString(),
+			},
+			{ onConflict: 'event_id,instance_start' }
+		)
+		.select()
+		.single();
+	if (error) throw error;
+	return data as RaceSessionRow;
+}
+
+export async function startRace(
+	eventId: string,
+	instanceStart: string
+): Promise<RaceSessionRow> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { data, error } = await supabase
+		.from('race_sessions')
+		.update({
+			status: 'running',
+			started_at: new Date().toISOString(),
+			started_by: userId,
+			updated_at: new Date().toISOString(),
+		})
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.select()
+		.single();
+	if (error) throw error;
+	return data as RaceSessionRow;
+}
+
+export async function endRace(
+	eventId: string,
+	instanceStart: string,
+	status: 'finished' | 'cancelled' = 'finished'
+): Promise<RaceSessionRow> {
+	const { data, error } = await supabase
+		.from('race_sessions')
+		.update({
+			status,
+			finished_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+		})
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.select()
+		.single();
+	if (error) throw error;
+	return data as RaceSessionRow;
+}
+
+export async function approveEventResult(
+	eventId: string,
+	instanceStart: string,
+	userId: string,
+	approve: boolean
+): Promise<void> {
+	const { error } = await supabase.rpc('approve_event_result', {
+		p_event_id: eventId,
+		p_instance_start: instanceStart,
+		p_user_id: userId,
+		p_approve: approve,
+	});
+	if (error) throw error;
+}
+
+export interface RacePingRow {
+	id: number;
+	event_id: string;
+	instance_start: string;
+	user_id: string;
+	at: string;
+	lat: number;
+	lng: number;
+	distance_m: number | null;
+	elapsed_s: number | null;
+	bpm: number | null;
+}
+
+/// Latest ping per runner for the spectator map. One row per user, at ==
+/// their most recent sample. Sorted by distance descending so the lead
+/// runner is first.
+export async function fetchLatestRacePings(
+	eventId: string,
+	instanceStart: string
+): Promise<RacePingRow[]> {
+	// Pull recent pings and collapse to the latest-per-user client-side.
+	// The index is (event_id, instance_start, at desc) so this is cheap;
+	// a `distinct on` RPC would be the next optimisation if this gets
+	// hot.
+	const { data } = await supabase
+		.from('race_pings')
+		.select('*')
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.order('at', { ascending: false })
+		.limit(500);
+	const pings = (data as RacePingRow[]) ?? [];
+	const byUser = new Map<string, RacePingRow>();
+	for (const p of pings) {
+		if (!byUser.has(p.user_id)) byUser.set(p.user_id, p);
+	}
+	return [...byUser.values()].sort(
+		(a, b) => (b.distance_m ?? 0) - (a.distance_m ?? 0)
+	);
+}
+
+export async function postRacePing(params: {
+	eventId: string;
+	instanceStart: string;
+	lat: number;
+	lng: number;
+	distanceM?: number;
+	elapsedS?: number;
+	bpm?: number;
+}): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase.from('race_pings').insert({
+		event_id: params.eventId,
+		instance_start: params.instanceStart,
+		user_id: userId,
+		lat: params.lat,
+		lng: params.lng,
+		distance_m: params.distanceM ?? null,
+		elapsed_s: params.elapsedS ?? null,
+		bpm: params.bpm ?? null,
+	});
+	if (error) throw error;
 }
 
 // --- Club posts (owner updates) ---

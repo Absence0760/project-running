@@ -52,7 +52,19 @@ data class UiState(
     val pendingRecovery: Checkpoint? = null,
     val activityType: String = "run",
     val lapCount: Int = 0,
+    val activeRace: ActiveRaceState? = null,
 )
+
+data class ActiveRaceState(
+    val eventId: String,
+    val instanceStart: String,
+    val status: String,
+    val startedAtMs: Long?,
+    val eventTitle: String?,
+) {
+    val isArmed: Boolean get() = status == "armed"
+    val isRunning: Boolean get() = status == "running"
+}
 
 data class FinishedSummary(
     val distanceM: Double,
@@ -81,6 +93,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionBridge = SessionBridge(application)
     private val checkpoints = CheckpointStore(application)
     private val networkWatcher = NetworkWatcher(application)
+    private val raceClient = RaceSessionClient(
+        baseUrl = BuildConfig.SUPABASE_URL,
+        anonKey = BuildConfig.SUPABASE_ANON_KEY,
+    )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -94,11 +110,15 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private var queueWatchJob: Job? = null
     private var recordingObserverJob: Job? = null
     private var connectivityJob: Job? = null
+    private var racePollJob: Job? = null
+    private var racePingJob: Job? = null
+    private var lastRacePingAtMs: Long = 0L
 
     init {
         observeRecording()
         observeQueue()
         observeConnectivity()
+        observeRace()
         bootstrapAuth()
         checkBatteryOptimisation()
         checkBatteryLevel()
@@ -122,10 +142,39 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             activityType = m.activityType,
                             lapCount = m.laps.size,
                         )
+                        maybePushRacePing(m)
                     }
                     RecordingRepository.Stage.Finished -> handleFinishedRun(m)
                     RecordingRepository.Stage.Idle -> Unit
                 }
+            }
+        }
+    }
+
+    private fun maybePushRacePing(m: RecordingRepository.Metrics) {
+        val race = _state.value.activeRace ?: return
+        if (!race.isRunning) return
+        val point = m.latestPoint ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastRacePingAtMs < 10_000) return
+        lastRacePingAtMs = now
+        val token = supabase.currentAccessToken ?: return
+        val uid = supabase.authedUserId ?: return
+        racePingJob = viewModelScope.launch {
+            try {
+                raceClient.pushPing(
+                    accessToken = token,
+                    userId = uid,
+                    eventId = race.eventId,
+                    instanceStart = race.instanceStart,
+                    lat = point.lat,
+                    lng = point.lng,
+                    distanceM = m.distanceM,
+                    elapsedS = (m.elapsedMs / 1000).toInt(),
+                    bpm = m.bpm,
+                )
+            } catch (_: Throwable) {
+                // ignore — pings are best-effort.
             }
         }
     }
@@ -151,6 +200,45 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 if (!seeded) { seeded = true; return@collect }
                 if (online && _state.value.authed) drainQueue()
             }
+        }
+    }
+
+    /// Poll for an armed / running race the user is RSVP'd to. The watch
+    /// has no realtime client today so we poll — 30s cadence is fine
+    /// because the organiser usually arms a few minutes before GO.
+    private fun observeRace() {
+        racePollJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(5_000)
+                if (authReady.value) refreshRace()
+                kotlinx.coroutines.delay(25_000)
+            }
+        }
+    }
+
+    private suspend fun refreshRace() {
+        val token = supabase.currentAccessToken ?: return
+        val uid = supabase.authedUserId ?: return
+        try {
+            val active = raceClient.fetchActive(token, uid)
+            val newState = active?.let {
+                ActiveRaceState(
+                    eventId = it.eventId,
+                    instanceStart = it.instanceStart,
+                    status = it.status,
+                    startedAtMs = it.startedAtIso?.let { iso ->
+                        runCatching { java.time.Instant.parse(iso).toEpochMilli() }
+                            .getOrNull()
+                    },
+                    eventTitle = it.eventTitle,
+                )
+            }
+            if (newState != _state.value.activeRace) {
+                _state.value = _state.value.copy(activeRace = newState)
+            }
+        } catch (_: Throwable) {
+            // Polling is advisory; swallow failures so a flaky connection
+            // doesn't spam the UI with errors.
         }
     }
 
@@ -373,6 +461,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val runId = m.runId ?: return
         val trackPath = m.trackFilePath ?: return
         val durationS = (m.elapsedMs / 1000).toInt()
+        // Snapshot race context before we reset; we need it below to
+        // submit the result after the upload drains.
+        val race = _state.value.activeRace
+            ?.takeIf { it.isRunning }
         val laps = buildFinishedLaps(m, durationS)
         val summary = FinishedSummary(
             distanceM = m.distanceM,
@@ -403,6 +495,30 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             )
             RecordingRepository.reset()
             drainQueue()
+            if (race != null) {
+                val token = supabase.currentAccessToken
+                val uid = supabase.authedUserId
+                if (token != null && uid != null) {
+                    try {
+                        raceClient.submitResult(
+                            accessToken = token,
+                            userId = uid,
+                            eventId = race.eventId,
+                            instanceStart = race.instanceStart,
+                            runId = runId,
+                            durationS = durationS,
+                            distanceM = m.distanceM,
+                        )
+                    } catch (_: Throwable) {
+                        // Leaderboard write is best-effort; the run is queued.
+                    }
+                }
+                // Clear the active race once we've reported. If the race
+                // is still running on the server, the next poll will
+                // re-populate it — but at that point the user isn't on
+                // it anymore (they've finished).
+                _state.value = _state.value.copy(activeRace = null)
+            }
         }
     }
 

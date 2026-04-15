@@ -236,6 +236,9 @@ class EventResultRow {
   static const String colNote = 'note';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colOrganiserApproved = 'organiser_approved';
+  static const String colOrganiserApprovedBy = 'organiser_approved_by';
+  static const String colOrganiserApprovedAt = 'organiser_approved_at';
 
   final String eventId;
   final DateTime instanceStart;
@@ -249,6 +252,9 @@ class EventResultRow {
   final String? note;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool organiserApproved;
+  final String? organiserApprovedBy;
+  final DateTime? organiserApprovedAt;
 
   const EventResultRow({
     required this.eventId,
@@ -263,6 +269,9 @@ class EventResultRow {
     this.note,
     required this.createdAt,
     required this.updatedAt,
+    required this.organiserApproved,
+    this.organiserApprovedBy,
+    this.organiserApprovedAt,
   });
 
   factory EventResultRow.fromJson(Map<String, dynamic> json) => EventResultRow(
@@ -278,6 +287,9 @@ class EventResultRow {
     note: json['note'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    organiserApproved: json['organiser_approved'] as bool,
+    organiserApprovedBy: json['organiser_approved_by'] as String?,
+    organiserApprovedAt: json['organiser_approved_at'] == null ? null : DateTime.parse(json['organiser_approved_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -293,6 +305,9 @@ class EventResultRow {
     colNote: note,
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colOrganiserApproved: organiserApproved,
+    colOrganiserApprovedBy: organiserApprovedBy,
+    colOrganiserApprovedAt: organiserApprovedAt?.toIso8601String(),
   };
 }
 
@@ -617,6 +632,133 @@ class PlanWorkoutRow {
     colCompletedAt: completedAt?.toIso8601String(),
     colPaceZone: paceZone,
     colTargetPaceEndSecPerKm: targetPaceEndSecPerKm,
+  };
+}
+
+/// Row shape for the `race_pings` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RacePingRow {
+  static const String table = 'race_pings';
+  static const String colId = 'id';
+  static const String colEventId = 'event_id';
+  static const String colInstanceStart = 'instance_start';
+  static const String colUserId = 'user_id';
+  static const String colAt = 'at';
+  static const String colLat = 'lat';
+  static const String colLng = 'lng';
+  static const String colDistanceM = 'distance_m';
+  static const String colElapsedS = 'elapsed_s';
+  static const String colBpm = 'bpm';
+
+  final dynamic id;
+  final String eventId;
+  final DateTime instanceStart;
+  final String userId;
+  final DateTime at;
+  final double lat;
+  final double lng;
+  final double? distanceM;
+  final int? elapsedS;
+  final int? bpm;
+
+  const RacePingRow({
+    required this.id,
+    required this.eventId,
+    required this.instanceStart,
+    required this.userId,
+    required this.at,
+    required this.lat,
+    required this.lng,
+    this.distanceM,
+    this.elapsedS,
+    this.bpm,
+  });
+
+  factory RacePingRow.fromJson(Map<String, dynamic> json) => RacePingRow(
+    id: json['id'],
+    eventId: json['event_id'] as String,
+    instanceStart: DateTime.parse(json['instance_start'] as String),
+    userId: json['user_id'] as String,
+    at: DateTime.parse(json['at'] as String),
+    lat: (json['lat'] as num).toDouble(),
+    lng: (json['lng'] as num).toDouble(),
+    distanceM: (json['distance_m'] as num?)?.toDouble(),
+    elapsedS: (json['elapsed_s'] as num?)?.toInt(),
+    bpm: (json['bpm'] as num?)?.toInt(),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colEventId: eventId,
+    colInstanceStart: instanceStart.toIso8601String(),
+    colUserId: userId,
+    colAt: at.toIso8601String(),
+    colLat: lat,
+    colLng: lng,
+    colDistanceM: distanceM,
+    colElapsedS: elapsedS,
+    colBpm: bpm,
+  };
+}
+
+/// Row shape for the `race_sessions` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RaceSessionRow {
+  static const String table = 'race_sessions';
+  static const String colEventId = 'event_id';
+  static const String colInstanceStart = 'instance_start';
+  static const String colStatus = 'status';
+  static const String colStartedAt = 'started_at';
+  static const String colStartedBy = 'started_by';
+  static const String colFinishedAt = 'finished_at';
+  static const String colAutoApprove = 'auto_approve';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String eventId;
+  final DateTime instanceStart;
+  final String status;
+  final DateTime? startedAt;
+  final String? startedBy;
+  final DateTime? finishedAt;
+  final bool autoApprove;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const RaceSessionRow({
+    required this.eventId,
+    required this.instanceStart,
+    required this.status,
+    this.startedAt,
+    this.startedBy,
+    this.finishedAt,
+    required this.autoApprove,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory RaceSessionRow.fromJson(Map<String, dynamic> json) => RaceSessionRow(
+    eventId: json['event_id'] as String,
+    instanceStart: DateTime.parse(json['instance_start'] as String),
+    status: json['status'] as String,
+    startedAt: json['started_at'] == null ? null : DateTime.parse(json['started_at'] as String),
+    startedBy: json['started_by'] as String?,
+    finishedAt: json['finished_at'] == null ? null : DateTime.parse(json['finished_at'] as String),
+    autoApprove: json['auto_approve'] as bool,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colEventId: eventId,
+    colInstanceStart: instanceStart.toIso8601String(),
+    colStatus: status,
+    colStartedAt: startedAt?.toIso8601String(),
+    colStartedBy: startedBy,
+    colFinishedAt: finishedAt?.toIso8601String(),
+    colAutoApprove: autoApprove,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
 

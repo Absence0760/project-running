@@ -116,6 +116,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             batteryPercent = state.batteryPercent,
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
                             activityType = state.activityType,
+                            activeRace = state.activeRace,
                             onCycleActivity = {
                                 val order = listOf("run", "walk", "hike", "cycle")
                                 val next = order[(order.indexOf(state.activityType) + 1) % order.size]
@@ -256,6 +257,7 @@ private fun PreRunScreen(
     online: Boolean,
     batteryOptimised: Boolean,
     batteryPercent: Int?,
+    activeRace: com.runapp.watchwear.ActiveRaceState?,
     pendingRecoveryDistance: Double?,
     activityType: String,
     onCycleActivity: () -> Unit,
@@ -348,6 +350,21 @@ private fun PreRunScreen(
                     "Battery $batteryPercent% · consider charging",
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.warning,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(4.dp))
+            }
+            if (activeRace != null) {
+                Text(
+                    if (activeRace.isArmed) "RACE ARMED" else "RACE LIVE",
+                    style = MaterialTheme.typography.caption2,
+                    color = MaterialTheme.colors.primary,
+                )
+                val title = activeRace.eventTitle ?: "Event"
+                Text(
+                    if (activeRace.isArmed) "$title · wait for GO" else "$title · tap Start",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.parchment,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(4.dp))

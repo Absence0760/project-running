@@ -11,6 +11,7 @@ import 'background_sync.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
+import 'race_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'settings_sync.dart';
@@ -119,6 +120,8 @@ void main() async {
   registerBackgroundSync();
 
   final social = SocialService();
+  final raceController = RaceController(social);
+  unawaited(raceController.start());
   final training = TrainingService();
   final heartRate = BleHeartRate();
   // Kick off auto-reconnect in the background. If the user has paired a
@@ -135,6 +138,7 @@ void main() async {
     syncService: syncService,
     settingsSync: settingsSync,
     social: social,
+    raceController: raceController,
     training: training,
     heartRate: heartRate,
     recoveredRun: recoveredRun,
@@ -156,6 +160,7 @@ class RunApp extends StatefulWidget {
   final SyncService syncService;
   final SettingsSyncService? settingsSync;
   final SocialService social;
+  final RaceController raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
   final cm.Run? recoveredRun;
@@ -169,6 +174,7 @@ class RunApp extends StatefulWidget {
     required this.syncService,
     this.settingsSync,
     required this.social,
+    required this.raceController,
     required this.training,
     required this.heartRate,
     this.recoveredRun,
@@ -231,6 +237,7 @@ class _RunAppState extends State<RunApp> {
                   preferences: widget.preferences,
                   audioCues: widget.audioCues,
                   social: widget.social,
+                  raceController: widget.raceController,
                   training: widget.training,
                   heartRate: widget.heartRate,
                   settingsSync: widget.settingsSync,

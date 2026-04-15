@@ -7,6 +7,7 @@ import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../race_controller.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -24,6 +25,7 @@ class HomeScreen extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SocialService social;
+  final RaceController raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
   final SettingsSyncService? settingsSync;
@@ -36,6 +38,7 @@ class HomeScreen extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.social,
+    required this.raceController,
     required this.training,
     required this.heartRate,
     this.settingsSync,
@@ -89,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
           preferences: widget.preferences,
           audioCues: widget.audioCues,
           social: widget.social,
+          raceController: widget.raceController,
           training: widget.training,
           heartRate: widget.heartRate,
           initialRoute: _preselectedRoute,

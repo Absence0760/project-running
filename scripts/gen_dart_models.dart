@@ -77,6 +77,8 @@ const _tables = <String>{
   'user_settings',
   'user_device_settings',
   'event_results',
+  'race_sessions',
+  'race_pings',
 };
 
 class _Column {

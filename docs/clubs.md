@@ -37,6 +37,33 @@ The enrichment fields are joined client-side in `data.ts` rather than through a 
 
 Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`.
 
+### Live race mode
+
+Organisers can turn an event instance into a live, server-coordinated race: every RSVP'd attendee's watch / phone shows an "armed" screen, the organiser presses GO, every client starts recording off the server's `started_at`, and finisher rows auto-populate the leaderboard without anyone submitting manually.
+
+**Tables** (`20260425_001_race_sessions.sql`):
+
+- `race_sessions` (`event_id`, `instance_start`, `status ∈ {armed, running, finished, cancelled}`, `started_at`, `started_by`, `finished_at`, `auto_approve`). Admin-only writes via `is_club_admin`; anyone who can see the event reads.
+- `race_pings` (append-only, `user_id`, `lat`, `lng`, `distance_m`, `elapsed_s`, `bpm`). Writes allowed only while the parent `race_sessions.status = 'running'`; reads follow the parent event's visibility.
+- `event_results.organiser_approved` + `organiser_approved_by` / `_at` columns. The trigger `event_results_set_approval_default` flips a new result to `organiser_approved = false` if the parent `race_sessions.auto_approve` is off; otherwise it's approved on insert.
+- `approve_event_result(event_id, instance_start, user_id, approve)` security-definer RPC so admins can approve pending rows without needing a direct update policy.
+
+**Realtime**: `race_sessions`, `race_pings`, and `event_results` are all published on `supabase_realtime` so the organiser panel, spectator page, and leaderboard all update without polling.
+
+**Surfaces**:
+
+- Web event page: admin race-control panel (Arm → GO → End), `auto_approve` checkbox before arming. Attendees see a "Race armed" / "Race LIVE" banner with live elapsed. Approval buttons on pending rows for admins.
+- `/live/event/{id}/{instance_start}`: public-ish spectator page. Live-ranked list of runners on course (distance, pace, elapsed) driven by `race_pings`, plus the finisher leaderboard below.
+- Mobile Android `lib/race_controller.dart` polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop.
+- Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows.
+
+**Not wired yet** (deferred follow-ups):
+
+- Remote auto-start of the recorder on the `running` signal. Today the user still taps Start; plumbing the permission flow + countdown into a remote trigger is a Wear-specific engineering task.
+- Apple Watch (watchOS Swift) race-armed UI. The `event_results` upload path exists; the "armed" screen is the missing piece.
+- Mobile iOS Flutter — the app is still scaffolded per [apps/mobile_ios/CLAUDE.md](../apps/mobile_ios/CLAUDE.md), so race mode doesn't surface there yet.
+- Spectator map. Today the spectator page is a live-updating list; adding a MapLibre view of runner dots is a straightforward extension using the existing `/live/[id]` pattern.
+
 ### Event results
 
 `event_results` (`20260424_001_event_results.sql`) is a per-`(event_id, instance_start, user_id)` leaderboard. Each row carries `run_id` (nullable — manual entries and DNF / DNS don't need a run), `duration_s`, `distance_m`, `finisher_status ∈ {finished, dnf, dns}`, and a server-maintained `rank` that a trigger (`recompute_event_ranks`) rewrites on every insert / update of `duration_s` or `finisher_status` and on delete. Non-finishers never get a rank (null). RLS: anyone who can see the parent event can read; users can write their own row; club admins / owners can edit or delete any row on their club's events.
