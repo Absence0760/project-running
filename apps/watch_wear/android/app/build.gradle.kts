@@ -1,21 +1,25 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // `org.jetbrains.kotlin.android` is built-in from AGP 9.0.
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 android {
     namespace = "com.runapp.watchwear"
-    compileSdk = 35
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -54,34 +58,36 @@ android {
 
 dependencies {
     // Compose
-    val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.03.01")
     implementation(composeBom)
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
 
     // Compose-for-Wear
-    implementation("androidx.wear.compose:compose-material:1.4.0")
-    implementation("androidx.wear.compose:compose-foundation:1.4.0")
-    implementation("androidx.wear.compose:compose-navigation:1.4.0")
-    implementation("androidx.wear:wear-ongoing:1.0.0")
+    implementation("androidx.wear.compose:compose-material:1.6.1")
+    implementation("androidx.wear.compose:compose-foundation:1.6.1")
+    implementation("androidx.wear.compose:compose-navigation:1.6.1")
+    implementation("androidx.wear:wear-ongoing:1.1.0")
 
-    // Health Services (live HR)
-    implementation("androidx.health:health-services-client:1.1.0-alpha05")
-    implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
-    implementation("com.google.guava:guava:33.3.1-android")
+    // Health Services (live HR). 1.1.0-rc01 is the latest pre-stable; 1.0.0
+    // is the last stable tag but lacks the flow helpers we want. Move to
+    // 1.1.0 stable when it ships.
+    implementation("androidx.health:health-services-client:1.1.0-rc01")
+    implementation("androidx.concurrent:concurrent-futures-ktx:1.3.0")
+    implementation("com.google.guava:guava:33.6.0-android")
 
     // Location
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // Networking
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
 
     // Local persistence
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Serialization + coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 }

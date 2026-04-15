@@ -116,7 +116,7 @@ class SupabaseClient(
 
     private fun execute(req: Request): String {
         http.newCall(req).execute().use { resp ->
-            val body = resp.body?.string().orEmpty()
+            val body = resp.body.string()
             if (!resp.isSuccessful) {
                 throw RuntimeException("HTTP ${resp.code}: $body")
             }

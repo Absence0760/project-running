@@ -96,6 +96,19 @@ The default `SUPABASE_URL` points at `http://10.0.2.2:54321` — the Android
 emulator's loopback alias for the host machine, matching the local Supabase
 stack that `mobile_android` also uses.
 
+## Dependency versions
+
+All versions are pinned to latest stable as of April 2026. Key points:
+
+- **AGP 9.1.0** + **Gradle 9.4.1**. AGP 9 removed the `org.jetbrains.kotlin.android` plugin — it's now built-in — and removed the `kotlinOptions {}` DSL block in favour of `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }`. Both changes are reflected in the root plugin list + `app/build.gradle.kts`.
+- **Kotlin 2.3.20** (compose + serialization plugins). Kotlin 2.0+ means the Compose Compiler is a Kotlin plugin (`org.jetbrains.kotlin.plugin.compose`), versioned with Kotlin itself.
+- **Compose BOM 2026.03.01** pins core Compose artifacts; **Wear Compose 1.6.1** (material / foundation / navigation) is declared separately because it's not under the core BOM.
+- **Health Services 1.1.0-rc01**. Last stable is 1.0.0 but lacks some of the APIs we rely on; bump to 1.1.0 stable when it ships.
+- **OkHttp 5.3.2**. OkHttp 5 made `ResponseBody` non-nullable (`response.body.string()` instead of `response.body?.string()`) — one ergonomic break to watch for when adding network code.
+- **compileSdk 36** / **targetSdk 35** / **minSdk 30**. AGP 9.1 requires compileSdk 36; Health Services requires minSdk 30; Wear OS 3 is the realistic deployment floor regardless.
+
+When bumping, regenerate the codegen afterwards (`dart run scripts/gen_dart_models.dart`) and build both `./gradlew assembleDebug` and `./gradlew assembleRelease`.
+
 ## Gradle JDK quirk
 
 Homebrew's default JDK on this machine is 25; Gradle 8.14's embedded Kotlin
