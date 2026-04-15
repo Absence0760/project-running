@@ -12,6 +12,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
 | Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
+| Touching a user setting / preference | [docs/settings.md](docs/settings.md) — universal + per-device prefs registry |
 | Touching the recording pipeline | [docs/run_recording.md](docs/run_recording.md) — state machine, filters, auto-pause |
 | Touching the web auth flow | [docs/web_app_auth.md](docs/web_app_auth.md) |
 | Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |

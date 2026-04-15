@@ -627,6 +627,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_device_settings: {
+        Row: {
+          device_id: string
+          label: string | null
+          last_seen_at: string
+          platform: string
+          prefs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          device_id: string
+          label?: string | null
+          last_seen_at?: string
+          platform: string
+          prefs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          device_id?: string
+          label?: string | null
+          last_seen_at?: string
+          platform?: string
+          prefs?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           avatar_url: string | null
@@ -657,6 +687,24 @@ export type Database = {
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          prefs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          prefs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          prefs?: Json
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

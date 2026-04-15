@@ -74,6 +74,8 @@ const _tables = <String>{
   'training_plans',
   'plan_weeks',
   'plan_workouts',
+  'user_settings',
+  'user_device_settings',
 };
 
 class _Column {

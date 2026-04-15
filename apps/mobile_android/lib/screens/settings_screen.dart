@@ -11,6 +11,7 @@ import '../ble_heart_rate.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
+import '../settings_sync.dart';
 import 'import_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -20,6 +21,7 @@ class SettingsScreen extends StatefulWidget {
   final Preferences preferences;
   final LocalRunStore? runStore;
   final BleHeartRate heartRate;
+  final SettingsSyncService? settingsSync;
 
   const SettingsScreen({
     super.key,
@@ -27,6 +29,7 @@ class SettingsScreen extends StatefulWidget {
     required this.preferences,
     required this.heartRate,
     this.runStore,
+    this.settingsSync,
   });
 
   @override
@@ -50,6 +53,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _onChange() {
     if (mounted) setState(() {});
+  }
+
+  String _unitSubtitle() {
+    final base = widget.preferences.useMiles ? 'mi, ft' : 'km, m';
+    final sync = widget.settingsSync;
+    if (sync == null || !sync.synced) return base;
+    return '$base · synced to your other devices';
   }
 
   Future<void> _signIn() async {
@@ -263,9 +273,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Use miles'),
-            subtitle: Text(prefs.useMiles ? 'mi, ft' : 'km, m'),
+            subtitle: Text(_unitSubtitle()),
             value: prefs.useMiles,
-            onChanged: prefs.setUseMiles,
+            onChanged: (v) async {
+              await prefs.setUseMiles(v);
+              // Best-effort cloud push — no UI error if we're offline.
+              // The cloud value is re-pulled on next sign-in anyway.
+              await widget.settingsSync?.pushPreferredUnit();
+              if (mounted) setState(() {});
+            },
           ),
           SwitchListTile(
             title: const Text('Audio cues'),

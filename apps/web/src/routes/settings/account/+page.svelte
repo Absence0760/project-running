@@ -1,8 +1,15 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
 	import { downloadFile } from '$lib/gpx';
 	import { fetchRuns } from '$lib/data';
+	import {
+		loadSettings,
+		updateUniversal,
+		effective,
+		type LoadedSettings,
+	} from '$lib/settings';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -10,6 +17,34 @@
 	let saving = $state(false);
 	let saved = $state(false);
 	let exporting = $state(false);
+
+	let settings = $state<LoadedSettings | null>(null);
+	let defaultActivityType = $state<'run' | 'walk' | 'hike' | 'cycle'>('run');
+	let weekStartDay = $state<'monday' | 'sunday'>('monday');
+	let prefsSaving = $state(false);
+	let prefsSaved = $state(false);
+
+	onMount(async () => {
+		if (!auth.user) return;
+		try {
+			settings = await loadSettings(auth.user.id);
+			defaultActivityType =
+				effective<'run' | 'walk' | 'hike' | 'cycle'>(
+					settings,
+					'default_activity_type',
+					'run'
+				) ?? 'run';
+			weekStartDay =
+				effective<'monday' | 'sunday'>(settings, 'week_start_day', 'monday') ??
+				'monday';
+			// Universal bag is source-of-truth for preferred_unit going
+			// forward; fall back to the profile column for existing users.
+			const fromBag = effective<'km' | 'mi'>(settings, 'preferred_unit');
+			if (fromBag) preferredUnit = fromBag;
+		} catch (e) {
+			console.warn('Settings load failed', e);
+		}
+	});
 
 	// Password management. Lets a user who signed up with Google / Apple
 	// add a password so they can also sign in via email+password on the
@@ -48,14 +83,33 @@
 		if (!auth.user) return;
 		saving = true;
 		saved = false;
-		await supabase.from('user_profiles').update({
-			display_name: displayName || null,
-			parkrun_number: parkrunNumber || null,
-			preferred_unit: preferredUnit,
-		}).eq('id', auth.user.id);
+		// Dual-write `preferred_unit` — profile column stays canonical for
+		// legacy reads (web, older mobile builds); the jsonb bag is what
+		// newer clients pull on sign-in. Next migration removes the column.
+		await Promise.all([
+			supabase.from('user_profiles').update({
+				display_name: displayName || null,
+				parkrun_number: parkrunNumber || null,
+				preferred_unit: preferredUnit,
+			}).eq('id', auth.user.id),
+			updateUniversal(auth.user.id, { preferred_unit: preferredUnit }),
+		]);
 		saved = true;
 		saving = false;
 		setTimeout(() => (saved = false), 2000);
+	}
+
+	async function handleSavePrefs() {
+		if (!auth.user) return;
+		prefsSaving = true;
+		prefsSaved = false;
+		await updateUniversal(auth.user.id, {
+			default_activity_type: defaultActivityType,
+			week_start_day: weekStartDay,
+		});
+		prefsSaved = true;
+		prefsSaving = false;
+		setTimeout(() => (prefsSaved = false), 2000);
 	}
 
 	async function handleExportCsv() {
@@ -100,6 +154,10 @@
 	<!-- Preferences -->
 	<section class="card">
 		<h2>Preferences</h2>
+		<p class="section-desc">
+			These settings sync to every device you sign into. Per-device overrides live in each
+			app's settings screen.
+		</p>
 		<label>
 			<span class="label-text">Distance Unit</span>
 			<div class="unit-toggle">
@@ -119,6 +177,29 @@
 				</button>
 			</div>
 		</label>
+		<label>
+			<span class="label-text">Default activity</span>
+			<select bind:value={defaultActivityType}>
+				<option value="run">Run</option>
+				<option value="walk">Walk</option>
+				<option value="hike">Hike</option>
+				<option value="cycle">Cycle</option>
+			</select>
+		</label>
+		<label>
+			<span class="label-text">Week starts on</span>
+			<select bind:value={weekStartDay}>
+				<option value="monday">Monday</option>
+				<option value="sunday">Sunday</option>
+			</select>
+		</label>
+		<button
+			class="btn btn-primary btn-save"
+			onclick={handleSavePrefs}
+			disabled={prefsSaving}
+		>
+			{prefsSaving ? 'Saving...' : prefsSaved ? 'Saved!' : 'Save Preferences'}
+		</button>
 	</section>
 
 	<!-- Sign-in password -->

@@ -13,6 +13,7 @@ import 'local_run_store.dart';
 import 'preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'settings_sync.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
 import 'ble_heart_rate.dart';
@@ -74,6 +75,7 @@ void main() async {
 
   // Try to initialize Supabase — skip if not configured or unreachable
   ApiClient? api;
+  SettingsSyncService? settingsSync;
   final supabaseUrl = dotenv.env['SUPABASE_URL'];
   final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
   if (supabaseUrl != null && supabaseUrl.isNotEmpty &&
@@ -96,6 +98,14 @@ void main() async {
         } catch (e) {
           debugPrint('Auto sign-in failed: $e');
         }
+      }
+      settingsSync = SettingsSyncService(preferences: prefs);
+      // Best-effort — a failed settings sync shouldn't block launch. The
+      // service stores `lastError` for the settings screen to surface.
+      try {
+        await settingsSync.onSignedIn();
+      } catch (e) {
+        debugPrint('Settings sync failed: $e');
       }
     } catch (e) {
       debugPrint('Supabase init failed, running offline: $e');
@@ -123,6 +133,7 @@ void main() async {
     preferences: prefs,
     audioCues: audioCues,
     syncService: syncService,
+    settingsSync: settingsSync,
     social: social,
     training: training,
     heartRate: heartRate,
@@ -143,6 +154,7 @@ class RunApp extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SyncService syncService;
+  final SettingsSyncService? settingsSync;
   final SocialService social;
   final TrainingService training;
   final BleHeartRate heartRate;
@@ -155,6 +167,7 @@ class RunApp extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.syncService,
+    this.settingsSync,
     required this.social,
     required this.training,
     required this.heartRate,
@@ -220,6 +233,7 @@ class _RunAppState extends State<RunApp> {
                   social: widget.social,
                   training: widget.training,
                   heartRate: widget.heartRate,
+                  settingsSync: widget.settingsSync,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,

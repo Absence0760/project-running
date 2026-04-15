@@ -7,6 +7,7 @@ import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import 'clubs_screen.dart';
@@ -25,6 +26,7 @@ class HomeScreen extends StatefulWidget {
   final SocialService social;
   final TrainingService training;
   final BleHeartRate heartRate;
+  final SettingsSyncService? settingsSync;
 
   const HomeScreen({
     super.key,
@@ -36,6 +38,7 @@ class HomeScreen extends StatefulWidget {
     required this.social,
     required this.training,
     required this.heartRate,
+    this.settingsSync,
   });
 
   @override
@@ -122,6 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
           preferences: widget.preferences,
           runStore: widget.runStore,
           heartRate: widget.heartRate,
+          settingsSync: widget.settingsSync,
         ),
       ),
     ];

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'goals.dart';
 
@@ -126,6 +127,10 @@ class Preferences extends ChangeNotifier {
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
   static const _kSplitIntervalMetres = 'split_interval_metres';
+  // Stable per-install identifier used to scope `user_device_settings`
+  // rows. Minted on first launch and never rotated — rotating would
+  // orphan the device's row and lose per-device preferences.
+  static const _kDeviceId = 'device_id';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -139,6 +144,7 @@ class Preferences extends ChangeNotifier {
   List<RunGoal> _goals = [];
   bool _advancedGps = false;
   int _splitIntervalMetres = 0;
+  String _deviceId = '';
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -149,6 +155,9 @@ class Preferences extends ChangeNotifier {
   /// Custom split interval in metres. 0 means use the activity-type default
   /// (1 km for run/walk/hike, 5 km for cycling).
   int get splitIntervalMetres => _splitIntervalMetres;
+
+  /// Stable per-install device identifier. Minted on first launch.
+  String get deviceId => _deviceId;
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
   /// when current pace is more than 30s off in either direction.
@@ -166,6 +175,14 @@ class Preferences extends ChangeNotifier {
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
+
+    final existingDeviceId = _prefs.getString(_kDeviceId);
+    if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
+      _deviceId = existingDeviceId;
+    } else {
+      _deviceId = const Uuid().v4();
+      await _prefs.setString(_kDeviceId, _deviceId);
+    }
 
     final rawGoals = _prefs.getString(_kGoalsJson);
     if (rawGoals != null && rawGoals.isNotEmpty) {

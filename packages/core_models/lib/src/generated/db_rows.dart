@@ -853,6 +853,57 @@ class TrainingPlanRow {
   };
 }
 
+/// Row shape for the `user_device_settings` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class UserDeviceSettingRow {
+  static const String table = 'user_device_settings';
+  static const String colUserId = 'user_id';
+  static const String colDeviceId = 'device_id';
+  static const String colPlatform = 'platform';
+  static const String colLabel = 'label';
+  static const String colPrefs = 'prefs';
+  static const String colLastSeenAt = 'last_seen_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String userId;
+  final String deviceId;
+  final String platform;
+  final String? label;
+  final dynamic prefs;
+  final DateTime lastSeenAt;
+  final DateTime updatedAt;
+
+  const UserDeviceSettingRow({
+    required this.userId,
+    required this.deviceId,
+    required this.platform,
+    this.label,
+    required this.prefs,
+    required this.lastSeenAt,
+    required this.updatedAt,
+  });
+
+  factory UserDeviceSettingRow.fromJson(Map<String, dynamic> json) => UserDeviceSettingRow(
+    userId: json['user_id'] as String,
+    deviceId: json['device_id'] as String,
+    platform: json['platform'] as String,
+    label: json['label'] as String?,
+    prefs: json['prefs'],
+    lastSeenAt: DateTime.parse(json['last_seen_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colDeviceId: deviceId,
+    colPlatform: platform,
+    colLabel: label,
+    colPrefs: prefs,
+    colLastSeenAt: lastSeenAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `user_profiles` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class UserProfileRow {
@@ -906,6 +957,37 @@ class UserProfileRow {
     colSubscriptionTier: subscriptionTier,
     colSubscriptionAt: subscriptionAt?.toIso8601String(),
     colCreatedAt: createdAt?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `user_settings` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class UserSettingRow {
+  static const String table = 'user_settings';
+  static const String colUserId = 'user_id';
+  static const String colPrefs = 'prefs';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String userId;
+  final dynamic prefs;
+  final DateTime updatedAt;
+
+  const UserSettingRow({
+    required this.userId,
+    required this.prefs,
+    required this.updatedAt,
+  });
+
+  factory UserSettingRow.fromJson(Map<String, dynamic> json) => UserSettingRow(
+    userId: json['user_id'] as String,
+    prefs: json['prefs'],
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colPrefs: prefs,
+    colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
 
