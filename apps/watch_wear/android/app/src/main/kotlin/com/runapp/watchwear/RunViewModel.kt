@@ -9,6 +9,10 @@ import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RunRecordingService
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import com.runapp.watchwear.system.BatteryOptimization
 import com.runapp.watchwear.system.NetworkWatcher
 import kotlinx.coroutines.Job
@@ -45,12 +49,16 @@ data class UiState(
     val lastRunSummary: FinishedSummary? = null,
     val batteryOptimised: Boolean = true,
     val pendingRecovery: Checkpoint? = null,
+    val activityType: String = "run",
+    val lapCount: Int = 0,
 )
 
 data class FinishedSummary(
     val distanceM: Double,
     val durationS: Int,
     val avgBpm: Double?,
+    val lapCount: Int = 0,
+    val activityType: String = "run",
 )
 
 class RunViewModel(application: Application) : AndroidViewModel(application) {
@@ -100,6 +108,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             paceSecPerKm = m.paceSecPerKm,
                             bpm = m.bpm,
                             locationAvailable = m.locationAvailable,
+                            activityType = m.activityType,
+                            lapCount = m.laps.size,
                         )
                     }
                     RecordingRepository.Stage.Finished -> handleFinishedRun(m)
@@ -267,11 +277,22 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             distanceM = 0.0,
             paceSecPerKm = null,
             bpm = null,
+            lapCount = 0,
             syncError = null,
             thisRunId = runId,
             thisRunSynced = false,
         )
-        RunRecordingService.start(getApplication(), runId)
+        RunRecordingService.start(getApplication(), runId, _state.value.activityType)
+    }
+
+    fun setActivityType(type: String) {
+        if (_state.value.stage != Stage.PreRun) return
+        _state.value = _state.value.copy(activityType = type)
+    }
+
+    fun markLap() {
+        if (_state.value.stage != Stage.Running && _state.value.stage != Stage.Paused) return
+        RunRecordingService.lap(getApplication())
     }
 
     fun stop() {
@@ -295,7 +316,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val runId = m.runId ?: return
         val durationS = (m.elapsedMs / 1000).toInt()
         val trackJson = encodeTrack(m.track)
-        val summary = FinishedSummary(m.distanceM, durationS, m.avgBpm)
+        val summary = FinishedSummary(
+            distanceM = m.distanceM,
+            durationS = durationS,
+            avgBpm = m.avgBpm,
+            lapCount = m.laps.size,
+            activityType = m.activityType,
+        )
         _state.value = _state.value.copy(
             stage = Stage.PostRun,
             thisRunId = runId,
@@ -311,9 +338,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     distanceM = m.distanceM,
                     trackJson = trackJson,
                     avgBpm = m.avgBpm,
+                    activityType = m.activityType,
+                    laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                 )
             )
-            // Reset the repo so the next run starts from a clean slate.
             RecordingRepository.reset()
             drainQueue()
         }
@@ -480,8 +508,20 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun pushRun(run: QueuedRun) {
-        val metadata: JsonObject? = run.avgBpm?.let {
-            buildJsonObject { put("avg_bpm", it) }
+        val metadata: JsonObject = buildJsonObject {
+            put("activity_type", run.activityType)
+            if (run.avgBpm != null) put("avg_bpm", run.avgBpm)
+            if (run.laps.isNotEmpty()) {
+                put("laps", buildJsonArray {
+                    for (lap in run.laps) {
+                        addJsonObject {
+                            put("number", lap.number)
+                            put("at_ms", lap.atMs)
+                            put("distance_m", lap.distanceM)
+                        }
+                    }
+                })
+            }
         }
         supabase.saveRun(
             runId = run.id,

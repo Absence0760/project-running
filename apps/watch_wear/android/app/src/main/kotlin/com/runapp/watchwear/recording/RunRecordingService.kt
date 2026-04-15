@@ -56,8 +56,10 @@ class RunRecordingService : Service() {
     private var lastLocation: Location? = null
     private val track = mutableListOf<GpsPoint>()
     private val bpmSamples = mutableListOf<Int>()
+    private val laps = mutableListOf<RecordingRepository.Lap>()
     private var startedAtMs = 0L
     private var runId: String = ""
+    private var activityType: String = "run"
 
     // Paused-interval accounting. `pausedAccumulatedMs` is the sum of
     // previous pause intervals; `pausedSinceMs` is the start of the
@@ -77,10 +79,12 @@ class RunRecordingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startRecording(
-                intent.getStringExtra(EXTRA_RUN_ID) ?: UUID.randomUUID().toString()
+                intent.getStringExtra(EXTRA_RUN_ID) ?: UUID.randomUUID().toString(),
+                intent.getStringExtra(EXTRA_ACTIVITY_TYPE) ?: "run",
             )
             ACTION_PAUSE -> pauseRecording()
             ACTION_RESUME -> resumeRecording()
+            ACTION_LAP -> markLap()
             ACTION_STOP -> stopRecording()
         }
         return START_STICKY
@@ -96,15 +100,17 @@ class RunRecordingService : Service() {
 
     // ----- Lifecycle -----
 
-    private fun startRecording(id: String) {
+    private fun startRecording(id: String, activity: String) {
         if (RecordingRepository.metrics.value.isActive) return
 
         runId = id
+        activityType = activity
         startedAtMs = System.currentTimeMillis()
         pausedAccumulatedMs = 0
         pausedSinceMs = 0
         track.clear()
         bpmSamples.clear()
+        laps.clear()
         lastLocation = null
 
         startForegroundCompat(buildNotification(elapsedMs = 0L, distanceM = 0.0, paused = false))
@@ -116,6 +122,7 @@ class RunRecordingService : Service() {
                 runId = runId,
                 startedAtMs = startedAtMs,
                 elapsedMs = 0L,
+                activityType = activityType,
             )
         }
 
@@ -164,6 +171,17 @@ class RunRecordingService : Service() {
         refreshNotification(elapsed, RecordingRepository.metrics.value.distanceM, paused = true)
     }
 
+    private fun markLap() {
+        if (!RecordingRepository.metrics.value.isActive) return
+        val lap = RecordingRepository.Lap(
+            number = laps.size + 1,
+            atMs = activeElapsedMs(),
+            distanceM = RecordingRepository.metrics.value.distanceM,
+        )
+        laps.add(lap)
+        RecordingRepository.update { it.copy(laps = laps.toList()) }
+    }
+
     private fun resumeRecording() {
         if (RecordingRepository.metrics.value.stage != RecordingRepository.Stage.Paused) return
         if (pausedSinceMs > 0) {
@@ -201,6 +219,8 @@ class RunRecordingService : Service() {
                 distanceM = finalDistance,
                 track = track.toList(),
                 avgBpm = avgBpm,
+                laps = laps.toList(),
+                activityType = activityType,
             )
         }
 
@@ -377,23 +397,27 @@ class RunRecordingService : Service() {
         const val ACTION_STOP = "com.runapp.watchwear.action.STOP_RECORDING"
         const val ACTION_PAUSE = "com.runapp.watchwear.action.PAUSE_RECORDING"
         const val ACTION_RESUME = "com.runapp.watchwear.action.RESUME_RECORDING"
+        const val ACTION_LAP = "com.runapp.watchwear.action.MARK_LAP"
         const val EXTRA_RUN_ID = "run_id"
+        const val EXTRA_ACTIVITY_TYPE = "activity_type"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "run_recording"
         private const val CHECKPOINT_INITIAL_DELAY_MS = 30_000L
         private const val CHECKPOINT_INTERVAL_MS = 15_000L
 
-        fun start(context: Context, runId: String) {
+        fun start(context: Context, runId: String, activityType: String) {
             val intent = Intent(context, RunRecordingService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_RUN_ID, runId)
+                putExtra(EXTRA_ACTIVITY_TYPE, activityType)
             }
             context.startForegroundService(intent)
         }
 
         fun pause(context: Context) = send(context, ACTION_PAUSE)
         fun resume(context: Context) = send(context, ACTION_RESUME)
+        fun lap(context: Context) = send(context, ACTION_LAP)
         fun stop(context: Context) = send(context, ACTION_STOP)
 
         private fun send(context: Context, action: String) {

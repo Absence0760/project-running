@@ -114,6 +114,12 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             online = state.online,
                             batteryOptimised = state.batteryOptimised,
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
+                            activityType = state.activityType,
+                            onCycleActivity = {
+                                val order = listOf("run", "walk", "hike", "cycle")
+                                val next = order[(order.indexOf(state.activityType) + 1) % order.size]
+                                vm.setActivityType(next)
+                            },
                             onStart = {
                                 permissionLauncher.launch(
                                     arrayOf(
@@ -141,11 +147,13 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     distanceM = state.distanceM,
                     paceSecPerKm = state.paceSecPerKm,
                     bpm = state.bpm,
+                    lapCount = state.lapCount,
                     paused = state.stage == Stage.Paused,
                     locationAvailable = state.locationAvailable,
                     ambient = isAmbient,
                     onPause = vm::pause,
                     onResume = vm::resume,
+                    onLap = vm::markLap,
                     onStop = vm::stop,
                 )
                 Stage.PostRun -> PostRunScreen(
@@ -238,6 +246,8 @@ private fun PreRunScreen(
     online: Boolean,
     batteryOptimised: Boolean,
     pendingRecoveryDistance: Double?,
+    activityType: String,
+    onCycleActivity: () -> Unit,
     onStart: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
@@ -321,6 +331,20 @@ private fun PreRunScreen(
                 }
                 Spacer(Modifier.height(4.dp))
             }
+            // Activity chip — tap cycles through run / walk / hike / cycle.
+            // Gets stamped into `metadata.activity_type` at save so the
+            // web and phone detail views can show the correct icon.
+            CompactChip(
+                onClick = onCycleActivity,
+                label = {
+                    Text(
+                        activityType.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = ChipDefaults.secondaryChipColors(),
+            )
+            Spacer(Modifier.height(6.dp))
             Button(
                 onClick = onStart,
                 modifier = Modifier.size(ButtonDefaults.LargeButtonSize + 20.dp),
@@ -619,11 +643,13 @@ private fun RunningScreen(
     distanceM: Double,
     paceSecPerKm: Double?,
     bpm: Int?,
+    lapCount: Int,
     paused: Boolean,
     locationAvailable: Boolean,
     ambient: Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
+    onLap: () -> Unit,
     onStop: () -> Unit,
 ) {
     // Ambient mode: dim, greyscale, no buttons. The foreground service
@@ -692,9 +718,16 @@ private fun RunningScreen(
                 color = DuskPalette.coral,
             )
         }
+        if (lapCount > 0) {
+            Text(
+                "Lap $lapCount",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.lilac,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         androidx.compose.foundation.layout.Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (paused) {
                 Button(
@@ -711,6 +744,13 @@ private fun RunningScreen(
                 ) {
                     Text("||")
                 }
+            }
+            Button(
+                onClick = onLap,
+                modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
+                colors = ButtonDefaults.secondaryButtonColors(),
+            ) {
+                Text("Lap", style = MaterialTheme.typography.caption2)
             }
             Button(
                 onClick = onStop,

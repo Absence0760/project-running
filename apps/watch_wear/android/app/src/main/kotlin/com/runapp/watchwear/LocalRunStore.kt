@@ -13,6 +13,9 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
+data class QueuedLap(val number: Int, val atMs: Long, val distanceM: Double)
+
+@Serializable
 data class QueuedRun(
     val id: String,
     val startedAtIso: String,
@@ -20,6 +23,8 @@ data class QueuedRun(
     val distanceM: Double,
     val trackJson: String,
     val avgBpm: Double? = null,
+    val activityType: String = "run",
+    val laps: List<QueuedLap> = emptyList(),
 )
 
 private val Context.dataStore by preferencesDataStore(name = "watch_wear")

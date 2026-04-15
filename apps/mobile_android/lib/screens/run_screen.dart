@@ -1258,6 +1258,7 @@ class _RunScreenState extends State<RunScreen> {
               elevation: _formattedElevation,
               steps: '$_steps',
               cadence: '$_cadence',
+              bpm: _currentBpm,
               lapCount: _lapCount,
               paused: _manualPaused,
               holdProgress: _holdToStopProgress,
@@ -1362,6 +1363,7 @@ class _StatsOverlay extends StatelessWidget {
   final String elevation;
   final String steps;
   final String cadence;
+  final int? bpm;
   final int lapCount;
   final bool paused;
   final double holdProgress;
@@ -1384,6 +1386,7 @@ class _StatsOverlay extends StatelessWidget {
     required this.elevation,
     required this.steps,
     required this.cadence,
+    required this.bpm,
     required this.lapCount,
     required this.paused,
     required this.holdProgress,
@@ -1437,6 +1440,24 @@ class _StatsOverlay extends StatelessWidget {
                   Expanded(child: _StatColumn(label: 'Cadence', value: cadence, unit: 'spm')),
                 ],
               ),
+              // Heart rate row — only renders when a BLE chest strap is
+              // paired AND has produced at least one sample. Null-on-null
+              // keeps the overlay the same height as before for runners
+              // without a strap.
+              if (bpm != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatColumn(
+                        label: 'Heart Rate',
+                        value: '$bpm',
+                        unit: 'bpm',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

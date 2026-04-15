@@ -121,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
           apiClient: widget.apiClient,
           preferences: widget.preferences,
           runStore: widget.runStore,
+          heartRate: widget.heartRate,
         ),
       ),
     ];

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../ble_heart_rate.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
@@ -17,11 +19,13 @@ class SettingsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
   final LocalRunStore? runStore;
+  final BleHeartRate heartRate;
 
   const SettingsScreen({
     super.key,
     this.apiClient,
     required this.preferences,
+    required this.heartRate,
     this.runStore,
   });
 
@@ -244,6 +248,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
+          // Sensors
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('Sensors', style: theme.textTheme.titleSmall),
+          ),
+          _HeartRateTile(heartRate: widget.heartRate),
+          const Divider(),
+
           // Preferences
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -350,6 +362,184 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => showLicensePage(context: context),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// List tile that shows whether a BLE chest strap is paired and opens a
+/// scan sheet to pair one. Delegates to `BleHeartRate` for everything.
+class _HeartRateTile extends StatefulWidget {
+  final BleHeartRate heartRate;
+  const _HeartRateTile({required this.heartRate});
+
+  @override
+  State<_HeartRateTile> createState() => _HeartRateTileState();
+}
+
+class _HeartRateTileState extends State<_HeartRateTile> {
+  String? _pairedName;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final name = await widget.heartRate.pairedName();
+    if (!mounted) return;
+    setState(() {
+      _pairedName = name;
+      _loading = false;
+    });
+  }
+
+  Future<void> _pair() async {
+    final device = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _HeartRateScanSheet(heartRate: widget.heartRate),
+    );
+    if (device != null) {
+      try {
+        await widget.heartRate.pair(device);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Pair failed: $e')),
+          );
+        }
+      }
+      await _refresh();
+    }
+  }
+
+  Future<void> _forget() async {
+    await widget.heartRate.forget();
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final paired = _pairedName;
+    return ListTile(
+      leading: const Icon(Icons.favorite_border),
+      title: const Text('Heart rate monitor'),
+      subtitle: Text(
+        _loading
+            ? 'Checking…'
+            : paired != null
+                ? 'Paired: $paired'
+                : 'No strap paired — tap to scan',
+      ),
+      trailing: paired != null
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Forget',
+              onPressed: _forget,
+            )
+          : const Icon(Icons.chevron_right),
+      onTap: _pair,
+    );
+  }
+}
+
+/// Modal bottom sheet that scans for BLE straps advertising the Heart
+/// Rate Service and returns the selected `BluetoothDevice` via `pop`.
+/// Re-imports `flutter_blue_plus` dynamically so the public surface of
+/// `BleHeartRate` can keep the dep hidden from UI callers.
+class _HeartRateScanSheet extends StatefulWidget {
+  final BleHeartRate heartRate;
+  const _HeartRateScanSheet({required this.heartRate});
+
+  @override
+  State<_HeartRateScanSheet> createState() => _HeartRateScanSheetState();
+}
+
+class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
+  List<dynamic> _results = const [];
+  bool _scanning = true;
+  StreamSubscription<List<dynamic>>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = widget.heartRate.scan().listen(
+      (list) {
+        if (mounted) setState(() => _results = list);
+      },
+      onDone: () {
+        if (mounted) setState(() => _scanning = false);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Scan for heart rate monitor',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_scanning)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Wake your strap / chest band. Apps typically take 3–8 seconds.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            if (_results.isEmpty && !_scanning)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No straps found. Make sure it\'s nearby and awake.'),
+              ),
+            ..._results.map((r) {
+              final device = r.device;
+              final name = device.platformName.isNotEmpty
+                  ? device.platformName
+                  : device.remoteId.str;
+              return ListTile(
+                leading: const Icon(Icons.bluetooth),
+                title: Text(name),
+                subtitle: Text('RSSI ${r.rssi} dBm'),
+                onTap: () => Navigator.of(context).pop(device),
+              );
+            }),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

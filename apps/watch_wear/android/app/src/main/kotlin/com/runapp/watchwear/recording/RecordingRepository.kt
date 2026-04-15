@@ -15,6 +15,15 @@ object RecordingRepository {
 
     enum class Stage { Idle, Recording, Paused, Finished }
 
+    /// A manual lap marker. Written whenever the user taps Lap during a
+    /// run. `atMs` is active-elapsed-time (paused intervals excluded);
+    /// `distanceM` is cumulative distance at the moment of the tap.
+    data class Lap(
+        val number: Int,
+        val atMs: Long,
+        val distanceM: Double,
+    )
+
     data class Metrics(
         val stage: Stage = Stage.Idle,
         val runId: String? = null,
@@ -26,6 +35,8 @@ object RecordingRepository {
         val avgBpm: Double? = null,
         val track: List<GpsPoint> = emptyList(),
         val locationAvailable: Boolean = true,
+        val activityType: String = "run",
+        val laps: List<Lap> = emptyList(),
     ) {
         val isActive: Boolean get() = stage == Stage.Recording || stage == Stage.Paused
     }
