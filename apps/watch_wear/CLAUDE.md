@@ -1,65 +1,121 @@
 # watch_wear — AI session notes
 
-Flutter app targeting Wear OS. **Phase 2 usable** — real GPS recording,
-live heart rate via Health Services, local persistence of finished runs,
-auto-sync to Supabase on connectivity change. Phase 3 rewrites the UI in
-Compose-for-Wear.
+**Pure Kotlin Wear OS app** using Jetpack Compose-for-Wear. **Not Flutter.**
+The Flutter build was removed when the team committed to Compose-for-Wear
+native UI (see [../../docs/decisions.md § 15](../../docs/decisions.md)).
 
-## Current state
+## Layout
 
-Four Dart files under `lib/`:
+```
+apps/watch_wear/
+├── CLAUDE.md                       # this file
+└── android/                        # Android project root
+    ├── build.gradle.kts
+    ├── settings.gradle.kts
+    ├── gradle.properties           # pins Gradle JDK to Android Studio's JBR 21
+    ├── gradle/wrapper/
+    └── app/
+        ├── build.gradle.kts
+        └── src/main/
+            ├── AndroidManifest.xml
+            ├── kotlin/com/runapp/watchwear/
+            │   ├── MainActivity.kt
+            │   ├── RunViewModel.kt        # single source of UI state
+            │   ├── SupabaseClient.kt      # OkHttp REST + Storage client
+            │   ├── GpsRecorder.kt         # FusedLocationProviderClient wrapper
+            │   ├── HeartRateMonitor.kt    # Health Services MeasureClient
+            │   ├── LocalRunStore.kt       # DataStore-backed retry queue
+            │   ├── ui/RunWatchApp.kt      # Compose-for-Wear screens
+            │   └── generated/DbRows.kt    # GENERATED — do not edit
+            └── res/mipmap-*/ic_launcher.png
+```
 
-- `main.dart` — app entry, `Supabase.initialize`, wires `ApiClient` + `LocalRunStore` into the screen
-- `run_watch_screen.dart` — pre-run / running / post-run state machine, driven by `packages/run_recorder`; listens to `Connectivity.onConnectivityChanged` and drains the local queue when the watch comes online
-- `local_run_store.dart` — `SharedPreferences`-backed list of unsynced runs, keyed by id
-- `heart_rate_service.dart` — thin Dart wrapper around the `watch_wear/hr` method channel + `watch_wear/hr/stream` event channel
+## Schema drift protection
 
-Native Kotlin (`android/app/src/main/kotlin/com/runapp/watchwear/watch_wear/`):
+`RunRow` in `generated/DbRows.kt` is emitted by `scripts/gen_dart_models.dart`
+from the Supabase migrations alongside the Dart `db_rows.dart`. Same
+generator, same parse, two emitters — schema changes regenerate both. Renaming
+`runs.distance_m` to, say, `runs.distance_metres` in a migration regenerates
+the Kotlin file and breaks `SupabaseClient.saveRun` at compile time, exactly
+like it breaks Dart callers of `RunRow`.
 
-- `MainActivity.kt` — installs the HR plugin on `configureFlutterEngine`
-- `HeartRatePlugin.kt` — registers a `MeasureCallback` on `HealthServices.getClient(context).measureClient` for `DataType.HEART_RATE_BPM`; pipes samples to the event channel. `start` / `stop` methods drive the lifecycle.
+**If you change the `runs` schema**: run `dart run scripts/gen_dart_models.dart`.
+Both outputs are committed. CI's `parity-types` job checks the TypeScript
+file; the Dart and Kotlin emitters currently lean on `dart analyze` (Dart)
+and `./gradlew compileDebugKotlin` (Kotlin) catching drift locally. A CI
+hook that re-runs the generator and fails on uncommitted diff is a TODO.
 
-Native Android project is scaffolded (previous sessions had none) with a
-Wear OS-shaped manifest: `<uses-feature android:name="android.hardware.type.watch" />`,
-`<uses-library name="com.google.android.wearable" required="false" />`,
-`com.google.android.wearable.standalone = true`, plus location + wake-lock
-permissions.
+If you add a new table that Wear OS writes to, add it to `_kotlinTables`
+in `gen_dart_models.dart`.
 
 ## Sync architecture
 
-The watch talks to Supabase **directly** over WiFi/cellular, same `ApiClient`
-that `mobile_android` uses — no phone handoff, no duplicate REST client like
-`watch_ios`. Because it reuses `packages/api_client` and the generated row
-types under `packages/core_models`, schema drift is caught at compile time
-instead of silently breaking sync.
+Wear OS watches are standalone-capable (WiFi + optional cellular), so the
+watch talks to Supabase directly — no paired-phone handoff, no Wearable
+Data Layer proxy. `SupabaseClient` is a thin OkHttp wrapper:
 
-Flow:
-1. User taps Start → `RunRecorder.prepare()` requests location permission, opens the position stream.
-2. User taps Stop → `RunRecorder.stop()` returns a `Run`. We immediately persist it to `LocalRunStore`.
-3. User taps Sync → `ApiClient.saveRun(run)` uploads the gzipped track to Storage and inserts the row. On success, remove from `LocalRunStore`. On failure (offline, auth), the run stays in the store and the user retries later.
-4. Pre-run screen shows the unsynced-count badge so runs that failed to sync are visible across app restarts.
+1. `signIn(email, password)` → POST `/auth/v1/token?grant_type=password`, stashes access token + user id in memory.
+2. `saveRun(...)` → gzips the track JSON, POSTs to `/storage/v1/object/runs/{user_id}/{run_id}.json.gz`, then POSTs the row to `/rest/v1/runs` with `Prefer: return=minimal`. Matches the Dart `ApiClient.saveRun` contract byte-for-byte so the web/Android apps read Wear-produced runs without special cases.
 
-Auth in Phase 1 is a hardcoded seed sign-in (`runner@test.com` /
-`testtest`) on app start — sufficient for dogfooding on a dev Supabase.
-Real auth lands with Phase 2 or 3.
+Auth in Phase 1 is a hardcoded seed sign-in (`runner@test.com` / `testtest`)
+on app start. Real OAuth lands with a later phase.
 
-## What's deferred
+Offline runs persist in `LocalRunStore` (DataStore, `watch_wear` prefs,
+key `queued_runs_v1`). `RunViewModel.drainQueue()` fires on app start after
+auth succeeds and after every run stops. A connectivity-change auto-retry is
+a TODO — today the queue drains opportunistically.
 
-- **Wearable Data Layer paired-phone handoff** — optional alternative to direct-to-Supabase; WiFi-direct works for now.
-- **Route preview / live navigation / off-route haptics** — `run_recorder` already supports it, but the watch UI doesn't surface it.
-- **Glanceable tile / watch face complication** — native Kotlin work.
-- **Compose-for-Wear UI** — Flutter widgets on a round Wear OS face are functional but not idiomatic. Rotary-bezel input and curved text need Compose.
+## Heart rate
+
+`HeartRateMonitor` registers a `MeasureCallback` on
+`HealthServices.getClient(context).measureClient` for
+`DataType.HEART_RATE_BPM` and exposes a `Flow<Int>` of live samples.
+`RunViewModel` collects into a list during recording, averages on stop,
+writes `avg_bpm` into `run.metadata` before upload. Behaviour matches
+`watch_ios`'s HealthKit integration — [docs/metadata.md](../../docs/metadata.md)
+registers the key.
 
 ## Running it locally
 
 See [../../docs/local_testing_wear_os.md](../../docs/local_testing_wear_os.md).
-`flutter run -d <wear-device>` from `apps/watch_wear/` with a local Supabase
-stack running. Override the backend with
-`--dart-define SUPABASE_URL=... --dart-define SUPABASE_ANON_KEY=...`.
+
+Build and install on a Wear OS emulator:
+
+```bash
+cd apps/watch_wear/android
+./gradlew installDebug
+```
+
+Override the Supabase backend:
+
+```bash
+./gradlew installDebug -PSUPABASE_URL=https://staging.example.co -PSUPABASE_ANON_KEY=...
+```
+
+The default `SUPABASE_URL` points at `http://10.0.2.2:54321` — the Android
+emulator's loopback alias for the host machine, matching the local Supabase
+stack that `mobile_android` also uses.
+
+## Gradle JDK quirk
+
+Homebrew's default JDK on this machine is 25; Gradle 8.14's embedded Kotlin
+compiler can't parse that version string and fails the whole build with a
+cryptic `IllegalArgumentException: 25.0.2`. `gradle.properties` pins
+`org.gradle.java.home` to the JDK bundled inside Android Studio (JBR 21).
+If Android Studio lives somewhere other than `/Applications/Android Studio.app`
+on your machine, override that line locally.
+
+## What's deferred
+
+- Connectivity-change auto-retry (today `drainQueue` only fires on app start + after stop).
+- Foreground service for background-safe GPS across wrist-down / ambient.
+- Wearable Data Layer phone handoff as an alternative sync path.
+- Watch face tile / complication.
+- Real OAuth sign-in (replaces the seed-creds hardcoding).
 
 ## Before reporting a task done
 
-- `dart analyze` passes with only `info`-level lints (imports, pubspec sort).
-- If you added a new native capability, update the manifest permissions and add a pointer to this file.
-- Tick the corresponding Wear OS box in `roadmap.md` § Phase 2.
-- If you touched `run_recorder` behaviour, test on both `mobile_android` and here — same package, two consumers.
+- `./gradlew compileDebugKotlin` passes.
+- If you touched the `runs` schema or added a table to `_kotlinTables`, re-ran `dart run scripts/gen_dart_models.dart` and committed the regenerated Kotlin file.
+- Updated [../../docs/metadata.md](../../docs/metadata.md) if a new `metadata` key is written from this app.
+- Ticked the corresponding Wear OS box in [../../docs/roadmap.md](../../docs/roadmap.md).

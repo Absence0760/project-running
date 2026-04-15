@@ -153,10 +153,10 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Wear OS standalone GPS recording
 
-- [ ] Compose for Wear UI (Kotlin + Flutter hybrid)
-- [x] GPS recording independent of phone (uses `packages/run_recorder` directly to Supabase via `ApiClient`)
-- [x] HR recording via Health Services (`androidx.health:health-services-client` + Kotlin method channel, average pushed to `run.metadata.avg_bpm`)
-- [x] Auto-sync on reconnect (connectivity_plus listener drains `LocalRunStore` whenever the watch comes online)
+- [x] Compose-for-Wear UI (pure Kotlin rewrite — see [decisions.md § 15](decisions.md))
+- [x] GPS recording independent of phone (`FusedLocationProviderClient` in `GpsRecorder.kt`)
+- [x] HR recording via Health Services (`MeasureClient` in `HeartRateMonitor.kt`, average pushed to `run.metadata.avg_bpm`)
+- [ ] Auto-sync on reconnect (today `drainQueue` fires on app start + after stop; connectivity-change listener is a TODO)
 
 ### Route navigation on watch
 

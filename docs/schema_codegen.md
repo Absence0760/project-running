@@ -81,6 +81,14 @@ class RunRow {
 
 The rich `Run` / `Route` / `Waypoint` domain classes in `core_models/lib/src/` are kept — they hold `Duration`, `DateTime`, the `RunSource` enum, and drop unused columns (`user_id`, `updated_at`). The generated rows are the DTO layer underneath them.
 
+### Wear OS (Kotlin) — `apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/generated/DbRows.kt`
+
+Same generator (`scripts/gen_dart_models.dart`), same parse tree, second emitter. Currently emits only the tables in `_kotlinTables` (just `runs` today — the watch only writes one table). Produces a Kotlin `data class RunRow` with the same column constants (`COL_STARTED_AT`, etc.) and `fromJson` / `toJsonMap` equivalents. `SupabaseClient.saveRun` in `watch_wear` references the generated constants, same pattern as the Dart `ApiClient`. A migration that drops or renames a column regenerates both the Dart file and the Kotlin file, and either consumer fails to compile if it references the old name.
+
+If you add a new table that the Wear OS app needs to write, add it to `_kotlinTables` in `scripts/gen_dart_models.dart` and rerun. The Kotlin type mapping is narrower than Dart's `dynamic` — jsonb columns become `kotlinx.serialization.json.JsonElement`, so callers use the JSON tree API to read nested values.
+
+Kotlin has no `parity-types`-equivalent CI gate yet; rely on `./gradlew compileDebugKotlin` locally catching drift. Adding a CI check that regenerates the Kotlin file and fails on uncommitted diff is a TODO — same shape as the TS `gen:types:check` job.
+
 ---
 
 ## The workflow
@@ -100,7 +108,8 @@ supabase db reset
 # 3. Regenerate both row files
 cd ..
 npm run gen:types                       # writes apps/web/src/lib/database.types.ts
-dart run scripts/gen_dart_models.dart   # writes packages/core_models/lib/src/generated/db_rows.dart
+dart run scripts/gen_dart_models.dart   # writes packages/core_models/lib/src/generated/db_rows.dart AND
+                                        # apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/generated/DbRows.kt
 
 # 4. Build the clients to find every drift site
 cd apps/web && npm run check

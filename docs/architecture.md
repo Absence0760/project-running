@@ -24,7 +24,7 @@ run-app/                          # Monorepo root
 │   ├── mobile_ios/               # Flutter iOS app target
 │   ├── mobile_android/           # Flutter Android app target
 │   ├── watch_ios/                # Native Swift + WatchKit (Xcode project)
-│   ├── watch_wear/               # Flutter Wear OS target
+│   ├── watch_wear/               # Native Kotlin + Compose-for-Wear OS app (not Flutter)
 │   ├── web/                      # SvelteKit web app (TypeScript)
 │   │   ├── src/
 │   │   │   ├── routes/           # SvelteKit file-based routes
@@ -141,17 +141,18 @@ WatchKit Extension
 └── WatchConnectivity.swift    # Sync with iPhone
 ```
 
-### Wear OS app (Flutter)
+### Wear OS app (Kotlin + Compose-for-Wear)
 
-Flutter runs natively on Wear OS. Phase 1 uses Material Flutter widgets; Phase 3 will rewrite the UI in Compose-for-Wear for idiomatic watch chrome.
+Native Kotlin Android app targeting Wear OS 3+ (minSdk 30). Uses Jetpack Compose-for-Wear (`androidx.wear.compose:*`) for UI, `FusedLocationProviderClient` for GPS, `androidx.health:health-services-client` for HR, DataStore for local queue persistence, and OkHttp for Supabase REST calls. **Not Flutter** — see [decisions.md § 15](decisions.md).
 
-Talks to Supabase **directly** via the shared `packages/api_client` (same Dart client as `mobile_android` and the web), so schema drift is caught by `packages/core_models` codegen instead of silently breaking sync — the thing that bit `watch_ios`'s hand-rolled REST client.
+Talks to Supabase **directly** (standalone — no paired-phone dependency). Schema drift is caught by the Kotlin row classes generated from Supabase migrations via `scripts/gen_dart_models.dart`'s Kotlin emitter, same source-of-truth that drives the Dart `db_rows.dart`. Renaming a column regenerates both and breaks `watch_wear`'s `SupabaseClient.saveRun` at compile time.
 
 **Key responsibilities:**
-- Standalone GPS workout recording via `packages/run_recorder`
-- Local persistence of unsynced runs in `SharedPreferences`; manual "Sync" button uploads via `ApiClient.saveRun`
-- Live metrics display (Tiles API for glanceable data — deferred)
-- Route navigation synced from phone via Data Layer (deferred)
+- Standalone GPS workout recording (`GpsRecorder` wrapping `FusedLocationProviderClient`)
+- Live HR via Health Services `MeasureClient`, averaged into `run.metadata.avg_bpm` on stop
+- DataStore-backed retry queue (`LocalRunStore`) — runs stay local until `SupabaseClient.saveRun` succeeds
+- Compose-for-Wear UI with `TimeText`, `Vignette`, `PositionIndicator`, `ScalingLazyColumn`
+- Tile / complication (deferred)
 
 ### Web app (SvelteKit)
 

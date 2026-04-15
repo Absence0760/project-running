@@ -1,6 +1,6 @@
 # Run app — orientation for AI sessions
 
-You're in a cross-platform running app monorepo: Flutter (Android + iOS), native Swift (Apple Watch), Flutter (Wear OS), SvelteKit (web), and Supabase (Postgres + Auth + Storage + Edge Functions). Full product context lives in [docs/](docs/) — this file is the index plus the non-obvious things that cost time to rediscover.
+You're in a cross-platform running app monorepo: Flutter (Android + iOS), native Swift (Apple Watch), native Kotlin + Compose-for-Wear (Wear OS), SvelteKit (web), and Supabase (Postgres + Auth + Storage + Edge Functions). Full product context lives in [docs/](docs/) — this file is the index plus the non-obvious things that cost time to rediscover.
 
 ## Read first
 
@@ -29,7 +29,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas):
 - [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target
 - [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter, mostly stubbed
-- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — Flutter Wear OS, single-file stub
+- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter)
 - [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional
 - [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes
 
@@ -94,7 +94,7 @@ apps/
     src/lib/types.ts            (Run/Route/Integration/UserProfile overlays)
   mobile_android/    → Flutter, most mature; real screens, stores, sync, tile cache
   mobile_ios/        → Flutter, skeleton screens only (Phase 1 unfinished)
-  watch_wear/        → Flutter Wear OS, single-file simulated stub
+  watch_wear/        → native Kotlin + Compose-for-Wear (not Flutter)
   watch_ios/         → native SwiftUI Xcode project, functional
 packages/
   core_models/       → Dart domain classes + generated row DTOs
