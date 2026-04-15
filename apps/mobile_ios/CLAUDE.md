@@ -40,6 +40,8 @@ No known lint tech debt on this app (there's barely any code). Keep it clean as 
 
 See [../../docs/local_testing_ios_app.md](../../docs/local_testing_ios_app.md). You need an iOS simulator or a paired device.
 
+The iOS Runner project uses Swift Package Manager + CocoaPods in hybrid mode (most plugins via SPM, `health` still via pods). Podfile pins `platform :ios, '15.0'`. Secrets for `flutter run` pass through `dart_defines.json` (gitignored) because inline `--dart-define=` flags break on the `sb_publishable_…` Supabase anon key format. Rationale: [../../docs/decisions.md § 13](../../docs/decisions.md).
+
 ## Before reporting a task done
 
 - Update the iOS checkbox in `roadmap.md` (there are several — "Parse on iOS", "Background location tracking (iOS)", etc.).

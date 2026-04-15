@@ -22,56 +22,55 @@ The iOS app is a Flutter target at `apps/mobile_ios/`.
 ```bash
 # From the repo root — bootstrap all Flutter packages
 melos bootstrap
+
+# Enable Swift Package Manager globally (one-time)
+flutter config --enable-swift-package-manager
 ```
 
-This links local packages (`core_models`, `gpx_parser`, `run_recorder`, `api_client`, `ui_kit`) and fetches dependencies.
+SPM is required because `maplibre_ios` (pulled in by `flutter_map_maplibre`) uses Flutter's native-assets build hook. CocoaPods still handles the plugins that haven't migrated (e.g. `health`), so the project runs in hybrid mode.
+
+If `apps/mobile_ios/ios/` doesn't exist (the iOS Runner project can be regenerated at any time), create it:
+
+```bash
+cd apps/mobile_ios
+flutter create --platforms=ios .
+rm test/widget_test.dart          # delete the stock counter-app test
+```
+
+Then edit `apps/mobile_ios/ios/Podfile` and set `platform :ios, '15.0'` (the `health` plugin requires 15+). Install pods:
+
+```bash
+cd apps/mobile_ios/ios && pod install
+```
 
 ---
 
 ## Running
 
-```bash
-# Open the iOS simulator
-open -a Simulator
+Put your secrets in `apps/mobile_ios/dart_defines.json` (gitignored):
 
+```json
+{
+  "SUPABASE_URL": "http://localhost:54321",
+  "SUPABASE_ANON_KEY": "<publishable key from `supabase status`>",
+  "MAPTILER_KEY": "<your MapTiler key>"
+}
+```
+
+Inline `--dart-define=` flags don't work on iOS when values are shaped like Supabase's `sb_publishable_…` keys — Flutter's Xcode build script rejects them as "improperly formatted define flag". The JSON file form is the supported path.
+
+```bash
+open -a Simulator
 cd apps/mobile_ios
-flutter run -d iPhone \
-  --dart-define=SUPABASE_URL=http://localhost:54321 \
-  --dart-define=SUPABASE_ANON_KEY=<publishable-key-from-supabase-status> \
-  --dart-define=MAPTILER_KEY=<your-maptiler-key>
+flutter run --dart-define-from-file=dart_defines.json
 ```
 
 To target a specific simulator:
 
 ```bash
-flutter devices                 # list available simulators
-flutter run -d <device-id>     # run on a specific one
+flutter devices                              # list available simulators
+flutter run -d <device-id> --dart-define-from-file=dart_defines.json
 ```
-
----
-
-## VS Code launch configuration
-
-To avoid typing `--dart-define` flags every time, create `.vscode/launch.json`:
-
-```json
-{
-  "configurations": [
-    {
-      "name": "iOS (dev)",
-      "type": "dart",
-      "program": "apps/mobile_ios/lib/main.dart",
-      "args": [
-        "--dart-define=SUPABASE_URL=${env:SUPABASE_URL}",
-        "--dart-define=SUPABASE_ANON_KEY=${env:SUPABASE_ANON_KEY}",
-        "--dart-define=MAPTILER_KEY=${env:MAPTILER_KEY}"
-      ]
-    }
-  ]
-}
-```
-
-Set the environment variables in your shell profile or a `.env` file.
 
 ---
 
@@ -135,6 +134,18 @@ HealthKit has limited support in the simulator. You can grant permissions but mo
 cd apps/mobile_ios/ios
 pod install --repo-update
 ```
+
+### "Improperly formatted define flag" on build
+
+You're using inline `--dart-define=` flags. Switch to `--dart-define-from-file=dart_defines.json` (see Running above).
+
+### "Failed to find Package.resolved" during build
+
+SPM isn't enabled, or the iOS Runner project predates SPM support. Run `flutter config --enable-swift-package-manager`, then `rm -rf ios && flutter create --platforms=ios .` and redo the Podfile + `pod install` steps.
+
+### "Target native_assets required define SdkRoot" on first run
+
+Transient glitch after regenerating the iOS project. Fix with `flutter clean && flutter pub get && cd ios && pod install`, then `flutter run` again. If it persists, open `ios/Runner.xcworkspace` in Xcode and build once (Cmd+B) to prime the project.
 
 ---
 

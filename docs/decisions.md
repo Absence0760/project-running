@@ -164,6 +164,20 @@ The LLM coach reviews the user's plan and runs; it does **not** author plans, pr
 
 ---
 
+## 13. iOS uses Swift Package Manager; `--dart-define-from-file` for secrets
+
+**Decided:** April 2026 · commit regenerating `apps/mobile_ios/ios/`
+
+`apps/mobile_ios` had no native iOS project for most of Phase 1 — `flutter create --platforms=ios .` was needed to generate one. The regenerated project enables Flutter's Swift Package Manager integration (`flutter config --enable-swift-package-manager`) because `maplibre_ios` (pulled in transitively by `flutter_map_maplibre`) uses the native-assets build hook which requires an SPM `Package.resolved`. CocoaPods still handles the plugins that haven't migrated (`health`). Podfile pins `platform :ios, '15.0'` because `health` refuses anything lower.
+
+Secrets for `flutter run` pass through `apps/mobile_ios/dart_defines.json` (gitignored), not inline `--dart-define=` flags. Flutter's Xcode build script rejects values shaped like Supabase's new `sb_publishable_...` anon keys as "improperly formatted define flag"; the JSON file path sidesteps that entirely.
+
+**Trade-off:** A hybrid SPM + CocoaPods project is slightly more moving parts than pure-Pods. We accept that because the two SDKs that dominate the dep graph (`maplibre_ios`, `supabase_flutter`'s deps) are moving to SPM and mixed mode is now the mainstream Flutter iOS story.
+
+**Don't re-litigate unless:** a future plugin refuses to play in mixed mode, or Flutter drops SPM support.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
