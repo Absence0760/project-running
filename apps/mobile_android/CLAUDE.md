@@ -45,6 +45,9 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
 - `explore_routes_screen.dart` — search and browse public routes with filters (distance, surface), save to library
 - `settings_screen.dart` — preferences, integrations, data export
+- `clubs_screen.dart` — Browse / My clubs, 6th bottom-nav tab
+- `club_detail_screen.dart` — feed (threaded), upcoming events, members, join/leave
+- `event_detail_screen.dart` — per-instance RSVP + admin update composer
 
 **Top-level (`lib/`):**
 - `main.dart` — app entry, Supabase init, service wiring
@@ -63,6 +66,9 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `widgets/collapsible_panel.dart` — the run screen's expandable stats panel
 - `widgets/run_share_card.dart` — portrait share card + modal sheet; captures a PNG via `RepaintBoundary.toImage` and hands it to `share_plus`
 - `widgets/goal_editor_sheet.dart` — modal bottom sheet for creating/editing/deleting a `RunGoal` (type + period + target)
+- `widgets/upcoming_event_card.dart` — Run tab idle-state card shown when the user has a `going` RSVP within 48h
+- `social_service.dart` — `ChangeNotifier` wrapping all Supabase calls for clubs / events / posts
+- `recurrence.dart` — Dart port of `apps/web/src/lib/recurrence.ts`, keep in sync
 
 ## Dart analyzer policy — treat `info` as noise
 

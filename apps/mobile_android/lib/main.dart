@@ -11,6 +11,7 @@ import 'local_run_store.dart';
 import 'preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'social_service.dart';
 import 'sync_service.dart';
 import 'tile_cache.dart';
 
@@ -97,6 +98,8 @@ void main() async {
 
   registerBackgroundSync();
 
+  final social = SocialService();
+
   runApp(RunApp(
     apiClient: api,
     runStore: store,
@@ -104,6 +107,7 @@ void main() async {
     preferences: prefs,
     audioCues: audioCues,
     syncService: syncService,
+    social: social,
     recoveredRun: recoveredRun,
   ));
 }
@@ -121,6 +125,7 @@ class RunApp extends StatefulWidget {
   final Preferences preferences;
   final AudioCues audioCues;
   final SyncService syncService;
+  final SocialService social;
   final cm.Run? recoveredRun;
   const RunApp({
     super.key,
@@ -130,6 +135,7 @@ class RunApp extends StatefulWidget {
     required this.preferences,
     required this.audioCues,
     required this.syncService,
+    required this.social,
     this.recoveredRun,
   });
 
@@ -189,6 +195,7 @@ class _RunAppState extends State<RunApp> {
                   routeStore: widget.routeStore,
                   preferences: widget.preferences,
                   audioCues: widget.audioCues,
+                  social: widget.social,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,

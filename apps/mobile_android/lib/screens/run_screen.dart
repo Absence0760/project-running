@@ -16,8 +16,11 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
+import '../social_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/upcoming_event_card.dart';
+import 'event_detail_screen.dart';
 
 /// Main run recording screen with GPS tracking, live stats, sync, audio cues,
 /// auto-pause, countdown, and optional route following.
@@ -27,6 +30,7 @@ class RunScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final AudioCues audioCues;
+  final SocialService social;
   final cm.Route? initialRoute;
 
   const RunScreen({
@@ -36,6 +40,7 @@ class RunScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     required this.audioCues,
+    required this.social,
     this.initialRoute,
   });
 
@@ -145,6 +150,10 @@ class _RunScreenState extends State<RunScreen> {
   bool _synced = false;
   String? _syncError;
 
+  // Next RSVP'd event in the social layer, if within the next 48h. Shown on
+  // the idle Run tab as a priority card above the last-run summary.
+  EventView? _upcomingEvent;
+
   // Measured height of the stats overlay — used to offset the map camera so
   // the blue dot sits in the visible area above the overlay, not behind it.
   final GlobalKey _statsOverlayKey = GlobalKey();
@@ -155,7 +164,22 @@ class _RunScreenState extends State<RunScreen> {
     super.initState();
     widget.preferences.addListener(_onPrefsChange);
     widget.runStore.addListener(_onPrefsChange);
+    widget.social.addListener(_onSocialChange);
     _selectedRoute = widget.initialRoute;
+    _refreshUpcomingEvent();
+  }
+
+  Future<void> _refreshUpcomingEvent() async {
+    try {
+      final evt = await widget.social.fetchNextRsvpedEvent();
+      if (mounted) setState(() => _upcomingEvent = evt);
+    } catch (_) {
+      // Non-critical — leave the card hidden if the fetch fails.
+    }
+  }
+
+  void _onSocialChange() {
+    _refreshUpcomingEvent();
   }
 
   @override
@@ -695,6 +719,7 @@ class _RunScreenState extends State<RunScreen> {
   void dispose() {
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
+    widget.social.removeListener(_onSocialChange);
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _countdownTimer?.cancel();
@@ -837,7 +862,35 @@ class _RunScreenState extends State<RunScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    if (_selectedRoute != null)
+                    if (_upcomingEvent != null && _selectedRoute == null)
+                      UpcomingEventCard(
+                        event: _upcomingEvent!,
+                        onTap: () async {
+                          final evt = _upcomingEvent!;
+                          // Resolve the slug so the event-detail back button
+                          // leads somewhere sensible.
+                          final clubs = await widget.social.fetchMyClubs();
+                          final match = clubs
+                              .where((c) => c.row.id == evt.row.clubId)
+                              .toList();
+                          if (!mounted) return;
+                          final slug = match.isEmpty
+                              ? null
+                              : match.first.row.slug;
+                          if (slug == null) return;
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => EventDetailScreen(
+                                social: widget.social,
+                                clubSlug: slug,
+                                eventId: evt.row.id,
+                              ),
+                            ),
+                          );
+                          _refreshUpcomingEvent();
+                        },
+                      )
+                    else if (_selectedRoute != null)
                       _RoutePreviewCard(route: _selectedRoute!)
                     else if (lastRun != null)
                       _LastRunCard(run: lastRun)

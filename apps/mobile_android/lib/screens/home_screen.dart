@@ -6,6 +6,8 @@ import '../audio_cues.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../social_service.dart';
+import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
 import 'history_screen.dart';
 import 'routes_screen.dart';
@@ -18,6 +20,7 @@ class HomeScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final AudioCues audioCues;
+  final SocialService social;
 
   const HomeScreen({
     super.key,
@@ -26,6 +29,7 @@ class HomeScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     required this.audioCues,
+    required this.social,
   });
 
   @override
@@ -75,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
           routeStore: widget.routeStore,
           preferences: widget.preferences,
           audioCues: widget.audioCues,
+          social: widget.social,
           initialRoute: _preselectedRoute,
         ),
       ),
@@ -94,6 +99,12 @@ class _HomeScreenState extends State<HomeScreen> {
           routeStore: widget.routeStore,
           preferences: widget.preferences,
           onStartRun: _startRunWithRoute,
+        ),
+      ),
+      _KeepAlive(
+        child: ClubsScreen(
+          key: const PageStorageKey('clubs'),
+          social: widget.social,
         ),
       ),
       _KeepAlive(
@@ -161,6 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
             NavigationDestination(icon: Icon(Icons.play_arrow), label: 'Run'),
             NavigationDestination(icon: Icon(Icons.history), label: 'History'),
             NavigationDestination(icon: Icon(Icons.route), label: 'Routes'),
+            NavigationDestination(icon: Icon(Icons.groups), label: 'Clubs'),
             NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),

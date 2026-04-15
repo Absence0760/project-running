@@ -37,9 +37,21 @@ The enrichment fields are joined client-side in `data.ts` rather than through a 
 
 Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`.
 
-## Deferred (Phase 3+)
+## Surfaces (Android)
+
+| Screen | Purpose |
+|---|---|
+| `clubs_screen.dart` | 6th bottom-nav tab. Segmented **Browse** / **My clubs**, search input, tappable club cards. |
+| `club_detail_screen.dart` | Club home with tabs: **Feed** (next-event card, threaded post replies, admin composer), **Events** (upcoming list), **Members** (placeholder count — full roster is a later polish). Join/Leave CTA in the hero. |
+| `event_detail_screen.dart` | Per-instance RSVP buttons (`I'm in` / `Maybe` / `Can't make it`), recurrence chips for picking an occurrence, attendee pills, admin-only update composer that tags the post to the active instance. |
+| `widgets/upcoming_event_card.dart` | Displayed on the Run tab idle state when `SocialService.fetchNextRsvpedEvent` returns a `going` RSVP within 48h. Replaces the Last-Run card in that window — imminent commitment beats recent history. |
+
+The app deliberately **does not** support creating clubs or events on Android. Admins use the web app for setup; Android focuses on the member and admin-update flows that make sense on the go.
+
+## Deferred (Phase 4+)
 
 - **Notifications / realtime** — feed refreshes on page load; no push, no websocket subscriptions. Phase 4.
-- **Android mirror** — web-first. Phase 3 of the social rollout.
+- **Member roster on Android** — shows count only in Phase 3. Full list with avatars is a polish task.
 - **Deeper thread nesting** — replies are one level deep in v2. `parent_post_id` doesn't block deeper threads at the schema level, but the UI and fetchers don't surface them. Easy to grow later.
 - **Per-instance edits / cancellations** — Phase 2 recurrence is pattern-only. A cancelled single occurrence or a per-instance time override would need an `event_exceptions` table.
+- **Android create flows** — club / event creation lives on web only. If a meaningful share of admins turn out to manage from mobile, add mirrored `clubs/new` and `events/new` screens.
