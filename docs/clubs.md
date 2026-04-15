@@ -2,36 +2,44 @@
 
 The social layer. A club is a group with an owner, members, events, and a feed of admin updates. Phase 1 (shipped) is web-only with one-off events. Full phasing in `roadmap.md § Clubs and events`.
 
-## Surfaces (Phase 1, web)
+## Surfaces (web)
 
 | Route | Purpose |
 |---|---|
 | `/clubs` | Two tabs: **Browse** (public clubs, searchable by name/location) and **My clubs**. |
-| `/clubs/new` | Create a club (name, optional description + location, public/private). |
-| `/clubs/[slug]` | Club home. Three tabs: **Feed** (admin posts + "next event" card), **Events** (upcoming + past), **Members**. Join/Leave button in the hero. Admins see "New event" and a post composer. |
-| `/clubs/[slug]/events/new` | Admin-only. Title, date/time, duration, meeting point, optional attached route, distance, target pace, capacity. |
-| `/clubs/[slug]/events/[id]` | Event detail. RSVP buttons (Going / Maybe / Can't make it), attendee list, admin-only per-event updates, linked route chip. |
+| `/clubs/new` | Create a club (name, optional description + location, visibility: public/private, join policy: anyone / approval required / invite-only). |
+| `/clubs/[slug]` | Club home. Three tabs: **Feed** (admin posts + "next event" card, with threaded replies), **Events** (upcoming + past), **Members**. Join/Leave button in the hero. Admins see "New event", a post composer, a pending-requests panel, and the invite-link panel. |
+| `/clubs/[slug]/events/new` | Admin-only. Title, date/time, duration, meeting point, optional attached route, distance, target pace, capacity, recurrence (`none` / `weekly` / `biweekly` / `monthly` + weekday picker + until date). |
+| `/clubs/[slug]/events/[id]` | Event detail. RSVP buttons (Going / Maybe / Can't make it), attendee list, admin-only per-event updates, linked route chip. For recurring events, an instance picker above the RSVP row lets the user pick which occurrence they're RSVPing to. |
+| `/clubs/join/[token]` | Public invite-link landing page. Redeems the token via the `join_club_by_token` RPC and redirects to the club page. |
 
-Admin = the club owner or a member with `role = 'admin'`. The owner is auto-enrolled as an `'owner'`-role member at club creation (trigger `enroll_club_owner`), so `is_club_admin()` works uniformly for them too.
+Admin = the club owner or a member with `role = 'admin'` whose `status = 'active'`. The owner is auto-enrolled as an `'owner'`-role member at club creation (trigger `enroll_club_owner`), so `is_club_admin()` works uniformly for them too.
 
 ## Data model
 
-Tables: `clubs`, `club_members`, `events`, `event_attendees`, `club_posts`. Full definitions + RLS in `api_database.md § clubs / club_members / events / event_attendees / club_posts`. Migration: `apps/backend/supabase/migrations/20260416_001_clubs_and_events.sql`.
+Tables: `clubs`, `club_members`, `events`, `event_attendees`, `club_posts`. Full definitions + RLS in `api_database.md § clubs / club_members / events / event_attendees / club_posts`. Phase 1 migration: `apps/backend/supabase/migrations/20260416_001_clubs_and_events.sql`. Phase 2 migration: `20260417_001_phase2_social.sql` — adds recurrence columns on `events`, `instance_start` + composite pkey on `event_attendees`, `join_policy` + `invite_token` on `clubs`, `status` on `club_members`, `parent_post_id` + `event_instance_start` on `club_posts`, and the `join_club_by_token` RPC.
 
 Narrow client-side unions in `apps/web/src/lib/types.ts`:
 
 - `ClubRole = 'owner' | 'admin' | 'member'`
 - `RsvpStatus = 'going' | 'maybe' | 'declined'`
-- `ClubWithMeta = Club & { member_count, viewer_role }` — returned by `browseClubs`, `fetchMyClubs`, `fetchClubBySlug`
-- `EventWithMeta = Event & { attendee_count, viewer_rsvp }` — returned by the event fetchers
-- `ClubPostWithAuthor = ClubPost & { author_display_name, author_avatar_url }` — returned by `fetchClubPosts`
+- `MembershipStatus = 'active' | 'pending'`
+- `JoinPolicy = 'open' | 'request' | 'invite'`
+- `RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly'`
+- `Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'`
+- `ClubWithMeta = Club & { member_count, viewer_role, viewer_status }` — returned by `browseClubs`, `fetchMyClubs`, `fetchClubBySlug`
+- `EventWithMeta = Event & { attendee_count, viewer_rsvp, next_instance_start }` — returned by the event fetchers. `viewer_rsvp` is always scoped to `next_instance_start`; per-instance RSVPs use `fetchEventAttendees(eventId, instanceStart)`.
+- `ClubPostWithAuthor = ClubPost & { author_display_name, author_avatar_url, reply_count }` — returned by `fetchClubPosts`. Reply bodies come from `fetchPostReplies(parentId)`.
 
 The enrichment fields are joined client-side in `data.ts` rather than through a Postgres view — small fan-out, fewer moving parts, and it means RLS governs everything.
 
-## Deferred (Phase 2+)
+### Recurrence expansion
 
-- **Recurrence** — events are one-off in v1. Phase 2 adds an enum (`weekly` / `biweekly` / `monthly`) + `byday[]` + `until_date` rather than full RFC 5545 RRULEs. See `decisions.md`.
-- **Invite-only clubs** — `is_public = false` is respected by RLS, but there's no invite link or request/approval flow yet. Private clubs in v1 are only reachable if you already know the slug and are a member.
-- **Threaded replies** on posts — v1 is broadcast only.
-- **Notifications / realtime** — feed refreshes on page load; no push, no websocket subscriptions.
+Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`.
+
+## Deferred (Phase 3+)
+
+- **Notifications / realtime** — feed refreshes on page load; no push, no websocket subscriptions. Phase 4.
 - **Android mirror** — web-first. Phase 3 of the social rollout.
+- **Deeper thread nesting** — replies are one level deep in v2. `parent_post_id` doesn't block deeper threads at the schema level, but the UI and fetchers don't surface them. Easy to grow later.
+- **Per-instance edits / cancellations** — Phase 2 recurrence is pattern-only. A cancelled single occurrence or a per-instance time override would need an `event_exceptions` table.

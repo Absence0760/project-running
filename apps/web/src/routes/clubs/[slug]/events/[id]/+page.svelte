@@ -13,6 +13,7 @@
 		deleteEvent,
 		createClubPost
 	} from '$lib/data';
+	import { expandInstances, describeRecurrence } from '$lib/recurrence';
 	import type {
 		EventWithMeta,
 		ClubWithMeta,
@@ -35,8 +36,28 @@
 	let error = $state<string | null>(null);
 	let draftPost = $state('');
 
+	/** The instance the user is currently RSVPing to. For one-off events this
+	 * stays equal to `event.starts_at`; for recurring events, the user can
+	 * pick any of the next N instances. */
+	let activeInstance = $state<string | null>(null);
+
+	let nextInstances = $derived(
+		event
+			? expandInstances(event, new Date(), new Date(Date.now() + 120 * 24 * 3600 * 1000), 6)
+			: []
+	);
+
+	let recurrenceLabel = $derived(
+		event ? describeRecurrence(event.recurrence_freq, event.recurrence_byday) : ''
+	);
+
 	let isAdmin = $derived(club?.viewer_role === 'owner' || club?.viewer_role === 'admin');
-	let isPast = $derived(!!event && new Date(event.starts_at).getTime() < Date.now());
+	let isPast = $derived(
+		!!event &&
+			(event.recurrence_freq
+				? nextInstances.length === 0
+				: new Date(event.starts_at).getTime() < Date.now())
+	);
 
 	async function load() {
 		loading = true;
@@ -45,29 +66,46 @@
 			loading = false;
 			return;
 		}
+		activeInstance = event.next_instance_start;
+		await reloadInstance();
+		loading = false;
+	}
+
+	async function reloadInstance() {
+		if (!event || !club || !activeInstance) return;
 		const results = await Promise.all([
-			fetchEventAttendees(eventId),
+			fetchEventAttendees(event.id, activeInstance),
 			event.route_id ? fetchRouteById(event.route_id) : Promise.resolve(null),
-			club ? fetchClubPosts(club.id, 50) : Promise.resolve([])
+			fetchClubPosts(club.id, 50)
 		]);
 		attendees = results[0];
 		route = results[1];
-		eventPosts = (results[2] as ClubPostWithAuthor[]).filter((p) => p.event_id === eventId);
-		loading = false;
+		eventPosts = (results[2] as ClubPostWithAuthor[]).filter(
+			(p) => p.event_id === event!.id && (!p.event_instance_start || p.event_instance_start === activeInstance)
+		);
+	}
+
+	async function pickInstance(iso: string) {
+		activeInstance = iso;
+		await reloadInstance();
 	}
 
 	onMount(load);
 
 	async function rsvp(status: RsvpStatus) {
-		if (!event || busy) return;
+		if (!event || !activeInstance || busy) return;
 		busy = true;
 		try {
-			if (event.viewer_rsvp === status) {
-				await clearRsvp(event.id);
+			// `viewer_rsvp` only reflects the NEXT instance; when the user is
+			// viewing a later instance we don't compare against it.
+			const shouldClear =
+				activeInstance === event.next_instance_start && event.viewer_rsvp === status;
+			if (shouldClear) {
+				await clearRsvp(event.id, activeInstance);
 			} else {
-				await rsvpEvent(event.id, status);
+				await rsvpEvent(event.id, status, activeInstance);
 			}
-			await load();
+			await load(); // reload for updated counts
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'RSVP failed';
 		} finally {
@@ -77,23 +115,24 @@
 
 	async function handleDeleteEvent() {
 		if (!event) return;
-		if (!confirm(`Delete "${event.title}"?`)) return;
+		if (!confirm(`Delete "${event.title}"?${event.recurrence_freq ? ' All occurrences will be removed.' : ''}`)) return;
 		await deleteEvent(event.id);
 		goto(`/clubs/${slug}`);
 	}
 
 	async function submitPost(e: Event) {
 		e.preventDefault();
-		if (!club || !event || !draftPost.trim() || busy) return;
+		if (!club || !event || !activeInstance || !draftPost.trim() || busy) return;
 		busy = true;
 		try {
 			await createClubPost({
 				club_id: club.id,
 				event_id: event.id,
+				event_instance_start: event.recurrence_freq ? activeInstance : null,
 				body: draftPost
 			});
 			draftPost = '';
-			eventPosts = (await fetchClubPosts(club.id, 50)).filter((p) => p.event_id === event!.id);
+			await reloadInstance();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Failed to post update';
 		} finally {
@@ -161,9 +200,15 @@
 		<header class="hero">
 			<div class="hero-left">
 				<h1>{event.title}</h1>
+				{#if event.recurrence_freq}
+					<p class="recurrence-label">
+						<span class="material-symbols">autorenew</span>
+						{recurrenceLabel}
+					</p>
+				{/if}
 				<p class="date-line">
 					<span class="material-symbols">calendar_today</span>
-					{fmtDate(event.starts_at)}
+					{fmtDate(activeInstance ?? event.starts_at)}
 					{#if event.duration_min}
 						<span class="muted">· {event.duration_min} min</span>
 					{/if}
@@ -242,6 +287,27 @@
 
 		{#if error}
 			<p class="error">{error}</p>
+		{/if}
+
+		{#if event.recurrence_freq && nextInstances.length > 1}
+			<section class="instance-picker">
+				<span class="label">Pick an occurrence</span>
+				<div class="instance-chips">
+					{#each nextInstances as iso}
+						<button
+							class="instance-chip"
+							class:active={activeInstance === iso.toISOString()}
+							onclick={() => pickInstance(iso.toISOString())}
+						>
+							{iso.toLocaleDateString(undefined, {
+								weekday: 'short',
+								month: 'short',
+								day: 'numeric'
+							})}
+						</button>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
 		{#if isAdmin}
@@ -346,6 +412,62 @@
 	.hero h1 {
 		font-size: 1.6rem;
 		margin: 0;
+	}
+
+	.recurrence-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin: 0.4rem 0 0 0;
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+
+	.recurrence-label .material-symbols {
+		font-size: 1rem;
+	}
+
+	.instance-picker {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: 0.7rem 0.9rem;
+		margin-bottom: var(--space-md);
+	}
+
+	.instance-picker .label {
+		display: block;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: var(--color-text-tertiary);
+		margin-bottom: 0.5rem;
+	}
+
+	.instance-chips {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
+	.instance-chip {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
+		padding: 0.35rem 0.75rem;
+		border-radius: var(--radius-md);
+		font-weight: 600;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+
+	.instance-chip.active {
+		background: var(--color-primary);
+		color: var(--color-bg);
+		border-color: var(--color-primary);
 	}
 
 	.date-line,

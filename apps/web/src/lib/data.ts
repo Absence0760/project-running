@@ -10,14 +10,19 @@ import type {
 	ClubWithMeta,
 	ClubMember,
 	ClubRole,
+	MembershipStatus,
+	JoinPolicy,
 	Event,
 	EventWithMeta,
 	EventAttendee,
 	RsvpStatus,
 	ClubPost,
-	ClubPostWithAuthor
+	ClubPostWithAuthor,
+	RecurrenceFreq,
+	Weekday
 } from './types';
 import { auth } from './stores/auth.svelte';
+import { nextInstanceAfter } from './recurrence';
 
 // --- Runs ---
 
@@ -437,21 +442,25 @@ export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null
 	return enriched;
 }
 
-/** Attach member_count + viewer_role to an array of clubs in a small number of queries. */
+/** Attach member_count + viewer_role + viewer_status to clubs in two queries. */
 async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 	if (clubs.length === 0) return [];
 	const ids = clubs.map((c) => c.id);
 	const userId = auth.user?.id;
 
 	const [countsRes, rolesRes] = await Promise.all([
-		supabase.from('club_members').select('club_id', { count: 'exact' }).in('club_id', ids),
+		supabase
+			.from('club_members')
+			.select('club_id', { count: 'exact' })
+			.in('club_id', ids)
+			.eq('status', 'active'),
 		userId
 			? supabase
 					.from('club_members')
-					.select('club_id, role')
+					.select('club_id, role, status')
 					.in('club_id', ids)
 					.eq('user_id', userId)
-			: Promise.resolve({ data: [] as { club_id: string; role: string }[] })
+			: Promise.resolve({ data: [] as { club_id: string; role: string; status: string }[] })
 	]);
 
 	const counts = new Map<string, number>();
@@ -459,13 +468,17 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 		counts.set(row.club_id, (counts.get(row.club_id) ?? 0) + 1);
 	}
 	const roles = new Map<string, ClubRole>();
-	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string }[]) {
-		roles.set(row.club_id, row.role as ClubRole);
+	const statuses = new Map<string, MembershipStatus>();
+	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
+		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
+		statuses.set(row.club_id, row.status as MembershipStatus);
 	}
 	return clubs.map((c) => ({
 		...c,
+		join_policy: (c.join_policy ?? 'open') as JoinPolicy,
 		member_count: counts.get(c.id) ?? 0,
-		viewer_role: roles.get(c.id) ?? null
+		viewer_role: roles.get(c.id) ?? null,
+		viewer_status: statuses.get(c.id) ?? null
 	}));
 }
 
@@ -474,12 +487,13 @@ export async function createClub(input: {
 	description?: string;
 	location_label?: string;
 	is_public: boolean;
+	join_policy: JoinPolicy;
 }): Promise<Club> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
 	const baseSlug = slugify(input.name) || 'club';
-	let slug = baseSlug;
+	const inviteToken = input.join_policy === 'invite' ? genToken() : null;
 	// Retry with a short random suffix up to 3 times if the slug is taken —
 	// simpler than a SQL trigger and acceptable for the expected volume.
 	for (let attempt = 0; attempt < 4; attempt++) {
@@ -493,17 +507,31 @@ export async function createClub(input: {
 				slug: candidate,
 				description: input.description?.trim() || null,
 				location_label: input.location_label?.trim() || null,
-				is_public: input.is_public
+				is_public: input.is_public,
+				join_policy: input.join_policy,
+				invite_token: inviteToken
 			})
 			.select()
 			.single();
 		if (!error && data) {
-			slug = candidate;
-			return data;
+			return { ...data, join_policy: (data.join_policy ?? 'open') as JoinPolicy };
 		}
 		if (error && error.code !== '23505') throw error;
 	}
 	throw new Error(`Could not allocate a slug for "${input.name}" after 4 attempts`);
+}
+
+function genToken(): string {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function regenerateInviteToken(clubId: string): Promise<string> {
+	const token = genToken();
+	const { error } = await supabase.from('clubs').update({ invite_token: token }).eq('id', clubId);
+	if (error) throw error;
+	return token;
 }
 
 export async function updateClub(
@@ -519,13 +547,65 @@ export async function deleteClub(id: string): Promise<void> {
 	if (error) throw error;
 }
 
-export async function joinClub(clubId: string): Promise<void> {
+export async function joinClub(clubId: string, policy: JoinPolicy = 'open'): Promise<MembershipStatus> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
+	const status: MembershipStatus = policy === 'request' ? 'pending' : 'active';
 	const { error } = await supabase
 		.from('club_members')
-		.insert({ club_id: clubId, user_id: userId, role: 'member' });
-	if (error && error.code !== '23505') throw error; // already a member is fine
+		.insert({ club_id: clubId, user_id: userId, role: 'member', status });
+	if (error && error.code !== '23505') throw error;
+	return status;
+}
+
+/** Redeem a shareable invite token. Returns the joined club id. */
+export async function joinClubByToken(token: string): Promise<string> {
+	const { data, error } = await supabase.rpc('join_club_by_token', { token });
+	if (error) throw error;
+	return data as string;
+}
+
+export async function fetchPendingRequests(clubId: string): Promise<(ClubMember & {
+	display_name: string | null;
+	avatar_url: string | null;
+})[]> {
+	const { data: rows } = await supabase
+		.from('club_members')
+		.select('*')
+		.eq('club_id', clubId)
+		.eq('status', 'pending')
+		.order('joined_at', { ascending: true });
+	if (!rows || rows.length === 0) return [];
+	const userIds = (rows as ClubMember[]).map((r) => r.user_id);
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', userIds);
+	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	return (rows as ClubMember[]).map((r) => ({
+		...r,
+		display_name: byId.get(r.user_id)?.display_name ?? null,
+		avatar_url: byId.get(r.user_id)?.avatar_url ?? null
+	}));
+}
+
+export async function approveMember(clubId: string, userId: string): Promise<void> {
+	const { error } = await supabase
+		.from('club_members')
+		.update({ status: 'active' })
+		.eq('club_id', clubId)
+		.eq('user_id', userId);
+	if (error) throw error;
+}
+
+export async function rejectMember(clubId: string, userId: string): Promise<void> {
+	const { error } = await supabase
+		.from('club_members')
+		.delete()
+		.eq('club_id', clubId)
+		.eq('user_id', userId);
+	if (error) throw error;
 }
 
 export async function leaveClub(clubId: string): Promise<void> {
@@ -566,14 +646,24 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 // --- Events ---
 
 export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta[]> {
-	const nowIso = new Date().toISOString();
+	// For recurring series, `starts_at` can be in the past even though the
+	// next instance is in the future. Pull anything that's either (a) one-off
+	// in the future OR (b) recurring with an until-date that's still ahead.
+	// The client-side enrichment computes `next_instance_start` per event.
 	const { data } = await supabase
 		.from('events')
 		.select('*')
 		.eq('club_id', clubId)
-		.gte('starts_at', nowIso)
 		.order('starts_at', { ascending: true });
-	return enrichEvents((data as Event[]) ?? []);
+	const events = (data as Event[]) ?? [];
+	const now = new Date();
+	const enriched = await enrichEvents(events);
+	return enriched
+		.filter((e) => new Date(e.next_instance_start) >= now)
+		.sort(
+			(a, b) =>
+				new Date(a.next_instance_start).getTime() - new Date(b.next_instance_start).getTime()
+		);
 }
 
 export async function fetchPastEvents(clubId: string, limit = 12): Promise<EventWithMeta[]> {
@@ -597,37 +687,72 @@ export async function fetchEventById(id: string): Promise<EventWithMeta | null> 
 
 async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	if (events.length === 0) return [];
+
+	// Compute each event's next instance client-side so counts + RSVPs can be
+	// scoped to that instance. One-off events use their starts_at verbatim.
+	const nextMap = new Map<string, string>();
+	for (const e of events) {
+		const evt = normaliseEvent(e);
+		const next = evt.recurrence_freq ? nextInstanceAfter(evt) ?? new Date(evt.starts_at) : new Date(evt.starts_at);
+		nextMap.set(e.id, next.toISOString());
+	}
+
 	const ids = events.map((e) => e.id);
 	const userId = auth.user?.id;
 
-	const [countsRes, rsvpRes] = await Promise.all([
-		supabase
-			.from('event_attendees')
-			.select('event_id', { count: 'exact' })
-			.in('event_id', ids)
-			.eq('status', 'going'),
-		userId
-			? supabase
+	// "Going" count on the next instance of each event.
+	const countsPromise: Promise<Array<[string, number]>> = Promise.all(
+		ids.map(
+			(id) =>
+				supabase
 					.from('event_attendees')
-					.select('event_id, status')
-					.in('event_id', ids)
-					.eq('user_id', userId)
-			: Promise.resolve({ data: [] as { event_id: string; status: string }[] })
-	]);
+					.select('event_id', { count: 'exact' })
+					.eq('event_id', id)
+					.eq('status', 'going')
+					.eq('instance_start', nextMap.get(id) as string)
+					.then((res) => [id, res.count ?? 0] as [string, number])
+		)
+	);
+	const rsvpPromise: Promise<Array<[string, RsvpStatus | null]>> = userId
+		? Promise.all(
+				ids.map(
+					(id) =>
+						supabase
+							.from('event_attendees')
+							.select('status')
+							.eq('event_id', id)
+							.eq('user_id', userId)
+							.eq('instance_start', nextMap.get(id) as string)
+							.maybeSingle()
+							.then(
+								(res) => [id, (res.data?.status ?? null) as RsvpStatus | null] as [
+									string,
+									RsvpStatus | null
+								]
+						)
+				)
+		  )
+		: Promise.resolve([] as Array<[string, RsvpStatus | null]>);
 
-	const counts = new Map<string, number>();
-	for (const row of (countsRes.data ?? []) as { event_id: string }[]) {
-		counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
-	}
-	const rsvps = new Map<string, RsvpStatus>();
-	for (const row of (rsvpRes.data ?? []) as { event_id: string; status: string }[]) {
-		rsvps.set(row.event_id, row.status as RsvpStatus);
-	}
+	const [countRows, rsvpRows] = await Promise.all([countsPromise, rsvpPromise]);
+	const counts = new Map<string, number>(countRows);
+	const rsvps = new Map<string, RsvpStatus | null>(rsvpRows);
+
 	return events.map((e) => ({
-		...e,
+		...normaliseEvent(e),
 		attendee_count: counts.get(e.id) ?? 0,
-		viewer_rsvp: rsvps.get(e.id) ?? null
+		viewer_rsvp: rsvps.get(e.id) ?? null,
+		next_instance_start: nextMap.get(e.id)!
 	}));
+}
+
+/** Coerce server-side string[]/string into typed unions. */
+function normaliseEvent(e: Event): Event {
+	return {
+		...e,
+		recurrence_freq: (e.recurrence_freq ?? null) as RecurrenceFreq | null,
+		recurrence_byday: (e.recurrence_byday ?? null) as Weekday[] | null
+	};
 }
 
 export async function createEvent(input: {
@@ -643,6 +768,10 @@ export async function createEvent(input: {
 	distance_m?: number;
 	pace_target_sec?: number;
 	capacity?: number;
+	recurrence_freq?: RecurrenceFreq | null;
+	recurrence_byday?: Weekday[] | null;
+	recurrence_until?: string | null;
+	recurrence_count?: number | null;
 }): Promise<Event> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
@@ -661,12 +790,16 @@ export async function createEvent(input: {
 			distance_m: input.distance_m ?? null,
 			pace_target_sec: input.pace_target_sec ?? null,
 			capacity: input.capacity ?? null,
+			recurrence_freq: input.recurrence_freq ?? null,
+			recurrence_byday: input.recurrence_byday ?? null,
+			recurrence_until: input.recurrence_until ?? null,
+			recurrence_count: input.recurrence_count ?? null,
 			created_by: userId
 		})
 		.select()
 		.single();
 	if (error) throw error;
-	return data as Event;
+	return normaliseEvent(data as Event);
 }
 
 export async function deleteEvent(id: string): Promise<void> {
@@ -674,30 +807,38 @@ export async function deleteEvent(id: string): Promise<void> {
 	if (error) throw error;
 }
 
-export async function rsvpEvent(eventId: string, status: RsvpStatus): Promise<void> {
+export async function rsvpEvent(
+	eventId: string,
+	status: RsvpStatus,
+	instanceStart: string
+): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { error } = await supabase
 		.from('event_attendees')
 		.upsert(
-			{ event_id: eventId, user_id: userId, status },
-			{ onConflict: 'event_id,user_id' }
+			{ event_id: eventId, user_id: userId, status, instance_start: instanceStart },
+			{ onConflict: 'event_id,user_id,instance_start' }
 		);
 	if (error) throw error;
 }
 
-export async function clearRsvp(eventId: string): Promise<void> {
+export async function clearRsvp(eventId: string, instanceStart: string): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { error } = await supabase
 		.from('event_attendees')
 		.delete()
 		.eq('event_id', eventId)
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.eq('instance_start', instanceStart);
 	if (error) throw error;
 }
 
-export async function fetchEventAttendees(eventId: string): Promise<(EventAttendee & {
+export async function fetchEventAttendees(
+	eventId: string,
+	instanceStart: string
+): Promise<(EventAttendee & {
 	display_name: string | null;
 	avatar_url: string | null;
 })[]> {
@@ -705,6 +846,7 @@ export async function fetchEventAttendees(eventId: string): Promise<(EventAttend
 		.from('event_attendees')
 		.select('*')
 		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
 		.order('joined_at', { ascending: true });
 	if (!attendees) return [];
 	const userIds = (attendees as EventAttendee[]).map((a) => a.user_id);
@@ -727,24 +869,59 @@ export async function fetchClubPosts(
 	clubId: string,
 	limit = 20
 ): Promise<ClubPostWithAuthor[]> {
+	// Top-level posts only; replies are loaded lazily per-post.
 	const { data: posts } = await supabase
 		.from('club_posts')
 		.select('*')
 		.eq('club_id', clubId)
+		.is('parent_post_id', null)
 		.order('created_at', { ascending: false })
 		.limit(limit);
 	if (!posts) return [];
-	const authorIds = Array.from(new Set((posts as ClubPost[]).map((p) => p.author_id)));
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', authorIds);
+	return enrichPosts(posts as ClubPost[]);
+}
+
+export async function fetchPostReplies(parentId: string): Promise<ClubPostWithAuthor[]> {
+	const { data: posts } = await supabase
+		.from('club_posts')
+		.select('*')
+		.eq('parent_post_id', parentId)
+		.order('created_at', { ascending: true });
+	if (!posts) return [];
+	return enrichPosts(posts as ClubPost[]);
+}
+
+async function enrichPosts(posts: ClubPost[]): Promise<ClubPostWithAuthor[]> {
+	if (posts.length === 0) return [];
+	const authorIds = Array.from(new Set(posts.map((p) => p.author_id)));
+	const topLevelIds = posts.filter((p) => !p.parent_post_id).map((p) => p.id);
+
+	const [profilesRes, repliesRes] = await Promise.all([
+		supabase
+			.from('user_profiles')
+			.select('id, display_name, avatar_url')
+			.in('id', authorIds),
+		topLevelIds.length > 0
+			? supabase
+					.from('club_posts')
+					.select('parent_post_id')
+					.in('parent_post_id', topLevelIds)
+			: Promise.resolve({ data: [] as { parent_post_id: string }[] })
+	]);
+
 	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
-	return (posts as ClubPost[]).map((post) => ({
+	for (const p of profilesRes.data ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+
+	const replyCounts = new Map<string, number>();
+	for (const row of (repliesRes.data ?? []) as { parent_post_id: string }[]) {
+		replyCounts.set(row.parent_post_id, (replyCounts.get(row.parent_post_id) ?? 0) + 1);
+	}
+
+	return posts.map((post) => ({
 		...post,
 		author_display_name: byId.get(post.author_id)?.display_name ?? null,
-		author_avatar_url: byId.get(post.author_id)?.avatar_url ?? null
+		author_avatar_url: byId.get(post.author_id)?.avatar_url ?? null,
+		reply_count: replyCounts.get(post.id) ?? 0
 	}));
 }
 
@@ -752,6 +929,8 @@ export async function createClubPost(input: {
 	club_id: string;
 	body: string;
 	event_id?: string | null;
+	event_instance_start?: string | null;
+	parent_post_id?: string | null;
 }): Promise<ClubPost> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
@@ -760,6 +939,8 @@ export async function createClubPost(input: {
 		.insert({
 			club_id: input.club_id,
 			event_id: input.event_id ?? null,
+			event_instance_start: input.event_instance_start ?? null,
+			parent_post_id: input.parent_post_id ?? null,
 			author_id: userId,
 			body: input.body.trim()
 		})

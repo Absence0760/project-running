@@ -8,6 +8,11 @@
 		fetchPastEvents,
 		fetchClubMembers,
 		fetchClubPosts,
+		fetchPostReplies,
+		fetchPendingRequests,
+		approveMember,
+		rejectMember,
+		regenerateInviteToken,
 		joinClub,
 		leaveClub,
 		createClubPost,
@@ -27,6 +32,7 @@
 	let past = $state<EventWithMeta[]>([]);
 	let posts = $state<ClubPostWithAuthor[]>([]);
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
+	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
 	let tab = $state<'feed' | 'events' | 'members'>('feed');
 
@@ -34,6 +40,10 @@
 	let postingBusy = $state(false);
 	let joinBusy = $state(false);
 	let error = $state<string | null>(null);
+
+	/** Thread state. Key is parent post id. */
+	let expandedThreads = $state<Record<string, ClubPostWithAuthor[] | null>>({});
+	let replyDrafts = $state<Record<string, string>>({});
 
 	let isAdmin = $derived(
 		club?.viewer_role === 'owner' || club?.viewer_role === 'admin'
@@ -46,12 +56,20 @@
 			loading = false;
 			return;
 		}
-		[upcoming, past, posts, members] = await Promise.all([
+		const [up, pa, po, me, pe] = await Promise.all([
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
-			fetchClubMembers(club.id)
+			fetchClubMembers(club.id),
+			club.viewer_role === 'owner' || club.viewer_role === 'admin'
+				? fetchPendingRequests(club.id)
+				: Promise.resolve([])
 		]);
+		upcoming = up;
+		past = pa;
+		posts = po;
+		members = me;
+		pending = pe;
 		loading = false;
 	}
 
@@ -61,7 +79,10 @@
 		if (!club || joinBusy) return;
 		joinBusy = true;
 		try {
-			await joinClub(club.id);
+			const status = await joinClub(club.id, club.join_policy);
+			if (status === 'pending') {
+				error = `Request sent. An admin will review it.`;
+			}
 			await load();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Failed to join';
@@ -82,6 +103,53 @@
 		} finally {
 			joinBusy = false;
 		}
+	}
+
+	async function approve(userId: string) {
+		if (!club) return;
+		await approveMember(club.id, userId);
+		await load();
+	}
+
+	async function reject(userId: string) {
+		if (!club) return;
+		await rejectMember(club.id, userId);
+		await load();
+	}
+
+	async function copyInvite() {
+		if (!club?.invite_token) return;
+		const link = `${location.origin}/clubs/join/${club.invite_token}`;
+		await navigator.clipboard.writeText(link);
+		error = 'Invite link copied to clipboard.';
+	}
+
+	async function regenerateInvite() {
+		if (!club) return;
+		if (!confirm('Generate a new invite link? The current link stops working immediately.')) return;
+		const token = await regenerateInviteToken(club.id);
+		club = { ...club, invite_token: token };
+	}
+
+	async function toggleReplies(postId: string) {
+		if (expandedThreads[postId]) {
+			expandedThreads = { ...expandedThreads, [postId]: null };
+			return;
+		}
+		const replies = await fetchPostReplies(postId);
+		expandedThreads = { ...expandedThreads, [postId]: replies };
+	}
+
+	async function sendReply(postId: string) {
+		if (!club) return;
+		const body = replyDrafts[postId]?.trim();
+		if (!body) return;
+		await createClubPost({ club_id: club.id, body, parent_post_id: postId });
+		replyDrafts = { ...replyDrafts, [postId]: '' };
+		const replies = await fetchPostReplies(postId);
+		expandedThreads = { ...expandedThreads, [postId]: replies };
+		// Refresh reply counts on the top-level post list.
+		posts = await fetchClubPosts(club.id, 20);
 	}
 
 	async function submitPost(e: Event) {
@@ -194,9 +262,21 @@
 				{/if}
 			</div>
 			<div class="hero-actions">
-				{#if !club.viewer_role}
+				{#if !club.viewer_role && club.viewer_status === 'pending'}
+					<button class="btn-secondary" disabled>Request pending</button>
+				{:else if !club.viewer_role && club.join_policy === 'invite'}
+					<button class="btn-secondary" disabled title="Invite-only — ask an admin for the link.">
+						Invite only
+					</button>
+				{:else if !club.viewer_role}
 					<button class="btn-primary" onclick={join} disabled={joinBusy}>
-						{joinBusy ? 'Joining…' : 'Join club'}
+						{#if joinBusy}
+							{club.join_policy === 'request' ? 'Requesting…' : 'Joining…'}
+						{:else if club.join_policy === 'request'}
+							Request to join
+						{:else}
+							Join club
+						{/if}
 					</button>
 				{:else if club.viewer_role === 'owner'}
 					<button class="btn-secondary danger" onclick={handleDeleteClub}>Delete club</button>
@@ -216,6 +296,55 @@
 
 		{#if error}
 			<p class="error">{error}</p>
+		{/if}
+
+		{#if isAdmin && (club.join_policy === 'invite' || club.invite_token)}
+			<section class="admin-card">
+				<div class="admin-card-title">
+					<span class="material-symbols">link</span>
+					<strong>Invite link</strong>
+					<span class="policy-chip">{club.join_policy}</span>
+				</div>
+				{#if club.invite_token}
+					<div class="invite-row">
+						<code class="invite-link">{location.origin}/clubs/join/{club.invite_token}</code>
+						<button class="btn-ghost" onclick={copyInvite}>
+							<span class="material-symbols">content_copy</span>
+							Copy
+						</button>
+						<button class="btn-ghost" onclick={regenerateInvite}>
+							<span class="material-symbols">refresh</span>
+							Rotate
+						</button>
+					</div>
+				{:else}
+					<button class="btn-secondary" onclick={regenerateInvite}>Generate invite link</button>
+				{/if}
+			</section>
+		{/if}
+
+		{#if isAdmin && pending.length > 0}
+			<section class="admin-card">
+				<div class="admin-card-title">
+					<span class="material-symbols">hourglass_top</span>
+					<strong>Pending requests ({pending.length})</strong>
+				</div>
+				<div class="pending-list">
+					{#each pending as p (p.user_id)}
+						<div class="pending-row">
+							<div class="avatar-sm" style="--seed: {hashHue(p.user_id)}">
+								{initial(p.display_name)}
+							</div>
+							<div class="pending-info">
+								<strong>{p.display_name ?? 'Member'}</strong>
+								<span class="when">Requested {fmtRelative(p.joined_at ?? new Date().toISOString())}</span>
+							</div>
+							<button class="btn-primary small" onclick={() => approve(p.user_id)}>Approve</button>
+							<button class="btn-ghost" onclick={() => reject(p.user_id)}>Reject</button>
+						</div>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
 		<div class="tabs">
@@ -287,13 +416,67 @@
 									<strong>{post.author_display_name ?? 'Member'}</strong>
 									<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
 								</div>
-								{#if post.author_id === club.viewer_role && isAdmin}
+								{#if isAdmin}
 									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label="Delete post">
 										<span class="material-symbols">close</span>
 									</button>
 								{/if}
 							</div>
 							<p class="post-body">{post.body}</p>
+
+							{#if club.viewer_role}
+								<div class="post-actions">
+									<button class="link-btn" onclick={() => toggleReplies(post.id)}>
+										<span class="material-symbols">chat_bubble_outline</span>
+										{#if post.reply_count === 0}
+											Reply
+										{:else if expandedThreads[post.id]}
+											Hide {post.reply_count} {post.reply_count === 1 ? 'reply' : 'replies'}
+										{:else}
+											{post.reply_count} {post.reply_count === 1 ? 'reply' : 'replies'}
+										{/if}
+									</button>
+								</div>
+
+								{#if expandedThreads[post.id]}
+									<div class="replies">
+										{#each expandedThreads[post.id] ?? [] as reply (reply.id)}
+											<div class="reply">
+												<div class="avatar-sm" style="--seed: {hashHue(reply.author_id)}">
+													{initial(reply.author_display_name)}
+												</div>
+												<div class="reply-body">
+													<div class="reply-head">
+														<strong>{reply.author_display_name ?? 'Member'}</strong>
+														<span class="when">{fmtRelative(reply.created_at ?? new Date().toISOString())}</span>
+													</div>
+													<p>{reply.body}</p>
+												</div>
+											</div>
+										{/each}
+										<form
+											class="reply-form"
+											onsubmit={(e) => {
+												e.preventDefault();
+												sendReply(post.id);
+											}}
+										>
+											<input
+												type="text"
+												placeholder="Write a reply…"
+												bind:value={replyDrafts[post.id]}
+											/>
+											<button
+												class="btn-primary small"
+												type="submit"
+												disabled={!replyDrafts[post.id]?.trim()}
+											>
+												Reply
+											</button>
+										</form>
+									</div>
+								{/if}
+							{/if}
 						</article>
 					{/each}
 				</div>
@@ -565,6 +748,172 @@
 	.tab.active {
 		color: var(--color-primary);
 		border-bottom-color: var(--color-primary);
+	}
+
+	.admin-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+
+	.admin-card-title {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin-bottom: 0.6rem;
+	}
+
+	.policy-chip {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		padding: 0.1rem 0.5rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+	}
+
+	.invite-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
+	.invite-link {
+		flex: 1;
+		background: var(--color-bg-secondary);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-md);
+		font-family: ui-monospace, Menlo, monospace;
+		font-size: 0.82rem;
+		overflow-x: auto;
+		white-space: nowrap;
+	}
+
+	.btn-ghost {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
+		padding: 0.4rem 0.65rem;
+		border-radius: var(--radius-md);
+		font-weight: 600;
+		font-size: 0.85rem;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.btn-ghost:hover {
+		background: var(--color-bg-tertiary);
+	}
+
+	.btn-primary.small {
+		padding: 0.35rem 0.7rem;
+		font-size: 0.85rem;
+	}
+
+	.pending-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.pending-row {
+		display: grid;
+		grid-template-columns: auto 1fr auto auto;
+		gap: 0.5rem;
+		align-items: center;
+		padding: 0.5rem 0.6rem;
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+
+	.pending-info {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.pending-info .when {
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.post-actions {
+		margin-top: 0.4rem;
+	}
+
+	.link-btn {
+		background: none;
+		border: none;
+		color: var(--color-primary);
+		font-weight: 600;
+		font-size: 0.85rem;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.2rem 0;
+	}
+
+	.link-btn .material-symbols {
+		font-size: 1rem;
+	}
+
+	.replies {
+		margin-top: 0.6rem;
+		padding-left: 0.6rem;
+		border-left: 2px solid var(--color-border);
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.reply {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.reply-body {
+		flex: 1;
+		background: var(--color-bg-secondary);
+		padding: 0.4rem 0.65rem;
+		border-radius: var(--radius-md);
+	}
+
+	.reply-head {
+		display: flex;
+		gap: 0.5rem;
+		align-items: baseline;
+	}
+
+	.reply-head .when {
+		color: var(--color-text-tertiary);
+		font-size: 0.78rem;
+	}
+
+	.reply-body p {
+		white-space: pre-wrap;
+		margin-top: 0.15rem;
+	}
+
+	.reply-form {
+		display: flex;
+		gap: 0.4rem;
+		margin-top: 0.3rem;
+	}
+
+	.reply-form input {
+		flex: 1;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		padding: 0.4rem 0.6rem;
+		border-radius: var(--radius-md);
+		font: inherit;
+		color: inherit;
 	}
 
 	.next-event-card {

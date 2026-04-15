@@ -65,10 +65,20 @@ export type SubscriptionTier = 'free' | 'premium';
 
 export type ClubRole = 'owner' | 'admin' | 'member';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';
+export type MembershipStatus = 'active' | 'pending';
+export type JoinPolicy = 'open' | 'request' | 'invite';
+export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
+export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 
-export type Club = Omit<ClubRow, never>;
-export type ClubMember = Omit<ClubMemberRow, 'role'> & { role: ClubRole };
-export type Event = Omit<EventRow, never>;
+export type Club = Omit<ClubRow, 'join_policy'> & { join_policy: JoinPolicy };
+export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
+	role: ClubRole;
+	status: MembershipStatus;
+};
+export type Event = Omit<EventRow, 'recurrence_freq' | 'recurrence_byday'> & {
+	recurrence_freq: RecurrenceFreq | null;
+	recurrence_byday: Weekday[] | null;
+};
 export type EventAttendee = Omit<EventAttendeeRow, 'status'> & { status: RsvpStatus };
 export type ClubPost = Omit<ClubPostRow, never>;
 
@@ -76,14 +86,18 @@ export type ClubPost = Omit<ClubPostRow, never>;
 export type ClubWithMeta = Club & {
 	member_count: number;
 	viewer_role: ClubRole | null;
+	viewer_status: MembershipStatus | null;
 };
 
+/** `viewer_rsvp` is always for the *next* instance of a recurring series; per-instance RSVPs are queried separately. */
 export type EventWithMeta = Event & {
 	attendee_count: number;
 	viewer_rsvp: RsvpStatus | null;
+	next_instance_start: string; // ISO — equals starts_at for one-offs
 };
 
 export type ClubPostWithAuthor = ClubPost & {
 	author_display_name: string | null;
 	author_avatar_url: string | null;
+	reply_count: number;
 };

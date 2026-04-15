@@ -3,7 +3,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { fetchClubBySlug, fetchRoutes, createEvent } from '$lib/data';
-	import type { ClubWithMeta, Route } from '$lib/types';
+	import { WEEKDAY_CHOICES } from '$lib/recurrence';
+	import type { ClubWithMeta, Route, RecurrenceFreq, Weekday } from '$lib/types';
 
 	let slug = $derived($page.params.slug as string);
 	let club = $state<ClubWithMeta | null>(null);
@@ -23,6 +24,14 @@
 	let capacity = $state<number | null>(null);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+
+	let recurrence = $state<'none' | RecurrenceFreq>('none');
+	let byday = $state<Weekday[]>([]);
+	let until = $state<string>('');
+
+	function toggleByday(code: Weekday) {
+		byday = byday.includes(code) ? byday.filter((c) => c !== code) : [...byday, code];
+	}
 
 	function defaultDate(): string {
 		const d = new Date();
@@ -57,6 +66,7 @@
 			const startsAt = new Date(`${date}T${time}`).toISOString();
 			const paceSecTotal =
 				paceMin != null ? paceMin * 60 + (paceSec ?? 0) : null;
+			const recurrenceFreq = recurrence === 'none' ? null : recurrence;
 			const event = await createEvent({
 				club_id: club.id,
 				title: title.trim(),
@@ -67,7 +77,11 @@
 				route_id: routeId || null,
 				distance_m: distanceKm != null ? distanceKm * 1000 : undefined,
 				pace_target_sec: paceSecTotal ?? undefined,
-				capacity: capacity ?? undefined
+				capacity: capacity ?? undefined,
+				recurrence_freq: recurrenceFreq,
+				recurrence_byday:
+					recurrenceFreq && recurrenceFreq !== 'monthly' && byday.length > 0 ? byday : null,
+				recurrence_until: recurrenceFreq && until ? new Date(until).toISOString() : null
 			});
 			goto(`/clubs/${slug}/events/${event.id}`);
 		} catch (e: unknown) {
@@ -142,6 +156,51 @@
 					{/each}
 				</select>
 			</label>
+
+			<fieldset>
+				<legend>Repeats</legend>
+				<div class="freq-row">
+					{#each [
+						{ value: 'none', label: 'One-off' },
+						{ value: 'weekly', label: 'Weekly' },
+						{ value: 'biweekly', label: 'Every 2 weeks' },
+						{ value: 'monthly', label: 'Monthly' }
+					] as opt}
+						<label class="radio-inline">
+							<input
+								type="radio"
+								name="freq"
+								checked={recurrence === opt.value}
+								onchange={() => (recurrence = opt.value as 'none' | RecurrenceFreq)}
+							/>
+							<span>{opt.label}</span>
+						</label>
+					{/each}
+				</div>
+
+				{#if recurrence === 'weekly' || recurrence === 'biweekly'}
+					<div class="byday-row">
+						<span class="hint">On these days:</span>
+						{#each WEEKDAY_CHOICES as wd}
+							<button
+								type="button"
+								class="byday-chip"
+								class:active={byday.includes(wd.code)}
+								onclick={() => toggleByday(wd.code)}
+							>
+								{wd.label}
+							</button>
+						{/each}
+					</div>
+				{/if}
+
+				{#if recurrence !== 'none'}
+					<label class="until">
+						<span>Ends on <span class="optional">optional</span></span>
+						<input type="date" bind:value={until} />
+					</label>
+				{/if}
+			</fieldset>
 
 			<div class="row">
 				<label>
@@ -246,6 +305,70 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: var(--space-sm);
+	}
+
+	fieldset {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: 0.8rem 1rem;
+		background: var(--color-surface);
+	}
+
+	legend {
+		font-weight: 600;
+		font-size: 0.9rem;
+		padding: 0 0.4rem;
+	}
+
+	.freq-row {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.radio-inline {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex-direction: row;
+		font-weight: 500;
+		font-size: 0.9rem;
+		cursor: pointer;
+	}
+
+	.byday-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+		margin-top: 0.75rem;
+	}
+
+	.byday-row .hint {
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		margin-right: 0.25rem;
+	}
+
+	.byday-chip {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
+		padding: 0.3rem 0.65rem;
+		border-radius: var(--radius-md);
+		font-weight: 600;
+		font-size: 0.82rem;
+		cursor: pointer;
+	}
+
+	.byday-chip.active {
+		background: var(--color-primary);
+		color: var(--color-bg);
+		border-color: var(--color-primary);
+	}
+
+	.until {
+		margin-top: 0.75rem;
 	}
 
 	.pace {

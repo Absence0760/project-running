@@ -1,13 +1,26 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { createClub } from '$lib/data';
+	import type { JoinPolicy } from '$lib/types';
 
 	let name = $state('');
 	let description = $state('');
 	let location = $state('');
-	let isPublic = $state(true);
+	let visibility = $state<'public' | 'private'>('public');
+	let joinPolicy = $state<JoinPolicy>('open');
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+
+	$effect(() => {
+		// Private clubs don't appear in Browse; 'request' makes no sense without
+		// discoverability, so invite is the only sensible pairing for private.
+		if (visibility === 'private' && joinPolicy !== 'invite') {
+			joinPolicy = 'invite';
+		}
+		if (visibility === 'public' && joinPolicy === 'invite') {
+			joinPolicy = 'open';
+		}
+	});
 
 	async function submit(e: Event) {
 		e.preventDefault();
@@ -19,7 +32,8 @@
 				name: name.trim(),
 				description: description.trim() || undefined,
 				location_label: location.trim() || undefined,
-				is_public: isPublic
+				is_public: visibility === 'public',
+				join_policy: joinPolicy
 			});
 			goto(`/clubs/${club.slug}`);
 		} catch (e: unknown) {
@@ -62,20 +76,60 @@
 		<fieldset>
 			<legend>Visibility</legend>
 			<label class="radio">
-				<input type="radio" name="vis" checked={isPublic} onchange={() => (isPublic = true)} />
+				<input
+					type="radio"
+					name="vis"
+					checked={visibility === 'public'}
+					onchange={() => (visibility = 'public')}
+				/>
 				<span>
 					<strong>Public</strong>
-					<span class="hint">Anyone can find and join.</span>
+					<span class="hint">Anyone can find this club in Browse.</span>
 				</span>
 			</label>
 			<label class="radio">
-				<input type="radio" name="vis" checked={!isPublic} onchange={() => (isPublic = false)} />
+				<input
+					type="radio"
+					name="vis"
+					checked={visibility === 'private'}
+					onchange={() => (visibility = 'private')}
+				/>
 				<span>
 					<strong>Private</strong>
-					<span class="hint">Only members see posts and events. You invite people by sharing the link.</span>
+					<span class="hint">Hidden from Browse. Invite-only — share the generated link to let people join.</span>
 				</span>
 			</label>
 		</fieldset>
+
+		{#if visibility === 'public'}
+			<fieldset>
+				<legend>Who can join?</legend>
+				<label class="radio">
+					<input
+						type="radio"
+						name="policy"
+						checked={joinPolicy === 'open'}
+						onchange={() => (joinPolicy = 'open')}
+					/>
+					<span>
+						<strong>Anyone</strong>
+						<span class="hint">One click to join, no approval needed.</span>
+					</span>
+				</label>
+				<label class="radio">
+					<input
+						type="radio"
+						name="policy"
+						checked={joinPolicy === 'request'}
+						onchange={() => (joinPolicy = 'request')}
+					/>
+					<span>
+						<strong>Approval required</strong>
+						<span class="hint">New members sit in a pending queue until an admin accepts them.</span>
+					</span>
+				</label>
+			</fieldset>
+		{/if}
 
 		{#if error}
 			<p class="error">{error}</p>

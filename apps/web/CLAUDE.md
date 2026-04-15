@@ -33,10 +33,11 @@ src/
     routes/new/     # Route builder (MapLibre + OSRM)
     routes/[id]/    # Route detail
     clubs/          # Social layer — browse + My clubs
-    clubs/new/      # Create a club
-    clubs/[slug]/   # Club home: feed / events / members
-    clubs/[slug]/events/new/      # Admin: create event (one-off, Phase 1)
-    clubs/[slug]/events/[id]/     # Event detail + RSVP + per-event updates
+    clubs/new/      # Create a club (visibility + join policy)
+    clubs/[slug]/   # Club home: feed (threaded) / events / members, pending-requests + invite-link panels for admins
+    clubs/[slug]/events/new/      # Admin: create event (one-off OR weekly/biweekly/monthly recurrence)
+    clubs/[slug]/events/[id]/     # Event detail + per-instance RSVP + per-event updates
+    clubs/join/[token]/           # Public invite-link landing (redeems via join_club_by_token RPC)
     explore/        # Public route discovery (search, distance/surface filters)
     settings/       # Account, integrations, preferences
     share/run/[id]/ # Public run share page (no auth required)

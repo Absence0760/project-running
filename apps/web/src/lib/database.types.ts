@@ -39,18 +39,21 @@ export type Database = {
           club_id: string
           joined_at: string | null
           role: string
+          status: string
           user_id: string
         }
         Insert: {
           club_id: string
           joined_at?: string | null
           role?: string
+          status?: string
           user_id: string
         }
         Update: {
           club_id?: string
           joined_at?: string | null
           role?: string
+          status?: string
           user_id?: string
         }
         Relationships: [
@@ -70,7 +73,9 @@ export type Database = {
           club_id: string
           created_at: string | null
           event_id: string | null
+          event_instance_start: string | null
           id: string
+          parent_post_id: string | null
         }
         Insert: {
           author_id: string
@@ -78,7 +83,9 @@ export type Database = {
           club_id: string
           created_at?: string | null
           event_id?: string | null
+          event_instance_start?: string | null
           id?: string
+          parent_post_id?: string | null
         }
         Update: {
           author_id?: string
@@ -86,7 +93,9 @@ export type Database = {
           club_id?: string
           created_at?: string | null
           event_id?: string | null
+          event_instance_start?: string | null
           id?: string
+          parent_post_id?: string | null
         }
         Relationships: [
           {
@@ -103,6 +112,13 @@ export type Database = {
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "club_posts_parent_post_id_fkey"
+            columns: ["parent_post_id"]
+            isOneToOne: false
+            referencedRelation: "club_posts"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clubs: {
@@ -111,7 +127,9 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          invite_token: string | null
           is_public: boolean | null
+          join_policy: string
           location_label: string | null
           name: string
           owner_id: string
@@ -123,7 +141,9 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          invite_token?: string | null
           is_public?: boolean | null
+          join_policy?: string
           location_label?: string | null
           name: string
           owner_id: string
@@ -135,7 +155,9 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          invite_token?: string | null
           is_public?: boolean | null
+          join_policy?: string
           location_label?: string | null
           name?: string
           owner_id?: string
@@ -147,18 +169,21 @@ export type Database = {
       event_attendees: {
         Row: {
           event_id: string
+          instance_start: string
           joined_at: string | null
           status: string
           user_id: string
         }
         Insert: {
           event_id: string
+          instance_start: string
           joined_at?: string | null
           status?: string
           user_id: string
         }
         Update: {
           event_id?: string
+          instance_start?: string
           joined_at?: string | null
           status?: string
           user_id?: string
@@ -187,6 +212,10 @@ export type Database = {
           meet_lat: number | null
           meet_lng: number | null
           pace_target_sec: number | null
+          recurrence_byday: string[] | null
+          recurrence_count: number | null
+          recurrence_freq: string | null
+          recurrence_until: string | null
           route_id: string | null
           starts_at: string
           title: string
@@ -205,6 +234,10 @@ export type Database = {
           meet_lat?: number | null
           meet_lng?: number | null
           pace_target_sec?: number | null
+          recurrence_byday?: string[] | null
+          recurrence_count?: number | null
+          recurrence_freq?: string | null
+          recurrence_until?: string | null
           route_id?: string | null
           starts_at: string
           title: string
@@ -223,6 +256,10 @@ export type Database = {
           meet_lat?: number | null
           meet_lng?: number | null
           pace_target_sec?: number | null
+          recurrence_byday?: string[] | null
+          recurrence_count?: number | null
+          recurrence_freq?: string | null
+          recurrence_until?: string | null
           route_id?: string | null
           starts_at?: string
           title?: string
@@ -477,6 +514,7 @@ export type Database = {
     Functions: {
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }
+      join_club_by_token: { Args: { token: string }; Returns: string }
       nearby_routes: {
         Args: {
           lat: number

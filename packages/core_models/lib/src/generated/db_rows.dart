@@ -14,17 +14,20 @@ class ClubMemberRow {
   static const String colUserId = 'user_id';
   static const String colRole = 'role';
   static const String colJoinedAt = 'joined_at';
+  static const String colStatus = 'status';
 
   final String clubId;
   final String userId;
   final String role;
   final DateTime? joinedAt;
+  final String status;
 
   const ClubMemberRow({
     required this.clubId,
     required this.userId,
     required this.role,
     this.joinedAt,
+    required this.status,
   });
 
   factory ClubMemberRow.fromJson(Map<String, dynamic> json) => ClubMemberRow(
@@ -32,6 +35,7 @@ class ClubMemberRow {
     userId: json['user_id'] as String,
     role: json['role'] as String,
     joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
+    status: json['status'] as String,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -39,6 +43,7 @@ class ClubMemberRow {
     colUserId: userId,
     colRole: role,
     colJoinedAt: joinedAt?.toIso8601String(),
+    colStatus: status,
   };
 }
 
@@ -52,6 +57,8 @@ class ClubPostRow {
   static const String colAuthorId = 'author_id';
   static const String colBody = 'body';
   static const String colCreatedAt = 'created_at';
+  static const String colEventInstanceStart = 'event_instance_start';
+  static const String colParentPostId = 'parent_post_id';
 
   final String id;
   final String clubId;
@@ -59,6 +66,8 @@ class ClubPostRow {
   final String authorId;
   final String body;
   final DateTime? createdAt;
+  final DateTime? eventInstanceStart;
+  final String? parentPostId;
 
   const ClubPostRow({
     required this.id,
@@ -67,6 +76,8 @@ class ClubPostRow {
     required this.authorId,
     required this.body,
     this.createdAt,
+    this.eventInstanceStart,
+    this.parentPostId,
   });
 
   factory ClubPostRow.fromJson(Map<String, dynamic> json) => ClubPostRow(
@@ -76,6 +87,8 @@ class ClubPostRow {
     authorId: json['author_id'] as String,
     body: json['body'] as String,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+    eventInstanceStart: json['event_instance_start'] == null ? null : DateTime.parse(json['event_instance_start'] as String),
+    parentPostId: json['parent_post_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -85,6 +98,8 @@ class ClubPostRow {
     colAuthorId: authorId,
     colBody: body,
     colCreatedAt: createdAt?.toIso8601String(),
+    colEventInstanceStart: eventInstanceStart?.toIso8601String(),
+    colParentPostId: parentPostId,
   };
 }
 
@@ -102,6 +117,8 @@ class ClubRow {
   static const String colIsPublic = 'is_public';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colJoinPolicy = 'join_policy';
+  static const String colInviteToken = 'invite_token';
 
   final String id;
   final String ownerId;
@@ -113,6 +130,8 @@ class ClubRow {
   final bool? isPublic;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String joinPolicy;
+  final String? inviteToken;
 
   const ClubRow({
     required this.id,
@@ -125,6 +144,8 @@ class ClubRow {
     this.isPublic,
     this.createdAt,
     this.updatedAt,
+    required this.joinPolicy,
+    this.inviteToken,
   });
 
   factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
@@ -138,6 +159,8 @@ class ClubRow {
     isPublic: json['is_public'] as bool?,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    joinPolicy: json['join_policy'] as String,
+    inviteToken: json['invite_token'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -151,6 +174,8 @@ class ClubRow {
     colIsPublic: isPublic,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
+    colJoinPolicy: joinPolicy,
+    colInviteToken: inviteToken,
   };
 }
 
@@ -162,17 +187,20 @@ class EventAttendeeRow {
   static const String colUserId = 'user_id';
   static const String colStatus = 'status';
   static const String colJoinedAt = 'joined_at';
+  static const String colInstanceStart = 'instance_start';
 
   final String eventId;
   final String userId;
   final String status;
   final DateTime? joinedAt;
+  final DateTime? instanceStart;
 
   const EventAttendeeRow({
     required this.eventId,
     required this.userId,
     required this.status,
     this.joinedAt,
+    this.instanceStart,
   });
 
   factory EventAttendeeRow.fromJson(Map<String, dynamic> json) => EventAttendeeRow(
@@ -180,6 +208,7 @@ class EventAttendeeRow {
     userId: json['user_id'] as String,
     status: json['status'] as String,
     joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
+    instanceStart: json['instance_start'] == null ? null : DateTime.parse(json['instance_start'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -187,6 +216,7 @@ class EventAttendeeRow {
     colUserId: userId,
     colStatus: status,
     colJoinedAt: joinedAt?.toIso8601String(),
+    colInstanceStart: instanceStart?.toIso8601String(),
   };
 }
 
@@ -210,6 +240,10 @@ class EventRow {
   static const String colCreatedBy = 'created_by';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colRecurrenceFreq = 'recurrence_freq';
+  static const String colRecurrenceByday = 'recurrence_byday';
+  static const String colRecurrenceUntil = 'recurrence_until';
+  static const String colRecurrenceCount = 'recurrence_count';
 
   final String id;
   final String clubId;
@@ -227,6 +261,10 @@ class EventRow {
   final String createdBy;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? recurrenceFreq;
+  final String? recurrenceByday;
+  final DateTime? recurrenceUntil;
+  final int? recurrenceCount;
 
   const EventRow({
     required this.id,
@@ -245,6 +283,10 @@ class EventRow {
     required this.createdBy,
     this.createdAt,
     this.updatedAt,
+    this.recurrenceFreq,
+    this.recurrenceByday,
+    this.recurrenceUntil,
+    this.recurrenceCount,
   });
 
   factory EventRow.fromJson(Map<String, dynamic> json) => EventRow(
@@ -264,6 +306,10 @@ class EventRow {
     createdBy: json['created_by'] as String,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    recurrenceFreq: json['recurrence_freq'] as String?,
+    recurrenceByday: json['recurrence_byday'] as String?,
+    recurrenceUntil: json['recurrence_until'] == null ? null : DateTime.parse(json['recurrence_until'] as String),
+    recurrenceCount: (json['recurrence_count'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -283,6 +329,10 @@ class EventRow {
     colCreatedBy: createdBy,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
+    colRecurrenceFreq: recurrenceFreq,
+    colRecurrenceByday: recurrenceByday,
+    colRecurrenceUntil: recurrenceUntil?.toIso8601String(),
+    colRecurrenceCount: recurrenceCount,
   };
 }
 

@@ -15,7 +15,11 @@
 	];
 
 	const publicPaths = ['/', '/login', '/auth/callback'];
-	const isPublic = (path: string) => publicPaths.includes(path) || path.startsWith('/live/') || path.startsWith('/share/');
+	const isPublic = (path: string) =>
+		publicPaths.includes(path) ||
+		path.startsWith('/live/') ||
+		path.startsWith('/share/') ||
+		path.startsWith('/clubs/join/');
 
 	function isActive(href: string, path: string): boolean {
 		if (href === '/settings/integrations') return path.startsWith('/settings');
