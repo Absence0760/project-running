@@ -130,11 +130,19 @@ void main(List<String> args) {
   stdout.writeln('Wrote ${kotlinOut.path}');
 }
 
-/// Subset of tables emitted on the Kotlin side. Keep narrow — only the tables
-/// a Kotlin app actually writes to. Adding `routes` etc. requires a migration
-/// hand check first because the Kotlin JSON mapping uses kotlinx.serialization
-/// JsonElement for jsonb columns, which is slightly stricter than Dart's
-/// `dynamic`.
+/// Subset of tables emitted on the Kotlin side. Keep narrow — Kotlin's
+/// `kotlinx.serialization.json.JsonElement` mapping is stricter than Dart's
+/// `dynamic`, so adding a table is a deliberate step:
+///
+///   1. Add the table name to this set.
+///   2. Rerun the generator (`dart run scripts/gen_dart_models.dart`).
+///   3. Rebuild `watch_wear` — any mismatch surfaces as a compile error.
+///
+/// Today Wear OS only *writes* the `runs` row. If a future Wear feature
+/// needs to read e.g. `routes` or a future `plan_workouts` for live
+/// navigation on the watch, extend this set then. Don't speculatively
+/// emit tables the app doesn't actually use — every added table is a
+/// surface that can drift.
 const _kotlinTables = <String>{'runs'};
 
 String _findRepoRoot() {

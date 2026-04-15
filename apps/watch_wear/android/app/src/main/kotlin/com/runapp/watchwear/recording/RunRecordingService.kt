@@ -234,12 +234,12 @@ class RunRecordingService : Service() {
     private fun isPaused(): Boolean =
         RecordingRepository.metrics.value.stage == RecordingRepository.Stage.Paused
 
-    private fun activeElapsedMs(): Long {
-        val now = System.currentTimeMillis()
-        val total = now - startedAtMs
-        val currentPauseMs = if (pausedSinceMs > 0) now - pausedSinceMs else 0
-        return (total - pausedAccumulatedMs - currentPauseMs).coerceAtLeast(0)
-    }
+    private fun activeElapsedMs(): Long = activeElapsedMs(
+        nowMs = System.currentTimeMillis(),
+        startedAtMs = startedAtMs,
+        pausedAccumulatedMs = pausedAccumulatedMs,
+        pausedSinceMs = pausedSinceMs,
+    )
 
     // ----- GPS handler -----
 

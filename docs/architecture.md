@@ -492,7 +492,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 |---|---|---|
 | iOS + Android UI | Flutter 3.x + Dart | Single codebase, ~80% shared |
 | Apple Watch | Swift 5 + SwiftUI + WatchKit | Separate Xcode project in monorepo |
-| Wear OS | Flutter + `wear` plugin | Compose for Wear via platform channel |
+| Wear OS | Native Kotlin + Jetpack Compose-for-Wear | Separate Gradle project in monorepo, schema-codegen'd Kotlin row classes — see [decisions.md § 15](decisions.md) |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to Vercel |
 | Web maps | MapLibre GL JS | Route builder, run GPS trace, live spectator |
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |

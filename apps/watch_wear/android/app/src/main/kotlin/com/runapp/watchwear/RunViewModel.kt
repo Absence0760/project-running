@@ -59,6 +59,15 @@ data class FinishedSummary(
     val avgBpm: Double?,
     val lapCount: Int = 0,
     val activityType: String = "run",
+    val laps: List<FinishedLap> = emptyList(),
+)
+
+data class FinishedLap(
+    val number: Int,
+    val splitSeconds: Int,
+    val splitDistanceM: Double,
+    val cumulativeSeconds: Int,
+    val cumulativeDistanceM: Double,
 )
 
 class RunViewModel(application: Application) : AndroidViewModel(application) {
@@ -316,12 +325,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val runId = m.runId ?: return
         val durationS = (m.elapsedMs / 1000).toInt()
         val trackJson = encodeTrack(m.track)
+        val laps = buildFinishedLaps(m, durationS)
         val summary = FinishedSummary(
             distanceM = m.distanceM,
             durationS = durationS,
             avgBpm = m.avgBpm,
             lapCount = m.laps.size,
             activityType = m.activityType,
+            laps = laps,
         )
         _state.value = _state.value.copy(
             stage = Stage.PostRun,
@@ -531,6 +542,45 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             trackJson = run.trackJson,
             metadata = metadata,
         )
+    }
+
+    /// Turn the service's raw lap list (cumulative marks) into split-per-lap
+    /// rows suitable for the post-run table. The final "bonus" row is the
+    /// partial between the last lap mark and the stop — only included when
+    /// it's non-trivial (≥ 1s and ≥ 1m).
+    private fun buildFinishedLaps(
+        m: RecordingRepository.Metrics,
+        totalDurationS: Int,
+    ): List<FinishedLap> {
+        if (m.laps.isEmpty()) return emptyList()
+        val out = mutableListOf<FinishedLap>()
+        var prevMs = 0L
+        var prevDist = 0.0
+        for (lap in m.laps) {
+            val split = ((lap.atMs - prevMs) / 1000).toInt().coerceAtLeast(0)
+            val splitDist = (lap.distanceM - prevDist).coerceAtLeast(0.0)
+            out += FinishedLap(
+                number = lap.number,
+                splitSeconds = split,
+                splitDistanceM = splitDist,
+                cumulativeSeconds = (lap.atMs / 1000).toInt(),
+                cumulativeDistanceM = lap.distanceM,
+            )
+            prevMs = lap.atMs
+            prevDist = lap.distanceM
+        }
+        val finalSplitS = totalDurationS - out.last().cumulativeSeconds
+        val finalSplitM = m.distanceM - out.last().cumulativeDistanceM
+        if (finalSplitS >= 1 && finalSplitM >= 1.0) {
+            out += FinishedLap(
+                number = out.size + 1,
+                splitSeconds = finalSplitS,
+                splitDistanceM = finalSplitM,
+                cumulativeSeconds = totalDurationS,
+                cumulativeDistanceM = m.distanceM,
+            )
+        }
+        return out
     }
 
     private fun encodeTrack(points: List<GpsPoint>): String {

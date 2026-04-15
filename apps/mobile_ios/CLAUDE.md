@@ -1,24 +1,25 @@
 # mobile_ios — AI session notes
 
-Flutter iOS app. **Almost entirely a scaffold** — the hard work in Phase 1 has been done on Android first. See the Phase 1 section of [../../docs/roadmap.md](../../docs/roadmap.md) for the unchecked iOS-specific boxes (iOS background location, iOS GPX/KML parsing, etc.).
+Flutter iOS app. **Phone-side WCSession sink for Apple Watch runs is live; the iOS-native recording UI is still a scaffold.** The hard work of Phase 1 has been done on Android first. See Phase 1 in [../../docs/roadmap.md](../../docs/roadmap.md) for the unchecked iOS-specific boxes (iOS background location, iOS GPX/KML parsing, etc.).
 
 ## Current state
 
-Seven Dart files under `lib/`:
+Dart files under `lib/`:
 
-- `main.dart` — app entry, contains TODO comments for Supabase and local-database initialisation
+- `main.dart` — **wired**: initialises Supabase from `--dart-define-from-file=dart_defines.json`, optionally auto-signs in via `DEV_USER_EMAIL`/`DEV_USER_PASSWORD`, and installs `WatchIngest.attach(api)` so runs sent from the watch land in Supabase.
 - `mock_data.dart` — fallback UI data
-- `screens/home_screen.dart`
-- `screens/run_screen.dart`
-- `screens/runs_screen.dart`
-- `screens/routes_screen.dart`
-- `screens/settings_screen.dart`
+- `screens/home_screen.dart`, `run_screen.dart`, `runs_screen.dart`, `routes_screen.dart`, `settings_screen.dart` — minimal shells. No GPS recording, no local store, no importer, no tile cache, no audio cues. Compare with [../mobile_android/CLAUDE.md](../mobile_android/CLAUDE.md) to see the gap.
 
-The screens are minimal shells. There is no sync service, no local store, no importer, no tile cache, no audio cues, no widgets beyond what the screens render inline — compare with the Android file list in [../mobile_android/CLAUDE.md](../mobile_android/CLAUDE.md) to see the gap.
+Native iOS files under `ios/Runner/`:
 
-## What this app will look like when it's done
+- `AppDelegate.swift` — activates the `WatchIngestBridge` singleton at launch + attaches its method channel when the Flutter engine spins up.
+- `WatchIngestBridge.swift` — `WCSessionDelegate` that receives `WCSessionFile` transfers from the watch, reads the gzipped-JSON track contents, and forwards to Dart via the `run_app/watch_ingest` method channel. Payloads arriving before Flutter is ready are buffered in-process and flushed on attach.
+
+## What "done" means
 
 Structurally identical to `mobile_android` (same stack, same `StatefulWidget + setState` pattern, same dependence on `packages/run_recorder` and `packages/api_client`). Every module in `mobile_android/lib/` that isn't Android-specific is a candidate to hoist into a shared package before the iOS port — ask before doing that; the team may prefer copy-then-converge.
+
+## What this app will look like when it's done
 
 Android-specific concerns that don't port:
 - Foreground service for background GPS → iOS uses `BGProcessingTask` + `CLLocationManager.allowsBackgroundLocationUpdates`.

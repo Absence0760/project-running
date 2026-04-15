@@ -36,3 +36,45 @@ jobs:
         run: |
           echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
           echo "Run 'npm run gen:types' locally and commit the result."
+
+  build-watch-wear:
+    name: Build Wear OS app (Kotlin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-watch-wear-${{ hashFiles('apps/watch_wear/android/**/*.gradle*', 'apps/watch_wear/android/gradle/wrapper/gradle-wrapper.properties') }}
+      - working-directory: apps/watch_wear/android
+        run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
+
+  schema-codegen-drift:
+    name: Kotlin row codegen drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      - working-directory: apps/backend
+        run: supabase start
+      - name: Regenerate Dart + Kotlin row classes
+        run: dart run scripts/gen_dart_models.dart
+      - name: Fail if committed outputs drifted
+        run: |
+          if ! git diff --exit-code packages/core_models/lib/src/generated/db_rows.dart apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/generated/DbRows.kt; then
+            echo "::error::Generated row classes are out of sync with migrations."
+            echo "Run 'dart run scripts/gen_dart_models.dart' locally and commit the result."
+            exit 1
+          fi

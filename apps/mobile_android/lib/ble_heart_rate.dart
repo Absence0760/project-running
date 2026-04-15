@@ -125,22 +125,7 @@ class BleHeartRate {
     });
   }
 
-  /// Parse the BLE Heart Rate Measurement characteristic per the spec:
-  /// byte 0 is flags; if bit 0 is clear the HR is uint8 in byte 1,
-  /// otherwise uint16 LE in bytes 1–2. Higher bits describe EE, RR, and
-  /// sensor-contact status — we ignore them for avg-BPM purposes.
-  int? _parseHeartRate(List<int> raw) {
-    if (raw.isEmpty) return null;
-    final bytes = Uint8List.fromList(raw);
-    final flags = bytes[0];
-    final is16bit = (flags & 0x01) == 0x01;
-    if (is16bit) {
-      if (bytes.length < 3) return null;
-      return bytes[1] | (bytes[2] << 8);
-    }
-    if (bytes.length < 2) return null;
-    return bytes[1];
-  }
+  int? _parseHeartRate(List<int> raw) => parseBleHeartRateMeasurement(raw);
 
   /// Drop the current connection. Safe to call when not connected.
   Future<void> disconnect() async {
@@ -166,4 +151,28 @@ class BleHeartRate {
     await disconnect();
     await _controller.close();
   }
+}
+
+/// Parse the BLE Heart Rate Measurement characteristic per the Bluetooth
+/// SIG spec (0x2A37): byte 0 is the flags field. Bit 0 of flags is the
+/// Heart Rate Value Format:
+///   `0` → HR is a `uint8` in byte 1.
+///   `1` → HR is a `uint16` little-endian in bytes 1-2.
+/// Higher bits describe Sensor Contact, Energy Expended, and RR
+/// Intervals — all ignored here (we only care about the current BPM).
+///
+/// Extracted from [BleHeartRate] as a top-level function so unit tests
+/// can exercise it against known-good byte sequences from real straps
+/// without a BLE stack.
+int? parseBleHeartRateMeasurement(List<int> raw) {
+  if (raw.isEmpty) return null;
+  final bytes = Uint8List.fromList(raw);
+  final flags = bytes[0];
+  final is16bit = (flags & 0x01) == 0x01;
+  if (is16bit) {
+    if (bytes.length < 3) return null;
+    return bytes[1] | (bytes[2] << 8);
+  }
+  if (bytes.length < 2) return null;
+  return bytes[1];
 }

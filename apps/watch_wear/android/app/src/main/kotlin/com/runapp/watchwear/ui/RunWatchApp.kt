@@ -207,11 +207,20 @@ private fun BatteryInstructions(
         }
         item {
             Text(
-                "1. On phone: open the Wear app.\n2. Find Better Runner.\n3. Turn battery optimisation off.",
+                "On phone: open Wear OS / Galaxy Wearable → Better Runner → Battery → Unrestricted.",
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.parchment,
                 textAlign = TextAlign.Start,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+        }
+        item {
+            Text(
+                "Or on watch: Settings → Apps → Better Runner → Battery → Unrestricted (if shown).",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.haze,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
             )
         }
         item {
@@ -652,30 +661,39 @@ private fun RunningScreen(
     onLap: () -> Unit,
     onStop: () -> Unit,
 ) {
-    // Ambient mode: dim, greyscale, no buttons. The foreground service
-    // keeps recording regardless — this is purely a lower-power render.
+    // Ambient mode: OEM burn-in protection rules apply — pure-black
+    // background, thin outlined text, no solid fills, and the content
+    // shifts a few dp each minute (handled by the system if we use the
+    // `TimeText` primitive). The recording continues in the service;
+    // this branch is purely lower-power rendering.
     if (ambient) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                formatElapsed(elapsedMs),
-                style = MaterialTheme.typography.display2,
-                color = DuskPalette.haze,
-            )
-            Text(
-                "%.2f km".format(distanceM / 1000.0),
-                style = MaterialTheme.typography.body2,
-                color = DuskPalette.haze,
-            )
-            if (paused) {
+        Scaffold(timeText = { TimeText() }) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
                 Text(
-                    "paused",
-                    style = MaterialTheme.typography.caption3,
-                    color = DuskPalette.haze,
+                    formatElapsed(elapsedMs),
+                    style = MaterialTheme.typography.display1.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Light,
+                    ),
+                    color = Color.White,
                 )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "%.2f km".format(distanceM / 1000.0),
+                    style = MaterialTheme.typography.body1,
+                    color = Color.White.copy(alpha = 0.72f),
+                )
+                if (paused) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "paused",
+                        style = MaterialTheme.typography.caption2,
+                        color = Color.White.copy(alpha = 0.4f),
+                    )
+                }
             }
         }
         return
@@ -819,6 +837,40 @@ private fun PostRunScreen(
                     )
                 }
             }
+
+            // Splits table — one row per lap. Rendered compactly with
+            // the lap number, pace for that split, and cumulative
+            // distance. Hides entirely when the user didn't tap Lap.
+            if (summary != null && summary.laps.isNotEmpty()) {
+                item {
+                    Text(
+                        "Splits",
+                        style = MaterialTheme.typography.caption2,
+                        color = DuskPalette.lilac,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                items(summary.laps.size) { i ->
+                    val lap = summary.laps[i]
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            "Lap ${lap.number}",
+                            style = MaterialTheme.typography.caption3,
+                            color = DuskPalette.haze,
+                        )
+                        Text(
+                            formatLapSplit(lap),
+                            style = MaterialTheme.typography.caption3,
+                            color = DuskPalette.parchment,
+                        )
+                    }
+                }
+            }
             if (synced) {
                 item {
                     Text(
@@ -884,6 +936,13 @@ private fun PostRunScreen(
             }
         }
     }
+}
+
+private fun formatLapSplit(lap: com.runapp.watchwear.FinishedLap): String {
+    val m = lap.splitSeconds / 60
+    val s = lap.splitSeconds % 60
+    val km = lap.splitDistanceM / 1000.0
+    return "%d:%02d · %.2f km".format(m, s, km)
 }
 
 private fun formatDuration(totalS: Int): String {
