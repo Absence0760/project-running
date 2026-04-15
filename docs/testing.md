@@ -407,3 +407,32 @@ scripts:
 **Tests pass locally but fail in CI** — most commonly from wall-clock assumptions. The recorder used to have exactly this bug in its speed clamp (wall-clock dt went near zero under load). If you see flaky timing tests, use GPS-reported timestamps from the `Position` rather than `DateTime.now()`, and be suspicious of any direct `DateTime.now()` subtraction in production code.
 
 **Dart analyzer complains that a `debug*` method on a production class isn't called** — the `@visibleForTesting` annotation suppresses this in test files but the warning still fires at the declaration site. Add `// ignore: invalid_use_of_visible_for_testing_member` only if you need to call from non-test code (you almost certainly don't).
+
+---
+
+## Tests to add when the competitor-parity backlog lands
+
+`docs/roadmap.md § Competitor-parity backlog` lists 12 features that aren't phased yet. When any of them ships, **the scope below is the minimum test surface** for that item to count as done. These are not nice-to-haves — they're the tests the CI job is expected to gate the PR on.
+
+| Backlog feature | Pure-function tests | Integration / widget tests | Backend / schema tests |
+|---|---|---|---|
+| Training plan runner | Plan-to-workout expansion (given `plan_weeks + plan_workouts`, return today's workout for a given date + tz). VDOT-driven pace target generator. Adherence scorer (planned vs actual mileage). Structured-interval state machine (rep / recovery transitions). | Run-screen widget test: start a plan workout, simulate a completed run, assert the planned workout flips to "done" with side-by-side stats. | Migration: plan rows cascade-delete when a user deletes themselves; RLS: one user can't read another user's plan. |
+| External platform sync | OAuth URL builder (per provider). Token refresh scheduler (given `token_expiry`, return next refresh time). Duplicate-run matcher (by `external_id` + timestamp fuzz). | Edge Function integration tests against a mock Strava/Garmin API; verify webhook → DB round-trip. | `integrations` RLS: users can't read other users' refresh tokens. |
+| Segments + leaderboards | PostGIS line-matching stub (given two line-strings, return overlap fraction — pure SQL test with PostGIS fixtures). Effort-time computation from track slice. | Insert a run that crosses a segment → assert a `segment_effort` row appears. Leaderboard query returns correct ordering across a seeded fixture. | Segment RLS: private segments invisible to non-owners. |
+| Heatmap / discovery | Tile-aggregation function: given N tracks, produce a tile's density array deterministically. Opt-out filter: a user's opt-out excludes their tracks from the aggregate. | Regression: a user who flips opt-out after aggregation no longer appears in next rebuild. | — |
+| Trail / offline nav | Turn-cue generator: given a route + current position, produce the next-turn string. Offline-pack manifest: given a bounding box, list the tile URLs. | Widget test: step a simulated GPS trace along a route, assert the off-route banner fires at the correct threshold (the existing `live_run_map` tests would extend here). | — |
+| Social graph | Follow-graph traversal (one hop). Feed query ordering (pinned runs, time-sorted, dedup). Kudos idempotency (second tap doesn't double-count). | Widget test: follow a user, navigate to feed, assert their latest run appears with correct kudos state. | `follows` RLS: a user can only create / delete their own follow row. Privacy-zone blur: start point returned as zone-center when viewer is not the owner. |
+| Gear tracking | Mileage-total aggregation across a run set. Retirement-reminder trigger (given gear + threshold + current mileage). | Add gear → record a run with that gear selected → assert total updates; assert reminder fires at threshold. | Gear RLS: users only see their own gear. |
+| Photos | Timestamp-to-waypoint matcher (given a photo EXIF time + a track, return the nearest waypoint). Thumbnail-URL generator. | Upload flow widget test: pick a photo, assert it appears on the run detail map pinned to the right location. | Storage bucket policy: anon can read thumbnails only if the run is public. |
+| Audio-coached runs | Cue-schedule expander (given a workout + start time, emit cue events at the right offsets). Download manager: list expected assets for a workout; verify all-present check. | Record a run with an audio workout → assert the cue-schedule fired with the recorded elapsed times (mock the AudioCues emitter). | — |
+| Race calendar + results | Race-proximity query (given lat/lng + radius, return races). Result-matching (given a run + a race, return confidence score). | Import a sample race → record a matching run → assert `race_results` row created and linked. | — |
+| Advanced analytics | VDOT from a race result. Banister CTL/ATL/TSB from a week of runs. Race-time prediction from VDOT. Weekly mileage rollup (the existing `period_summary_test.dart` is the template). | Dashboard widget test: seed a fixture of runs, assert CTL/ATL curves render within tolerance. | — |
+| Premium billing | Tier gate: given a `SubscriptionTier`, which features are enabled (pure data-driven). Webhook-payload parser (test against Stripe's fixture events). | Checkout flow e2e: click Upgrade → mock webhook → assert `subscription_tier` flips to `premium` on the profile within 5s. | Webhook replay-attack test: a re-posted event doesn't double-apply. Customer-portal link is user-scoped. |
+
+### Conventions to keep
+
+- Each new pure-function test file lives next to the code under `test/` in its package, matching the existing `run_stats_test.dart` pattern.
+- SQL tests (RLS, PostGIS segment matching) go under `apps/backend/supabase/tests/` with `pgtap`; the CI job runs them via `supabase db test`.
+- Edge Function tests use `deno test` and live under `apps/backend/supabase/functions/<name>/index.test.ts`.
+- Widget tests use `WidgetTester.pumpWidget` + the existing synthetic-`Position` helpers from `test/helpers.dart`.
+- No mocks for databases we control — local Supabase (54322) is the authoritative fixture. Mock only third-party HTTP (Strava, Stripe).

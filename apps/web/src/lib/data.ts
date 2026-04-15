@@ -19,8 +19,14 @@ import type {
 	ClubPost,
 	ClubPostWithAuthor,
 	RecurrenceFreq,
-	Weekday
+	Weekday,
+	TrainingPlan,
+	PlanWeek,
+	PlanWorkout,
+	ActivePlanOverview,
+	PlanStatus
 } from './types';
+import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
 
@@ -953,4 +959,233 @@ export async function createClubPost(input: {
 export async function deleteClubPost(id: string): Promise<void> {
 	const { error } = await supabase.from('club_posts').delete().eq('id', id);
 	if (error) throw error;
+}
+
+// --- Training plans ---
+
+export async function fetchMyPlans(): Promise<TrainingPlan[]> {
+	const { data } = await supabase
+		.from('training_plans')
+		.select('*')
+		.order('created_at', { ascending: false });
+	return ((data ?? []) as TrainingPlan[]) ?? [];
+}
+
+export async function fetchPlan(id: string): Promise<{
+	plan: TrainingPlan | null;
+	weeks: PlanWeek[];
+	workouts: PlanWorkout[];
+}> {
+	const [planRes, weeksRes] = await Promise.all([
+		supabase.from('training_plans').select('*').eq('id', id).maybeSingle(),
+		supabase
+			.from('plan_weeks')
+			.select('*')
+			.eq('plan_id', id)
+			.order('week_index', { ascending: true })
+	]);
+	const plan = (planRes.data ?? null) as TrainingPlan | null;
+	const weeks = ((weeksRes.data ?? []) as PlanWeek[]) ?? [];
+	if (!plan || weeks.length === 0) {
+		return { plan, weeks, workouts: [] };
+	}
+	const weekIds = weeks.map((w) => w.id);
+	const { data: woData } = await supabase
+		.from('plan_workouts')
+		.select('*')
+		.in('week_id', weekIds)
+		.order('scheduled_date', { ascending: true });
+	return {
+		plan,
+		weeks,
+		workouts: ((woData ?? []) as PlanWorkout[]) ?? []
+	};
+}
+
+export async function fetchWorkout(id: string): Promise<PlanWorkout | null> {
+	const { data } = await supabase
+		.from('plan_workouts')
+		.select('*')
+		.eq('id', id)
+		.maybeSingle();
+	return (data as PlanWorkout | null) ?? null;
+}
+
+export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	const { data: plan } = await supabase
+		.from('training_plans')
+		.select('*')
+		.eq('user_id', userId)
+		.eq('status', 'active')
+		.maybeSingle();
+	if (!plan) return null;
+	const { weeks, workouts } = await fetchPlan(plan.id);
+	const today = new Date().toISOString().slice(0, 10);
+	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
+	const completed = workouts.filter((w) => w.completed_run_id).length;
+	const total = workouts.filter((w) => w.kind !== 'rest').length;
+	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+	return {
+		plan: plan as TrainingPlan,
+		weeks: weeks ?? [],
+		workouts: workouts ?? [],
+		todayWorkout,
+		completionPct
+	};
+}
+
+/**
+ * Persist a freshly generated plan — plan row, one row per week, and N
+ * workouts per week. Runs four sequential inserts (plan → weeks → workouts
+ * grouped by week); could be collapsed into a single RPC later but the
+ * linear path is easier to reason about while the feature is new.
+ */
+export async function createTrainingPlan(input: {
+	name: string;
+	goalEvent: GoalEvent;
+	goalDistanceM: number;
+	goalTimeSec?: number | null;
+	recent5kSec?: number | null;
+	startDate: string; // ISO date
+	daysPerWeek: number;
+	notes?: string;
+	generated: GeneratedPlan;
+}): Promise<TrainingPlan> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+
+	// Auto-complete any existing active plan so the partial unique index
+	// (one-active-per-user) doesn't reject the insert.
+	await supabase
+		.from('training_plans')
+		.update({ status: 'completed' })
+		.eq('user_id', userId)
+		.eq('status', 'active');
+
+	const { data: plan, error: planErr } = await supabase
+		.from('training_plans')
+		.insert({
+			user_id: userId,
+			name: input.name.trim(),
+			goal_event: input.goalEvent,
+			goal_distance_m: input.goalDistanceM,
+			goal_time_seconds: input.goalTimeSec ?? null,
+			start_date: input.startDate,
+			end_date: input.generated.endDate,
+			days_per_week: input.daysPerWeek,
+			vdot: input.generated.vdot ?? null,
+			current_5k_seconds: input.recent5kSec ?? null,
+			status: 'active' as PlanStatus,
+			notes: input.notes?.trim() || null
+		})
+		.select()
+		.single();
+	if (planErr || !plan) throw planErr ?? new Error('Plan insert failed');
+
+	const weekRows = input.generated.weeks.map((w) => ({
+		plan_id: plan.id,
+		week_index: w.week_index,
+		phase: w.phase,
+		target_volume_m: w.target_volume_m,
+		notes: w.notes
+	}));
+	const { data: weekRes, error: weekErr } = await supabase
+		.from('plan_weeks')
+		.insert(weekRows)
+		.select();
+	if (weekErr || !weekRes) throw weekErr ?? new Error('Weeks insert failed');
+
+	const byIndex = new Map<number, string>();
+	for (const w of weekRes as { id: string; week_index: number }[]) {
+		byIndex.set(w.week_index, w.id);
+	}
+
+	const workoutRows = input.generated.weeks.flatMap((w) =>
+		w.workouts.map((wo) => ({
+			week_id: byIndex.get(w.week_index)!,
+			scheduled_date: wo.scheduled_date,
+			kind: wo.kind,
+			target_distance_m: wo.target_distance_m,
+			target_duration_seconds: wo.target_duration_seconds,
+			target_pace_sec_per_km: wo.target_pace_sec_per_km,
+			target_pace_tolerance_sec: wo.target_pace_tolerance_sec,
+			structure: wo.structure,
+			notes: wo.notes
+		}))
+	);
+	if (workoutRows.length > 0) {
+		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
+		if (woErr) throw woErr;
+	}
+
+	return plan as TrainingPlan;
+}
+
+export async function updatePlanStatus(
+	id: string,
+	status: PlanStatus
+): Promise<void> {
+	const { error } = await supabase
+		.from('training_plans')
+		.update({ status })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+export async function deletePlan(id: string): Promise<void> {
+	const { error } = await supabase.from('training_plans').delete().eq('id', id);
+	if (error) throw error;
+}
+
+export async function markWorkoutCompleted(
+	workoutId: string,
+	runId: string | null
+): Promise<void> {
+	const { error } = await supabase
+		.from('plan_workouts')
+		.update({
+			completed_run_id: runId,
+			completed_at: runId ? new Date().toISOString() : null
+		})
+		.eq('id', workoutId);
+	if (error) throw error;
+}
+
+/**
+ * Best-effort auto-match: link `runId` to a plan workout scheduled for the
+ * same calendar date whose target distance is within ±25% of the actual.
+ * Returns the matched workout id, or null. Wrong matches are manually
+ * clearable via `markWorkoutCompleted(id, null)`.
+ */
+export async function autoMatchRunToPlanWorkout(
+	runId: string,
+	runIsoDate: string,
+	runDistanceM: number
+): Promise<string | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	const { data: candidates } = await supabase
+		.from('plan_workouts')
+		.select('id, target_distance_m, completed_run_id, week_id')
+		.eq('scheduled_date', runIsoDate)
+		.is('completed_run_id', null);
+	if (!candidates || candidates.length === 0) return null;
+	const withDistance = candidates
+		.filter((c) => c.target_distance_m != null)
+		.map((c) => ({
+			id: c.id as string,
+			target: c.target_distance_m as number,
+			delta: Math.abs((c.target_distance_m as number) - runDistanceM)
+		}))
+		.filter(
+			(c) =>
+				c.delta / c.target <= 0.25 // within 25% of target distance
+		)
+		.sort((a, b) => a.delta - b.delta);
+	if (withDistance.length === 0) return null;
+	const match = withDistance[0];
+	await markWorkoutCompleted(match.id, runId);
+	return match.id;
 }

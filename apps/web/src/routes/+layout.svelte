@@ -9,6 +9,7 @@
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
 		{ href: '/runs', label: 'Runs', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
+		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
 		{ href: '/explore', label: 'Explore', icon: 'explore', accent: '#7FB3C2' },
 		{ href: '/settings/integrations', label: 'Settings', icon: 'settings', accent: '#E6A96B' },

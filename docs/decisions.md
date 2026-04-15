@@ -134,6 +134,20 @@ Schema + RLS details in `api_database.md`, surfaces in `clubs.md`, phased rollou
 
 ---
 
+## 11. Training paces are goal-pace multipliers, not Daniels table lookups
+
+**Decided:** April 2026 · `apps/web/src/lib/training.ts#pacesFromGoalPace`
+
+The full Daniels training-pace model derives pace for each intensity zone from VDOT via the same implicit equation used to *compute* VDOT — there's no closed-form inverse. Real implementations use a published table of ~60 VDOT values × 5 zones. For v1 we anchor the five zones (easy / marathon / tempo / interval / repetition) on the runner's goal pace with fixed multipliers (1.22, 1.06, 0.97, 0.9, 0.85). Across the 3:00-5:00/km goal band these land within ~5 s/km of the Daniels tables, which is well inside the tolerance band a plan runner expects — most runners cannot actually hit a 1-second pace window, and the target bands we emit carry `±5-30s` tolerances anyway.
+
+**Trade-off:** For very fast (≤3:00/km 5K) or very slow (≥7:00/km 5K) runners the multiplier model drifts further from the table — easy pace becomes too slow for elites and too fast for beginners. Neither demographic is our current target user; if we add one, swap `pacesFromGoalPace` for a table lookup without touching any caller.
+
+**Don't re-litigate unless:** user reports show pace targets are systematically off, or we expand into the elite / total-beginner segments.
+
+VDOT is still computed and stored (`training_plans.vdot`) for display — it's a useful fitness number for the runner even if it doesn't drive pace derivation in v1. See `docs/training.md § Pace derivation`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

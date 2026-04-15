@@ -251,6 +251,18 @@ The running app market is dominated by a small number of well-funded incumbents.
 | Social segments | Phase 3 | ✓ | — | — | — | — | — |
 | Community routes | Phase 3 | ✓ | — | — | ✓ | ✓ | — |
 | Offline maps | Phase 3 | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — |
+| Segments + leaderboards | Backlog | **Native** | — | — | — | — | — |
+| Heatmaps / popular-route tiles | Backlog | ✓ (premium) | — | — | — | ✓ | — |
+| Route-condition reports | Backlog | — | — | — | ✓ | ✓ | — |
+| Social graph (follows, kudos) | Backlog | ✓ | Limited | ✓ | — | ✓ | — |
+| Gear tracking (shoe mileage) | Backlog | ✓ | ✓ | — | — | — | — |
+| Photos on runs / routes | Backlog | ✓ | Partial | — | ✓ | ✓ | — |
+| Audio-coached / guided runs | Backlog | — | — | **Native** | — | — | Partial |
+| Race calendar + results | Backlog | Limited | ✓ | — | — | — | ✓ |
+| VDOT + training load analytics | Backlog | ✓ (premium) | ✓ | — | — | — | ✓ |
+| Clubs + events | ✓ (web, Android) | ✓ | Limited | ✓ | — | — | — |
+
+Backlog items are tracked in `docs/roadmap.md § Competitor-parity backlog` with rough sizing and open decisions. No ordering implied — the user still owes three prioritisation decisions before any of these start.
 
 ---
 

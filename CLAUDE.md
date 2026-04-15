@@ -9,7 +9,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | If the task is... | Start with |
 |---|---|
 | Anything at all, first time in a session | [docs/architecture.md](docs/architecture.md) — the map |
-| Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned |
+| Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
 | Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
 | Touching the recording pipeline | [docs/run_recording.md](docs/run_recording.md) — state machine, filters, auto-pause |
@@ -18,6 +18,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Understanding an end-to-end user journey | [docs/flows.md](docs/flows.md) — sign-in, record, sync, spectator |
 | Adding a test | [docs/testing.md](docs/testing.md) — what's covered, patterns, how to run |
 | Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
+| Touching training plans (VDOT, Riegel, generator, week grid) | [docs/training.md](docs/training.md) — engine shape, pace derivation, what's deferred |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
 | Running one of the apps locally | [docs/local_testing_*.md](docs/) — one per platform |
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |

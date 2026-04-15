@@ -611,4 +611,41 @@ The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Conne
 
 ---
 
+## Competitor-parity backlog (unphased)
+
+Generated from `docs/competitors.md` and confirmed scope with the user. These are the features that would close the gap to the strongest existing apps (Strava / Garmin / Nike Run Club / AllTrails / Runna / Komoot). They are **deliberately unphased** — ordering depends on three decisions the user still owes:
+
+1. **Which competitor do we most want to displace first?** (Drives which bundle ships before the others — e.g. beating Runna means plan runner before segments; beating Strava means segments + social graph before plans.)
+2. **Pricing model:** free forever / freemium / pay-once. Gates how much of the list sits behind a paywall.
+3. **Premium boundary:** where the line runs between free and paid if freemium is chosen.
+
+Until those three are answered, treat this list as a menu, not a sequence. Rough sizing is in weeks of single-dev work; most items carry schema changes that need the usual codegen + CI parity check (see `schema_codegen.md`).
+
+| # | Feature | Rough size | Competitor it closes | Schema impact | Open decisions |
+|---|---|---|---|---|---|
+| 1 | **Training plan runner** — [x] web: schema + generator + editor + dashboard card + auto-match; [ ] mobile read-only surface; [ ] live structured-workout execution loop (mobile-primary) | 6–8 wk (web part shipped) | Runna, Garmin | `training_plans`, `plan_weeks`, `plan_workouts` (shipped) | Live execution in run screen — Android or web first? |
+| 2 | **External integrations (OAuth sync)**: Strava read + write, Garmin Connect, Health Connect, HealthKit, parkrun, RunSignUp | 4–6 wk + Garmin business approval | Strava, Garmin | `integrations` already exists — extend per provider; token refresh Edge Function | Webhook vs polling for Strava; Garmin app approval timeline |
+| 3 | **Segments + leaderboards** (segment creation, automatic matching on new runs, weekly / all-time boards) | 2–3 wk | Strava | `segments`, `segment_efforts`; PostGIS line matching | Public vs private segments; anti-cheat |
+| 4 | **Heatmap / popular-route discovery** (anonymised aggregation tile layer) | 2 wk | Strava, Komoot | Materialised tile table or a Go tile service | Opt-in vs opt-out privacy default |
+| 5 | **Trail / offline navigation** (turn-by-turn nav on a loaded route, offline tile packs, condition reports) | 3–4 wk | AllTrails, Komoot | `route_conditions` (user reports), tile-pack store on disk | Which routing engine for turn cues? |
+| 6 | **Social graph** (follow / unfollow, kudos, activity comments, privacy zones) | 2–3 wk | Strava, Nike Run Club | `follows`, `kudos`, `comments`, `privacy_zones` on `user_profiles` | Default profile visibility; block / report surface |
+| 7 | **Gear tracking** (shoes, bikes; mileage per item; retirement reminders) | 1 wk | Strava, Garmin | `gear`, `run_gear` (link table) | Manual only v1 vs future barcode import |
+| 8 | **Photos on runs and routes** (multi-photo per run, map-pinned, auto-attached from camera roll by timestamp) | 3–4 d | Strava, AllTrails | `run_photos`, `route_photos`; Storage bucket `photos` | Max photos per run; server-side thumbnailing? |
+| 9 | **Audio-coached / guided runs** (library of pre-recorded workouts, TTS-narrated pace cues) | 3–4 wk | Nike Run Club | `audio_workouts`, `audio_segments`; audio CDN strategy | Voice talent budget; TTS-only v1? |
+| 10 | **Race calendar + results import** (event discovery near me, entry links, auto-match results when you record the race) | 2 wk | Garmin, Runna | `races`, `race_results`; import from RunSignUp + parkrun | Scope: local only or worldwide? |
+| 11 | **Advanced analytics** (VDOT, training load / fitness / freshness curves, weekly/monthly breakdowns, race-time predictor) | 2 wk | Garmin, Runna | No new tables — derived from `runs` | Algorithm source of truth: Daniels vs Banister |
+| 12 | **Premium billing + feature gating** (Stripe Checkout, subscription webhook, `SubscriptionTier` honouring across web + mobile, customer portal) | 1–2 wk | All | `user_profiles.subscription_tier` already exists; add `stripe_customer_id`, `stripe_subscription_id` | Monthly vs annual; grandfather early users? |
+
+### Where each item lives in the repo
+
+For whichever items the user green-lights, here's where the new surface lands — so future sessions can pick one up without re-deriving the map:
+
+- **Web pages:** `apps/web/src/routes/<feature>/+page.svelte` + the data helpers in `src/lib/data.ts` (add a new section header). New types overlay in `src/lib/types.ts`.
+- **Mobile Android:** `apps/mobile_android/lib/screens/<feature>_screen.dart` + a service singleton in `apps/mobile_android/lib/<feature>_service.dart` if there's non-trivial network state. Tab additions in `home_screen.dart`; 6 tabs is the current ceiling — past that, collapse under an existing tab.
+- **Backend:** one migration per feature under `apps/backend/supabase/migrations/` with the same naming pattern (`YYYYMMDD_NNN_<feature>.sql`). Run `npm run gen:types && dart run scripts/gen_dart_models.dart` after each, commit both.
+- **Edge Functions** for OAuth exchanges / webhooks: `apps/backend/supabase/functions/<provider>-<action>/index.ts`. One function per provider action (e.g. `strava-webhook`, `garmin-import`).
+- **Decisions** for any non-obvious trade-off: append to `docs/decisions.md` in sequence (next free number is #11).
+- **Feature doc stub** in `docs/features.md` under a "Competitor-parity features" section (stubs added below, flesh out on delivery).
+- **Tests** — see `docs/testing.md` for the per-feature-area test map.
+
 *Last updated: April 2026*

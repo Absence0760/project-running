@@ -327,6 +327,101 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_weeks: {
+        Row: {
+          id: string
+          notes: string | null
+          phase: Database["public"]["Enums"]["plan_phase"]
+          plan_id: string
+          target_volume_m: number | null
+          week_index: number
+        }
+        Insert: {
+          id?: string
+          notes?: string | null
+          phase?: Database["public"]["Enums"]["plan_phase"]
+          plan_id: string
+          target_volume_m?: number | null
+          week_index: number
+        }
+        Update: {
+          id?: string
+          notes?: string | null
+          phase?: Database["public"]["Enums"]["plan_phase"]
+          plan_id?: string
+          target_volume_m?: number | null
+          week_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_weeks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "training_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_workouts: {
+        Row: {
+          completed_at: string | null
+          completed_run_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["workout_kind"]
+          notes: string | null
+          scheduled_date: string
+          structure: Json | null
+          target_distance_m: number | null
+          target_duration_seconds: number | null
+          target_pace_sec_per_km: number | null
+          target_pace_tolerance_sec: number | null
+          week_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_run_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["workout_kind"]
+          notes?: string | null
+          scheduled_date: string
+          structure?: Json | null
+          target_distance_m?: number | null
+          target_duration_seconds?: number | null
+          target_pace_sec_per_km?: number | null
+          target_pace_tolerance_sec?: number | null
+          week_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_run_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["workout_kind"]
+          notes?: string | null
+          scheduled_date?: string
+          structure?: Json | null
+          target_distance_m?: number | null
+          target_duration_seconds?: number | null
+          target_pace_sec_per_km?: number | null
+          target_pace_tolerance_sec?: number | null
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_workouts_completed_run_id_fkey"
+            columns: ["completed_run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_workouts_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "plan_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_reviews: {
         Row: {
           comment: string | null
@@ -466,6 +561,60 @@ export type Database = {
           },
         ]
       }
+      training_plans: {
+        Row: {
+          created_at: string | null
+          current_5k_seconds: number | null
+          days_per_week: number
+          end_date: string
+          goal_distance_m: number
+          goal_event: Database["public"]["Enums"]["goal_event"]
+          goal_time_seconds: number | null
+          id: string
+          name: string
+          notes: string | null
+          start_date: string
+          status: string
+          updated_at: string | null
+          user_id: string
+          vdot: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_5k_seconds?: number | null
+          days_per_week?: number
+          end_date: string
+          goal_distance_m: number
+          goal_event: Database["public"]["Enums"]["goal_event"]
+          goal_time_seconds?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+          vdot?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          current_5k_seconds?: number | null
+          days_per_week?: number
+          end_date?: string
+          goal_distance_m?: number
+          goal_event?: Database["public"]["Enums"]["goal_event"]
+          goal_time_seconds?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+          vdot?: number | null
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           avatar_url: string | null
@@ -560,7 +709,22 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      goal_event:
+        | "distance_5k"
+        | "distance_10k"
+        | "distance_half"
+        | "distance_full"
+        | "custom"
+      plan_phase: "base" | "build" | "peak" | "taper" | "race"
+      workout_kind:
+        | "easy"
+        | "long"
+        | "recovery"
+        | "tempo"
+        | "interval"
+        | "marathon_pace"
+        | "race"
+        | "rest"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -690,7 +854,26 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      goal_event: [
+        "distance_5k",
+        "distance_10k",
+        "distance_half",
+        "distance_full",
+        "custom",
+      ],
+      plan_phase: ["base", "build", "peak", "taper", "race"],
+      workout_kind: [
+        "easy",
+        "long",
+        "recovery",
+        "tempo",
+        "interval",
+        "marathon_pace",
+        "race",
+        "rest",
+      ],
+    },
   },
 } as const
 

@@ -12,6 +12,9 @@ type ClubMemberRow = Database['public']['Tables']['club_members']['Row'];
 type EventRow = Database['public']['Tables']['events']['Row'];
 type EventAttendeeRow = Database['public']['Tables']['event_attendees']['Row'];
 type ClubPostRow = Database['public']['Tables']['club_posts']['Row'];
+type TrainingPlanRow = Database['public']['Tables']['training_plans']['Row'];
+type PlanWeekRow = Database['public']['Tables']['plan_weeks']['Row'];
+type PlanWorkoutRow = Database['public']['Tables']['plan_workouts']['Row'];
 
 export interface TrackPoint {
 	lat: number;
@@ -100,4 +103,22 @@ export type ClubPostWithAuthor = ClubPost & {
 	author_display_name: string | null;
 	author_avatar_url: string | null;
 	reply_count: number;
+};
+
+// ─────────────────────── Training plans ───────────────────────
+
+export type PlanStatus = 'active' | 'completed' | 'abandoned';
+
+export type TrainingPlan = TrainingPlanRow & { status: PlanStatus };
+export type PlanWeek = PlanWeekRow;
+export type PlanWorkout = PlanWorkoutRow;
+
+/** View-model returned by `fetchActivePlanOverview` — plan + current week +
+ * next few workouts. Used by the dashboard card + the plan detail page. */
+export type ActivePlanOverview = {
+	plan: TrainingPlan;
+	weeks: PlanWeek[];
+	workouts: PlanWorkout[];
+	todayWorkout: PlanWorkout | null;
+	completionPct: number;
 };

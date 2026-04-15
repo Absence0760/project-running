@@ -38,6 +38,10 @@ src/
     clubs/[slug]/events/new/      # Admin: create event (one-off OR weekly/biweekly/monthly recurrence)
     clubs/[slug]/events/[id]/     # Event detail + per-instance RSVP + per-event updates
     clubs/join/[token]/           # Public invite-link landing (redeems via join_club_by_token RPC)
+    plans/          # Training plans list
+    plans/new/      # New-plan wizard with live preview
+    plans/[id]/     # Plan detail: progress ring, today card, week grid
+    plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
     explore/        # Public route discovery (search, distance/surface filters)
     settings/       # Account, integrations, preferences
     share/run/[id]/ # Public run share page (no auth required)

@@ -10,12 +10,14 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRuns, fetchWeeklyMileage, fetchPersonalRecords } from '$lib/data';
-	import type { Run, RunSource } from '$lib/types';
+	import { fetchRuns, fetchWeeklyMileage, fetchPersonalRecords, fetchActivePlanOverview } from '$lib/data';
+	import { fmtPace, fmtKm, WORKOUT_KIND_LABEL } from '$lib/training';
+	import type { Run, RunSource, ActivePlanOverview } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
 	let weeklyMileage = $state<{ week: string; distance_km: number }[]>([]);
 	let personalRecords = $state<{ distance: string; time_s: number; date: string }[]>([]);
+	let planOverview = $state<ActivePlanOverview | null>(null);
 	let loading = $state(true);
 	let mileageView = $state<'weekly' | 'monthly' | 'yearly'>('weekly');
 	let sourceFilter = $state<RunSource | 'all'>('all');
@@ -29,10 +31,11 @@
 	];
 
 	onMount(async () => {
-		[runs, weeklyMileage, personalRecords] = await Promise.all([
+		[runs, weeklyMileage, personalRecords, planOverview] = await Promise.all([
 			fetchRuns(),
 			fetchWeeklyMileage(),
 			fetchPersonalRecords(),
+			fetchActivePlanOverview(),
 		]);
 		loading = false;
 	});
@@ -82,6 +85,48 @@
 	{#if loading}
 		<p class="loading-text">&nbsp;</p>
 	{:else}
+		{#if planOverview?.todayWorkout}
+			{@const t = planOverview.todayWorkout}
+			<a
+				class="today-card"
+				class:done={!!t.completed_run_id}
+				href="/plans/{planOverview.plan.id}/workouts/{t.id}"
+			>
+				<div class="today-left">
+					<span class="today-label">TODAY'S WORKOUT</span>
+					<h2>
+						{WORKOUT_KIND_LABEL[t.kind as keyof typeof WORKOUT_KIND_LABEL] ?? t.kind}
+					</h2>
+					<div class="today-meta">
+						{#if t.target_distance_m != null}
+							<span>{fmtKm(t.target_distance_m)}</span>
+						{/if}
+						{#if t.target_pace_sec_per_km}
+							<span>@ {fmtPace(t.target_pace_sec_per_km)}</span>
+						{/if}
+					</div>
+				</div>
+				<div class="today-right">
+					{#if t.completed_run_id}
+						<span class="material-symbols done-icon">check_circle</span>
+					{:else}
+						<span class="material-symbols">chevron_right</span>
+					{/if}
+					<span class="plan-name">{planOverview.plan.name}</span>
+					<span class="plan-progress">{planOverview.completionPct}% done</span>
+				</div>
+			</a>
+		{:else if !planOverview}
+			<a class="plan-promo" href="/plans/new">
+				<div>
+					<span class="today-label">TRAINING PLANS</span>
+					<h3>Pick a goal race and we'll schedule the weeks</h3>
+					<p>5K, 10K, half or full — VDOT-anchored paces, phases, step-back weeks.</p>
+				</div>
+				<span class="material-symbols">chevron_right</span>
+			</a>
+		{/if}
+
 		<!-- Stat cards -->
 		<div class="stat-grid">
 			<div class="stat-card">
@@ -305,6 +350,86 @@
 		background: var(--color-primary);
 		color: white;
 		box-shadow: 0 1px 4px rgba(79, 70, 229, 0.3);
+	}
+
+	.today-card {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem 1.2rem;
+		margin-bottom: var(--space-md);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-primary) 15%, var(--color-surface)),
+			var(--color-surface)
+		);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		color: inherit;
+		transition: transform var(--transition-base), box-shadow var(--transition-base);
+	}
+	.today-card:hover {
+		transform: translateY(-1px);
+		box-shadow: var(--shadow-md);
+	}
+	.today-card.done {
+		opacity: 0.85;
+	}
+	.today-label {
+		font-size: 0.72rem;
+		letter-spacing: 0.1em;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+	.today-card h2 {
+		margin: 0.35rem 0 0.25rem 0;
+		font-size: 1.3rem;
+	}
+	.today-meta {
+		display: flex;
+		gap: 0.8rem;
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+	}
+	.today-right {
+		text-align: right;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.2rem;
+		color: var(--color-text-secondary);
+	}
+	.plan-name {
+		font-weight: 600;
+		color: var(--color-text);
+		font-size: 0.9rem;
+	}
+	.plan-progress {
+		font-size: 0.8rem;
+	}
+	.done-icon {
+		color: var(--color-primary);
+		font-size: 1.6rem;
+	}
+	.plan-promo {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.9rem 1.2rem;
+		margin-bottom: var(--space-md);
+		background: var(--color-surface);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-lg);
+		color: inherit;
+	}
+	.plan-promo h3 {
+		font-size: 1.05rem;
+		margin: 0.3rem 0 0.2rem 0;
+	}
+	.plan-promo p {
+		color: var(--color-text-secondary);
+		font-size: 0.88rem;
 	}
 
 	.stat-grid {

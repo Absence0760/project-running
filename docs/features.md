@@ -427,4 +427,58 @@ Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store +
 
 ---
 
+## Competitor-parity features (backlog — not yet in a phase)
+
+These are stubs. Each closes a gap against a specific competitor (see `docs/competitors.md`) and is listed with its sizing + open decisions in `docs/roadmap.md § Competitor-parity backlog`. Flesh each one out on delivery — do **not** treat the stubs below as a spec.
+
+### Training plan runner
+**Closes:** Runna, Garmin Coach.
+**Stub:** plan → weeks → workouts data model (already partially sketched in `roadmap.md § Premium tier`); web plan editor; "today's workout" dashboard card; execution loop in the run screen; auto-match planned vs actual.
+
+### External platform sync (OAuth)
+**Closes:** Strava, Garmin Connect, Apple Health, Health Connect, parkrun, RunSignUp.
+**Stub:** one OAuth Edge Function per provider with token refresh, webhook or polling ingest, bidirectional for Strava. Garmin Connect is gated on business approval — do not block on it.
+
+### Segments + leaderboards
+**Closes:** Strava.
+**Stub:** user-authored GPS segments; PostGIS line-matching RPC invoked on run insert to produce `segment_efforts`; weekly + all-time boards per segment; KOM/CR equivalent per segment.
+
+### Heatmap / popular-route discovery
+**Closes:** Strava, Komoot.
+**Stub:** anonymised GPS aggregation into raster or vector tiles served from CDN. Privacy default is opt-out (user data included unless they toggle off) — this is the decision knob worth re-litigating before shipping.
+
+### Trail / offline navigation
+**Closes:** AllTrails, Komoot.
+**Stub:** turn-by-turn voice cues along a loaded route; offline map-tile packs saved to device; route-condition reports (mud, closure, overgrowth) with timestamp and upvotes.
+
+### Social graph
+**Closes:** Strava, Nike Run Club.
+**Stub:** `follows` table; activity feed of people you follow; kudos (one-tap); threaded comments on runs; per-user privacy zones that blur start/end within radius.
+
+### Gear tracking
+**Closes:** Strava, Garmin.
+**Stub:** shoes and bikes as `gear` rows; `run_gear` link table; auto-compute total mileage; retirement reminder at user-chosen threshold (default 500 mi for shoes).
+
+### Photos on runs and routes
+**Closes:** Strava, AllTrails.
+**Stub:** multi-photo upload, attached either by timestamp match against the GPS track or explicit map pin; server-side thumbnailing via Edge Function or Supabase image-transform; cap at 10 photos per run in v1.
+
+### Audio-coached / guided runs
+**Closes:** Nike Run Club.
+**Stub:** a library of `audio_workouts` (recorded MP3 coaching + structured intervals); downloaded to device on start; integrated into the run recorder's audio-cue layer. v1 can be TTS-only if voice talent budget is a blocker.
+
+### Race calendar + results import
+**Closes:** Garmin, Runna.
+**Stub:** `races` table seeded from RunSignUp + parkrun imports; discovery by location; "register" deep-links to the organiser's page; auto-match recorded runs on race day to produce a result entry.
+
+### Advanced analytics
+**Closes:** Garmin, Runna.
+**Stub:** VDOT computed from recent races; Banister-style training-load / fitness / freshness curves; race-time predictor for 5k/10k/half/full from VDOT; weekly and monthly drill-downs on the web dashboard. No new tables — all derived from `runs`.
+
+### Premium billing
+**Closes:** All (any monetised feature needs this).
+**Stub:** Stripe Checkout flow, webhook handler Edge Function, `stripe_customer_id` + `stripe_subscription_id` on `user_profiles`; `SubscriptionTier` already exists client-side; customer portal link in Settings; middleware that gates premium features cleanly (not hardcoded checks per screen).
+
+---
+
 *Last updated: April 2026*
