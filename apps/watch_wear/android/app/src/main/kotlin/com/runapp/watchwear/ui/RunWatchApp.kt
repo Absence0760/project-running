@@ -91,26 +91,44 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity) {
             vignette = { Vignette(vignettePosition = VignettePosition.TopAndBottom) },
         ) {
             when (state.stage) {
-                Stage.PreRun -> PreRunScreen(
-                    queuedCount = state.queuedCount,
-                    authed = state.authed,
-                    authError = state.authError,
-                    batteryOptimised = state.batteryOptimised,
-                    pendingRecoveryDistance = state.pendingRecovery?.distanceM,
-                    onStart = {
-                        permissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.BODY_SENSORS,
-                            )
+                Stage.PreRun -> {
+                    var batteryHelp by remember { mutableStateOf(false) }
+                    // Auto-dismiss the instruction card when the user has
+                    // actually granted the exemption — VM state flips from
+                    // `batteryOptimised = true` → `false`.
+                    LaunchedEffect(state.batteryOptimised) {
+                        if (!state.batteryOptimised) batteryHelp = false
+                    }
+                    if (batteryHelp) {
+                        BatteryInstructions(
+                            onTryAutoOpen = {
+                                BatteryOptimization.requestExemption(activity)
+                            },
+                            onClose = { batteryHelp = false },
                         )
-                    },
-                    onSignIn = vm::openSignIn,
-                    onSignOut = vm::signOut,
-                    onFixBattery = { BatteryOptimization.requestExemption(activity) },
-                    onRecover = vm::recoverCheckpoint,
-                    onDiscardRecovery = vm::discardCheckpoint,
-                )
+                    } else {
+                        PreRunScreen(
+                            queuedCount = state.queuedCount,
+                            authed = state.authed,
+                            authError = state.authError,
+                            batteryOptimised = state.batteryOptimised,
+                            pendingRecoveryDistance = state.pendingRecovery?.distanceM,
+                            onStart = {
+                                permissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.BODY_SENSORS,
+                                    )
+                                )
+                            },
+                            onSignIn = vm::openSignIn,
+                            onSignOut = vm::signOut,
+                            onFixBattery = { batteryHelp = true },
+                            onRecover = vm::recoverCheckpoint,
+                            onDiscardRecovery = vm::discardCheckpoint,
+                        )
+                    }
+                }
                 Stage.SignIn -> SignInScreen(
                     authError = state.authError,
                     loading = state.signInLoading,
@@ -134,6 +152,74 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity) {
                     onDiscard = vm::discard,
                 )
             }
+        }
+    }
+}
+
+/// Full-screen instruction card explaining how to grant battery-opt
+/// exemption. Replaces a silent `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+/// intent launch — on many Wear OS builds that intent resolves but the
+/// actual Activity is a no-op stub. The card gives the user a reliable
+/// manual path plus a "Try auto-open" button for watches where the
+/// intent does work.
+@Composable
+private fun BatteryInstructions(
+    onTryAutoOpen: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val listState = rememberScalingLazyListState()
+    ScalingLazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        autoCentering = AutoCenteringParams(itemIndex = 0),
+        contentPadding = PaddingValues(horizontal = 14.dp),
+    ) {
+        item {
+            Text(
+                "Allow background activity",
+                style = MaterialTheme.typography.title3,
+                textAlign = TextAlign.Center,
+            )
+        }
+        item {
+            Text(
+                "Needed so GPS keeps recording on long runs.",
+                style = MaterialTheme.typography.caption2,
+                color = DuskPalette.haze,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+        }
+        item {
+            Text(
+                "1. On phone: open the Wear app.\n2. Find Better Runner.\n3. Turn battery optimisation off.",
+                style = MaterialTheme.typography.caption2,
+                color = DuskPalette.parchment,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+        }
+        item {
+            Chip(
+                onClick = onTryAutoOpen,
+                label = {
+                    Text(
+                        "Try auto-open",
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            Chip(
+                onClick = onClose,
+                label = { Text("Done") },
+                colors = ChipDefaults.primaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -243,7 +329,7 @@ private fun PreRunScreen(
                     onClick = onFixBattery,
                     label = {
                         Text(
-                            "Fix battery saver",
+                            "Allow background activity",
                             style = MaterialTheme.typography.caption3,
                         )
                     },

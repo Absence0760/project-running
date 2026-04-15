@@ -23,24 +23,48 @@ object BatteryOptimization {
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    /// Launches the system "Allow X to run in the background?" dialog.
-    /// Falls back to the broader battery-optimisation settings list on
-    /// devices that block the direct prompt.
-    fun requestExemption(activity: Activity) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-        try {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:${activity.packageName}")
-            }
-            activity.startActivity(intent)
-        } catch (_: Throwable) {
-            try {
-                activity.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+    enum class PromptResult {
+        /// A system Activity was launched. The user returns via back/swipe;
+        /// `onResume` re-checks status.
+        LaunchedSystemPrompt,
+
+        /// No activity could handle the request. Common on Wear OS, where
+        /// battery-optimisation settings are usually on the paired phone's
+        /// Watch companion app rather than in the watch's own Settings.
+        NotSupportedOnThisWatch,
+
+        /// Handler claimed to resolve but threw when launched.
+        Failed,
+    }
+
+    /// Asks the OS to whitelist this app from battery optimisation.
+    /// Returns a [PromptResult] so the caller can render appropriate
+    /// feedback — tapping the chip with no visible result was the
+    /// original complaint.
+    fun requestExemption(activity: Activity): PromptResult {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return PromptResult.NotSupportedOnThisWatch
+        }
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:${activity.packageName}")
+        }
+        if (direct.resolveActivity(activity.packageManager) != null) {
+            return try {
+                activity.startActivity(direct)
+                PromptResult.LaunchedSystemPrompt
             } catch (_: Throwable) {
-                // OEM with no settings activity exposed; nothing more we
-                // can do programmatically. The pre-run banner remains so
-                // the user knows recordings may be unreliable.
+                PromptResult.Failed
             }
         }
+        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        if (fallback.resolveActivity(activity.packageManager) != null) {
+            return try {
+                activity.startActivity(fallback)
+                PromptResult.LaunchedSystemPrompt
+            } catch (_: Throwable) {
+                PromptResult.Failed
+            }
+        }
+        return PromptResult.NotSupportedOnThisWatch
     }
 }
