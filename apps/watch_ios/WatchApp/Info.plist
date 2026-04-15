@@ -26,5 +26,12 @@
 	<string>Better Runner needs your location to track your running route, calculate distance, and provide pace information.</string>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKWatchOnly</key>
+	<true/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>workout-processing</string>
+	</array>
 </dict>
 </plist>

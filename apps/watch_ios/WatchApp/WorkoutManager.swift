@@ -43,7 +43,6 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
-        locationManager.allowsBackgroundLocationUpdates = true
     }
 
     // MARK: - Controls
