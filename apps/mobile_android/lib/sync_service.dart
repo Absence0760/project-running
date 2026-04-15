@@ -15,7 +15,7 @@ import 'local_run_store.dart';
 ///
 /// Sync attempts are silent and best-effort — failures are logged but don't
 /// surface to the UI. The user can still trigger an explicit sync from the
-/// History screen.
+/// Runs screen.
 class SyncService with WidgetsBindingObserver {
   final ApiClient? apiClient;
   final LocalRunStore runStore;

@@ -9,17 +9,17 @@ import '../preferences.dart';
 import 'add_run_screen.dart';
 import 'run_detail_screen.dart';
 
-/// Run history showing local runs with sync status.
+/// Runs list showing local runs with sync status.
 ///
 /// Rendering is lazy (`ListView.builder`) and the filtered/sorted view is
 /// cached in state rather than recomputed on every rebuild — both of those
 /// matter when the store has thousands of runs.
-class HistoryScreen extends StatefulWidget {
+class RunsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
-  const HistoryScreen({
+  const RunsScreen({
     super.key,
     this.apiClient,
     required this.runStore,
@@ -28,18 +28,18 @@ class HistoryScreen extends StatefulWidget {
   });
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
+  State<RunsScreen> createState() => _RunsScreenState();
 }
 
-enum _HistorySort { newest, oldest, longest, fastest }
+enum _RunsSort { newest, oldest, longest, fastest }
 
-enum _HistoryRange { today, week, month, year, all }
+enum _RunsRange { today, week, month, year, all }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class _RunsScreenState extends State<RunsScreen> {
   bool _syncing = false;
   bool _fetching = false;
-  _HistorySort _sort = _HistorySort.newest;
-  _HistoryRange _range = _HistoryRange.week;
+  _RunsSort _sort = _RunsSort.newest;
+  _RunsRange _range = _RunsRange.week;
   ActivityType? _activityFilter;
 
   // Derived view — recomputed when the store, filter, or sort changes,
@@ -84,8 +84,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   static List<Run> _filterAndSort(
     List<Run> all,
-    _HistoryRange range,
-    _HistorySort sort,
+    _RunsRange range,
+    _RunsSort sort,
     ActivityType? activityFilter,
   ) {
     final cutoff = _rangeCutoff(range);
@@ -100,13 +100,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
       }).toList();
     }
     switch (sort) {
-      case _HistorySort.newest:
+      case _RunsSort.newest:
         filtered.sort((a, b) => b.startedAt.compareTo(a.startedAt));
-      case _HistorySort.oldest:
+      case _RunsSort.oldest:
         filtered.sort((a, b) => a.startedAt.compareTo(b.startedAt));
-      case _HistorySort.longest:
+      case _RunsSort.longest:
         filtered.sort((a, b) => b.distanceMetres.compareTo(a.distanceMetres));
-      case _HistorySort.fastest:
+      case _RunsSort.fastest:
         double pace(Run r) => r.distanceMetres < 10
             ? double.infinity
             : r.duration.inSeconds / (r.distanceMetres / 1000);
@@ -115,34 +115,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return filtered;
   }
 
-  static DateTime? _rangeCutoff(_HistoryRange range) {
+  static DateTime? _rangeCutoff(_RunsRange range) {
     final now = DateTime.now();
     switch (range) {
-      case _HistoryRange.today:
+      case _RunsRange.today:
         return DateTime(now.year, now.month, now.day);
-      case _HistoryRange.week:
+      case _RunsRange.week:
         return weekStartLocal(now);
-      case _HistoryRange.month:
+      case _RunsRange.month:
         return DateTime(now.year, now.month, now.day)
             .subtract(const Duration(days: 30));
-      case _HistoryRange.year:
+      case _RunsRange.year:
         return DateTime(now.year, 1, 1);
-      case _HistoryRange.all:
+      case _RunsRange.all:
         return null;
     }
   }
 
-  static String _rangeLabel(_HistoryRange range) {
+  static String _rangeLabel(_RunsRange range) {
     switch (range) {
-      case _HistoryRange.today:
+      case _RunsRange.today:
         return 'Today';
-      case _HistoryRange.week:
+      case _RunsRange.week:
         return 'This week';
-      case _HistoryRange.month:
+      case _RunsRange.month:
         return 'Last 30 days';
-      case _HistoryRange.year:
+      case _RunsRange.year:
         return 'This year';
-      case _HistoryRange.all:
+      case _RunsRange.all:
         return 'All time';
     }
   }
@@ -334,9 +334,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   AppBar _normalAppBar() {
     final unsyncedCount = widget.runStore.unsyncedCount;
     return AppBar(
-      title: const Text('History'),
+      title: const Text('Runs'),
       actions: [
-        PopupMenuButton<_HistoryRange>(
+        PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
           tooltip: 'Date range',
           onSelected: (v) {
@@ -345,7 +345,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               _recompute();
             });
           },
-          itemBuilder: (_) => _HistoryRange.values
+          itemBuilder: (_) => _RunsRange.values
               .map((r) => CheckedPopupMenuItem(
                     value: r,
                     checked: _range == r,
@@ -353,7 +353,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ))
               .toList(),
         ),
-        PopupMenuButton<_HistorySort>(
+        PopupMenuButton<_RunsSort>(
           icon: const Icon(Icons.sort),
           tooltip: 'Sort',
           onSelected: (v) {
@@ -364,23 +364,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
           },
           itemBuilder: (_) => [
             CheckedPopupMenuItem(
-              value: _HistorySort.newest,
-              checked: _sort == _HistorySort.newest,
+              value: _RunsSort.newest,
+              checked: _sort == _RunsSort.newest,
               child: const Text('Newest first'),
             ),
             CheckedPopupMenuItem(
-              value: _HistorySort.oldest,
-              checked: _sort == _HistorySort.oldest,
+              value: _RunsSort.oldest,
+              checked: _sort == _RunsSort.oldest,
               child: const Text('Oldest first'),
             ),
             CheckedPopupMenuItem(
-              value: _HistorySort.longest,
-              checked: _sort == _HistorySort.longest,
+              value: _RunsSort.longest,
+              checked: _sort == _RunsSort.longest,
               child: const Text('Longest distance'),
             ),
             CheckedPopupMenuItem(
-              value: _HistorySort.fastest,
-              checked: _sort == _HistorySort.fastest,
+              value: _RunsSort.fastest,
+              checked: _sort == _RunsSort.fastest,
               child: const Text('Best pace'),
             ),
           ],
@@ -448,7 +448,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildBody(ThemeData theme, DistanceUnit unit, int totalCount) {
     if (totalCount == 0) {
-      return _EmptyHistory(theme: theme);
+      return _EmptyRuns(theme: theme);
     }
     return RefreshIndicator(
       onRefresh: _fetchRemote,
@@ -534,7 +534,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onPressed: () {
                     setState(() {
                       _activityFilter = null;
-                      _range = _HistoryRange.all;
+                      _range = _RunsRange.all;
                       _recompute();
                     });
                   },
@@ -675,9 +675,9 @@ class _RunTile extends StatelessWidget {
   }
 }
 
-class _EmptyHistory extends StatelessWidget {
+class _EmptyRuns extends StatelessWidget {
   final ThemeData theme;
-  const _EmptyHistory({required this.theme});
+  const _EmptyRuns({required this.theme});
 
   @override
   Widget build(BuildContext context) {

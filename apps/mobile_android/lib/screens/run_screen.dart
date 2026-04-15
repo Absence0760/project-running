@@ -664,7 +664,7 @@ class _RunScreenState extends State<RunScreen> {
         if (mounted) setState(() => _synced = true);
       } catch (e) {
         debugPrint('Auto-sync failed: $e');
-        if (mounted) setState(() => _syncError = 'Saved offline. Sync from History.');
+        if (mounted) setState(() => _syncError = 'Saved offline. Sync from Runs.');
       }
     } else {
       if (mounted) setState(() => _syncError = 'Saved offline.');

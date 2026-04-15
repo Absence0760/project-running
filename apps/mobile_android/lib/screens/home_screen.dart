@@ -10,7 +10,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
-import 'history_screen.dart';
+import 'runs_screen.dart';
 import 'routes_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
@@ -88,8 +88,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _KeepAlive(
-        child: HistoryScreen(
-          key: const PageStorageKey('history'),
+        child: RunsScreen(
+          key: const PageStorageKey('runs'),
           apiClient: widget.apiClient,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
           destinations: const [
             NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
             NavigationDestination(icon: Icon(Icons.play_arrow), label: 'Run'),
-            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+            NavigationDestination(icon: Icon(Icons.history), label: 'Runs'),
             NavigationDestination(icon: Icon(Icons.route), label: 'Routes'),
             NavigationDestination(icon: Icon(Icons.groups), label: 'Clubs'),
             NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),

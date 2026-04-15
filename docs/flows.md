@@ -185,7 +185,7 @@ No queuing, no retry-with-backoff. If a push fails (network dies mid-sync, serve
 ### Newer-wins conflict resolution (pull side)
 
 ```
-User taps "Pull" on HistoryScreen
+User taps "Pull" on RunsScreen
   → ApiClient.getRuns() returns cloud runs (track is empty; lazy-loaded later)
   → for each remote run:
       LocalRunStore.saveFromRemote(remote):

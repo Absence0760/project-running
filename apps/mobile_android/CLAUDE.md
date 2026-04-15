@@ -21,7 +21,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - Strava ZIP import (GPX/TCX/FIT) and Health Connect import. Batch cloud push via `saveRunsBatch`.
 - Disk-backed tile cache.
 - Personal bests, weekly goals, edit title/notes, share as GPX, delete.
-- History filter by activity type (run/walk/cycle/hike filter chips).
+- Runs filter by activity type (run/walk/cycle/hike filter chips).
 - Configurable split interval for voice cues (Settings > Split interval).
 - Advanced GPS mode (Settings > Advanced GPS) for higher accuracy under tree cover.
 
@@ -36,7 +36,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `sign_in_screen.dart` — email/password + Google sign-in
 - `home_screen.dart` — the dashboard + nav tabs host
 - `dashboard_screen.dart` — weekly mileage, PBs, goal progress
-- `history_screen.dart` — run list with sorting, FAB opens `add_run_screen`
+- `runs_screen.dart` — run list with sorting, FAB opens `add_run_screen`
 - `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
 - `run_detail_screen.dart` — single run map + stats (primary + secondary) + interactive elevation/pace chart + best efforts + pace-bar splits + laps
 - `import_screen.dart` — GPX / KML / KMZ / GeoJSON / TCX file picker

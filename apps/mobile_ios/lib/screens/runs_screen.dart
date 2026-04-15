@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../mock_data.dart';
 
-/// Run history list with weekly summary.
-class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({super.key});
+/// Runs list with weekly summary.
+class RunsScreen extends StatelessWidget {
+  const RunsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(title: const Text('Runs')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

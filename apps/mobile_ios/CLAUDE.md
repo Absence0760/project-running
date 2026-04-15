@@ -10,7 +10,7 @@ Seven Dart files under `lib/`:
 - `mock_data.dart` — fallback UI data
 - `screens/home_screen.dart`
 - `screens/run_screen.dart`
-- `screens/history_screen.dart`
+- `screens/runs_screen.dart`
 - `screens/routes_screen.dart`
 - `screens/settings_screen.dart`
 

@@ -9,7 +9,7 @@ import 'package:uuid/uuid.dart';
 /// Health Connect doesn't expose GPS routes for workouts written by other
 /// apps — those stay in the originating app's database. We can read the
 /// workout summary (start, duration, distance, type) and use that to create
-/// runs without GPS tracks. The user can still see them in History; the
+/// runs without GPS tracks. The user can still see them in Runs; the
 /// detail screen just shows stats and no map.
 class HealthConnectImporter {
   static const _uuid = Uuid();
