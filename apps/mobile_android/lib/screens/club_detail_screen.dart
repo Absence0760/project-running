@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../social_service.dart';
 import 'event_detail_screen.dart';
@@ -29,6 +32,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   final Map<String, List<ClubPostView>> _threads = {};
   final Map<String, TextEditingController> _replyCtrls = {};
 
+  RealtimeChannel? _channel;
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +64,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         _posts = results[1] as List<ClubPostView>;
         _loading = false;
       });
+      if (_channel == null) {
+        _channel = widget.social.subscribeToClub(club.row.id, _onRealtimeChange);
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -160,8 +169,22 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     _load();
   }
 
+  void _onRealtimeChange() {
+    // Coalesce bursts so a multi-row change (e.g. cascading delete) triggers
+    // one reload, not several.
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) _load();
+    });
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
+    final channel = _channel;
+    if (channel != null) {
+      widget.social.unsubscribe(channel);
+    }
     _tabs.dispose();
     _postCtrl.dispose();
     for (final c in _replyCtrls.values) {

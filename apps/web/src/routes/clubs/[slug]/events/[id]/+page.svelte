@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { supabase } from '$lib/supabase';
+	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		fetchEventById,
 		fetchClubBySlug,
@@ -90,7 +92,59 @@
 		await reloadInstance();
 	}
 
-	onMount(load);
+	let channel: RealtimeChannel | null = null;
+
+	onMount(async () => {
+		await load();
+		subscribeRealtime();
+	});
+
+	onDestroy(() => {
+		if (channel) {
+			supabase.removeChannel(channel);
+			channel = null;
+		}
+	});
+
+	/**
+	 * Event page realtime: watch attendee rows for this event so the "going"
+	 * count + attendee list refresh as others RSVP, and watch club_posts so
+	 * admin updates tagged to this event appear without refresh.
+	 */
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	function scheduleReload() {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			if (event && activeInstance) reloadInstance();
+		}, 250);
+	}
+
+	function subscribeRealtime() {
+		if (!event || !club) return;
+		channel = supabase
+			.channel(`event-${event.id}`)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'event_attendees',
+					filter: `event_id=eq.${event.id}`
+				},
+				scheduleReload
+			)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'club_posts',
+					filter: `club_id=eq.${club.id}`
+				},
+				scheduleReload
+			)
+			.subscribe();
+	}
 
 	async function rsvp(status: RsvpStatus) {
 		if (!event || !activeInstance || busy) return;

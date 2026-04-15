@@ -469,6 +469,78 @@ class SocialService extends ChangeNotifier {
     await _c.from('club_posts').delete().eq('id', postId);
     notifyListeners();
   }
+
+  // ─────────────────────── Realtime ───────────────────────
+  //
+  // Screens pass a reload callback; the service wires the Supabase channel
+  // and returns a `RealtimeChannel` the caller must `unsubscribe` from in
+  // dispose. RLS is the authoritative filter — the payload is ignored and
+  // the callback just triggers a fresh fetch so the caller gets enriched
+  // `ClubView`/`EventView` objects, not raw rows.
+
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) {
+    return _c
+        .channel('club-$clubId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_posts',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'club_id',
+            value: clubId,
+          ),
+          callback: (_) => onChange(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_members',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'club_id',
+            value: clubId,
+          ),
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  RealtimeChannel subscribeToEvent(
+    String eventId,
+    String clubId,
+    void Function() onChange,
+  ) {
+    return _c
+        .channel('event-$eventId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'event_attendees',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'event_id',
+            value: eventId,
+          ),
+          callback: (_) => onChange(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_posts',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'club_id',
+            value: clubId,
+          ),
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  Future<void> unsubscribe(RealtimeChannel channel) async {
+    await _c.removeChannel(channel);
+  }
 }
 
 /// Hash a user id to a hue 0-360 so avatars colour-diff consistently.

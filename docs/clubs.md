@@ -37,6 +37,12 @@ The enrichment fields are joined client-side in `data.ts` rather than through a 
 
 Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`.
 
+### Realtime
+
+`club_posts`, `event_attendees`, and `club_members` are published on the `supabase_realtime` publication (migration `20260418_001_social_realtime.sql`). Both web and Android club / event detail surfaces subscribe via `postgres_changes` and debounce reloads at 250ms so a burst of changes (a cascading delete, a multi-member update) triggers one enriched refetch rather than N. Payloads are ignored in favour of a fresh fetch — RLS governs the subscription, so the payload's visibility would need re-validation anyway, and the REST enrichment path is already the source of `ClubWithMeta` / `EventWithMeta` shapes.
+
+Subscriptions unmount cleanly: the web pages call `supabase.removeChannel` in `onDestroy`; Android screens call `SocialService.unsubscribe(channel)` in `dispose`.
+
 ## Surfaces (Android)
 
 | Screen | Purpose |

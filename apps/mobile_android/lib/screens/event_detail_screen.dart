@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../recurrence.dart';
 import '../social_service.dart';
@@ -26,6 +29,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   List<DateTime> _instances = const [];
   bool _loading = true;
   bool _busy = false;
+
+  RealtimeChannel? _channel;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -58,6 +64,30 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _instances = instances;
       _loading = false;
     });
+    if (_channel == null && club != null) {
+      _channel = widget.social.subscribeToEvent(
+        event.row.id,
+        club.row.id,
+        _onRealtimeChange,
+      );
+    }
+  }
+
+  void _onRealtimeChange() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    final channel = _channel;
+    if (channel != null) {
+      widget.social.unsubscribe(channel);
+    }
+    super.dispose();
   }
 
   Future<void> _pickInstance(DateTime dt) async {

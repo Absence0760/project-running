@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { supabase } from '$lib/supabase';
+	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		fetchClubBySlug,
 		fetchUpcomingEvents,
@@ -73,7 +75,52 @@
 		loading = false;
 	}
 
-	onMount(load);
+	let channel: RealtimeChannel | null = null;
+
+	onMount(async () => {
+		await load();
+		subscribeRealtime();
+	});
+
+	onDestroy(() => {
+		if (channel) {
+			supabase.removeChannel(channel);
+			channel = null;
+		}
+	});
+
+	/**
+	 * Reload the feed whenever a relevant row changes server-side. We don't
+	 * try to patch state in-place — RLS is the authoritative filter for
+	 * "what this viewer can see", and the payload's shape differs from
+	 * `ClubPostWithAuthor`/`ClubWithMeta` (no joined author, no enrichment),
+	 * so a fresh fetch is both simpler and correct. Debounced to coalesce
+	 * bursts (e.g. an admin pasting a multi-line post fires one INSERT).
+	 */
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	function scheduleReload() {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			if (club) load();
+		}, 250);
+	}
+
+	function subscribeRealtime() {
+		if (!club) return;
+		channel = supabase
+			.channel(`club-${club.id}`)
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'club_posts', filter: `club_id=eq.${club.id}` },
+				scheduleReload
+			)
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'club_members', filter: `club_id=eq.${club.id}` },
+				scheduleReload
+			)
+			.subscribe();
+	}
 
 	async function join() {
 		if (!club || joinBusy) return;
