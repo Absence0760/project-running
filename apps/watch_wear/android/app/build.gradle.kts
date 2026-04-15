@@ -80,6 +80,9 @@ dependencies {
     // Location
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
+    // Wearable Data Layer — receives Supabase session handoff from the paired phone.
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+
     // Networking
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
 

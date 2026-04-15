@@ -57,8 +57,17 @@ Data Layer proxy. `SupabaseClient` is a thin OkHttp wrapper:
 1. `signIn(email, password)` → POST `/auth/v1/token?grant_type=password`, stashes access token + user id in memory.
 2. `saveRun(...)` → gzips the track JSON, POSTs to `/storage/v1/object/runs/{user_id}/{run_id}.json.gz`, then POSTs the row to `/rest/v1/runs` with `Prefer: return=minimal`. Matches the Dart `ApiClient.saveRun` contract byte-for-byte so the web/Android apps read Wear-produced runs without special cases.
 
-Auth in Phase 1 is a hardcoded seed sign-in (`runner@test.com` / `testtest`)
-on app start. Real OAuth lands with a later phase.
+Auth comes from the paired Android phone over the Wearable Data Layer.
+`mobile_android` pushes `{access_token, refresh_token, user_id, base_url,
+anon_key, expires_at_ms}` to `/supabase_session` whenever Supabase's
+`onAuthStateChange` fires; `SessionBridge` on the watch receives it and
+`SessionStore` caches it to DataStore so a cold launch while offline
+still has credentials. `RunViewModel.refreshIfExpired` exchanges the
+refresh token for a new access token automatically, and `drainQueue`
+retries once on HTTP 401 by refreshing then re-pushing. If no session has
+ever been received (fresh install, phone app never signed in), the
+pre-run screen shows an auth error — open the phone app and sign in
+there; the watch picks up the session within a second.
 
 Offline runs persist in `LocalRunStore` (DataStore, `watch_wear` prefs,
 key `queued_runs_v1`). `RunViewModel.drainQueue()` fires on app start after
@@ -122,9 +131,8 @@ on your machine, override that line locally.
 
 - Connectivity-change auto-retry (today `drainQueue` only fires on app start + after stop).
 - Foreground service for background-safe GPS across wrist-down / ambient.
-- Wearable Data Layer phone handoff as an alternative sync path.
+- Standalone sign-in for users without a paired Android phone (QR pairing / Google Sign-In via `RemoteActivityHelper`).
 - Watch face tile / complication.
-- Real OAuth sign-in (replaces the seed-creds hardcoding).
 
 ## Before reporting a task done
 

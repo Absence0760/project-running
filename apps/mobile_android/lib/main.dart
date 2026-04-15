@@ -15,6 +15,7 @@ import 'social_service.dart';
 import 'sync_service.dart';
 import 'tile_cache.dart';
 import 'training_service.dart';
+import 'wear_auth_bridge.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +78,11 @@ void main() async {
     try {
       await ApiClient.initialize(url: supabaseUrl, anonKey: anonKey);
       api = ApiClient();
+
+      // Forward the Supabase session to the paired Wear OS watch whenever
+      // it changes. No-op if no watch is paired — DataClient just holds
+      // the DataItem until one shows up.
+      WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
 
       final devEmail = dotenv.env['DEV_USER_EMAIL'];
       final devPassword = dotenv.env['DEV_USER_PASSWORD'];

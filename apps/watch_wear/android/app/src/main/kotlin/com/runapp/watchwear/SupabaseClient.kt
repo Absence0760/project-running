@@ -28,9 +28,66 @@ class SupabaseClient(
     private val jsonMedia = "application/json".toMediaType()
 
     private var accessToken: String? = null
+    private var refreshToken: String? = null
     private var userId: String? = null
 
     val authedUserId: String? get() = userId
+
+    /// Apply a session delivered by the paired phone via the Wearable Data
+    /// Layer. Called from `SessionBridge` pushes + the `SessionStore`
+    /// cold-start restore.
+    fun applyCredentials(
+        accessToken: String,
+        refreshToken: String,
+        userId: String,
+        baseUrl: String,
+        anonKey: String,
+    ) {
+        this.accessToken = accessToken
+        this.refreshToken = refreshToken
+        this.userId = userId
+        // `baseUrl` / `anonKey` are not mutable on this client today — the
+        // Gradle BuildConfig value is used. If the phone's environment ever
+        // diverges from the watch's (staging phone paired to a local-dev
+        // watch), we'll need to make these `var` and forward them here.
+    }
+
+    /// Exchange the cached refresh token for a fresh access token. Returns
+    /// the new access + refresh token pair and the absolute expiry (ms since
+    /// epoch); the caller persists them back to `SessionStore`.
+    suspend fun refreshAccessToken(): RefreshedSession {
+        val refresh = refreshToken
+            ?: throw IllegalStateException("no refresh token cached")
+
+        val body = buildJsonObject {
+            put("refresh_token", refresh)
+        }.toString().toRequestBody(jsonMedia)
+
+        val req = Request.Builder()
+            .url("$baseUrl/auth/v1/token?grant_type=refresh_token")
+            .header("apikey", anonKey)
+            .post(body)
+            .build()
+
+        val respBody = execute(req)
+        val parsed = json.parseToJsonElement(respBody) as? JsonObject
+            ?: throw IllegalStateException("unexpected refresh response")
+        val newAccess = parsed["access_token"]?.toString()?.trim('"')
+            ?: throw IllegalStateException("refresh response missing access_token")
+        val newRefresh = parsed["refresh_token"]?.toString()?.trim('"') ?: refresh
+        val expiresInSec = (parsed["expires_in"]?.toString()?.toLongOrNull()) ?: 3600L
+
+        accessToken = newAccess
+        refreshToken = newRefresh
+        val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+        return RefreshedSession(newAccess, newRefresh, expiresAtMs)
+    }
+
+    data class RefreshedSession(
+        val accessToken: String,
+        val refreshToken: String,
+        val expiresAtMs: Long,
+    )
 
     suspend fun signIn(email: String, password: String): String {
         val body = buildJsonObject {

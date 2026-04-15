@@ -61,3 +61,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Wearable Data Layer — pushes the Supabase session to the paired watch_wear app.
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+}

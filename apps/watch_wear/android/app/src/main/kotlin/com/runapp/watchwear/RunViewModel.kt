@@ -57,6 +57,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val gps = GpsRecorder(application)
     private val hr = HeartRateMonitor(application)
     private val store = LocalRunStore(application)
+    private val sessionStore = SessionStore(application)
+    private val sessionBridge = SessionBridge(application)
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -72,16 +74,41 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private var startMs = 0L
 
     init {
+        // 1. Restore any previously-handed-over session from disk. Runs even
+        //    when the phone is out of range — so a cold start while offline
+        //    still has credentials to drain the queue once the network
+        //    returns.
+        viewModelScope.launch {
+            val cached = sessionStore.current()
+            if (cached != null) {
+                applySession(cached)
+                refreshIfExpired(cached)
+            }
+        }
+        // 2. One-shot pull from the Data Layer in case the phone pushed
+        //    while the watch app was closed.
         viewModelScope.launch {
             try {
-                supabase.signIn("runner@test.com", "testtest")
-                _state.value = _state.value.copy(authed = true, authError = null)
+                sessionBridge.current()?.let { payload ->
+                    val stored = StoredSession.fromPayload(payload)
+                    sessionStore.save(stored)
+                    applySession(stored)
+                    refreshIfExpired(stored)
+                    drainQueue()
+                }
+            } catch (_: Throwable) {
+                // Data Layer not available (e.g. emulator without paired phone).
+                // The cached session path above is our fallback.
+            }
+        }
+        // 3. Live subscription for future pushes (token refresh on the phone,
+        //    account switch, sign-out).
+        viewModelScope.launch {
+            sessionBridge.sessions.collect { payload ->
+                val stored = StoredSession.fromPayload(payload)
+                sessionStore.save(stored)
+                applySession(stored)
                 drainQueue()
-            } catch (e: Throwable) {
-                _state.value = _state.value.copy(
-                    authed = false,
-                    authError = e.message ?: e.javaClass.simpleName,
-                )
             }
         }
         queueWatchJob = viewModelScope.launch {
@@ -93,6 +120,35 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     } ?: _state.value.thisRunSynced,
                 )
             }
+        }
+    }
+
+    private fun applySession(s: StoredSession) {
+        supabase.applyCredentials(
+            accessToken = s.accessToken,
+            refreshToken = s.refreshToken,
+            userId = s.userId,
+            baseUrl = s.baseUrl,
+            anonKey = s.anonKey,
+        )
+        _state.value = _state.value.copy(authed = true, authError = null)
+    }
+
+    private suspend fun refreshIfExpired(s: StoredSession) {
+        if (!s.isExpired()) return
+        try {
+            val refreshed = supabase.refreshAccessToken()
+            sessionStore.save(
+                s.copy(
+                    accessToken = refreshed.accessToken,
+                    refreshToken = refreshed.refreshToken,
+                    expiresAtMs = refreshed.expiresAtMs,
+                )
+            )
+        } catch (e: Throwable) {
+            _state.value = _state.value.copy(
+                authError = "Token refresh failed: ${e.message ?: e.javaClass.simpleName}",
+            )
         }
     }
 
@@ -198,23 +254,50 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val snapshot = store.queue.first()
         for (run in snapshot) {
             try {
-                val metadata: JsonObject? = run.avgBpm?.let {
-                    buildJsonObject { put("avg_bpm", it) }
-                }
-                supabase.saveRun(
-                    runId = run.id,
-                    startedAtIso = run.startedAtIso,
-                    durationS = run.durationS,
-                    distanceM = run.distanceM,
-                    trackJson = run.trackJson,
-                    metadata = metadata,
-                )
+                pushRun(run)
                 store.remove(run.id)
             } catch (e: Throwable) {
+                // One retry on 401 — access token probably expired while the
+                // run was queued. Burn a refresh and re-try once; if that
+                // still fails, leave the queue intact for the next trigger.
+                if (e.message?.contains("HTTP 401") == true) {
+                    try {
+                        val refreshed = supabase.refreshAccessToken()
+                        val cached = sessionStore.current()
+                        if (cached != null) {
+                            sessionStore.save(
+                                cached.copy(
+                                    accessToken = refreshed.accessToken,
+                                    refreshToken = refreshed.refreshToken,
+                                    expiresAtMs = refreshed.expiresAtMs,
+                                )
+                            )
+                        }
+                        pushRun(run)
+                        store.remove(run.id)
+                        continue
+                    } catch (_: Throwable) {
+                        // fall through to the error state below
+                    }
+                }
                 _state.value = _state.value.copy(syncError = e.message)
                 break
             }
         }
+    }
+
+    private suspend fun pushRun(run: QueuedRun) {
+        val metadata: JsonObject? = run.avgBpm?.let {
+            buildJsonObject { put("avg_bpm", it) }
+        }
+        supabase.saveRun(
+            runId = run.id,
+            startedAtIso = run.startedAtIso,
+            durationS = run.durationS,
+            distanceM = run.distanceM,
+            trackJson = run.trackJson,
+            metadata = metadata,
+        )
     }
 
     private fun onGps(p: GpsPoint) {

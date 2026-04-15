@@ -54,8 +54,9 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `workout_detail_screen.dart` — Structured-interval breakdown + per-kind advice
 
 **Top-level (`lib/`):**
-- `main.dart` — app entry, Supabase init, service wiring
+- `main.dart` — app entry, Supabase init, service wiring; calls `WearAuthBridge().attach(...)` so the paired Wear OS watch inherits the Supabase session
 - `sync_service.dart` — bulk-sync button, auto-sync on connectivity/foreground, conflict resolution
+- `wear_auth_bridge.dart` — forwards Supabase session changes to the paired Wear OS watch via a `run_app/wear_auth` method channel (native `WearAuthBridge.kt` under `android/app/src/main/kotlin/com/betterrunner/app/` writes to the Wearable Data Layer)
 - `background_sync.dart` — WorkManager periodic background sync (hourly, network-connected)
 - `local_run_store.dart` / `local_route_store.dart` — `ChangeNotifier`-style on-disk stores
 - `preferences.dart` — SharedPreferences wrapper for settings
