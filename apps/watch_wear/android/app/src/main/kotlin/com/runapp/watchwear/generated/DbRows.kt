@@ -36,7 +36,8 @@ data class RunRow(
     val createdAt: Instant? = null,
     val updatedAt: Instant? = null,
     val trackUrl: String? = null,
-    val isPublic: Boolean? = null
+    val isPublic: Boolean? = null,
+    val eventId: String? = null
 ) {
     companion object {
         const val TABLE = "runs"
@@ -53,6 +54,7 @@ data class RunRow(
         const val COL_UPDATED_AT = "updated_at"
         const val COL_TRACK_URL = "track_url"
         const val COL_IS_PUBLIC = "is_public"
+        const val COL_EVENT_ID = "event_id"
 
         fun fromJson(json: JsonObject): RunRow = RunRow(
             id = json["id"]!!.jsonPrimitive.content,
@@ -67,7 +69,8 @@ data class RunRow(
             createdAt = json["created_at"]?.jsonPrimitive?.contentOrNull?.let { Instant.parse(it) },
             updatedAt = json["updated_at"]?.jsonPrimitive?.contentOrNull?.let { Instant.parse(it) },
             trackUrl = json["track_url"]?.jsonPrimitive?.contentOrNull,
-            isPublic = json["is_public"]?.jsonPrimitive?.boolean
+            isPublic = json["is_public"]?.jsonPrimitive?.boolean,
+            eventId = json["event_id"]?.jsonPrimitive?.contentOrNull
         )
     }
 
@@ -84,7 +87,8 @@ data class RunRow(
         COL_CREATED_AT to createdAt?.toString(),
         COL_UPDATED_AT to updatedAt?.toString(),
         COL_TRACK_URL to trackUrl,
-        COL_IS_PUBLIC to isPublic
+        COL_IS_PUBLIC to isPublic,
+        COL_EVENT_ID to eventId
     )
 }
 

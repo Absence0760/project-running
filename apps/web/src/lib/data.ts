@@ -869,6 +869,139 @@ export async function fetchEventAttendees(
 	}));
 }
 
+// --- Event results (leaderboard) ---
+
+export interface EventResultRow {
+	user_id: string;
+	run_id: string | null;
+	duration_s: number;
+	distance_m: number;
+	rank: number | null;
+	finisher_status: 'finished' | 'dnf' | 'dns';
+	age_grade_pct: number | null;
+	note: string | null;
+	created_at: string;
+}
+
+export interface EventResultWithUser extends EventResultRow {
+	display_name: string | null;
+	avatar_url: string | null;
+}
+
+export async function fetchEventResults(
+	eventId: string,
+	instanceStart: string
+): Promise<EventResultWithUser[]> {
+	const { data: results } = await supabase
+		.from('event_results')
+		.select(
+			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at'
+		)
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.order('rank', { ascending: true, nullsFirst: false })
+		.order('created_at', { ascending: true });
+	if (!results) return [];
+	const rows = results as EventResultRow[];
+	if (rows.length === 0) return [];
+	const userIds = rows.map((r) => r.user_id);
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', userIds);
+	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+	for (const p of profiles ?? [])
+		byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	return rows.map((r) => ({
+		...r,
+		display_name: byId.get(r.user_id)?.display_name ?? null,
+		avatar_url: byId.get(r.user_id)?.avatar_url ?? null,
+	}));
+}
+
+export async function submitEventResult(params: {
+	eventId: string;
+	instanceStart: string;
+	durationS: number;
+	distanceM: number;
+	runId?: string | null;
+	finisherStatus?: 'finished' | 'dnf' | 'dns';
+	ageGradePct?: number | null;
+	note?: string | null;
+}): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase.from('event_results').upsert(
+		{
+			event_id: params.eventId,
+			instance_start: params.instanceStart,
+			user_id: userId,
+			run_id: params.runId ?? null,
+			duration_s: params.durationS,
+			distance_m: params.distanceM,
+			finisher_status: params.finisherStatus ?? 'finished',
+			age_grade_pct: params.ageGradePct ?? null,
+			note: params.note ?? null,
+			updated_at: new Date().toISOString(),
+		},
+		{ onConflict: 'event_id,instance_start,user_id' }
+	);
+	if (error) throw error;
+	// Best-effort back-link so the run-detail page can show "ran at {event}".
+	if (params.runId) {
+		await supabase
+			.from('runs')
+			.update({ event_id: params.eventId })
+			.eq('id', params.runId)
+			.eq('user_id', userId);
+	}
+}
+
+export async function removeEventResult(
+	eventId: string,
+	instanceStart: string
+): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase
+		.from('event_results')
+		.delete()
+		.eq('event_id', eventId)
+		.eq('user_id', userId)
+		.eq('instance_start', instanceStart);
+	if (error) throw error;
+}
+
+export interface RecentRunOption {
+	id: string;
+	started_at: string;
+	duration_s: number;
+	distance_m: number;
+	activity_type: string;
+}
+
+export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOption[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data } = await supabase
+		.from('runs')
+		.select('id, started_at, duration_s, distance_m, metadata')
+		.eq('user_id', userId)
+		.order('started_at', { ascending: false })
+		.limit(limit);
+	if (!data) return [];
+	return data.map((r) => ({
+		id: r.id,
+		started_at: r.started_at,
+		duration_s: r.duration_s,
+		distance_m: r.distance_m,
+		activity_type:
+			(r.metadata && typeof r.metadata === 'object' && 'activity_type' in r.metadata
+				? ((r.metadata as Record<string, unknown>).activity_type as string)
+				: null) ?? 'run',
+	}));
+}
+
 // --- Club posts (owner updates) ---
 
 export async function fetchClubPosts(

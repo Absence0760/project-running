@@ -13,8 +13,15 @@
 		rsvpEvent,
 		clearRsvp,
 		deleteEvent,
-		createClubPost
+		createClubPost,
+		fetchEventResults,
+		submitEventResult,
+		removeEventResult,
+		fetchRecentRunsForPicker,
+		type EventResultWithUser,
+		type RecentRunOption
 	} from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
 	import type {
 		EventWithMeta,
@@ -37,6 +44,10 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let draftPost = $state('');
+	let results = $state<EventResultWithUser[]>([]);
+	let showResultPicker = $state(false);
+	let runOptions = $state<RecentRunOption[]>([]);
+	let submitting = $state(false);
 
 	/** The instance the user is currently RSVPing to. For one-off events this
 	 * stays equal to `event.starts_at`; for recurring events, the user can
@@ -75,17 +86,95 @@
 
 	async function reloadInstance() {
 		if (!event || !club || !activeInstance) return;
-		const results = await Promise.all([
+		const res = await Promise.all([
 			fetchEventAttendees(event.id, activeInstance),
 			event.route_id ? fetchRouteById(event.route_id) : Promise.resolve(null),
-			fetchClubPosts(club.id, 50)
+			fetchClubPosts(club.id, 50),
+			fetchEventResults(event.id, activeInstance)
 		]);
-		attendees = results[0];
-		route = results[1];
-		eventPosts = (results[2] as ClubPostWithAuthor[]).filter(
+		attendees = res[0];
+		route = res[1];
+		eventPosts = (res[2] as ClubPostWithAuthor[]).filter(
 			(p) => p.event_id === event!.id && (!p.event_instance_start || p.event_instance_start === activeInstance)
 		);
+		results = res[3];
 	}
+
+	async function openResultPicker() {
+		if (runOptions.length === 0) {
+			runOptions = await fetchRecentRunsForPicker(20);
+		}
+		showResultPicker = true;
+	}
+
+	async function pickRunAsResult(run: RecentRunOption) {
+		if (!event || !activeInstance || submitting) return;
+		submitting = true;
+		try {
+			await submitEventResult({
+				eventId: event.id,
+				instanceStart: activeInstance,
+				durationS: run.duration_s,
+				distanceM: run.distance_m,
+				runId: run.id,
+				finisherStatus: 'finished'
+			});
+			showResultPicker = false;
+			await reloadInstance();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Submit failed';
+		} finally {
+			submitting = false;
+		}
+	}
+
+	async function recordNonFinish(status: 'dnf' | 'dns') {
+		if (!event || !activeInstance || submitting) return;
+		submitting = true;
+		try {
+			await submitEventResult({
+				eventId: event.id,
+				instanceStart: activeInstance,
+				durationS: 0,
+				distanceM: 0,
+				finisherStatus: status
+			});
+			showResultPicker = false;
+			await reloadInstance();
+		} finally {
+			submitting = false;
+		}
+	}
+
+	async function removeMyResult() {
+		if (!event || !activeInstance) return;
+		await removeEventResult(event.id, activeInstance);
+		await reloadInstance();
+	}
+
+	function formatDuration(s: number): string {
+		if (s <= 0) return '—';
+		const h = Math.floor(s / 3600);
+		const m = Math.floor((s % 3600) / 60);
+		const sec = s % 60;
+		if (h > 0) {
+			return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+		}
+		return `${m}:${sec.toString().padStart(2, '0')}`;
+	}
+
+	function formatRunDate(iso: string): string {
+		return new Date(iso).toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
+
+	let myUserId = $derived(auth.user?.id ?? null);
+	let hasMyResult = $derived(
+		myUserId !== null && results.some((r) => r.user_id === myUserId)
+	);
 
 	async function pickInstance(iso: string) {
 		activeInstance = iso;
@@ -403,6 +492,78 @@
 				</div>
 			</section>
 		{/if}
+
+		<section class="card">
+			<div class="results-head">
+				<h3>Results ({results.length})</h3>
+				{#if myUserId}
+					{#if hasMyResult}
+						<button type="button" class="btn-link" onclick={removeMyResult}>Remove mine</button>
+					{:else}
+						<button type="button" class="btn btn-primary-sm" onclick={openResultPicker} disabled={submitting}>
+							{submitting ? 'Submitting…' : 'Submit my time'}
+						</button>
+					{/if}
+				{/if}
+			</div>
+			{#if results.length === 0}
+				<p class="muted">No results yet. Submit your time after the event and others will see it here.</p>
+			{:else}
+				<ol class="results">
+					{#each results as r (r.user_id)}
+						<li class="result" class:me={r.user_id === myUserId}>
+							<span class="rank">{r.rank ?? '—'}</span>
+							<div class="avatar-sm" style="--seed: {hashHue(r.user_id)}">
+								{initial(r.display_name)}
+							</div>
+							<div class="res-info">
+								<strong>{r.display_name ?? 'Runner'}</strong>
+								{#if r.user_id === myUserId}<span class="you">(you)</span>{/if}
+								{#if r.finisher_status !== 'finished'}
+									<span class="dnf-tag">{r.finisher_status.toUpperCase()}</span>
+								{/if}
+							</div>
+							{#if r.finisher_status === 'finished'}
+								<span class="time">{formatDuration(r.duration_s)}</span>
+								<span class="dist muted">{(r.distance_m / 1000).toFixed(2)} km</span>
+							{/if}
+						</li>
+					{/each}
+				</ol>
+			{/if}
+
+			{#if showResultPicker}
+				<div class="picker">
+					<h4>Attach a run</h4>
+					{#if runOptions.length === 0}
+						<p class="muted">No recent runs found. Record a run first.</p>
+					{:else}
+						<ul class="run-options">
+							{#each runOptions as run (run.id)}
+								<li>
+									<button
+										type="button"
+										class="run-option"
+										onclick={() => pickRunAsResult(run)}
+										disabled={submitting}
+									>
+										<span class="run-date">{formatRunDate(run.started_at)}</span>
+										<span class="run-dist">{(run.distance_m / 1000).toFixed(2)} km</span>
+										<span class="run-time">{formatDuration(run.duration_s)}</span>
+										<span class="run-kind muted">{run.activity_type}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<div class="picker-actions">
+						<button type="button" class="btn-link" onclick={() => recordNonFinish('dnf')} disabled={submitting}>Record DNF</button>
+						<button type="button" class="btn-link" onclick={() => recordNonFinish('dns')} disabled={submitting}>Record DNS</button>
+						<button type="button" class="btn-link" onclick={() => (showResultPicker = false)}>Cancel</button>
+					</div>
+				</div>
+			{/if}
+		</section>
 
 		<section class="card">
 			<h3>Attendees ({attendees.length})</h3>
@@ -765,5 +926,121 @@
 
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.results-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		margin-bottom: var(--space-sm);
+	}
+	.btn-primary-sm {
+		padding: 0.35rem 0.75rem;
+		font-size: 0.85rem;
+		border-radius: var(--radius-md);
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		font-weight: 600;
+	}
+	.btn-primary-sm:disabled { opacity: 0.6; }
+	.btn-link {
+		background: none;
+		border: none;
+		color: var(--color-primary);
+		cursor: pointer;
+		font-size: 0.85rem;
+		padding: 0.2rem 0.4rem;
+	}
+	.btn-link:hover { text-decoration: underline; }
+	.results {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.result {
+		display: grid;
+		grid-template-columns: 2rem 1.8rem 1fr auto auto;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.35rem 0.5rem;
+		border-radius: var(--radius-md);
+	}
+	.result.me {
+		background: var(--color-primary-light);
+	}
+	.result .rank {
+		font-weight: 700;
+		color: var(--color-primary);
+		text-align: center;
+		font-variant-numeric: tabular-nums;
+	}
+	.res-info {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-width: 0;
+	}
+	.res-info strong {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.you {
+		color: var(--color-text-tertiary);
+		font-size: 0.8rem;
+	}
+	.dnf-tag {
+		background: var(--color-danger-light);
+		color: var(--color-danger);
+		font-size: 0.7rem;
+		font-weight: 700;
+		padding: 0.1rem 0.35rem;
+		border-radius: var(--radius-sm);
+		letter-spacing: 0.04em;
+	}
+	.time {
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+	.dist {
+		font-size: 0.8rem;
+	}
+	.picker {
+		margin-top: var(--space-lg);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+	}
+	.run-options {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.run-option {
+		display: grid;
+		grid-template-columns: 1fr auto auto auto;
+		gap: 0.6rem;
+		align-items: center;
+		width: 100%;
+		padding: 0.5rem 0.6rem;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		font-size: 0.85rem;
+		text-align: left;
+	}
+	.run-option:hover { border-color: var(--color-primary); }
+	.picker-actions {
+		display: flex;
+		gap: 0.4rem;
+		margin-top: var(--space-md);
 	}
 </style>

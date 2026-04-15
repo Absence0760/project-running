@@ -198,6 +198,66 @@ export type Database = {
           },
         ]
       }
+      event_results: {
+        Row: {
+          age_grade_pct: number | null
+          created_at: string
+          distance_m: number
+          duration_s: number
+          event_id: string
+          finisher_status: string
+          instance_start: string
+          note: string | null
+          rank: number | null
+          run_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          age_grade_pct?: number | null
+          created_at?: string
+          distance_m: number
+          duration_s: number
+          event_id: string
+          finisher_status?: string
+          instance_start: string
+          note?: string | null
+          rank?: number | null
+          run_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          age_grade_pct?: number | null
+          created_at?: string
+          distance_m?: number
+          duration_s?: number
+          event_id?: string
+          finisher_status?: string
+          instance_start?: string
+          note?: string | null
+          rank?: number | null
+          run_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_results_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_results_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           capacity: number | null
@@ -516,6 +576,7 @@ export type Database = {
           created_at: string | null
           distance_m: number
           duration_s: number
+          event_id: string | null
           external_id: string | null
           id: string
           is_public: boolean | null
@@ -531,6 +592,7 @@ export type Database = {
           created_at?: string | null
           distance_m: number
           duration_s: number
+          event_id?: string | null
           external_id?: string | null
           id?: string
           is_public?: boolean | null
@@ -546,6 +608,7 @@ export type Database = {
           created_at?: string | null
           distance_m?: number
           duration_s?: number
+          event_id?: string | null
           external_id?: string | null
           id?: string
           is_public?: boolean | null
@@ -558,6 +621,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "runs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "runs_route_id_fkey"
             columns: ["route_id"]
@@ -759,6 +829,10 @@ export type Database = {
           best_time_s: number
           distance: string
         }[]
+      }
+      recompute_event_ranks: {
+        Args: { p_event_id: string; p_instance_start: string }
+        Returns: undefined
       }
       weekly_mileage: {
         Args: { weeks_back?: number }

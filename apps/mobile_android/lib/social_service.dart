@@ -74,6 +74,53 @@ class AttendeeView {
   });
 }
 
+/// Minimal projection of a `runs` row used by the event-result picker.
+/// Deliberately smaller than the full [Run] domain class — we don't need
+/// the track or pace, just enough to identify the run in a list.
+class RecentRunRow {
+  final String id;
+  final DateTime startedAt;
+  final int durationS;
+  final double distanceM;
+  final String activityType;
+  const RecentRunRow({
+    required this.id,
+    required this.startedAt,
+    required this.durationS,
+    required this.distanceM,
+    required this.activityType,
+  });
+}
+
+/// One row on the event leaderboard. `rank` is null for DNF/DNS and for
+/// newly inserted finishers that the server-side rerank trigger hasn't
+/// caught up on — UIs render null as an em-dash.
+class EventResultView {
+  final String userId;
+  final String? displayName;
+  final String? runId;
+  final int durationS;
+  final double distanceM;
+  final int? rank;
+  final String finisherStatus;
+  final double? ageGradePct;
+  final String? note;
+  final DateTime createdAt;
+
+  const EventResultView({
+    required this.userId,
+    required this.displayName,
+    required this.runId,
+    required this.durationS,
+    required this.distanceM,
+    required this.rank,
+    required this.finisherStatus,
+    required this.ageGradePct,
+    required this.note,
+    required this.createdAt,
+  });
+}
+
 /// All Supabase calls for the social layer. Instances are notifier-backed so
 /// the screens can subscribe to refresh events (joined a club, posted an
 /// update, RSVP'd) without threading callbacks. One instance per app.
@@ -390,6 +437,139 @@ class SocialService extends ChangeNotifier {
           displayName: byId[a['user_id']],
         ),
     ];
+  }
+
+  // ─────────────────────── Event results ───────────────────────
+
+  /// Leaderboard for a single (event, instance). Results come back
+  /// pre-ordered by the DB — finishers ascending by `rank`, then
+  /// DNF/DNS rows last in insert order.
+  Future<List<EventResultView>> fetchEventResults(
+    String eventId,
+    DateTime instance,
+  ) async {
+    final rows = await _c
+        .from('event_results')
+        .select()
+        .eq('event_id', eventId)
+        .eq('instance_start', instance.toIso8601String())
+        .order('rank', ascending: true, nullsFirst: false)
+        .order('created_at', ascending: true);
+    final results = (rows as List).cast<Map<String, dynamic>>();
+    if (results.isEmpty) return const [];
+    final ids = results.map((r) => r['user_id'] as String).toList();
+    final profiles = await _c
+        .from('user_profiles')
+        .select('id, display_name')
+        .inFilter('id', ids);
+    final byId = <String, String?>{};
+    for (final p in profiles as List) {
+      byId[(p as Map)['id'] as String] = p['display_name'] as String?;
+    }
+    return [
+      for (final r in results)
+        EventResultView(
+          userId: r['user_id'] as String,
+          displayName: byId[r['user_id']],
+          runId: r['run_id'] as String?,
+          durationS: (r['duration_s'] as num).toInt(),
+          distanceM: (r['distance_m'] as num).toDouble(),
+          rank: r['rank'] as int?,
+          finisherStatus: r['finisher_status'] as String,
+          ageGradePct: (r['age_grade_pct'] as num?)?.toDouble(),
+          note: r['note'] as String?,
+          createdAt: DateTime.parse(r['created_at'] as String),
+        ),
+    ];
+  }
+
+  /// Submit or overwrite the current user's result for an event instance.
+  /// Either [runId] + [durationS] + [distanceM] (attach an existing run)
+  /// or [durationS] + [distanceM] alone (manual entry). Pass
+  /// [finisherStatus] = `'dnf'` / `'dns'` to record a non-finish.
+  ///
+  /// Also stamps `runs.event_id` when [runId] is supplied so the run
+  /// detail page can link back to the event.
+  Future<void> submitEventResult({
+    required String eventId,
+    required DateTime instance,
+    required int durationS,
+    required double distanceM,
+    String? runId,
+    String finisherStatus = 'finished',
+    double? ageGradePct,
+    String? note,
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+    await _c.from('event_results').upsert(
+      {
+        'event_id': eventId,
+        'instance_start': instance.toIso8601String(),
+        'user_id': uid,
+        if (runId != null) 'run_id': runId,
+        'duration_s': durationS,
+        'distance_m': distanceM,
+        'finisher_status': finisherStatus,
+        if (ageGradePct != null) 'age_grade_pct': ageGradePct,
+        if (note != null) 'note': note,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict: 'event_id,instance_start,user_id',
+    );
+    if (runId != null) {
+      // Best-effort back-link. If the run isn't owned by this user
+      // (shouldn't happen via this UI path, but RLS would block it
+      // anyway) we swallow the error — the result row still exists.
+      try {
+        await _c
+            .from('runs')
+            .update({'event_id': eventId})
+            .eq('id', runId)
+            .eq('user_id', uid);
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  /// Recent runs for the current user, newest first. Used by the Submit
+  /// Time flow to let users attach an existing run to an event. Kept on
+  /// SocialService (rather than a per-screen fetcher) so the event
+  /// detail screen doesn't need a direct [LocalRunStore] dependency.
+  Future<List<RecentRunRow>> fetchRecentRuns({int limit = 20}) async {
+    final uid = _uid;
+    if (uid == null) return const [];
+    final rows = await _c
+        .from('runs')
+        .select('id, started_at, duration_s, distance_m, metadata')
+        .eq('user_id', uid)
+        .order('started_at', ascending: false)
+        .limit(limit);
+    return [
+      for (final r in (rows as List).cast<Map<String, dynamic>>())
+        RecentRunRow(
+          id: r['id'] as String,
+          startedAt: DateTime.parse(r['started_at'] as String),
+          durationS: (r['duration_s'] as num).toInt(),
+          distanceM: (r['distance_m'] as num).toDouble(),
+          activityType: (r['metadata'] is Map
+                  ? (r['metadata'] as Map)['activity_type']
+                  : null) as String? ??
+              'run',
+        ),
+    ];
+  }
+
+  Future<void> removeEventResult(String eventId, DateTime instance) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _c
+        .from('event_results')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('instance_start', instance.toIso8601String())
+        .eq('user_id', uid);
+    notifyListeners();
   }
 
   // ─────────────────────── Club posts ───────────────────────

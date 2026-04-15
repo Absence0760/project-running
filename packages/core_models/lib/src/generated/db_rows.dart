@@ -220,6 +220,82 @@ class EventAttendeeRow {
   };
 }
 
+/// Row shape for the `event_results` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class EventResultRow {
+  static const String table = 'event_results';
+  static const String colEventId = 'event_id';
+  static const String colInstanceStart = 'instance_start';
+  static const String colUserId = 'user_id';
+  static const String colRunId = 'run_id';
+  static const String colDurationS = 'duration_s';
+  static const String colDistanceM = 'distance_m';
+  static const String colRank = 'rank';
+  static const String colFinisherStatus = 'finisher_status';
+  static const String colAgeGradePct = 'age_grade_pct';
+  static const String colNote = 'note';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String eventId;
+  final DateTime instanceStart;
+  final String userId;
+  final String? runId;
+  final int durationS;
+  final double distanceM;
+  final int? rank;
+  final String finisherStatus;
+  final double? ageGradePct;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const EventResultRow({
+    required this.eventId,
+    required this.instanceStart,
+    required this.userId,
+    this.runId,
+    required this.durationS,
+    required this.distanceM,
+    this.rank,
+    required this.finisherStatus,
+    this.ageGradePct,
+    this.note,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory EventResultRow.fromJson(Map<String, dynamic> json) => EventResultRow(
+    eventId: json['event_id'] as String,
+    instanceStart: DateTime.parse(json['instance_start'] as String),
+    userId: json['user_id'] as String,
+    runId: json['run_id'] as String?,
+    durationS: (json['duration_s'] as num).toInt(),
+    distanceM: (json['distance_m'] as num).toDouble(),
+    rank: (json['rank'] as num?)?.toInt(),
+    finisherStatus: json['finisher_status'] as String,
+    ageGradePct: (json['age_grade_pct'] as num?)?.toDouble(),
+    note: json['note'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colEventId: eventId,
+    colInstanceStart: instanceStart.toIso8601String(),
+    colUserId: userId,
+    colRunId: runId,
+    colDurationS: durationS,
+    colDistanceM: distanceM,
+    colRank: rank,
+    colFinisherStatus: finisherStatus,
+    colAgeGradePct: ageGradePct,
+    colNote: note,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `events` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class EventRow {
@@ -688,6 +764,7 @@ class RunRow {
   static const String colUpdatedAt = 'updated_at';
   static const String colTrackUrl = 'track_url';
   static const String colIsPublic = 'is_public';
+  static const String colEventId = 'event_id';
 
   final String id;
   final String userId;
@@ -702,6 +779,7 @@ class RunRow {
   final DateTime? updatedAt;
   final String? trackUrl;
   final bool? isPublic;
+  final String? eventId;
 
   const RunRow({
     required this.id,
@@ -717,6 +795,7 @@ class RunRow {
     this.updatedAt,
     this.trackUrl,
     this.isPublic,
+    this.eventId,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -733,6 +812,7 @@ class RunRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     trackUrl: json['track_url'] as String?,
     isPublic: json['is_public'] as bool?,
+    eventId: json['event_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -749,6 +829,7 @@ class RunRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colTrackUrl: trackUrl,
     colIsPublic: isPublic,
+    colEventId: eventId,
   };
 }
 
