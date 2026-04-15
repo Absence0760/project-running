@@ -47,7 +47,18 @@ const _pgToDart = <String, String>{
 // Tables to emit. Internal auth / storage tables are referenced via FKs but
 // we don't own them. Materialized views are excluded — the `views` section
 // of `Database` in TypeScript covers them and mobile doesn't query them.
-const _tables = <String>{'runs', 'routes', 'integrations', 'user_profiles', 'route_reviews'};
+const _tables = <String>{
+  'runs',
+  'routes',
+  'integrations',
+  'user_profiles',
+  'route_reviews',
+  'clubs',
+  'club_members',
+  'events',
+  'event_attendees',
+  'club_posts',
+};
 
 class _Column {
   _Column(this.name, this.pgType, this.nullable, this.waypointJsonb);

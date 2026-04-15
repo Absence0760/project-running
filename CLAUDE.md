@@ -17,6 +17,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |
 | Understanding an end-to-end user journey | [docs/flows.md](docs/flows.md) — sign-in, record, sync, spectator |
 | Adding a test | [docs/testing.md](docs/testing.md) — what's covered, patterns, how to run |
+| Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
 | Running one of the apps locally | [docs/local_testing_*.md](docs/) — one per platform |
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |

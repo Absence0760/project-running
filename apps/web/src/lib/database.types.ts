@@ -34,6 +34,217 @@ export type Database = {
   }
   public: {
     Tables: {
+      club_members: {
+        Row: {
+          club_id: string
+          joined_at: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          club_id: string
+          joined_at?: string | null
+          role?: string
+          user_id: string
+        }
+        Update: {
+          club_id?: string
+          joined_at?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_members_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      club_posts: {
+        Row: {
+          author_id: string
+          body: string
+          club_id: string
+          created_at: string | null
+          event_id: string | null
+          id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          club_id: string
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          club_id?: string
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_posts_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "club_posts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clubs: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_public: boolean | null
+          location_label: string | null
+          name: string
+          owner_id: string
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          location_label?: string | null
+          name: string
+          owner_id: string
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          location_label?: string | null
+          name?: string
+          owner_id?: string
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      event_attendees: {
+        Row: {
+          event_id: string
+          joined_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          event_id: string
+          joined_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          event_id?: string
+          joined_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_attendees_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          capacity: number | null
+          club_id: string
+          created_at: string | null
+          created_by: string
+          description: string | null
+          distance_m: number | null
+          duration_min: number | null
+          id: string
+          meet_label: string | null
+          meet_lat: number | null
+          meet_lng: number | null
+          pace_target_sec: number | null
+          route_id: string | null
+          starts_at: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          capacity?: number | null
+          club_id: string
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          distance_m?: number | null
+          duration_min?: number | null
+          id?: string
+          meet_label?: string | null
+          meet_lat?: number | null
+          meet_lng?: number | null
+          pace_target_sec?: number | null
+          route_id?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          capacity?: number | null
+          club_id?: string
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          distance_m?: number | null
+          duration_min?: number | null
+          id?: string
+          meet_label?: string | null
+          meet_lat?: number | null
+          meet_lng?: number | null
+          pace_target_sec?: number | null
+          route_id?: string | null
+          starts_at?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           access_token: string | null
@@ -264,6 +475,8 @@ export type Database = {
       }
     }
     Functions: {
+      is_club_admin: { Args: { target_club: string }; Returns: boolean }
+      is_club_member: { Args: { target_club: string }; Returns: boolean }
       nearby_routes: {
         Args: {
           lat: number

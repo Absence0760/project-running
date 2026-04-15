@@ -7,6 +7,11 @@ type RunRow = Database['public']['Tables']['runs']['Row'];
 type RouteRow = Database['public']['Tables']['routes']['Row'];
 type IntegrationRow = Database['public']['Tables']['integrations']['Row'];
 type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
+type ClubRow = Database['public']['Tables']['clubs']['Row'];
+type ClubMemberRow = Database['public']['Tables']['club_members']['Row'];
+type EventRow = Database['public']['Tables']['events']['Row'];
+type EventAttendeeRow = Database['public']['Tables']['event_attendees']['Row'];
+type ClubPostRow = Database['public']['Tables']['club_posts']['Row'];
 
 export interface TrackPoint {
 	lat: number;
@@ -57,3 +62,28 @@ export type RouteSurface = 'road' | 'trail' | 'mixed';
 export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';
 export type PreferredUnit = 'km' | 'mi';
 export type SubscriptionTier = 'free' | 'premium';
+
+export type ClubRole = 'owner' | 'admin' | 'member';
+export type RsvpStatus = 'going' | 'maybe' | 'declined';
+
+export type Club = Omit<ClubRow, never>;
+export type ClubMember = Omit<ClubMemberRow, 'role'> & { role: ClubRole };
+export type Event = Omit<EventRow, never>;
+export type EventAttendee = Omit<EventAttendeeRow, 'status'> & { status: RsvpStatus };
+export type ClubPost = Omit<ClubPostRow, never>;
+
+/** Shape returned by club list/detail queries — member count + current-user membership. */
+export type ClubWithMeta = Club & {
+	member_count: number;
+	viewer_role: ClubRole | null;
+};
+
+export type EventWithMeta = Event & {
+	attendee_count: number;
+	viewer_rsvp: RsvpStatus | null;
+};
+
+export type ClubPostWithAuthor = ClubPost & {
+	author_display_name: string | null;
+	author_avatar_url: string | null;
+};

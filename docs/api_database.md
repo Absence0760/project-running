@@ -163,6 +163,77 @@ create table user_profiles (
 );
 ```
 
+### `clubs` / `club_members` / `events` / `event_attendees` / `club_posts`
+
+The social layer. See `docs/clubs.md` for surfaces and `docs/roadmap.md § Clubs and events` for phasing. Added in `20260416_001_clubs_and_events.sql`.
+
+```sql
+create table clubs (
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid references auth.users not null,
+  name          text not null,
+  slug          text unique not null,                 -- URL-safe, generated from name
+  description   text,
+  avatar_url    text,
+  location_label text,                                -- freeform "Austin, TX" — no geo yet
+  is_public     boolean default true,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+create table club_members (
+  club_id     uuid references clubs on delete cascade not null,
+  user_id     uuid references auth.users on delete cascade not null,
+  role        text not null default 'member',         -- 'owner' | 'admin' | 'member'
+  joined_at   timestamptz default now(),
+  primary key (club_id, user_id)
+);
+
+-- One-off events. Recurrence is Phase 2 (see roadmap).
+create table events (
+  id              uuid primary key default gen_random_uuid(),
+  club_id         uuid references clubs on delete cascade not null,
+  title           text not null,
+  description     text,
+  starts_at       timestamptz not null,
+  duration_min    integer,
+  meet_lat        double precision,
+  meet_lng        double precision,
+  meet_label      text,
+  route_id        uuid references routes on delete set null,
+  distance_m      numeric(10, 2),
+  pace_target_sec integer,                            -- seconds per km
+  capacity        integer,
+  created_by      uuid references auth.users not null,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
+);
+
+create table event_attendees (
+  event_id   uuid references events on delete cascade not null,
+  user_id    uuid references auth.users on delete cascade not null,
+  status     text not null default 'going',            -- 'going' | 'maybe' | 'declined'
+  joined_at  timestamptz default now(),
+  primary key (event_id, user_id)
+);
+
+-- Owner/admin broadcast updates. event_id is optional — posts can be
+-- pinned to a specific event (shows on the event page) or general (shows on
+-- the club feed only).
+create table club_posts (
+  id          uuid primary key default gen_random_uuid(),
+  club_id     uuid references clubs on delete cascade not null,
+  event_id    uuid references events on delete cascade,
+  author_id   uuid references auth.users not null,
+  body        text not null,
+  created_at  timestamptz default now()
+);
+```
+
+**Helper functions** (RLS readability): `is_club_member(club_id)` and `is_club_admin(club_id)` — `security definer` functions that encapsulate the `club_members` lookup so every policy below can read cleanly. A trigger auto-enrolls the owner as an `owner`-role member on club insert, so the helpers work uniformly for owners too.
+
+**Narrow unions** (client-side, no DB CHECK): `ClubRole = 'owner' | 'admin' | 'member'`, `RsvpStatus = 'going' | 'maybe' | 'declined'`. See `apps/web/src/lib/types.ts`.
+
 ---
 
 ## Row-level security
@@ -219,6 +290,15 @@ create policy "users manage their own reviews"
   on route_reviews for all to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- clubs: public clubs readable by anyone; private clubs readable only by
+-- members (+ owner). Only authenticated users can create. Updates/deletes
+-- gated by is_club_admin and owner_id respectively.
+alter table clubs enable row level security;
+-- events, event_attendees, club_posts inherit visibility from the parent
+-- club. Admin-only inserts for events and posts. Users manage their own RSVP
+-- row and leave their own club membership row. See
+-- 20260416_001_clubs_and_events.sql for the full set.
 ```
 
 ---

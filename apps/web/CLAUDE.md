@@ -32,6 +32,11 @@ src/
     routes/         # User's saved routes
     routes/new/     # Route builder (MapLibre + OSRM)
     routes/[id]/    # Route detail
+    clubs/          # Social layer — browse + My clubs
+    clubs/new/      # Create a club
+    clubs/[slug]/   # Club home: feed / events / members
+    clubs/[slug]/events/new/      # Admin: create event (one-off, Phase 1)
+    clubs/[slug]/events/[id]/     # Event detail + RSVP + per-event updates
     explore/        # Public route discovery (search, distance/surface filters)
     settings/       # Account, integrations, preferences
     share/run/[id]/ # Public run share page (no auth required)

@@ -6,6 +6,286 @@
 // Do not hand-edit. To add a column, add it to the SQL
 // migration, rerun the generator, and commit both files.
 
+/// Row shape for the `club_members` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ClubMemberRow {
+  static const String table = 'club_members';
+  static const String colClubId = 'club_id';
+  static const String colUserId = 'user_id';
+  static const String colRole = 'role';
+  static const String colJoinedAt = 'joined_at';
+
+  final String clubId;
+  final String userId;
+  final String role;
+  final DateTime? joinedAt;
+
+  const ClubMemberRow({
+    required this.clubId,
+    required this.userId,
+    required this.role,
+    this.joinedAt,
+  });
+
+  factory ClubMemberRow.fromJson(Map<String, dynamic> json) => ClubMemberRow(
+    clubId: json['club_id'] as String,
+    userId: json['user_id'] as String,
+    role: json['role'] as String,
+    joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colClubId: clubId,
+    colUserId: userId,
+    colRole: role,
+    colJoinedAt: joinedAt?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `club_posts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ClubPostRow {
+  static const String table = 'club_posts';
+  static const String colId = 'id';
+  static const String colClubId = 'club_id';
+  static const String colEventId = 'event_id';
+  static const String colAuthorId = 'author_id';
+  static const String colBody = 'body';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String clubId;
+  final String? eventId;
+  final String authorId;
+  final String body;
+  final DateTime? createdAt;
+
+  const ClubPostRow({
+    required this.id,
+    required this.clubId,
+    this.eventId,
+    required this.authorId,
+    required this.body,
+    this.createdAt,
+  });
+
+  factory ClubPostRow.fromJson(Map<String, dynamic> json) => ClubPostRow(
+    id: json['id'] as String,
+    clubId: json['club_id'] as String,
+    eventId: json['event_id'] as String?,
+    authorId: json['author_id'] as String,
+    body: json['body'] as String,
+    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colClubId: clubId,
+    colEventId: eventId,
+    colAuthorId: authorId,
+    colBody: body,
+    colCreatedAt: createdAt?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `clubs` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ClubRow {
+  static const String table = 'clubs';
+  static const String colId = 'id';
+  static const String colOwnerId = 'owner_id';
+  static const String colName = 'name';
+  static const String colSlug = 'slug';
+  static const String colDescription = 'description';
+  static const String colAvatarUrl = 'avatar_url';
+  static const String colLocationLabel = 'location_label';
+  static const String colIsPublic = 'is_public';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String ownerId;
+  final String name;
+  final String slug;
+  final String? description;
+  final String? avatarUrl;
+  final String? locationLabel;
+  final bool? isPublic;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const ClubRow({
+    required this.id,
+    required this.ownerId,
+    required this.name,
+    required this.slug,
+    this.description,
+    this.avatarUrl,
+    this.locationLabel,
+    this.isPublic,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
+    id: json['id'] as String,
+    ownerId: json['owner_id'] as String,
+    name: json['name'] as String,
+    slug: json['slug'] as String,
+    description: json['description'] as String?,
+    avatarUrl: json['avatar_url'] as String?,
+    locationLabel: json['location_label'] as String?,
+    isPublic: json['is_public'] as bool?,
+    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colOwnerId: ownerId,
+    colName: name,
+    colSlug: slug,
+    colDescription: description,
+    colAvatarUrl: avatarUrl,
+    colLocationLabel: locationLabel,
+    colIsPublic: isPublic,
+    colCreatedAt: createdAt?.toIso8601String(),
+    colUpdatedAt: updatedAt?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `event_attendees` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class EventAttendeeRow {
+  static const String table = 'event_attendees';
+  static const String colEventId = 'event_id';
+  static const String colUserId = 'user_id';
+  static const String colStatus = 'status';
+  static const String colJoinedAt = 'joined_at';
+
+  final String eventId;
+  final String userId;
+  final String status;
+  final DateTime? joinedAt;
+
+  const EventAttendeeRow({
+    required this.eventId,
+    required this.userId,
+    required this.status,
+    this.joinedAt,
+  });
+
+  factory EventAttendeeRow.fromJson(Map<String, dynamic> json) => EventAttendeeRow(
+    eventId: json['event_id'] as String,
+    userId: json['user_id'] as String,
+    status: json['status'] as String,
+    joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colEventId: eventId,
+    colUserId: userId,
+    colStatus: status,
+    colJoinedAt: joinedAt?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `events` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class EventRow {
+  static const String table = 'events';
+  static const String colId = 'id';
+  static const String colClubId = 'club_id';
+  static const String colTitle = 'title';
+  static const String colDescription = 'description';
+  static const String colStartsAt = 'starts_at';
+  static const String colDurationMin = 'duration_min';
+  static const String colMeetLat = 'meet_lat';
+  static const String colMeetLng = 'meet_lng';
+  static const String colMeetLabel = 'meet_label';
+  static const String colRouteId = 'route_id';
+  static const String colDistanceM = 'distance_m';
+  static const String colPaceTargetSec = 'pace_target_sec';
+  static const String colCapacity = 'capacity';
+  static const String colCreatedBy = 'created_by';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String clubId;
+  final String title;
+  final String? description;
+  final DateTime startsAt;
+  final int? durationMin;
+  final double? meetLat;
+  final double? meetLng;
+  final String? meetLabel;
+  final String? routeId;
+  final double? distanceM;
+  final int? paceTargetSec;
+  final int? capacity;
+  final String createdBy;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const EventRow({
+    required this.id,
+    required this.clubId,
+    required this.title,
+    this.description,
+    required this.startsAt,
+    this.durationMin,
+    this.meetLat,
+    this.meetLng,
+    this.meetLabel,
+    this.routeId,
+    this.distanceM,
+    this.paceTargetSec,
+    this.capacity,
+    required this.createdBy,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory EventRow.fromJson(Map<String, dynamic> json) => EventRow(
+    id: json['id'] as String,
+    clubId: json['club_id'] as String,
+    title: json['title'] as String,
+    description: json['description'] as String?,
+    startsAt: DateTime.parse(json['starts_at'] as String),
+    durationMin: (json['duration_min'] as num?)?.toInt(),
+    meetLat: (json['meet_lat'] as num?)?.toDouble(),
+    meetLng: (json['meet_lng'] as num?)?.toDouble(),
+    meetLabel: json['meet_label'] as String?,
+    routeId: json['route_id'] as String?,
+    distanceM: (json['distance_m'] as num?)?.toDouble(),
+    paceTargetSec: (json['pace_target_sec'] as num?)?.toInt(),
+    capacity: (json['capacity'] as num?)?.toInt(),
+    createdBy: json['created_by'] as String,
+    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colClubId: clubId,
+    colTitle: title,
+    colDescription: description,
+    colStartsAt: startsAt.toIso8601String(),
+    colDurationMin: durationMin,
+    colMeetLat: meetLat,
+    colMeetLng: meetLng,
+    colMeetLabel: meetLabel,
+    colRouteId: routeId,
+    colDistanceM: distanceM,
+    colPaceTargetSec: paceTargetSec,
+    colCapacity: capacity,
+    colCreatedBy: createdBy,
+    colCreatedAt: createdAt?.toIso8601String(),
+    colUpdatedAt: updatedAt?.toIso8601String(),
+  };
+}
+
 /// Row shape for the `integrations` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class IntegrationRow {
