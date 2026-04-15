@@ -36,7 +36,10 @@
 	function defaultDate(): string {
 		const d = new Date();
 		d.setDate(d.getDate() + 1);
-		return d.toISOString().slice(0, 10);
+		// Local-tz yyyy-mm-dd; `toISOString` would give UTC which is off by
+		// a day for any viewer not on UTC near midnight.
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 	}
 
 	onMount(async () => {

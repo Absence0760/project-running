@@ -10,7 +10,8 @@
 		fmtHms,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
-		parseISO
+		parseISO,
+		todayISO
 	} from '$lib/training';
 	import type { TrainingPlan, PlanWeek, PlanWorkout } from '$lib/types';
 
@@ -42,7 +43,7 @@
 		return m;
 	});
 
-	let today = $derived(new Date().toISOString().slice(0, 10));
+	let today = $derived(todayISO());
 
 	let todayWorkout = $derived(
 		workouts.find((w) => w.scheduled_date === today) ?? null
@@ -92,6 +93,17 @@
 			<span class="material-symbols">arrow_back</span>
 			All plans
 		</a>
+
+		{#if Array.isArray(plan.rules) && plan.rules.length > 0}
+			<aside class="rules-card">
+				<h3>Rules</h3>
+				<ul>
+					{#each plan.rules as r}
+						<li>{r}</li>
+					{/each}
+				</ul>
+			</aside>
+		{/if}
 
 		<header class="hero">
 			<div>
@@ -471,6 +483,28 @@
 		letter-spacing: 0.08em;
 		color: var(--color-text-secondary);
 		margin: 0 0 var(--space-sm) 0;
+	}
+	.rules-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.rules-card h3 {
+		font-size: 0.78rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-text-tertiary);
+		margin-bottom: 0.4rem;
+	}
+	.rules-card ul {
+		margin: 0;
+		padding-left: 1.1rem;
+	}
+	.rules-card li {
+		margin-bottom: 0.2rem;
+		font-size: 0.92rem;
 	}
 	.centered {
 		text-align: center;

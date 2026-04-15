@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../training.dart';
 import '../training_service.dart';
@@ -51,27 +52,43 @@ class _PlansScreenState extends State<PlansScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final signedIn = Supabase.instance.client.auth.currentUser != null;
+    // Samsung devices with the 3-button nav bar report a bottom viewPadding
+    // the Scaffold does NOT automatically pad FABs for (that auto-pad only
+    // applies when a bottomNavigationBar is present). Apply it manually.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(title: const Text('Training plans')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => PlanNewScreen(training: widget.training),
-            ),
-          );
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('New plan'),
-      ),
-      body: _loading
+      floatingActionButton: signedIn
+          ? Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: FloatingActionButton.extended(
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          PlanNewScreen(training: widget.training),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('New plan'),
+              ),
+            )
+          : null,
+      body: !signedIn
+          ? const _SignInPrompt()
+          : _loading
           ? const Center(child: CircularProgressIndicator())
           : _plans.isEmpty
               ? _Empty()
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                    // Bottom padding = FAB clearance (80) + system nav
+                    // inset so the last card isn't trapped behind either.
+                    padding: EdgeInsets.fromLTRB(
+                      16, 12, 16, 80 + bottomInset),
                     itemCount: _plans.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, i) {
@@ -251,6 +268,39 @@ class _PlanTile extends StatelessWidget {
               color: theme.colorScheme.outline,
             )),
       ],
+    );
+  }
+}
+
+class _SignInPrompt extends StatelessWidget {
+  const _SignInPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_outline, size: 48,
+                color: theme.colorScheme.outline),
+            const SizedBox(height: 12),
+            Text('Sign in to use training plans',
+                style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Plans sync to your account so they follow you across devices. '
+              'Head to Settings → Sign in to connect.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

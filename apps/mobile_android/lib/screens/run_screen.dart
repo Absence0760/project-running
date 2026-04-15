@@ -921,58 +921,72 @@ class _RunScreenState extends State<RunScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    if (_planOverview?.todayWorkout != null &&
-                        _selectedRoute == null)
-                      TodaysWorkoutCard(
-                        overview: _planOverview!,
-                        onTap: () async {
-                          final overview = _planOverview!;
-                          await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => WorkoutDetailScreen(
-                                training: widget.training,
-                                planId: overview.plan.id,
-                                workoutId: overview.todayWorkout!.id,
-                              ),
-                            ),
-                          );
-                          _refreshPlanOverview();
-                        },
-                      )
-                    else if (_upcomingEvent != null && _selectedRoute == null)
-                      UpcomingEventCard(
-                        event: _upcomingEvent!,
-                        onTap: () async {
-                          final evt = _upcomingEvent!;
-                          // Resolve the slug so the event-detail back button
-                          // leads somewhere sensible.
-                          final clubs = await widget.social.fetchMyClubs();
-                          final match = clubs
-                              .where((c) => c.row.id == evt.row.clubId)
-                              .toList();
-                          if (!mounted) return;
-                          final slug = match.isEmpty
-                              ? null
-                              : match.first.row.slug;
-                          if (slug == null) return;
-                          await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => EventDetailScreen(
-                                social: widget.social,
-                                clubSlug: slug,
-                                eventId: evt.row.id,
-                              ),
-                            ),
-                          );
-                          _refreshUpcomingEvent();
-                        },
-                      )
-                    else if (_selectedRoute != null)
+                    // Priority-card *stack* (previously a pick-one chain).
+                    // When the user has multiple signals active — an RSVP
+                    // event tomorrow, a plan workout today, and a recent
+                    // run — showing them together fills the space that
+                    // was sitting empty between the chips and the START
+                    // button. If a route is selected for this specific
+                    // run, suppress the social/plan cards and show only
+                    // the route preview since that's the active context.
+                    if (_selectedRoute != null)
                       _RoutePreviewCard(route: _selectedRoute!)
-                    else if (lastRun != null)
-                      _LastRunCard(run: lastRun)
-                    else
-                      _FirstRunPrompt(theme: theme),
+                    else ...[
+                      if (_upcomingEvent != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: UpcomingEventCard(
+                            event: _upcomingEvent!,
+                            onTap: () async {
+                              final evt = _upcomingEvent!;
+                              final clubs = await widget.social.fetchMyClubs();
+                              final match = clubs
+                                  .where((c) => c.row.id == evt.row.clubId)
+                                  .toList();
+                              if (!mounted) return;
+                              final slug = match.isEmpty
+                                  ? null
+                                  : match.first.row.slug;
+                              if (slug == null) return;
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => EventDetailScreen(
+                                    social: widget.social,
+                                    clubSlug: slug,
+                                    eventId: evt.row.id,
+                                  ),
+                                ),
+                              );
+                              _refreshUpcomingEvent();
+                            },
+                          ),
+                        ),
+                      if (_planOverview?.todayWorkout != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TodaysWorkoutCard(
+                            overview: _planOverview!,
+                            onTap: () async {
+                              final overview = _planOverview!;
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => WorkoutDetailScreen(
+                                    training: widget.training,
+                                    planId: overview.plan.id,
+                                    workoutId: overview.todayWorkout!.id,
+                                  ),
+                                ),
+                              );
+                              _refreshPlanOverview();
+                            },
+                          ),
+                        ),
+                      if (lastRun != null)
+                        _LastRunCard(run: lastRun)
+                      else if (_upcomingEvent == null &&
+                          _planOverview?.todayWorkout == null)
+                        _FirstRunPrompt(theme: theme),
+                    ],
                   ],
                 ),
                 Padding(

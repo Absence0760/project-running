@@ -28,11 +28,30 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	/** Pull a sensible message out of whatever the supabase / fetch layer
+	 * throws. PostgrestError is a plain object with `.message`, `.code`,
+	 * `.details`, `.hint` — `instanceof Error` is false for those. */
+	function describeError(e: unknown): string {
+		if (e instanceof Error) return e.message;
+		if (e && typeof e === 'object') {
+			const obj = e as { message?: unknown; code?: unknown; details?: unknown };
+			const parts: string[] = [];
+			if (typeof obj.message === 'string') parts.push(obj.message);
+			if (typeof obj.code === 'string') parts.push(`(${obj.code})`);
+			if (typeof obj.details === 'string') parts.push(obj.details);
+			if (parts.length) return parts.join(' ');
+		}
+		return 'Failed to create plan. Check the browser console for details.';
+	}
+
 	function defaultStart(): string {
 		const d = new Date();
 		d.setDate(d.getDate() + 7);
 		d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); // next Sunday
-		return d.toISOString().slice(0, 10);
+		// Local-tz yyyy-mm-dd; `toISOString` would give UTC which is off by
+		// a day for any viewer not on UTC near midnight.
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 	}
 
 	let goalDistance = $derived(
@@ -93,7 +112,8 @@
 			});
 			goto(`/plans/${plan.id}`);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to create plan';
+			error = describeError(e);
+			console.error('Plan create failed', e);
 		} finally {
 			busy = false;
 		}

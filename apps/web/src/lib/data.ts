@@ -1022,7 +1022,10 @@ export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | nu
 		.maybeSingle();
 	if (!plan) return null;
 	const { weeks, workouts } = await fetchPlan(plan.id);
-	const today = new Date().toISOString().slice(0, 10);
+	// Local-tz today — `toISOString().slice(0,10)` returns the UTC date,
+	// which rolls a calendar day early/late depending on the viewer's TZ.
+	const { todayISO } = await import('./training');
+	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
 	const completed = workouts.filter((w) => w.completed_run_id).length;
 	const total = workouts.filter((w) => w.kind !== 'rest').length;
@@ -1053,8 +1056,44 @@ export async function createTrainingPlan(input: {
 	notes?: string;
 	generated: GeneratedPlan;
 }): Promise<TrainingPlan> {
-	const userId = auth.user?.id;
-	if (!userId) throw new Error('Not authenticated');
+	// Read the id from the session directly rather than from the auth store.
+	// The store's `user` object is populated by a background profile fetch
+	// which races with "Create plan" — using the session avoids the
+	// spurious "Not authenticated" when the session is valid but the profile
+	// hasn't loaded.
+	const { data: { session } } = await supabase.auth.getSession();
+	const userId = session?.user?.id;
+	if (!userId) throw new Error('Please sign in to create a plan.');
+
+	// Pre-flight validation — every client-set invariant the DB enforces
+	// echoed here so the user gets a readable error instead of a raw
+	// PostgrestError 23xxx code.
+	if (!input.name.trim()) throw new Error('Name is required.');
+	if (!(input.goalDistanceM > 0)) throw new Error('Goal distance must be positive.');
+	if (input.daysPerWeek < 3 || input.daysPerWeek > 7) {
+		throw new Error('Days per week must be between 3 and 7.');
+	}
+	if (input.goalTimeSec != null && input.goalTimeSec <= 0) {
+		throw new Error('Goal time must be positive.');
+	}
+	if (input.recent5kSec != null && input.recent5kSec <= 0) {
+		throw new Error('Recent 5K time must be positive.');
+	}
+	if (!input.generated.weeks.length) {
+		throw new Error('Generated plan has no weeks.');
+	}
+	// Defence in depth for the null-kind bug we fixed in training.ts —
+	// if some future change lets a kindless workout escape the generator,
+	// catch it here instead of losing the context in a server-side 23502.
+	for (const w of input.generated.weeks) {
+		for (const wo of w.workouts) {
+			if (!wo.kind) {
+				throw new Error(
+					`Generator produced a workout with no kind (week ${w.week_index}, ${wo.scheduled_date}).`
+				);
+			}
+		}
+	}
 
 	// Auto-complete any existing active plan so the partial unique index
 	// (one-active-per-user) doesn't reject the insert.

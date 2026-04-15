@@ -16,6 +16,16 @@ class PlanNewScreen extends StatefulWidget {
 
 class _PlanNewScreenState extends State<PlanNewScreen> {
   final _nameCtrl = TextEditingController();
+  // Persistent controllers for the numeric fields — creating them inside
+  // build() (as the first pass did) resets the cursor every character and
+  // makes the boxes nearly unusable. State-owned + disposed below.
+  final _goalHoursCtrl = TextEditingController();
+  final _goalMinutesCtrl = TextEditingController();
+  final _goalSecondsCtrl = TextEditingController();
+  final _recent5kMinCtrl = TextEditingController();
+  final _recent5kSecCtrl = TextEditingController();
+  final _weekOverrideCtrl = TextEditingController();
+
   GoalEvent _goal = GoalEvent.distanceHalf;
   DateTime _startDate = _nextSunday();
   int _daysPerWeek = 4;
@@ -100,6 +110,12 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _goalHoursCtrl.dispose();
+    _goalMinutesCtrl.dispose();
+    _goalSecondsCtrl.dispose();
+    _recent5kMinCtrl.dispose();
+    _recent5kSecCtrl.dispose();
+    _weekOverrideCtrl.dispose();
     super.dispose();
   }
 
@@ -107,10 +123,14 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final preview = _preview();
+    // See plans_screen.dart — Samsung's 3-button nav bar isn't auto-padded
+    // on screens without a bottom nav. Include it in the ListView bottom
+    // padding so the Cancel/Create row sits above the system buttons.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(title: const Text('New plan')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 32 + bottomInset),
         children: [
           TextField(
             controller: _nameCtrl,
@@ -170,18 +190,21 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           Row(
             children: [
               Expanded(
-                child: _numField('h', _goalHours,
-                    (v) => setState(() => _goalHours = v), 0, 9),
+                child: _numField(
+                  _goalHoursCtrl, 'h',
+                  (v) => setState(() => _goalHours = v), 0, 9),
               ),
               const Text(' : '),
               Expanded(
-                child: _numField('m', _goalMinutes,
-                    (v) => setState(() => _goalMinutes = v), 0, 59),
+                child: _numField(
+                  _goalMinutesCtrl, 'm',
+                  (v) => setState(() => _goalMinutes = v), 0, 59),
               ),
               const Text(' : '),
               Expanded(
-                child: _numField('s', _goalSeconds,
-                    (v) => setState(() => _goalSeconds = v), 0, 59),
+                child: _numField(
+                  _goalSecondsCtrl, 's',
+                  (v) => setState(() => _goalSeconds = v), 0, 59),
               ),
             ],
           ),
@@ -190,13 +213,15 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           Row(
             children: [
               Expanded(
-                child: _numField('min', _recent5kMin,
-                    (v) => setState(() => _recent5kMin = v), 0, 59),
+                child: _numField(
+                  _recent5kMinCtrl, 'min',
+                  (v) => setState(() => _recent5kMin = v), 0, 59),
               ),
               const Text(' : '),
               Expanded(
-                child: _numField('sec', _recent5kSec,
-                    (v) => setState(() => _recent5kSec = v), 0, 59),
+                child: _numField(
+                  _recent5kSecCtrl, 'sec',
+                  (v) => setState(() => _recent5kSec = v), 0, 59),
               ),
             ],
           ),
@@ -209,8 +234,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ),
           const SizedBox(height: 16),
           _numField(
+            _weekOverrideCtrl,
             'Override total weeks',
-            _weekOverride,
             (v) => setState(() => _weekOverride = v),
             4,
             24,
@@ -369,18 +394,15 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   }
 
   Widget _numField(
+    TextEditingController controller,
     String hint,
-    int? value,
     void Function(int?) onChanged,
     int min,
     int max, {
     String? labelText,
   }) {
-    final ctrl = TextEditingController(text: value?.toString() ?? '');
-    ctrl.selection =
-        TextSelection.collapsed(offset: ctrl.text.length);
     return TextField(
-      controller: ctrl,
+      controller: controller,
       keyboardType: TextInputType.number,
       decoration: InputDecoration(
         labelText: labelText,

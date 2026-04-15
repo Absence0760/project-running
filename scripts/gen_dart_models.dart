@@ -12,8 +12,15 @@
 // Supported SQL subset (intentionally small — grow as the schema needs it):
 //   create table NAME ( col type [constraints], ... );
 //   alter table NAME add column COL TYPE [constraints];
+//   alter table NAME add column A TYPE, add column B TYPE;
 //   alter table NAME drop column COL;
 // Other statements (indexes, functions, RLS, storage, policies) are ignored.
+//
+// jsonb/json columns generate as `dynamic` since Postgres doesn't know the
+// shape. Callers narrow at the usage site (`as Map<String, dynamic>` /
+// `as List<dynamic>`). The `routes.waypoints` jsonb column is specifically
+// typed `List<Map<String, dynamic>>` via the `waypointJsonb` hint below —
+// add a similar hint if another jsonb column needs typed access.
 
 import 'dart:io';
 
@@ -40,8 +47,14 @@ const _pgToDart = <String, String>{
   'timestamp with time zone': 'DateTime',
   'timestamp without time zone': 'DateTime',
   'date': 'DateTime',
-  'jsonb': 'Map<String, dynamic>',
-  'json': 'Map<String, dynamic>',
+  // `jsonb` and `json` map to `dynamic` (not `Map<String, dynamic>`) because
+  // Postgres doesn't constrain the shape. Columns like `training_plans.rules`
+  // store arrays, which would crash a `json['rules'] as Map<String, dynamic>?`
+  // cast. `dynamic` lets both maps and arrays flow through; callers narrow
+  // locally (`as Map<String, dynamic>`, `as List<dynamic>`) where they need
+  // to. The waypoint-jsonb special-case below still produces a typed list.
+  'jsonb': 'dynamic',
+  'json': 'dynamic',
 };
 
 // Tables to emit. Internal auth / storage tables are referenced via FKs but
@@ -64,13 +77,17 @@ const _tables = <String>{
 };
 
 class _Column {
-  _Column(this.name, this.pgType, this.nullable, this.waypointJsonb);
+  _Column(this.name, this.pgType, this.nullable, this.waypointJsonb,
+      {this.isArray = false});
   final String name;
   final String pgType;
   bool nullable;
   // `routes.waypoints` is jsonb of TrackPoint[] — special-case it to
   // List<Map<String, dynamic>> so callers don't have to downcast.
   bool waypointJsonb;
+  /// Postgres array type — e.g. `text[]`. Emits `List<innerType>` and reads
+  /// the JSON value as a `List` rather than attempting a scalar cast.
+  bool isArray;
 }
 
 void main(List<String> args) {
@@ -237,10 +254,24 @@ void _parseAlterTable(String stmt, Map<String, Map<String, _Column>> schema) {
   final lower = rest.toLowerCase();
 
   if (lower.startsWith('add column')) {
-    final colPart = rest.substring('add column'.length).trim();
-    final col = _parseColumn(colPart);
-    if (col != null) {
-      schema.putIfAbsent(table, () => {})[col.name] = col;
+    // Supports both forms:
+    //   alter table t add column a int;
+    //   alter table t add column a int, add column b jsonb;
+    // Split on `add column` so each clause parses independently.
+    final clauses = rest
+        .split(RegExp(r',\s*add\s+column\s+', caseSensitive: false))
+        .map((s) => s.trim())
+        .toList();
+    // First element retains the leading "add column NAME TYPE …" — strip it.
+    clauses[0] = clauses[0].replaceFirst(
+      RegExp(r'^add\s+column\s+', caseSensitive: false),
+      '',
+    );
+    for (final colPart in clauses) {
+      final col = _parseColumn(colPart);
+      if (col != null) {
+        schema.putIfAbsent(table, () => {})[col.name] = col;
+      }
     }
   } else if (lower.startsWith('drop column')) {
     final name = rest
@@ -271,6 +302,10 @@ _Column? _parseColumn(String line) {
   final pgType = _extractType(remainder);
   if (pgType == null) return null;
 
+  // Detect `type[]` (Postgres array) — emit List<innerType> on the Dart side.
+  final isArray =
+      RegExp(r'\[\s*\]', caseSensitive: false).hasMatch(remainder);
+
   final hasNotNull = RegExp(r'\bnot\s+null\b', caseSensitive: false)
       .hasMatch(remainder);
   // Primary keys are implicitly NOT NULL in Postgres.
@@ -279,7 +314,7 @@ _Column? _parseColumn(String line) {
   final nullable = !hasNotNull && !isPrimaryKey;
 
   final waypointJsonb = name == 'waypoints' && pgType == 'jsonb';
-  return _Column(name, pgType, nullable, waypointJsonb);
+  return _Column(name, pgType, nullable, waypointJsonb, isArray: isArray);
 }
 
 String? _extractType(String remainder) {
@@ -374,13 +409,22 @@ void _emitClass(StringBuffer out, String table, Map<String, _Column> cols) {
 
 String _dartType(_Column c) {
   if (c.waypointJsonb) return 'List<Map<String, dynamic>>';
-  return _pgToDart[c.pgType] ?? 'dynamic';
+  final scalar = _pgToDart[c.pgType] ?? 'dynamic';
+  if (c.isArray) return 'List<$scalar>';
+  return scalar;
 }
 
 String _fromJsonExpr(_Column c) {
   final key = "json['${c.name}']";
   final dart = _dartType(c);
   final nullCast = c.nullable ? '?' : '';
+  if (c.isArray) {
+    // Postgres array — PostgREST returns a JSON array. Cast the whole value
+    // to List first, then narrow each element to the scalar Dart type.
+    final scalar = _pgToDart[c.pgType] ?? 'dynamic';
+    final body = '($key as List<dynamic>).cast<$scalar>()';
+    return c.nullable ? '$key == null ? null : $body' : body;
+  }
   switch (dart) {
     case 'String':
       return '$key as String$nullCast';
@@ -400,6 +444,9 @@ String _fromJsonExpr(_Column c) {
           : 'DateTime.parse($key as String)';
     case 'Map<String, dynamic>':
       return '$key as Map<String, dynamic>$nullCast';
+    case 'dynamic':
+      // Emit bare subscript — `dynamic` is already the result type.
+      return key;
     case 'List<Map<String, dynamic>>':
       final body = '($key as List<dynamic>).cast<Map<String, dynamic>>()';
       return c.nullable ? '$key == null ? null : $body' : body;

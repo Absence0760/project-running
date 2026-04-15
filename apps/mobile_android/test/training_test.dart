@@ -158,5 +158,40 @@ void main() {
       expect(plan.vdot, isNull);
       expect(plan.paces.easy > 0, isTrue);
     });
+
+    test(
+        'every generated workout has a non-null kind across goals and days/week',
+        () {
+      // The DB enforces NOT NULL on plan_workouts.kind. The TS twin has a
+      // regression test for the same invariant; keep both in sync so a
+      // future edit to either engine can't silently produce kind-less
+      // workouts (race week + sparse quality allocation were the trigger
+      // on the web side).
+      for (final combo in [
+        (GoalEvent.distance5k, 8),
+        (GoalEvent.distance10k, 12),
+        (GoalEvent.distanceHalf, 16),
+        (GoalEvent.distanceFull, 32),
+      ]) {
+        for (final dpw in [3, 4, 5, 6, 7]) {
+          final plan = generatePlan(GeneratePlanInput(
+            goalEvent: combo.$1,
+            startDate: DateTime(2026, 3, 30),
+            daysPerWeek: dpw,
+            goalTimeSec: 3 * 3600,
+            recent5kSec: 22 * 60,
+            weeks: combo.$2,
+          ));
+          for (final w in plan.weeks) {
+            for (final wo in w.workouts) {
+              // ignore: unnecessary_null_comparison — documents the invariant
+              expect(wo.kind, isNotNull,
+                  reason:
+                      'null kind in ${combo.$1} ${combo.$2}w × $dpw/wk at week ${w.weekIndex}');
+            }
+          }
+        }
+      }
+    });
   });
 }

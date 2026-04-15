@@ -111,11 +111,23 @@ class SocialService extends ChangeNotifier {
   }
 
   Future<ClubView?> fetchClubBySlug(String slug) async {
-    final row =
-        await _c.from('clubs').select().eq('slug', slug).maybeSingle();
-    if (row == null) return null;
-    final enriched = await _enrichClubs([row]);
-    return enriched.isEmpty ? null : enriched.first;
+    try {
+      final row =
+          await _c.from('clubs').select().eq('slug', slug).maybeSingle();
+      if (row == null) {
+        debugPrint('fetchClubBySlug: no row for slug=$slug');
+        return null;
+      }
+      final enriched = await _enrichClubs([row]);
+      if (enriched.isEmpty) {
+        debugPrint('fetchClubBySlug: enrichment returned empty (slug=$slug)');
+        return null;
+      }
+      return enriched.first;
+    } catch (e, s) {
+      debugPrint('fetchClubBySlug failed: $e\n$s');
+      rethrow;
+    }
   }
 
   Future<List<ClubView>> _enrichClubs(List<dynamic> rawRows) async {

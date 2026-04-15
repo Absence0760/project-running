@@ -149,7 +149,47 @@ class TrainingService extends ChangeNotifier {
     required GeneratedPlan generated,
   }) async {
     final uid = _uid;
-    if (uid == null) throw Exception('Not authenticated');
+    if (uid == null) {
+      throw Exception(
+        'Please sign in first — plans sync to your account.',
+      );
+    }
+
+    // Client-side validation mirroring the TS path. Cheaper to reject here
+    // with a readable message than to catch a PostgrestError 23xxx later.
+    if (name.trim().isEmpty) {
+      throw Exception('Name is required.');
+    }
+    if (goalDistanceM <= 0) {
+      throw Exception('Goal distance must be positive.');
+    }
+    if (daysPerWeek < 3 || daysPerWeek > 7) {
+      throw Exception('Days per week must be between 3 and 7.');
+    }
+    if (goalTimeSec != null && goalTimeSec <= 0) {
+      throw Exception('Goal time must be positive.');
+    }
+    if (recent5kSec != null && recent5kSec <= 0) {
+      throw Exception('Recent 5K time must be positive.');
+    }
+    if (generated.weeks.isEmpty) {
+      throw Exception('Generated plan has no weeks.');
+    }
+    // Defence in depth for the same class of generator bug we fixed in
+    // training.ts — catch any null kind before the DB rejects the insert.
+    for (final w in generated.weeks) {
+      for (final wo in w.workouts) {
+        // kind is non-nullable in Dart, but an uninitialised code path
+        // could still produce WorkoutKind.rest unintentionally; we rely on
+        // the non-null type rather than a null check here.
+        if (wo.scheduledDate.isBefore(DateTime(2000))) {
+          throw Exception(
+            'Generator produced a workout with no date (week ${w.weekIndex}).',
+          );
+        }
+      }
+    }
+
     await _c
         .from('training_plans')
         .update({'status': 'completed'})

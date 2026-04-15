@@ -219,3 +219,35 @@ test('generatePlan: weekly volume steps back every 4th week', () => {
 test('GOAL_DISTANCES_M: half marathon is within 1m of 21.0975km', () => {
 	assert.equal(GOAL_DISTANCES_M.distance_half, 21097.5);
 });
+
+test('generatePlan: every generated workout has a kind (regression for the null-kind race-week bug)', () => {
+	// Exercise every phase boundary the generator can hit — varying weeks
+	// and days/week — so a race week or sparse-allocation phase can't
+	// silently emit a kindless workout the way the old quality-slot code did.
+	for (const [goal, weeks] of [
+		['distance_5k', 8],
+		['distance_10k', 12],
+		['distance_half', 16],
+		['distance_full', 32]
+	] as const) {
+		for (const dpw of [3, 4, 5, 6, 7]) {
+			const plan = generatePlan({
+				goalEvent: goal,
+				startDate: '2026-03-30',
+				daysPerWeek: dpw,
+				goalTimeSec: 3 * 3600,
+				recent5kSec: 22 * 60,
+				weeks
+			});
+			for (const w of plan.weeks) {
+				for (const wo of w.workouts) {
+					assert.ok(
+						wo.kind,
+						`null kind in ${goal} ${weeks}w × ${dpw}/wk at week ${w.week_index} ${wo.scheduled_date}`
+					);
+					assert.ok(wo.scheduled_date, 'scheduled_date missing');
+				}
+			}
+		}
+	}
+});

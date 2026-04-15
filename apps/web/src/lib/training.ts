@@ -353,17 +353,19 @@ function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 			}
 			continue;
 		}
-		if (dow === qualityA && w.daysPerWeek >= 4) {
-			workouts.push(
-				qualityDistribution.a ?? easyWorkout(date, easyKm, w.paces)
-			);
-			qualityDistribution.a = { ...qualityDistribution.a!, scheduled_date: date };
-			workouts[workouts.length - 1] = qualityDistribution.a!;
+		// If this phase allocated a quality workout for this slot, use it with
+		// the current date. Otherwise fall through to the easy default. The
+		// previous implementation mutated qualityDistribution.a with a
+		// non-null assertion even when it was null, producing a workout row
+		// with only `scheduled_date` — which the DB then rejected on insert
+		// because `kind` is NOT NULL. Race week (which allocates nothing)
+		// was the trigger.
+		if (dow === qualityA && w.daysPerWeek >= 4 && qualityDistribution.a) {
+			workouts.push({ ...qualityDistribution.a, scheduled_date: date });
 			continue;
 		}
-		if (dow === qualityB && w.daysPerWeek >= 5) {
-			const wk = qualityDistribution.b ?? easyWorkout(date, easyKm, w.paces);
-			workouts.push({ ...wk, scheduled_date: date });
+		if (dow === qualityB && w.daysPerWeek >= 5 && qualityDistribution.b) {
+			workouts.push({ ...qualityDistribution.b, scheduled_date: date });
 			continue;
 		}
 		workouts.push(easyWorkout(date, easyKm, w.paces));
@@ -548,6 +550,16 @@ export function parseISO(s: string): Date {
 export function formatISO(d: Date): string {
 	const pad = (n: number) => String(n).padStart(2, '0');
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * "Today" in the *local* timezone as yyyy-mm-dd. Use this instead of
+ * `new Date().toISOString().slice(0, 10)` — `toISOString` formats in UTC,
+ * so in any positive-offset timezone it rolls over before midnight local
+ * and the date comes out a day early. Mirror of `formatISO(new Date())`.
+ */
+export function todayISO(): string {
+	return formatISO(new Date());
 }
 
 export function addDays(d: Date, n: number): Date {

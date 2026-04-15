@@ -82,8 +82,16 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
               if (w.targetDurationSeconds != null)
                 _metric(theme, 'Duration', fmtHms(w.targetDurationSeconds)),
               if (w.targetPaceSecPerKm != null)
-                _metric(theme, 'Target pace', fmtPace(w.targetPaceSecPerKm),
-                    tolerance: w.targetPaceToleranceSec),
+                _metric(
+                  theme,
+                  'Target pace',
+                  w.targetPaceEndSecPerKm != null &&
+                          w.targetPaceEndSecPerKm != w.targetPaceSecPerKm
+                      ? '${fmtPace(w.targetPaceSecPerKm)} → ${fmtPace(w.targetPaceEndSecPerKm)}'
+                      : fmtPace(w.targetPaceSecPerKm),
+                  tolerance: w.targetPaceToleranceSec,
+                  zone: w.paceZone,
+                ),
             ],
           ),
           if (w.completedRunId != null) ...[
@@ -148,7 +156,8 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         ));
   }
 
-  Widget _metric(ThemeData theme, String label, String value, {int? tolerance}) {
+  Widget _metric(ThemeData theme, String label, String value,
+      {int? tolerance, String? zone}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -170,6 +179,25 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                   )),
+            ],
+            if (zone != null && zone.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  zone,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onPrimaryContainer,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
             ],
           ],
         ),

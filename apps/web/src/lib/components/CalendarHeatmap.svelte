@@ -37,7 +37,11 @@
 				date.setDate(start.getDate() + w * 7 + d);
 				if (date > today) continue;
 
-				const dateStr = date.toISOString().slice(0, 10);
+				// Format as local yyyy-mm-dd — `toISOString` gives the UTC
+				// date, which cuts the heatmap by the wrong day for any
+				// viewer not on UTC near midnight.
+				const pad = (n: number) => String(n).padStart(2, '0');
+				const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 				result.push({
 					date: dateStr,
 					col: w,

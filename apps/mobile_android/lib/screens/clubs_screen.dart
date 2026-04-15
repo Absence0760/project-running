@@ -12,7 +12,10 @@ class ClubsScreen extends StatefulWidget {
 }
 
 class _ClubsScreenState extends State<ClubsScreen> {
-  int _tab = 0; // 0 = Browse, 1 = My clubs
+  // Default to "My clubs" — returning users want to see the clubs they're
+  // already in first. Fresh users with no memberships get an empty state
+  // that points them at Browse.
+  int _tab = 1; // 0 = Browse, 1 = My clubs
   bool _loading = true;
   List<ClubView> _browse = const [];
   List<ClubView> _mine = const [];
@@ -59,12 +62,18 @@ class _ClubsScreenState extends State<ClubsScreen> {
     final theme = Theme.of(context);
     final list = _tab == 0 ? _browse : _mine;
 
+    // Height budget: segmented button (~48) + 8px below. Plus the search
+    // field (~48) when we're on the Browse tab. Sizing this conditionally
+    // avoids both an empty band on "My clubs" and a 12px overflow stripe
+    // on "Browse" that otherwise show up as a visible glitch when tabbing.
+    final bottomHeight = _tab == 0 ? 108.0 : 56.0;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clubs'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(92),
+          preferredSize: Size.fromHeight(bottomHeight),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),

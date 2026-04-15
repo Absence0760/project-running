@@ -262,7 +262,7 @@ class EventRow {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? recurrenceFreq;
-  final String? recurrenceByday;
+  final List<String>? recurrenceByday;
   final DateTime? recurrenceUntil;
   final int? recurrenceCount;
 
@@ -307,7 +307,7 @@ class EventRow {
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     recurrenceFreq: json['recurrence_freq'] as String?,
-    recurrenceByday: json['recurrence_byday'] as String?,
+    recurrenceByday: json['recurrence_byday'] == null ? null : (json['recurrence_byday'] as List<dynamic>).cast<String>(),
     recurrenceUntil: json['recurrence_until'] == null ? null : DateTime.parse(json['recurrence_until'] as String),
     recurrenceCount: (json['recurrence_count'] as num?)?.toInt(),
   );
@@ -475,6 +475,7 @@ class PlanWorkoutRow {
   static const String colCompletedRunId = 'completed_run_id';
   static const String colCompletedAt = 'completed_at';
   static const String colPaceZone = 'pace_zone';
+  static const String colTargetPaceEndSecPerKm = 'target_pace_end_sec_per_km';
 
   final String id;
   final String weekId;
@@ -484,11 +485,12 @@ class PlanWorkoutRow {
   final int? targetDurationSeconds;
   final int? targetPaceSecPerKm;
   final int? targetPaceToleranceSec;
-  final Map<String, dynamic>? structure;
+  final dynamic structure;
   final String? notes;
   final String? completedRunId;
   final DateTime? completedAt;
   final String? paceZone;
+  final int? targetPaceEndSecPerKm;
 
   const PlanWorkoutRow({
     required this.id,
@@ -504,6 +506,7 @@ class PlanWorkoutRow {
     this.completedRunId,
     this.completedAt,
     this.paceZone,
+    this.targetPaceEndSecPerKm,
   });
 
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
@@ -515,11 +518,12 @@ class PlanWorkoutRow {
     targetDurationSeconds: (json['target_duration_seconds'] as num?)?.toInt(),
     targetPaceSecPerKm: (json['target_pace_sec_per_km'] as num?)?.toInt(),
     targetPaceToleranceSec: (json['target_pace_tolerance_sec'] as num?)?.toInt(),
-    structure: json['structure'] as Map<String, dynamic>?,
+    structure: json['structure'],
     notes: json['notes'] as String?,
     completedRunId: json['completed_run_id'] as String?,
     completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
     paceZone: json['pace_zone'] as String?,
+    targetPaceEndSecPerKm: (json['target_pace_end_sec_per_km'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -536,6 +540,7 @@ class PlanWorkoutRow {
     colCompletedRunId: completedRunId,
     colCompletedAt: completedAt?.toIso8601String(),
     colPaceZone: paceZone,
+    colTargetPaceEndSecPerKm: targetPaceEndSecPerKm,
   };
 }
 
@@ -692,7 +697,7 @@ class RunRow {
   final String? routeId;
   final String source;
   final String? externalId;
-  final Map<String, dynamic>? metadata;
+  final dynamic metadata;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? trackUrl;
@@ -723,7 +728,7 @@ class RunRow {
     routeId: json['route_id'] as String?,
     source: json['source'] as String,
     externalId: json['external_id'] as String?,
-    metadata: json['metadata'] as Map<String, dynamic>?,
+    metadata: json['metadata'],
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     trackUrl: json['track_url'] as String?,
@@ -767,6 +772,7 @@ class TrainingPlanRow {
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
   static const String colSource = 'source';
+  static const String colRules = 'rules';
 
   final String id;
   final String userId;
@@ -784,6 +790,7 @@ class TrainingPlanRow {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String source;
+  final dynamic rules;
 
   const TrainingPlanRow({
     required this.id,
@@ -802,6 +809,7 @@ class TrainingPlanRow {
     this.createdAt,
     this.updatedAt,
     required this.source,
+    this.rules,
   });
 
   factory TrainingPlanRow.fromJson(Map<String, dynamic> json) => TrainingPlanRow(
@@ -821,6 +829,7 @@ class TrainingPlanRow {
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     source: json['source'] as String,
+    rules: json['rules'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -840,6 +849,7 @@ class TrainingPlanRow {
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
     colSource: source,
+    colRules: rules,
   };
 }
 

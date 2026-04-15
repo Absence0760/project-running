@@ -85,10 +85,15 @@ class ApiClient {
       trackUrl = existingTrackUrl;
     }
 
+    // `startedAt` is captured as `DateTime.now()` — a local-tz DateTime.
+    // `toIso8601String()` on a local DateTime emits a naive string with no
+    // Z or offset, which PostgreSQL's `timestamptz` column interprets as
+    // UTC — off by the user's offset and potentially a full calendar day.
+    // Force UTC here so the stored instant is unambiguous.
     final row = RunRow(
       id: run.id,
       userId: userId,
-      startedAt: run.startedAt,
+      startedAt: run.startedAt.toUtc(),
       durationS: run.duration.inSeconds,
       distanceM: run.distanceMetres,
       source: run.source.name,
@@ -151,7 +156,8 @@ class ApiClient {
       return RunRow(
         id: r.id,
         userId: userId,
-        startedAt: r.startedAt,
+        // Same UTC-normalisation as saveRun — see comment there.
+        startedAt: r.startedAt.toUtc(),
         durationS: r.duration.inSeconds,
         distanceM: r.distanceMetres,
         source: r.source.name,

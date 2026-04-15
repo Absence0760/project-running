@@ -78,9 +78,18 @@
 					{#if workout.target_pace_sec_per_km}
 						<div class="metric">
 							<span class="m-label">Target pace</span>
-							<strong>{fmtPace(workout.target_pace_sec_per_km)}</strong>
+							<strong>
+								{fmtPace(workout.target_pace_sec_per_km)}
+								{#if workout.target_pace_end_sec_per_km && workout.target_pace_end_sec_per_km !== workout.target_pace_sec_per_km}
+									<span class="arrow">→</span>
+									{fmtPace(workout.target_pace_end_sec_per_km)}
+								{/if}
+							</strong>
 							{#if workout.target_pace_tolerance_sec}
 								<span class="tol">±{workout.target_pace_tolerance_sec}s</span>
+							{/if}
+							{#if workout.pace_zone}
+								<span class="zone">{workout.pace_zone}</span>
 							{/if}
 						</div>
 					{/if}
@@ -229,6 +238,22 @@
 		color: var(--color-text-tertiary);
 		margin-left: 0.25rem;
 		font-size: 0.78rem;
+	}
+	.arrow {
+		color: var(--color-text-tertiary);
+		margin: 0 0.2rem;
+		font-weight: 400;
+	}
+	.zone {
+		display: inline-block;
+		margin-left: 0.45rem;
+		padding: 0.1rem 0.45rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
 	}
 	.completed-card {
 		background: var(--color-primary-light);

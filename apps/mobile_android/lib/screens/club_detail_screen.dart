@@ -202,7 +202,38 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (c == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('Club not found.')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.help_outline, size: 48,
+                    color: Theme.of(context).colorScheme.outline),
+                const SizedBox(height: 12),
+                const Text(
+                  "Couldn't load this club.",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _error != null
+                      ? _error!
+                      : 'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _load,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
     final theme = Theme.of(context);
