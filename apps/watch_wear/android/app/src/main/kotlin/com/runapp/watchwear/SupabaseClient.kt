@@ -89,7 +89,16 @@ class SupabaseClient(
         val expiresAtMs: Long,
     )
 
-    suspend fun signIn(email: String, password: String): String {
+    /// Result of a password-grant sign-in, with everything needed to
+    /// populate a [StoredSession] for the watch's auth cache.
+    data class SignInResult(
+        val accessToken: String,
+        val refreshToken: String,
+        val userId: String,
+        val expiresAtMs: Long,
+    )
+
+    suspend fun signIn(email: String, password: String): SignInResult {
         val body = buildJsonObject {
             put("email", email)
             put("password", password)
@@ -102,21 +111,31 @@ class SupabaseClient(
             .build()
 
         val respBody = execute(req)
-        val parsed = json.parseToJsonElement(respBody).let {
-            if (it !is JsonObject) throw IllegalStateException("unexpected auth response")
-            it
-        }
-        val token = parsed["access_token"]
+        val parsed = json.parseToJsonElement(respBody) as? JsonObject
+            ?: throw IllegalStateException("unexpected auth response")
+        val access = parsed["access_token"]?.toString()?.trim('"')
             ?: throw IllegalStateException("auth response missing access_token")
+        val refresh = parsed["refresh_token"]?.toString()?.trim('"') ?: ""
+        val expiresInSec = parsed["expires_in"]?.toString()?.toLongOrNull() ?: 3600L
         val user = parsed["user"] as? JsonObject
             ?: throw IllegalStateException("auth response missing user")
-        val uid = user["id"]
+        val uid = user["id"]?.toString()?.trim('"')
             ?: throw IllegalStateException("auth response missing user.id")
 
-        accessToken = token.toString().trim('"')
-        userId = uid.toString().trim('"')
-        return userId!!
+        accessToken = access
+        refreshToken = refresh
+        userId = uid
+        return SignInResult(
+            accessToken = access,
+            refreshToken = refresh,
+            userId = uid,
+            expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L,
+        )
     }
+
+    /// Base URL + anon key exposed for the ViewModel to pack into a
+    /// [StoredSession] after a direct watch sign-in.
+    val environment: Pair<String, String> get() = baseUrl to anonKey
 
     /// Upload a run: gzip the track JSON into the `runs` bucket at
     /// `{userId}/{runId}.json.gz`, then insert the row.

@@ -25,7 +25,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-enum class Stage { PreRun, Running, PostRun }
+enum class Stage { PreRun, Running, PostRun, SignIn }
 
 data class UiState(
     val stage: Stage = Stage.PreRun,
@@ -245,6 +245,47 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (id != null) store.remove(id)
             startNextRun()
+        }
+    }
+
+    // ----- Direct sign-in (no paired phone) -----
+
+    fun openSignIn() {
+        _state.value = _state.value.copy(stage = Stage.SignIn, authError = null)
+    }
+
+    fun cancelSignIn() {
+        _state.value = _state.value.copy(stage = Stage.PreRun)
+    }
+
+    /// Sign in directly against Supabase from the watch. Used by standalone
+    /// users without a paired Android phone. The resulting session is saved
+    /// to `SessionStore` so subsequent launches and reboots don't require
+    /// re-typing; the same refresh-on-expiry path used for phone-handed
+    /// sessions applies after this.
+    fun signInWithEmail(email: String, password: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(authed = false, authError = null)
+            try {
+                val result = supabase.signIn(email, password)
+                val (baseUrl, anonKey) = supabase.environment
+                val stored = StoredSession(
+                    accessToken = result.accessToken,
+                    refreshToken = result.refreshToken,
+                    userId = result.userId,
+                    baseUrl = baseUrl,
+                    anonKey = anonKey,
+                    expiresAtMs = result.expiresAtMs,
+                )
+                sessionStore.save(stored)
+                applySession(stored)
+                _state.value = _state.value.copy(stage = Stage.PreRun)
+                drainQueue()
+            } catch (e: Throwable) {
+                _state.value = _state.value.copy(
+                    authError = e.message ?: e.javaClass.simpleName,
+                )
+            }
         }
     }
 

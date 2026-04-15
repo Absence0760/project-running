@@ -57,17 +57,25 @@ Data Layer proxy. `SupabaseClient` is a thin OkHttp wrapper:
 1. `signIn(email, password)` → POST `/auth/v1/token?grant_type=password`, stashes access token + user id in memory.
 2. `saveRun(...)` → gzips the track JSON, POSTs to `/storage/v1/object/runs/{user_id}/{run_id}.json.gz`, then POSTs the row to `/rest/v1/runs` with `Prefer: return=minimal`. Matches the Dart `ApiClient.saveRun` contract byte-for-byte so the web/Android apps read Wear-produced runs without special cases.
 
-Auth comes from the paired Android phone over the Wearable Data Layer.
-`mobile_android` pushes `{access_token, refresh_token, user_id, base_url,
-anon_key, expires_at_ms}` to `/supabase_session` whenever Supabase's
-`onAuthStateChange` fires; `SessionBridge` on the watch receives it and
-`SessionStore` caches it to DataStore so a cold launch while offline
-still has credentials. `RunViewModel.refreshIfExpired` exchanges the
-refresh token for a new access token automatically, and `drainQueue`
-retries once on HTTP 401 by refreshing then re-pushing. If no session has
-ever been received (fresh install, phone app never signed in), the
-pre-run screen shows an auth error — open the phone app and sign in
-there; the watch picks up the session within a second.
+**Primary path — phone handoff.** Auth comes from the paired Android phone
+over the Wearable Data Layer. `mobile_android` pushes `{access_token,
+refresh_token, user_id, base_url, anon_key, expires_at_ms}` to
+`/supabase_session` whenever Supabase's `onAuthStateChange` fires;
+`SessionBridge` on the watch receives it and `SessionStore` caches it to
+DataStore so a cold launch while offline still has credentials.
+`RunViewModel.refreshIfExpired` exchanges the refresh token for a new
+access token automatically, and `drainQueue` retries once on HTTP 401 by
+refreshing then re-pushing.
+
+**Fallback — direct sign-in on the watch.** For standalone Wear OS
+users (LTE watch, no paired Android phone), the pre-run screen has a
+"Sign in" button that opens a Compose email/password form
+(`Stage.SignIn` in the ViewModel). Calls the same `SupabaseClient.signIn`
+path that the seed-creds fallback used to use, and stores the resulting
+session in `SessionStore` so it's indistinguishable from a
+phone-handed-over session for the rest of the lifecycle. Typing an email
+on a 46mm screen is awful; the docs say so explicitly. Use it only when
+you don't have a paired Android phone.
 
 Offline runs persist in `LocalRunStore` (DataStore, `watch_wear` prefs,
 key `queued_runs_v1`). `RunViewModel.drainQueue()` fires on app start after
@@ -131,7 +139,7 @@ on your machine, override that line locally.
 
 - Connectivity-change auto-retry (today `drainQueue` only fires on app start + after stop).
 - Foreground service for background-safe GPS across wrist-down / ambient.
-- Standalone sign-in for users without a paired Android phone (QR pairing / Google Sign-In via `RemoteActivityHelper`).
+- Google Sign-In on the watch (currently only email/password direct sign-in is supported; for Google, use the phone app and rely on the Data Layer handoff, or add `RemoteActivityHelper` to launch the OAuth flow on the paired phone).
 - Watch face tile / complication.
 
 ## Before reporting a task done
