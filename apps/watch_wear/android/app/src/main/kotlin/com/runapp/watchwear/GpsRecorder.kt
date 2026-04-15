@@ -3,6 +3,7 @@ package com.runapp.watchwear
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
+import android.os.Looper
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -44,7 +45,10 @@ class GpsRecorder(context: Context) {
             }
         }
 
-        client.requestLocationUpdates(request, cb, null)
+        // Pass the main Looper explicitly. `null` means "use the calling
+        // thread's Looper", which throws when this Flow is collected on a
+        // background dispatcher (e.g. the foreground service's scope).
+        client.requestLocationUpdates(request, cb, Looper.getMainLooper())
         awaitClose { client.removeLocationUpdates(cb) }
     }
 }

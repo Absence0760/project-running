@@ -85,7 +85,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity) {
         }
     }
 
-    MaterialTheme {
+    DuskTheme {
         Scaffold(
             timeText = { TimeText() },
             vignette = { Vignette(vignettePosition = VignettePosition.TopAndBottom) },
@@ -162,7 +162,7 @@ private fun PreRunScreen(
                 Text(
                     "%.2f km recorded".format(pendingRecoveryDistance / 1000.0),
                     style = MaterialTheme.typography.caption2,
-                    color = Color.LightGray,
+                    color = DuskPalette.haze,
                 )
                 Spacer(Modifier.height(8.dp))
                 Chip(
@@ -191,31 +191,35 @@ private fun PreRunScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("Ready to Run", style = MaterialTheme.typography.title3)
-            Spacer(Modifier.height(4.dp))
+            // Status caption above the Start button. Order: queued count
+            // first (most relevant), then any auth-error detail. The
+            // "Ready to Run" heading was dropped — the big Start button
+            // is self-explanatory and removing the heading frees the
+            // top-right area for the sign-out icon to live alone.
             if (queuedCount > 0) {
                 Text(
                     "$queuedCount run${if (queuedCount == 1) "" else "s"} to sync",
                     style = MaterialTheme.typography.caption3,
-                    color = Color.LightGray,
+                    color = DuskPalette.haze,
                 )
+                Spacer(Modifier.height(4.dp))
             }
             if (!authed) {
                 Text(
                     "Offline",
                     style = MaterialTheme.typography.caption3,
-                    color = Color(0xFFFFA726),
+                    color = DuskPalette.warning,
                 )
                 if (authError != null) {
                     Text(
                         authError,
                         style = MaterialTheme.typography.caption3,
-                        color = Color(0xFFEF5350),
+                        color = DuskPalette.error,
                         textAlign = TextAlign.Center,
                     )
                 }
+                Spacer(Modifier.height(4.dp))
             }
-            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = onStart,
                 modifier = Modifier.size(ButtonDefaults.LargeButtonSize + 20.dp),
@@ -248,15 +252,16 @@ private fun PreRunScreen(
             }
         }
 
-        // Small exit-icon button in the top-right corner, but only when
-        // signed in. Using Alignment.TopEnd with padding lands it inside
-        // the inscribed rectangle of the round face around 2 o'clock.
+        // Small exit-icon button at ~2 o'clock. The round bezel cuts off
+        // the bounding-box corner — TopEnd with 8dp padding ends up outside
+        // the visible circle. ~24dp pulls it well inside the inscribed
+        // rectangle on a typical round face.
         if (authed) {
             CompactButton(
                 onClick = onSignOut,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 8.dp, end = 8.dp),
+                    .padding(top = 24.dp, end = 24.dp),
                 colors = ButtonDefaults.secondaryButtonColors(),
             ) {
                 Icon(
@@ -348,7 +353,7 @@ private fun SignInScreen(
                 Text(
                     authError,
                     style = MaterialTheme.typography.caption3,
-                    color = Color(0xFFEF5350),
+                    color = DuskPalette.error,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 8.dp),
                 )
@@ -440,7 +445,7 @@ private fun InlineTextField(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF2A2A2A))
+            .background(DuskPalette.dusk)
             .clickable {
                 focusRequester.requestFocus()
                 keyboard?.show()
@@ -451,14 +456,14 @@ private fun InlineTextField(
             Text(
                 label,
                 style = MaterialTheme.typography.caption3,
-                color = Color.LightGray,
+                color = DuskPalette.haze,
             )
             Box {
                 if (value.isEmpty()) {
                     Text(
                         "Tap here",
                         style = MaterialTheme.typography.body2,
-                        color = Color.Gray,
+                        color = DuskPalette.haze,
                     )
                 }
                 BasicTextField(
@@ -493,10 +498,10 @@ private fun InlineTextField(
                         VisualTransformation.None
                     },
                     textStyle = TextStyle(
-                        color = Color.White,
+                        color = DuskPalette.parchment,
                         fontSize = MaterialTheme.typography.body2.fontSize,
                     ),
-                    cursorBrush = SolidColor(Color.White),
+                    cursorBrush = SolidColor(DuskPalette.parchment),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester),
@@ -536,7 +541,7 @@ private fun RunningScreen(
             Text(
                 "${formatPace(paceSecPerKm)} /km",
                 style = MaterialTheme.typography.caption3,
-                color = Color.LightGray,
+                color = DuskPalette.haze,
             )
         }
         // Only render the HR row when we actually got a sample. With
@@ -547,7 +552,7 @@ private fun RunningScreen(
             Text(
                 "$bpm bpm",
                 style = MaterialTheme.typography.caption3,
-                color = Color(0xFFEF5350),
+                color = DuskPalette.error,
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -589,7 +594,7 @@ private fun PostRunScreen(
                     Text(
                         formatDuration(summary.durationS),
                         style = MaterialTheme.typography.caption2,
-                        color = Color.LightGray,
+                        color = DuskPalette.haze,
                     )
                 }
                 if (summary.avgBpm != null) {
@@ -597,7 +602,7 @@ private fun PostRunScreen(
                         Text(
                             "${summary.avgBpm.toInt()} bpm avg",
                             style = MaterialTheme.typography.caption3,
-                            color = Color(0xFFEF5350),
+                            color = DuskPalette.error,
                         )
                     }
                 }
@@ -607,7 +612,7 @@ private fun PostRunScreen(
                     Text(
                         syncError,
                         style = MaterialTheme.typography.caption3,
-                        color = Color(0xFFEF5350),
+                        color = DuskPalette.error,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
@@ -618,7 +623,7 @@ private fun PostRunScreen(
                     Text(
                         "Synced",
                         style = MaterialTheme.typography.caption2,
-                        color = Color(0xFF66BB6A),
+                        color = DuskPalette.success,
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
@@ -660,15 +665,15 @@ private fun PostRunScreen(
             }
         }
 
-        // Small destructive action in the top-right corner, mirrors the
-        // sign-out treatment on PreRun. Only shows before the run is
-        // synced — after sync there's nothing to discard.
+        // Small destructive action at ~2 o'clock — same offset as the
+        // PreRun sign-out icon so it lands inside the round-bezel inscribed
+        // rectangle. Only shows before the run is synced.
         if (!synced && summary != null) {
             CompactButton(
                 onClick = onDiscard,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 8.dp, end = 8.dp),
+                    .padding(top = 24.dp, end = 24.dp),
                 colors = ButtonDefaults.secondaryButtonColors(),
             ) {
                 Text(
