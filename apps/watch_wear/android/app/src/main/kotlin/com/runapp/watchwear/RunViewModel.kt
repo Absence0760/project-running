@@ -36,6 +36,7 @@ data class UiState(
     val queuedCount: Int = 0,
     val authed: Boolean = false,
     val authError: String? = null,
+    val signInLoading: Boolean = false,
     val syncing: Boolean = false,
     val syncError: String? = null,
     val thisRunId: String? = null,
@@ -77,12 +78,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // 1. Restore any previously-handed-over session from disk. Runs even
         //    when the phone is out of range — so a cold start while offline
         //    still has credentials to drain the queue once the network
-        //    returns.
+        //    returns. If nothing is cached and BYPASS_LOGIN is on (dev-only
+        //    flag in .env.local), sign in with the seed creds so the
+        //    sign-in screen doesn't get in the way during local testing.
         viewModelScope.launch {
             val cached = sessionStore.current()
             if (cached != null) {
                 applySession(cached)
                 refreshIfExpired(cached)
+                return@launch
+            }
+            if (BuildConfig.BYPASS_LOGIN) {
+                try {
+                    signInWithEmailInternal("runner@test.com", "testtest")
+                } catch (_: Throwable) {
+                    // Local Supabase probably isn't running; the sign-in
+                    // screen will surface the error if the user opens it.
+                }
             }
         }
         // 2. One-shot pull from the Data Layer in case the phone pushed
@@ -173,10 +185,16 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 onGps(p)
             }
         }
-        hrJob = viewModelScope.launch {
-            hr.stream().collect { bpm ->
-                bpmSamples.add(bpm)
-                _state.value = _state.value.copy(bpm = bpm)
+        // HR is gated by the ENABLE_HR flag in `.env.local`. The Wear OS
+        // emulator produces synthetic BPM samples that look real — we don't
+        // want them polluting production runs, so the sensor stays off
+        // unless a developer has explicitly enabled it for a real device.
+        if (BuildConfig.ENABLE_HR) {
+            hrJob = viewModelScope.launch {
+                hr.stream().collect { bpm ->
+                    bpmSamples.add(bpm)
+                    _state.value = _state.value.copy(bpm = bpm)
+                }
             }
         }
         tickerJob = viewModelScope.launch {
@@ -248,6 +266,30 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ----- Sign out -----
+
+    /// Clear the cached session + in-memory credentials. The user lands
+    /// back on PreRun with `authed = false`. Any queued runs stay in the
+    /// local store — they'll attempt to upload against whichever account
+    /// signs in next, which is usually what you want for dev dogfooding
+    /// but is a flag to keep in mind if multi-user support lands later.
+    ///
+    /// Does NOT override `BYPASS_LOGIN`: if that flag is true and the
+    /// activity restarts, the auto-sign-in path in `init` will pick the
+    /// session back up. Flip the flag to `false` in `.env.local` before
+    /// rebuilding to actually see the sign-in screen.
+    fun signOut() {
+        viewModelScope.launch {
+            supabase.clearCredentials()
+            sessionStore.clear()
+            _state.value = _state.value.copy(
+                authed = false,
+                authError = null,
+                stage = Stage.PreRun,
+            )
+        }
+    }
+
     // ----- Direct sign-in (no paired phone) -----
 
     fun openSignIn() {
@@ -265,28 +307,43 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// sessions applies after this.
     fun signInWithEmail(email: String, password: String) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(authed = false, authError = null)
+            _state.value = _state.value.copy(
+                authed = false,
+                authError = null,
+                signInLoading = true,
+            )
             try {
-                val result = supabase.signIn(email, password)
-                val (baseUrl, anonKey) = supabase.environment
-                val stored = StoredSession(
-                    accessToken = result.accessToken,
-                    refreshToken = result.refreshToken,
-                    userId = result.userId,
-                    baseUrl = baseUrl,
-                    anonKey = anonKey,
-                    expiresAtMs = result.expiresAtMs,
+                signInWithEmailInternal(email, password)
+                _state.value = _state.value.copy(
+                    stage = Stage.PreRun,
+                    signInLoading = false,
                 )
-                sessionStore.save(stored)
-                applySession(stored)
-                _state.value = _state.value.copy(stage = Stage.PreRun)
-                drainQueue()
             } catch (e: Throwable) {
                 _state.value = _state.value.copy(
                     authError = e.message ?: e.javaClass.simpleName,
+                    signInLoading = false,
                 )
             }
         }
+    }
+
+    /// Core sign-in logic shared by the user-facing [signInWithEmail] and
+    /// the BYPASS_LOGIN auto-sign-in path in [init]. Throws on failure so
+    /// each caller can surface the error however it wants.
+    private suspend fun signInWithEmailInternal(email: String, password: String) {
+        val result = supabase.signIn(email, password)
+        val (baseUrl, anonKey) = supabase.environment
+        val stored = StoredSession(
+            accessToken = result.accessToken,
+            refreshToken = result.refreshToken,
+            userId = result.userId,
+            baseUrl = baseUrl,
+            anonKey = anonKey,
+            expiresAtMs = result.expiresAtMs,
+        )
+        sessionStore.save(stored)
+        applySession(stored)
+        drainQueue()
     }
 
     // ----- Internals -----

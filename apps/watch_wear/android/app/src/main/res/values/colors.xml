@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Background colour for the adaptive launcher icon. Picked to match
+      the dominant coral of the foreground PNG so the masked edge blends
+      seamlessly when Wear OS crops the icon to a circle. Tune toward
+      the exact PNG colour if a designer revisits the brand mark.
+    -->
+    <color name="ic_launcher_background">#C2256E</color>
+</resources>

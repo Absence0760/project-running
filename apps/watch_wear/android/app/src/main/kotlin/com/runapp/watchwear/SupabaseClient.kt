@@ -35,6 +35,14 @@ class SupabaseClient(
 
     val authedUserId: String? get() = userId
 
+    /// Drop the in-memory session. Caller is also responsible for clearing
+    /// `SessionStore` so a cold restart doesn't restore it.
+    fun clearCredentials() {
+        accessToken = null
+        refreshToken = null
+        userId = null
+    }
+
     /// Apply a session delivered by the paired phone via the Wearable Data
     /// Layer. Called from `SessionBridge` pushes + the `SessionStore`
     /// cold-start restore.
@@ -200,9 +208,24 @@ class SupabaseClient(
         http.newCall(req).execute().use { resp ->
             val body = resp.body.string()
             if (!resp.isSuccessful) {
-                throw RuntimeException("HTTP ${resp.code}: $body")
+                throw RuntimeException(humanErrorMessage(resp.code, body))
             }
             body
+        }
+    }
+
+    /// Supabase errors come back as `{"code":400,"error_code":"...","msg":"..."}`
+    /// or `{"error":"...","error_description":"..."}` depending on the endpoint.
+    /// Pick the most user-readable field; fall back to the raw body if
+    /// nothing parses.
+    private fun humanErrorMessage(code: Int, body: String): String {
+        return try {
+            val obj = json.parseToJsonElement(body) as? JsonObject
+                ?: return "HTTP $code"
+            val msg = obj["msg"] ?: obj["error_description"] ?: obj["error"] ?: obj["message"]
+            if (msg != null) msg.toString().trim('"') else "HTTP $code"
+        } catch (_: Throwable) {
+            "HTTP $code"
         }
     }
 

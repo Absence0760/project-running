@@ -113,6 +113,22 @@ The default `SUPABASE_URL` points at `http://10.0.2.2:54321` — the Android
 emulator's loopback alias for the host machine, matching the local Supabase
 stack that `mobile_android` also uses.
 
+## Dev-only env flags (`.env.local`)
+
+Gitignored file at `apps/watch_wear/android/.env.local` — copy from
+`.env.example` and flip what you need. Values are read at Gradle-configure
+time and emitted as `BuildConfig` constants; changes require a rebuild
+(`./gradlew installDebug`).
+
+| Flag | Default | Effect |
+|---|---|---|
+| `BYPASS_LOGIN` | `false` | On app start, if no cached session and no phone handoff, auto-sign-in as `runner@test.com` / `testtest`. Skips the sign-in screen. Use only against local/dev Supabase. **Not a sign-out switch**: flipping to `false` won't sign out a user whose session is already cached — tap the "Sign out" chip on PreRun or `./gradlew uninstallDebug && ./gradlew installDebug` to get a clean slate. |
+| `ENABLE_HR` | `false` | Start the Health Services `MeasureClient` during a run and write `avg_bpm` into run metadata. Default off because the Wear OS emulator produces synthetic HR samples that look like real readings — leaving it off by default keeps fake data out of the runs table. Turn on when building for a real device with a real sensor. |
+
+The UI tracks the flags: with `ENABLE_HR` off, the BPM row on the Running
+screen and the "N bpm avg" line on PostRun both disappear rather than
+showing placeholder text that would train you to trust an emptyish reading.
+
 ## Dependency versions
 
 All versions are pinned to latest stable as of April 2026. Key points:

@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -5,6 +6,18 @@ plugins {
     // `org.jetbrains.kotlin.android` is built-in from AGP 9.0.
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+// Gradle-time .env.local reader. Mirrors the mobile_android pattern: a
+// gitignored file with DEV-only toggles. Missing file → every flag defaults
+// to the safe production value.
+val envFile = rootProject.file(".env.local")
+val envProps = Properties().apply {
+    if (envFile.exists()) envFile.inputStream().use { load(it) }
+}
+fun envFlag(key: String, default: Boolean = false): Boolean {
+    val raw = envProps.getProperty(key) ?: project.findProperty(key) as? String
+    return raw?.trim()?.lowercase() == "true"
 }
 
 kotlin {
@@ -41,6 +54,12 @@ android {
             ?: "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+
+        // DEV-only toggles read from `apps/watch_wear/android/.env.local`
+        // (gitignored). All default false so the shipping build has no
+        // seed-creds and no emulator-synthesised HR leaking into runs.
+        buildConfigField("boolean", "BYPASS_LOGIN", envFlag("BYPASS_LOGIN").toString())
+        buildConfigField("boolean", "ENABLE_HR", envFlag("ENABLE_HR").toString())
     }
 
     buildFeatures {
@@ -63,6 +82,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    implementation("androidx.compose.material:material-icons-core")
 
     // Compose-for-Wear
     implementation("androidx.wear.compose:compose-material:1.6.1")

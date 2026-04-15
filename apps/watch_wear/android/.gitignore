@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Dev-only build flags — BYPASS_LOGIN, ENABLE_HR, etc. Never commit this.
+.env.local
