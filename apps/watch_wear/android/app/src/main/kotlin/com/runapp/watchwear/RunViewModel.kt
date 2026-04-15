@@ -35,6 +35,7 @@ data class UiState(
     val bpm: Int? = null,
     val queuedCount: Int = 0,
     val authed: Boolean = false,
+    val authError: String? = null,
     val syncing: Boolean = false,
     val syncError: String? = null,
     val thisRunId: String? = null,
@@ -74,10 +75,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 supabase.signIn("runner@test.com", "testtest")
-                _state.value = _state.value.copy(authed = true)
+                _state.value = _state.value.copy(authed = true, authError = null)
                 drainQueue()
-            } catch (_: Throwable) {
-                _state.value = _state.value.copy(authed = false)
+            } catch (e: Throwable) {
+                _state.value = _state.value.copy(
+                    authed = false,
+                    authError = e.message ?: e.javaClass.simpleName,
+                )
             }
         }
         queueWatchJob = viewModelScope.launch {

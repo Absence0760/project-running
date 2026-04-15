@@ -54,6 +54,7 @@ fun RunWatchApp(vm: RunViewModel) {
                 Stage.PreRun -> PreRunScreen(
                     queuedCount = state.queuedCount,
                     authed = state.authed,
+                    authError = state.authError,
                     onStart = {
                         permissionLauncher.launch(
                             arrayOf(
@@ -88,6 +89,7 @@ fun RunWatchApp(vm: RunViewModel) {
 private fun PreRunScreen(
     queuedCount: Int,
     authed: Boolean,
+    authError: String?,
     onStart: () -> Unit,
 ) {
     Column(
@@ -106,6 +108,14 @@ private fun PreRunScreen(
         }
         if (!authed) {
             Text("Offline", style = MaterialTheme.typography.caption3, color = Color(0xFFFFA726))
+            if (authError != null) {
+                Text(
+                    authError,
+                    style = MaterialTheme.typography.caption3,
+                    color = Color(0xFFEF5350),
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Button(onClick = onStart) {
