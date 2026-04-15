@@ -71,14 +71,18 @@ import androidx.wear.compose.material.Vignette
 import androidx.wear.compose.material.VignettePosition
 import com.runapp.watchwear.RunViewModel
 import com.runapp.watchwear.Stage
+import com.runapp.watchwear.system.BatteryOptimization
+import android.app.Activity
 
 @Composable
-fun RunWatchApp(vm: RunViewModel) {
+fun RunWatchApp(vm: RunViewModel, activity: Activity) {
     val state by vm.state.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        if (granted.values.all { it }) vm.start()
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+            vm.start()
+        }
     }
 
     MaterialTheme {
@@ -91,6 +95,8 @@ fun RunWatchApp(vm: RunViewModel) {
                     queuedCount = state.queuedCount,
                     authed = state.authed,
                     authError = state.authError,
+                    batteryOptimised = state.batteryOptimised,
+                    pendingRecoveryDistance = state.pendingRecovery?.distanceM,
                     onStart = {
                         permissionLauncher.launch(
                             arrayOf(
@@ -101,6 +107,9 @@ fun RunWatchApp(vm: RunViewModel) {
                     },
                     onSignIn = vm::openSignIn,
                     onSignOut = vm::signOut,
+                    onFixBattery = { BatteryOptimization.requestExemption(activity) },
+                    onRecover = vm::recoverCheckpoint,
+                    onDiscardRecovery = vm::discardCheckpoint,
                 )
                 Stage.SignIn -> SignInScreen(
                     authError = state.authError,
@@ -134,10 +143,46 @@ private fun PreRunScreen(
     queuedCount: Int,
     authed: Boolean,
     authError: String?,
+    batteryOptimised: Boolean,
+    pendingRecoveryDistance: Double?,
     onStart: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
+    onFixBattery: () -> Unit,
+    onRecover: () -> Unit,
+    onDiscardRecovery: () -> Unit,
 ) {
+    // Recovery prompt takes precedence — user has unsaved-run state from
+    // a previous app kill. Show that exclusively until they decide.
+    if (pendingRecoveryDistance != null) {
+        Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Recover unsaved run?", style = MaterialTheme.typography.title3, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "%.2f km recorded".format(pendingRecoveryDistance / 1000.0),
+                    style = MaterialTheme.typography.caption2,
+                    color = Color.LightGray,
+                )
+                Spacer(Modifier.height(8.dp))
+                Chip(
+                    onClick = onRecover,
+                    label = { Text("Save it") },
+                    colors = ChipDefaults.primaryChipColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(4.dp))
+                Chip(
+                    onClick = onDiscardRecovery,
+                    label = { Text("Discard") },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        return
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -185,6 +230,19 @@ private fun PreRunScreen(
                 CompactChip(
                     onClick = onSignIn,
                     label = { Text("Sign in", style = MaterialTheme.typography.caption2) },
+                    colors = ChipDefaults.secondaryChipColors(),
+                )
+            }
+            if (batteryOptimised) {
+                Spacer(Modifier.height(4.dp))
+                CompactChip(
+                    onClick = onFixBattery,
+                    label = {
+                        Text(
+                            "Fix battery saver",
+                            style = MaterialTheme.typography.caption3,
+                        )
+                    },
                     colors = ChipDefaults.secondaryChipColors(),
                 )
             }

@@ -8,6 +8,15 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Foreground service for long-running GPS recording. Without this
+         the OS kills the recording the moment the watch goes ambient. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets us prompt the user to whitelist this app from battery
+         optimisation (Doze / App Standby), which otherwise throttles
+         the foreground service after ~10 minutes. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:label="Better Runner"
@@ -34,5 +43,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".recording.RunRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 </manifest>

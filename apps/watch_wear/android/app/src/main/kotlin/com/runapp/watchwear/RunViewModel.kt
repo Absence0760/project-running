@@ -1,29 +1,28 @@
 package com.runapp.watchwear
 
 import android.app.Application
-import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.runapp.watchwear.recording.Checkpoint
+import com.runapp.watchwear.recording.CheckpointStore
+import com.runapp.watchwear.recording.RecordingRepository
+import com.runapp.watchwear.recording.RunRecordingService
+import com.runapp.watchwear.system.BatteryOptimization
+import com.runapp.watchwear.system.NetworkWatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.UUID
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 enum class Stage { PreRun, Running, PostRun, SignIn }
 
@@ -33,6 +32,7 @@ data class UiState(
     val distanceM: Double = 0.0,
     val paceSecPerKm: Double? = null,
     val bpm: Int? = null,
+    val locationAvailable: Boolean = true,
     val queuedCount: Int = 0,
     val authed: Boolean = false,
     val authError: String? = null,
@@ -42,6 +42,8 @@ data class UiState(
     val thisRunId: String? = null,
     val thisRunSynced: Boolean = false,
     val lastRunSummary: FinishedSummary? = null,
+    val batteryOptimised: Boolean = true,
+    val pendingRecovery: Checkpoint? = null,
 )
 
 data class FinishedSummary(
@@ -55,74 +57,56 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         baseUrl = BuildConfig.SUPABASE_URL,
         anonKey = BuildConfig.SUPABASE_ANON_KEY,
     )
-    private val gps = GpsRecorder(application)
-    private val hr = HeartRateMonitor(application)
     private val store = LocalRunStore(application)
     private val sessionStore = SessionStore(application)
     private val sessionBridge = SessionBridge(application)
+    private val checkpoints = CheckpointStore(application)
+    private val networkWatcher = NetworkWatcher(application)
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    private var recordingJob: Job? = null
-    private var hrJob: Job? = null
-    private var tickerJob: Job? = null
-    private var queueWatchJob: Job? = null
+    /// Latches when a session has been applied to `supabase`. `drainQueue`
+    /// awaits this with a short timeout so the cold-start race (recording
+    /// stops before the cached session restore completes) doesn't surface
+    /// as a "not authenticated" error.
+    private val authReady = MutableStateFlow(false)
 
-    private val track = mutableListOf<GpsPoint>()
-    private val bpmSamples = mutableListOf<Int>()
-    private var lastLocation: Location? = null
-    private var startMs = 0L
+    private var queueWatchJob: Job? = null
+    private var recordingObserverJob: Job? = null
+    private var connectivityJob: Job? = null
 
     init {
-        // 1. Restore any previously-handed-over session from disk. Runs even
-        //    when the phone is out of range — so a cold start while offline
-        //    still has credentials to drain the queue once the network
-        //    returns. If nothing is cached and BYPASS_LOGIN is on (dev-only
-        //    flag in .env.local), sign in with the seed creds so the
-        //    sign-in screen doesn't get in the way during local testing.
-        viewModelScope.launch {
-            val cached = sessionStore.current()
-            if (cached != null) {
-                applySession(cached)
-                refreshIfExpired(cached)
-                return@launch
-            }
-            if (BuildConfig.BYPASS_LOGIN) {
-                try {
-                    signInWithEmailInternal("runner@test.com", "testtest")
-                } catch (_: Throwable) {
-                    // Local Supabase probably isn't running; the sign-in
-                    // screen will surface the error if the user opens it.
+        observeRecording()
+        observeQueue()
+        observeConnectivity()
+        bootstrapAuth()
+        checkBatteryOptimisation()
+        checkRecovery()
+    }
+
+    private fun observeRecording() {
+        recordingObserverJob = viewModelScope.launch {
+            RecordingRepository.metrics.collect { m ->
+                when (m.stage) {
+                    RecordingRepository.Stage.Recording -> {
+                        _state.value = _state.value.copy(
+                            stage = Stage.Running,
+                            elapsedMs = m.elapsedMs,
+                            distanceM = m.distanceM,
+                            paceSecPerKm = m.paceSecPerKm,
+                            bpm = m.bpm,
+                            locationAvailable = m.locationAvailable,
+                        )
+                    }
+                    RecordingRepository.Stage.Finished -> handleFinishedRun(m)
+                    RecordingRepository.Stage.Idle -> Unit
                 }
             }
         }
-        // 2. One-shot pull from the Data Layer in case the phone pushed
-        //    while the watch app was closed.
-        viewModelScope.launch {
-            try {
-                sessionBridge.current()?.let { payload ->
-                    val stored = StoredSession.fromPayload(payload)
-                    sessionStore.save(stored)
-                    applySession(stored)
-                    refreshIfExpired(stored)
-                    drainQueue()
-                }
-            } catch (_: Throwable) {
-                // Data Layer not available (e.g. emulator without paired phone).
-                // The cached session path above is our fallback.
-            }
-        }
-        // 3. Live subscription for future pushes (token refresh on the phone,
-        //    account switch, sign-out).
-        viewModelScope.launch {
-            sessionBridge.sessions.collect { payload ->
-                val stored = StoredSession.fromPayload(payload)
-                sessionStore.save(stored)
-                applySession(stored)
-                drainQueue()
-            }
-        }
+    }
+
+    private fun observeQueue() {
         queueWatchJob = viewModelScope.launch {
             store.queue.collect { list ->
                 _state.value = _state.value.copy(
@@ -135,6 +119,111 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun observeConnectivity() {
+        connectivityJob = viewModelScope.launch {
+            // Skip the seed "true" emission so we don't fire drainQueue
+            // duplicately with the auth bootstrap path.
+            var seeded = false
+            networkWatcher.availability().collect { online ->
+                if (!seeded) { seeded = true; return@collect }
+                if (online && _state.value.authed) drainQueue()
+            }
+        }
+    }
+
+    private fun bootstrapAuth() {
+        viewModelScope.launch {
+            val cached = sessionStore.current()
+            if (cached != null) {
+                applySession(cached)
+                refreshIfExpired(cached)
+                drainQueue()
+                return@launch
+            }
+            if (BuildConfig.BYPASS_LOGIN) {
+                try {
+                    signInWithEmailInternal("runner@test.com", "testtest")
+                } catch (_: Throwable) { /* sign-in screen will surface */ }
+            }
+        }
+        viewModelScope.launch {
+            try {
+                sessionBridge.current()?.let { payload ->
+                    val stored = StoredSession.fromPayload(payload)
+                    sessionStore.save(stored)
+                    applySession(stored)
+                    refreshIfExpired(stored)
+                    drainQueue()
+                }
+            } catch (_: Throwable) { /* no paired phone, fine */ }
+        }
+        viewModelScope.launch {
+            sessionBridge.sessions.collect { payload ->
+                val stored = StoredSession.fromPayload(payload)
+                sessionStore.save(stored)
+                applySession(stored)
+                drainQueue()
+            }
+        }
+    }
+
+    private fun checkBatteryOptimisation() {
+        _state.value = _state.value.copy(
+            batteryOptimised = !BatteryOptimization.isExempt(getApplication()),
+        )
+    }
+
+    fun refreshBatteryOptimisation() = checkBatteryOptimisation()
+
+    private fun checkRecovery() {
+        viewModelScope.launch {
+            val cp = checkpoints.current()
+            if (cp != null) {
+                _state.value = _state.value.copy(pendingRecovery = cp)
+            }
+        }
+    }
+
+    /// User accepted the recovery prompt. Treat the checkpointed run as
+    /// finished-as-of-savedAt and queue it for upload.
+    fun recoverCheckpoint() {
+        val cp = _state.value.pendingRecovery ?: return
+        viewModelScope.launch {
+            val durationS = ((cp.savedAtMs - cp.startedAtMs) / 1000).toInt()
+            val avgBpm = if (cp.bpmSamples.isEmpty()) null
+                else cp.bpmSamples.sum().toDouble() / cp.bpmSamples.size
+            val trackJson = encodeCheckpointTrack(cp)
+            store.save(
+                QueuedRun(
+                    id = cp.runId,
+                    startedAtIso = Instant.ofEpochMilli(cp.startedAtMs).toString(),
+                    durationS = durationS,
+                    distanceM = cp.distanceM,
+                    trackJson = trackJson,
+                    avgBpm = avgBpm,
+                )
+            )
+            checkpoints.clear()
+            _state.value = _state.value.copy(
+                pendingRecovery = null,
+                lastRunSummary = FinishedSummary(cp.distanceM, durationS, avgBpm),
+                stage = Stage.PostRun,
+                thisRunId = cp.runId,
+                thisRunSynced = false,
+            )
+            drainQueue()
+        }
+    }
+
+    fun discardCheckpoint() {
+        viewModelScope.launch {
+            checkpoints.clear()
+            _state.value = _state.value.copy(pendingRecovery = null)
+        }
+    }
+
+    // ----- Auth helpers -----
+
     private fun applySession(s: StoredSession) {
         supabase.applyCredentials(
             accessToken = s.accessToken,
@@ -144,6 +233,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             anonKey = s.anonKey,
         )
         _state.value = _state.value.copy(authed = true, authError = null)
+        authReady.value = true
     }
 
     private suspend fun refreshIfExpired(s: StoredSession) {
@@ -164,13 +254,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ----- Recording controls (delegate to the foreground service) -----
+
     fun start() {
         if (_state.value.stage != Stage.PreRun) return
-        track.clear()
-        bpmSamples.clear()
-        lastLocation = null
-        startMs = System.currentTimeMillis()
-
+        val runId = UUID.randomUUID().toString()
         _state.value = _state.value.copy(
             stage = Stage.Running,
             elapsedMs = 0,
@@ -178,65 +266,43 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             paceSecPerKm = null,
             bpm = null,
             syncError = null,
+            thisRunId = runId,
+            thisRunSynced = false,
         )
-
-        recordingJob = viewModelScope.launch {
-            gps.stream().collect { p ->
-                onGps(p)
-            }
-        }
-        // HR is gated by the ENABLE_HR flag in `.env.local`. The Wear OS
-        // emulator produces synthetic BPM samples that look real — we don't
-        // want them polluting production runs, so the sensor stays off
-        // unless a developer has explicitly enabled it for a real device.
-        if (BuildConfig.ENABLE_HR) {
-            hrJob = viewModelScope.launch {
-                hr.stream().collect { bpm ->
-                    bpmSamples.add(bpm)
-                    _state.value = _state.value.copy(bpm = bpm)
-                }
-            }
-        }
-        tickerJob = viewModelScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(500)
-                val elapsed = System.currentTimeMillis() - startMs
-                _state.value = _state.value.copy(elapsedMs = elapsed)
-            }
-        }
+        RunRecordingService.start(getApplication(), runId)
     }
 
     fun stop() {
         if (_state.value.stage != Stage.Running) return
-        recordingJob?.cancel(); recordingJob = null
-        hrJob?.cancel(); hrJob = null
-        tickerJob?.cancel(); tickerJob = null
+        RunRecordingService.stop(getApplication())
+    }
 
-        val durationS = ((System.currentTimeMillis() - startMs) / 1000).toInt()
-        val avgBpm = if (bpmSamples.isEmpty()) null
-            else bpmSamples.sum().toDouble() / bpmSamples.size
-        val runId = UUID.randomUUID().toString()
-        val startedAtIso = Instant.ofEpochMilli(startMs).toString()
-        val trackJson = encodeTrack(track)
-
+    /// Called from the recording observer when the service publishes a
+    /// `Finished` state. Persists the run to LocalRunStore + drains.
+    private fun handleFinishedRun(m: RecordingRepository.Metrics) {
+        val runId = m.runId ?: return
+        val durationS = (m.elapsedMs / 1000).toInt()
+        val trackJson = encodeTrack(m.track)
+        val summary = FinishedSummary(m.distanceM, durationS, m.avgBpm)
         _state.value = _state.value.copy(
             stage = Stage.PostRun,
             thisRunId = runId,
             thisRunSynced = false,
-            lastRunSummary = FinishedSummary(_state.value.distanceM, durationS, avgBpm),
+            lastRunSummary = summary,
         )
-
         viewModelScope.launch {
             store.save(
                 QueuedRun(
                     id = runId,
-                    startedAtIso = startedAtIso,
+                    startedAtIso = Instant.ofEpochMilli(m.startedAtMs).toString(),
                     durationS = durationS,
-                    distanceM = _state.value.distanceM,
+                    distanceM = m.distanceM,
                     trackJson = trackJson,
-                    avgBpm = avgBpm,
+                    avgBpm = m.avgBpm,
                 )
             )
+            // Reset the repo so the next run starts from a clean slate.
+            RecordingRepository.reset()
             drainQueue()
         }
     }
@@ -266,22 +332,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ----- Sign out -----
+    // ----- Sign in / out -----
 
-    /// Clear the cached session + in-memory credentials. The user lands
-    /// back on PreRun with `authed = false`. Any queued runs stay in the
-    /// local store — they'll attempt to upload against whichever account
-    /// signs in next, which is usually what you want for dev dogfooding
-    /// but is a flag to keep in mind if multi-user support lands later.
-    ///
-    /// Does NOT override `BYPASS_LOGIN`: if that flag is true and the
-    /// activity restarts, the auto-sign-in path in `init` will pick the
-    /// session back up. Flip the flag to `false` in `.env.local` before
-    /// rebuilding to actually see the sign-in screen.
     fun signOut() {
         viewModelScope.launch {
             supabase.clearCredentials()
             sessionStore.clear()
+            authReady.value = false
             _state.value = _state.value.copy(
                 authed = false,
                 authError = null,
@@ -289,8 +346,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
-
-    // ----- Direct sign-in (no paired phone) -----
 
     fun openSignIn() {
         _state.value = _state.value.copy(stage = Stage.SignIn, authError = null)
@@ -300,11 +355,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(stage = Stage.PreRun)
     }
 
-    /// Sign in directly against Supabase from the watch. Used by standalone
-    /// users without a paired Android phone. The resulting session is saved
-    /// to `SessionStore` so subsequent launches and reboots don't require
-    /// re-typing; the same refresh-on-expiry path used for phone-handed
-    /// sessions applies after this.
     fun signInWithEmail(email: String, password: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(
@@ -327,9 +377,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /// Core sign-in logic shared by the user-facing [signInWithEmail] and
-    /// the BYPASS_LOGIN auto-sign-in path in [init]. Throws on failure so
-    /// each caller can surface the error however it wants.
     private suspend fun signInWithEmailInternal(email: String, password: String) {
         val result = supabase.signIn(email, password)
         val (baseUrl, anonKey) = supabase.environment
@@ -346,18 +393,31 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         drainQueue()
     }
 
-    // ----- Internals -----
+    // ----- Queue drain -----
+
+    /// Wait briefly for the auth bootstrap to land before bailing out
+    /// with "not authenticated". Eliminates the race where a fresh
+    /// activity launch fires `drainQueue` (e.g. via a network-available
+    /// callback) before the cached session has been restored.
+    private suspend fun awaitAuth(): Boolean {
+        if (authReady.value) return true
+        return withTimeoutOrNull(AUTH_WAIT_MS) {
+            authReady.first { it }
+        } != null
+    }
 
     private suspend fun drainQueue() {
+        if (!awaitAuth()) {
+            // Not signed in yet — runs stay queued; next signal (network
+            // online, sign-in success, app foreground) will retry.
+            return
+        }
         val snapshot = store.queue.first()
         for (run in snapshot) {
             try {
                 pushRun(run)
                 store.remove(run.id)
             } catch (e: Throwable) {
-                // One retry on 401 — access token probably expired while the
-                // run was queued. Burn a refresh and re-try once; if that
-                // still fails, leave the queue intact for the next trigger.
                 if (e.message?.contains("HTTP 401") == true) {
                     try {
                         val refreshed = supabase.refreshAccessToken()
@@ -374,9 +434,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                         pushRun(run)
                         store.remove(run.id)
                         continue
-                    } catch (_: Throwable) {
-                        // fall through to the error state below
-                    }
+                    } catch (_: Throwable) { /* fall through */ }
                 }
                 _state.value = _state.value.copy(syncError = e.message)
                 break
@@ -398,32 +456,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun onGps(p: GpsPoint) {
-        val asLoc = Location("").apply {
-            latitude = p.lat; longitude = p.lng; time = p.epochMs
-        }
-        lastLocation?.let { prev ->
-            val delta = haversineM(prev.latitude, prev.longitude, p.lat, p.lng)
-            // Same jitter gate as the Dart run_recorder: 2m floor, 100m ceiling.
-            if (delta in 2.0..100.0) {
-                val newDist = _state.value.distanceM + delta
-                _state.value = _state.value.copy(
-                    distanceM = newDist,
-                    paceSecPerKm = computePace(newDist),
-                )
-            }
-        }
-        lastLocation = asLoc
-        track.add(p)
-    }
-
-    private fun computePace(distanceM: Double): Double? {
-        if (distanceM < 50) return null
-        val elapsedS = (System.currentTimeMillis() - startMs) / 1000.0
-        if (elapsedS <= 0) return null
-        return elapsedS / distanceM * 1000.0
-    }
-
     private fun encodeTrack(points: List<GpsPoint>): String {
         val sb = StringBuilder("[")
         points.forEachIndexed { i, p ->
@@ -437,17 +469,21 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         return sb.toString()
     }
 
-    private fun haversineM(
-        aLat: Double, aLng: Double, bLat: Double, bLng: Double,
-    ): Double {
-        val r = 6371000.0
-        val dLat = Math.toRadians(bLat - aLat)
-        val dLng = Math.toRadians(bLng - aLng)
-        val a = sin(dLat / 2).pow(2.0) +
-            cos(Math.toRadians(aLat)) * cos(Math.toRadians(bLat)) *
-            sin(dLng / 2).pow(2.0)
-        val c = 2 * Math.asin(sqrt(a))
-        return r * c
+    private fun encodeCheckpointTrack(cp: Checkpoint): String {
+        val sb = StringBuilder("[")
+        cp.track.forEachIndexed { i, p ->
+            if (i > 0) sb.append(",")
+            sb.append("{\"lat\":").append(p.lat)
+                .append(",\"lng\":").append(p.lng)
+                .append(",\"ele\":").append(p.ele ?: "null")
+                .append(",\"ts\":\"").append(Instant.ofEpochMilli(p.epochMs)).append("\"}")
+        }
+        sb.append("]")
+        return sb.toString()
+    }
+
+    companion object {
+        private const val AUTH_WAIT_MS = 3_000L
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {

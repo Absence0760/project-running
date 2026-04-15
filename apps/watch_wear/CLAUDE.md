@@ -151,12 +151,62 @@ cryptic `IllegalArgumentException: 25.0.2`. `gradle.properties` pins
 If Android Studio lives somewhere other than `/Applications/Android Studio.app`
 on your machine, override that line locally.
 
-## What's deferred
+## Production reliability (Phase 4)
 
-- Connectivity-change auto-retry (today `drainQueue` only fires on app start + after stop).
-- Foreground service for background-safe GPS across wrist-down / ambient.
-- Google Sign-In on the watch (currently only email/password direct sign-in is supported; for Google, use the phone app and rely on the Data Layer handoff, or add `RemoteActivityHelper` to launch the OAuth flow on the paired phone).
-- Watch face tile / complication.
+The recording loop lives in **`RunRecordingService`** — a foreground
+service with `foregroundServiceType="location"`, a sticky notification,
+and a partial wake-lock — not in the ViewModel's coroutine scope. This
+is what lets a run survive the activity being destroyed (ambient mode,
+backgrounding, low-memory kills).
+
+- `recording/RecordingRepository.kt` — process-singleton `StateFlow`
+  that the service writes and the ViewModel reads. The decoupling is
+  the whole point.
+- `recording/RunRecordingService.kt` — owns the GPS + HR streams, ticks
+  the elapsed clock every 500ms, posts notification updates, holds the
+  wake lock.
+- `recording/CheckpointStore.kt` — DataStore snapshot of an in-progress
+  run, written every 15s during recording. On next launch, if a
+  checkpoint exists, the pre-run screen shows a **"Recover unsaved
+  run?"** prompt — accepting saves it as a finished run (queued for
+  upload), discarding clears it. This is what saves a run when the
+  process is killed mid-recording.
+- `system/BatteryOptimization.kt` — checks
+  `PowerManager.isIgnoringBatteryOptimizations` at launch and on each
+  `onResume`. If we're not whitelisted, the pre-run screen surfaces a
+  **"Fix battery saver"** chip that opens the system whitelist prompt.
+  Without this, Android throttles the foreground service after ~10
+  minutes — fatal for long runs.
+- `system/NetworkWatcher.kt` — `ConnectivityManager.NetworkCallback`
+  flow. The ViewModel collects it; offline → online transitions fire
+  `drainQueue` automatically so a run recorded out of range uploads as
+  soon as connectivity returns.
+- `awaitAuth()` in `RunViewModel.drainQueue` — waits up to 3s for the
+  cached-session restore to land before bailing with "not
+  authenticated". Kills the cold-start race that previously surfaced a
+  spurious sync error after a quick start/stop.
+
+Permissions added in the manifest: `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`,
+`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+
+## What's still deferred
+
+- **Ambient-mode rendering.** The recording continues in the foreground
+  service when the watch dims — it will not be killed — but the Compose
+  UI doesn't yet have a low-color "ambient" branch. Wire
+  `AmbientLifecycleObserver` + a dimmed Compose render path. (Glanceable
+  watch face complication is a separate, larger item.)
+- **Pause / resume.** No way to pause mid-run.
+- **Laps / splits.**
+- **Google Sign-In on the watch** (today only email/password direct
+  sign-in works; for Google use the phone app + Data Layer handoff, or
+  build out `RemoteActivityHelper`).
+- **Watch face tile / complication.**
+- **End-to-end soak test on a real device.** All of the above ships in
+  this session as compiles-cleanly code; verifying it actually
+  records 60+ minutes without dropping samples requires putting it on a
+  watch and going for a real run.
 
 ## Before reporting a task done
 
