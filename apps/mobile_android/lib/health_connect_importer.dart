@@ -23,6 +23,7 @@ class HealthConnectImporter {
     final types = [
       HealthDataType.WORKOUT,
       HealthDataType.DISTANCE_DELTA,
+      HealthDataType.HEART_RATE,
     ];
 
     final granted = await _health.requestAuthorization(
@@ -61,6 +62,19 @@ class HealthConnectImporter {
         final distance = (value.totalDistance ?? 0).toDouble();
         if (distance < 100) continue; // skip workouts shorter than 100m
 
+        // Average heart rate across the workout window. Null when the
+        // source app didn't write HR samples — common for walking
+        // sessions and third-party trackers that only report a summary.
+        final avgBpm = await _averageHrInWindow(point.dateFrom, point.dateTo);
+
+        final metadata = <String, dynamic>{
+          'imported_from': 'health_connect',
+          'imported_at': DateTime.now().toIso8601String(),
+          'health_connect_type': value.workoutActivityType.name,
+          'activity_type': activityType,
+        };
+        if (avgBpm != null) metadata['avg_bpm'] = avgBpm;
+
         runs.add(Run(
           id: _uuid.v4(),
           startedAt: point.dateFrom,
@@ -69,18 +83,41 @@ class HealthConnectImporter {
           track: const [], // Health Connect doesn't expose route geometry
           source: RunSource.healthconnect,
           externalId: point.uuid,
-          metadata: {
-            'imported_from': 'health_connect',
-            'imported_at': DateTime.now().toIso8601String(),
-            'health_connect_type': value.workoutActivityType.name,
-            'activity_type': activityType,
-          },
+          metadata: metadata,
         ));
       } catch (e) {
         debugPrint('Failed to map Health Connect workout: $e');
       }
     }
     return runs;
+  }
+
+  /// Mean of every HR sample Health Connect has between [start] and [end].
+  /// Returns null when no samples exist in the window or the query errors
+  /// (the caller just omits `avg_bpm` from metadata in that case).
+  static Future<double?> _averageHrInWindow(DateTime start, DateTime end) async {
+    try {
+      final samples = await _health.getHealthDataFromTypes(
+        types: const [HealthDataType.HEART_RATE],
+        startTime: start,
+        endTime: end,
+      );
+      final values = <double>[];
+      for (final s in samples) {
+        final v = s.value;
+        if (v is NumericHealthValue) {
+          final bpm = v.numericValue.toDouble();
+          // Same sanity clamp the watch uses: anything outside 30–230
+          // is sensor noise and shouldn't bias the average.
+          if (bpm >= 30 && bpm <= 230) values.add(bpm);
+        }
+      }
+      if (values.isEmpty) return null;
+      return values.reduce((a, b) => a + b) / values.length;
+    } catch (e) {
+      debugPrint('HR fetch failed for workout window: $e');
+      return null;
+    }
   }
 
   /// Map Health Connect workout types to our activity_type strings.

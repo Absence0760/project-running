@@ -3,6 +3,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 
 import '../audio_cues.dart';
+import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -23,6 +24,7 @@ class HomeScreen extends StatefulWidget {
   final AudioCues audioCues;
   final SocialService social;
   final TrainingService training;
+  final BleHeartRate heartRate;
 
   const HomeScreen({
     super.key,
@@ -33,6 +35,7 @@ class HomeScreen extends StatefulWidget {
     required this.audioCues,
     required this.social,
     required this.training,
+    required this.heartRate,
   });
 
   @override
@@ -84,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
           audioCues: widget.audioCues,
           social: widget.social,
           training: widget.training,
+          heartRate: widget.heartRate,
           initialRoute: _preselectedRoute,
         ),
       ),

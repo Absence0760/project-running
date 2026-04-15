@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../audio_cues.dart';
+import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -37,6 +38,7 @@ class RunScreen extends StatefulWidget {
   final AudioCues audioCues;
   final SocialService social;
   final TrainingService training;
+  final BleHeartRate heartRate;
   final cm.Route? initialRoute;
 
   const RunScreen({
@@ -48,6 +50,7 @@ class RunScreen extends StatefulWidget {
     required this.audioCues,
     required this.social,
     required this.training,
+    required this.heartRate,
     this.initialRoute,
   });
 
@@ -61,6 +64,14 @@ class _RunScreenState extends State<RunScreen> {
   _ScreenState _state = _ScreenState.idle;
   RunRecorder? _recorder;
   StreamSubscription<RunSnapshot>? _snapshotSub;
+
+  // Heart-rate samples collected during a run via the paired BLE chest
+  // strap (if any). Averaged on stop and written into `metadata.avg_bpm`.
+  // Empty list + null avg when no strap is paired, which is fine —
+  // metadata just omits the key.
+  StreamSubscription<int>? _hrSub;
+  final List<int> _bpmSamples = [];
+  int? _currentBpm;
 
   // Countdown
   int _countdownValue = 3;
@@ -388,6 +399,17 @@ class _RunScreenState extends State<RunScreen> {
     _cadence = 0;
     _stepSamples.clear();
 
+    // Subscribe to the BLE chest strap's BPM stream if a strap has been
+    // paired. `connectCached` runs at app start in main.dart; the stream
+    // is already producing if the strap is in range. Samples are
+    // averaged on stop into `metadata.avg_bpm`.
+    _bpmSamples.clear();
+    _currentBpm = null;
+    _hrSub = widget.heartRate.stream.listen((bpm) {
+      _bpmSamples.add(bpm);
+      if (mounted) setState(() => _currentBpm = bpm);
+    });
+
     // Crash-safe incremental persistence — every 10s, write the current
     // track + stats to a separate file so a force-kill mid-run is recoverable.
     _incrementalSaveTimer =
@@ -620,6 +642,13 @@ class _RunScreenState extends State<RunScreen> {
     final metadata = Map<String, dynamic>.from(raw.metadata ?? {});
     metadata['activity_type'] = _activityType.name;
     if (_steps > 0) metadata['steps'] = _steps;
+
+    // Average heart rate across the run (BLE chest-strap samples).
+    if (_bpmSamples.isNotEmpty) {
+      metadata['avg_bpm'] = _bpmSamples.reduce((a, b) => a + b) / _bpmSamples.length;
+    }
+    await _hrSub?.cancel();
+    _hrSub = null;
 
     // Prefer the stable id generated at _begin() over the recorder's
     // stop-time uuid so the saved run matches any incremental in-progress

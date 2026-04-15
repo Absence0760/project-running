@@ -12,6 +12,16 @@
     <!-- Health Connect read permissions for importing workouts. -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+
+    <!-- Bluetooth LE for chest-strap HR monitors. Android 12+ (API 31)
+         replaced legacy BLUETOOTH / BLUETOOTH_ADMIN / ACCESS_FINE_LOCATION
+         for scan with the split BLUETOOTH_SCAN / BLUETOOTH_CONNECT pair.
+         `neverForLocation` lets us scan without triggering the location
+         permission prompt — we already have location for GPS. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+                     android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application
         android:label="Better Runner"
         android:name="${applicationName}"

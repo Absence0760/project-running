@@ -113,6 +113,13 @@
 		return Math.round((totalSteps / (movingSeconds / 60)) || 0);
 	});
 
+	/** Average heart rate. Watch apps (watch_ios, watch_wear) record this
+	 *  into `metadata.avg_bpm` during a run. See `docs/metadata.md`. */
+	let avgBpm = $derived.by(() => {
+		const v = run?.metadata?.['avg_bpm'];
+		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
+	});
+
 	const hrZones = [
 		{ zone: 'Zone 1', label: 'Recovery', pct: 8, color: '#90CAF9' },
 		{ zone: 'Zone 2', label: 'Easy', pct: 32, color: '#4CAF50' },
@@ -262,6 +269,12 @@
 				<div class="key-stat">
 					<span class="key-stat-value">{avgCadence}</span>
 					<span class="key-stat-label">Cadence spm</span>
+				</div>
+			{/if}
+			{#if avgBpm != null}
+				<div class="key-stat">
+					<span class="key-stat-value">{avgBpm}</span>
+					<span class="key-stat-label">Avg HR bpm</span>
 				</div>
 			{/if}
 		</div>

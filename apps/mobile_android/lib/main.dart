@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -13,6 +15,7 @@ import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
+import 'ble_heart_rate.dart';
 import 'tile_cache.dart';
 import 'training_service.dart';
 import 'wear_auth_bridge.dart';
@@ -107,6 +110,11 @@ void main() async {
 
   final social = SocialService();
   final training = TrainingService();
+  final heartRate = BleHeartRate();
+  // Kick off auto-reconnect in the background. If the user has paired a
+  // strap previously, HR is ready when they tap Start; otherwise it's a
+  // no-op and the run records without HR.
+  unawaited(heartRate.connectCached());
 
   runApp(RunApp(
     apiClient: api,
@@ -117,6 +125,7 @@ void main() async {
     syncService: syncService,
     social: social,
     training: training,
+    heartRate: heartRate,
     recoveredRun: recoveredRun,
   ));
 }
@@ -136,6 +145,7 @@ class RunApp extends StatefulWidget {
   final SyncService syncService;
   final SocialService social;
   final TrainingService training;
+  final BleHeartRate heartRate;
   final cm.Run? recoveredRun;
   const RunApp({
     super.key,
@@ -147,6 +157,7 @@ class RunApp extends StatefulWidget {
     required this.syncService,
     required this.social,
     required this.training,
+    required this.heartRate,
     this.recoveredRun,
   });
 
@@ -208,6 +219,7 @@ class _RunAppState extends State<RunApp> {
                   audioCues: widget.audioCues,
                   social: widget.social,
                   training: widget.training,
+                  heartRate: widget.heartRate,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,
