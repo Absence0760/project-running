@@ -106,10 +106,20 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
+	const personality = (context.data as Record<string, unknown>)?.runner_context as Record<string, unknown> | undefined;
+	const coachStyle = personality?.coach_personality as string | undefined;
+	let personalityAddendum = '';
+	if (coachStyle === 'drill_sergeant') {
+		personalityAddendum = '\n\nTone override: be blunt, demanding, and no-nonsense. Push the runner hard. Short sentences. No coddling. Think military coach.';
+	} else if (coachStyle === 'analytical') {
+		personalityAddendum = '\n\nTone override: be data-driven and precise. Lead with numbers, percentages, and trends. Cite specific paces, distances, and dates. Think sports scientist.';
+	}
+	// 'supportive' is the default tone in COACH_SYSTEM_PROMPT — no addendum needed.
+
 	const systemBlocks = [
 		{
 			type: 'text' as const,
-			text: COACH_SYSTEM_PROMPT,
+			text: COACH_SYSTEM_PROMPT + personalityAddendum,
 			cache_control: { type: 'ephemeral' as const }
 		}
 	];
@@ -184,6 +194,7 @@ const COACH_SYSTEM_PROMPT = `You are a running coach embedded in the user's trai
 - Answer "should I run today/tomorrow?" questions using their plan, recent runs, and any signs of strain (a string of missed sessions, pace drift on easy runs, unusually high mileage the week before, etc.).
 - Explain what a workout is designed to achieve and how to execute it.
 - Flag red flags gently — a 3-day miss, a long run that's far slower than usual, back-to-back hard days when the plan says easy.
+- Use runner_context when available: age (from date_of_birth), resting/max HR and HR zones for effort-level guidance, weekly_mileage_goal_m for progress commentary. If HR zones are set, interpret avg_bpm from runs in terms of those zones.
 
 You do NOT:
 
@@ -256,10 +267,26 @@ async function buildContext(
 		.eq('id', user.id)
 		.maybeSingle();
 
+	const { data: userSettings } = await supabase
+		.from('user_settings')
+		.select('prefs')
+		.eq('user_id', user.id)
+		.maybeSingle();
+	const prefs = (userSettings?.prefs ?? {}) as Record<string, unknown>;
+
 	return {
 		data: {
 			now_iso: new Date().toISOString(),
 			profile: profile ?? null,
+			runner_context: {
+				date_of_birth: prefs.date_of_birth ?? null,
+				resting_hr_bpm: prefs.resting_hr_bpm ?? null,
+				max_hr_bpm: prefs.max_hr_bpm ?? null,
+				hr_zones: prefs.hr_zones ?? null,
+				weekly_mileage_goal_m: prefs.weekly_mileage_goal_m ?? null,
+				auto_pause_enabled: prefs.auto_pause_enabled ?? null,
+				coach_personality: prefs.coach_personality ?? null,
+			},
 			plan: plan ?? null,
 			plan_weeks: weeks,
 			plan_workouts: workouts,
