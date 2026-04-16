@@ -5,9 +5,13 @@ import 'dart:typed_data';
 import 'package:api_client/api_client.dart';
 import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+
+import 'local_route_store.dart';
+import 'local_run_store.dart';
 
 /// Full round-trip backup and restore for the signed-in user's data.
 /// See [docs/backup_restore.md](../../../docs/backup_restore.md) for the
@@ -121,15 +125,35 @@ class BackupService {
     return outputFile;
   }
 
-  /// Read [zipFile] and upsert its contents against the signed-in user.
-  /// Additive — never deletes existing data.
+  /// Read [zipFile] and restore its contents.
+  ///
+  /// Two modes:
+  ///
+  /// * **Online** — the user is signed in. Runs + routes + profile are
+  ///   upserted directly to Supabase; track blobs are re-homed to the
+  ///   signed-in user's Storage bucket. This is the normal path.
+  /// * **Offline-first** — no session, but a [runStore] and/or
+  ///   [routeStore] are supplied. Data is hydrated into the local
+  ///   stores marked as not-yet-synced; `SyncService` takes over the
+  ///   upload once the user signs in. Profile + settings are skipped
+  ///   with a warning — those keys don't apply to an anonymous user.
+  ///
+  /// Additive either way — never deletes existing data.
   Future<RestoreResult> restore({
     required File zipFile,
     bool generateNewIds = false,
+    LocalRunStore? runStore,
+    LocalRouteStore? routeStore,
     void Function(RestoreProgress)? onProgress,
   }) async {
     final userId = api.userId;
-    if (userId == null) throw Exception('Not authenticated');
+    final offline = userId == null;
+
+    if (offline && runStore == null && routeStore == null) {
+      throw Exception(
+        'Sign in first, or pass a local store to restore offline.',
+      );
+    }
 
     onProgress?.call(const RestoreProgress.stage('reading'));
     final bytes = await zipFile.readAsBytes();
@@ -146,6 +170,19 @@ class BackupService {
       );
     }
 
+    if (offline) {
+      return _restoreOffline(
+        archive: archive,
+        runStore: runStore,
+        routeStore: routeStore,
+        generateNewIds: generateNewIds,
+        onProgress: onProgress,
+      );
+    }
+
+    // Online path — we're signed in. Capture into a non-null local so
+    // later branches don't have to re-null-check.
+    final uid = userId;
     final result = RestoreResult();
 
     // Profile first.
@@ -155,14 +192,14 @@ class BackupService {
       try {
         if (profile['profile'] is Map<String, dynamic>) {
           final row = Map<String, dynamic>.from(profile['profile'] as Map);
-          row['id'] = userId;
+          row['id'] = uid;
           await _client.from('user_profiles').upsert(row);
           result.profileRestored = true;
         }
         final prefs = profile['settings_prefs'];
         if (prefs is Map && prefs.isNotEmpty) {
           await _client.from('user_settings').upsert({
-            'user_id': userId,
+            'user_id': uid,
             'prefs': prefs,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           });
@@ -209,11 +246,11 @@ class BackupService {
           try {
             final trackBytes = Uint8List.fromList(trackFile.content as List<int>);
             await api.uploadTrackBytes(
-              userId: userId,
+              userId: uid,
               runId: newId,
               gzippedBytes: trackBytes,
             );
-            trackUrl = '$userId/$newId.json.gz';
+            trackUrl = '$uid/$newId.json.gz';
             result.tracksUploaded++;
           } catch (e) {
             result.warnings.add('track $origId: $e');
@@ -224,7 +261,7 @@ class BackupService {
         final eventId = (ev is String && validEventIds.contains(ev)) ? ev : null;
 
         r['id'] = newId;
-        r['user_id'] = userId;
+        r['user_id'] = uid;
         r['event_id'] = eventId;
         r['track_url'] = trackUrl;
 
@@ -249,7 +286,7 @@ class BackupService {
         final origId = r['id'];
         final newId = generateNewIds ? _randomUuid() : origId;
         r['id'] = newId;
-        r['user_id'] = userId;
+        r['user_id'] = uid;
         try {
           await _client.from('routes').upsert(r);
           result.routesImported++;
@@ -262,6 +299,155 @@ class BackupService {
 
     onProgress?.call(const RestoreProgress.done());
     return result;
+  }
+
+  /// Offline-first restore. Hydrates local stores and leaves the
+  /// SyncService to push to Supabase on next sign-in.
+  ///
+  /// Tracks are decoded from the archive and attached to the in-memory
+  /// `Run` object rather than re-gzipped to disk — once the user signs
+  /// in, `ApiClient.saveRun` re-gzips and uploads, matching the normal
+  /// save path. That means a big backup temporarily lives in memory
+  /// during the restore loop; for typical libraries (hundreds of runs,
+  /// not tens of thousands) this is fine. If that breaks someday, stage
+  /// the `.json.gz` blobs to the cache dir keyed on run id instead.
+  Future<RestoreResult> _restoreOffline({
+    required Archive archive,
+    required LocalRunStore? runStore,
+    required LocalRouteStore? routeStore,
+    required bool generateNewIds,
+    required void Function(RestoreProgress)? onProgress,
+  }) async {
+    final result = RestoreResult();
+    result.warnings.add(
+      'Restoring offline — runs are queued locally and will sync once you '
+      'sign in. Profile and settings were skipped.',
+    );
+
+    // Runs.
+    if (runStore != null) {
+      final runs = _readJson(archive, 'runs.json') as List?;
+      if (runs != null) {
+        var i = 0;
+        for (final entry in runs) {
+          onProgress?.call(RestoreProgress.runs(i, runs.length));
+          if (entry is! Map) { i++; continue; }
+          final r = Map<String, dynamic>.from(entry);
+          final origId = r['id'] as String;
+          final newId = generateNewIds ? _randomUuid() : origId;
+
+          final track = _decodeTrack(archive, origId);
+
+          try {
+            final run = cm.Run(
+              id: newId,
+              startedAt: DateTime.parse(r['started_at'] as String),
+              duration: Duration(seconds: (r['duration_s'] as num).toInt()),
+              distanceMetres: (r['distance_m'] as num).toDouble(),
+              track: track,
+              routeId: r['route_id'] as String?,
+              source: cm.RunSource.values.firstWhere(
+                (s) => s.name == (r['source'] as String?),
+                orElse: () => cm.RunSource.app,
+              ),
+              externalId: r['external_id'] as String?,
+              metadata: r['metadata'] is Map
+                  ? Map<String, dynamic>.from(r['metadata'] as Map)
+                  : null,
+              createdAt: r['created_at'] != null
+                  ? DateTime.tryParse(r['created_at'] as String)
+                  : null,
+            );
+            await runStore.save(run);
+            result.runsImported++;
+            if (track.isNotEmpty) result.tracksUploaded++;
+          } catch (e) {
+            result.warnings.add('run $origId: $e');
+          }
+          i++;
+        }
+      }
+    } else {
+      result.warnings.add('runs: no LocalRunStore supplied — skipped');
+    }
+
+    // Routes.
+    if (routeStore != null) {
+      final routes = _readJson(archive, 'routes.json') as List?;
+      if (routes != null) {
+        var i = 0;
+        for (final entry in routes) {
+          onProgress?.call(RestoreProgress.routes(i, routes.length));
+          if (entry is! Map) { i++; continue; }
+          final r = Map<String, dynamic>.from(entry);
+          final origId = r['id'] as String;
+          final newId = generateNewIds ? _randomUuid() : origId;
+          try {
+            final waypoints = <cm.Waypoint>[];
+            final wp = r['waypoints'];
+            if (wp is List) {
+              for (final w in wp) {
+                if (w is! Map) continue;
+                waypoints.add(cm.Waypoint(
+                  lat: (w['lat'] as num).toDouble(),
+                  lng: (w['lng'] as num).toDouble(),
+                  elevationMetres: (w['ele'] as num?)?.toDouble(),
+                ));
+              }
+            }
+            final route = cm.Route(
+              id: newId,
+              name: r['name'] as String? ?? 'Route',
+              waypoints: waypoints,
+              distanceMetres: (r['distance_m'] as num?)?.toDouble() ?? 0,
+              elevationGainMetres:
+                  (r['elevation_m'] as num?)?.toDouble() ?? 0,
+              isPublic: r['is_public'] == true,
+              surface: r['surface'] as String?,
+              tags: (r['tags'] as List?)?.cast<String>() ?? const [],
+              featured: r['featured'] == true,
+              runCount: (r['run_count'] as num?)?.toInt() ?? 0,
+              createdAt: r['created_at'] != null
+                  ? DateTime.tryParse(r['created_at'] as String)
+                  : null,
+            );
+            await routeStore.save(route);
+            result.routesImported++;
+          } catch (e) {
+            result.warnings.add('route $origId: $e');
+          }
+          i++;
+        }
+      }
+    }
+
+    onProgress?.call(const RestoreProgress.done());
+    return result;
+  }
+
+  List<cm.Waypoint> _decodeTrack(Archive archive, String runId) {
+    final file = archive.findFile('tracks/$runId.json.gz');
+    if (file == null) return const [];
+    try {
+      final gz = file.content as List<int>;
+      final raw = GZipDecoder().decodeBytes(gz);
+      final body = utf8.decode(raw);
+      final list = jsonDecode(body) as List;
+      return [
+        for (final w in list)
+          if (w is Map)
+            cm.Waypoint(
+              lat: (w['lat'] as num).toDouble(),
+              lng: (w['lng'] as num).toDouble(),
+              elevationMetres: (w['ele'] as num?)?.toDouble(),
+              timestamp: w['ts'] is String
+                  ? DateTime.tryParse(w['ts'] as String)
+                  : null,
+            ),
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   // ----- helpers -----

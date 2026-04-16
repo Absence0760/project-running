@@ -228,9 +228,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _restoreBackup() async {
     final api = widget.apiClient;
-    if (api == null || api.userId == null) {
+    final store = widget.runStore;
+    if (api == null || store == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in first to restore.')),
+        const SnackBar(content: Text('Backup service unavailable.')),
       );
       return;
     }
@@ -241,13 +242,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (picked == null || picked.files.isEmpty) return;
     final path = picked.files.first.path;
     if (path == null) return;
+    final offline = api.userId == null;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Restore from backup?'),
-        content: const Text(
-          'This adds or overwrites runs and routes matching IDs in the backup. '
-          'It will not delete runs or routes that aren\'t in the backup.',
+        content: Text(
+          offline
+              ? 'You\'re not signed in. Runs will be restored to this device '
+                  'and synced to your account the next time you sign in.'
+              : 'This adds or overwrites runs and routes matching IDs in the '
+                  'backup. It will not delete runs or routes that aren\'t in '
+                  'the backup.',
         ),
         actions: [
           TextButton(
@@ -265,7 +271,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(const SnackBar(content: Text('Restoring…')));
     try {
-      final res = await BackupService(api: api).restore(zipFile: File(path));
+      final res = await BackupService(api: api).restore(
+        zipFile: File(path),
+        runStore: store,
+      );
       messenger.showSnackBar(
         SnackBar(
           content: Text(

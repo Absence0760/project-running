@@ -101,9 +101,16 @@ as their DB rows.
 
 - **Web** → `/settings/account` → "Download full backup" + "Restore from
   backup". Implemented in `apps/web/src/lib/backup.ts`. Uses `JSZip`.
+  Both paths require an authenticated session — there's no local
+  persistence to stage into.
 - **Mobile Android** → Settings → "Full backup" / "Restore from backup".
   Implemented in `apps/mobile_android/lib/backup.dart`. Uses the
-  `archive` package.
+  `archive` package. **Restore works offline** — if the user isn't
+  signed in, runs + routes are hydrated into `LocalRunStore` /
+  `LocalRouteStore` and `SyncService` pushes them to Supabase on the
+  next sign-in. Profile and `user_settings` keys are skipped in that
+  mode with a warning; they need a user id to attach to. Export still
+  requires sign-in since the canonical source of truth is the server.
 - Mobile iOS and the watch apps do **not** offer backup — too much UI for
   a small screen. Use the phone or the web.
 
