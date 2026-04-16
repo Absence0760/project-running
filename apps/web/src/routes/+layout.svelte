@@ -12,7 +12,7 @@
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
 		{ href: '/explore', label: 'Explore', icon: 'explore', accent: '#7FB3C2' },
-		{ href: '/settings/integrations', label: 'Settings', icon: 'settings', accent: '#E6A96B' },
+		{ href: '/settings/account', label: 'Settings', icon: 'settings', accent: '#E6A96B' },
 	];
 
 	const publicPaths = ['/', '/login', '/auth/callback'];
@@ -23,7 +23,7 @@
 		path.startsWith('/clubs/join/');
 
 	function isActive(href: string, path: string): boolean {
-		if (href === '/settings/integrations') return path.startsWith('/settings');
+		if (href === '/settings/account') return path.startsWith('/settings');
 		return path.startsWith(href);
 	}
 
