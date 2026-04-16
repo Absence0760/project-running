@@ -79,6 +79,8 @@ const _tables = <String>{
   'event_results',
   'race_sessions',
   'race_pings',
+  'user_coach_usage',
+  'monthly_funding',
 };
 
 class _Column {

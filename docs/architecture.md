@@ -79,7 +79,7 @@ scripts:
 │                                                                          │
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌─────────┐ ┌─────────────┐ │
 │  │ iOS app   │ │Android app│ │Apple Watch│ │ Wear OS │ │  Web app    │ │
-│  │ Flutter   │ │  Flutter  │ │Swift+WKit │ │ Flutter │ │ SvelteKit  │ │
+│  │ Flutter   │ │  Flutter  │ │Swift+WKit │ │ Kotlin  │ │ SvelteKit  │ │
 │  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └────┬────┘ └──────┬──────┘ │
 │        │             │       WatchConnectivity    │             │        │
 └────────┼─────────────┼─────────────┼─────────────┼─────────────┼────────┘
@@ -183,9 +183,19 @@ src/routes/
 ├── runs/
 │   ├── +page.svelte            # Run history with filters
 │   └── [id]/+page.svelte       # Run detail — map + full analysis
+├── clubs/                       # Social layer — browse + create + detail
+├── plans/                       # Training plans list + create + detail
+├── explore/                     # Public route discovery (nearby, search)
+├── live/                        # Live spectator tracking
+├── api/coach/+server.ts         # Claude coach endpoint (server-side)
+├── share/                       # Public run/route share pages (no auth)
 └── settings/
-    ├── integrations/+page.svelte  # Connect Strava, Garmin, parkrun
-    └── account/+page.svelte       # Profile, subscription, data export
+    ├── +layout.svelte           # Tabbed settings layout
+    ├── account/+page.svelte     # Profile, display name, data export
+    ├── preferences/+page.svelte # Units, activity defaults, coach tone
+    ├── integrations/+page.svelte # Connect Strava, Garmin, parkrun
+    ├── devices/+page.svelte     # Per-device settings
+    └── upgrade/+page.svelte     # Funding transparency + donate
 ```
 
 **Route builder (web-specific):**
@@ -324,11 +334,14 @@ create table runs (
   started_at  timestamptz not null,
   duration_s  integer not null,
   distance_m  numeric not null,
-  track       jsonb,           -- array of {lat, lng, ele, ts}
+  track_url   text,            -- Storage path: {user_id}/{run_id}.json.gz
+  is_public   boolean default false,
   route_id    uuid references routes,
-  source      text not null,   -- 'recorded' | 'strava' | 'garmin' | 'parkrun'
+  source      text not null,   -- 'app' | 'strava' | 'garmin' | 'parkrun' | ...
   external_id text,            -- source platform's ID for deduplication
-  created_at  timestamptz default now()
+  metadata    jsonb,           -- source-specific extra fields
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
 );
 
 create table routes (
@@ -375,6 +388,9 @@ Thin TypeScript functions deployed to Supabase Edge Functions (Deno runtime).
 | `strava-import` | POST (user action) | OAuth token exchange, backfill last 90 days of activities |
 | `parkrun-import` | POST (user action) | Fetch athlete results page by athlete number, parse HTML, save runs |
 | `refresh-tokens` | Scheduled (cron) | Refresh expiring Strava access tokens before they expire |
+| `export-data` | POST (user action) | Export all user runs as GPX zip or CSV (GDPR) |
+| `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation |
+| `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) |
 
 ---
 

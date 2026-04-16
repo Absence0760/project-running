@@ -1,30 +1,42 @@
 # Paywall
 
-Subscription tiers and feature gating. The app uses a freemium model:
-the core feature set is free forever; specific high-value or high-cost
-features require a Pro subscription.
+## Current model: free with donations
 
-## Tiers
+**Everything is free.** The app pivoted from a paid subscription model
+to a donation-funded model. `isLocked()` in `features.ts` always
+returns `false` — no feature is gated behind a paywall. The gate
+infrastructure (tiers, `ProGate` component, server-side checks) is
+retained so features can be re-gated later if needed.
+
+The donate/funding page at `/settings/upgrade` shows a transparent
+cost breakdown (Supabase, Claude API, MapTiler, etc.) with progress
+bars showing how much of the monthly server cost is covered by
+donations. Donation data is stored in the `monthly_funding` table
+(see `api_database.md`).
+
+## Tiers (infrastructure retained)
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | All core features |
-| `pro` | Monthly or annual subscription via RevenueCat | Gated features listed below |
-| `lifetime` | One-time purchase via RevenueCat | Same as `pro`, never expires |
+| `free` | Default for every new account | Everything |
+| `pro` | RevenueCat (not currently sold) | Same as free (gate is disabled) |
+| `lifetime` | RevenueCat (not currently sold) | Same as free (gate is disabled) |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
 constraint enforces the three valid values. The `is_pro()` SQL helper
 returns `true` for both `pro` and `lifetime`.
 
-## Gated features
+## Gated features (currently all unlocked)
 
-| Feature key | Label | Where gated |
+| Feature key | Label | Where gated (if re-enabled) |
 |---|---|---|
-| `ai_coach` | AI Coach | Server: `/api/coach/+server.ts` returns 403. Client: `CoachChat.svelte` shows `<ProGate>`. |
-| `priority_sync` | Priority Background Sync | Mobile: `main.dart` skips `registerBackgroundSync()` for free users. Free users sync on app open via `SyncService`; Pro users sync hourly in the background via WorkManager. |
+| `ai_coach` | AI Coach | Server: `/api/coach/+server.ts` checks tier (skipped when `isLocked` returns false). Client: `CoachChat.svelte` shows `<ProGate>`. Currently ungated; usage limited to 10 messages/day instead (see `user_coach_usage` table). |
+| `priority_sync` | Priority Background Sync | Mobile: `main.dart` skips `registerBackgroundSync()` for free users. Currently ungated. |
 
-This list is intentionally short at launch. New features are added by
-following the checklist below.
+All features are free. The AI Coach has a **daily usage limit of 10
+messages per user** (enforced server-side via `increment_coach_usage`
+RPC) instead of a paywall, keeping API costs manageable without
+charging users.
 
 ## Adding a new gated feature
 
@@ -147,11 +159,22 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
 | `REVENUECAT_API_KEY_WEB` | Web `.env` / CI secrets | RevenueCat project API key for web |
 
-## Payment flow (user perspective)
+## Donation flow (user perspective)
+
+1. User navigates to `/settings/upgrade` (linked from sidebar and
+   settings layout).
+2. Page shows a transparent cost breakdown (server costs, dev time)
+   with progress bars showing donation coverage for the current month.
+3. User picks a donation tier (e.g. "Buy me a gel" / "Cover a day of
+   servers") and is directed to an external payment link.
+4. Project owner updates `monthly_funding` when donations land.
+
+## Payment flow (retained for future re-gating)
+
+If features are re-gated behind a paywall:
 
 1. User taps a locked feature → sees the `<ProGate>` card.
-2. Taps "Upgrade" → navigates to `/settings/account` (web) or a
-   dedicated upgrade sheet (mobile).
+2. Taps "Upgrade" → navigates to `/settings/upgrade`.
 3. RevenueCat SDK presents the native payment flow (Play Store / App
    Store / Stripe for web).
 4. On success, RevenueCat fires the webhook → Edge Function updates

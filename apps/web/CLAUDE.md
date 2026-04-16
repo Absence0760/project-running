@@ -17,8 +17,8 @@ This is a SvelteKit web template deployed to GitHub Pages.
 ```
 src/
   lib/
-    components/     # RunMap, ElevationProfile, ImportRoute, RouteBuilder
-    stores/         # auth.svelte.ts (Supabase Auth store)
+    components/     # RunMap, ElevationProfile, ImportRoute, RouteBuilder, CoachChat, ConfirmDialog, ToastContainer, ProGate, WorkoutEditor
+    stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types
     database.types.ts  # Generated Supabase types (regenerate after migrations)
@@ -44,7 +44,7 @@ src/
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
     api/coach/+server.ts         # Claude coach — prompt-cached over plan + recent runs. Needs a server adapter + ANTHROPIC_API_KEY
     explore/        # Public route discovery (search, distance/surface filters)
-    settings/       # Account, integrations, preferences
+    settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)
     live/[id]/      # Live spectator tracking (simulated)

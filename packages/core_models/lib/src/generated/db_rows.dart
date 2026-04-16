@@ -503,6 +503,42 @@ class IntegrationRow {
   };
 }
 
+/// Row shape for the `monthly_funding` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class MonthlyFundingRow {
+  static const String table = 'monthly_funding';
+  static const String colMonth = 'month';
+  static const String colAmountReceived = 'amount_received';
+  static const String colDonorCount = 'donor_count';
+  static const String colUpdatedAt = 'updated_at';
+
+  final DateTime month;
+  final double amountReceived;
+  final int donorCount;
+  final DateTime updatedAt;
+
+  const MonthlyFundingRow({
+    required this.month,
+    required this.amountReceived,
+    required this.donorCount,
+    required this.updatedAt,
+  });
+
+  factory MonthlyFundingRow.fromJson(Map<String, dynamic> json) => MonthlyFundingRow(
+    month: DateTime.parse(json['month'] as String),
+    amountReceived: (json['amount_received'] as num).toDouble(),
+    donorCount: (json['donor_count'] as num).toInt(),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colMonth: month.toIso8601String(),
+    colAmountReceived: amountReceived,
+    colDonorCount: donorCount,
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `plan_weeks` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class PlanWeekRow {
@@ -1093,6 +1129,37 @@ class TrainingPlanRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colSource: source,
     colRules: rules,
+  };
+}
+
+/// Row shape for the `user_coach_usage` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class UserCoachUsageRow {
+  static const String table = 'user_coach_usage';
+  static const String colUserId = 'user_id';
+  static const String colUsageDate = 'usage_date';
+  static const String colMessageCount = 'message_count';
+
+  final String userId;
+  final DateTime usageDate;
+  final int messageCount;
+
+  const UserCoachUsageRow({
+    required this.userId,
+    required this.usageDate,
+    required this.messageCount,
+  });
+
+  factory UserCoachUsageRow.fromJson(Map<String, dynamic> json) => UserCoachUsageRow(
+    userId: json['user_id'] as String,
+    usageDate: DateTime.parse(json['usage_date'] as String),
+    messageCount: (json['message_count'] as num).toInt(),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colUsageDate: usageDate.toIso8601String(),
+    colMessageCount: messageCount,
   };
 }
 

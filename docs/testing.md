@@ -25,6 +25,9 @@ flutter test --plain-name "speed clamp drops teleport-style jumps"
 
 # Or regex match
 flutter test --name "^position filter chain"
+
+# Web (TypeScript) tests — from apps/web
+npx tsx --test src/lib/training.test.ts
 ```
 
 `flutter test` has no built-in `--watch` flag. For a tight edit-save-test loop, either rerun the single file manually (sub-second) or wire up an editor integration — the Flutter plugin for VS Code and Android Studio both support running individual tests from gutter icons and auto-re-running on save.
@@ -40,7 +43,7 @@ flutter test --name "^position filter chain"
 
 ## What's covered today
 
-Total: **94 tests across 6 files** (80 in mobile_android + 14 in run_recorder), all Dart unit tests (no widget tests, no integration tests, no golden tests yet).
+Total: **142 tests across 10 files** — 107 Dart unit tests in mobile_android (8 test files), 14 in run_recorder, and 21 TypeScript unit tests in the web app. No widget tests, no integration tests, no golden tests yet.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -162,6 +165,67 @@ Tests for Ramer-Douglas-Peucker track simplification in `lib/route_simplify.dart
 - Fewer than 3 points returned unchanged
 - Collinear points dropped
 - `computeElevationGain` accumulates only positive deltas
+
+### `apps/mobile_android/test/ble_heart_rate_test.dart` — 9 tests
+
+Pure-function tests for `parseBleHeartRateMeasurement` in `lib/ble_heart_rate.dart`, the BLE Heart Rate Service characteristic 0x2A37 parser:
+
+- 8-bit BPM decoding (flags byte with various sensor-contact + EE bits)
+- 16-bit BPM little-endian decoding
+- 16-bit at low value (some straps always report 16-bit)
+- Empty payload returns null
+- Truncated payload returns null
+- Single-byte payload returns null
+
+### `apps/mobile_android/test/training_test.dart` — 18 tests
+
+Dart mirror of `apps/web/src/lib/training.test.ts`. The Dart engine (`lib/training.dart`) must produce the same paces and phase assignments as the TypeScript engine for the same inputs. Covers the same functions:
+
+- `vdotFromRace`: 3 tests (VDOT 50, VDOT 54, faster = higher)
+- `riegelPredict`: 2 tests (identity, projection)
+- `pacesFromGoalPace`: 2 tests (zone ordering, 4:00/km band)
+- `resolveTrainingPaces`: 2 tests (recent 5k anchor, fallback)
+- `phaseFor`: 2 tests (phase splits, final week)
+- `generatePlan`: 7 tests (week count, day distribution, taper volume, race week, intervals, no-input fallback, stepback)
+
+### `apps/web/src/lib/training.test.ts` — 21 tests
+
+TypeScript unit tests for the training plan engine, written against Node's `node:test` API (no test runner dependency). Run with `npx tsx --test src/lib/training.test.ts` from `apps/web`.
+
+**`vdotFromRace` (3 tests):**
+- 20-min 5k yields ~VDOT 50
+- 3:00 marathon yields ~VDOT 54
+- Slower runners get lower VDOT
+
+**`riegelPredict` (3 tests):**
+- 20-min 5k projects to ~41-42 min 10k
+- Identity for same distance
+- Longer target means longer predicted time
+
+**`pacesFromGoalPace` (2 tests):**
+- Zones ordered slow to fast
+- 4:00/km goal yields easy pace in the 4:30-5:15 band
+
+**`resolveTrainingPaces` (2 tests):**
+- Recent 5k beats goal time as pace anchor
+- Fall-back without race data produces valid paces
+
+**`phaseFor` (2 tests):**
+- 16-week plan splits ~30/40/20/10 base/build/peak/taper
+- Final week is always race
+
+**`generatePlan` (8 tests):**
+- Correct number of weeks produced
+- 4-day plan has 3 runs + 1 long per week in base
+- Taper weeks have lower volume than peak
+- Race week ends with a race-kind workout
+- Build-phase intervals have structured interval data
+- No recent 5k + no goal still produces a plan
+- Weekly volume steps back every 4th week
+- Regression: every workout has a `kind` (null-kind race-week bug)
+
+**`GOAL_DISTANCES_M` (1 test):**
+- Half marathon constant is within 1m of 21.0975km
 
 ---
 

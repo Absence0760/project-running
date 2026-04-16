@@ -122,7 +122,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Row-level security policies on all tables
 - [x] Database functions (weekly_mileage, personal_records)
 - [x] Seed script with test user and mock data
-- [x] Edge Functions: parkrun-import, strava-import, strava-webhook, refresh-tokens, export-data
+- [x] Edge Functions: parkrun-import, strava-import, strava-webhook, refresh-tokens, export-data, revenuecat-webhook, delete-account
 - [x] Move GPS tracks from JSONB `track` column to Supabase Storage. Tracks
       are now gzipped JSON files at `runs/{user_id}/{run_id}.json.gz` and the
       row stores a `track_url` pointer. Cuts per-row size by ~99%, eliminates
@@ -335,7 +335,25 @@ Phased rollout so the schema doesn't sprawl. MVP is club-owned events only, enum
 | parkrun | Athlete number scrape | [ ] Edge Function exists, not wired |
 | Race results | RunSignUp API + bib scrape | [ ] Not started |
 
-### Premium tier — training and coaching (~$6/month)
+### AI Coach (free, usage-capped)
+
+Claude-powered training advisor embedded in the web app. Reviews the runner's plan and recent runs; does not generate plans or prescribe medical/nutrition advice (see `decisions.md #12`).
+
+- [x] Server endpoint (`/api/coach/+server.ts`) with prompt-cached system prompt + context dump
+- [x] `CoachChat.svelte` UI with suggestion chips and cache-hit stats
+- [x] Daily usage limit of 10 messages per user (`user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
+- [x] Personality tones — `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) fed into the system prompt
+- [x] User preferences (date of birth, HR zones, resting/max HR, weekly mileage goal) fed into context for personalised advice
+
+### Funding and donations (free-with-donations pivot)
+
+- [x] All features free — `isLocked()` always returns `false` (see `decisions.md #18`)
+- [x] Transparent funding page at `/settings/upgrade` with real cost breakdown and progress bars
+- [x] `monthly_funding` table for donation tracking
+- [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)
+- [x] `ToastContainer.svelte` + `toast.svelte.ts` for transient success/error/info feedback
+
+### Premium tier — training and coaching (deferred, see decisions.md #18)
 
 **Structured training plan runner (workout execution):**
 

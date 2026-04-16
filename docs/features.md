@@ -427,6 +427,88 @@ Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store +
 
 ---
 
+## AI Coach
+
+**Phase:** 3 (shipped) | **Platform:** Web
+
+**Why:** Runners want a "second opinion" on their plan adherence without hiring a human coach. The coach is grounded in the user's actual data (plan, recent runs, settings) and deliberately scoped to avoid liability (no plan generation, no medical/nutrition advice).
+
+**Spec:**
+
+Claude-powered chat embedded in the web app via `CoachChat.svelte`. The server endpoint at `/api/coach/+server.ts` sends the user's active training plan, recent runs, and profile/preferences as cached context, then streams the conversation. Two prompt-cache breakpoints (system prompt + context dump) keep repeat turns cheap.
+
+**Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
+
+**Usage limits:** 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. The UI shows "N of M remaining" before the user types. `BYPASS_PAYWALL=true` skips the limit in dev.
+
+**What the coach does:**
+- Critique adherence (hitting planned sessions, mileage, pace targets)
+- Answer "should I run today?" questions using plan + recent runs
+- Explain what a workout is designed to achieve
+- Flag red flags (missed sessions, pace drift, back-to-back hard days)
+- Use runner context (age, HR zones, weekly goal) when available
+
+**What the coach refuses:**
+- Prescribing new plans or rewriting existing ones
+- Medical advice (redirects to doctor/physio)
+- Nutrition prescriptions
+- Inventing stats not in the context
+
+See `decisions.md #12` for the rationale.
+
+**Done when:**
+- Coach responds within 3 seconds on a warm cache
+- Personality tone is audibly different across the three presets
+- Usage limit rejects at 11th message with a clear "come back tomorrow" message
+- Context includes the user's plan and last 20 runs
+
+---
+
+## Funding transparency
+
+**Phase:** 3 (shipped) | **Platform:** Web
+
+**Why:** The app uses a free-with-donations model (see `decisions.md #18`). Transparency about costs builds trust and motivates donations.
+
+**Spec:**
+
+The `/settings/upgrade` page shows:
+- A line-item cost breakdown (Supabase, Claude API, MapTiler, domain, misc)
+- A progress bar for server costs covered this month
+- A progress bar for total costs (server + dev time) covered this month
+- Donor count for the current month
+- Donation tiers with icons and accent colors (gel, day of servers, week, month)
+- A full feature list confirming everything is free
+
+Data is read from the `monthly_funding` table (publicly readable, owner-writable).
+
+**Done when:**
+- Progress bars reflect the current month's `monthly_funding` row
+- Cost breakdown matches actual infrastructure spend
+- Donation buttons link to external payment
+
+---
+
+## Custom dialogs and toast system
+
+**Phase:** 3 (shipped) | **Platform:** Web
+
+**Why:** Browser `confirm()`/`alert()`/`prompt()` are unstyled, block the main thread, and break the app's visual language.
+
+**Spec:**
+
+- `ConfirmDialog.svelte` — styled modal for destructive-action confirmations. Focus trap, escape-to-dismiss, configurable title/message/buttons. Resolves a promise so callers can `await` it.
+- `ToastContainer.svelte` + `toast.svelte.ts` — corner notification stack for transient success/error/info messages. Auto-dismiss with configurable duration.
+
+Used across: account deletion, run deletion, club leave, event cancel, RSVP changes, and all server-error feedback.
+
+**Done when:**
+- No `window.confirm()`, `window.alert()`, or `window.prompt()` calls remain in the codebase
+- Toast messages appear for all save/delete/error actions
+- Dialogs are keyboard-accessible
+
+---
+
 ## Competitor-parity features (backlog — not yet in a phase)
 
 These are stubs. Each closes a gap against a specific competitor (see `docs/competitors.md`) and is listed with its sizing + open decisions in `docs/roadmap.md § Competitor-parity backlog`. Flesh each one out on delivery — do **not** treat the stubs below as a spec.

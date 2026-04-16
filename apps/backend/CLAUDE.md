@@ -16,11 +16,32 @@ apps/backend/
     │   ├── 20260405_001_initial_schema.sql
     │   ├── 20260406_001_database_functions.sql
     │   ├── 20260407_001_performance.sql
-    │   └── 20260410_001_runs_to_storage.sql
+    │   ├── 20260410_001_runs_to_storage.sql
+    │   ├── 20260413_001_public_runs.sql
+    │   ├── 20260414_001_route_reviews.sql
+    │   ├── 20260415_001_postgis_nearby_routes.sql
+    │   ├── 20260416_001_clubs_and_events.sql
+    │   ├── 20260417_001_phase2_social.sql
+    │   ├── 20260418_001_social_realtime.sql
+    │   ├── 20260419_001_training_plans.sql
+    │   ├── 20260420_001_plan_editor.sql
+    │   ├── 20260421_001_plan_hardening.sql
+    │   ├── 20260422_001_user_settings.sql
+    │   ├── 20260423_001_backfill_preferred_unit.sql
+    │   ├── 20260424_001_event_results.sql
+    │   ├── 20260425_001_race_sessions.sql
+    │   ├── 20260426_001_route_discovery.sql
+    │   ├── 20260427_001_fix_run_count_trigger.sql
+    │   ├── 20260428_001_role_permissions.sql
+    │   ├── 20260429_001_subscription_paywall.sql
+    │   ├── 20260430_001_coach_usage.sql
+    │   └── 20260501_001_funding.sql
     └── functions/
+        ├── delete-account/index.ts
         ├── export-data/index.ts
         ├── parkrun-import/index.ts
         ├── refresh-tokens/index.ts
+        ├── revenuecat-webhook/index.ts
         ├── strava-import/index.ts
         └── strava-webhook/index.ts
 ```
@@ -112,7 +133,9 @@ Five functions live under `supabase/functions/`. Two are wired up and shippable;
 | `export-data` | **Stub** — every step is a TODO | Client POST with `{ format }` | User JWT | — |
 | `revenuecat-webhook` | **Working** | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC signature verification (`REVENUECAT_WEBHOOK_SECRET`) | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 
-All five are short — 25 to 70 lines each. Read the file, not an abstraction; they don't share helpers.
+| `delete-account` | **Working** | Client POST (user action) | User JWT + service role for admin delete | `SUPABASE_SERVICE_ROLE_KEY` |
+
+All seven are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers.
 
 ### Common shape
 

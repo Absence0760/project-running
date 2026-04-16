@@ -396,6 +396,27 @@ export type Database = {
         }
         Relationships: []
       }
+      monthly_funding: {
+        Row: {
+          amount_received: number
+          donor_count: number
+          month: string
+          updated_at: string
+        }
+        Insert: {
+          amount_received?: number
+          donor_count?: number
+          month: string
+          updated_at?: string
+        }
+        Update: {
+          amount_received?: number
+          donor_count?: number
+          month?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       plan_weeks: {
         Row: {
           id: string
@@ -809,6 +830,24 @@ export type Database = {
         }
         Relationships: []
       }
+      user_coach_usage: {
+        Row: {
+          message_count: number
+          usage_date: string
+          user_id: string
+        }
+        Insert: {
+          message_count?: number
+          usage_date?: string
+          user_id: string
+        }
+        Update: {
+          message_count?: number
+          usage_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_device_settings: {
         Row: {
           device_id: string
@@ -934,6 +973,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_coach_usage: { Args: { p_user_id: string }; Returns: number }
+      increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }
       is_event_organiser: { Args: { target_club: string }; Returns: boolean }

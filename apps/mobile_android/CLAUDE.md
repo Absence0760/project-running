@@ -27,7 +27,6 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 **Stubbed or deferred:**
 - OAuth sign-in for providers other than Google (Apple, Strava, parkrun) — UI removed from Settings in the meantime. See the "Deferred from Phase 1" section in `roadmap.md`.
-- Heart-rate from Bluetooth devices.
 
 ## Files
 
@@ -90,12 +89,14 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Tests
 
-Test files in `test/` (80 tests total):
+Test files in `test/` (107 tests total):
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
 - `local_run_store_test.dart` — 16 tests: store persistence, sync state, in-progress save/load, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
 - `goals_test.dart` — 20 tests: goal evaluation (distance/time/pace/run-count, weekly/monthly, multi-target)
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
+- `training_test.dart` — 18 tests: VDOT, Riegel, pace derivation, plan generation (mirrors `apps/web/src/lib/training.test.ts`)
+- `ble_heart_rate_test.dart` — 9 tests: BLE HR characteristic 0x2A37 parser (8-bit/16-bit BPM, edge cases)
 - plus `run_recorder`'s own 14 tests in `packages/run_recorder/test/`
 
 See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
