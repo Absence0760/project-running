@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
 	import { getDeviceId } from '$lib/settings';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	interface DeviceRow {
 		device_id: string;
@@ -16,6 +17,7 @@
 	let devices = $state<DeviceRow[]>([]);
 	let loading = $state(true);
 	let currentDeviceId = $state('');
+	let confirmingRemove = $state<string | null>(null);
 
 	onMount(async () => {
 		if (!auth.user) return;
@@ -31,14 +33,14 @@
 
 	async function removeDevice(deviceId: string) {
 		if (!auth.user) return;
-		if (!confirm('Remove this device? Its per-device preferences will be deleted.')) return;
 		const { error } = await supabase
 			.from('user_device_settings')
 			.delete()
 			.eq('user_id', auth.user.id)
 			.eq('device_id', deviceId);
-		if (error) { alert('Failed to remove device'); return; }
+		if (error) return;
 		devices = devices.filter((d) => d.device_id !== deviceId);
+		confirmingRemove = null;
 	}
 
 	function platformIcon(p: string): string {
@@ -115,7 +117,7 @@
 						</div>
 					</div>
 					{#if d.device_id !== currentDeviceId}
-						<button class="remove-btn" onclick={() => removeDevice(d.device_id)} title="Remove device">
+						<button class="remove-btn" onclick={() => (confirmingRemove = d.device_id)} title="Remove device">
 							<span class="material-symbols">close</span>
 						</button>
 					{/if}
@@ -124,6 +126,16 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmDialog
+	open={confirmingRemove !== null}
+	title="Remove device"
+	message="Remove this device and its per-device preferences? This cannot be undone."
+	confirmLabel="Remove"
+	danger
+	onconfirm={() => { if (confirmingRemove) removeDevice(confirmingRemove); }}
+	oncancel={() => (confirmingRemove = null)}
+/>
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }
@@ -145,7 +157,17 @@
 	.device-icon { font-size: 1.5rem; color: var(--color-text-secondary); }
 	.device.current .device-icon { color: var(--color-primary); }
 	.device-info { flex: 1; min-width: 0; }
-	.device-name { display: flex; align-items: center; gap: 0.5rem; }
+	.device-name {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		overflow: hidden;
+	}
+	.device-name strong {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.current-badge {
 		font-size: 0.7rem;
 		font-weight: 700;
@@ -159,6 +181,9 @@
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
 		margin-top: 0.2rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.sep { margin: 0 0.3rem; }
 	.remove-btn {

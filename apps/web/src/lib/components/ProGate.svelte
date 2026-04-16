@@ -16,7 +16,7 @@
 	<p class="desc">{featureDescription(feature)}</p>
 	<span class="pro-badge">PRO</span>
 	<p class="cta">Upgrade to Pro to unlock this feature.</p>
-	<a href="/settings/account" class="btn-upgrade">
+	<a href="/settings/upgrade" class="btn-upgrade">
 		<span class="material-symbols">star</span>
 		Upgrade
 	</a>

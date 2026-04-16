@@ -28,6 +28,7 @@
 		type RaceSessionRow
 	} from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
 	import type {
 		EventWithMeta,
@@ -58,6 +59,8 @@
 	let raceBusy = $state(false);
 	let nowTick = $state(Date.now());
 	let autoApproveOnArm = $state(true);
+	let showEndRaceConfirm = $state<'finished' | 'cancelled' | null>(null);
+	let showDeleteEventConfirm = $state(false);
 
 	/** The instance the user is currently RSVPing to. For one-off events this
 	 * stays equal to `event.starts_at`; for recurring events, the user can
@@ -143,9 +146,15 @@
 		}
 	}
 
-	async function handleEnd(status: 'finished' | 'cancelled') {
+	function handleEnd(status: 'finished' | 'cancelled') {
 		if (!event || !activeInstance || raceBusy) return;
-		if (!confirm(status === 'cancelled' ? 'Cancel the race?' : 'End the race?')) return;
+		showEndRaceConfirm = status;
+	}
+
+	async function confirmEndRace() {
+		if (!event || !activeInstance || !showEndRaceConfirm) return;
+		const status = showEndRaceConfirm;
+		showEndRaceConfirm = null;
 		raceBusy = true;
 		try {
 			raceSession = await endRace(event.id, activeInstance, status);
@@ -360,9 +369,14 @@
 		}
 	}
 
-	async function handleDeleteEvent() {
+	function handleDeleteEvent() {
 		if (!event) return;
-		if (!confirm(`Delete "${event.title}"?${event.recurrence_freq ? ' All occurrences will be removed.' : ''}`)) return;
+		showDeleteEventConfirm = true;
+	}
+
+	async function confirmDeleteEvent() {
+		if (!event) return;
+		showDeleteEventConfirm = false;
 		await deleteEvent(event.id);
 		goto(`/clubs/${slug}`);
 	}
@@ -754,6 +768,26 @@
 			{/if}
 		</section>
 	</div>
+
+<ConfirmDialog
+	open={showEndRaceConfirm !== null}
+	title={showEndRaceConfirm === 'cancelled' ? 'Cancel race' : 'End race'}
+	message={showEndRaceConfirm === 'cancelled' ? 'Cancel the race?' : 'End the race?'}
+	confirmLabel={showEndRaceConfirm === 'cancelled' ? 'Cancel race' : 'End race'}
+	onconfirm={confirmEndRace}
+	oncancel={() => showEndRaceConfirm = null}
+	danger
+/>
+
+<ConfirmDialog
+	open={showDeleteEventConfirm}
+	title="Delete event"
+	message={`Delete "${event?.title ?? ''}"?${event?.recurrence_freq ? ' All occurrences will be removed.' : ''}`}
+	confirmLabel="Delete"
+	onconfirm={confirmDeleteEvent}
+	oncancel={() => showDeleteEventConfirm = false}
+	danger
+/>
 {/if}
 
 <style>

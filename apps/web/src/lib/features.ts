@@ -22,19 +22,22 @@ export const GATED_FEATURES: Record<
 		description:
 			'Get personalised training advice powered by Claude, grounded in your actual runs and plan.',
 	},
+	priority_sync: {
+		label: 'Priority Background Sync',
+		description:
+			'Runs sync automatically in the background via WorkManager — no need to open the app. Free users sync when the app is open.',
+	},
 	// Future gated features go here. Examples:
-	// training_plans: { label: 'Training Plans', description: '...' },
 	// live_spectator: { label: 'Live Spectator', description: '...' },
 	// advanced_analytics: { label: 'Advanced Analytics', description: '...' },
 };
 
 /// Returns true when the feature requires a subscription the user
-/// doesn't have. Always returns false when `BYPASS_PAYWALL` is active
-/// on the server (but that's a server check — client-side we just
-/// read the user's tier).
-export function isLocked(feature: string): boolean {
-	if (!(feature in GATED_FEATURES)) return false;
-	return !auth.isPro;
+/// doesn't have. Currently everything is free — this always returns
+/// false. The gate infrastructure stays in place so features can be
+/// paywalled later by flipping this check.
+export function isLocked(_feature: string): boolean {
+	return false;
 }
 
 export function featureLabel(feature: string): string {

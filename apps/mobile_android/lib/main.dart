@@ -117,6 +117,8 @@ void main() async {
   final syncService = SyncService(apiClient: api, runStore: store);
   syncService.start();
 
+  // Background sync for all users. The gate infrastructure exists in
+  // features.ts / paywall.md if this needs to be paywalled later.
   registerBackgroundSync();
 
   final social = SocialService();

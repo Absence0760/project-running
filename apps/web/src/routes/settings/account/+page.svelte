@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { supabase } from '$lib/supabase';
 	import { downloadFile } from '$lib/gpx';
 	import { fetchRuns } from '$lib/data';
@@ -28,6 +31,8 @@
 	let restoreResult = $state<RestoreResult | null>(null);
 	let restoreError = $state<string | null>(null);
 	let restoreFileInput: HTMLInputElement;
+	let showRestoreConfirm = $state(false);
+	let pendingRestoreFile = $state<File | null>(null);
 
 	let newPassword = $state('');
 	let confirmPassword = $state('');
@@ -120,20 +125,66 @@
 			a.href = url; a.download = `run-app-backup-${ts}.zip`;
 			document.body.appendChild(a); a.click(); a.remove();
 			URL.revokeObjectURL(url);
-		} catch (e) { alert(`Backup failed: ${(e as Error).message}`); }
+		} catch (e) { showToast(`Backup failed: ${(e as Error).message}`, 'error'); }
 		finally { backingUp = false; backupProgress = null; }
 	}
 
-	async function handleRestoreFile(e: Event) {
+	function handleRestoreFile(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		const file = input.files?.[0]; if (!file) return;
-		if (!confirm(`Restore from "${file.name}"?\n\nThis adds or overwrites runs matching IDs in the backup.`)) { input.value = ''; return; }
+		pendingRestoreFile = file;
+		showRestoreConfirm = true;
+	}
+
+	async function confirmRestore() {
+		showRestoreConfirm = false;
+		const file = pendingRestoreFile;
+		pendingRestoreFile = null;
+		if (!file) return;
 		restoring = true; restoreProgress = null; restoreResult = null; restoreError = null;
 		try {
 			const res = await restoreBackup(file, { onProgress: (p) => (restoreProgress = p) });
 			restoreResult = res;
 		} catch (err) { restoreError = (err as Error).message; }
-		finally { restoring = false; restoreProgress = null; input.value = ''; }
+		finally { restoring = false; restoreProgress = null; restoreFileInput.value = ''; }
+	}
+
+	function cancelRestore() {
+		showRestoreConfirm = false;
+		pendingRestoreFile = null;
+		restoreFileInput.value = '';
+	}
+
+	let showDeleteAccount = $state(false);
+	let deleting = $state(false);
+
+	async function handleDeleteAccount() {
+		showDeleteAccount = false;
+		deleting = true;
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not signed in');
+			const resp = await fetch(
+				`${import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+				{
+					method: 'POST',
+					headers: {
+						Authorization: `Bearer ${session.access_token}`,
+						'Content-Type': 'application/json',
+					},
+				},
+			);
+			if (!resp.ok) {
+				const body = await resp.json().catch(() => ({}));
+				throw new Error(body.error ?? `HTTP ${resp.status}`);
+			}
+			await auth.logout();
+			goto('/login');
+		} catch (e) {
+			showToast(`Account deletion failed: ${(e as Error).message}`, 'error');
+		} finally {
+			deleting = false;
+		}
 	}
 </script>
 
@@ -237,13 +288,35 @@
 		</button>
 	</section>
 
+	<ConfirmDialog
+		open={showRestoreConfirm}
+		title="Restore from backup"
+		message={`Restore from "${pendingRestoreFile?.name ?? ''}"? This adds or overwrites runs matching IDs in the backup.`}
+		confirmLabel="Restore"
+		onconfirm={confirmRestore}
+		oncancel={cancelRestore}
+		danger
+	/>
+
 	<!-- Danger zone -->
 	<section class="card card-danger">
 		<h2 class="danger-heading">Danger Zone</h2>
 		<p class="section-desc">Permanently delete your account and all associated data. This cannot be undone.</p>
-		<button class="btn btn-danger">Delete Account</button>
+		<button class="btn btn-danger" onclick={() => (showDeleteAccount = true)} disabled={deleting}>
+			{deleting ? 'Deleting...' : 'Delete Account'}
+		</button>
 	</section>
 </div>
+
+<ConfirmDialog
+	open={showDeleteAccount}
+	title="Delete your account?"
+	message="This permanently deletes your account, all runs, routes, tracks, club memberships, and preferences. This cannot be undone. Download a backup first if you want to keep your data."
+	confirmLabel="Delete my account"
+	danger
+	onconfirm={handleDeleteAccount}
+	oncancel={() => (showDeleteAccount = false)}
+/>
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }

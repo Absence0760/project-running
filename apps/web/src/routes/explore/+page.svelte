@@ -4,6 +4,7 @@
 	import { searchPublicRoutes, nearbyPublicRoutes, fetchPopularRouteTags } from '$lib/data';
 	import type { Route } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/supabase';
 
 	let routes = $state<Route[]>([]);
@@ -90,7 +91,7 @@
 			is_public: false,
 		});
 		if (!error) {
-			alert(`Saved "${route.name}" to your library`);
+			showToast(`Saved "${route.name}" to your library`, 'success');
 		}
 	}
 

@@ -36,9 +36,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun hasWearableLibrary(): Boolean {
+        return try {
+            Class.forName("com.google.android.wearable.compat.WearableActivityController")
+            true
+        } catch (_: ClassNotFoundException) {
+            false
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        lifecycle.addObserver(AmbientLifecycleObserver(this, ambientCallback))
+        if (hasWearableLibrary()) {
+            lifecycle.addObserver(AmbientLifecycleObserver(this, ambientCallback))
+        }
         setContent {
             val isAmbient by ambient.collectAsState()
             RunWatchApp(vm = vm, activity = this, isAmbient = isAmbient)

@@ -14,6 +14,8 @@
 	import { movingTimeSeconds, elevationGainMetres } from '$lib/run_stats';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
@@ -23,6 +25,7 @@
 	let editing = $state(false);
 	let editTitle = $state('');
 	let editNotes = $state('');
+	let showDeleteConfirm = $state(false);
 
 	onMount(async () => {
 		run = await fetchRunById(pageData.id);
@@ -47,17 +50,23 @@
 			run = { ...run, metadata } as Run;
 			editing = false;
 		} catch (e) {
-			alert(`Save failed: ${e}`);
+			showToast(`Save failed: ${e}`, 'error');
 		}
 	}
 
-	async function handleDelete() {
-		if (!run || !confirm('Delete this run? This cannot be undone.')) return;
+	function handleDelete() {
+		if (!run) return;
+		showDeleteConfirm = true;
+	}
+
+	async function confirmDelete() {
+		if (!run) return;
+		showDeleteConfirm = false;
 		try {
 			await deleteRun(run.id);
 			goto('/runs');
 		} catch (e) {
-			alert(`Delete failed: ${e}`);
+			showToast(`Delete failed: ${e}`, 'error');
 		}
 	}
 
@@ -67,9 +76,9 @@
 			await makeRunPublic(run.id);
 			const url = `${window.location.origin}/share/run/${run.id}`;
 			await navigator.clipboard.writeText(url);
-			alert('Share link copied to clipboard');
+			showToast('Share link copied to clipboard', 'success');
 		} catch (e) {
-			alert(`Share failed: ${e}`);
+			showToast(`Share failed: ${e}`, 'error');
 		}
 	}
 
@@ -336,6 +345,16 @@
 		</section>
 	</aside>
 </div>
+
+<ConfirmDialog
+	open={showDeleteConfirm}
+	title="Delete run"
+	message="Delete this run? This cannot be undone."
+	confirmLabel="Delete"
+	onconfirm={confirmDelete}
+	oncancel={() => showDeleteConfirm = false}
+	danger
+/>
 {/if}
 
 <style>

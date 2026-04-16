@@ -21,6 +21,7 @@ returns `true` for both `pro` and `lifetime`.
 | Feature key | Label | Where gated |
 |---|---|---|
 | `ai_coach` | AI Coach | Server: `/api/coach/+server.ts` returns 403. Client: `CoachChat.svelte` shows `<ProGate>`. |
+| `priority_sync` | Priority Background Sync | Mobile: `main.dart` skips `registerBackgroundSync()` for free users. Free users sync on app open via `SyncService`; Pro users sync hourly in the background via WorkManager. |
 
 This list is intentionally short at launch. New features are added by
 following the checklist below.

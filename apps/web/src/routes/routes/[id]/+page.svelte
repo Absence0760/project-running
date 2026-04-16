@@ -5,6 +5,7 @@
 	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags } from '$lib/data';
 	import { supabase } from '$lib/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Route } from '$lib/types';
@@ -46,7 +47,7 @@
 			showReviewForm = false;
 			reviewComment = '';
 		} catch (e) {
-			alert(`Failed to submit review: ${e}`);
+			showToast(`Failed to submit review: ${e}`, 'error');
 		}
 	}
 
@@ -72,7 +73,7 @@
 			route.tags = updated;
 			tagDraft = '';
 		} catch (e) {
-			alert(`Could not save tag: ${e}`);
+			showToast(`Could not save tag: ${e}`, 'error');
 		} finally {
 			tagsSaving = false;
 		}
@@ -86,7 +87,7 @@
 			await updateRouteTags(route.id, updated);
 			route.tags = updated;
 		} catch (e) {
-			alert(`Could not remove tag: ${e}`);
+			showToast(`Could not remove tag: ${e}`, 'error');
 		} finally {
 			tagsSaving = false;
 		}

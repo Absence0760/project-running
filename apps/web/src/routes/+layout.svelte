@@ -4,15 +4,15 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.svelte';
+	import ToastContainer from '$lib/components/ToastContainer.svelte';
 
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
-		{ href: '/runs', label: 'Runs', icon: 'directions_run', accent: '#D97A54' },
+		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
 		{ href: '/explore', label: 'Explore', icon: 'explore', accent: '#7FB3C2' },
-		{ href: '/settings/account', label: 'Settings', icon: 'settings', accent: '#E6A96B' },
 	];
 
 	const publicPaths = ['/', '/login', '/auth/callback'];
@@ -23,7 +23,6 @@
 		path.startsWith('/clubs/join/');
 
 	function isActive(href: string, path: string): boolean {
-		if (href === '/settings/account') return path.startsWith('/settings');
 		return path.startsWith(href);
 	}
 
@@ -34,11 +33,16 @@
 		}
 	});
 
+	let showLogoutModal = $state(false);
+
 	async function handleLogout() {
+		showLogoutModal = false;
 		await auth.logout();
 		goto('/login');
 	}
 </script>
+
+<ToastContainer />
 
 {#if isPublic($page.url.pathname)}
 	<!-- Public pages: landing + login — no sidebar -->
@@ -76,7 +80,7 @@
 
 			<div class="sidebar-footer">
 				{#if auth.user}
-					<div class="user-info">
+					<button class="profile-btn" onclick={() => (showLogoutModal = true)}>
 						<div class="user-avatar">
 							{auth.user.display_name?.[0]?.toUpperCase() ?? '?'}
 						</div>
@@ -84,14 +88,8 @@
 							<span class="user-name">{auth.user.display_name ?? auth.user.email}</span>
 							<span class="user-email">{auth.user.email}</span>
 						</div>
-					</div>
+					</button>
 				{/if}
-				<button class="nav-link logout-btn" onclick={handleLogout} style="--accent: #8A8298;">
-					<span class="nav-icon-wrap">
-						<span class="nav-icon material-symbols">logout</span>
-					</span>
-					<span class="nav-label">Sign Out</span>
-				</button>
 			</div>
 		</nav>
 
@@ -99,6 +97,30 @@
 			<slot />
 		</main>
 	</div>
+
+	{#if showLogoutModal}
+		<div class="popover-backdrop" onclick={() => (showLogoutModal = false)} role="presentation"></div>
+		<div class="popover" role="menu">
+			<div class="popover-header">
+				<div class="popover-avatar">
+					{auth.user?.display_name?.[0]?.toUpperCase() ?? '?'}
+				</div>
+				<div class="popover-info">
+					<span class="popover-name">{auth.user?.display_name ?? 'Account'}</span>
+					<span class="popover-email">{auth.user?.email}</span>
+				</div>
+			</div>
+			<div class="popover-divider"></div>
+			<a href="/settings/account" class="popover-item" onclick={() => (showLogoutModal = false)}>
+				<span class="material-symbols">settings</span>
+				Settings
+			</a>
+			<button class="popover-item popover-danger" onclick={handleLogout}>
+				<span class="material-symbols">logout</span>
+				Sign out
+			</button>
+		</div>
+	{/if}
 {/if}
 
 <style>
@@ -178,11 +200,10 @@
 	}
 
 	.nav-icon-wrap {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
+		display: grid;
+		place-items: center;
+		width: 2.25rem;
+		height: 2.25rem;
 		border-radius: 10px;
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
 		color: var(--accent);
@@ -196,10 +217,14 @@
 	}
 
 	.nav-icon {
-		font-size: 1.125rem;
+		font-size: 1.25rem;
 		font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
 		transition: font-variation-settings var(--transition-base);
 		line-height: 1;
+		width: 1.25rem;
+		height: 1.25rem;
+		display: block;
+		text-align: center;
 	}
 
 	.nav-label {
@@ -263,11 +288,21 @@
 		gap: var(--space-sm);
 	}
 
-	.user-info {
+	.profile-btn {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
+		width: 100%;
+		border: none;
+		background: none;
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		text-align: left;
+		transition: background var(--transition-fast);
+	}
+	.profile-btn:hover {
+		background: var(--sidebar-hover-bg);
 	}
 
 	.user-avatar {
@@ -307,15 +342,95 @@
 		white-space: nowrap;
 	}
 
-	.logout-btn {
-		color: var(--sidebar-text-muted);
-		font-size: 0.85rem;
-		--accent: #8A8298;
+	.popover-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 99;
 	}
-
-	.logout-btn:hover {
-		--accent: #D8594C;
-		color: #F7F3EC;
+	.popover {
+		position: fixed;
+		bottom: 4rem;
+		left: var(--space-md);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-sm);
+		min-width: 14rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+		z-index: 100;
+	}
+	.popover-header {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.6rem;
+	}
+	.popover-avatar {
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		background: var(--gradient-primary);
+		color: white;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.8rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+	.popover-info {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.popover-name {
+		font-size: 0.85rem;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.popover-email {
+		font-size: 0.72rem;
+		color: var(--color-text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.popover-divider {
+		height: 1px;
+		background: var(--color-border);
+		margin: 0.3rem 0;
+	}
+	.popover-item {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.6rem;
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: var(--color-text);
+		border: none;
+		background: none;
+		width: 100%;
+		text-align: left;
+		cursor: pointer;
+		text-decoration: none;
+		transition: background var(--transition-fast);
+	}
+	.popover-item:hover {
+		background: var(--color-bg-tertiary);
+	}
+	.popover-item .material-symbols {
+		font-size: 1.1rem;
+		color: var(--color-text-secondary);
+	}
+	.popover-danger {
+		color: var(--color-danger);
+	}
+	.popover-danger .material-symbols {
+		color: var(--color-danger);
 	}
 
 	.main-content {

@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { fetchWorkout, markWorkoutCompleted } from '$lib/data';
 	import { fmtPace, fmtKm, fmtHms, WORKOUT_KIND_LABEL } from '$lib/training';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import type { WorkoutStructure } from '$lib/training';
 
@@ -10,6 +11,7 @@
 	let wid = $derived($page.params.wid as string);
 	let workout = $state<PlanWorkout | null>(null);
 	let loading = $state(true);
+	let showUnlinkConfirm = $state(false);
 
 	async function load() {
 		loading = true;
@@ -23,9 +25,14 @@
 		(workout?.structure as unknown as WorkoutStructure | null) ?? null
 	);
 
-	async function unlink() {
+	function unlink() {
 		if (!workout?.completed_run_id) return;
-		if (!confirm('Unlink the matched run? The workout will show as not yet done.')) return;
+		showUnlinkConfirm = true;
+	}
+
+	async function confirmUnlink() {
+		if (!workout) return;
+		showUnlinkConfirm = false;
 		await markWorkoutCompleted(workout.id, null);
 		await load();
 	}
@@ -181,6 +188,16 @@
 			{/if}
 		</section>
 	</div>
+
+<ConfirmDialog
+	open={showUnlinkConfirm}
+	title="Unlink run"
+	message="Unlink the matched run? The workout will show as not yet done."
+	confirmLabel="Unlink"
+	onconfirm={confirmUnlink}
+	oncancel={() => showUnlinkConfirm = false}
+	danger
+/>
 {/if}
 
 <style>

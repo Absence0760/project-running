@@ -1,3 +1,15 @@
+<script lang="ts">
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
+
+	$effect(() => {
+		if (browser && !auth.loading && auth.loggedIn) {
+			goto('/dashboard');
+		}
+	});
+</script>
+
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
 		<span class="logo-icon">&#9654;</span> Run

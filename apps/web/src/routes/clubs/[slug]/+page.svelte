@@ -22,6 +22,8 @@
 		deleteClubPost,
 		deleteClub
 	} from '$lib/data';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -43,6 +45,10 @@
 	let postingBusy = $state(false);
 	let joinBusy = $state(false);
 	let error = $state<string | null>(null);
+	let showLeaveConfirm = $state(false);
+	let showRegenConfirm = $state(false);
+	let showDeleteClubConfirm = $state(false);
+	let showDeletePostConfirm = $state<string | null>(null);
 
 	/** Thread state. Key is parent post id. */
 	let expandedThreads = $state<Record<string, ClubPostWithAuthor[] | null>>({});
@@ -140,9 +146,14 @@
 		}
 	}
 
-	async function leave() {
+	function leave() {
 		if (!club || joinBusy) return;
-		if (!confirm(`Leave ${club.name}?`)) return;
+		showLeaveConfirm = true;
+	}
+
+	async function confirmLeave() {
+		if (!club) return;
+		showLeaveConfirm = false;
 		joinBusy = true;
 		try {
 			await leaveClub(club.id);
@@ -173,9 +184,14 @@
 		error = 'Invite link copied to clipboard.';
 	}
 
-	async function regenerateInvite() {
+	function regenerateInvite() {
 		if (!club) return;
-		if (!confirm('Generate a new invite link? The current link stops working immediately.')) return;
+		showRegenConfirm = true;
+	}
+
+	async function confirmRegenerate() {
+		if (!club) return;
+		showRegenConfirm = false;
 		const token = await regenerateInviteToken(club.id);
 		club = { ...club, invite_token: token };
 	}
@@ -216,16 +232,27 @@
 		}
 	}
 
-	async function removePost(id: string) {
+	function removePost(id: string) {
 		if (!club) return;
-		if (!confirm('Delete this post?')) return;
+		showDeletePostConfirm = id;
+	}
+
+	async function confirmDeletePost() {
+		if (!club || !showDeletePostConfirm) return;
+		const id = showDeletePostConfirm;
+		showDeletePostConfirm = null;
 		await deleteClubPost(id);
 		posts = await fetchClubPosts(club.id, 20);
 	}
 
-	async function handleDeleteClub() {
+	function handleDeleteClub() {
 		if (!club) return;
-		if (!confirm(`Delete ${club.name}? This removes all events, posts, and members.`)) return;
+		showDeleteClubConfirm = true;
+	}
+
+	async function confirmDeleteClub() {
+		if (!club) return;
+		showDeleteClubConfirm = false;
 		await deleteClub(club.id);
 		goto('/clubs');
 	}
@@ -633,7 +660,7 @@
 											m.role = newRole;
 										} catch (err) {
 											target.value = m.role;
-											alert('Failed to change role: ' + err);
+											showToast('Failed to change role: ' + err, 'error');
 										}
 									}}
 								>
@@ -651,6 +678,45 @@
 			</div>
 		{/if}
 	</div>
+
+<ConfirmDialog
+	open={showLeaveConfirm}
+	title="Leave club"
+	message={`Leave ${club?.name ?? ''}?`}
+	confirmLabel="Leave"
+	onconfirm={confirmLeave}
+	oncancel={() => showLeaveConfirm = false}
+	danger
+/>
+
+<ConfirmDialog
+	open={showRegenConfirm}
+	title="Regenerate invite link"
+	message="Generate a new invite link? The current link stops working immediately."
+	confirmLabel="Regenerate"
+	onconfirm={confirmRegenerate}
+	oncancel={() => showRegenConfirm = false}
+/>
+
+<ConfirmDialog
+	open={showDeletePostConfirm !== null}
+	title="Delete post"
+	message="Delete this post?"
+	confirmLabel="Delete"
+	onconfirm={confirmDeletePost}
+	oncancel={() => showDeletePostConfirm = null}
+	danger
+/>
+
+<ConfirmDialog
+	open={showDeleteClubConfirm}
+	title="Delete club"
+	message={`Delete ${club?.name ?? ''}? This removes all events, posts, and members.`}
+	confirmLabel="Delete"
+	onconfirm={confirmDeleteClub}
+	oncancel={() => showDeleteClubConfirm = false}
+	danger
+/>
 {/if}
 
 <style>

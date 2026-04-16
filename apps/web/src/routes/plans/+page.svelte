@@ -2,10 +2,13 @@
 	import { onMount } from 'svelte';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
 	import { fmtPace } from '$lib/training';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
 	let plans = $state<TrainingPlan[]>([]);
 	let loading = $state(true);
+	let confirmTarget = $state<TrainingPlan | null>(null);
+	let confirmAction = $state<'abandon' | 'delete' | null>(null);
 
 	async function load() {
 		loading = true;
@@ -33,16 +36,31 @@
 			: `${m}:${String(s).padStart(2, '0')}`;
 	}
 
-	async function abandon(p: TrainingPlan) {
-		if (!confirm(`Abandon "${p.name}"? You can create a new plan after.`)) return;
-		await updatePlanStatus(p.id, 'abandoned');
+	function abandon(p: TrainingPlan) {
+		confirmTarget = p;
+		confirmAction = 'abandon';
+	}
+
+	function remove(p: TrainingPlan) {
+		confirmTarget = p;
+		confirmAction = 'delete';
+	}
+
+	async function handleConfirmAction() {
+		if (!confirmTarget || !confirmAction) return;
+		if (confirmAction === 'abandon') {
+			await updatePlanStatus(confirmTarget.id, 'abandoned');
+		} else {
+			await deletePlan(confirmTarget.id);
+		}
+		confirmTarget = null;
+		confirmAction = null;
 		await load();
 	}
 
-	async function remove(p: TrainingPlan) {
-		if (!confirm(`Delete "${p.name}"? All weeks and workouts will be removed.`)) return;
-		await deletePlan(p.id);
-		await load();
+	function cancelConfirm() {
+		confirmTarget = null;
+		confirmAction = null;
 	}
 </script>
 
@@ -127,6 +145,18 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmDialog
+	open={confirmTarget !== null}
+	title={confirmAction === 'abandon' ? 'Abandon plan' : 'Delete plan'}
+	message={confirmAction === 'abandon'
+		? `Abandon "${confirmTarget?.name}"? You can create a new plan after.`
+		: `Delete "${confirmTarget?.name}"? All weeks and workouts will be removed.`}
+	confirmLabel={confirmAction === 'abandon' ? 'Abandon' : 'Delete'}
+	onconfirm={handleConfirmAction}
+	oncancel={cancelConfirm}
+	danger
+/>
 
 <style>
 	.page {

@@ -6,6 +6,7 @@
 		{ href: '/settings/preferences', label: 'Preferences', icon: 'tune' },
 		{ href: '/settings/integrations', label: 'Integrations', icon: 'link' },
 		{ href: '/settings/devices', label: 'Devices', icon: 'devices' },
+		{ href: '/settings/upgrade', label: 'Donate', icon: 'favorite' },
 	];
 </script>
 
