@@ -68,10 +68,33 @@ export const POST: RequestHandler = async ({ request }) => {
 		global: { headers: { Authorization: `Bearer ${body.access_token}` } }
 	});
 
-	// Paywall gate placeholder. Currently everything is free. To re-enable
-	// the gate, uncomment this block and set BYPASS_PAYWALL=true in dev.
-	// const bypassPaywall = env.BYPASS_PAYWALL === 'true';
-	// if (!bypassPaywall) { ... check subscription_tier ... }
+	// Daily usage limit. BYPASS_PAYWALL skips in dev so you don't burn
+	// through the quota while iterating on prompts.
+	const DAILY_LIMIT = 10;
+	const bypassLimit = env.BYPASS_PAYWALL === 'true';
+	if (!bypassLimit) {
+		const { data: { user: authUser } } = await supabase.auth.getUser();
+		if (!authUser) {
+			return new Response(JSON.stringify({ error: 'not authenticated' }), {
+				status: 401,
+				headers: { 'content-type': 'application/json' }
+			});
+		}
+		const { data: newCount } = await supabase.rpc('increment_coach_usage', {
+			p_user_id: authUser.id,
+		});
+		if (typeof newCount === 'number' && newCount > DAILY_LIMIT) {
+			return new Response(
+				JSON.stringify({
+					error: 'daily_limit',
+					message: `You've used all ${DAILY_LIMIT} coach messages for today. Come back tomorrow!`,
+					used: newCount,
+					limit: DAILY_LIMIT,
+				}),
+				{ status: 429, headers: { 'content-type': 'application/json' } }
+			);
+		}
+	}
 
 	const context = await buildContext(supabase, body.plan_id ?? null);
 	if (context.error) {

@@ -27,6 +27,20 @@
 		out: number;
 	} | null>(null);
 
+	const DAILY_LIMIT = 10;
+	let usedToday = $state(0);
+	let limitReached = $derived(usedToday >= DAILY_LIMIT);
+	let remaining = $derived(Math.max(0, DAILY_LIMIT - usedToday));
+
+	onMount(async () => {
+		const { data: { session } } = await supabase.auth.getSession();
+		if (!session) return;
+		const { data } = await supabase.rpc('get_coach_usage', {
+			p_user_id: session.user.id,
+		});
+		if (typeof data === 'number') usedToday = data;
+	});
+
 	const SUGGESTIONS = [
 		'Should I run tomorrow or take a rest day?',
 		'Am I on track for my goal time?',
@@ -68,12 +82,17 @@
 				if (res.status === 404) {
 					error =
 						'Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.';
+				} else if (res.status === 429) {
+					const body = await res.json().catch(() => ({}));
+					usedToday = body.used ?? DAILY_LIMIT;
+					error = body.message ?? `Daily limit reached (${DAILY_LIMIT} messages). Come back tomorrow!`;
 				} else {
 					const body = await res.json().catch(() => ({}));
 					error = body.error ?? `Coach error (${res.status})`;
 				}
 				return;
 			}
+			usedToday++;
 			const body = await res.json();
 			messages = [...messages, { role: 'assistant', content: body.reply }];
 			lastCache = {
@@ -137,29 +156,39 @@
 		<p class="error">{error}</p>
 	{/if}
 
-	<form
-		class="composer"
-		onsubmit={(e) => {
-			e.preventDefault();
-			send();
-		}}
-	>
-		<input
-			type="text"
-			placeholder="Ask about today, pace, adherence…"
-			bind:value={draft}
-			disabled={busy}
-			maxlength="600"
-		/>
-		<button type="submit" class="btn-primary" disabled={busy || !draft.trim()}>
-			{busy ? '…' : 'Send'}
-		</button>
-	</form>
-	{#if lastCache && (lastCache.read > 0 || lastCache.create > 0)}
-		<p class="cache-note">
-			Cache: read {lastCache.read} · wrote {lastCache.create} · in {lastCache.in} · out {lastCache.out}
-		</p>
+	{#if limitReached}
+		<div class="limit-bar">
+			<span class="material-symbols">schedule</span>
+			You've used all {DAILY_LIMIT} messages for today. Come back tomorrow!
+		</div>
+	{:else}
+		<form
+			class="composer"
+			onsubmit={(e) => {
+				e.preventDefault();
+				send();
+			}}
+		>
+			<input
+				type="text"
+				placeholder="Ask about today, pace, adherence…"
+				bind:value={draft}
+				disabled={busy}
+				maxlength="600"
+			/>
+			<button type="submit" class="btn-primary" disabled={busy || !draft.trim()}>
+				{busy ? '…' : 'Send'}
+			</button>
+		</form>
 	{/if}
+	<div class="usage-bar">
+		<span class="usage-count">{remaining} of {DAILY_LIMIT} messages remaining today</span>
+		{#if lastCache && (lastCache.read > 0 || lastCache.create > 0)}
+			<span class="cache-note">
+				Cache: read {lastCache.read} · wrote {lastCache.create} · in {lastCache.in} · out {lastCache.out}
+			</span>
+		{/if}
+	</div>
 </div>
 {/if}
 
@@ -269,9 +298,35 @@
 		border-radius: var(--radius-md);
 		font-size: 0.88rem;
 	}
+	.usage-bar {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-xs) var(--space-sm);
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+	}
+	.usage-count {
+		font-weight: 500;
+	}
 	.cache-note {
 		font-size: 0.72rem;
 		color: var(--color-text-tertiary);
-		padding: 0 var(--space-sm) var(--space-sm);
+	}
+	.limit-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.2);
+		border-radius: var(--radius-md);
+		margin: 0 var(--space-sm) var(--space-sm);
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+	}
+	.limit-bar .material-symbols {
+		font-size: 1.1rem;
+		color: var(--color-danger);
 	}
 </style>
