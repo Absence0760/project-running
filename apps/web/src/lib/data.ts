@@ -210,35 +210,70 @@ export async function searchPublicRoutes(options?: {
 	minDistanceM?: number;
 	maxDistanceM?: number;
 	surface?: string;
+	tags?: string[];
+	featuredOnly?: boolean;
+	sort?: 'newest' | 'popular' | 'featured';
 	limit?: number;
 	offset?: number;
 }): Promise<Route[]> {
-	const { query, minDistanceM, maxDistanceM, surface, limit = 50, offset = 0 } = options ?? {};
+	const {
+		query,
+		minDistanceM,
+		maxDistanceM,
+		surface,
+		tags,
+		featuredOnly,
+		sort = 'newest',
+		limit = 50,
+		offset = 0,
+	} = options ?? {};
 
-	let q = supabase
-		.from('routes')
-		.select('*')
-		.eq('is_public', true);
-
-	if (query && query.trim()) {
-		q = q.textSearch('name', `'${query.trim()}'`);
-	}
-	if (minDistanceM != null) {
-		q = q.gte('distance_m', minDistanceM);
-	}
-	if (maxDistanceM != null) {
-		q = q.lte('distance_m', maxDistanceM);
-	}
-	if (surface) {
-		q = q.eq('surface', surface);
-	}
-
-	const { data, error } = await q
-		.order('created_at', { ascending: false })
-		.range(offset, offset + limit - 1);
-
+	const { data, error } = await supabase.rpc('search_public_routes', {
+		p_query: query && query.trim() ? query.trim() : null,
+		p_min_distance_m: minDistanceM ?? null,
+		p_max_distance_m: maxDistanceM ?? null,
+		p_surface: surface ?? null,
+		p_tags: tags && tags.length > 0 ? tags : null,
+		p_featured_only: featuredOnly ?? false,
+		p_sort: sort,
+		p_limit: limit,
+		p_offset: offset,
+	});
 	if (error || !data) return [];
-	return data;
+	return data as Route[];
+}
+
+/// The set of tags currently used across any public route, ordered by
+/// most-used. Powers the filter chip row on /explore. Aggregation is
+/// client-side because a single SELECT returns a small array per row
+/// and the route count is modest; when the library grows past a few
+/// thousand public routes, replace this with a DB-side materialised
+/// view.
+export async function fetchPopularRouteTags(limit = 20): Promise<string[]> {
+	const { data } = await supabase
+		.from('routes')
+		.select('tags')
+		.eq('is_public', true)
+		.limit(500);
+	if (!data) return [];
+	const counts = new Map<string, number>();
+	for (const row of data as { tags: string[] | null }[]) {
+		for (const t of row.tags ?? []) {
+			counts.set(t, (counts.get(t) ?? 0) + 1);
+		}
+	}
+	return [...counts.entries()]
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, limit)
+		.map(([t]) => t);
+}
+
+export async function updateRouteTags(routeId: string, tags: string[]): Promise<void> {
+	const { error } = await supabase
+		.from('routes')
+		.update({ tags, updated_at: new Date().toISOString() })
+		.eq('id', routeId);
+	if (error) throw error;
 }
 
 export async function fetchRoutes(): Promise<Route[]> {

@@ -11,6 +11,9 @@ class RouteDetailScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final ApiClient? apiClient;
+  /// Whether the current user owns this route. Callers opening from
+  /// their own library pass `true`; the Explore tab opens read-only.
+  final bool isOwner;
 
   const RouteDetailScreen({
     super.key,
@@ -18,6 +21,7 @@ class RouteDetailScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     this.apiClient,
+    this.isOwner = false,
   });
 
   @override
@@ -26,10 +30,31 @@ class RouteDetailScreen extends StatefulWidget {
 
 class _RouteDetailScreenState extends State<RouteDetailScreen> {
   late bool _isPublic = widget.route.isPublic;
+  late List<String> _tags = List.from(widget.route.tags);
   List<cm.RouteReviewRow> _reviews = [];
   bool _loadingReviews = false;
   bool _reviewsOffline = false;
   double _avgRating = 0;
+
+  bool get _isOwner => widget.isOwner && widget.apiClient?.userId != null;
+
+  Widget _inlineMeta(ThemeData theme, IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.outline),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.outline,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -233,40 +258,40 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             if (route.surface != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
-                    Icon(
+                    _inlineMeta(
+                      theme,
                       _surfaceIcon(route.surface!),
-                      size: 14,
-                      color: theme.colorScheme.outline,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
                       _surfaceLabel(route.surface!),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.outline,
-                      ),
                     ),
-                    if (_isPublic) ...[
-                      const SizedBox(width: 12),
-                      Icon(Icons.public, size: 14,
-                          color: theme.colorScheme.outline),
-                      const SizedBox(width: 4),
-                      Text(
-                        'PUBLIC',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.outline,
-                        ),
+                    if (_isPublic)
+                      _inlineMeta(theme, Icons.public, 'PUBLIC'),
+                    if (route.runCount > 0)
+                      _inlineMeta(
+                        theme,
+                        Icons.directions_run,
+                        '${route.runCount} ${route.runCount == 1 ? 'RUN' : 'RUNS'}',
                       ),
-                    ],
+                    if (route.featured)
+                      _inlineMeta(theme, Icons.star, 'FEATURED'),
                   ],
                 ),
               ),
+
+            // Tags — display + owner-only inline editor.
+            _RouteTagsRow(
+              route: route,
+              isOwner: _isOwner,
+              apiClient: widget.apiClient,
+              onChange: (next) {
+                setState(() => _tags = next);
+              },
+              initialTags: _tags,
+            ),
 
             const Divider(),
 
@@ -469,6 +494,118 @@ class _Stat extends StatelessWidget {
               color: theme.colorScheme.outline,
             )),
       ],
+    );
+  }
+}
+
+class _RouteTagsRow extends StatefulWidget {
+  final cm.Route route;
+  final bool isOwner;
+  final ApiClient? apiClient;
+  final List<String> initialTags;
+  final void Function(List<String>) onChange;
+
+  const _RouteTagsRow({
+    required this.route,
+    required this.isOwner,
+    required this.apiClient,
+    required this.initialTags,
+    required this.onChange,
+  });
+
+  @override
+  State<_RouteTagsRow> createState() => _RouteTagsRowState();
+}
+
+class _RouteTagsRowState extends State<_RouteTagsRow> {
+  late List<String> _tags = List.from(widget.initialTags);
+  final _controller = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _add() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final t = _controller.text.trim().toLowerCase();
+    if (t.isEmpty || _tags.contains(t)) { _controller.clear(); return; }
+    final next = [..._tags, t];
+    setState(() { _saving = true; });
+    try {
+      await api.updateRouteTags(widget.route.id, next);
+      setState(() { _tags = next; _saving = false; _controller.clear(); });
+      widget.onChange(next);
+    } catch (e) {
+      setState(() => _saving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save tag: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _remove(String tag) async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final next = _tags.where((t) => t != tag).toList();
+    setState(() { _saving = true; });
+    try {
+      await api.updateRouteTags(widget.route.id, next);
+      setState(() { _tags = next; _saving = false; });
+      widget.onChange(next);
+    } catch (_) {
+      setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (_tags.isEmpty && !widget.isOwner) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final t in _tags)
+            Chip(
+              label: Text(t, style: const TextStyle(fontSize: 12)),
+              onDeleted: widget.isOwner && !_saving ? () => _remove(t) : null,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          if (widget.isOwner)
+            SizedBox(
+              width: 120,
+              child: TextField(
+                controller: _controller,
+                enabled: !_saving,
+                style: const TextStyle(fontSize: 12),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _add(),
+                decoration: InputDecoration(
+                  hintText: 'add tag',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(999),
+                    borderSide: BorderSide(color: theme.colorScheme.outline),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

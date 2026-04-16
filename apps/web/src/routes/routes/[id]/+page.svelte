@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview } from '$lib/data';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags } from '$lib/data';
 	import { supabase } from '$lib/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -52,6 +52,45 @@
 
 	let shareLink = $state('');
 	let shareCopied = $state(false);
+	let tagDraft = $state('');
+	let tagsSaving = $state(false);
+
+	let isOwner = $derived(route !== null && auth.user?.id === route.user_id);
+
+	async function addTag() {
+		if (!route) return;
+		const next = tagDraft.trim().toLowerCase();
+		if (!next) return;
+		if ((route.tags ?? []).includes(next)) {
+			tagDraft = '';
+			return;
+		}
+		const updated = [...(route.tags ?? []), next];
+		tagsSaving = true;
+		try {
+			await updateRouteTags(route.id, updated);
+			route.tags = updated;
+			tagDraft = '';
+		} catch (e) {
+			alert(`Could not save tag: ${e}`);
+		} finally {
+			tagsSaving = false;
+		}
+	}
+
+	async function removeTag(tag: string) {
+		if (!route) return;
+		const updated = (route.tags ?? []).filter((t) => t !== tag);
+		tagsSaving = true;
+		try {
+			await updateRouteTags(route.id, updated);
+			route.tags = updated;
+		} catch (e) {
+			alert(`Could not remove tag: ${e}`);
+		} finally {
+			tagsSaving = false;
+		}
+	}
 
 	function handleExportGpx() {
 		if (!route || !route.waypoints.length) return;
@@ -111,7 +150,37 @@
 					{/if}
 					<span class="meta-sep">&middot;</span>
 					<span class="surface-tag">{route.surface}</span>
+					{#if route.run_count > 0}
+						<span class="meta-sep">&middot;</span>
+						<span>run {route.run_count} {route.run_count === 1 ? 'time' : 'times'}</span>
+					{/if}
+					{#if route.featured}
+						<span class="featured-pill">★ Featured</span>
+					{/if}
 				</div>
+				{#if (route.tags && route.tags.length > 0) || isOwner}
+					<div class="tags-row">
+						{#each route.tags ?? [] as t (t)}
+							<span class="tag-chip">
+								{t}
+								{#if isOwner}
+									<button type="button" class="tag-x" aria-label="Remove tag {t}" onclick={() => removeTag(t)}>×</button>
+								{/if}
+							</span>
+						{/each}
+						{#if isOwner}
+							<form class="tag-add" onsubmit={(e) => { e.preventDefault(); addTag(); }}>
+								<input
+									type="text"
+									bind:value={tagDraft}
+									placeholder="add tag"
+									maxlength="24"
+									disabled={tagsSaving}
+								/>
+							</form>
+						{/if}
+					</div>
+				{/if}
 			</div>
 			<div class="actions">
 				<button class="btn btn-outline" onclick={handleExportGpx}>GPX</button>
@@ -457,5 +526,48 @@
 
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
+	}
+
+	.featured-pill {
+		background: var(--color-primary);
+		color: white;
+		font-size: 0.7rem;
+		font-weight: 700;
+		padding: 0.15rem 0.5rem;
+		border-radius: 9999px;
+		letter-spacing: 0.04em;
+	}
+	.tags-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-top: 0.5rem;
+	}
+	.tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+		font-size: 0.78rem;
+		padding: 0.15rem 0.55rem;
+		border-radius: 9999px;
+	}
+	.tag-x {
+		background: none;
+		border: none;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		font-size: 1rem;
+		line-height: 1;
+		padding: 0;
+	}
+	.tag-x:hover { color: var(--color-danger); }
+	.tag-add input {
+		padding: 0.15rem 0.55rem;
+		border: 1px dashed var(--color-border);
+		border-radius: 9999px;
+		font-size: 0.78rem;
+		background: transparent;
 	}
 </style>

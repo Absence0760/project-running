@@ -631,12 +631,16 @@ export type Database = {
           created_at: string | null
           distance_m: number
           elevation_m: number | null
+          featured: boolean
+          featured_at: string | null
           id: string
           is_public: boolean | null
           name: string
+          run_count: number
           slug: string | null
           start_point: unknown
           surface: string | null
+          tags: string[]
           updated_at: string | null
           user_id: string
           waypoints: Json
@@ -645,12 +649,16 @@ export type Database = {
           created_at?: string | null
           distance_m: number
           elevation_m?: number | null
+          featured?: boolean
+          featured_at?: string | null
           id?: string
           is_public?: boolean | null
           name: string
+          run_count?: number
           slug?: string | null
           start_point?: unknown
           surface?: string | null
+          tags?: string[]
           updated_at?: string | null
           user_id: string
           waypoints: Json
@@ -659,12 +667,16 @@ export type Database = {
           created_at?: string | null
           distance_m?: number
           elevation_m?: number | null
+          featured?: boolean
+          featured_at?: string | null
           id?: string
           is_public?: boolean | null
           name?: string
+          run_count?: number
           slug?: string | null
           start_point?: unknown
           surface?: string | null
+          tags?: string[]
           updated_at?: string | null
           user_id?: string
           waypoints?: Json
@@ -936,12 +948,16 @@ export type Database = {
           created_at: string | null
           distance_m: number
           elevation_m: number | null
+          featured: boolean
+          featured_at: string | null
           id: string
           is_public: boolean | null
           name: string
+          run_count: number
           slug: string | null
           start_point: unknown
           surface: string | null
+          tags: string[]
           updated_at: string | null
           user_id: string
           waypoints: Json
@@ -964,6 +980,43 @@ export type Database = {
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined
+      }
+      search_public_routes: {
+        Args: {
+          p_featured_only?: boolean
+          p_limit?: number
+          p_max_distance_m?: number
+          p_min_distance_m?: number
+          p_offset?: number
+          p_query?: string
+          p_sort?: string
+          p_surface?: string
+          p_tags?: string[]
+        }
+        Returns: {
+          created_at: string | null
+          distance_m: number
+          elevation_m: number | null
+          featured: boolean
+          featured_at: string | null
+          id: string
+          is_public: boolean | null
+          name: string
+          run_count: number
+          slug: string | null
+          start_point: unknown
+          surface: string | null
+          tags: string[]
+          updated_at: string | null
+          user_id: string
+          waypoints: Json
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "routes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       weekly_mileage: {
         Args: { weeks_back?: number }

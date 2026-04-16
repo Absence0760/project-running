@@ -829,6 +829,10 @@ class RouteRow {
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
   static const String colStartPoint = 'start_point';
+  static const String colTags = 'tags';
+  static const String colFeatured = 'featured';
+  static const String colFeaturedAt = 'featured_at';
+  static const String colRunCount = 'run_count';
 
   final String id;
   final String userId;
@@ -842,6 +846,10 @@ class RouteRow {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final dynamic startPoint;
+  final List<String> tags;
+  final bool featured;
+  final DateTime? featuredAt;
+  final int runCount;
 
   const RouteRow({
     required this.id,
@@ -856,6 +864,10 @@ class RouteRow {
     this.createdAt,
     this.updatedAt,
     this.startPoint,
+    required this.tags,
+    required this.featured,
+    this.featuredAt,
+    required this.runCount,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -871,6 +883,10 @@ class RouteRow {
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     startPoint: json['start_point'],
+    tags: (json['tags'] as List<dynamic>).cast<String>(),
+    featured: json['featured'] as bool,
+    featuredAt: json['featured_at'] == null ? null : DateTime.parse(json['featured_at'] as String),
+    runCount: (json['run_count'] as num).toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -886,6 +902,10 @@ class RouteRow {
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
     colStartPoint: startPoint,
+    colTags: tags,
+    colFeatured: featured,
+    colFeaturedAt: featuredAt?.toIso8601String(),
+    colRunCount: runCount,
   };
 }
 

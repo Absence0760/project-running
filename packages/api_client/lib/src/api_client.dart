@@ -367,32 +367,53 @@ class ApiClient {
     double? minDistanceM,
     double? maxDistanceM,
     String? surface,
+    List<String>? tags,
+    bool featuredOnly = false,
+    String sort = 'newest',
     int limit = 50,
     int offset = 0,
   }) async {
-    var q = _client
+    final data = await _client.rpc('search_public_routes', params: {
+      'p_query': (query != null && query.trim().isNotEmpty) ? query.trim() : null,
+      'p_min_distance_m': minDistanceM,
+      'p_max_distance_m': maxDistanceM,
+      'p_surface': (surface != null && surface.isNotEmpty) ? surface : null,
+      'p_tags': (tags != null && tags.isNotEmpty) ? tags : null,
+      'p_featured_only': featuredOnly,
+      'p_sort': sort,
+      'p_limit': limit,
+      'p_offset': offset,
+    });
+    return (data as List)
+        .map<Route>((row) => _routeFromRow(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// The N most-used tags across public routes, for filter-chip population.
+  /// Client-side aggregation; see the web twin for the same approach.
+  Future<List<String>> fetchPopularRouteTags({int limit = 20}) async {
+    final rows = await _client
         .from(RouteRow.table)
-        .select()
-        .eq(RouteRow.colIsPublic, true);
+        .select('tags')
+        .eq(RouteRow.colIsPublic, true)
+        .limit(500);
+    final counts = <String, int>{};
+    for (final row in (rows as List).cast<Map<String, dynamic>>()) {
+      final tags = (row['tags'] as List?)?.cast<String>() ?? const [];
+      for (final t in tags) {
+        counts[t] = (counts[t] ?? 0) + 1;
+      }
+    }
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(limit).map((e) => e.key).toList();
+  }
 
-    if (query != null && query.trim().isNotEmpty) {
-      q = q.textSearch(RouteRow.colName, "'${query.trim()}'");
-    }
-    if (minDistanceM != null) {
-      q = q.gte(RouteRow.colDistanceM, minDistanceM);
-    }
-    if (maxDistanceM != null) {
-      q = q.lte(RouteRow.colDistanceM, maxDistanceM);
-    }
-    if (surface != null && surface.isNotEmpty) {
-      q = q.eq(RouteRow.colSurface, surface);
-    }
-
-    final data = await q
-        .order(RouteRow.colCreatedAt, ascending: false)
-        .range(offset, offset + limit - 1);
-
-    return data.map<Route>((row) => _routeFromRow(row)).toList();
+  Future<void> updateRouteTags(String routeId, List<String> tags) async {
+    await _client.from(RouteRow.table).update({
+      'tags': tags,
+      RouteRow.colUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+    }).eq(RouteRow.colId, routeId);
   }
 
   /// Find public routes near a geographic point, sorted by distance.
@@ -510,6 +531,9 @@ class ApiClient {
       isPublic: r.isPublic ?? false,
       surface: r.surface,
       createdAt: r.createdAt,
+      tags: (row['tags'] as List?)?.cast<String>() ?? const [],
+      featured: row['featured'] == true,
+      runCount: (row['run_count'] as num?)?.toInt() ?? 0,
     );
   }
 }
