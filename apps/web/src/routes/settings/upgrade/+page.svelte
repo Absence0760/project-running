@@ -1,18 +1,49 @@
 <script lang="ts">
-	import { auth } from '$lib/stores/auth.svelte';
+	import { onMount } from 'svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/supabase';
-	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
-	let loading = $state<string | null>(null);
+	// Monthly cost breakdown — update these when infrastructure changes.
+	const costs = [
+		{ name: 'Supabase Pro (DB, Auth, Storage)', amount: 25 },
+		{ name: 'Claude API (AI Coach)', amount: 30 },
+		{ name: 'MapTiler (map tiles)', amount: 20 },
+		{ name: 'Domain + DNS', amount: 2 },
+		{ name: 'Misc (monitoring, email)', amount: 3 },
+	];
+	const serverCostTotal = costs.reduce((s, c) => s + c.amount, 0);
+	const devCost = 3000;
+	const monthlyTarget = serverCostTotal + devCost;
 
-	let hasDonated = $state(false);
+	let amountReceived = $state(0);
+	let donorCount = $state(0);
+	let loading = $state(false);
 
-	const donateAmounts = [
-		{ id: 'donate_5', amount: '$5', label: 'Buy me a gel' },
-		{ id: 'donate_10', amount: '$10', label: 'Buy me a race entry' },
-		{ id: 'donate_25', amount: '$25', label: 'Buy me new shoes', popular: true },
-		{ id: 'donate_50', amount: '$50', label: 'Sponsor a month of servers' },
+	let serverPct = $derived(Math.min(100, Math.round((amountReceived / serverCostTotal) * 100)));
+	let totalPct = $derived(Math.min(100, Math.round((amountReceived / monthlyTarget) * 100)));
+	let serverCovered = $derived(amountReceived >= serverCostTotal);
+
+	onMount(async () => {
+		const firstOfMonth = new Date();
+		firstOfMonth.setDate(1);
+		firstOfMonth.setHours(0, 0, 0, 0);
+		const monthStr = firstOfMonth.toISOString().slice(0, 10);
+		const { data } = await supabase
+			.from('monthly_funding')
+			.select('amount_received, donor_count')
+			.eq('month', monthStr)
+			.maybeSingle();
+		if (data) {
+			amountReceived = Number(data.amount_received);
+			donorCount = data.donor_count;
+		}
+	});
+
+	const donateOptions = [
+		{ id: 'donate_5', amount: 5, label: 'Buy me a gel' },
+		{ id: 'donate_15', amount: 15, label: 'Cover a day of servers' },
+		{ id: 'donate_50', amount: 50, label: 'Cover a week of servers' },
+		{ id: 'donate_80', amount: 80, label: 'Cover a full month of servers' },
 	];
 
 	const features = [
@@ -31,241 +62,243 @@
 		'Background sync',
 	];
 
-	async function handleDonate(donateId: string) {
-		// TODO: Replace with Stripe Checkout or Ko-fi / Buy Me a Coffee
-		// redirect. For now, show a thank-you message.
-		loading = donateId;
+	async function handleDonate(amount: number) {
+		// TODO: Replace with Stripe Checkout / Ko-fi / GitHub Sponsors
+		// redirect. The webhook or return URL updates monthly_funding.
+		loading = true;
 		try {
-			// Placeholder — in production this redirects to a payment
-			// link. The actual donation flow is external (Stripe, Ko-fi,
-			// GitHub Sponsors, etc.) and doesn't change subscription_tier.
 			showToast('Thank you! Payment integration coming soon.', 'info');
-			hasDonated = true;
 		} finally {
-			loading = null;
+			loading = false;
 		}
 	}
+
+	function fmtCurrency(n: number): string {
+		return `$${n.toLocaleString()}`;
+	}
+
+	const monthName = new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' });
 </script>
 
 <div class="page">
 	<header class="page-header">
-		<h1>Support Better Runner</h1>
+		<h1>Fund Better Runner</h1>
 		<p class="subtitle">
-			Every feature is free. If the app has helped your running, a donation
-			keeps the servers on and development going.
+			Every feature is free, forever. Your donations keep the servers running
+			and development moving.
 		</p>
 	</header>
 
-	{#if hasDonated}
-		<section class="thank-you">
-			<span class="heart">&#10084;</span>
-			<strong>Thank you for your support!</strong>
-		</section>
-	{/if}
+	<!-- Progress bars -->
+	<section class="card funding-card">
+		<h2>Monthly funding — {monthName}</h2>
 
-	<div class="plans">
-		{#each donateAmounts as d (d.id)}
-			<div class="plan-card" class:popular={d.popular}>
-				{#if d.popular}
-					<div class="popular-tag">Most popular</div>
-				{/if}
-				<div class="price">
-					<span class="amount">{d.amount}</span>
-				</div>
-				<p class="plan-desc">{d.label}</p>
-				<button
-					class="btn-plan"
-					class:primary={d.popular}
-					onclick={() => handleDonate(d.id)}
-					disabled={loading !== null}
-				>
-					{loading === d.id ? 'Processing...' : 'Donate'}
-				</button>
+		<div class="progress-section">
+			<div class="progress-header">
+				<span class="progress-label">Server costs</span>
+				<span class="progress-value">
+					{fmtCurrency(Math.min(amountReceived, serverCostTotal))} / {fmtCurrency(serverCostTotal)}
+					{#if serverCovered}<span class="covered-badge">Covered</span>{/if}
+				</span>
 			</div>
-		{/each}
-	</div>
+			<div class="progress-bar">
+				<div
+					class="progress-fill server"
+					style="width: {serverPct}%"
+				></div>
+			</div>
+		</div>
 
-	<section class="comparison">
-		<h2>Everything is free</h2>
-		<table>
-			<thead>
-				<tr>
-					<th>Feature</th>
-					<th>Included</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each features as f}
-					<tr>
-						<td>{f}</td>
-						<td class="check">✓</td>
-					</tr>
+		<div class="progress-section">
+			<div class="progress-header">
+				<span class="progress-label">Server + 1 dedicated developer</span>
+				<span class="progress-value">
+					{fmtCurrency(amountReceived)} / {fmtCurrency(monthlyTarget)}
+				</span>
+			</div>
+			<div class="progress-bar">
+				<div
+					class="progress-fill total"
+					style="width: {totalPct}%"
+				></div>
+			</div>
+			<p class="progress-sub">
+				{donorCount} donor{donorCount === 1 ? '' : 's'} this month
+			</p>
+		</div>
+	</section>
+
+	<!-- Cost breakdown -->
+	<section class="card">
+		<h2>Where your money goes</h2>
+		<div class="cost-grid">
+			<div class="cost-group">
+				<h3>Server costs <span class="cost-total">{fmtCurrency(serverCostTotal)}/mo</span></h3>
+				{#each costs as c}
+					<div class="cost-row">
+						<span>{c.name}</span>
+						<span class="cost-amount">{fmtCurrency(c.amount)}</span>
+					</div>
 				{/each}
-			</tbody>
-		</table>
+			</div>
+			<div class="cost-group">
+				<h3>Development <span class="cost-total">{fmtCurrency(devCost)}/mo</span></h3>
+				<div class="cost-row">
+					<span>1 dedicated developer</span>
+					<span class="cost-amount">{fmtCurrency(devCost)}</span>
+				</div>
+				<p class="cost-note">
+					Full-time development: new features, bug fixes, platform
+					updates, and keeping 5 app targets in sync.
+				</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- Donate buttons -->
+	<section class="card">
+		<h2>Contribute</h2>
+		<div class="donate-grid">
+			{#each donateOptions as d (d.id)}
+				<button
+					class="donate-btn"
+					onclick={() => handleDonate(d.amount)}
+					disabled={loading}
+				>
+					<span class="donate-amount">{fmtCurrency(d.amount)}</span>
+					<span class="donate-label">{d.label}</span>
+				</button>
+			{/each}
+		</div>
+		<p class="donate-note">
+			Donations are one-time. No subscription, no recurring charge.
+			<!-- TODO: Add links when payment is wired -->
+			<!-- Also available on <a href="#">GitHub Sponsors</a> and <a href="#">Ko-fi</a>. -->
+		</p>
+	</section>
+
+	<!-- All features free -->
+	<section class="card">
+		<h2>Everything is free</h2>
+		<div class="feature-list">
+			{#each features as f}
+				<div class="feature-row">
+					<span class="feature-check">✓</span>
+					<span>{f}</span>
+				</div>
+			{/each}
+		</div>
 	</section>
 </div>
 
 <style>
-	.page {
-		padding: var(--space-xl) var(--space-2xl);
-		max-width: 52rem;
-	}
+	.page { padding: var(--space-xl) var(--space-2xl); max-width: 48rem; }
 	.page-header { margin-bottom: var(--space-xl); text-align: center; }
 	h1 { font-size: 1.75rem; font-weight: 800; margin-bottom: var(--space-xs); }
-	.subtitle { color: var(--color-text-secondary); font-size: 0.95rem; }
+	.subtitle { color: var(--color-text-secondary); font-size: 0.95rem; max-width: 36rem; margin: 0 auto; }
+	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
+	h3 { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
 
-	.thank-you {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 1rem 1.25rem;
-		background: rgba(46, 125, 50, 0.08);
-		border: 1.5px solid #2e7d32;
-		border-radius: var(--radius-lg);
-		margin-bottom: var(--space-xl);
-		font-size: 0.95rem;
-	}
-	.heart { font-size: 1.5rem; color: #e53935; }
-
-	.current-plan {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		padding: 1rem 1.25rem;
-		background: var(--color-primary-light);
-		border: 1.5px solid var(--color-primary);
-		border-radius: var(--radius-lg);
-		margin-bottom: var(--space-xl);
-	}
-	.pro-badge {
-		background: var(--color-primary);
-		color: white;
-		font-size: 0.7rem;
-		font-weight: 800;
-		letter-spacing: 0.08em;
-		padding: 0.3rem 0.8rem;
-		border-radius: 9999px;
-	}
-	.plan-note { font-size: 0.82rem; color: var(--color-text-secondary); margin: 0.2rem 0 0; }
-	.link-btn {
-		background: none;
-		border: none;
-		color: var(--color-primary);
-		cursor: pointer;
-		font-size: 0.82rem;
-		padding: 0;
-		text-decoration: underline;
-	}
-
-	.plans {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: var(--space-lg);
-		margin-bottom: var(--space-2xl);
-	}
-	@media (max-width: 48rem) {
-		.plans { grid-template-columns: 1fr; }
-	}
-	.plan-card {
-		background: var(--color-surface);
-		border: 1.5px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		display: flex;
-		flex-direction: column;
-		position: relative;
-		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-	}
-	.plan-card:hover { border-color: var(--color-primary); }
-	.plan-card.popular {
-		border-color: var(--color-primary);
-		box-shadow: 0 4px 20px rgba(79, 70, 229, 0.15);
-	}
-	.plan-card.active {
-		border-color: var(--color-primary);
-		background: var(--color-primary-light);
-	}
-	.popular-tag {
-		position: absolute;
-		top: -0.7rem;
-		left: 50%;
-		transform: translateX(-50%);
-		background: var(--color-primary);
-		color: white;
-		font-size: 0.7rem;
-		font-weight: 700;
-		padding: 0.2rem 0.8rem;
-		border-radius: 9999px;
-		letter-spacing: 0.04em;
-	}
-	.plan-card h3 {
-		font-size: 1.1rem;
-		font-weight: 700;
-		margin: 0 0 0.75rem;
-	}
-	.price { margin-bottom: 0.5rem; }
-	.amount { font-size: 2rem; font-weight: 800; }
-	.period { font-size: 0.85rem; color: var(--color-text-secondary); margin-left: 0.2rem; }
-	.plan-desc {
-		font-size: 0.82rem;
-		color: var(--color-text-secondary);
-		line-height: 1.5;
-		flex: 1;
-		margin-bottom: 1rem;
-	}
-	.btn-plan {
-		width: 100%;
-		padding: 0.6rem;
-		border-radius: var(--radius-md);
-		font-size: 0.88rem;
-		font-weight: 600;
-		cursor: pointer;
-		border: 1.5px solid var(--color-border);
-		background: var(--color-bg);
-		color: var(--color-text);
-		transition: all var(--transition-fast);
-	}
-	.btn-plan:hover { border-color: var(--color-primary); color: var(--color-primary); }
-	.btn-plan.primary {
-		background: var(--color-primary);
-		color: white;
-		border-color: var(--color-primary);
-	}
-	.btn-plan.primary:hover { background: var(--color-primary-hover); }
-	.btn-plan.current { opacity: 0.6; cursor: default; }
-	.btn-plan:disabled { opacity: 0.5; cursor: not-allowed; }
-
-	h2 {
-		font-size: 1.1rem;
-		font-weight: 700;
-		margin-bottom: var(--space-lg);
-		text-align: center;
-	}
-	.comparison {
+	.card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: 1.5rem;
+		margin-bottom: var(--space-xl);
 	}
-	table { width: 100%; border-collapse: collapse; }
-	th {
-		text-align: left;
-		font-size: 0.78rem;
+
+	.funding-card { border-color: var(--color-primary); border-width: 1.5px; }
+
+	.progress-section { margin-bottom: 1.25rem; }
+	.progress-section:last-child { margin-bottom: 0; }
+	.progress-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.4rem;
+	}
+	.progress-label { font-size: 0.88rem; font-weight: 600; }
+	.progress-value { font-size: 0.82rem; color: var(--color-text-secondary); }
+	.covered-badge {
+		background: #2e7d32;
+		color: white;
+		font-size: 0.65rem;
 		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--color-text-secondary);
-		padding: 0.5rem 0;
-		border-bottom: 1px solid var(--color-border);
+		padding: 0.1rem 0.5rem;
+		border-radius: 9999px;
+		margin-left: 0.4rem;
+		letter-spacing: 0.04em;
 	}
-	th:not(:first-child) { text-align: center; width: 4rem; }
-	td {
-		padding: 0.5rem 0;
+	.progress-bar {
+		height: 0.6rem;
+		background: var(--color-bg-tertiary);
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+	.progress-fill {
+		height: 100%;
+		border-radius: 9999px;
+		transition: width 0.5s ease;
+	}
+	.progress-fill.server { background: #2e7d32; }
+	.progress-fill.total { background: var(--color-primary); }
+	.progress-sub {
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+		margin-top: 0.3rem;
+	}
+
+	.cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+	@media (max-width: 40rem) { .cost-grid { grid-template-columns: 1fr; } }
+	.cost-group { }
+	.cost-total { font-weight: 400; font-size: 0.82rem; color: var(--color-text-secondary); }
+	.cost-row {
+		display: flex;
+		justify-content: space-between;
+		padding: 0.35rem 0;
 		font-size: 0.85rem;
 		border-bottom: 1px solid var(--color-border);
 	}
-	td.check { text-align: center; font-size: 1rem; }
-	td.pro-check { color: var(--color-primary); font-weight: 700; }
-	tr:last-child td { border-bottom: none; }
+	.cost-row:last-of-type { border-bottom: none; }
+	.cost-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+	.cost-note { font-size: 0.78rem; color: var(--color-text-tertiary); margin-top: 0.5rem; line-height: 1.5; }
+
+	.donate-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+	@media (max-width: 40rem) { .donate-grid { grid-template-columns: repeat(2, 1fr); } }
+	.donate-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 1rem 0.5rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-bg);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+	.donate-btn:hover {
+		border-color: var(--color-primary);
+		box-shadow: 0 4px 16px rgba(79, 70, 229, 0.12);
+	}
+	.donate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.donate-amount { font-size: 1.5rem; font-weight: 800; }
+	.donate-label { font-size: 0.75rem; color: var(--color-text-secondary); text-align: center; }
+	.donate-note { font-size: 0.78rem; color: var(--color-text-tertiary); }
+
+	.feature-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1.5rem; }
+	@media (max-width: 40rem) { .feature-list { grid-template-columns: 1fr; } }
+	.feature-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0;
+		font-size: 0.85rem;
+	}
+	.feature-check { color: #2e7d32; font-weight: 700; }
 </style>
