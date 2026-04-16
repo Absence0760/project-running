@@ -40,10 +40,10 @@
 	});
 
 	const donateOptions = [
-		{ id: 'donate_5', amount: 5, label: 'Buy me a gel' },
-		{ id: 'donate_15', amount: 15, label: 'Cover a day of servers' },
-		{ id: 'donate_50', amount: 50, label: 'Cover a week of servers' },
-		{ id: 'donate_80', amount: 80, label: 'Cover a full month of servers' },
+		{ id: 'donate_5', amount: 5, label: 'Buy me a gel', icon: '🧴', color: '#89D0B8' },
+		{ id: 'donate_15', amount: 15, label: 'Cover a day of servers', icon: '🖥', color: '#B9A7E8' },
+		{ id: 'donate_50', amount: 50, label: 'Cover a week of servers', icon: '🚀', color: '#F2A07B' },
+		{ id: 'donate_80', amount: 80, label: 'Cover a full month of servers', icon: '💛', color: '#E6A96B' },
 	];
 
 	const features = [
@@ -162,9 +162,11 @@
 			{#each donateOptions as d (d.id)}
 				<button
 					class="donate-btn"
+					style="--accent: {d.color}"
 					onclick={() => handleDonate(d.amount)}
 					disabled={loading}
 				>
+					<span class="donate-icon">{d.icon}</span>
 					<span class="donate-amount">{fmtCurrency(d.amount)}</span>
 					<span class="donate-label">{d.label}</span>
 				</button>
@@ -271,24 +273,40 @@
 	}
 	@media (max-width: 40rem) { .donate-grid { grid-template-columns: repeat(2, 1fr); } }
 	.donate-btn {
+		--accent: var(--color-primary);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.3rem;
-		padding: 1rem 0.5rem;
-		border: 1.5px solid var(--color-border);
+		gap: 0.4rem;
+		padding: 1.25rem 0.75rem;
+		border: 1.5px solid color-mix(in srgb, var(--accent) 35%, transparent);
 		border-radius: var(--radius-lg);
-		background: var(--color-bg);
+		background: color-mix(in srgb, var(--accent) 8%, var(--color-surface));
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition: all 0.2s ease;
 	}
 	.donate-btn:hover {
-		border-color: var(--color-primary);
-		box-shadow: 0 4px 16px rgba(79, 70, 229, 0.12);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 16%, var(--color-surface));
+		box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 25%, transparent);
+		transform: translateY(-2px);
 	}
-	.donate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.donate-amount { font-size: 1.5rem; font-weight: 800; }
-	.donate-label { font-size: 0.75rem; color: var(--color-text-secondary); text-align: center; }
+	.donate-btn:active {
+		transform: translateY(0);
+	}
+	.donate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+	.donate-icon { font-size: 1.5rem; }
+	.donate-amount {
+		font-size: 1.75rem;
+		font-weight: 800;
+		color: var(--accent);
+	}
+	.donate-label {
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+		text-align: center;
+		line-height: 1.4;
+	}
 	.donate-note { font-size: 0.78rem; color: var(--color-text-tertiary); }
 
 	.feature-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1.5rem; }
