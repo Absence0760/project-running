@@ -14,6 +14,7 @@
 		fetchPendingRequests,
 		approveMember,
 		rejectMember,
+		setMemberRole,
 		regenerateInviteToken,
 		joinClub,
 		leaveClub,
@@ -50,6 +51,7 @@
 	let isAdmin = $derived(
 		club?.viewer_role === 'owner' || club?.viewer_role === 'admin'
 	);
+	let isMember = $derived(club?.viewer_role != null);
 
 	async function load() {
 		loading = true;
@@ -430,7 +432,7 @@
 				</div>
 			{/if}
 
-			{#if isAdmin}
+			{#if isMember}
 				<form class="post-form" onsubmit={submitPost}>
 					<textarea
 						bind:value={draftPost}
@@ -618,7 +620,31 @@
 						</div>
 						<div class="member-info">
 							<strong>{m.display_name ?? 'Member'}</strong>
-							<span class="role">{m.role}</span>
+							{#if isAdmin && m.role !== 'owner' && m.user_id !== club?.owner_id}
+								<select
+									class="role-select"
+									value={m.role}
+									onchange={async (e) => {
+										const target = e.currentTarget as HTMLSelectElement;
+										const newRole = target.value as 'admin' | 'event_organiser' | 'race_director' | 'member';
+										if (!club) return;
+										try {
+											await setMemberRole(club.id, m.user_id, newRole);
+											m.role = newRole;
+										} catch (err) {
+											target.value = m.role;
+											alert('Failed to change role: ' + err);
+										}
+									}}
+								>
+									<option value="admin">Admin</option>
+									<option value="event_organiser">Event organiser</option>
+									<option value="race_director">Race director</option>
+									<option value="member">Member</option>
+								</select>
+							{:else}
+								<span class="role">{m.role.replace('_', ' ')}</span>
+							{/if}
 						</div>
 					</div>
 				{/each}
@@ -1181,6 +1207,15 @@
 		flex-direction: column;
 	}
 
+	.role-select {
+		padding: 0.15rem 0.4rem;
+		font-size: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
 	.member-info .role {
 		font-size: 0.75rem;
 		text-transform: capitalize;

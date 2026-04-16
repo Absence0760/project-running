@@ -22,6 +22,10 @@ class ClubView {
   });
 
   bool get isAdmin => viewerRole == 'owner' || viewerRole == 'admin';
+  bool get isEventOrganiser =>
+      isAdmin || viewerRole == 'event_organiser';
+  bool get isRaceDirector =>
+      isAdmin || viewerRole == 'race_director';
   bool get isMember => viewerRole != null;
 }
 

@@ -190,7 +190,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
     final desc = describeRecurrence(e.freq, e.byday);
     final active = _activeInstance!;
-    final isAdmin = _club?.isAdmin == true;
+    final isMember = _club?.isMember == true;
 
     return Scaffold(
       appBar: AppBar(title: Text(e.row.title)),
@@ -369,7 +369,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             onSubmit: _submitMyTime,
             onRemove: _removeMyResult,
           ),
-          if (isAdmin) ...[
+          if (isMember) ...[
             const SizedBox(height: 24),
             _AdminUpdateComposer(
               onSubmit: (body) async {

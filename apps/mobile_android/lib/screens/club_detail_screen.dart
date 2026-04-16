@@ -391,7 +391,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         children: [
           if (_upcoming.isNotEmpty) _buildNextEventCard(theme, c, _upcoming.first),
-          if (c.isAdmin)
+          if (c.isMember)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildPostComposer(theme),
@@ -401,7 +401,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
                 child: Text(
-                  c.isAdmin
+                  c.isMember
                       ? 'No posts yet. Share an update with members.'
                       : 'No updates yet.',
                   style: theme.textTheme.bodyMedium?.copyWith(

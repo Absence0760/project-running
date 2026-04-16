@@ -15,13 +15,31 @@ The social layer. A club is a group with an owner, members, events, and a feed o
 
 Admin = the club owner or a member with `role = 'admin'` whose `status = 'active'`. The owner is auto-enrolled as an `'owner'`-role member at club creation (trigger `enroll_club_owner`), so `is_club_admin()` works uniformly for them too.
 
+### Roles and permissions
+
+| Action | owner | admin | event\_organiser | race\_director | member |
+|---|---|---|---|---|---|
+| Change club settings | yes | yes | | | |
+| Remove / change member roles | yes | yes | | | |
+| Create / edit / delete events | yes | yes | yes | | |
+| Add attendees to events | yes | yes | yes | | |
+| Arm / start / end a race | yes | yes | | yes | |
+| Approve / reject results | yes | yes | | yes | |
+| Post to the event/club feed | yes | yes | yes | yes | yes |
+| Submit own race result | yes | yes | yes | yes | yes |
+| RSVP | yes | yes | yes | yes | yes |
+
+SQL helpers (`20260428_001_role_permissions.sql`): `is_event_organiser(club_id)` matches `owner | admin | event_organiser`; `is_race_director(club_id)` matches `owner | admin | race_director`. Both are `security definer` + pinned `search_path`. RLS policies on `events`, `event_attendees`, `race_sessions`, `event_results`, and `club_posts` reference these helpers rather than `is_club_admin` for the actions they govern. Admin-only actions (settings, member management) continue to use `is_club_admin`.
+
+Admins can change any non-owner member's role from the Members tab on the web club page via a dropdown. The `setMemberRole(clubId, userId, role)` helper in `data.ts` and the `club_members` UPDATE policy (which requires `is_club_admin`) enforce this.
+
 ## Data model
 
 Tables: `clubs`, `club_members`, `events`, `event_attendees`, `club_posts`, `event_results`. Full definitions + RLS in `api_database.md § clubs / club_members / events / event_attendees / club_posts`. Phase 1 migration: `apps/backend/supabase/migrations/20260416_001_clubs_and_events.sql`. Phase 2 migration: `20260417_001_phase2_social.sql` — adds recurrence columns on `events`, `instance_start` + composite pkey on `event_attendees`, `join_policy` + `invite_token` on `clubs`, `status` on `club_members`, `parent_post_id` + `event_instance_start` on `club_posts`, and the `join_club_by_token` RPC.
 
 Narrow client-side unions in `apps/web/src/lib/types.ts`:
 
-- `ClubRole = 'owner' | 'admin' | 'member'`
+- `ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member'`
 - `RsvpStatus = 'going' | 'maybe' | 'declined'`
 - `MembershipStatus = 'active' | 'pending'`
 - `JoinPolicy = 'open' | 'request' | 'invite'`

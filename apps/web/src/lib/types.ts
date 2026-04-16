@@ -66,7 +66,7 @@ export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';
 export type PreferredUnit = 'km' | 'mi';
 export type SubscriptionTier = 'free' | 'premium';
 
-export type ClubRole = 'owner' | 'admin' | 'member';
+export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';
 export type MembershipStatus = 'active' | 'pending';
 export type JoinPolicy = 'open' | 'request' | 'invite';

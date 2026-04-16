@@ -75,6 +75,13 @@
 	);
 
 	let isAdmin = $derived(club?.viewer_role === 'owner' || club?.viewer_role === 'admin');
+	let isEventOrganiser = $derived(
+		isAdmin || club?.viewer_role === 'event_organiser'
+	);
+	let isRaceDirector = $derived(
+		isAdmin || club?.viewer_role === 'race_director'
+	);
+	let isMember = $derived(club?.viewer_role != null);
 	let isPast = $derived(
 		!!event &&
 			(event.recurrence_freq
@@ -550,7 +557,7 @@
 			</section>
 		{/if}
 
-		{#if isAdmin}
+		{#if isMember}
 			<section class="card">
 				<h3>Post an update</h3>
 				<p class="sub">Members will see this on the club feed, tagged to this event.</p>
@@ -590,7 +597,7 @@
 			</section>
 		{/if}
 
-		{#if isAdmin}
+		{#if isRaceDirector}
 			<section class="card race-panel">
 				<div class="results-head">
 					<h3>Race control</h3>
@@ -683,9 +690,9 @@
 								<span class="time">{formatDuration(r.duration_s)}</span>
 								<span class="dist muted">{(r.distance_m / 1000).toFixed(2)} km</span>
 							{/if}
-							{#if isAdmin && !r.organiser_approved}
+							{#if isRaceDirector && !r.organiser_approved}
 								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id, true)}>Approve</button>
-							{:else if isAdmin && r.organiser_approved && r.user_id !== myUserId}
+							{:else if isRaceDirector && r.organiser_approved && r.user_id !== myUserId}
 								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id, false)}>Unverify</button>
 							{/if}
 						</li>

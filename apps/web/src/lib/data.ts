@@ -640,6 +640,19 @@ export async function approveMember(clubId: string, userId: string): Promise<voi
 	if (error) throw error;
 }
 
+export async function setMemberRole(
+	clubId: string,
+	userId: string,
+	role: 'admin' | 'event_organiser' | 'race_director' | 'member'
+): Promise<void> {
+	const { error } = await supabase
+		.from('club_members')
+		.update({ role })
+		.eq('club_id', clubId)
+		.eq('user_id', userId);
+	if (error) throw error;
+}
+
 export async function rejectMember(clubId: string, userId: string): Promise<void> {
 	const { error } = await supabase
 		.from('club_members')
