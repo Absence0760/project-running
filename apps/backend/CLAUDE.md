@@ -110,6 +110,7 @@ Five functions live under `supabase/functions/`. Two are wired up and shippable;
 | `strava-import` | **Partial** — OAuth + token store works, backfill is a TODO | Client POST with `{ code, scope }` from OAuth redirect | User JWT | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
 | `strava-webhook` | **Partial** — verification works, activity sync is a TODO | GET verification from Strava + POST activity events | Service role (webhook is public) | `STRAVA_VERIFY_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `export-data` | **Stub** — every step is a TODO | Client POST with `{ format }` | User JWT | — |
+| `revenuecat-webhook` | **Working** | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC signature verification (`REVENUECAT_WEBHOOK_SECRET`) | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 
 All five are short — 25 to 70 lines each. Read the file, not an abstraction; they don't share helpers.
 

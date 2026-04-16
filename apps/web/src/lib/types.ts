@@ -64,7 +64,7 @@ export type RunSource =
 export type RouteSurface = 'road' | 'trail' | 'mixed';
 export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';
 export type PreferredUnit = 'km' | 'mi';
-export type SubscriptionTier = 'free' | 'premium';
+export type SubscriptionTier = 'free' | 'pro' | 'lifetime';
 
 export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';

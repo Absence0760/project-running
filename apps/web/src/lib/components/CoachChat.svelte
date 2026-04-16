@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { isLocked } from '$lib/features';
+	import ProGate from '$lib/components/ProGate.svelte';
 
 	interface Props {
 		planId: string | null;
 	}
 	let { planId }: Props = $props();
+	let locked = $derived(isLocked('ai_coach'));
 
 	interface Msg {
 		role: 'user' | 'assistant';
@@ -97,6 +100,9 @@
 	}
 </script>
 
+{#if locked}
+	<ProGate feature="ai_coach" />
+{:else}
 <div class="chat">
 	<header>
 		<h3>Coach</h3>
@@ -155,6 +161,7 @@
 		</p>
 	{/if}
 </div>
+{/if}
 
 <style>
 	.chat {

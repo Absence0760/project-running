@@ -68,6 +68,35 @@ export const POST: RequestHandler = async ({ request }) => {
 		global: { headers: { Authorization: `Bearer ${body.access_token}` } }
 	});
 
+	// Paywall gate. BYPASS_PAYWALL is a dev-only flag that skips the
+	// tier check so local testing works without a subscription.
+	const bypassPaywall = env.BYPASS_PAYWALL === 'true';
+	if (!bypassPaywall) {
+		const { data: { user: authUser } } = await supabase.auth.getUser();
+		if (!authUser) {
+			return new Response(JSON.stringify({ error: 'not authenticated' }), {
+				status: 401,
+				headers: { 'content-type': 'application/json' }
+			});
+		}
+		const { data: profile } = await supabase
+			.from('user_profiles')
+			.select('subscription_tier')
+			.eq('id', authUser.id)
+			.single();
+		const tier = profile?.subscription_tier ?? 'free';
+		if (tier === 'free') {
+			return new Response(
+				JSON.stringify({
+					error: 'pro_required',
+					message: 'AI Coach is a Pro feature. Upgrade to unlock.',
+					feature: 'ai_coach',
+				}),
+				{ status: 403, headers: { 'content-type': 'application/json' } }
+			);
+		}
+	}
+
 	const context = await buildContext(supabase, body.plan_id ?? null);
 	if (context.error) {
 		return new Response(JSON.stringify({ error: context.error }), {

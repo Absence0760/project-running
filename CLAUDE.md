@@ -27,6 +27,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
+| Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
 
 Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas):
 - [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target

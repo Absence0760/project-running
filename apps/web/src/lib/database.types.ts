@@ -936,6 +936,10 @@ export type Database = {
       }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }
+      is_event_organiser: { Args: { target_club: string }; Returns: boolean }
+      is_pro: { Args: never; Returns: boolean }
+      is_race_director: { Args: { target_club: string }; Returns: boolean }
+      is_user_pro: { Args: { p_user_id: string }; Returns: boolean }
       join_club_by_token: { Args: { token: string }; Returns: string }
       nearby_routes: {
         Args: {
