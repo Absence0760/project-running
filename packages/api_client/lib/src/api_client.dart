@@ -231,6 +231,54 @@ class ApiClient {
     return _downloadTrack(url);
   }
 
+  /// Download the raw gzipped track bytes from Storage without decoding.
+  /// Used by the backup flow which wants to archive the gzipped blob
+  /// verbatim so restore is a byte-for-byte upload.
+  Future<Uint8List> downloadTrackBytes(String path) async {
+    return _client.storage.from('runs').download(path);
+  }
+
+  /// Upload pre-gzipped track bytes to Storage at `{userId}/{runId}.json.gz`.
+  /// Used on the restore path to re-home a track without re-encoding.
+  Future<void> uploadTrackBytes({
+    required String userId,
+    required String runId,
+    required Uint8List gzippedBytes,
+  }) async {
+    final path = '$userId/$runId.json.gz';
+    await _client.storage.from('runs').uploadBinary(
+          path,
+          gzippedBytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/json',
+            upsert: true,
+          ),
+        );
+  }
+
+  /// Raw-row read of the `runs` table. Returns the underlying row
+  /// `Map<String, dynamic>` rather than a `Run` domain object — the
+  /// backup writer needs every column verbatim so round-trips preserve
+  /// source-specific metadata, `event_id`, and anything else added to
+  /// the schema later.
+  Future<List<Map<String, dynamic>>> fetchRunRowsRaw() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    final data = await _client
+        .from(RunRow.table)
+        .select()
+        .eq(RunRow.colUserId, userId)
+        .order(RunRow.colStartedAt, ascending: false);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Upsert a raw run row. The backup restore path builds these
+  /// directly from the archive so `metadata`, `source`, and every other
+  /// column survive untouched.
+  Future<void> upsertRunRowRaw(Map<String, dynamic> row) async {
+    await _client.from(RunRow.table).upsert(row);
+  }
+
   // -- Storage helpers --
 
   Future<String> _uploadTrack({

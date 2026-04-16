@@ -10,6 +10,13 @@
 		effective,
 		type LoadedSettings,
 	} from '$lib/settings';
+	import {
+		createBackup,
+		restoreBackup,
+		type BackupProgress,
+		type RestoreProgress,
+		type RestoreResult,
+	} from '$lib/backup';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -19,6 +26,13 @@
 	let exporting = $state(false);
 
 	let settings = $state<LoadedSettings | null>(null);
+	let backingUp = $state(false);
+	let backupProgress = $state<BackupProgress | null>(null);
+	let restoring = $state(false);
+	let restoreProgress = $state<RestoreProgress | null>(null);
+	let restoreResult = $state<RestoreResult | null>(null);
+	let restoreError = $state<string | null>(null);
+	let restoreFileInput: HTMLInputElement;
 	let defaultActivityType = $state<'run' | 'walk' | 'hike' | 'cycle'>('run');
 	let weekStartDay = $state<'monday' | 'sunday'>('monday');
 	let prefsSaving = $state(false);
@@ -124,6 +138,59 @@
 			downloadFile(header + rows, 'runs_export.csv', 'text/csv');
 		} finally {
 			exporting = false;
+		}
+	}
+
+	async function handleBackup() {
+		backingUp = true;
+		backupProgress = null;
+		try {
+			const blob = await createBackup((p) => (backupProgress = p));
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			const ts = new Date().toISOString().replace(/[:.]/g, '-');
+			a.href = url;
+			a.download = `run-app-backup-${ts}.zip`;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			console.error(e);
+			alert(`Backup failed: ${(e as Error).message}`);
+		} finally {
+			backingUp = false;
+			backupProgress = null;
+		}
+	}
+
+	async function handleRestoreFile(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		if (!confirm(
+			`Restore from "${file.name}"?\n\n` +
+				'This adds or overwrites runs and routes matching IDs in the backup. ' +
+				'It will not delete runs or routes that aren\'t in the backup.'
+		)) {
+			input.value = '';
+			return;
+		}
+		restoring = true;
+		restoreProgress = null;
+		restoreResult = null;
+		restoreError = null;
+		try {
+			const res = await restoreBackup(file, {
+				onProgress: (p) => (restoreProgress = p),
+			});
+			restoreResult = res;
+		} catch (err) {
+			restoreError = (err as Error).message;
+		} finally {
+			restoring = false;
+			restoreProgress = null;
+			input.value = '';
 		}
 	}
 </script>
@@ -246,8 +313,57 @@
 
 	<!-- Data -->
 	<section class="card">
-		<h2>Data Export</h2>
-		<p class="section-desc">Download all your data. Available as GPX (routes + GPS traces) or CSV (run history).</p>
+		<h2>Backup & Restore</h2>
+		<p class="section-desc">
+			Full backup includes every run with its GPS trace, your routes, profile, and preferences —
+			a lossless archive you can restore on this account or a fresh one.
+		</p>
+		<div class="backup-row">
+			<button class="btn btn-primary" onclick={handleBackup} disabled={backingUp || restoring}>
+				<span class="material-symbols">archive</span>
+				{backingUp
+					? backupProgress
+						? `${backupProgress.stage}… (${backupProgress.current}/${backupProgress.total})`
+						: 'Backing up…'
+					: 'Download full backup'}
+			</button>
+			<button
+				class="btn btn-outline"
+				onclick={() => restoreFileInput.click()}
+				disabled={backingUp || restoring}
+			>
+				<span class="material-symbols">unarchive</span>
+				{restoring
+					? restoreProgress
+						? `${restoreProgress.stage}… (${restoreProgress.current}/${restoreProgress.total})`
+						: 'Restoring…'
+					: 'Restore from backup'}
+			</button>
+			<input
+				bind:this={restoreFileInput}
+				type="file"
+				accept=".zip,application/zip"
+				onchange={handleRestoreFile}
+				style="display: none"
+			/>
+		</div>
+		{#if restoreResult}
+			<p class="restore-ok">
+				Restored {restoreResult.runsImported} runs · {restoreResult.tracksUploaded} tracks ·
+				{restoreResult.routesImported} routes{#if restoreResult.profileRestored} · profile{/if}.
+				{#if restoreResult.warnings.length > 0}
+					<br /><small>{restoreResult.warnings.length} warnings (see console).</small>
+				{/if}
+			</p>
+		{/if}
+		{#if restoreError}
+			<p class="password-error">Restore failed: {restoreError}</p>
+		{/if}
+	</section>
+
+	<section class="card">
+		<h2>Data Export (CSV)</h2>
+		<p class="section-desc">Summary CSV for spreadsheet analysis. No GPS traces — use Full backup for a lossless copy.</p>
 		<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting}>
 			<span class="material-symbols">download</span>
 			{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
@@ -432,5 +548,16 @@
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.1rem;
+	}
+
+	.backup-row {
+		display: flex;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+	.restore-ok {
+		margin-top: var(--space-md);
+		color: #2e7d32;
+		font-size: 0.85rem;
 	}
 </style>

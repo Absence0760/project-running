@@ -1,12 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../backup.dart';
 import '../ble_heart_rate.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
@@ -198,21 +199,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _exportBackup() async {
-    final store = widget.runStore;
-    if (store == null) return;
-    final runs = store.runs;
-    final json = jsonEncode({
-      'exported_at': DateTime.now().toIso8601String(),
-      'count': runs.length,
-      'runs': runs.map((r) => r.toJson()).toList(),
-    });
-    final tmp = await getTemporaryDirectory();
-    final file = File('${tmp.path}/runs-backup-${DateTime.now().millisecondsSinceEpoch}.json');
-    await file.writeAsString(json);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Run backup — ${runs.length} runs',
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in first to back up your runs.')),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Preparing backup…')),
     );
+    try {
+      final tmp = await getTemporaryDirectory();
+      final ts = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+      final file = File('${tmp.path}/run-app-backup-$ts.zip');
+      await BackupService(api: api).createBackup(outputFile: file);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Run app backup',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Backup failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in first to restore.')),
+      );
+      return;
+    }
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final path = picked.files.first.path;
+    if (path == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from backup?'),
+        content: const Text(
+          'This adds or overwrites runs and routes matching IDs in the backup. '
+          'It will not delete runs or routes that aren\'t in the backup.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Restoring…')));
+    try {
+      final res = await BackupService(api: api).restore(zipFile: File(path));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Restored ${res.runsImported} runs · ${res.tracksUploaded} tracks · ${res.routesImported} routes'
+            '${res.warnings.isNotEmpty ? ' · ${res.warnings.length} warnings' : ''}',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+    }
   }
 
   @override
@@ -353,11 +417,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.download),
-              title: const Text('Backup runs'),
-              subtitle: Text('${widget.runStore!.runs.length} runs'),
+              leading: const Icon(Icons.archive_outlined),
+              title: const Text('Full backup'),
+              subtitle: const Text(
+                'Every run with its GPS trace, plus routes, profile, and preferences. '
+                'Restores on web or Android.',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _exportBackup,
+            ),
+            ListTile(
+              leading: const Icon(Icons.unarchive_outlined),
+              title: const Text('Restore from backup'),
+              subtitle: const Text('Pick a previously saved .zip backup.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _restoreBackup,
             ),
             const Divider(),
           ],
