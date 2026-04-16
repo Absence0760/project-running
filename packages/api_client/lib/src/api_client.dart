@@ -341,6 +341,9 @@ class ApiClient {
       elevationM: route.elevationGainMetres,
       isPublic: route.isPublic,
       surface: route.surface,
+      tags: route.tags,
+      featured: route.featured,
+      runCount: route.runCount,
     );
     // Drop null / server-default columns so Postgres fills them in.
     final body = Map<String, dynamic>.from(row.toJson())

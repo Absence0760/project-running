@@ -1,18 +1,48 @@
 name: Release Apple Watch
 
+# Tag: `watch_ios@1.2.3`. Apple Watch apps don't ship independently on
+# the App Store — they bundle with the phone app's release. This
+# workflow exists so the repo can build and verify the watchOS target in
+# isolation, but the canonical "ship to users" path goes through
+# `release-ios.yml` once that's code-signed.
+
 on:
   push:
     tags:
-      - 'watch/v*'
+      - 'watch_ios@*'
 
 jobs:
   build:
-    name: Build Apple Watch
+    name: Build watchOS target
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - run: |
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#watch_ios@}"
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build for simulator (smoke check)
+        run: |
           xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
             -scheme WatchApp \
             -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
             build
+
+      - name: Create GitHub Release (audit record)
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Apple Watch ${{ steps.version.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            Apple Watch builds ship inside the paired iOS app (see the
+            corresponding `mobile_ios@${{ steps.version.outputs.name }}`
+            tag). This release is a build-only audit record.
+          generate_release_notes: true

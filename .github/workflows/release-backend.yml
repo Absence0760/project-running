@@ -1,24 +1,71 @@
 name: Release Backend
 
+# Tag: `backend@1.2.3`. Pushes schema migrations + Edge Functions to the
+# linked Supabase project. Migrations run before functions so a function
+# that depends on a new column doesn't deploy ahead of the schema it
+# reads.
+#
+# Secrets read:
+#   SUPABASE_ACCESS_TOKEN         personal access token for the CLI
+#   SUPABASE_PROJECT_REF          target project's ref (e.g. `abcd1234xyz`)
+#   SUPABASE_DB_PASSWORD          Postgres password for `supabase db push`
+#
+# There is no "internal track" for a backend — once migrations and
+# functions deploy they're live for every client. Roll forward with a
+# follow-up migration rather than trying to roll back.
+
 on:
   push:
     tags:
-      - 'backend/v*'
+      - 'backend@*'
 
 jobs:
   deploy:
-    name: Deploy Edge Functions
+    name: Deploy migrations + Edge Functions
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#backend@}"
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+
       - uses: supabase/setup-cli@v1
         with:
           version: 2.84.2
-      - run: |
-          supabase functions deploy strava-webhook --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy strava-import --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy parkrun-import --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy refresh-tokens --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy export-data --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Link project
+        working-directory: apps/backend
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Push migrations
+        working-directory: apps/backend
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push
+
+      - name: Deploy Edge Functions
+        working-directory: apps/backend
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for fn in strava-webhook strava-import parkrun-import refresh-tokens export-data; do
+            supabase functions deploy "$fn" --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+          done
+
+      - name: Create GitHub Release (audit record)
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Backend ${{ steps.version.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true

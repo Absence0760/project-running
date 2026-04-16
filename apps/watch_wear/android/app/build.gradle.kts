@@ -67,10 +67,38 @@ android {
         buildConfig = true
     }
 
+    // Release signing config. Matches the pattern used by
+    // `apps/mobile_android`: if `key.properties` exists at the Android
+    // project root, use it; otherwise fall back to the debug key so
+    // local `./gradlew assembleRelease` on a clean checkout still
+    // produces an installable (though untrusted) APK. CI supplies the
+    // real keystore via secrets.
+    val keystoreFile = rootProject.file("key.properties")
+    val keystoreProps = java.util.Properties().apply {
+        if (keystoreFile.exists()) {
+            load(java.io.FileInputStream(keystoreFile))
+        }
+    }
+
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+                storeFile = file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keystoreFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

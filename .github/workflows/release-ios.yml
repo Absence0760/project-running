@@ -1,20 +1,102 @@
 name: Release iOS
 
+# Tag: `mobile_ios@1.2.3`. Skeleton workflow — the iOS Flutter app is
+# still scaffolded (see `apps/mobile_ios/CLAUDE.md`), so this workflow
+# builds an unsigned IPA today and is ready to flip on code-signing +
+# TestFlight upload when the app is shippable.
+#
+# To activate TestFlight upload, uncomment the signing + upload steps
+# and add these secrets:
+#   IOS_BUILD_CERTIFICATE_BASE64   Apple distribution certificate (.p12)
+#   IOS_P12_PASSWORD               password for the .p12
+#   IOS_PROVISIONING_PROFILE_BASE64
+#   KEYCHAIN_PASSWORD              anything — used to create an ephemeral keychain
+#   APP_STORE_CONNECT_API_KEY_ID
+#   APP_STORE_CONNECT_API_ISSUER_ID
+#   APP_STORE_CONNECT_API_KEY_BASE64   .p8 key from App Store Connect
+
 on:
   push:
     tags:
-      - 'ios/v*'
+      - 'mobile_ios@*'
 
 jobs:
-  build:
-    name: Build iOS
+  release:
+    name: Build iOS (unsigned until app ships)
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION_NAME="${TAG#mobile_ios@}"
+          VERSION_CODE=$(git rev-list --count HEAD)
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+
       - run: dart pub global activate melos
       - run: melos bootstrap
-      - working-directory: apps/mobile_ios
+
+      - name: Pin version from tag
+        working-directory: apps/mobile_ios
+        run: |
+          sed -i '' "s/^version: .*/version: ${{ steps.version.outputs.name }}+${{ steps.version.outputs.code }}/" pubspec.yaml
+          grep '^version:' pubspec.yaml
+
+      # TestFlight-ready signing + upload. Uncomment when the iOS app
+      # is ready to ship.
+      #
+      # - name: Install signing assets
+      #   env:
+      #     IOS_BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+      #     IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+      #     IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      #   run: |
+      #     CERT_PATH=$RUNNER_TEMP/build_certificate.p12
+      #     PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+      #     KEYCHAIN=$RUNNER_TEMP/build.keychain-db
+      #     echo "$IOS_BUILD_CERTIFICATE_BASE64" | base64 -d > "$CERT_PATH"
+      #     echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d > "$PP_PATH"
+      #     security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+      #     security set-keychain-settings -lut 21600 "$KEYCHAIN"
+      #     security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+      #     security import "$CERT_PATH" -P "$IOS_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+      #     security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+      #     security list-keychain -d user -s "$KEYCHAIN"
+      #     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+      #     cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+      #
+      # - name: Build signed IPA
+      #   working-directory: apps/mobile_ios
+      #   run: flutter build ipa --release
+      #
+      # - name: Upload to TestFlight
+      #   uses: apple-actions/upload-testflight-build@v1
+      #   with:
+      #     app-path: apps/mobile_ios/build/ios/ipa/mobile_ios.ipa
+      #     issuer-id: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      #     api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      #     api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+
+      - name: Build IPA (unsigned)
+        working-directory: apps/mobile_ios
         run: flutter build ipa --no-codesign
+
+      - name: Create GitHub Release + attach IPA
+        uses: softprops/action-gh-release@v2
+        with:
+          name: iOS ${{ steps.version.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          files: apps/mobile_ios/build/ios/ipa/*.ipa
+          generate_release_notes: true
