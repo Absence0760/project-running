@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
@@ -8,6 +9,12 @@
 	let email = $state('');
 	let password = $state('');
 	let isSignUp = $state(false);
+
+	$effect(() => {
+		if (browser && !auth.loading && auth.loggedIn) {
+			goto('/dashboard', { replaceState: true });
+		}
+	});
 
 	async function handleGoogleSignIn() {
 		error = '';
