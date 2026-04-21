@@ -350,7 +350,7 @@ class ApiClient {
         'lat': w.lat,
         'lng': w.lng,
         'ele': w.elevationMetres,
-        'ts': w.timestamp?.toIso8601String(),
+        'ts': w.timestamp?.toUtc().toIso8601String(),
       };
 
   static Waypoint _waypointFromJson(Map<String, dynamic> m) => Waypoint(

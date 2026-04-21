@@ -172,7 +172,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
 
     final run = Run(
       id: _uuid.v4(),
-      startedAt: _startedAt,
+      startedAt: _startedAt.toUtc(),
       duration: duration,
       distanceMetres: distance,
       source: RunSource.app,
