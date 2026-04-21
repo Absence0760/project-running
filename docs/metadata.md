@@ -47,6 +47,16 @@ Written by the `parkrun-import` Edge Function when scraping a runner's results p
 | `age_grade` | `string` — age-graded percentage as a string with `%` suffix (e.g. `"54.23%"`) | Same | — | Optional | No UI consumer today. Kept so future analytics can use it. |
 | `avg_bpm` | `number` — mean heart rate in BPM across the run | `apps/watch_ios/WatchApp/ContentView.swift` (forwards `FinishedRun.averageBPM` from `HealthKitManager`); `apps/watch_wear/android/.../RunRecordingService.kt` (averages from `HeartRateMonitor`); `apps/mobile_android/lib/screens/run_screen.dart` (averages BLE chest-strap samples from `BleHeartRate`); `apps/mobile_android/lib/health_connect_importer.dart` (averages `HEART_RATE` samples inside the workout window) | `apps/web/src/routes/runs/[id]/+page.svelte` (post-run detail); `apps/mobile_android/lib/screens/run_detail_screen.dart`; watch apps' own post-run summaries | Optional; only present when HR was captured | Recording sources: Apple Watch → HealthKit `HKLiveWorkoutBuilder`; Wear OS → `androidx.health:health-services-client`; Android phone → BLE Heart Rate Service (0x180D) via `flutter_blue_plus`; Health Connect import → averages `HEART_RATE` samples from the importing app's writes. All clamp to 30–230 BPM before averaging to drop sensor noise. |
 
+### Training plan linkage
+
+Written when a run was recorded under a structured plan workout. See [workout_execution.md](workout_execution.md) for the full loop.
+
+| Key | Shape | Writers | Readers | Required? | Notes |
+|---|---|---|---|---|---|
+| `plan_workout_id` | `string` (uuid) — the linked `plan_workouts` row | `mobile_android/lib/screens/run_screen.dart` (`_finishRun`, when a workout was active) | `apps/web/src/routes/runs/[id]/+page.svelte`, `mobile_android/lib/screens/run_detail_screen.dart` (both surface a "Workout" section when set) | Optional | Presence implies an explicit link — the auto-matcher (`autoMatchRunToPlanWorkout`) skips runs that already carry it. |
+| `workout_step_results` | `array<{ step_index: int, kind: string, rep_index?: int, rep_total?: int, target_distance_m: double, actual_distance_m: double, target_pace_sec_per_km: int, actual_pace_sec_per_km: int?, duration_s: int, status: 'completed' \| 'skipped' }>` | `mobile_android/lib/screens/run_screen.dart` (`_finishRun`, from `WorkoutRunner.snapshotResults`) | `apps/web/src/routes/runs/[id]/+page.svelte`, `mobile_android/lib/screens/run_detail_screen.dart` (planned-vs-actual table) | Optional; always present alongside `plan_workout_id` | `actual_pace_sec_per_km` is null for steps where `actual_distance_m < ~10 m` (the user skipped almost immediately). One row per expanded step, including skipped ones, so readers can render the full planned sequence. |
+| `workout_adherence` | `string` — `completed` \| `partial` \| `abandoned` | Same as above | Same as above | Optional; always present alongside `plan_workout_id` | `completed` = every step hit target ± tolerance. `partial` = any step skipped or more than 20 % short. `abandoned` = user explicitly abandoned mid-workout. |
+
 ### Internal / runtime-only
 
 Keys that carry transient or platform-internal state. Treat these as implementation detail — do not expose them in the UI, and do not depend on them across platforms.

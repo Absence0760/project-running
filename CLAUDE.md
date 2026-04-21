@@ -20,6 +20,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Adding a test | [docs/testing.md](docs/testing.md) — what's covered, patterns, how to run |
 | Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
 | Touching training plans (VDOT, Riegel, generator, week grid) | [docs/training.md](docs/training.md) — engine shape, pace derivation, what's deferred |
+| Implementing the live structured-workout execution loop | [docs/workout_execution.md](docs/workout_execution.md) — specced runner state machine + UI + persistence |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
 | Running one of the apps locally | `apps/<app>/local_testing.md` — one per app (e.g. [apps/mobile_android/local_testing.md](apps/mobile_android/local_testing.md), [apps/backend/local_testing.md](apps/backend/local_testing.md)) |
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |

@@ -100,10 +100,10 @@ Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will gro
 
 ## Deferred
 
-- **Live execution loop** in the run screen (interval state machine, live rep count, cooldown-on-completion) — Phase 2 of this feature. Needs mobile-app work to land end-to-end, even though `structure` is already stored in a ready-to-execute shape.
+- **Live execution loop** in the run screen (interval state machine, live rep count, cooldown-on-completion) — Phase 2 of this feature. **Specced in [workout_execution.md](workout_execution.md)**, not yet built. `plan_workouts.structure` already stores everything the runner needs; the remaining work is the `WorkoutRunner` state machine (in `packages/run_recorder`), the execution-band widget, and run-screen wiring. Rough sizing ~4 dev-days. Read the spec before picking this up.
 - **Plan generator v2** with adaptive weekly rescheduling driven by adherence.
 - **Plan library / sharing** — publish a plan, clone into your own account. Deferred until the clubs/social layer is the natural home for it.
-- **Structured-interval execution on the Android run screen** — no code yet; `plan_workouts.structure` is the handoff.
+- **Structured-interval execution on the Android run screen** — specced in [workout_execution.md](workout_execution.md), no code yet; `plan_workouts.structure` is the handoff.
 - **Paste-a-template import** — markdown table → weeks/workouts.
 - **Export as markdown / JSON** — round-trips through the paste path above.
 - **Dart port of the engine** — *Shipped in Phase 3 Android port* via `apps/mobile_android/lib/training.dart` with 17 mirror tests in `test/training_test.dart`. Must stay in sync with `apps/web/src/lib/training.ts`; any change to pace multipliers, phase breakdown, or mileage fractions requires updating both files and re-running both test suites.
