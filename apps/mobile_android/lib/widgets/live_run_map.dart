@@ -249,6 +249,12 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
           options: MapOptions(
             initialCenter: fitBounds ? allPoints.first : center,
             initialZoom: fitBounds ? 14 : 19,
+            // Cap gesture zoom to what the tile layer can actually cover
+            // (with up-sampling above 19). Without this, users on the
+            // finished-run screen pinch past the tile layer's display
+            // ceiling and see only the polyline on a white background.
+            minZoom: 3,
+            maxZoom: 22,
             initialCameraFit: fitBounds
                 ? CameraFit.bounds(
                     bounds: LatLngBounds.fromPoints(allPoints),
@@ -272,11 +278,17 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             },
           ),
           children: [
-            // Dark map tiles with HTTP cache
+            // Dark map tiles with HTTP cache. `maxNativeZoom` caps tile
+            // fetches at 19 (MapTiler's ceiling for this style) while
+            // `maxZoom` lets flutter_map keep displaying the layer at
+            // gesture-zoom 20–22 by up-sampling the z=19 tiles. Without
+            // the split the layer goes blank past 19 and the user sees
+            // the polyline floating on a white background.
             TileLayer(
               urlTemplate: _tileUrl,
               userAgentPackageName: 'com.example.mobile_android',
-              maxZoom: 19,
+              maxNativeZoom: 19,
+              maxZoom: 22,
               tileProvider: CachedTileProvider(
                 store: TileCache.store,
                 maxStale: const Duration(days: 30),
