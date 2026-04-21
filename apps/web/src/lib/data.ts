@@ -1617,6 +1617,7 @@ export async function updatePlanWorkout(
 		pace_zone: string | null;
 		notes: string | null;
 		scheduled_date: string;
+		structure: Record<string, unknown> | null;
 	}>
 ): Promise<void> {
 	const { error } = await supabase.from('plan_workouts').update(patch).eq('id', id);

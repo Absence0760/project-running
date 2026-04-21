@@ -56,6 +56,8 @@
 			const paceEnd =
 				paceEndMin != null ? paceEndMin * 60 + (paceEndSec ?? 0) : null;
 			const isRest = kind === 'rest';
+			const unstructuredKinds = ['easy', 'long', 'recovery', 'rest'] as const;
+			const isUnstructured = (unstructuredKinds as readonly string[]).includes(kind);
 			await updatePlanWorkout(workout.id, {
 				kind,
 				target_distance_m: isRest ? null : distanceKm != null ? distanceKm * 1000 : null,
@@ -63,7 +65,8 @@
 				target_pace_end_sec_per_km: isRest ? null : paceEnd,
 				target_pace_tolerance_sec: isRest ? null : toleranceSec,
 				pace_zone: isRest ? null : zone.trim() || null,
-				notes: notes.trim() || null
+				notes: notes.trim() || null,
+				structure: isUnstructured ? null : undefined,
 			});
 			onSaved();
 		} catch (e: unknown) {
