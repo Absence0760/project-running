@@ -553,7 +553,7 @@ class PlanWeekRow {
   final String id;
   final String planId;
   final int weekIndex;
-  final dynamic phase;
+  final String phase;
   final double? targetVolumeM;
   final String? notes;
 
@@ -570,7 +570,7 @@ class PlanWeekRow {
     id: json['id'] as String,
     planId: json['plan_id'] as String,
     weekIndex: (json['week_index'] as num).toInt(),
-    phase: json['phase'],
+    phase: json['phase'] as String,
     targetVolumeM: (json['target_volume_m'] as num?)?.toDouble(),
     notes: json['notes'] as String?,
   );
@@ -607,7 +607,7 @@ class PlanWorkoutRow {
   final String id;
   final String weekId;
   final DateTime scheduledDate;
-  final dynamic kind;
+  final String kind;
   final double? targetDistanceM;
   final int? targetDurationSeconds;
   final int? targetPaceSecPerKm;
@@ -640,7 +640,7 @@ class PlanWorkoutRow {
     id: json['id'] as String,
     weekId: json['week_id'] as String,
     scheduledDate: DateTime.parse(json['scheduled_date'] as String),
-    kind: json['kind'],
+    kind: json['kind'] as String,
     targetDistanceM: (json['target_distance_m'] as num?)?.toDouble(),
     targetDurationSeconds: (json['target_duration_seconds'] as num?)?.toInt(),
     targetPaceSecPerKm: (json['target_pace_sec_per_km'] as num?)?.toInt(),
@@ -1056,7 +1056,7 @@ class TrainingPlanRow {
   final String id;
   final String userId;
   final String name;
-  final dynamic goalEvent;
+  final String goalEvent;
   final double goalDistanceM;
   final int? goalTimeSeconds;
   final DateTime startDate;
@@ -1095,7 +1095,7 @@ class TrainingPlanRow {
     id: json['id'] as String,
     userId: json['user_id'] as String,
     name: json['name'] as String,
-    goalEvent: json['goal_event'],
+    goalEvent: json['goal_event'] as String,
     goalDistanceM: (json['goal_distance_m'] as num).toDouble(),
     goalTimeSeconds: (json['goal_time_seconds'] as num?)?.toInt(),
     startDate: DateTime.parse(json['start_date'] as String),

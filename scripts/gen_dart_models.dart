@@ -113,15 +113,16 @@ void main(List<String> args) {
     ..sort((a, b) => a.path.compareTo(b.path));
 
   final schema = <String, Map<String, _Column>>{};
+  final enums = <String>{};
   for (final f in files) {
-    _applyMigration(f.readAsStringSync(), schema);
+    _applyMigration(f.readAsStringSync(), schema, enums);
   }
 
   final outFile = File(
     '$repoRoot/packages/core_models/lib/src/generated/db_rows.dart',
   );
   outFile.parent.createSync(recursive: true);
-  outFile.writeAsStringSync(_emit(schema));
+  outFile.writeAsStringSync(_emit(schema, enums));
   stdout.writeln('Wrote ${outFile.path}');
 
   // Kotlin emitter for the `watch_wear` pure-Kotlin rewrite. Only emits the
@@ -133,7 +134,7 @@ void main(List<String> args) {
     '$repoRoot/apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/generated/DbRows.kt',
   );
   kotlinOut.parent.createSync(recursive: true);
-  kotlinOut.writeAsStringSync(_emitKotlin(schema));
+  kotlinOut.writeAsStringSync(_emitKotlin(schema, enums));
   stdout.writeln('Wrote ${kotlinOut.path}');
 }
 
@@ -167,7 +168,11 @@ String _findRepoRoot() {
   }
 }
 
-void _applyMigration(String sql, Map<String, Map<String, _Column>> schema) {
+void _applyMigration(
+  String sql,
+  Map<String, Map<String, _Column>> schema,
+  Set<String> enums,
+) {
   // Strip line comments first so they can't swallow statement terminators.
   final cleaned = sql
       .split('\n')
@@ -189,9 +194,22 @@ void _applyMigration(String sql, Map<String, Map<String, _Column>> schema) {
       _parseCreateTable(stmt, schema);
     } else if (lower.startsWith('alter table')) {
       _parseAlterTable(stmt, schema);
+    } else if (lower.startsWith('create type')) {
+      _parseCreateTypeEnum(stmt, enums);
     }
     // All other statements (create index, create function, insert,
     // alter ... enable rls, create policy, $$ ... $$) are ignored.
+  }
+}
+
+void _parseCreateTypeEnum(String stmt, Set<String> enums) {
+  // Matches: create type NAME as enum ( ... )
+  final match = RegExp(
+    r'create\s+type\s+(\w+)\s+as\s+enum\s*\(',
+    caseSensitive: false,
+  ).firstMatch(stmt);
+  if (match != null) {
+    enums.add(match.group(1)!.toLowerCase());
   }
 }
 
@@ -387,7 +405,7 @@ String? _extractType(String remainder) {
   return match.group(1)!.toLowerCase();
 }
 
-String _emit(Map<String, Map<String, _Column>> schema) {
+String _emit(Map<String, Map<String, _Column>> schema, Set<String> enums) {
   final out = StringBuffer()
     ..writeln('// GENERATED FILE — DO NOT EDIT.')
     ..writeln('//')
@@ -402,13 +420,18 @@ String _emit(Map<String, Map<String, _Column>> schema) {
   for (final table in tableOrder) {
     final cols = schema[table];
     if (cols == null || cols.isEmpty) continue;
-    _emitClass(out, table, cols);
+    _emitClass(out, table, cols, enums);
     out.writeln();
   }
   return out.toString();
 }
 
-void _emitClass(StringBuffer out, String table, Map<String, _Column> cols) {
+void _emitClass(
+  StringBuffer out,
+  String table,
+  Map<String, _Column> cols,
+  Set<String> enums,
+) {
   final className = '${_pascal(_singular(table))}Row';
 
   out.writeln('/// Row shape for the `$table` table. Mirrors the Supabase schema');
@@ -424,7 +447,7 @@ void _emitClass(StringBuffer out, String table, Map<String, _Column> cols) {
 
   // Fields
   for (final c in cols.values) {
-    final dartType = _dartType(c);
+    final dartType = _dartType(c, enums);
     // `dynamic` is already nullable — adding `?` triggers a warning.
     final nullable = c.nullable && dartType != 'dynamic' ? '?' : '';
     out.writeln('  final $dartType$nullable ${_camel(c.name)};');
@@ -443,7 +466,7 @@ void _emitClass(StringBuffer out, String table, Map<String, _Column> cols) {
   // fromJson
   out.writeln('  factory $className.fromJson(Map<String, dynamic> json) => $className(');
   for (final c in cols.values) {
-    out.writeln('    ${_camel(c.name)}: ${_fromJsonExpr(c)},');
+    out.writeln('    ${_camel(c.name)}: ${_fromJsonExpr(c, enums)},');
   }
   out.writeln('  );');
   out.writeln();
@@ -451,23 +474,27 @@ void _emitClass(StringBuffer out, String table, Map<String, _Column> cols) {
   // toJson — emits every column, including nulls, so upserts are explicit.
   out.writeln('  Map<String, dynamic> toJson() => <String, dynamic>{');
   for (final c in cols.values) {
-    out.writeln('    col${_pascal(c.name)}: ${_toJsonExpr(c)},');
+    out.writeln('    col${_pascal(c.name)}: ${_toJsonExpr(c, enums)},');
   }
   out.writeln('  };');
 
   out.writeln('}');
 }
 
-String _dartType(_Column c) {
+String _dartType(_Column c, Set<String> enums) {
   if (c.waypointJsonb) return 'List<Map<String, dynamic>>';
+  // User-defined Postgres enum types are not in _pgToDart. Map them to String
+  // so callers get a typed field rather than dynamic. Enum values are still
+  // validated at the DB level via CHECK constraints or the enum type itself.
+  if (enums.contains(c.pgType)) return 'String';
   final scalar = _pgToDart[c.pgType] ?? 'dynamic';
   if (c.isArray) return 'List<$scalar>';
   return scalar;
 }
 
-String _fromJsonExpr(_Column c) {
+String _fromJsonExpr(_Column c, Set<String> enums) {
   final key = "json['${c.name}']";
-  final dart = _dartType(c);
+  final dart = _dartType(c, enums);
   final nullCast = c.nullable ? '?' : '';
   if (c.isArray) {
     // Postgres array — PostgREST returns a JSON array. Cast the whole value
@@ -505,9 +532,9 @@ String _fromJsonExpr(_Column c) {
   return key;
 }
 
-String _toJsonExpr(_Column c) {
+String _toJsonExpr(_Column c, Set<String> enums) {
   final field = _camel(c.name);
-  final dart = _dartType(c);
+  final dart = _dartType(c, enums);
   switch (dart) {
     case 'DateTime':
       return c.nullable
@@ -565,7 +592,7 @@ const _pgToKotlin = <String, String>{
   'json': 'JsonElement',
 };
 
-String _emitKotlin(Map<String, Map<String, _Column>> schema) {
+String _emitKotlin(Map<String, Map<String, _Column>> schema, Set<String> enums) {
   final out = StringBuffer()
     ..writeln('// GENERATED FILE — DO NOT EDIT.')
     ..writeln('//')
@@ -595,14 +622,14 @@ String _emitKotlin(Map<String, Map<String, _Column>> schema) {
   for (final table in tableOrder) {
     final cols = schema[table];
     if (cols == null || cols.isEmpty) continue;
-    _emitKotlinClass(out, table, cols);
+    _emitKotlinClass(out, table, cols, enums);
     out.writeln();
   }
   return out.toString();
 }
 
 void _emitKotlinClass(
-    StringBuffer out, String table, Map<String, _Column> cols) {
+    StringBuffer out, String table, Map<String, _Column> cols, Set<String> enums) {
   final className = '${_pascal(_singular(table))}Row';
 
   out.writeln('/// Row shape for the `$table` table. Mirrors the Supabase schema');
@@ -611,7 +638,7 @@ void _emitKotlinClass(
   final colList = cols.values.toList();
   for (var i = 0; i < colList.length; i++) {
     final c = colList[i];
-    final type = _kotlinType(c);
+    final type = _kotlinType(c, enums);
     final nullable = c.nullable ? '?' : '';
     final defaultVal = c.nullable ? ' = null' : '';
     final comma = i == colList.length - 1 ? '' : ',';
@@ -629,7 +656,7 @@ void _emitKotlinClass(
     final c = colList[i];
     final comma = i == colList.length - 1 ? '' : ',';
     out.writeln(
-        '            ${_camel(c.name)} = ${_kotlinFromJson(c)}$comma');
+        '            ${_camel(c.name)} = ${_kotlinFromJson(c, enums)}$comma');
   }
   out.writeln('        )');
   out.writeln('    }');
@@ -638,21 +665,22 @@ void _emitKotlinClass(
   for (var i = 0; i < colList.length; i++) {
     final c = colList[i];
     final comma = i == colList.length - 1 ? '' : ',';
-    out.writeln('        ${_kotlinColConst(c.name)} to ${_kotlinToJson(c)}$comma');
+    out.writeln('        ${_kotlinColConst(c.name)} to ${_kotlinToJson(c, enums)}$comma');
   }
   out.writeln('    )');
   out.writeln('}');
 }
 
-String _kotlinType(_Column c) {
+String _kotlinType(_Column c, Set<String> enums) {
+  if (enums.contains(c.pgType)) return 'String';
   return _pgToKotlin[c.pgType] ?? 'JsonElement';
 }
 
 String _kotlinColConst(String name) => 'COL_${name.toUpperCase()}';
 
-String _kotlinFromJson(_Column c) {
+String _kotlinFromJson(_Column c, Set<String> enums) {
   final key = 'json["${c.name}"]';
-  final type = _kotlinType(c);
+  final type = _kotlinType(c, enums);
   if (c.nullable) {
     switch (type) {
       case 'String':
@@ -690,9 +718,9 @@ String _kotlinFromJson(_Column c) {
   return key;
 }
 
-String _kotlinToJson(_Column c) {
+String _kotlinToJson(_Column c, Set<String> enums) {
   final field = _camel(c.name);
-  final type = _kotlinType(c);
+  final type = _kotlinType(c, enums);
   if (type == 'Instant') {
     return c.nullable ? '$field?.toString()' : '$field.toString()';
   }
