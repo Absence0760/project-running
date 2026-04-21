@@ -195,6 +195,70 @@ void main() {
             'not loop-await each one.',
       );
     });
+
+    test('save() stamps metadata.last_modified_at', () {
+      // Reason: sync uses `metadata.last_modified_at` for newer-wins
+      // conflict resolution (see saveFromRemote). A local save that
+      // doesn't stamp can be silently clobbered by the next remote pull
+      // if the remote carries a later timestamp from a different device.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> save\(Run run\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('_withLastModified('),
+        reason: 'save() must route the incoming run through '
+            '_withLastModified so metadata.last_modified_at is set. '
+            'Without this, conflict resolution degrades to '
+            'created_at / started_at — incorrect after any local edit.',
+      );
+    });
+
+    test('update() stamps metadata.last_modified_at', () {
+      // Reason: same as save(). Edit-dialog changes (title, notes) flow
+      // through update(). If this stops stamping, web/watch edits to the
+      // same run can race and the older write silently wins.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> update\(Run updated\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('_withLastModified('),
+        reason: 'update() must call _withLastModified on the incoming '
+            'run. Newer-wins sync depends on this stamp — see '
+            'saveFromRemote for the counterparty.',
+      );
+    });
+
+    test('saveFromRemote() compares timestamps and preserves remote', () {
+      // Reason: this is the counterparty to save/update. The remote copy
+      // carries its own `last_modified_at`; overwriting it here would
+      // collapse the whole newer-wins mechanism into "last writer wins".
+      // The regex looks for the timestamp comparison that gates the
+      // preserve-local branch.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> saveFromRemote\(Run run\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('_lastModifiedOf('),
+        reason: 'saveFromRemote() must call _lastModifiedOf() on both '
+            'the local and remote copies to decide which to keep. If '
+            'someone drops this comparison, the cloud will clobber '
+            'local-only edits on every sync.',
+      );
+      expect(
+        body.contains('_withLastModified('),
+        isFalse,
+        reason: 'saveFromRemote() must NOT stamp — it preserves the '
+            "remote's timestamp. Stamping here would make the local "
+            "copy look newer than the write that produced it, "
+            'breaking newer-wins on the NEXT sync.',
+      );
+    });
   });
 
   group('sync paths use saveRunsBatch', () {

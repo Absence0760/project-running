@@ -16,7 +16,8 @@ Each row: what the key is, its shape, which platforms *write* it, which platform
 |---|---|---|---|---|---|
 | `activity_type` | `string` — one of `run`, `walk`, `hike`, `cycle` | `mobile_android/screens/run_screen.dart` (recording), `mobile_android/health_connect_importer.dart` | `mobile_android` (dashboard, history, run detail), `apps/web/src/routes/runs/[id]/+page.svelte` | Optional; defaults to `run` when absent | The Android recorder writes this on every save. Health Connect imports map through `_mapWorkoutType`. Parkrun imports and older `app`-source runs may not have it. |
 | `steps` | `int` (stringified on the wire? — **investigate**) | `mobile_android/screens/run_screen.dart` (pedometer) | `apps/web/src/routes/runs/[id]/+page.svelte` | Optional; only present when pedometer data is available | Only written when `_steps > 0`. Android omits the key entirely if the pedometer never fired. |
-| `laps` | `array` of `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }` | `packages/run_recorder/lib/src/run_recorder.dart` (final save only) | `mobile_android/screens/run_detail_screen.dart` | Optional; only present if the runner marked laps | The recorder sets `metadata = null` entirely when `_laps.isEmpty`, so readers must check for both a null `metadata` and a missing `laps` key. |
+| `laps` | `array` of `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }` | `packages/run_recorder/lib/src/run_recorder.dart` (final save only) | `mobile_android/screens/run_detail_screen.dart` | Optional; only present if the runner marked laps | The recorder sets `metadata = null` entirely when `_laps.isEmpty`, so readers must check for both a null `metadata` and a missing `laps` key. **Known divergence:** `watch_wear/RunViewModel.kt` writes `{ number, at_ms, distance_m }` instead — flagged in the Apr 2026 cross-platform audit; schema should unify on the registered shape. |
+| `cadence` | `number` — steps per minute | — (currently no writer — see note) | `mobile_android/screens/run_detail_screen.dart:_cadence` reads `metadata['cadence']` directly; `apps/web/src/routes/runs/[id]/+page.svelte` computes it as `steps / moving_time_minutes` | Optional | **Known divergence:** Android reads this key expecting it to be populated, but nothing writes it, so the cadence tile always renders `0 spm` on Android. Web derives cadence on-the-fly from `steps` and moving time, which is the correct pattern. Fix: switch the Android reader to the derivative formula (parity with web) and delete this registry entry, **or** have the recorder write this at save time. Do not add a new writer without picking one path. |
 
 ### User-editable fields
 
@@ -90,9 +91,15 @@ When adding a new metadata key:
 4. **Be explicit about absence.** "Optional" is the default. If a reader can't tolerate the key being missing, call that out in the notes column and ask whether it should be a real NOT NULL column instead.
 5. **Update this file and remove the key here when you remove it from code.** The schema generators can't do this for you.
 
+## Enforcement
+
+**Dart side (mobile + packages):** `apps/mobile_android/test/metadata_registry_test.dart` greps every `.dart` file under `apps/mobile_android/lib/`, `packages/api_client/lib/`, and `packages/run_recorder/lib/` for subscript access (`metadata['xxx']`) and map-literal writes (`metadata: { 'xxx': ... }`), and asserts every key is a row in this file. Runs in the `test-packages` CI job — a PR that adds an unregistered key fails there.
+
+**Web, watch_wear, watch_ios:** no equivalent guard yet. Parity tests on those platforms are a TODO — until then, this file plus PR review is the coordination point and the Dart-side discipline catches most cross-platform drift because the phone is the dominant writer.
+
 ## Known issues
 
 - **Web doesn't write any metadata today.** Route builder, integrations management, and account settings never touch the key. If the web gains an "edit run" page, it needs to know every key in this registry and which ones a user can edit.
 - **Apple Watch has its own Supabase client** (`apps/watch_ios/WatchApp/SupabaseService.swift`) that does not share this registry. Any metadata keys written from the watch have to be manually reconciled with this file. See [../apps/watch_ios/CLAUDE.md](../apps/watch_ios/CLAUDE.md).
-- **No runtime validation.** Nothing checks that an incoming `metadata` blob matches this registry. The check is purely social — this doc — plus whatever type assertions the reader writes at the call site.
+- **No runtime validation.** Nothing checks that an incoming `metadata` blob matches this registry. The check is purely social — this doc — plus whatever type assertions the reader writes at the call site. The Dart-side CI guard above is a static analogue that at least catches writes that drop into a grep.
 - **`steps` wire type is unverified.** The Android code writes it as an `int` from the pedometer; the web reader indexes it as-is. `Json` on both clients will accept either a number or a string, so if a writer ever coerces it, both platforms will silently drift. Worth a future audit — or a cast at the write site.
