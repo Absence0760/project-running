@@ -210,6 +210,7 @@ class TrainingService extends ChangeNotifier {
           'vdot': generated.vdot,
           'current_5k_seconds': recent5kSec,
           'status': 'active',
+          'source': 'generated',
           'notes': notes?.trim(),
         })
         .select()

@@ -1478,6 +1478,7 @@ export async function createTrainingPlan(input: {
 			vdot: input.generated.vdot ?? null,
 			current_5k_seconds: input.recent5kSec ?? null,
 			status: 'active' as PlanStatus,
+			source: 'generated' as const,
 			notes: input.notes?.trim() || null
 		})
 		.select()
