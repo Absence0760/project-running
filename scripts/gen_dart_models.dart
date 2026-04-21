@@ -315,6 +315,23 @@ void _parseAlterTable(String stmt, Map<String, Map<String, _Column>> schema) {
         .first
         .toLowerCase();
     schema[table]?.remove(name);
+  } else if (lower.startsWith('alter column')) {
+    // Handles:
+    //   alter table t alter column col set not null
+    //   alter table t alter column col drop not null
+    final parts = lower
+        .substring('alter column'.length)
+        .trim()
+        .split(RegExp(r'\s+'));
+    if (parts.length >= 4) {
+      final colName = parts[0];
+      final op = parts[1];
+      if (op == 'set' && parts[2] == 'not' && parts[3] == 'null') {
+        schema[table]?[colName]?.nullable = false;
+      } else if (op == 'drop' && parts[2] == 'not' && parts[3] == 'null') {
+        schema[table]?[colName]?.nullable = true;
+      }
+    }
   }
   // `alter table ... enable row level security` and other forms ignored.
 }

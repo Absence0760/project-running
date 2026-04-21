@@ -193,14 +193,14 @@ class EventAttendeeRow {
   final String userId;
   final String status;
   final DateTime? joinedAt;
-  final DateTime? instanceStart;
+  final DateTime instanceStart;
 
   const EventAttendeeRow({
     required this.eventId,
     required this.userId,
     required this.status,
     this.joinedAt,
-    this.instanceStart,
+    required this.instanceStart,
   });
 
   factory EventAttendeeRow.fromJson(Map<String, dynamic> json) => EventAttendeeRow(
@@ -208,7 +208,7 @@ class EventAttendeeRow {
     userId: json['user_id'] as String,
     status: json['status'] as String,
     joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
-    instanceStart: json['instance_start'] == null ? null : DateTime.parse(json['instance_start'] as String),
+    instanceStart: DateTime.parse(json['instance_start'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -216,7 +216,7 @@ class EventAttendeeRow {
     colUserId: userId,
     colStatus: status,
     colJoinedAt: joinedAt?.toIso8601String(),
-    colInstanceStart: instanceStart?.toIso8601String(),
+    colInstanceStart: instanceStart.toIso8601String(),
   };
 }
 
