@@ -152,7 +152,11 @@ export async function updateRunMetadata(
 		.eq('id', id)
 		.single();
 	if (!run) throw new Error('Run not found');
-	const metadata = { ...(run.metadata as Record<string, unknown> ?? {}), ...fields };
+	const metadata = {
+		...(run.metadata as Record<string, unknown> ?? {}),
+		...fields,
+		last_modified_at: new Date().toISOString(),
+	};
 	const { error } = await supabase
 		.from('runs')
 		.update({ metadata })
