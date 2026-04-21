@@ -181,6 +181,7 @@ class SupabaseClient(
                 RunRow.COL_SOURCE to "watch",
                 RunRow.COL_TRACK_URL to path,
                 RunRow.COL_METADATA to metadata,
+                RunRow.COL_EXTERNAL_ID to runId,
             )
             val body = encodeJsonMap(rowMap).toRequestBody(jsonMedia)
 
@@ -189,7 +190,7 @@ class SupabaseClient(
                 .header("apikey", anonKey)
                 .header("Authorization", "Bearer $token")
                 .header("Content-Type", "application/json")
-                .header("Prefer", "return=minimal")
+                .header("Prefer", "resolution=merge-duplicates,return=minimal")
                 .post(body)
                 .build()
 

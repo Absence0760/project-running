@@ -636,7 +636,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 // Permanent-ish errors: 400/404/409/422 — the run is
                 // malformed or already exists. Leave it queued (the user
                 // can Discard from the UI if they want) but move on.
-                val permanent = Regex("HTTP 4(00|04|09|22)").containsMatchIn(msg)
+                // 409 is now safe to remove: every run carries external_id so
+                // a 409 means the row is already in the DB (idempotent upload).
+                val alreadyPersisted = msg.contains("HTTP 409")
+                val permanent = Regex("HTTP 4(00|04|22)").containsMatchIn(msg)
                 // Transient: timeouts, 5xx, network loss. Stop iterating
                 // so we don't hammer the backend, but keep the queue
                 // intact. Next drain trigger (network-back-online,
@@ -671,11 +674,24 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                lastError = msg
                 when {
-                    transient -> break  // try again later; don't thrash
-                    permanent -> continue  // skip to next; this one is stuck
-                    else -> continue  // unknown — optimistically try next
+                    alreadyPersisted -> {
+                        store.remove(run.id)
+                        lastError = null
+                        continue
+                    }
+                    transient -> {
+                        lastError = msg
+                        break  // try again later; don't thrash
+                    }
+                    permanent -> {
+                        lastError = msg
+                        continue  // skip to next; this one is stuck
+                    }
+                    else -> {
+                        lastError = msg
+                        continue  // unknown — optimistically try next
+                    }
                 }
             }
         }
