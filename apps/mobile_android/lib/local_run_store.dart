@@ -142,7 +142,7 @@ class LocalRunStore extends ChangeNotifier {
 
   Run _withLastModified(Run run, DateTime ts) {
     final metadata = Map<String, dynamic>.from(run.metadata ?? {});
-    metadata['last_modified_at'] = ts.toIso8601String();
+    metadata['last_modified_at'] = ts.toUtc().toIso8601String();
     return Run(
       id: run.id,
       startedAt: run.startedAt,
