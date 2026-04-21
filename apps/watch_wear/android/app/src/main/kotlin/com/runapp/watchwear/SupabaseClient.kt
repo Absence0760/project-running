@@ -23,8 +23,8 @@ import java.util.zip.GZIPOutputStream
 /// a migration regenerates that file and fails to compile here, same
 /// guarantee the Dart `ApiClient` has.
 class SupabaseClient(
-    private val baseUrl: String,
-    private val anonKey: String,
+    private var baseUrl: String,
+    private var anonKey: String,
     private val http: OkHttpClient = OkHttpClient(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -60,10 +60,8 @@ class SupabaseClient(
         this.accessToken = accessToken
         this.refreshToken = refreshToken
         this.userId = userId
-        // `baseUrl` / `anonKey` are not mutable on this client today — the
-        // Gradle BuildConfig value is used. If the phone's environment ever
-        // diverges from the watch's (staging phone paired to a local-dev
-        // watch), we'll need to make these `var` and forward them here.
+        this.baseUrl = baseUrl
+        this.anonKey = anonKey
     }
 
     /// Exchange the cached refresh token for a fresh access token. Returns

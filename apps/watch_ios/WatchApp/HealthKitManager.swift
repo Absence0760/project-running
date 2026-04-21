@@ -98,7 +98,9 @@ extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
 
         DispatchQueue.main.async {
             if let most = most { self.currentBPM = Int(most.rounded()) }
-            self.averageBPM = avg
+            if let raw = avg, raw >= 30 && raw <= 230 {
+                self.averageBPM = raw
+            }
         }
     }
 }

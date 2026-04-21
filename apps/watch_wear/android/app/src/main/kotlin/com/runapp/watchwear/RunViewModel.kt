@@ -688,12 +688,17 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             if (run.avgBpm != null) put("avg_bpm", run.avgBpm)
             if (run.laps.isNotEmpty()) {
                 put("laps", buildJsonArray {
+                    var prevMs = 0L
+                    var prevDist = 0.0
                     for (lap in run.laps) {
                         addJsonObject {
-                            put("number", lap.number)
-                            put("at_ms", lap.atMs)
-                            put("distance_m", lap.distanceM)
+                            put("index", lap.number)
+                            put("start_offset_s", (lap.atMs / 1000).toInt())
+                            put("distance_m", (lap.distanceM - prevDist).coerceAtLeast(0.0))
+                            put("duration_s", ((lap.atMs - prevMs) / 1000).toInt().coerceAtLeast(0))
                         }
+                        prevMs = lap.atMs
+                        prevDist = lap.distanceM
                     }
                 })
             }
