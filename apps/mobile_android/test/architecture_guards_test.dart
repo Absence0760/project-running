@@ -251,6 +251,91 @@ void main() {
     });
   });
 
+  group('local_route_store.dart', () {
+    test('_loadAll reads route files in parallel', () {
+      // Reason: same cold-start concern as runs — a user with 50 saved
+      // routes should see them load in one batch, not 50 serial reads.
+      final source = File('lib/local_route_store.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _loadAll\(\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('Future.wait'),
+        reason: 'routeStore._loadAll must use Future.wait — mirrors '
+            'the same optimization applied to runStore.',
+      );
+    });
+  });
+
+  group('main.dart launch path', () {
+    test('local inits run in parallel', () {
+      // Reason: dotenv, TileCache, runStore, routeStore, prefs, Supabase
+      // init are all independent. Sequential awaits add up to hundreds
+      // of ms of scheduler overhead before the first frame. Future.wait
+      // multiplexes them.
+      final source = File('lib/main.dart').readAsStringSync();
+      expect(
+        source,
+        contains('Future.wait'),
+        reason: 'main() must use Future.wait for the local-init batch.',
+      );
+      expect(
+        source,
+        contains('TileCache.init()'),
+        reason: 'TileCache.init must be part of the parallel batch.',
+      );
+      expect(
+        source,
+        contains('store.init()'),
+        reason: 'runStore.init must be part of the parallel batch.',
+      );
+      expect(
+        source,
+        contains('routeStore.init()'),
+        reason: 'routeStore.init must be part of the parallel batch.',
+      );
+      expect(
+        source,
+        contains('prefs.init()'),
+        reason: 'prefs.init must be part of the parallel batch.',
+      );
+    });
+
+    test('network-gated work is deferred to post-first-frame', () {
+      // Reason: settingsSync.onSignedIn() + dev auto-sign-in + WearAuthBridge
+      // attach + registerBackgroundSync are all invisible to the first
+      // frame. Awaiting them before runApp holds the splash screen open
+      // on slow connections. Must schedule via addPostFrameCallback or
+      // an unawaited Future.
+      final source = File('lib/main.dart').readAsStringSync();
+      expect(
+        source,
+        contains('addPostFrameCallback'),
+        reason: 'main() must defer the network-gated init block via '
+            'addPostFrameCallback.',
+      );
+      // settingsSync.onSignedIn() should appear AFTER the
+      // addPostFrameCallback call site (i.e. inside the deferred block),
+      // not before it in the main() body.
+      final mainBody = _extractMethodBody(
+        source,
+        r'void main\(\)\s*async\s*\{',
+      );
+      final postFrameIdx = mainBody.indexOf('addPostFrameCallback');
+      final settingsSyncIdx = mainBody.indexOf('settingsSync?.onSignedIn()');
+      if (settingsSyncIdx != -1) {
+        expect(
+          settingsSyncIdx > postFrameIdx,
+          isTrue,
+          reason: 'settingsSync.onSignedIn() must run inside the '
+              'addPostFrameCallback block — not on the critical path.',
+        );
+      }
+    });
+  });
+
   group('main.dart error boundary', () {
     test('release-mode ErrorWidget.builder override is present', () {
       // Reason: a subtree crash (most likely in flutter_map on a bad

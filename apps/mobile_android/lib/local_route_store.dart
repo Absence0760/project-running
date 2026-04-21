@@ -44,15 +44,26 @@ class LocalRouteStore extends ChangeNotifier {
         .where((f) => f.path.endsWith('.json'))
         .toList();
 
-    for (final file in files) {
-      try {
-        final data =
-            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-        _routes.add(Route.fromJson(data));
-      } catch (e) {
-        debugPrint('Failed to load route file ${file.path}: $e');
-      }
+    // Read all files in parallel — cold-start is bounded by the slowest
+    // single read, not the sum of them. Same pattern as LocalRunStore.
+    final loaded = await Future.wait(
+      files.map(_readRouteFile),
+      eagerError: false,
+    );
+    for (final route in loaded) {
+      if (route != null) _routes.add(route);
     }
     notifyListeners();
+  }
+
+  Future<Route?> _readRouteFile(File file) async {
+    try {
+      final raw = await file.readAsString();
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      return Route.fromJson(data);
+    } catch (e) {
+      debugPrint('Failed to load route file ${file.path}: $e');
+      return null;
+    }
   }
 }

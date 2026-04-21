@@ -62,14 +62,39 @@ void main() async {
     };
   }
 
+  // `dotenv` must resolve first because the Supabase URL/key come from it,
+  // and Supabase.initialize is one of the parallel tasks below.
   await dotenv.load(fileName: '.env.local');
 
-  // Disk-backed map tile cache. Survives app restarts so repeated runs in
-  // the same area render the basemap from disk instead of re-downloading.
-  await TileCache.init();
-
+  // Construct stores synchronously so we can kick off their `init()`s in
+  // parallel with the other independent launch tasks. Nothing here
+  // depends on anything else — the previous sequential-await chain was
+  // just paying plugin-channel round-trip latency N times for no reason.
   final store = LocalRunStore();
-  await store.init();
+  final routeStore = LocalRouteStore();
+  final prefs = Preferences();
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  final hasSupabase = supabaseUrl != null &&
+      anonKey != null &&
+      supabaseUrl.isNotEmpty &&
+      anonKey.isNotEmpty;
+
+  // Parallel batch. Each of these is independent — the platform plugin
+  // channels (`getApplicationDocumentsDirectory`, `getApplicationCacheDirectory`,
+  // `SharedPreferences.getInstance`, etc.) multiplex fine.
+  await Future.wait([
+    TileCache.init(),
+    store.init(),
+    routeStore.init(),
+    prefs.init(),
+    if (hasSupabase)
+      ApiClient.initialize(url: supabaseUrl, anonKey: anonKey)
+          .catchError((Object e) {
+        debugPrint('Supabase init failed, running offline: $e');
+      }),
+  ]);
 
   // Recover a run that was in progress when the app was last killed
   // (crash, force-stop, OOM). We promote the partial data to a regular
@@ -115,60 +140,25 @@ void main() async {
     debugPrint('In-progress recovery failed: $e');
   }
 
-  final routeStore = LocalRouteStore();
-  await routeStore.init();
-
-  final prefs = Preferences();
-  await prefs.init();
-
   final audioCues = AudioCues();
 
-  // Try to initialize Supabase — skip if not configured or unreachable
+  // ApiClient is created synchronously if Supabase initialised. The
+  // awaited `Supabase.initialize` above guarantees the global client is
+  // wired; all downstream calls just need the config — they don't need
+  // to wait for the network.
   ApiClient? api;
   SettingsSyncService? settingsSync;
-  final supabaseUrl = dotenv.env['SUPABASE_URL'];
-  final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
-  if (supabaseUrl != null && supabaseUrl.isNotEmpty &&
-      anonKey != null && anonKey.isNotEmpty) {
+  if (hasSupabase) {
     try {
-      await ApiClient.initialize(url: supabaseUrl, anonKey: anonKey);
       api = ApiClient();
-
-      // Forward the Supabase session to the paired Wear OS watch whenever
-      // it changes. No-op if no watch is paired — DataClient just holds
-      // the DataItem until one shows up.
-      WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
-
-      final devEmail = dotenv.env['DEV_USER_EMAIL'];
-      final devPassword = dotenv.env['DEV_USER_PASSWORD'];
-      if (devEmail != null && devEmail.isNotEmpty &&
-          devPassword != null && devPassword.isNotEmpty) {
-        try {
-          await api.signIn(email: devEmail, password: devPassword);
-        } catch (e) {
-          debugPrint('Auto sign-in failed: $e');
-        }
-      }
       settingsSync = SettingsSyncService(preferences: prefs);
-      // Best-effort — a failed settings sync shouldn't block launch. The
-      // service stores `lastError` for the settings screen to surface.
-      try {
-        await settingsSync.onSignedIn();
-      } catch (e) {
-        debugPrint('Settings sync failed: $e');
-      }
     } catch (e) {
-      debugPrint('Supabase init failed, running offline: $e');
-      api = null;
+      debugPrint('ApiClient construction failed: $e');
     }
   }
 
   final syncService = SyncService(apiClient: api, runStore: store);
   syncService.start();
-
-  // Background sync for all users. The gate infrastructure exists in
-  // features.ts / paywall.md if this needs to be paywalled later.
-  registerBackgroundSync();
 
   final social = SocialService();
   final raceController = RaceController(social);
@@ -179,6 +169,45 @@ void main() async {
   // strap previously, HR is ready when they tap Start; otherwise it's a
   // no-op and the run records without HR.
   unawaited(heartRate.connectCached());
+
+  // Everything below here runs AFTER the first frame paints:
+  //
+  //  - WorkManager background-sync registration (plugin channel work the
+  //    user never sees)
+  //  - Dev-only auto sign-in (network round-trip)
+  //  - SettingsSync cloud fetch (network round-trip)
+  //  - WearAuthBridge attach (method channel)
+  //
+  // Previously these all awaited before runApp and held the splash screen
+  // open for hundreds of ms on slow connections. None of them change the
+  // first-frame render — if the user isn't signed in yet, the dashboard
+  // shows the signed-out state and updates when auth finishes.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    registerBackgroundSync();
+    if (!hasSupabase || api == null) return;
+    WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
+    final devEmail = dotenv.env['DEV_USER_EMAIL'];
+    final devPassword = dotenv.env['DEV_USER_PASSWORD'];
+    Future(() async {
+      if (devEmail != null &&
+          devEmail.isNotEmpty &&
+          devPassword != null &&
+          devPassword.isNotEmpty) {
+        try {
+          await api!.signIn(email: devEmail, password: devPassword);
+        } catch (e) {
+          debugPrint('Auto sign-in failed: $e');
+        }
+      }
+      // Best-effort — the service stores `lastError` for the settings
+      // screen to surface.
+      try {
+        await settingsSync?.onSignedIn();
+      } catch (e) {
+        debugPrint('Settings sync failed: $e');
+      }
+    });
+  });
 
   runApp(RunApp(
     apiClient: api,
