@@ -85,6 +85,7 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 - **Don't summarise what you just did** at the end of every response when the user can read the diff — keep end-of-turn text to 1–2 sentences (what changed, what's next).
 - **No preemptive abstractions.** Three similar lines is better than a premature helper. If a `bug fix` PR contains a refactor, split it.
 - **No backwards-compat shims**, no `// removed X` comments, no renamed-to-underscore-prefix unused variables. If something's unused, delete it.
+- **Layered resilience is a product contract.** Basics always work. Design every new feature so a failure at a higher layer (L4 auxiliary effect, L3 route overlay, L2 map, etc.) cannot break a lower one (L1 GPS/pedometer distance, L0 clock). Wrap each auxiliary effect (TTS, network ping, platform channel, third-party widget) in its own try/catch + `debugPrint` — never widen to a single outer catch, never swallow silently, and never let an auxiliary failure cancel a core `setState`. See [docs/conventions.md § Layered resilience](docs/conventions.md#layered-resilience) and the L0–L4 table in [docs/run_recording.md § Layering](docs/run_recording.md#layering) before touching the recording stack.
 
 ## Layout cheat-sheet
 

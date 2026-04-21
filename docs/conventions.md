@@ -68,6 +68,31 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 - `StateError` / `TypeError` / precondition failures — these are bugs. Let them crash in debug, let crash reporting catch them in release.
 - Every possible exception. A blanket `try { ... } catch (_) {}` is a bug in waiting.
 
+### Isolate auxiliary effects
+
+An **auxiliary effect** is anything non-essential to the core stats/state that can still throw: TTS announcements, network pings (race feed, analytics), platform channels (lock-screen notification, BLE), third-party sensor streams, route math against user-imported data. When multiple of these live in the same handler (`_onSnapshot` is the canonical example), they must not cascade into each other or into the core state update.
+
+Rules:
+
+- **Core state first, unconditionally.** The `setState` / state mutation that drives the visible numbers (elapsed, distance, pace) runs before any auxiliary block, with no try/catch around it. It's trusted — if it throws, that's a real bug and we want the crash.
+- **Each auxiliary effect in its own try/catch.** One per logical block. On catch, `debugPrint` and move on — never silently swallow to a lower level (no `catch (_) {}`), never re-throw from an auxiliary block into the core.
+- **Never widen to a single outer try/catch.** `try { setState(...); ping(); tts(); ... } catch (_) {}` hides which effect failed and lets a late effect cancel an earlier one's commit.
+- **Label the layer in a comment** when the intent isn't obvious (`// L4 — race ping`) so a later reader knows why the block is walled off.
+
+The run recorder is the reference — see `_onSnapshot` in `apps/mobile_android/lib/screens/run_screen.dart` and the L0–L4 table in [run_recording.md § Hardening § Layering](run_recording.md#layering).
+
+## Layered resilience
+
+Design so a failure at a higher layer **cannot** break a lower one. "Basics always work" is a product contract, not a nice-to-have.
+
+The rule when adding any feature that touches a mature flow (recording, sync, auth, etc.):
+
+1. **Identify the layer.** What does your feature depend on? Stopwatch (L0), sensors (L1), network (L2), third-party widgets (L3), side-effects (L4). Put it at the highest layer that needs it — don't wire a new visual into the state that drives the clock.
+2. **Degrade, don't fail.** If the dependency is unavailable (GPS off, network dead, tile layer crashed), the layers below must still work. Provide a fallback (pedometer distance when GPS is absent, cached tiles when offline, typed errors that leave the recorder usable). Silent stalls and white screens are bugs.
+3. **Wrap risky subtrees.** User-facing surfaces that depend on complex third-party widgets (`flutter_map` is the prime example) need a release-mode `ErrorWidget.builder` override so a subtree crash replaces *only* that subtree, not the entire screen. Debug keeps the default red screen.
+
+The canonical write-up with the L0–L4 table and failure modes is [run_recording.md § Hardening § Layering](run_recording.md#layering). Read it before touching the recording stack; copy the pattern when building the next "basics must always work" surface (e.g. sync, auth, navigation).
+
 ## Logging
 
 No framework consensus yet — use the platform default:
