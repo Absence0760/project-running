@@ -40,7 +40,7 @@ serve(async (req: Request) => {
     runs.push({
       id: crypto.randomUUID(),
       user_id: user.id,
-      started_at: date,
+      started_at: parseParkrunDate(date),
       duration_s: parseTime(time),
       distance_m: 5000,
       source: 'parkrun',
@@ -59,6 +59,11 @@ serve(async (req: Request) => {
 
   return Response.json({ imported: runs.length, skipped: 0 });
 });
+
+function parseParkrunDate(d: string): string {
+  const [dd, mm, yyyy] = d.split('/');
+  return `${yyyy}-${mm}-${dd}T08:00:00Z`;
+}
 
 function parseTime(time: string): number {
   const parts = time.split(':').map(Number);
