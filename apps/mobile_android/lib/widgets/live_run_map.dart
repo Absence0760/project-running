@@ -154,6 +154,22 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   void didUpdateWidget(covariant LiveRunMap oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    // Detect a run reset: when the parent clears its track and current
+    // position (discard / finish → new run), wipe the interpolated dot,
+    // the tween endpoints, and the user-panned flag. Without this, the
+    // next run's first fix would tween from the previous run's location
+    // and the camera would stay parked where the last run ended.
+    final resetDetected = oldWidget.track.isNotEmpty &&
+        widget.track.isEmpty &&
+        widget.currentPosition == null;
+    if (resetDetected) {
+      _positionController.stop();
+      _animatedLatLng = null;
+      _tweenStart = null;
+      _tweenEnd = null;
+      _userPanned = false;
+    }
+
     final pos = _latestPosition;
     if (pos == null) return;
     final target = LatLng(pos.lat, pos.lng);

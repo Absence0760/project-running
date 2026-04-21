@@ -235,17 +235,12 @@ class _RunScreenState extends State<RunScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<bool> _ensurePermission() async {
-    final status = await Permission.location.request();
-    if (!status.isGranted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission is required to record runs')),
-        );
-      }
-      return false;
-    }
-    return true;
+  /// Ask for location permission but don't block the run on the result —
+  /// denying it drops the run into a time-only indoor mode rather than
+  /// stopping it outright. The downstream [RunRecorder.prepare] call
+  /// surfaces the denied case as a snackbar via [_notifyGpsUnavailable].
+  Future<void> _maybeRequestPermission() async {
+    await Permission.location.request();
   }
 
   Future<void> _selectRoute() async {
@@ -285,7 +280,8 @@ class _RunScreenState extends State<RunScreen> {
   Future<void> _beginCountdown() async {
     if (_startRequested || _state != _ScreenState.idle) return;
     _startRequested = true;
-    if (!await _ensurePermission()) {
+    await _maybeRequestPermission();
+    if (!mounted) {
       _startRequested = false;
       return;
     }
@@ -324,20 +320,18 @@ class _RunScreenState extends State<RunScreen> {
 
     // Open the GPS stream now so the first fix is already in hand when the
     // run starts. Positions received during this phase drive the blue dot
-    // but don't accumulate into the track or distance.
+    // but don't accumulate into the track or distance. Errors propagate on
+    // _prepareFuture so _begin can abort the countdown instead of entering
+    // a "recording" state with no GPS stream behind it.
     final adv = widget.preferences.advancedGps;
-    _prepareFuture = _recorder!
-        .prepare(
+    _prepareFuture = _recorder!.prepare(
       route: _selectedRoute,
       distanceFilterMetres: adv ? 2 : _activityType.gpsDistanceFilter,
       minMovementMetres: adv ? 1 : _activityType.minMovementMetres,
       maxSpeedMps: _activityType.maxSpeedMps,
       accuracy: adv ? LocationAccuracy.best : LocationAccuracy.high,
       accuracyGateMetres: adv ? 10 : 20,
-    )
-        .catchError((e, st) {
-      debugPrint('RunRecorder.prepare failed: $e');
-    });
+    );
   }
 
   /// Subscribe to the pedometer stream. On error, wait a bit and retry —
@@ -384,8 +378,16 @@ class _RunScreenState extends State<RunScreen> {
   Future<void> _begin() async {
     // In the common case prepare has already completed during the 3-second
     // countdown, so this await is a no-op. On a slow device it waits for
-    // the GPS stream to come up before starting the clock.
-    await _prepareFuture;
+    // the GPS stream to come up before starting the clock. If prepare
+    // failed (location services off, permission denied), the recorder is
+    // still marked prepared and we proceed into an indoor/time-only run —
+    // the stopwatch ticks, distance stays 0, and the live map shows its
+    // "Waiting for GPS..." placeholder until a fix arrives (if ever).
+    try {
+      await _prepareFuture;
+    } catch (e) {
+      _notifyGpsUnavailable(e);
+    }
 
     if (!mounted || _recorder == null) return;
 
@@ -447,9 +449,12 @@ class _RunScreenState extends State<RunScreen> {
   void _onSnapshot(RunSnapshot snapshot) {
       final unit = widget.preferences.unit;
 
-      // Record that a fresh GPS-backed snapshot arrived. The GPS-lost
-      // banner uses this to know whether the sensor is alive.
-      _lastSnapshotAt = DateTime.now();
+      // Only count GPS-backed snapshots as evidence that the sensor is
+      // alive. Timer-driven snapshots without a fix (indoor run, warmup)
+      // don't mask a real GPS outage mid-run.
+      if (snapshot.currentPosition != null) {
+        _lastSnapshotAt = DateTime.now();
+      }
 
       setState(() {
         _elapsed = snapshot.elapsed;
@@ -462,15 +467,19 @@ class _RunScreenState extends State<RunScreen> {
       });
 
       // Ping the live race spectator feed. RaceController enforces a
-      // 10s cadence so this is safe to fire on every snapshot.
+      // 10s cadence so this is safe to fire on every snapshot. Skip when
+      // there's no GPS fix (indoor run, GPS warmup) — the spectator feed
+      // needs a real position.
       final pos = snapshot.currentPosition;
-      widget.raceController?.pushPing(
-        lat: pos.lat,
-        lng: pos.lng,
-        distanceM: snapshot.distanceMetres,
-        elapsedS: snapshot.elapsed.inSeconds,
-        bpm: _currentBpm,
-      );
+      if (pos != null) {
+        widget.raceController?.pushPing(
+          lat: pos.lat,
+          lng: pos.lng,
+          distanceM: snapshot.distanceMetres,
+          elapsedS: snapshot.elapsed.inSeconds,
+          bpm: _currentBpm,
+        );
+      }
 
       // Off-route warning
       final off = snapshot.offRouteDistanceMetres;
@@ -564,13 +573,15 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
-  /// Update [_gpsLost] based on snapshot freshness. Drives the warning
-  /// banner rendered in [_buildRecording].
+  /// Update [_gpsLost] based on GPS-backed snapshot freshness. Drives the
+  /// warning banner rendered in [_buildRecording]. Only fires once at
+  /// least one real GPS fix has arrived — a run that starts without GPS
+  /// (indoor / treadmill) shouldn't nag the user about signal loss.
   void _checkGpsHealth() {
     if (_state != _ScreenState.recording) return;
     final last = _lastSnapshotAt;
-    final lost = last == null ||
-        DateTime.now().difference(last) > _gpsLostThreshold;
+    final lost =
+        last != null && DateTime.now().difference(last) > _gpsLostThreshold;
     if (lost != _gpsLost && mounted) {
       setState(() => _gpsLost = lost);
     }
@@ -578,19 +589,62 @@ class _RunScreenState extends State<RunScreen> {
 
   /// Poll location permission so we can surface a banner if the runner
   /// toggles it off in Android settings mid-run. The recorder's position
-  /// stream will silently stall otherwise.
+  /// stream will silently stall otherwise. Skipped for indoor runs that
+  /// never had a GPS fix — those users have intentionally denied
+  /// permission and don't need a banner reminding them.
   Future<void> _checkPermission() async {
     if (_state != _ScreenState.recording) return;
     try {
       final p = await Geolocator.checkPermission();
-      final lost = p == LocationPermission.denied ||
+      final denied = p == LocationPermission.denied ||
           p == LocationPermission.deniedForever;
+      // Only treat denial as "revoked mid-run" if we previously had a fix.
+      // A run started in indoor mode stays indoor silently.
+      final lost = denied && _lastSnapshotAt != null;
       if (lost != _permissionLost && mounted) {
         setState(() => _permissionLost = lost);
       }
     } catch (e) {
       debugPrint('Permission check failed: $e');
     }
+  }
+
+  /// Non-blocking notification that GPS isn't available for this run. The
+  /// run still starts — the stopwatch ticks and the map shows its
+  /// "Waiting for GPS..." placeholder — so a treadmill / indoor session
+  /// still gets recorded. The snackbar carries a Settings shortcut so the
+  /// user can enable the missing piece mid-run if they change their mind.
+  void _notifyGpsUnavailable(Object? error) {
+    debugPrint('RunRecorder.prepare failed: $error');
+    if (!mounted) return;
+
+    String message;
+    String? actionLabel;
+    VoidCallback? onAction;
+    if (error is LocationServiceDisabledError) {
+      message = 'No GPS — tracking will start when Location is on.';
+      actionLabel = 'Settings';
+      onAction = () => Geolocator.openLocationSettings();
+    } else if (error is LocationPermissionDeniedError) {
+      message = error.forever
+          ? 'No GPS — permission is blocked. Enable it to track route.'
+          : 'No GPS — tracking will start when permission is granted.';
+      actionLabel = 'Settings';
+      onAction = () => Geolocator.openAppSettings();
+    } else {
+      message = 'Recording without GPS — could not start the sensor.';
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 6),
+        behavior: SnackBarBehavior.floating,
+        action: onAction == null
+            ? null
+            : SnackBarAction(label: actionLabel!, onPressed: onAction),
+      ),
+    );
   }
 
   void _toggleManualPause() {

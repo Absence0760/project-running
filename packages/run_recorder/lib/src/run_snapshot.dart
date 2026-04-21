@@ -5,7 +5,12 @@ class RunSnapshot {
   final Duration elapsed;
   final double distanceMetres;
   final double? currentPaceSecondsPerKm;
-  final Waypoint currentPosition;
+
+  /// Latest GPS fix, if any. Null during the initial warmup and for indoor
+  /// runs where location services were never available — the stopwatch
+  /// keeps ticking and the live map falls back to its "Waiting for GPS..."
+  /// placeholder until a fix arrives.
+  final Waypoint? currentPosition;
   final double? offRouteDistanceMetres;
 
   /// Distance remaining to the end of the selected route, in metres.
@@ -19,7 +24,7 @@ class RunSnapshot {
     required this.elapsed,
     required this.distanceMetres,
     this.currentPaceSecondsPerKm,
-    required this.currentPosition,
+    this.currentPosition,
     this.offRouteDistanceMetres,
     this.routeRemainingMetres,
     this.track = const [],

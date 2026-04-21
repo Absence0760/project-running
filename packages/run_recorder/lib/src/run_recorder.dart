@@ -8,6 +8,25 @@ import 'package:uuid/uuid.dart';
 
 import 'run_snapshot.dart';
 
+/// Thrown by [RunRecorder.prepare] when device location services are turned
+/// off (system-level, distinct from app permission). The user must enable
+/// them in Settings before a run can start.
+class LocationServiceDisabledError extends Error {
+  @override
+  String toString() => 'Location services are disabled on this device';
+}
+
+/// Thrown by [RunRecorder.prepare] when the user denied the location
+/// permission prompt (or has previously set it to deniedForever).
+class LocationPermissionDeniedError extends Error {
+  final bool forever;
+  LocationPermissionDeniedError({this.forever = false});
+  @override
+  String toString() => forever
+      ? 'Location permission is permanently denied'
+      : 'Location permission was denied';
+}
+
 /// Manages a live GPS recording session.
 ///
 /// Streams position updates, calculates pace, and accumulates distance.
@@ -36,9 +55,16 @@ class LapSplit {
 class RunRecorder {
   static const _uuid = Uuid();
 
+  /// How often [prepare] retries opening the position stream when it is
+  /// currently absent (services/permission denied at start, or the stream
+  /// errored mid-run). Short enough that re-enabling Location in Settings
+  /// feels immediate; long enough to avoid thrash.
+  static const _gpsRetryInterval = Duration(seconds: 3);
+
   final _controller = StreamController<RunSnapshot>.broadcast();
   StreamSubscription<Position>? _positionSub;
   Timer? _timer;
+  Timer? _gpsRetryTimer;
   final List<LapSplit> _laps = [];
 
   /// All lap splits recorded so far.
@@ -64,6 +90,9 @@ class RunRecorder {
   double _trackThresholdMetres = 3;
   double _maxSpeedMps = 10;
   double _accuracyGateMetres = 20;
+  // Remembered so the retry loop can re-open the position stream with the
+  // same accuracy setting the caller passed to [prepare].
+  LocationAccuracy _locationAccuracy = LocationAccuracy.high;
 
   /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
   /// per second after [begin] starts recording time.
@@ -96,16 +125,12 @@ class RunRecorder {
     LocationAccuracy accuracy = LocationAccuracy.high,
     double accuracyGateMetres = 20,
   }) async {
-    // Ensure location permission
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.deniedForever ||
-        permission == LocationPermission.denied) {
-      throw Exception('Location permission denied');
-    }
-
+    // Reset state first and flip _prepared = true unconditionally. If GPS
+    // setup below throws, the recorder is still usable for a time-only
+    // (indoor / treadmill) run — begin() will start the stopwatch, the
+    // 1-second timer emits snapshots with a null currentPosition, and the
+    // live map falls back to its "Waiting for GPS..." placeholder. If GPS
+    // later becomes available the caller can call prepare() again.
     _startTime = null;
     _stopwatch
       ..stop()
@@ -123,10 +148,46 @@ class RunRecorder {
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
     _accuracyGateMetres = accuracyGateMetres;
+    _locationAccuracy = accuracy;
+    _prepared = true;
 
+    // Start the self-healing retry loop regardless of whether GPS is
+    // available right now. If the user has Location off at the start of
+    // the run and flips it on later, or if Android tears the stream down
+    // mid-run, the loop re-subscribes within a few seconds.
+    _startGpsRetryLoop();
+
+    // Device-level location services must be on before we even try to get a
+    // permission or open a position stream — otherwise getPositionStream
+    // silently produces nothing and the run never receives a fix.
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw LocationServiceDisabledError();
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever) {
+      throw LocationPermissionDeniedError(forever: true);
+    }
+    if (permission == LocationPermission.denied) {
+      throw LocationPermissionDeniedError();
+    }
+
+    _openPositionStream();
+  }
+
+  /// Subscribe to [Geolocator.getPositionStream] with the accuracy settings
+  /// remembered from the last [prepare] call. Any stream error (commonly
+  /// thrown when the user toggles Location off mid-run) cancels the
+  /// subscription and clears [_positionSub] — the retry loop picks it back
+  /// up once services are available again.
+  void _openPositionStream() {
+    _positionSub?.cancel();
     _positionSub = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
-        accuracy: accuracy,
+        accuracy: _locationAccuracy,
         // Receive every fix from the OS; movement filtering happens in
         // software so the blue dot can refresh without inflating the track.
         distanceFilter: 0,
@@ -134,12 +195,41 @@ class RunRecorder {
           notificationTitle: 'Run in progress',
           notificationText: 'Recording your run',
           enableWakeLock: true,
-          notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+          notificationIcon:
+              AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
         ),
       ),
-    ).listen(_onPosition);
+    ).listen(
+      _onPosition,
+      onError: (Object e, StackTrace st) {
+        debugPrint('RunRecorder: position stream error — $e');
+        _positionSub?.cancel();
+        _positionSub = null;
+      },
+      cancelOnError: true,
+    );
+  }
 
-    _prepared = true;
+  /// Periodically check whether GPS is available and (re-)open the
+  /// position stream if it's currently down. Idempotent — a healthy
+  /// stream is a no-op.
+  void _startGpsRetryLoop() {
+    _gpsRetryTimer?.cancel();
+    _gpsRetryTimer = Timer.periodic(_gpsRetryInterval, (_) async {
+      if (!_prepared) return;
+      if (_positionSub != null) return;
+      try {
+        if (!await Geolocator.isLocationServiceEnabled()) return;
+        final p = await Geolocator.checkPermission();
+        if (p == LocationPermission.denied ||
+            p == LocationPermission.deniedForever) return;
+      } catch (e) {
+        debugPrint('RunRecorder: GPS retry precheck failed — $e');
+        return;
+      }
+      if (!_prepared || _positionSub != null) return;
+      _openPositionStream();
+    });
   }
 
   /// Flip the recorder into recording mode. Must be called after [prepare]
@@ -161,9 +251,12 @@ class RunRecorder {
     _recording = true;
     _paused = false;
 
-    // 1-second timer for elapsed time updates.
+    // 1-second timer for elapsed time updates. Fires regardless of whether
+    // we've received a GPS fix yet — during warmup or an indoor run the
+    // stopwatch still ticks; snapshots just carry a null currentPosition
+    // and the UI falls back to its "Waiting for GPS..." placeholder.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_recording || _currentWaypoint == null) return;
+      if (!_recording) return;
       _emitSnapshot();
     });
   }
@@ -317,12 +410,11 @@ class RunRecorder {
 
   void _emitSnapshot() {
     final current = _currentWaypoint;
-    if (current == null) return;
-
     final elapsed = _stopwatch.elapsed;
     final pace = _calculatePace();
-    final offRoute = _offRouteDistance(current);
-    final remaining = _routeRemaining(current);
+    // Route-relative fields are only meaningful once we have a fix.
+    final offRoute = current == null ? null : _offRouteDistance(current);
+    final remaining = current == null ? null : _routeRemaining(current);
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
@@ -509,6 +601,8 @@ class RunRecorder {
     _stopwatch.stop();
     _timer?.cancel();
     _timer = null;
+    _gpsRetryTimer?.cancel();
+    _gpsRetryTimer = null;
     await _positionSub?.cancel();
     _positionSub = null;
 
@@ -531,6 +625,7 @@ class RunRecorder {
   /// Clean up resources.
   void dispose() {
     _timer?.cancel();
+    _gpsRetryTimer?.cancel();
     _positionSub?.cancel();
     _controller.close();
   }

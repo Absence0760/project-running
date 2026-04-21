@@ -53,7 +53,7 @@ What runs when (`run_screen.dart`):
   - Call `_recorder.prepare()` — opens GPS, starts foreground service, subscribes to position stream. Store the returned Future in `_prepareFuture`
 - **Countdown timer ticks t=1, t=2**: UI only; no background work
 - **`_begin` (t=3, countdown ends)**:
-  - `await _prepareFuture` as a safety net (no-op in the common case — prepare is done by now)
+  - `await _prepareFuture` — if prepare failed (location services off, permission denied) the error is caught and `_notifyGpsUnavailable` shows a non-blocking snackbar with a Settings shortcut. The recorder is still `prepared` so the run proceeds as an indoor / time-only session: the stopwatch ticks, distance stays 0, `currentPosition` snapshots are null, and the live map falls back to "Waiting for GPS...". If GPS later becomes available via a restart the run populates normally.
   - `_recorder.begin()` — synchronous, flips `_recording = true`, starts elapsed-time timer
   - Generate stable `_runId` (UUID) and `_runStartedAtWall` (wall clock)
   - Reset the pedometer baseline to `_latestPedometerSteps` so any steps taken during the countdown don't count toward the run
@@ -67,6 +67,8 @@ What runs when (`run_screen.dart`):
 
 - During `prepared`: the blue dot on the live map can be drawn from the first usable fix, the elapsed time stays at `00:00`, and the track polyline stays empty.
 - During `recording`: everything accumulates as normal.
+
+The 1-second elapsed-time timer inside `begin()` emits snapshots unconditionally — it does not gate on `_currentWaypoint`. This keeps the stopwatch advancing for indoor / treadmill runs that never receive a fix. The snapshot simply carries `currentPosition: null` (the field is nullable on `RunSnapshot`), and the live map falls back to its "Waiting for GPS..." placeholder.
 
 ---
 
@@ -285,6 +287,9 @@ Each of these is a self-contained piece with its own purpose. Most can be tuned 
 | 6 | Pedometer resubscribe | Exponential backoff on stream error, up to 5 retries | `_pedometerMaxRetries` |
 | 7 | Permission watchdog | Poll `Geolocator.checkPermission()` every 5 s; banner if revoked | — |
 | 8 | Activity-type lock | Guard in `onSelected` to reject changes unless state is idle | — |
+| 9 | Indoor / no-GPS fallback | `RunRecorder.prepare` flips `_prepared` before opening the position stream and throws typed errors (`LocationServiceDisabledError` / `LocationPermissionDeniedError`) if GPS setup fails. `RunSnapshot.currentPosition` is nullable; the 1-second timer emits snapshots regardless of fix state. `_begin` catches prepare errors, shows a non-blocking snackbar, and the run proceeds as a time-only session. GPS-lost and permission-revoked banners stay dormant until the first real fix arrives, so indoor runs don't nag. | — |
+| 11 | GPS self-heal | `_gpsRetryTimer` inside `RunRecorder` polls every 3 s while `_prepared` is true and `_positionSub` is null. Once `isLocationServiceEnabled()` + `checkPermission()` both pass, it reopens the position stream with the accuracy settings remembered from `prepare()`. The stream subscription uses `onError`/`cancelOnError: true` so an Android-side disconnect (e.g. user toggles Location off mid-run) cleanly clears `_positionSub` and the retry loop takes over. Net effect: tracking resumes automatically when Location is re-enabled, whether the run started without GPS or lost it mid-run. | `_gpsRetryInterval` |
+| 10 | LiveRunMap restart reset | `didUpdateWidget` wipes `_animatedLatLng`, tween endpoints, and `_userPanned` when the track clears for a new run, so the next first fix snaps cleanly and the follow-cam re-centres | — |
 | + | Reentrancy guard on Start | `_startRequested` flag prevents double-taps from spawning multiple recorders | — |
 | + | No live auto-pause | Clock runs continuously; "moving time" computed as a derived metric at summary time instead | — |
 
@@ -345,6 +350,7 @@ All in `apps/mobile_android/lib/screens/run_screen.dart` unless noted.
 |---|---|---|
 | `_incrementalSaveInterval` | 10 s | Cadence of crash-safe persistence writes |
 | `_gpsLostThreshold` | 10 s | Snapshot staleness that triggers the GPS-lost banner |
+| `_gpsRetryInterval` (in `run_recorder.dart`) | 3 s | Cadence of the in-recorder retry loop that reopens the position stream after a service/permission outage |
 | `_holdToStopDuration` | 800 ms | Hold time before the stop button fires |
 | `_pedometerMaxRetries` | 5 | Exponential-backoff cap before giving up on pedometer |
 | `_offRouteThresholdMetres` | 40 m | Distance from selected route that triggers off-route warning |
