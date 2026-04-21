@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:core_models/core_models.dart' as cm;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
@@ -24,6 +25,43 @@ import 'wear_auth_bridge.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Replace Flutter's default red-screen error widget in release builds
+  // with a quiet fallback card. A crash inside a single subtree (most
+  // likely the live map — flutter_map is the widest surface area in the
+  // run screen) would otherwise take down the whole screen, including
+  // the recording stats. RunRecorder lives outside the widget tree, so
+  // recording itself keeps going while the user sees a replaced subtree.
+  //
+  // Kept as the default red screen in debug so we don't mask bugs during
+  // development.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (details) {
+      debugPrint('ErrorWidget: ${details.exception}');
+      return Container(
+        color: const Color(0xFF1E1B4B),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(16),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFF59E0B),
+              size: 32,
+            ),
+            SizedBox(height: 8),
+            Text(
+              "This section couldn't load.\nRecording is still running.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    };
+  }
+
   await dotenv.load(fileName: '.env.local');
 
   // Disk-backed map tile cache. Survives app restarts so repeated runs in
@@ -38,12 +76,23 @@ void main() async {
   // completed run so at least the user keeps whatever was captured. Only
   // runs with meaningful content are kept — tiny "I tapped start then
   // backgrounded" runs are dropped silently.
+  //
+  // An indoor (pedometer-only) run has no track and its distance came
+  // from `steps × stride`. For those, we accept the run if duration ≥ 60s
+  // instead of requiring GPS waypoints — a treadmill session that crashed
+  // after 10 minutes shouldn't evaporate just because there are no fixes.
   cm.Run? recoveredRun;
   try {
     final partial = await store.loadInProgress();
-    if (partial != null &&
+    final indoorEstimated =
+        partial?.metadata?['indoor_estimated'] == true;
+    final hasEnoughGps = partial != null &&
         partial.track.length >= 3 &&
-        partial.distanceMetres >= 50) {
+        partial.distanceMetres >= 50;
+    final hasEnoughIndoor = partial != null &&
+        indoorEstimated &&
+        partial.duration.inSeconds >= 60;
+    if (hasEnoughGps || hasEnoughIndoor) {
       final metadata = Map<String, dynamic>.from(partial.metadata ?? {});
       metadata['recovered_from_crash'] = true;
       final recovered = cm.Run(

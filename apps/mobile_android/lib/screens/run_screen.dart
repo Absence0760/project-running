@@ -99,6 +99,13 @@ class _RunScreenState extends State<RunScreen> {
   bool _manualPaused = false;
   DateTime? _lastSnapshotAt;
 
+  // Has any GPS fix arrived during this run? Drives the indoor-mode
+  // distance fallback below — when false, we use `steps × stride` instead
+  // of `0` so a treadmill session shows a plausible distance even though
+  // GPS never produced a fix. Flipped true on the first non-null
+  // snapshot.currentPosition; reset on discard.
+  bool _everHadGpsFix = false;
+
   // Reentrancy guard on start — prevents rapid taps from spawning
   // multiple recorders.
   bool _startRequested = false;
@@ -465,9 +472,11 @@ class _RunScreenState extends State<RunScreen> {
 
       // Only count GPS-backed snapshots as evidence that the sensor is
       // alive. Timer-driven snapshots without a fix (indoor run, warmup)
-      // don't mask a real GPS outage mid-run.
+      // don't mask a real GPS outage mid-run. Also latch _everHadGpsFix
+      // so we know whether to fall back to the pedometer for distance.
       if (snapshot.currentPosition != null) {
         _lastSnapshotAt = DateTime.now();
+        if (!_everHadGpsFix) _everHadGpsFix = true;
       }
 
       setState(() {
@@ -480,85 +489,115 @@ class _RunScreenState extends State<RunScreen> {
         _routeRemaining = snapshot.routeRemainingMetres;
       });
 
-      // Ping the live race spectator feed. RaceController enforces a
-      // 10s cadence so this is safe to fire on every snapshot. Skip when
-      // there's no GPS fix (indoor run, GPS warmup) — the spectator feed
-      // needs a real position.
-      final pos = snapshot.currentPosition;
-      if (pos != null) {
-        widget.raceController?.pushPing(
-          lat: pos.lat,
-          lng: pos.lng,
-          distanceM: snapshot.distanceMetres,
-          elapsedS: snapshot.elapsed.inSeconds,
-          bpm: _currentBpm,
-        );
+      // Every auxiliary effect below runs behind its own try/catch — if any
+      // one fails (TTS init error, network race-ping error, flaky route
+      // math on a corrupt route) the rest still fire, and the core stats
+      // update above stays intact. The layering rule is: L0 (clock) and
+      // L1 (GPS distance / pace in the setState above) must not be broken
+      // by any failure in L4 auxiliaries.
+
+      // L4 — Live race spectator ping. Requires a real GPS fix; cadence
+      // throttled inside RaceController. Network / Supabase realtime can
+      // throw; swallow and keep going.
+      try {
+        final pos = snapshot.currentPosition;
+        if (pos != null) {
+          widget.raceController?.pushPing(
+            lat: pos.lat,
+            lng: pos.lng,
+            distanceM: snapshot.distanceMetres,
+            elapsedS: snapshot.elapsed.inSeconds,
+            bpm: _currentBpm,
+          );
+        }
+      } catch (e) {
+        debugPrint('raceController.pushPing failed: $e');
       }
 
-      // Off-route warning
-      final off = snapshot.offRouteDistanceMetres;
-      if (off != null) {
-        if (off > _offRouteThresholdMetres && !_offRouteWarned) {
-          _offRouteWarned = true;
-          if (widget.preferences.audioCues) {
-            widget.audioCues.announceOffRoute();
+      // L4 — Off-route warning + audio cue. Route math is pure but the
+      // audio_cues TTS bridge can throw if the engine hasn't initialised.
+      try {
+        final off = snapshot.offRouteDistanceMetres;
+        if (off != null) {
+          if (off > _offRouteThresholdMetres && !_offRouteWarned) {
+            _offRouteWarned = true;
+            if (widget.preferences.audioCues) {
+              widget.audioCues.announceOffRoute();
+            }
+          } else if (off < _offRouteThresholdMetres / 2) {
+            _offRouteWarned = false;
           }
-        } else if (off < _offRouteThresholdMetres / 2) {
-          _offRouteWarned = false;
         }
+      } catch (e) {
+        debugPrint('off-route cue failed: $e');
       }
 
-      // Pace alert (skip for cycling — pace target doesn't apply)
-      final target = widget.preferences.targetPaceSecPerKm;
-      if (!_activityType.usesSpeed &&
-          target > 0 &&
-          _pace != null &&
-          widget.preferences.audioCues) {
-        final diff = _pace! - target;
-        final lastAlert = _lastPaceAlertAt;
-        final canAlert = lastAlert == null ||
-            DateTime.now().difference(lastAlert).inSeconds > 30;
-        if (canAlert && diff.abs() > 30) {
-          _lastPaceAlertAt = DateTime.now();
-          widget.audioCues.announcePaceAlert(tooSlow: diff > 0);
+      // L4 — Pace alert (skip for cycling — pace target doesn't apply).
+      try {
+        final target = widget.preferences.targetPaceSecPerKm;
+        if (!_activityType.usesSpeed &&
+            target > 0 &&
+            _pace != null &&
+            widget.preferences.audioCues) {
+          final diff = _pace! - target;
+          final lastAlert = _lastPaceAlertAt;
+          final canAlert = lastAlert == null ||
+              DateTime.now().difference(lastAlert).inSeconds > 30;
+          if (canAlert && diff.abs() > 30) {
+            _lastPaceAlertAt = DateTime.now();
+            widget.audioCues.announcePaceAlert(tooSlow: diff > 0);
+          }
         }
+      } catch (e) {
+        debugPrint('pace-alert cue failed: $e');
       }
 
-      // Distance tick notification + audio cue.
-      // Custom interval from preferences overrides the activity-type default.
-      final customInterval = widget.preferences.splitIntervalMetres;
-      final tickInterval = customInterval > 0
-          ? customInterval.toDouble()
-          : _activityType.splitIntervalMetres;
-      final currentTick = UnitFormat.activityTicks(_distanceMetres, tickInterval);
-      if (currentTick > _lastTickNotified && currentTick > 0) {
-        _lastTickNotified = currentTick;
-        final totalDistanceMetres = (currentTick * tickInterval).toDouble();
-        final tail = _activityType.usesSpeed
-            ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
-            : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  '${UnitFormat.distance(totalDistanceMetres, unit)} — $tail'),
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+      // L4 — Distance tick snackbar + audio cue. Custom interval from
+      // preferences overrides the activity-type default.
+      try {
+        final customInterval = widget.preferences.splitIntervalMetres;
+        final tickInterval = customInterval > 0
+            ? customInterval.toDouble()
+            : _activityType.splitIntervalMetres;
+        final currentTick =
+            UnitFormat.activityTicks(_distanceMetres, tickInterval);
+        if (currentTick > _lastTickNotified && currentTick > 0) {
+          _lastTickNotified = currentTick;
+          final totalDistanceMetres = (currentTick * tickInterval).toDouble();
+          final tail = _activityType.usesSpeed
+              ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
+              : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    '${UnitFormat.distance(totalDistanceMetres, unit)} — $tail'),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          if (widget.preferences.audioCues) {
+            widget.audioCues.announceSplit(
+              distanceTicks: currentTick,
+              paceSecondsPerKm: _pace,
+              unit: unit,
+              useSpeed: _activityType.usesSpeed,
+              tickIntervalMetres: tickInterval,
+            );
+          }
         }
-        if (widget.preferences.audioCues) {
-          widget.audioCues.announceSplit(
-            distanceTicks: currentTick,
-            paceSecondsPerKm: _pace,
-            unit: unit,
-            useSpeed: _activityType.usesSpeed,
-            tickIntervalMetres: tickInterval,
-          );
-        }
+      } catch (e) {
+        debugPrint('split tick failed: $e');
       }
 
-      _refreshLockScreenNotification();
+      // L4 — Lock-screen notification (Dart client already has its own
+      // try/catch, but isolate here too for belt-and-suspenders).
+      try {
+        _refreshLockScreenNotification();
+      } catch (e) {
+        debugPrint('lock-screen notification update failed: $e');
+      }
   }
 
   /// Push the current stats to the native lock-screen notification,
@@ -575,7 +614,11 @@ class _RunScreenState extends State<RunScreen> {
 
     final unit = widget.preferences.unit;
     final timeStr = _formatDuration(_elapsed);
-    final distanceStr = UnitFormat.distance(_distanceMetres, unit);
+    // Mirror the on-screen distance (GPS or pedometer-estimated with a
+    // tilde prefix) so the lock-screen matches what the user sees.
+    final rawDistance = UnitFormat.distance(_displayDistanceMetres, unit);
+    final distanceStr =
+        _distanceIsEstimated ? '~$rawDistance' : rawDistance;
     final paceStr = _activityType.usesSpeed
         ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
         : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
@@ -596,15 +639,25 @@ class _RunScreenState extends State<RunScreen> {
     if (id == null || startedAt == null) return;
     if (_state != _ScreenState.recording) return;
 
+    // Mirror the indoor-estimate path in _stop() so a crash-recovered
+    // treadmill run keeps its pedometer-based distance instead of being
+    // promoted as 0 km.
+    final indoorEstimate = !_everHadGpsFix &&
+        _distanceMetres == 0 &&
+        _displayDistanceMetres > 0;
     final metadata = <String, dynamic>{
       'activity_type': _activityType.name,
       'in_progress_saved_at': DateTime.now().toIso8601String(),
+      if (indoorEstimate) 'indoor_estimated': true,
+      if (indoorEstimate) 'distance_source': 'pedometer',
+      if (_steps > 0) 'steps': _steps,
     };
     final run = cm.Run(
       id: id,
       startedAt: startedAt,
       duration: _elapsed,
-      distanceMetres: _distanceMetres,
+      distanceMetres:
+          indoorEstimate ? _displayDistanceMetres : _distanceMetres,
       track: List.unmodifiable(_track),
       source: cm.RunSource.app,
       metadata: metadata,
@@ -769,6 +822,18 @@ class _RunScreenState extends State<RunScreen> {
     metadata['activity_type'] = _activityType.name;
     if (_steps > 0) metadata['steps'] = _steps;
 
+    // Indoor fallback: if no GPS fix ever arrived but the pedometer ran,
+    // save the estimated distance so the run history shows something
+    // useful. Flagged in metadata so downstream views can mark it as
+    // estimated rather than measured.
+    final indoorEstimate = !_everHadGpsFix &&
+        raw.distanceMetres == 0 &&
+        _displayDistanceMetres > 0;
+    if (indoorEstimate) {
+      metadata['indoor_estimated'] = true;
+      metadata['distance_source'] = 'pedometer';
+    }
+
     // Average heart rate across the run (BLE chest-strap samples).
     if (_bpmSamples.isNotEmpty) {
       metadata['avg_bpm'] = _bpmSamples.reduce((a, b) => a + b) / _bpmSamples.length;
@@ -784,7 +849,8 @@ class _RunScreenState extends State<RunScreen> {
       id: runId,
       startedAt: _runStartedAtWall ?? raw.startedAt,
       duration: raw.duration,
-      distanceMetres: raw.distanceMetres,
+      distanceMetres:
+          indoorEstimate ? _displayDistanceMetres : raw.distanceMetres,
       track: raw.track,
       routeId: _selectedRoute?.id ?? raw.routeId,
       source: raw.source,
@@ -876,6 +942,7 @@ class _RunScreenState extends State<RunScreen> {
     _pedometerRetries = 0;
     _gpsLost = false;
     _permissionLost = false;
+    _everHadGpsFix = false;
     _holdToStopProgress = 0;
     // Fire-and-forget — if we discarded mid-run, drop the in-progress file.
     widget.runStore.clearInProgress();
@@ -938,16 +1005,39 @@ class _RunScreenState extends State<RunScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  String get _formattedDistance => UnitFormat.distance(_distanceMetres, _unit);
+  /// Distance the UI should display. GPS track distance when a fix has
+  /// arrived; pedometer-estimated distance (`steps × stride`) for indoor
+  /// runs where GPS never produced a fix. Cycling has no pedometer so the
+  /// estimate is zero — there's no meaningful fallback for that activity.
+  double get _displayDistanceMetres {
+    if (_everHadGpsFix || _distanceMetres > 0) return _distanceMetres;
+    final stride = _activityType.strideMetres;
+    if (stride <= 0 || _steps <= 0) return 0;
+    return _steps * stride;
+  }
 
-  String get _formattedDistanceValue =>
-      UnitFormat.distanceValue(_distanceMetres, _unit);
+  /// True when [_displayDistanceMetres] is pedometer-estimated rather than
+  /// GPS-measured. Drives the tilde prefix and the "estimated" chip so the
+  /// user knows the number isn't from GPS.
+  bool get _distanceIsEstimated =>
+      !_everHadGpsFix && _displayDistanceMetres > 0;
+
+  String get _formattedDistance {
+    final base = UnitFormat.distance(_displayDistanceMetres, _unit);
+    return _distanceIsEstimated ? '~$base' : base;
+  }
+
+  String get _formattedDistanceValue {
+    final base = UnitFormat.distanceValue(_displayDistanceMetres, _unit);
+    return _distanceIsEstimated ? '~$base' : base;
+  }
 
   String get _formattedPaceValue => UnitFormat.pace(_pace, _unit);
 
   String get _formattedAvgPaceValue {
-    if (_distanceMetres < 10 || _elapsed.inSeconds < 1) return '--:--';
-    final secPerKm = _elapsed.inSeconds / (_distanceMetres / 1000);
+    final d = _displayDistanceMetres;
+    if (d < 10 || _elapsed.inSeconds < 1) return '--:--';
+    final secPerKm = _elapsed.inSeconds / (d / 1000);
     return UnitFormat.pace(secPerKm, _unit);
   }
 
@@ -955,20 +1045,26 @@ class _RunScreenState extends State<RunScreen> {
   /// full elapsed time. Used on the finished-run screen so the headline
   /// pace excludes stops.
   String _formattedAvgPaceValueFromMoving(Duration movingTime) {
-    if (_distanceMetres < 10 || movingTime.inSeconds < 1) return '--:--';
-    final secPerKm = movingTime.inSeconds / (_distanceMetres / 1000);
+    final d = _displayDistanceMetres;
+    if (d < 10 || movingTime.inSeconds < 1) return '--:--';
+    final secPerKm = movingTime.inSeconds / (d / 1000);
     return UnitFormat.pace(secPerKm, _unit);
   }
 
   String get _formattedAvgSpeedValue {
-    if (_distanceMetres < 10 || _elapsed.inSeconds < 1) return '--';
-    final secPerKm = _elapsed.inSeconds / (_distanceMetres / 1000);
+    final d = _displayDistanceMetres;
+    if (d < 10 || _elapsed.inSeconds < 1) return '--';
+    final secPerKm = _elapsed.inSeconds / (d / 1000);
     return UnitFormat.speed(secPerKm, _unit);
   }
 
   String get _formattedCalories {
-    // Assume 70 kg body weight; multiplier varies by activity.
-    final cals = (70 * _activityType.kcalPerKgPerKm * _distanceMetres / 1000).round();
+    // Assume 70 kg body weight; multiplier varies by activity. Uses the
+    // display distance so indoor runs show non-zero calories from the
+    // pedometer estimate rather than always 0.
+    final cals =
+        (70 * _activityType.kcalPerKgPerKm * _displayDistanceMetres / 1000)
+            .round();
     return '$cals';
   }
 

@@ -91,6 +91,26 @@ enum ActivityType {
     }
   }
 
+  /// Average stride / step length in metres. Used as a fallback distance
+  /// estimate for indoor / treadmill runs where GPS never produces a fix —
+  /// the pedometer still counts steps, so `steps × strideMetres` gives a
+  /// rough distance that's better than the `0.00 km` we'd otherwise show.
+  /// Values are average-adult estimates; individual stride varies with
+  /// height, cadence, and fatigue. Cycling has no pedometer so its value
+  /// is unused.
+  double get strideMetres {
+    switch (this) {
+      case ActivityType.run:
+        return 1.1; // ~2000 steps/km at a moderate pace
+      case ActivityType.walk:
+        return 0.73; // ~1370 steps/km
+      case ActivityType.cycle:
+        return 0.0; // pedometer not meaningful for cycling
+      case ActivityType.hike:
+        return 0.85; // shorter than running, longer than walking
+    }
+  }
+
   /// Maximum plausible speed (metres/second). Position deltas implying
   /// anything faster than this are discarded as GPS corruption — the line
   /// shouldn't teleport across town because of one bad fix.

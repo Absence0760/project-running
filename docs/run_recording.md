@@ -284,6 +284,21 @@ The GPS-lost banner, permission watchdog, and snapshot freshness tracking (`_las
 
 Each of these is a self-contained piece with its own purpose. Most can be tuned without touching any other part of the system — the constants live at the top of `run_screen.dart` or in `ActivityType`.
 
+### Layering
+
+The recording stack is organised so a failure at a higher layer cannot break a lower one. "Basics always work" is load-bearing: an indoor treadmill session with no GPS and a crashed tile layer must still show a running clock and a plausible distance.
+
+| Layer | Depends on | Breaks if... |
+|---|---|---|
+| **L0 — Clock** | `Stopwatch` only | The Dart VM dies. That's it. |
+| **L1a — Pedometer distance** | L0 + accelerometer | Phone lacks a step sensor. Used as the indoor-run fallback. |
+| **L1b — GPS distance + pace** | L0 + location services + permission + signal | Location off, permission denied, sky blocked. Falls back to L1a. |
+| **L2 — Live map tiles + polyline** | L1b + network or tile cache + `flutter_map` | Offline and no cached tiles, or a `flutter_map` crash. Caught by the error boundary (row 15) so L0/L1 stay visible. |
+| **L3 — Route overlay** | L2 + a selected `Route` | Usually silent — no route, no overlay. |
+| **L4 — Auxiliary effects** | Everything above + TTS + network + pedometer + BLE HR + platform channels | Individually wrapped in try/catch (row 13) so a single failure (e.g. TTS init error) doesn't bring down L0–L2. |
+
+If you add a new feature, place it at the highest layer it actually needs. A new visual (e.g. a cadence chart) is L2 — don't wire it into the `setState` that drives L0/L1. A new alert or side-effect is L4 — wrap it in try/catch.
+
 | # | Concern | Mechanism | Constant(s) |
 |---|---|---|---|
 | 1 | Crash-safe run data | Serialise partial run to `in_progress.json` every 10 s; recover on launch if ≥ 3 waypoints and ≥ 50 m | `_incrementalSaveInterval` |
@@ -298,6 +313,9 @@ Each of these is a self-contained piece with its own purpose. Most can be tuned 
 | 10 | LiveRunMap restart reset | `didUpdateWidget` wipes `_animatedLatLng`, tween endpoints, and `_userPanned` when the track clears for a new run, so the next first fix snaps cleanly and the follow-cam re-centres | — |
 | 11 | GPS self-heal | `_gpsRetryTimer` inside `RunRecorder` polls every 3 s while `_prepared` is true and `_positionSub` is null. Once `isLocationServiceEnabled()` + `checkPermission()` both pass, it reopens the position stream with the accuracy settings remembered from `prepare()`. The stream subscription uses `onError`/`cancelOnError: true` so an Android-side disconnect (e.g. user toggles Location off mid-run) cleanly clears `_positionSub` and the retry loop takes over. Net effect: tracking resumes automatically when Location is re-enabled, whether the run started without GPS or lost it mid-run. | `_gpsRetryInterval` |
 | 12 | Live lock-screen notification (Android) | `RunNotificationBridge` (Kotlin) pre-creates `geolocator_channel_01` with `VISIBILITY_PUBLIC` + `IMPORTANCE_LOW` (winning the race against geolocator's private-visibility default, which is immutable after creation), then reposts on that channel with `BigTextStyle` + `CATEGORY_WORKOUT` so the lock-screen row shows live time / distance / pace instead of the static "Run in progress". Posts are guarded by a runtime POST_NOTIFICATIONS check (Android 13+); if missing the bridge returns an error rather than silently no-opping. The Dart side (`RunNotificationBridge`, called from `_refreshLockScreenNotification` at the end of `_onSnapshot`) throttles to ~1 Hz. Explicitly cleared on stop / discard. Constants in the bridge mirror `GeolocatorLocationService`; if a future geolocator release changes them, the replacement stops applying — fix by updating the constants. | — |
+| 13 | Auxiliary-effect isolation | Every L4 effect inside `_onSnapshot` (race ping, off-route cue, pace alert, split snackbar + TTS, lock-screen update) is wrapped in its own try/catch + `debugPrint`. A failure in any one (TTS init error, Supabase realtime drop, corrupt route math) can't break the core `setState` that drives the visible stats — the L0 (clock) / L1 (distance / pace) numbers stay live even when L4 is misbehaving. | — |
+| 14 | Pedometer distance fallback | When `_everHadGpsFix` is false and the GPS distance is 0, `_displayDistanceMetres` returns `steps × ActivityType.strideMetres`. UI prefixes a tilde and the indoor chip flags the estimate. On stop, `metadata.indoor_estimated = true` + `metadata.distance_source = "pedometer"` are written so downstream views can render it distinctly. Crash recovery accepts an indoor run with `duration ≥ 60 s` instead of the usual 3-waypoint / 50 m gate, so a treadmill session doesn't evaporate on recovery. | `ActivityType.strideMetres` |
+| 15 | Release-build error boundary | `ErrorWidget.builder` is overridden in `main.dart` (release only — debug keeps Flutter's red screen for visibility) with a subtle "This section couldn't load" card. A crash inside `LiveRunMap` or any other subtree replaces only that subtree, leaving the stats panel and recording state intact. `RunRecorder` lives outside the widget tree, so even a full-screen rebuild doesn't stop it. | — |
 | + | Reentrancy guard on Start | `_startRequested` flag prevents double-taps from spawning multiple recorders | — |
 | + | No live auto-pause | Clock runs continuously; "moving time" computed as a derived metric at summary time instead | — |
 
