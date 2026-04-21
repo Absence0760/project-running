@@ -26,11 +26,12 @@ serve(async (req: Request) => {
   // Verify HMAC signature.
   const body = await req.text();
   const sig = req.headers.get('x-revenuecat-hmac');
-  if (sig) {
-    const expected = hmac('sha256', secret, body, 'utf8', 'hex');
-    if (sig !== expected) {
-      return new Response('Bad signature', { status: 401 });
-    }
+  if (!sig) {
+    return new Response('Missing signature', { status: 401 });
+  }
+  const expected = hmac('sha256', secret, body, 'utf8', 'hex');
+  if (sig !== expected) {
+    return new Response('Bad signature', { status: 401 });
   }
 
   let event: RevenueCatEvent;
