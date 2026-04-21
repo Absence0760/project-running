@@ -3,11 +3,17 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 
 import '../audio_cues.dart';
+import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../race_controller.dart';
+import '../settings_sync.dart';
+import '../social_service.dart';
+import '../training_service.dart';
+import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
-import 'history_screen.dart';
+import 'runs_screen.dart';
 import 'routes_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
@@ -18,6 +24,11 @@ class HomeScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final AudioCues audioCues;
+  final SocialService social;
+  final RaceController raceController;
+  final TrainingService training;
+  final BleHeartRate heartRate;
+  final SettingsSyncService? settingsSync;
 
   const HomeScreen({
     super.key,
@@ -26,6 +37,11 @@ class HomeScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     required this.audioCues,
+    required this.social,
+    required this.raceController,
+    required this.training,
+    required this.heartRate,
+    this.settingsSync,
   });
 
   @override
@@ -75,12 +91,16 @@ class _HomeScreenState extends State<HomeScreen> {
           routeStore: widget.routeStore,
           preferences: widget.preferences,
           audioCues: widget.audioCues,
+          social: widget.social,
+          raceController: widget.raceController,
+          training: widget.training,
+          heartRate: widget.heartRate,
           initialRoute: _preselectedRoute,
         ),
       ),
       _KeepAlive(
-        child: HistoryScreen(
-          key: const PageStorageKey('history'),
+        child: RunsScreen(
+          key: const PageStorageKey('runs'),
           apiClient: widget.apiClient,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
@@ -97,11 +117,19 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _KeepAlive(
+        child: ClubsScreen(
+          key: const PageStorageKey('clubs'),
+          social: widget.social,
+        ),
+      ),
+      _KeepAlive(
         child: SettingsScreen(
           key: const PageStorageKey('settings'),
           apiClient: widget.apiClient,
           preferences: widget.preferences,
           runStore: widget.runStore,
+          heartRate: widget.heartRate,
+          settingsSync: widget.settingsSync,
         ),
       ),
     ];
@@ -159,8 +187,9 @@ class _HomeScreenState extends State<HomeScreen> {
           destinations: const [
             NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
             NavigationDestination(icon: Icon(Icons.play_arrow), label: 'Run'),
-            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+            NavigationDestination(icon: Icon(Icons.history), label: 'Runs'),
             NavigationDestination(icon: Icon(Icons.route), label: 'Routes'),
+            NavigationDestination(icon: Icon(Icons.groups), label: 'Clubs'),
             NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),

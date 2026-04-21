@@ -52,7 +52,7 @@ class _SignInScreenState extends State<SignInScreen> {
   ///   auth provider.
   /// - Android OAuth 2.0 client configured with the app's SHA-1
   ///   fingerprint.
-  /// See docs/local_testing_android_app.md for the full setup walkthrough.
+  /// See apps/mobile_android/local_testing.md for the full setup walkthrough.
   Future<void> _signInWithGoogle() async {
     setState(() {
       _loading = true;
@@ -63,7 +63,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (webClientId == null || webClientId.isEmpty) {
         throw Exception(
           'Google Sign-In not configured — set GOOGLE_WEB_CLIENT_ID in .env.local. '
-          'See docs/local_testing_android_app.md.',
+          'See apps/mobile_android/local_testing.md.',
         );
       }
 

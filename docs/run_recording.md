@@ -2,7 +2,7 @@
 
 Authoritative reference for how the app records a run — the state machine, the data flow, the hardening that keeps a run from being lost when the real world goes wrong, and the knobs you can tune without redesigning anything.
 
-For a high-level view of where this fits in the repo see [architecture.md](architecture.md). For user-facing feature behaviour see [features.md](features.md). For testing instructions on a real device see [local_testing_android_app.md](local_testing_android_app.md).
+For a high-level view of where this fits in the repo see [architecture.md](architecture.md). For user-facing feature behaviour see [features.md](features.md). For testing instructions on a real device see [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md).
 
 ---
 
@@ -45,7 +45,7 @@ The app splits `prepare` and `begin` so all expensive setup happens during the 3
 
 What runs when (`run_screen.dart`):
 
-- **On tap Start**: `_beginCountdown` → `_ensurePermission` → `_preload`
+- **On tap Start**: `_beginCountdown` → `_maybeRequestPermission` → `_preload` (permission request is non-blocking; denial drops the run into time-only mode rather than aborting)
 - **`_preload` (t=0, countdown begins)**:
   - Create `RunRecorder`, subscribe to its `snapshots` stream
   - Subscribe to the pedometer stream (gated — step counts don't accrue until state is `recording`)
@@ -53,7 +53,7 @@ What runs when (`run_screen.dart`):
   - Call `_recorder.prepare()` — opens GPS, starts foreground service, subscribes to position stream. Store the returned Future in `_prepareFuture`
 - **Countdown timer ticks t=1, t=2**: UI only; no background work
 - **`_begin` (t=3, countdown ends)**:
-  - `await _prepareFuture` as a safety net (no-op in the common case — prepare is done by now)
+  - `await _prepareFuture` — if prepare failed (location services off, permission denied) the error is caught and `_notifyGpsUnavailable` shows a non-blocking snackbar with a Settings shortcut. The recorder is still `prepared` so the run proceeds as an indoor / time-only session: the stopwatch ticks, distance stays 0, `currentPosition` snapshots are null, and the live map falls back to "Waiting for GPS...". If GPS later becomes available via a restart the run populates normally.
   - `_recorder.begin()` — synchronous, flips `_recording = true`, starts elapsed-time timer
   - Generate stable `_runId` (UUID) and `_runStartedAtWall` (wall clock)
   - Reset the pedometer baseline to `_latestPedometerSteps` so any steps taken during the countdown don't count toward the run
@@ -68,25 +68,32 @@ What runs when (`run_screen.dart`):
 - During `prepared`: the blue dot on the live map can be drawn from the first usable fix, the elapsed time stays at `00:00`, and the track polyline stays empty.
 - During `recording`: everything accumulates as normal.
 
+The 1-second elapsed-time timer inside `begin()` emits snapshots unconditionally — it does not gate on `_currentWaypoint`. This keeps the stopwatch advancing for indoor / treadmill runs that never receive a fix. The snapshot simply carries `currentPosition: null` (the field is nullable on `RunSnapshot`), and the live map falls back to its "Waiting for GPS..." placeholder.
+
 ---
 
 ## Data flow: recording a run
 
 ```
 1.  User taps Start on the idle screen
-2.  _ensurePermission() — request location + notifications if needed
+2.  _maybeRequestPermission() — requests FINE_LOCATION + POST_NOTIFICATIONS
+    (non-blocking; denial drops the run into time-only mode)
 3.  _beginCountdown() flips state to countdown and starts the 1s tick timer
 4.  _preload() kicks off asynchronously:
     - RunRecorder created
     - snapshots subscription attached (→ _onSnapshot)
     - Pedometer stream subscribed (counts gated on recording state)
     - Wakelock enabled
-    - _recorder.prepare() opens the GPS stream with a foreground service
-      notification ("Run in progress") and begins receiving positions
+    - _recorder.prepare() flips _prepared = true, starts the GPS retry
+      loop, then tries to open the GPS stream. If services or permission
+      are denied it throws a typed error but _prepared stays true — the
+      retry loop reopens the stream when conditions come back.
 5.  GPS fixes arriving during prepared update _currentWaypoint; snapshots
-    drive the blue dot; elapsed stays at 0; track stays empty
-6.  Countdown reaches 1 → _begin() runs:
-    - Awaits _prepareFuture (no-op in the common case)
+    drive the blue dot; elapsed stays at 0; track stays empty. With no
+    fix the map shows "Waiting for GPS..." — still fine, nothing blocks.
+6.  Countdown reaches 0 → _begin() runs:
+    - Awaits _prepareFuture (errors caught → _notifyGpsUnavailable snackbar,
+      run still starts)
     - _recorder.begin() flips on recording, starts Stopwatch, starts the
       1s elapsed-time timer
     - Stable _runId generated; _runStartedAtWall recorded
@@ -178,6 +185,8 @@ AndroidSettings(
 )
 ```
 
+The title / text above are only the *initial* state. Once recording begins, `_refreshLockScreenNotification` (run_screen, throttled to ~1 Hz) calls `RunNotificationBridge` which reposts on the same channel + id with live time / distance / pace — so the lock-screen row is live, not the static strings above. See hardening row 12.
+
 **`distanceFilter: 0`** is intentional. The OS-level `distanceFilter` gates position emission by physical distance — a value of 3 means no position until the device has physically moved 3 m. That starves the blue dot at slow walking speeds (the marker doesn't move until 3 m of accumulated motion crosses the threshold).
 
 With `distanceFilter: 0` we receive every fix the sensor produces (~1 Hz on most Android chips) and do all the filtering in software below, which lets the dot refresh at sensor rate while still keeping the track clean.
@@ -187,7 +196,7 @@ With `distanceFilter: 0` we receive every fix the sensor produces (~1 Hz on most
 Every incoming `Position` goes through:
 
 1. **Paused gate** — if `_paused`, drop (Stopwatch is also paused, so elapsed doesn't advance).
-2. **Accuracy filter** — `pos.accuracy > 20` → drop. 20 m is a compromise between rejecting urban-canyon corruption and keeping sparse fixes alive.
+2. **Accuracy filter** — `pos.accuracy > _accuracyGateMetres` (default 20) → drop. 20 m is a compromise between rejecting urban-canyon corruption and keeping sparse fixes alive. Drops log via `debugPrint`, rate-limited to once per 5 s so an always-bad stream doesn't flood. Tightening below 20 m silently rejects realistic outdoor fixes — see [decisions.md § 21](decisions.md).
 3. **Always** update `_currentWaypoint` (blue dot).
 4. **If not recording**, emit snapshot and return. Track and distance are untouched.
 5. **First tracked position** — set `_lastTrackedPosition` + `_lastTrackedPositionAt`, append to track, no distance delta yet.
@@ -211,6 +220,23 @@ Every incoming `Position` goes through:
 
 `trackThresholdMetres` in the recorder is `max(distanceFilterMetres, minMovementMetres)` — i.e. the more conservative of the two knobs.
 
+### Advanced GPS override
+
+A user-facing toggle (Settings > Advanced GPS, mobile_android only) overrides the per-activity knobs for higher-fidelity recording on devices with capable chips:
+
+| Knob | Normal | Advanced GPS |
+|---|---|---|
+| `accuracy` | `LocationAccuracy.high` | `LocationAccuracy.best` |
+| `distanceFilterMetres` | per-activity (3 or 5) | 2 |
+| `minMovementMetres` | per-activity (2 or 4) | 1 |
+| `accuracyGateMetres` | 20 (default) | 20 (default) |
+
+`maxSpeedMps` stays on the per-activity value.
+
+The accuracy gate stays at the 20 m default in both modes — it has to, because the reported `pos.accuracy` is a real-world uncertainty estimate, not a knob the OS scales down when you ask for `best`. A tighter gate silently rejects the 15–30 m fixes that consumer phones routinely produce outdoors. See [decisions.md § 21](decisions.md).
+
+The toggle is per-device (SharedPreferences, not synced) and applies at `RunRecorder.prepare()` time — flipping it mid-run has no effect until the next run. It's only read in `run_screen.dart:_preload`.
+
 ### Display smoothing
 
 In `live_run_map.dart`, `_smoothTrack` applies a 1-2-3-2-1 weighted moving average to the rendered polyline. Two passes are run before feeding the `PolylineLayer` stack. This reduces visible zig-zag at walking pace. It's **display-only** — the stored run keeps the raw waypoints, so stored distance/pace and GPX export are unaffected.
@@ -219,13 +245,27 @@ Smoothing cannot correct systematic offset from the road (GPS bias, not noise). 
 
 ### NRC-style polyline
 
-The live track is drawn as three stacked `PolylineLayer`s for a Nike-Run-Club-style glow:
+The live track is drawn as four stacked `PolylineLayer`s for a Nike-Run-Club-style glow and pace heatmap:
 
 1. **Outermost halo** — 18 px stroke, indigo at 18% alpha
 2. **Mid halo** — 10 px stroke, indigo at 35% alpha
-3. **Main line** — 6 px stroke, gradient from deep indigo (oldest) → pale lavender (newest), 2 px dark indigo border for contrast against dark map tiles
+3. **Dark underline** — 8 px stroke, deep indigo (`0xFF1E1B4B`), solid. Replaces the per-polyline border that the old single-gradient line used — a shared underline avoids visible seams at the boundaries between coalesced pace buckets on layer 4.
+4. **Pace heatmap** — per-segment polylines coloured by instantaneous speed and faded by age. Built by `buildPaceSegments` in `widgets/pace_segments.dart`, cached in `LiveRunMap` by `(track.length, activity)`. See below. When `LiveRunMap.activity` is null (route preview, manual-entry runs without activity metadata) this falls back to the legacy single 6 px gradient polyline (deep indigo → pale lavender).
 
-Rounded caps and joins are flutter_map's default. The gradient direction makes the line look like it's trailing behind a comet, brightening toward the blue dot.
+Rounded caps and joins are flutter_map's default.
+
+#### Pace heatmap
+
+Each segment (consecutive waypoint pair) is assigned two coordinates:
+
+- **Pace bucket** (0..5, slow → fast) from its instantaneous speed in m/s. Break-points are activity-specific: running ~7:30 → 3:45 per km, walking ~16:40 → 7:35, hiking shifted slower, cycling 12 → 36 km/h. Segments without timestamps (shouldn't happen for recorded runs; guards against manual-entry imports) fall back to the slowest bucket as a safe default.
+- **Age band** (0..2, oldest → newest) from its position along the track. Three bands at 1/3 boundaries give the run a "comet trail" fade: oldest segments render at 55 % alpha, mid at 80 %, newest at 100 %.
+
+Consecutive segments sharing both coordinates are coalesced into a single `Polyline` — a 10 km run with steady pacing typically lands at ~20 polylines, a hard-hard-easy interval session at ~50. Adjacent coalesced runs share their boundary vertex so there's no visible gap at bucket transitions.
+
+The six-colour ramp (red → orange → amber → lime → emerald → cyan) is fixed, so a steady 5:00/km pace renders the same colour across every run — you can eyeball a pace comparison between two runs by comparing hue.
+
+Mini-test list in `test/pace_segments_test.dart` covers bucket clamping, activity-specific scaling, uniform-pace coalescing, vertex-sharing continuity, and the no-timestamp fallback.
 
 ### Blue dot interpolation
 
@@ -275,6 +315,21 @@ The GPS-lost banner, permission watchdog, and snapshot freshness tracking (`_las
 
 Each of these is a self-contained piece with its own purpose. Most can be tuned without touching any other part of the system — the constants live at the top of `run_screen.dart` or in `ActivityType`.
 
+### Layering
+
+The recording stack is organised so a failure at a higher layer cannot break a lower one. "Basics always work" is load-bearing: an indoor treadmill session with no GPS and a crashed tile layer must still show a running clock and a plausible distance.
+
+| Layer | Depends on | Breaks if... |
+|---|---|---|
+| **L0 — Clock** | `Stopwatch` only | The Dart VM dies. That's it. |
+| **L1a — Pedometer distance** | L0 + accelerometer | Phone lacks a step sensor. Used as the indoor-run fallback. |
+| **L1b — GPS distance + pace** | L0 + location services + permission + signal | Location off, permission denied, sky blocked. Falls back to L1a. |
+| **L2 — Live map tiles + polyline** | L1b + network or tile cache + `flutter_map` | Offline and no cached tiles, or a `flutter_map` crash. Caught by the error boundary (row 15) so L0/L1 stay visible. |
+| **L3 — Route overlay** | L2 + a selected `Route` | Usually silent — no route, no overlay. |
+| **L4 — Auxiliary effects** | Everything above + TTS + network + pedometer + BLE HR + platform channels | Individually wrapped in try/catch (row 13) so a single failure (e.g. TTS init error) doesn't bring down L0–L2. |
+
+If you add a new feature, place it at the highest layer it actually needs. A new visual (e.g. a cadence chart) is L2 — don't wire it into the `setState` that drives L0/L1. A new alert or side-effect is L4 — wrap it in try/catch.
+
 | # | Concern | Mechanism | Constant(s) |
 |---|---|---|---|
 | 1 | Crash-safe run data | Serialise partial run to `in_progress.json` every 10 s; recover on launch if ≥ 3 waypoints and ≥ 50 m | `_incrementalSaveInterval` |
@@ -285,6 +340,13 @@ Each of these is a self-contained piece with its own purpose. Most can be tuned 
 | 6 | Pedometer resubscribe | Exponential backoff on stream error, up to 5 retries | `_pedometerMaxRetries` |
 | 7 | Permission watchdog | Poll `Geolocator.checkPermission()` every 5 s; banner if revoked | — |
 | 8 | Activity-type lock | Guard in `onSelected` to reject changes unless state is idle | — |
+| 9 | Indoor / no-GPS fallback | `RunRecorder.prepare` flips `_prepared` before opening the position stream and throws typed errors (`LocationServiceDisabledError` / `LocationPermissionDeniedError`) if GPS setup fails. `RunSnapshot.currentPosition` is nullable; the 1-second timer emits snapshots regardless of fix state. `_begin` catches prepare errors, shows a non-blocking snackbar, and the run proceeds as a time-only session. GPS-lost and permission-revoked banners stay dormant until the first real fix arrives, so indoor runs don't nag. | — |
+| 10 | LiveRunMap restart reset | `didUpdateWidget` wipes `_animatedLatLng`, tween endpoints, and `_userPanned` when the track clears for a new run, so the next first fix snaps cleanly and the follow-cam re-centres | — |
+| 11 | GPS self-heal | `_gpsRetryTimer` inside `RunRecorder` polls every 3 s while `_prepared` is true and `_positionSub` is null. Once `isLocationServiceEnabled()` + `checkPermission()` both pass, it reopens the position stream with the accuracy settings remembered from `prepare()`. The stream subscription uses `onError`/`cancelOnError: true` so an Android-side disconnect (e.g. user toggles Location off mid-run) cleanly clears `_positionSub` and the retry loop takes over. Net effect: tracking resumes automatically when Location is re-enabled, whether the run started without GPS or lost it mid-run. | `_gpsRetryInterval` |
+| 12 | Live lock-screen notification (Android) | `RunNotificationBridge` (Kotlin) pre-creates `geolocator_channel_01` with `VISIBILITY_PUBLIC` + `IMPORTANCE_LOW` (winning the race against geolocator's private-visibility default, which is immutable after creation), then reposts on that channel with `BigTextStyle` + `CATEGORY_WORKOUT` so the lock-screen row shows live time / distance / pace instead of the static "Run in progress". Posts are guarded by a runtime POST_NOTIFICATIONS check (Android 13+); if missing the bridge returns an error rather than silently no-opping. The Dart side (`RunNotificationBridge`, called from `_refreshLockScreenNotification` at the end of `_onSnapshot`) throttles to ~1 Hz. Explicitly cleared on stop / discard. Constants in the bridge mirror `GeolocatorLocationService`; if a future geolocator release changes them, the replacement stops applying — fix by updating the constants. | — |
+| 13 | Auxiliary-effect isolation | Every L4 effect inside `_onSnapshot` (race ping, off-route cue, pace alert, split snackbar + TTS, lock-screen update) is wrapped in its own try/catch + `debugPrint`. A failure in any one (TTS init error, Supabase realtime drop, corrupt route math) can't break the core `setState` that drives the visible stats — the L0 (clock) / L1 (distance / pace) numbers stay live even when L4 is misbehaving. | — |
+| 14 | Pedometer distance fallback | When `_everHadGpsFix` is false and the GPS distance is 0, `_displayDistanceMetres` returns `steps × ActivityType.strideMetres`. UI prefixes a tilde and the indoor chip flags the estimate. On stop, `metadata.indoor_estimated = true` + `metadata.distance_source = "pedometer"` are written so downstream views can render it distinctly. Crash recovery accepts an indoor run with `duration ≥ 60 s` instead of the usual 3-waypoint / 50 m gate, so a treadmill session doesn't evaporate on recovery. | `ActivityType.strideMetres` |
+| 15 | Release-build error boundary | `ErrorWidget.builder` is overridden in `main.dart` (release only — debug keeps Flutter's red screen for visibility) with a subtle "This section couldn't load" card. A crash inside `LiveRunMap` or any other subtree replaces only that subtree, leaving the stats panel and recording state intact. `RunRecorder` lives outside the widget tree, so even a full-screen rebuild doesn't stop it. | — |
 | + | Reentrancy guard on Start | `_startRequested` flag prevents double-taps from spawning multiple recorders | — |
 | + | No live auto-pause | Clock runs continuously; "moving time" computed as a derived metric at summary time instead | — |
 
@@ -309,7 +371,7 @@ Practical requirements on the device:
 
 - Location permission must be granted as **"Allow all the time"**, not "While using the app" — the latter stops feeding fixes the moment the app is backgrounded, regardless of the foreground service.
 - Battery optimisation must be **Unrestricted** for the app — aggressive OEM battery managers (Samsung, Xiaomi, Huawei) can kill foreground services otherwise.
-- The **Run in progress** notification must be visible in the shade whenever recording is active. If it's not, the foreground service didn't start.
+- A persistent notification showing live time / distance / pace (posted by `RunNotificationBridge` on geolocator's foreground-service channel) must be visible in the shade whenever recording is active. If it's absent, the foreground service (`geolocator_android`) did not start.
 
 When the app returns from background, the Flutter UI resumes and the next snapshot repaints the screen with the latest accumulated state — no data is lost.
 
@@ -333,7 +395,7 @@ From `apps/mobile_android/pubspec.yaml` — major-version baseline after the dep
 | Stable run ids | `uuid` | ^4.5 |
 | Local persistence | `path_provider` (+ JSON via `dart:convert`) | ^2.1 |
 
-See [local_testing_android_app.md](local_testing_android_app.md#android-tech-stack) for the full stack.
+See [../apps/mobile_android/local_testing.md](../apps/mobile_android/local_testing.md#android-tech-stack) for the full stack.
 
 ---
 
@@ -345,6 +407,7 @@ All in `apps/mobile_android/lib/screens/run_screen.dart` unless noted.
 |---|---|---|
 | `_incrementalSaveInterval` | 10 s | Cadence of crash-safe persistence writes |
 | `_gpsLostThreshold` | 10 s | Snapshot staleness that triggers the GPS-lost banner |
+| `_gpsRetryInterval` (in `run_recorder.dart`) | 3 s | Cadence of the in-recorder retry loop that reopens the position stream after a service/permission outage |
 | `_holdToStopDuration` | 800 ms | Hold time before the stop button fires |
 | `_pedometerMaxRetries` | 5 | Exponential-backoff cap before giving up on pedometer |
 | `_offRouteThresholdMetres` | 40 m | Distance from selected route that triggers off-route warning |
@@ -360,4 +423,4 @@ All in `apps/mobile_android/lib/screens/run_screen.dart` unless noted.
 
 - **Line drift onto sidewalks/verges.** Consumer phone GPS is 3–8 m accurate under open sky, worse elsewhere. Smoothing reduces jitter but cannot correct bias. The real fix is backend map matching — tracked in the [roadmap](roadmap.md#future--map-matching-strava--nike-run-club-quality) as a self-hosted Valhalla / OSRM / GraphHopper deployment, post-run only.
 - **Resume recording after a crash.** The current recovery path saves the partial as a completed run. It does not re-enter recording mode on the recovered data — that would require preserving the full recorder state machine across process death, which is out of scope for the current persistence shape.
-- **Widget / integration test coverage.** Unit tests cover the `RunRecorder` state machine + filter chain (14 tests in `packages/run_recorder/test/run_recorder_test.dart`), the `movingTimeOf` helper (8 tests in `apps/mobile_android/test/run_stats_test.dart`), and `LocalRunStore` persistence (14 tests in `apps/mobile_android/test/local_run_store_test.dart`) — see [testing.md](testing.md) for the full list. The recording UI (`run_screen.dart`, `live_run_map.dart`, `collapsible_panel.dart`) and the sync pipeline have no widget or integration tests yet. Adding widget tests for state transitions would be a good next move.
+- **Widget / integration test coverage.** Unit tests cover the `RunRecorder` state machine + filter chain + indoor-mode timer (17 tests in `packages/run_recorder/test/run_recorder_test.dart`), the `movingTimeOf` helper (8 tests in `apps/mobile_android/test/run_stats_test.dart`), and `LocalRunStore` persistence (14 tests in `apps/mobile_android/test/local_run_store_test.dart`) — see [testing.md](testing.md) for the full list. The recording UI (`run_screen.dart`, `live_run_map.dart`, `collapsible_panel.dart`) and the sync pipeline have no widget or integration tests yet. The GPS self-heal retry loop + typed errors thrown from `prepare()` are not unit-tested either — both would require injecting a mock `GeolocatorPlatform.instance`.

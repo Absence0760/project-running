@@ -320,6 +320,7 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                     plannedRoute:
                         run.track.isEmpty ? _linkedRoute?.waypoints : null,
                     followRunner: false,
+                    activity: run.track.isNotEmpty ? _activityType : null,
                   ),
                   if (_loadingTrack)
                     const Positioned(
@@ -479,6 +480,14 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                         value: '$_cadence spm',
                       ),
                     ),
+                  if (_avgBpm > 0)
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.favorite,
+                        label: 'Avg HR',
+                        value: '$_avgBpm bpm',
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -630,6 +639,17 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
     final c = run.metadata?['cadence'];
     if (c is int) return c;
     if (c is num) return c.toInt();
+    return 0;
+  }
+
+  /// Average heart rate in BPM. Watch apps (watch_ios, watch_wear) write
+  /// this during a run; the phone's own `run_recorder` doesn't populate
+  /// it today (no BLE strap integration on mobile_android yet). Returns
+  /// 0 when absent so the tile renders conditionally.
+  int get _avgBpm {
+    final v = run.metadata?['avg_bpm'];
+    if (v is int) return v;
+    if (v is num) return v.round();
     return 0;
   }
 

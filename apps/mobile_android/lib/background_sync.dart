@@ -33,17 +33,13 @@ void callbackDispatcher() {
       final unsynced = store.unsyncedRuns;
       if (unsynced.isEmpty) return true;
 
-      int pushed = 0;
-      for (final run in unsynced) {
-        try {
-          await api.saveRun(run);
-          await store.markSynced(run.id);
-          pushed++;
-        } catch (e) {
-          debugPrint('Background sync failed for ${run.id}: $e');
-        }
+      try {
+        await api.saveRunsBatch(unsynced);
+        await store.markManySynced(unsynced.map((r) => r.id));
+        debugPrint('Background sync: pushed ${unsynced.length}');
+      } catch (e) {
+        debugPrint('Background sync batch failed: $e');
       }
-      debugPrint('Background sync: pushed $pushed/${unsynced.length}');
     } catch (e) {
       debugPrint('Background sync error: $e');
     }

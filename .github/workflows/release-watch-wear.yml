@@ -1,0 +1,105 @@
+name: Release Wear OS
+
+# Tag: `watch_wear@1.2.3`. Builds a signed release APK + uploads to the
+# Play Internal track under a distinct `applicationId` from the phone
+# app (Play lists Wear OS apps separately even when they share a phone
+# app — the current release workflow treats them independently).
+#
+# Secrets read:
+#   WATCH_WEAR_KEYSTORE_BASE64    base64-encoded upload-keystore.jks for Wear
+#   WATCH_WEAR_KEYSTORE_PASSWORD
+#   WATCH_WEAR_KEY_ALIAS
+#   WATCH_WEAR_KEY_PASSWORD
+#   PLAY_SERVICE_ACCOUNT_JSON     same service account as release-android.yml
+#                                 (or a second one scoped to watch_wear)
+#
+# The Wear keystore can be the same key as mobile_android if you want to
+# share the upload identity; Play only requires that the key matches
+# whatever's already associated with each package name.
+
+on:
+  push:
+    tags:
+      - 'watch_wear@*'
+
+jobs:
+  release:
+    name: Build, sign, upload Wear AAB
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION_NAME="${TAG#watch_wear@}"
+          VERSION_CODE=$(git rev-list --count HEAD)
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-watch-wear-${{ hashFiles('apps/watch_wear/android/**/*.gradle*', 'apps/watch_wear/android/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Pin versionCode + versionName from tag
+        working-directory: apps/watch_wear/android/app
+        run: |
+          # watch_wear's gradle file hardcodes versionCode / versionName
+          # today. Rewrite those two lines in place before building so
+          # the signed artifact carries the tag's numbers.
+          sed -i "s/versionCode = [0-9]*/versionCode = ${{ steps.version.outputs.code }}/" build.gradle.kts
+          sed -i "s/versionName = \".*\"/versionName = \"${{ steps.version.outputs.name }}\"/" build.gradle.kts
+          grep -E 'versionCode|versionName' build.gradle.kts
+
+      - name: Decode release keystore
+        env:
+          WATCH_WEAR_KEYSTORE_BASE64: ${{ secrets.WATCH_WEAR_KEYSTORE_BASE64 }}
+        run: |
+          echo "$WATCH_WEAR_KEYSTORE_BASE64" | base64 -d > apps/watch_wear/android/app/upload-keystore.jks
+          cat > apps/watch_wear/android/key.properties <<EOF
+          storePassword=${{ secrets.WATCH_WEAR_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.WATCH_WEAR_KEY_PASSWORD }}
+          keyAlias=${{ secrets.WATCH_WEAR_KEY_ALIAS }}
+          storeFile=app/upload-keystore.jks
+          EOF
+
+      - name: Build AAB + APK (signed)
+        working-directory: apps/watch_wear/android
+        run: |
+          ./gradlew bundleRelease assembleRelease \
+            -PSUPABASE_URL='${{ secrets.SUPABASE_URL }}' \
+            -PSUPABASE_ANON_KEY='${{ secrets.SUPABASE_ANON_KEY }}' \
+            --no-daemon
+
+      - name: Upload to Play Internal
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.runapp.watchwear
+          releaseFiles: apps/watch_wear/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+      - name: Create GitHub Release + attach artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Wear OS ${{ steps.version.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            apps/watch_wear/android/app/build/outputs/bundle/release/app-release.aab
+            apps/watch_wear/android/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true

@@ -43,6 +43,10 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   _DistanceFilter _distanceFilter = _DistanceFilter.any;
   _SurfaceFilter _surfaceFilter = _SurfaceFilter.any;
   _ExploreMode _mode = _ExploreMode.search;
+  final Set<String> _selectedTags = {};
+  bool _featuredOnly = false;
+  String _sort = 'popular';
+  List<String> _popularTags = const [];
 
   static const _pageSize = 30;
 
@@ -51,6 +55,16 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _search();
+    _loadPopularTags();
+  }
+
+  Future<void> _loadPopularTags() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final tags = await api.fetchPopularRouteTags();
+      if (mounted) setState(() => _popularTags = tags);
+    } catch (_) {}
   }
 
   @override
@@ -91,6 +105,9 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         minDistanceM: _minDistance,
         maxDistanceM: _maxDistance,
         surface: _surfaceValue,
+        tags: _selectedTags.isEmpty ? null : _selectedTags.toList(),
+        featuredOnly: _featuredOnly,
+        sort: _sort,
         limit: _pageSize,
         offset: 0,
       );
@@ -122,6 +139,9 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         minDistanceM: _minDistance,
         maxDistanceM: _maxDistance,
         surface: _surfaceValue,
+        tags: _selectedTags.isEmpty ? null : _selectedTags.toList(),
+        featuredOnly: _featuredOnly,
+        sort: _sort,
         limit: _pageSize,
         offset: _results.length,
       );
@@ -327,20 +347,58 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           ),
 
           // Filter chips (search mode only)
-          if (_mode == _ExploreMode.search)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildDistanceChip(theme),
-                  const SizedBox(width: 8),
-                  _buildSurfaceChip(theme),
-                ],
+          if (_mode == _ExploreMode.search) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildDistanceChip(theme),
+                    const SizedBox(width: 8),
+                    _buildSurfaceChip(theme),
+                    const SizedBox(width: 8),
+                    _buildSortChip(theme),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      avatar: const Icon(Icons.star_border, size: 16),
+                      label: const Text('Featured'),
+                      selected: _featuredOnly,
+                      onSelected: (v) {
+                        setState(() => _featuredOnly = v);
+                        _search();
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+            if (_popularTags.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final t in _popularTags) ...[
+                        FilterChip(
+                          label: Text(t),
+                          selected: _selectedTags.contains(t),
+                          onSelected: (v) {
+                            setState(() {
+                              if (v) _selectedTags.add(t);
+                              else _selectedTags.remove(t);
+                            });
+                            _search();
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
 
           const Divider(height: 1),
 
@@ -378,6 +436,31 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         backgroundColor: _distanceFilter != _DistanceFilter.any
             ? theme.colorScheme.primaryContainer
             : null,
+      ),
+    );
+  }
+
+  Widget _buildSortChip(ThemeData theme) {
+    const labels = {
+      'popular': 'Most run',
+      'newest': 'Newest',
+      'featured': 'Featured',
+    };
+    return PopupMenuButton<String>(
+      onSelected: (v) {
+        setState(() => _sort = v);
+        _search();
+      },
+      itemBuilder: (_) => labels.entries
+          .map((e) => CheckedPopupMenuItem(
+                value: e.key,
+                checked: _sort == e.key,
+                child: Text(e.value),
+              ))
+          .toList(),
+      child: Chip(
+        avatar: const Icon(Icons.sort, size: 16),
+        label: Text(labels[_sort] ?? 'Sort'),
       ),
     );
   }
@@ -542,30 +625,73 @@ class _RouteCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      route.name,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            route.name,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (route.featured)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Icon(
+                              Icons.star,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
-                    Row(
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
                       children: [
                         _tag(Icons.straighten,
                             UnitFormat.distance(route.distanceMetres, unit)),
-                        const SizedBox(width: 12),
                         if (route.elevationGainMetres > 0)
                           _tag(Icons.trending_up,
                               '${route.elevationGainMetres.round()}m'),
-                        if (route.surface != null) ...[
-                          const SizedBox(width: 12),
+                        if (route.surface != null)
                           _tag(_surfaceIcon(route.surface),
                               _surfaceLabel(route.surface)),
-                        ],
+                        if (route.runCount > 0)
+                          _tag(Icons.directions_run, '${route.runCount}'),
                       ],
                     ),
+                    if (route.tags.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final t in route.tags.take(4))
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                t,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: 11,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

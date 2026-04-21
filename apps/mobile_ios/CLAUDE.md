@@ -1,30 +1,34 @@
 # mobile_ios — AI session notes
 
-Flutter iOS app. **Almost entirely a scaffold** — the hard work in Phase 1 has been done on Android first. See the Phase 1 section of [../../docs/roadmap.md](../../docs/roadmap.md) for the unchecked iOS-specific boxes (iOS background location, iOS GPX/KML parsing, etc.).
+Flutter iOS app. **Phone-side WCSession sink for Apple Watch runs is live; the iOS-native recording UI is still a scaffold.** The hard work of Phase 1 has been done on Android first. See Phase 1 in [../../docs/roadmap.md](../../docs/roadmap.md) for the unchecked iOS-specific boxes (iOS background location, iOS GPX/KML parsing, etc.).
 
 ## Current state
 
-Seven Dart files under `lib/`:
+Dart files under `lib/`:
 
-- `main.dart` — app entry, contains TODO comments for Supabase and local-database initialisation
+- `main.dart` — **wired**: initialises Supabase from `--dart-define-from-file=dart_defines.json`, optionally auto-signs in via `DEV_USER_EMAIL`/`DEV_USER_PASSWORD`, and installs `WatchIngest.attach(api)` so runs sent from the watch land in Supabase.
 - `mock_data.dart` — fallback UI data
-- `screens/home_screen.dart`
-- `screens/run_screen.dart`
-- `screens/history_screen.dart`
-- `screens/routes_screen.dart`
-- `screens/settings_screen.dart`
+- `screens/home_screen.dart`, `run_screen.dart`, `runs_screen.dart`, `routes_screen.dart`, `settings_screen.dart` — minimal shells. No GPS recording, no local store, no importer, no tile cache, no audio cues. Compare with [../mobile_android/CLAUDE.md](../mobile_android/CLAUDE.md) to see the gap.
 
-The screens are minimal shells. There is no sync service, no local store, no importer, no tile cache, no audio cues, no widgets beyond what the screens render inline — compare with the Android file list in [../mobile_android/CLAUDE.md](../mobile_android/CLAUDE.md) to see the gap.
+Native iOS files under `ios/Runner/`:
 
-## What this app will look like when it's done
+- `AppDelegate.swift` — activates the `WatchIngestBridge` singleton at launch + attaches its method channel when the Flutter engine spins up.
+- `WatchIngestBridge.swift` — `WCSessionDelegate` that receives `WCSessionFile` transfers from the watch, reads the gzipped-JSON track contents, and forwards to Dart via the `run_app/watch_ingest` method channel. Payloads arriving before Flutter is ready are buffered in-process and flushed on attach.
+
+## What "done" means
 
 Structurally identical to `mobile_android` (same stack, same `StatefulWidget + setState` pattern, same dependence on `packages/run_recorder` and `packages/api_client`). Every module in `mobile_android/lib/` that isn't Android-specific is a candidate to hoist into a shared package before the iOS port — ask before doing that; the team may prefer copy-then-converge.
+
+## What this app will look like when it's done
 
 Android-specific concerns that don't port:
 - Foreground service for background GPS → iOS uses `BGProcessingTask` + `CLLocationManager.allowsBackgroundLocationUpdates`.
 - Health Connect importer → replaced by HealthKit importer.
 - Google Sign-In flow → replaced by Apple Sign-In.
 - Disk-backed tile cache → the same `flutter_map_cache` + `dio_cache_interceptor` combo works.
+
+iOS-only concerns with no Android analogue:
+- **Watch run ingest.** The `watch_ios` app records runs but doesn't sync them directly; it calls `WCSession.transferFile(_:metadata:)` on finish, expecting this app to receive the JSON track + metadata dict and write to Supabase on the watch's behalf. The watch-side sender is wired up (`WatchConnectivityManager.transferRun(fileURL:metadata:)`); the phone-side receiver is a TODO, blocked on Supabase auth landing here first. Plan: a native Swift `WCSessionDelegate` in `ios/Runner/` exposed via a method channel — implements `session(_:didReceive file:)`, gzips the JSON payload, uploads to the `runs` Storage bucket at `{user_id}/{metadata.id}.json.gz`, and inserts the row via the shared `packages/api_client`. Metadata keys to expect: `id`, `started_at`, `duration_s`, `distance_m`, `source`.
 
 ## Recommended approach for a new task here
 
@@ -38,7 +42,9 @@ No known lint tech debt on this app (there's barely any code). Keep it clean as 
 
 ## Running it locally
 
-See [../../docs/local_testing_ios_app.md](../../docs/local_testing_ios_app.md). You need an iOS simulator or a paired device.
+See [local_testing.md](local_testing.md). You need an iOS simulator or a paired device.
+
+The iOS Runner project uses Swift Package Manager + CocoaPods in hybrid mode (most plugins via SPM, `health` still via pods). Podfile pins `platform :ios, '15.0'`. Secrets for `flutter run` pass through `dart_defines.json` (gitignored) because inline `--dart-define=` flags break on the `sb_publishable_…` Supabase anon key format. Rationale: [../../docs/decisions.md § 13](../../docs/decisions.md).
 
 ## Before reporting a task done
 

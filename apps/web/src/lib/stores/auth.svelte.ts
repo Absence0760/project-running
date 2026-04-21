@@ -8,7 +8,7 @@ interface User {
 	avatar_url: string | null;
 	parkrun_number: string | null;
 	preferred_unit: 'km' | 'mi';
-	subscription_tier: 'free' | 'premium';
+	subscription_tier: 'free' | 'pro' | 'lifetime';
 }
 
 function createAuthStore() {
@@ -123,7 +123,7 @@ function createAuthStore() {
 		get user() { return user; },
 		get loggedIn() { return loggedIn; },
 		get loading() { return loading; },
-		get isPremium() { return user?.subscription_tier === 'premium'; },
+		get isPro() { return user?.subscription_tier === 'pro' || user?.subscription_tier === 'lifetime'; },
 		signInWithGoogle,
 		signInWithApple,
 		fetchUser,

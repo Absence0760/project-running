@@ -31,8 +31,6 @@ out/
 .DS_Store
 
 # Xcode
-*.xcworkspace
-!*.xcodeproj/project.xcworkspace
 xcuserdata/
 DerivedData/
 *.hmap

@@ -16,7 +16,8 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 - `LocationManager.swift` — `CLLocationManager` wrapper, background location updates
 - `WatchConnectivityManager.swift` — Watch Connectivity framework, two-way messaging with the iOS phone app
 - `RouteNavigator.swift` — route preview and off-route detection on the watch
-- `SupabaseService.swift` — direct Supabase REST calls from the watch (no shared Dart/JS code)
+- `HealthKitManager.swift` — `HKWorkoutSession` + `HKLiveWorkoutBuilder` wrapper that publishes live heart rate from the watch's sensor
+- `SupabaseService.swift` — DEBUG-only direct Supabase REST calls from the watch (no shared Dart/JS code)
 
 ## What's real vs stubbed
 
@@ -25,7 +26,7 @@ More than a stub — there's a multi-file architecture with `@StateObject` / `@O
 Per [`roadmap.md` § Phase 2](../../docs/roadmap.md), the boxes still unchecked are:
 
 - [ ] Standalone workout session (no phone required)
-- [ ] Heart rate via HealthKit sensor
+- [x] Heart rate via HealthKit sensor
 - [ ] Haptic pace alerts
 - [ ] Syncs run data via Watch Connectivity framework
 - [ ] Route preview on watch face before starting
@@ -35,19 +36,19 @@ Per [`roadmap.md` § Phase 2](../../docs/roadmap.md), the boxes still unchecked 
 
 Several of these have "code exists, not yet wired up" as their true state — verify against the source before assuming any are done.
 
-## The watch has its own Supabase client
+## Sync architecture: phone-as-proxy
 
-`SupabaseService.swift` talks directly to the Supabase REST API from the watch. This **does not share code with `packages/api_client`** — no common library, no shared row types, no shared auth. Changes to the schema have to be ported here by hand; the Phase 1 parity-enforcement work (see [schema_codegen.md](../../docs/schema_codegen.md)) does not cover Swift.
+In Release builds the watch does **not** talk to Supabase directly. On run finish, `WorkoutManager.writeTrackJSON()` serialises the track to a file in the Caches directory and `WatchConnectivityManager.transferRun(fileURL:metadata:)` hands it off via `WCSession.transferFile(_:metadata:)`. The paired iPhone is responsible for gzipping, uploading to the `runs` Storage bucket, and inserting the row via the shared `packages/api_client`. WCSession picks the transport (Bluetooth / Wi-Fi P2P / iCloud relay), queues across app launches, and retries on its own — so the watch needs no Supabase credentials, no anon key, and no internet connectivity.
 
-If you change a column name or a table shape, grep `WatchApp/` for the old column string and update the Swift client manually. A future parity-enforcement phase may add Swift codegen — not today.
+The phone-side receiver is **not yet built** — it needs a Swift `WCSessionDelegate` in `apps/mobile_ios/ios/Runner/` (exposed to Flutter via a method channel) that implements `session(_:didReceive file:)`, reads the metadata dict, and writes to Supabase. That work is blocked on `mobile_ios` gaining real Supabase auth.
 
-## Auth on the watch
+`SupabaseService.swift` still exists but is wrapped in `#if DEBUG` — it gives watch-sim-alone developers a direct upload path via the "DEBUG: Sync Direct" button, signing in with seed creds against `http://127.0.0.1:54321`. Release builds compile that file out entirely: the watch binary ships without any Supabase client, anon key, or credential-handling code. Rationale: [decisions.md § 14](../../docs/decisions.md).
 
-The watch defers auth to the phone app via Watch Connectivity. It receives the Supabase access token from the iPhone over `WCSession` and uses it directly. **Don't** try to bring up a sign-in UI on the watch — the device is too small for credential entry, and the account is already active on the paired phone.
+Metadata dict sent with each run file: `{id, started_at, duration_s, distance_m, source}` — the phone supplies `user_id` from its own authenticated session when inserting the row. The file contents are a raw JSON array of `{lat, lng, ele, ts}` points; the phone compresses before upload.
 
 ## Building and testing
 
-See [../../docs/local_testing_apple_watch.md](../../docs/local_testing_apple_watch.md). You need:
+See [local_testing.md](local_testing.md). You need:
 
 - Xcode with watchOS simulators installed
 - A paired iOS simulator + Apple Watch simulator, or a physical paired pair

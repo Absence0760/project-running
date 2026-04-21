@@ -36,7 +36,7 @@ Supported formats:
 
 On receipt, the file is parsed into a `Route` object (name, waypoint list, total distance, elevation gain). The route is displayed on the map with a summary card showing distance and elevation. The user can rename it before saving.
 
-Routes are stored locally in SQLite (mobile) and synced to Supabase in the background.
+Routes are stored locally in JSON files (mobile Android via `path_provider` + `dart:convert`) and synced to Supabase in the background.
 
 **Done when:**
 - User can export a KML from Google My Maps on iPhone and open it in the app via share sheet
@@ -48,7 +48,7 @@ Routes are stored locally in SQLite (mobile) and synced to Supabase in the backg
 
 ### Live GPS run recording
 
-**Phase:** 1 | **Platform:** iOS, Android
+**Phase:** 1 | **Platform:** Android (shipped); iOS (not yet implemented — scaffold only)
 
 **Why:** The core product function. Without this nothing else matters.
 
@@ -87,7 +87,7 @@ On hold-to-stop: the run finalises, the in-progress save file is cleared, and th
 - The finished-run screen shows both Time (elapsed) and Moving (derived from the track), with pace computed against moving time
 - Hold-to-stop prevents accidental ends and the user can still reach it from the collapsed stats bar
 - A force-killed run is recovered on next launch with all its data
-- The "Run in progress" foreground service notification appears for the entire duration of the run
+- A persistent notification showing live time, distance, and pace appears in the notification shade and on the lock screen for the entire duration of the run (Android; iOS not yet implemented)
 
 See [run_recording.md](run_recording.md) for the full technical reference.
 
@@ -106,14 +106,14 @@ When a user starts a run with a route selected, the map shows:
 - Their current position as a moving dot
 - Distance remaining to the end of the route
 
-Off-route detection: if the user strays more than 50m from the nearest point on the route for more than 15 seconds, a haptic alert fires and a banner appears: "Off route — 60m from path." The banner dismisses when they return within 30m of the route.
+Off-route detection: if the user strays more than 40m from the nearest point on the route, a voice cue fires and a red banner appears ("Off route — 60m from path"). The banner dismisses when the user returns to within 20m of the route (half the threshold, avoids flapping).
 
-The map auto-centres on the user's position during the run. Users can pan away to look ahead, and it re-centres after 5 seconds of inactivity.
+The map auto-centres on the user's position during the run (follow mode). Users can pan away to look ahead; a re-centre FAB appears in the bottom-right corner to snap back to the runner. There is no auto-re-centre-on-timer.
 
 **Done when:**
 - Route is visible on map from the first GPS fix after starting
-- Off-route alert fires correctly at 50m deviation and not before
-- Map stays centred on user position during normal running
+- Off-route alert fires correctly at 40m deviation (no grace timer)
+- Map stays centred on user position during normal running, and the re-centre FAB appears once the user pans
 - No battery drain beyond a 10% increase vs. recording without a route
 
 ---
@@ -154,7 +154,7 @@ Auth providers: Apple Sign-In (required on iOS per App Store guidelines) and Goo
 
 On first launch, users see a sign-in screen. After auth, all subsequent app opens check for a valid session silently — no login screen unless the session has expired (30 days).
 
-Sync strategy: write-to-local-first, sync-in-background. Runs are written to SQLite immediately on save. A background sync process uploads pending runs to Supabase within 60 seconds when on wifi or LTE. Conflicts (same run modified on two devices) resolve in favour of the server copy — last-write-wins.
+Sync strategy: write-to-local-first, sync-in-background. Runs are written to JSON files on disk (`LocalRunStore`) immediately on save. A background sync process (foreground triggers + connectivity change + hourly WorkManager on Android) uploads pending runs to Supabase. Conflicts (same run modified on two devices) resolve via `metadata.last_modified_at` — last-write-wins.
 
 **Done when:**
 - User can uninstall and reinstall the app and all runs reappear after sign-in
@@ -196,13 +196,13 @@ On Stop: run is saved to watch-local storage as an `HKWorkout`. `WCSession` tran
 
 ### Wear OS standalone GPS recording
 
-**Phase:** 2 | **Platform:** Wear OS (Flutter)
+**Phase:** 2 | **Platform:** Wear OS (native Kotlin + Compose-for-Wear)
 
 **Why:** NRC dropped Wear OS support. Android users with Pixel Watch or Galaxy Watch have no dedicated standalone running app. A genuine gap in a growing market.
 
 **Spec:**
 
-Functionally identical to the Apple Watch app. Flutter on Wear OS, using `compose_for_wear` for the round-screen-optimised UI.
+Functionally identical to the Apple Watch app. Native Kotlin + Compose-for-Wear (not Flutter — see [decisions.md § 15](decisions.md) for why).
 
 GPS recording via Android Location APIs. HR via Health Services for Wear OS.
 
@@ -424,6 +424,142 @@ Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store +
 - Public routes for a given location are discoverable without login on the web
 - Route pages are indexed by Google within 7 days of creation
 - Switching a route to public makes it appear in the community feed within 5 minutes
+
+---
+
+## AI Coach
+
+**Phase:** 3 (shipped) | **Platform:** Web
+
+**Why:** Runners want a "second opinion" on their plan adherence without hiring a human coach. The coach is grounded in the user's actual data (plan, recent runs, settings) and deliberately scoped to avoid liability (no plan generation, no medical/nutrition advice).
+
+**Spec:**
+
+Claude-powered chat embedded in the web app via `CoachChat.svelte`. The server endpoint at `/api/coach/+server.ts` sends the user's active training plan, recent runs, and profile/preferences as cached context, then streams the conversation. Two prompt-cache breakpoints (system prompt + context dump) keep repeat turns cheap.
+
+**Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
+
+**Usage limits:** 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. The UI shows "N of M remaining" before the user types. `BYPASS_PAYWALL=true` skips the limit in dev.
+
+**What the coach does:**
+- Critique adherence (hitting planned sessions, mileage, pace targets)
+- Answer "should I run today?" questions using plan + recent runs
+- Explain what a workout is designed to achieve
+- Flag red flags (missed sessions, pace drift, back-to-back hard days)
+- Use runner context (age, HR zones, weekly goal) when available
+
+**What the coach refuses:**
+- Prescribing new plans or rewriting existing ones
+- Medical advice (redirects to doctor/physio)
+- Nutrition prescriptions
+- Inventing stats not in the context
+
+See `decisions.md #12` for the rationale.
+
+**Done when:**
+- Coach responds within 3 seconds on a warm cache
+- Personality tone is audibly different across the three presets
+- Usage limit rejects at 11th message with a clear "come back tomorrow" message
+- Context includes the user's plan and last 20 runs
+
+---
+
+## Funding transparency
+
+**Phase:** 3 (shipped) | **Platform:** Web
+
+**Why:** The app uses a free-with-donations model (see `decisions.md #18`). Transparency about costs builds trust and motivates donations.
+
+**Spec:**
+
+The `/settings/upgrade` page shows:
+- A line-item cost breakdown (Supabase, Claude API, MapTiler, domain, misc)
+- A progress bar for server costs covered this month
+- A progress bar for total costs (server + dev time) covered this month
+- Donor count for the current month
+- Donation tiers with icons and accent colors (gel, day of servers, week, month)
+- A full feature list confirming everything is free
+
+Data is read from the `monthly_funding` table (publicly readable, owner-writable).
+
+**Done when:**
+- Progress bars reflect the current month's `monthly_funding` row
+- Cost breakdown matches actual infrastructure spend
+- Donation buttons link to external payment
+
+---
+
+## Custom dialogs and toast system
+
+**Phase:** 3 (shipped) | **Platform:** Web
+
+**Why:** Browser `confirm()`/`alert()`/`prompt()` are unstyled, block the main thread, and break the app's visual language.
+
+**Spec:**
+
+- `ConfirmDialog.svelte` — styled modal for destructive-action confirmations. Focus trap, escape-to-dismiss, configurable title/message/buttons. Resolves a promise so callers can `await` it.
+- `ToastContainer.svelte` + `toast.svelte.ts` — corner notification stack for transient success/error/info messages. Auto-dismiss with configurable duration.
+
+Used across: account deletion, run deletion, club leave, event cancel, RSVP changes, and all server-error feedback.
+
+**Done when:**
+- No `window.confirm()`, `window.alert()`, or `window.prompt()` calls remain in the codebase
+- Toast messages appear for all save/delete/error actions
+- Dialogs are keyboard-accessible
+
+---
+
+## Competitor-parity features (backlog — not yet in a phase)
+
+These are stubs. Each closes a gap against a specific competitor (see `docs/competitors.md`) and is listed with its sizing + open decisions in `docs/roadmap.md § Competitor-parity backlog`. Flesh each one out on delivery — do **not** treat the stubs below as a spec.
+
+### Training plan runner
+**Closes:** Runna, Garmin Coach.
+**Stub:** plan → weeks → workouts data model (already partially sketched in `roadmap.md § Premium tier`); web plan editor; "today's workout" dashboard card; execution loop in the run screen; auto-match planned vs actual.
+
+### External platform sync (OAuth)
+**Closes:** Strava, Garmin Connect, Apple Health, Health Connect, parkrun, RunSignUp.
+**Stub:** one OAuth Edge Function per provider with token refresh, webhook or polling ingest, bidirectional for Strava. Garmin Connect is gated on business approval — do not block on it.
+
+### Segments + leaderboards
+**Closes:** Strava.
+**Stub:** user-authored GPS segments; PostGIS line-matching RPC invoked on run insert to produce `segment_efforts`; weekly + all-time boards per segment; KOM/CR equivalent per segment.
+
+### Heatmap / popular-route discovery
+**Closes:** Strava, Komoot.
+**Stub:** anonymised GPS aggregation into raster or vector tiles served from CDN. Privacy default is opt-out (user data included unless they toggle off) — this is the decision knob worth re-litigating before shipping.
+
+### Trail / offline navigation
+**Closes:** AllTrails, Komoot.
+**Stub:** turn-by-turn voice cues along a loaded route; offline map-tile packs saved to device; route-condition reports (mud, closure, overgrowth) with timestamp and upvotes.
+
+### Social graph
+**Closes:** Strava, Nike Run Club.
+**Stub:** `follows` table; activity feed of people you follow; kudos (one-tap); threaded comments on runs; per-user privacy zones that blur start/end within radius.
+
+### Gear tracking
+**Closes:** Strava, Garmin.
+**Stub:** shoes and bikes as `gear` rows; `run_gear` link table; auto-compute total mileage; retirement reminder at user-chosen threshold (default 500 mi for shoes).
+
+### Photos on runs and routes
+**Closes:** Strava, AllTrails.
+**Stub:** multi-photo upload, attached either by timestamp match against the GPS track or explicit map pin; server-side thumbnailing via Edge Function or Supabase image-transform; cap at 10 photos per run in v1.
+
+### Audio-coached / guided runs
+**Closes:** Nike Run Club.
+**Stub:** a library of `audio_workouts` (recorded MP3 coaching + structured intervals); downloaded to device on start; integrated into the run recorder's audio-cue layer. v1 can be TTS-only if voice talent budget is a blocker.
+
+### Race calendar + results import
+**Closes:** Garmin, Runna.
+**Stub:** `races` table seeded from RunSignUp + parkrun imports; discovery by location; "register" deep-links to the organiser's page; auto-match recorded runs on race day to produce a result entry.
+
+### Advanced analytics
+**Closes:** Garmin, Runna.
+**Stub:** VDOT computed from recent races; Banister-style training-load / fitness / freshness curves; race-time predictor for 5k/10k/half/full from VDOT; weekly and monthly drill-downs on the web dashboard. No new tables — all derived from `runs`.
+
+### Premium billing
+**Closes:** All (any monetised feature needs this).
+**Stub:** Stripe Checkout flow, webhook handler Edge Function, `stripe_customer_id` + `stripe_subscription_id` on `user_profiles`; `SubscriptionTier` already exists client-side; customer portal link in Settings; middleware that gates premium features cleanly (not hardcoded checks per screen).
 
 ---
 

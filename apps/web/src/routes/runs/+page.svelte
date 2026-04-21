@@ -51,7 +51,7 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1>Run History</h1>
+		<h1>Runs</h1>
 		<div class="filters">
 			{#each sources as src}
 				<button

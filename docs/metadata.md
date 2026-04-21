@@ -16,7 +16,8 @@ Each row: what the key is, its shape, which platforms *write* it, which platform
 |---|---|---|---|---|---|
 | `activity_type` | `string` — one of `run`, `walk`, `hike`, `cycle` | `mobile_android/screens/run_screen.dart` (recording), `mobile_android/health_connect_importer.dart` | `mobile_android` (dashboard, history, run detail), `apps/web/src/routes/runs/[id]/+page.svelte` | Optional; defaults to `run` when absent | The Android recorder writes this on every save. Health Connect imports map through `_mapWorkoutType`. Parkrun imports and older `app`-source runs may not have it. |
 | `steps` | `int` (stringified on the wire? — **investigate**) | `mobile_android/screens/run_screen.dart` (pedometer) | `apps/web/src/routes/runs/[id]/+page.svelte` | Optional; only present when pedometer data is available | Only written when `_steps > 0`. Android omits the key entirely if the pedometer never fired. |
-| `laps` | `array` of `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }` | `packages/run_recorder/lib/src/run_recorder.dart` (final save only) | `mobile_android/screens/run_detail_screen.dart` | Optional; only present if the runner marked laps | The recorder sets `metadata = null` entirely when `_laps.isEmpty`, so readers must check for both a null `metadata` and a missing `laps` key. |
+| `laps` | `array` of `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }` | `packages/run_recorder/lib/src/run_recorder.dart` (final save only) | `mobile_android/screens/run_detail_screen.dart` | Optional; only present if the runner marked laps | The recorder sets `metadata = null` entirely when `_laps.isEmpty`, so readers must check for both a null `metadata` and a missing `laps` key. **Known divergence:** `watch_wear/RunViewModel.kt` writes `{ number, at_ms, distance_m }` instead — flagged in the Apr 2026 cross-platform audit; schema should unify on the registered shape. |
+| `cadence` | `number` — steps per minute | — (currently no writer — see note) | `mobile_android/screens/run_detail_screen.dart:_cadence` reads `metadata['cadence']` directly; `apps/web/src/routes/runs/[id]/+page.svelte` computes it as `steps / moving_time_minutes` | Optional | **Known divergence:** Android reads this key expecting it to be populated, but nothing writes it, so the cadence tile always renders `0 spm` on Android. Web derives cadence on-the-fly from `steps` and moving time, which is the correct pattern. Fix: switch the Android reader to the derivative formula (parity with web) and delete this registry entry, **or** have the recorder write this at save time. Do not add a new writer without picking one path. |
 
 ### User-editable fields
 
@@ -45,6 +46,17 @@ Written by the `parkrun-import` Edge Function when scraping a runner's results p
 | `event` | `string` — the parkrun event name (e.g. `Richmond`, `Bushy Park`) | `apps/backend/supabase/functions/parkrun-import/index.ts` | `apps/web/src/routes/runs/+page.svelte` | Required when `source = 'parkrun'` | Displayed on the web runs list as a source badge. |
 | `position` | `number` — finishing position in the event | Same | `apps/web/src/routes/runs/+page.svelte` | Required when `source = 'parkrun'` | Displayed next to the event name on the web runs list. |
 | `age_grade` | `string` — age-graded percentage as a string with `%` suffix (e.g. `"54.23%"`) | Same | — | Optional | No UI consumer today. Kept so future analytics can use it. |
+| `avg_bpm` | `number` — mean heart rate in BPM across the run | `apps/watch_ios/WatchApp/ContentView.swift` (forwards `FinishedRun.averageBPM` from `HealthKitManager`); `apps/watch_wear/android/.../RunRecordingService.kt` (averages from `HeartRateMonitor`); `apps/mobile_android/lib/screens/run_screen.dart` (averages BLE chest-strap samples from `BleHeartRate`); `apps/mobile_android/lib/health_connect_importer.dart` (averages `HEART_RATE` samples inside the workout window) | `apps/web/src/routes/runs/[id]/+page.svelte` (post-run detail); `apps/mobile_android/lib/screens/run_detail_screen.dart`; watch apps' own post-run summaries | Optional; only present when HR was captured | Recording sources: Apple Watch → HealthKit `HKLiveWorkoutBuilder`; Wear OS → `androidx.health:health-services-client`; Android phone → BLE Heart Rate Service (0x180D) via `flutter_blue_plus`; Health Connect import → averages `HEART_RATE` samples from the importing app's writes. All clamp to 30–230 BPM before averaging to drop sensor noise. |
+
+### Training plan linkage
+
+Written when a run was recorded under a structured plan workout. See [workout_execution.md](workout_execution.md) for the full loop.
+
+| Key | Shape | Writers | Readers | Required? | Notes |
+|---|---|---|---|---|---|
+| `plan_workout_id` | `string` (uuid) — the linked `plan_workouts` row | `mobile_android/lib/screens/run_screen.dart` (`_finishRun`, when a workout was active) | `apps/web/src/routes/runs/[id]/+page.svelte`, `mobile_android/lib/screens/run_detail_screen.dart` (both surface a "Workout" section when set) | Optional | Presence implies an explicit link — the auto-matcher (`autoMatchRunToPlanWorkout`) skips runs that already carry it. |
+| `workout_step_results` | `array<{ step_index: int, kind: string, rep_index?: int, rep_total?: int, target_distance_m: double, actual_distance_m: double, target_pace_sec_per_km: int, actual_pace_sec_per_km: int?, duration_s: int, status: 'completed' \| 'skipped' }>` | `mobile_android/lib/screens/run_screen.dart` (`_finishRun`, from `WorkoutRunner.snapshotResults`) | `apps/web/src/routes/runs/[id]/+page.svelte`, `mobile_android/lib/screens/run_detail_screen.dart` (planned-vs-actual table) | Optional; always present alongside `plan_workout_id` | `actual_pace_sec_per_km` is null for steps where `actual_distance_m < ~10 m` (the user skipped almost immediately). One row per expanded step, including skipped ones, so readers can render the full planned sequence. |
+| `workout_adherence` | `string` — `completed` \| `partial` \| `abandoned` | Same as above | Same as above | Optional; always present alongside `plan_workout_id` | `completed` = every step hit target ± tolerance. `partial` = any step skipped or more than 20 % short. `abandoned` = user explicitly abandoned mid-workout. |
 
 ### Internal / runtime-only
 
@@ -56,6 +68,8 @@ Keys that carry transient or platform-internal state. Treat these as implementat
 | `recovered_from_crash` | `bool` — always `true` when present | `mobile_android/lib/main.dart` (app launch, when it detects an in-progress crash-time save) | — | Optional | Marks a run that was reconstructed from the incremental-save snapshot after a crash mid-recording. No UI consumer yet — would be useful for a "we saved what we had" toast. |
 | `in_progress_saved_at` | `string` (ISO 8601) | `mobile_android/lib/screens/run_screen.dart` (periodic incremental save during recording) | — | Optional | Timestamp of the last incremental save. Cleared when the run is finalised. Survival indicator for crash recovery. |
 | `manual_entry` | `bool` — always `true` when present | `mobile_android/lib/screens/add_run_screen.dart` | — | Optional | Marks a run created via the "Add run" form rather than a live recording or an import. Present on runs with an empty `track` and a `routeId` that the user picked by hand. No UI consumer yet — useful when computing PBs, since a user-estimated time shouldn't outrank a GPS-recorded one. |
+| `indoor_estimated` | `bool` — always `true` when present | `mobile_android/lib/screens/run_screen.dart` (`_stop`, `_saveInProgress`) when `_everHadGpsFix` stayed false and the pedometer produced distance | — | Optional | Marks a treadmill / indoor run where `distanceMetres` came from `steps × stride` rather than GPS. Pairs with `distance_source = "pedometer"`. PB calculations should probably exclude these. |
+| `distance_source` | `string` — `"pedometer"` (extendable) | `mobile_android/lib/screens/run_screen.dart` when saving an indoor-estimated run | — | Optional | Explicit tag for *where* the distance came from when it isn't GPS. Present together with `indoor_estimated`. Leaving room for future sources (e.g. `"strava_import"`, `"user_entered"`) without adding new booleans. |
 
 ### Client-side synthetic
 
@@ -77,9 +91,15 @@ When adding a new metadata key:
 4. **Be explicit about absence.** "Optional" is the default. If a reader can't tolerate the key being missing, call that out in the notes column and ask whether it should be a real NOT NULL column instead.
 5. **Update this file and remove the key here when you remove it from code.** The schema generators can't do this for you.
 
+## Enforcement
+
+**Dart side (mobile + packages):** `apps/mobile_android/test/metadata_registry_test.dart` greps every `.dart` file under `apps/mobile_android/lib/`, `packages/api_client/lib/`, and `packages/run_recorder/lib/` for subscript access (`metadata['xxx']`) and map-literal writes (`metadata: { 'xxx': ... }`), and asserts every key is a row in this file. Runs in the `test-packages` CI job — a PR that adds an unregistered key fails there.
+
+**Web, watch_wear, watch_ios:** no equivalent guard yet. Parity tests on those platforms are a TODO — until then, this file plus PR review is the coordination point and the Dart-side discipline catches most cross-platform drift because the phone is the dominant writer.
+
 ## Known issues
 
 - **Web doesn't write any metadata today.** Route builder, integrations management, and account settings never touch the key. If the web gains an "edit run" page, it needs to know every key in this registry and which ones a user can edit.
 - **Apple Watch has its own Supabase client** (`apps/watch_ios/WatchApp/SupabaseService.swift`) that does not share this registry. Any metadata keys written from the watch have to be manually reconciled with this file. See [../apps/watch_ios/CLAUDE.md](../apps/watch_ios/CLAUDE.md).
-- **No runtime validation.** Nothing checks that an incoming `metadata` blob matches this registry. The check is purely social — this doc — plus whatever type assertions the reader writes at the call site.
+- **No runtime validation.** Nothing checks that an incoming `metadata` blob matches this registry. The check is purely social — this doc — plus whatever type assertions the reader writes at the call site. The Dart-side CI guard above is a static analogue that at least catches writes that drop into a grep.
 - **`steps` wire type is unverified.** The Android code writes it as an `int` from the pedometer; the web reader indexes it as-is. `Json` on both clients will accept either a number or a string, so if a writer ever coerces it, both platforms will silently drift. Worth a future audit — or a cast at the write site.

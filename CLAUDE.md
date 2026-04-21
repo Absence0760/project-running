@@ -1,6 +1,6 @@
 # Run app — orientation for AI sessions
 
-You're in a cross-platform running app monorepo: Flutter (Android + iOS), native Swift (Apple Watch), Flutter (Wear OS), SvelteKit (web), and Supabase (Postgres + Auth + Storage + Edge Functions). Full product context lives in [docs/](docs/) — this file is the index plus the non-obvious things that cost time to rediscover.
+You're in a cross-platform running app monorepo: Flutter (Android + iOS), native Swift (Apple Watch), native Kotlin + Compose-for-Wear (Wear OS), SvelteKit (web), and Supabase (Postgres + Auth + Storage + Edge Functions). Full product context lives in [docs/](docs/) — this file is the index plus the non-obvious things that cost time to rediscover.
 
 ## Read first
 
@@ -9,25 +9,31 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | If the task is... | Start with |
 |---|---|
 | Anything at all, first time in a session | [docs/architecture.md](docs/architecture.md) — the map |
-| Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned |
+| Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
 | Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
+| Touching a user setting / preference | [docs/settings.md](docs/settings.md) — universal + per-device prefs registry |
 | Touching the recording pipeline | [docs/run_recording.md](docs/run_recording.md) — state machine, filters, auto-pause |
 | Touching the web auth flow | [docs/web_app_auth.md](docs/web_app_auth.md) |
 | Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |
 | Understanding an end-to-end user journey | [docs/flows.md](docs/flows.md) — sign-in, record, sync, spectator |
 | Adding a test | [docs/testing.md](docs/testing.md) — what's covered, patterns, how to run |
+| Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
+| Touching training plans (VDOT, Riegel, generator, week grid) | [docs/training.md](docs/training.md) — engine shape, pace derivation, what's deferred |
+| Implementing the live structured-workout execution loop | [docs/workout_execution.md](docs/workout_execution.md) — specced runner state machine + UI + persistence |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
-| Running one of the apps locally | [docs/local_testing_*.md](docs/) — one per platform |
+| Running one of the apps locally | `apps/<app>/local_testing.md` — one per app (e.g. [apps/mobile_android/local_testing.md](apps/mobile_android/local_testing.md), [apps/backend/local_testing.md](apps/backend/local_testing.md)) |
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |
 | Setting up the monorepo / melos / workspaces | [docs/monorepo.md](docs/monorepo.md) |
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
+| Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
+| Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
 
 Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas):
 - [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target
 - [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter, mostly stubbed
-- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — Flutter Wear OS, single-file stub
+- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter)
 - [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional
 - [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes
 
@@ -44,7 +50,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 
 Concretely, before you report a task as done:
 
-1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `architecture.md`, the matching `local_testing_*.md`, and the per-app CLAUDE.md.
+1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
 2. **Schema change** — regenerate both type files (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`). Update `api_database.md` if a column, index, or RLS policy moved. See [schema_codegen.md](docs/schema_codegen.md).
 3. **New convention or house rule** — add it to `docs/conventions.md`.
 4. **Non-obvious decision or trade-off** — append an entry to `docs/decisions.md`. One paragraph. Don't rewrite history entries.
@@ -80,6 +86,7 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 - **Don't summarise what you just did** at the end of every response when the user can read the diff — keep end-of-turn text to 1–2 sentences (what changed, what's next).
 - **No preemptive abstractions.** Three similar lines is better than a premature helper. If a `bug fix` PR contains a refactor, split it.
 - **No backwards-compat shims**, no `// removed X` comments, no renamed-to-underscore-prefix unused variables. If something's unused, delete it.
+- **Layered resilience is a product contract.** Basics always work. Design every new feature so a failure at a higher layer (L4 auxiliary effect, L3 route overlay, L2 map, etc.) cannot break a lower one (L1 GPS/pedometer distance, L0 clock). Wrap each auxiliary effect (TTS, network ping, platform channel, third-party widget) in its own try/catch + `debugPrint` — never widen to a single outer catch, never swallow silently, and never let an auxiliary failure cancel a core `setState`. See [docs/conventions.md § Layered resilience](docs/conventions.md#layered-resilience) and the L0–L4 table in [docs/run_recording.md § Layering](docs/run_recording.md#layering) before touching the recording stack.
 
 ## Layout cheat-sheet
 
@@ -92,14 +99,14 @@ apps/
     src/lib/types.ts            (Run/Route/Integration/UserProfile overlays)
   mobile_android/    → Flutter, most mature; real screens, stores, sync, tile cache
   mobile_ios/        → Flutter, skeleton screens only (Phase 1 unfinished)
-  watch_wear/        → Flutter Wear OS, single-file simulated stub
+  watch_wear/        → native Kotlin + Compose-for-Wear (not Flutter)
   watch_ios/         → native SwiftUI Xcode project, functional
 packages/
   core_models/       → Dart domain classes + generated row DTOs
     lib/src/generated/db_rows.dart  (generated by scripts/gen_dart_models.dart)
   api_client/        → Typed Supabase client for Flutter apps
   gpx_parser/        → Pure Dart GPX/KML/KMZ/GeoJSON parser
-  run_recorder/      → Live GPS recording state machine (used by mobile_android)
+  run_recorder/      → Live GPS recording state machine (used by mobile_android; mobile_ios is scaffold-only and does not wire it yet)
   ui_kit/            → Shared Flutter widgets
 docs/                → The canonical reference — read these first
 scripts/

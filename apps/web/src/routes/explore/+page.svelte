@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { searchPublicRoutes, nearbyPublicRoutes } from '$lib/data';
+	import { searchPublicRoutes, nearbyPublicRoutes, fetchPopularRouteTags } from '$lib/data';
 	import type { Route } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/supabase';
 
 	let routes = $state<Route[]>([]);
@@ -12,6 +13,10 @@
 	let query = $state('');
 	let distanceFilter = $state<string>('any');
 	let surfaceFilter = $state<string>('any');
+	let selectedTags = $state<Set<string>>(new Set());
+	let popularTags = $state<string[]>([]);
+	let featuredOnly = $state(false);
+	let sort = $state<'newest' | 'popular' | 'featured'>('popular');
 	let mode = $state<'search' | 'nearby'>('search');
 	let locationError = $state<string | null>(null);
 
@@ -32,17 +37,24 @@
 		mixed: 'Mixed',
 	};
 
-	async function search() {
-		loading = true;
+	function searchOptions(offset: number) {
 		const opts = distanceOptions[distanceFilter];
-		routes = await searchPublicRoutes({
+		return {
 			query: query.trim() || undefined,
 			minDistanceM: opts?.min,
 			maxDistanceM: opts?.max,
 			surface: surfaceFilter === 'any' ? undefined : surfaceFilter,
+			tags: selectedTags.size > 0 ? [...selectedTags] : undefined,
+			featuredOnly,
+			sort,
 			limit: PAGE_SIZE,
-			offset: 0,
-		});
+			offset,
+		};
+	}
+
+	async function search() {
+		loading = true;
+		routes = await searchPublicRoutes(searchOptions(0));
 		hasMore = routes.length >= PAGE_SIZE;
 		loading = false;
 	}
@@ -50,18 +62,18 @@
 	async function loadMore() {
 		if (loading || !hasMore) return;
 		loading = true;
-		const opts = distanceOptions[distanceFilter];
-		const more = await searchPublicRoutes({
-			query: query.trim() || undefined,
-			minDistanceM: opts?.min,
-			maxDistanceM: opts?.max,
-			surface: surfaceFilter === 'any' ? undefined : surfaceFilter,
-			limit: PAGE_SIZE,
-			offset: routes.length,
-		});
+		const more = await searchPublicRoutes(searchOptions(routes.length));
 		routes = [...routes, ...more];
 		hasMore = more.length >= PAGE_SIZE;
 		loading = false;
+	}
+
+	function toggleTag(tag: string) {
+		const next = new Set(selectedTags);
+		if (next.has(tag)) next.delete(tag);
+		else next.add(tag);
+		selectedTags = next;
+		search();
 	}
 
 	async function saveToLibrary(route: Route) {
@@ -79,7 +91,7 @@
 			is_public: false,
 		});
 		if (!error) {
-			alert(`Saved "${route.name}" to your library`);
+			showToast(`Saved "${route.name}" to your library`, 'success');
 		}
 	}
 
@@ -119,7 +131,10 @@
 		else search();
 	}
 
-	onMount(() => search());
+	onMount(async () => {
+		popularTags = await fetchPopularRouteTags();
+		search();
+	});
 </script>
 
 <svelte:head>
@@ -176,8 +191,31 @@
 				<option value={key}>{label}</option>
 			{/each}
 		</select>
+		<select bind:value={sort} onchange={() => search()}>
+			<option value="popular">Most run</option>
+			<option value="newest">Newest</option>
+			<option value="featured">Featured</option>
+		</select>
+		<label class="chip-toggle">
+			<input type="checkbox" bind:checked={featuredOnly} onchange={() => search()} />
+			<span>Featured only</span>
+		</label>
 		<button class="btn btn-outline" onclick={() => search()}>Search</button>
 	</div>
+
+	{#if popularTags.length > 0}
+		<div class="tag-row">
+			{#each popularTags as tag (tag)}
+				<button
+					class="tag-chip"
+					class:active={selectedTags.has(tag)}
+					onclick={() => toggleTag(tag)}
+				>
+					{tag}
+				</button>
+			{/each}
+		</div>
+	{/if}
 	{/if}
 
 	{#if routes.length === 0 && !loading}
@@ -193,6 +231,11 @@
 					<a href="/share/route/{route.id}" class="route-link">
 						<div class="route-map-placeholder">
 							<span class="material-symbols">{route.surface === 'trail' ? 'terrain' : route.surface === 'mixed' ? 'alt_route' : 'route'}</span>
+							{#if route.featured}
+								<span class="featured-badge" title="Featured route">
+									<span class="material-symbols">star</span>
+								</span>
+							{/if}
 						</div>
 						<div class="route-info">
 							<h3>{route.name}</h3>
@@ -211,7 +254,20 @@
 									<span class="material-symbols meta-icon">{route.surface === 'trail' ? 'terrain' : 'add_road'}</span>
 									<span class="surface-tag">{route.surface}</span>
 								</span>
+								{#if route.run_count > 0}
+									<span class="meta-item">
+										<span class="material-symbols meta-icon">directions_run</span>
+										{route.run_count}
+									</span>
+								{/if}
 							</div>
+							{#if route.tags && route.tags.length > 0}
+								<div class="card-tags">
+									{#each route.tags.slice(0, 4) as t (t)}
+										<span class="card-tag">{t}</span>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					</a>
 					{#if auth.loggedIn}
@@ -513,6 +569,75 @@
 	.load-more {
 		text-align: center;
 		padding: var(--space-xl);
+	}
+
+	.tag-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-bottom: var(--space-lg);
+	}
+	.tag-chip {
+		padding: 0.25rem 0.7rem;
+		border: 1px solid var(--color-border);
+		border-radius: 9999px;
+		background: var(--color-surface);
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+	.tag-chip:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+	.tag-chip.active {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: white;
+	}
+	.chip-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: var(--space-sm) var(--space-md);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+	.featured-badge {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		background: var(--color-primary);
+		color: white;
+		width: 1.6rem;
+		height: 1.6rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.featured-badge .material-symbols {
+		font-size: 1rem;
+	}
+	.route-map-placeholder {
+		position: relative;
+	}
+	.card-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+		margin-top: 0.5rem;
+	}
+	.card-tag {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+		font-size: 0.72rem;
+		padding: 0.1rem 0.45rem;
+		border-radius: 9999px;
 	}
 
 	.material-symbols {

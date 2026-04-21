@@ -1,14 +1,18 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../backup.dart';
+import '../ble_heart_rate.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
+import '../settings_sync.dart';
 import 'import_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -17,12 +21,16 @@ class SettingsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
   final LocalRunStore? runStore;
+  final BleHeartRate heartRate;
+  final SettingsSyncService? settingsSync;
 
   const SettingsScreen({
     super.key,
     this.apiClient,
     required this.preferences,
+    required this.heartRate,
     this.runStore,
+    this.settingsSync,
   });
 
   @override
@@ -46,6 +54,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _onChange() {
     if (mounted) setState(() {});
+  }
+
+  String _unitSubtitle() {
+    final base = widget.preferences.useMiles ? 'mi, ft' : 'km, m';
+    final sync = widget.settingsSync;
+    if (sync == null || !sync.synced) return base;
+    return '$base · synced to your other devices';
   }
 
   Future<void> _signIn() async {
@@ -184,21 +199,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _exportBackup() async {
-    final store = widget.runStore;
-    if (store == null) return;
-    final runs = store.runs;
-    final json = jsonEncode({
-      'exported_at': DateTime.now().toIso8601String(),
-      'count': runs.length,
-      'runs': runs.map((r) => r.toJson()).toList(),
-    });
-    final tmp = await getTemporaryDirectory();
-    final file = File('${tmp.path}/runs-backup-${DateTime.now().millisecondsSinceEpoch}.json');
-    await file.writeAsString(json);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Run backup — ${runs.length} runs',
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in first to back up your runs.')),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Preparing backup…')),
     );
+    try {
+      final tmp = await getTemporaryDirectory();
+      final ts = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+      final file = File('${tmp.path}/run-app-backup-$ts.zip');
+      await BackupService(api: api).createBackup(outputFile: file);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Run app backup',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Backup failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final api = widget.apiClient;
+    final store = widget.runStore;
+    if (api == null || store == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup service unavailable.')),
+      );
+      return;
+    }
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final path = picked.files.first.path;
+    if (path == null) return;
+    final offline = api.userId == null;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from backup?'),
+        content: Text(
+          offline
+              ? 'You\'re not signed in. Runs will be restored to this device '
+                  'and synced to your account the next time you sign in.'
+              : 'This adds or overwrites runs and routes matching IDs in the '
+                  'backup. It will not delete runs or routes that aren\'t in '
+                  'the backup.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Restoring…')));
+    try {
+      final res = await BackupService(api: api).restore(
+        zipFile: File(path),
+        runStore: store,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Restored ${res.runsImported} runs · ${res.tracksUploaded} tracks · ${res.routesImported} routes'
+            '${res.warnings.isNotEmpty ? ' · ${res.warnings.length} warnings' : ''}',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+    }
   }
 
   @override
@@ -244,6 +331,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
+          // Sensors
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('Sensors', style: theme.textTheme.titleSmall),
+          ),
+          _HeartRateTile(heartRate: widget.heartRate),
+          const Divider(),
+
           // Preferences
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -251,9 +346,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Use miles'),
-            subtitle: Text(prefs.useMiles ? 'mi, ft' : 'km, m'),
+            subtitle: Text(_unitSubtitle()),
             value: prefs.useMiles,
-            onChanged: prefs.setUseMiles,
+            onChanged: (v) async {
+              await prefs.setUseMiles(v);
+              // Best-effort cloud push — no UI error if we're offline.
+              // The cloud value is re-pulled on next sign-in anyway.
+              await widget.settingsSync?.pushPreferredUnit();
+              if (mounted) setState(() {});
+            },
           ),
           SwitchListTile(
             title: const Text('Audio cues'),
@@ -325,11 +426,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.download),
-              title: const Text('Backup runs'),
-              subtitle: Text('${widget.runStore!.runs.length} runs'),
+              leading: const Icon(Icons.archive_outlined),
+              title: const Text('Full backup'),
+              subtitle: const Text(
+                'Every run with its GPS trace, plus routes, profile, and preferences. '
+                'Restores on web or Android.',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _exportBackup,
+            ),
+            ListTile(
+              leading: const Icon(Icons.unarchive_outlined),
+              title: const Text('Restore from backup'),
+              subtitle: const Text('Pick a previously saved .zip backup.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _restoreBackup,
             ),
             const Divider(),
           ],
@@ -350,6 +461,184 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => showLicensePage(context: context),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// List tile that shows whether a BLE chest strap is paired and opens a
+/// scan sheet to pair one. Delegates to `BleHeartRate` for everything.
+class _HeartRateTile extends StatefulWidget {
+  final BleHeartRate heartRate;
+  const _HeartRateTile({required this.heartRate});
+
+  @override
+  State<_HeartRateTile> createState() => _HeartRateTileState();
+}
+
+class _HeartRateTileState extends State<_HeartRateTile> {
+  String? _pairedName;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final name = await widget.heartRate.pairedName();
+    if (!mounted) return;
+    setState(() {
+      _pairedName = name;
+      _loading = false;
+    });
+  }
+
+  Future<void> _pair() async {
+    final device = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _HeartRateScanSheet(heartRate: widget.heartRate),
+    );
+    if (device != null) {
+      try {
+        await widget.heartRate.pair(device);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Pair failed: $e')),
+          );
+        }
+      }
+      await _refresh();
+    }
+  }
+
+  Future<void> _forget() async {
+    await widget.heartRate.forget();
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final paired = _pairedName;
+    return ListTile(
+      leading: const Icon(Icons.favorite_border),
+      title: const Text('Heart rate monitor'),
+      subtitle: Text(
+        _loading
+            ? 'Checking…'
+            : paired != null
+                ? 'Paired: $paired'
+                : 'No strap paired — tap to scan',
+      ),
+      trailing: paired != null
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Forget',
+              onPressed: _forget,
+            )
+          : const Icon(Icons.chevron_right),
+      onTap: _pair,
+    );
+  }
+}
+
+/// Modal bottom sheet that scans for BLE straps advertising the Heart
+/// Rate Service and returns the selected `BluetoothDevice` via `pop`.
+/// Re-imports `flutter_blue_plus` dynamically so the public surface of
+/// `BleHeartRate` can keep the dep hidden from UI callers.
+class _HeartRateScanSheet extends StatefulWidget {
+  final BleHeartRate heartRate;
+  const _HeartRateScanSheet({required this.heartRate});
+
+  @override
+  State<_HeartRateScanSheet> createState() => _HeartRateScanSheetState();
+}
+
+class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
+  List<dynamic> _results = const [];
+  bool _scanning = true;
+  StreamSubscription<List<dynamic>>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = widget.heartRate.scan().listen(
+      (list) {
+        if (mounted) setState(() => _results = list);
+      },
+      onDone: () {
+        if (mounted) setState(() => _scanning = false);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Scan for heart rate monitor',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_scanning)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Wake your strap / chest band. Apps typically take 3–8 seconds.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            if (_results.isEmpty && !_scanning)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No straps found. Make sure it\'s nearby and awake.'),
+              ),
+            ..._results.map((r) {
+              final device = r.device;
+              final name = device.platformName.isNotEmpty
+                  ? device.platformName
+                  : device.remoteId.str;
+              return ListTile(
+                leading: const Icon(Icons.bluetooth),
+                title: Text(name),
+                subtitle: Text('RSSI ${r.rssi} dBm'),
+                onTap: () => Navigator.of(context).pop(device),
+              );
+            }),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

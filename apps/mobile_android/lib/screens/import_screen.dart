@@ -103,9 +103,7 @@ class _ImportScreenState extends State<ImportScreen> {
             }
           },
         );
-        for (final run in savedRuns) {
-          await widget.runStore.markSynced(run.id);
-        }
+        await widget.runStore.markManySynced(savedRuns.map((r) => r.id));
       } catch (e) {
         debugPrint('Batch cloud push failed: $e');
       }

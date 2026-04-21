@@ -55,7 +55,7 @@ Track position, pace, distance, and elapsed time using device GPS. Runs saved to
 - [x] Background location tracking (Android — geolocator foreground service)
 - [ ] Background location tracking (iOS)
 - [x] Real-time pace and distance display (Android)
-- [x] Auto-pause on stop detection (Android, toggleable)
+- [x] ~~Auto-pause on stop detection~~ (Android) — *removed*: replaced by moving time derived from the GPS track at summary time. See [decisions.md § 4](decisions.md).
 - [x] Manual pause/resume (Android)
 - [x] Lap markers (Android)
 - [x] Wakelock during run (Android)
@@ -63,6 +63,9 @@ Track position, pace, distance, and elapsed time using device GPS. Runs saved to
 - [x] Audio cues for splits and pace alerts via TTS (Android)
 - [x] Step count and cadence via pedometer (Android)
 - [x] Live HTTP tile cache so revisited tiles work without network (Android)
+- [x] GPS self-heal retry loop — recorder re-subscribes automatically when location services / permission come back mid-run (Android)
+- [x] Indoor / no-GPS mode — run proceeds as time-only when GPS is unavailable; stopwatch keeps ticking, `RunSnapshot.currentPosition` is nullable, and the live map falls back to "Waiting for GPS..." (Android)
+- [x] Live lock-screen notification — `RunNotificationBridge` replaces the static "Run in progress" with live time / distance / pace on the same geolocator foreground-service channel (Android)
 
 ### Route overlay during run
 
@@ -122,7 +125,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Row-level security policies on all tables
 - [x] Database functions (weekly_mileage, personal_records)
 - [x] Seed script with test user and mock data
-- [x] Edge Functions: parkrun-import, strava-import, strava-webhook, refresh-tokens, export-data
+- [x] Edge Functions: parkrun-import, strava-import, strava-webhook, refresh-tokens, export-data, revenuecat-webhook, delete-account
 - [x] Move GPS tracks from JSONB `track` column to Supabase Storage. Tracks
       are now gzipped JSON files at `runs/{user_id}/{run_id}.json.gz` and the
       row stores a `track_url` pointer. Cuts per-row size by ~99%, eliminates
@@ -147,15 +150,18 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 ### Apple Watch standalone GPS recording
 
 - [ ] Standalone workout session (no phone required)
-- [ ] Heart rate via HealthKit sensor
+- [x] Heart rate via HealthKit sensor (live BPM in `RunningView`, `avg_bpm` forwarded in run metadata)
 - [ ] Haptic pace alerts (above / below target)
 - [ ] Syncs run data via Watch Connectivity framework
 
 ### Wear OS standalone GPS recording
 
-- [ ] Compose for Wear UI (Kotlin + Flutter hybrid)
-- [ ] GPS + HR recording independent of phone
-- [ ] Background sync on reconnect
+- [x] Compose-for-Wear UI (pure Kotlin rewrite — see [decisions.md § 15](decisions.md))
+- [x] GPS recording independent of phone (`FusedLocationProviderClient` in `GpsRecorder.kt`)
+- [x] HR recording via Health Services (`MeasureClient` in `HeartRateMonitor.kt`, average pushed to `run.metadata.avg_bpm`)
+- [x] Ultra-length (10h+) recording: streaming on-disk track writer, rolling-HR aggregation, checkpoint-by-reference, throttled notification refresh, streamed gzip upload, low-battery pre-run warning
+- [x] Live race mode: server-authoritative Arm/GO/End + per-runner pings feeding a spectator leaderboard, auto-submitted `event_results` rows, optional organiser approval gating
+- [ ] Auto-sync on reconnect (today `drainQueue` fires on app start + after stop; connectivity-change listener is a TODO)
 
 ### Route navigation on watch
 
@@ -311,6 +317,16 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [ ] Share to social (image card with map + stats)
 - [ ] SEO-indexed public route pages
 
+### Clubs and events — social layer
+
+Phased rollout so the schema doesn't sprawl. MVP is club-owned events only, enum-based recurrence (Phase 2), and open-join clubs with invite-link sharing (Phase 2). See `docs/clubs.md` for surfaces and `apps/backend/supabase/migrations/20260416_001_clubs_and_events.sql` for schema.
+
+- [x] **Phase 1 — MVP (web only):** `clubs` / `club_members` / `events` / `event_attendees` / `club_posts` tables with RLS; browse/create/view clubs, create one-off events, RSVP, owner/admin text updates. No recurrence, no invites, no notifications. Web routes: `/clubs`, `/clubs/new`, `/clubs/[slug]`, `/clubs/[slug]/events/new`, `/clubs/[slug]/events/[id]`.
+- [x] **Phase 2 — recurrence + invites:** Enum recurrence (`weekly` / `biweekly` / `monthly` + `byday[]` + `until_date`) with instance expansion on the client; per-instance RSVPs (`event_attendees` pkey extended with `instance_start`); join policies (`open` / `request` / `invite`) with a pending-requests admin panel; shareable invite tokens on clubs + `/clubs/join/[token]` landing route; one-level threaded replies on posts. Migration: `20260417_001_phase2_social.sql`.
+- [x] **Phase 3 — Android mirror:** `clubs_screen.dart` (Browse + My clubs), `club_detail_screen.dart` (feed / events / members tabs with threaded post replies and member post composer), `event_detail_screen.dart` (per-instance RSVP + admin update composer), `upcoming_event_card.dart` replaces the Last-Run card on the Run tab when the user has RSVP'd `going` to an event within 48h. Clubs added as a 6th bottom-nav tab. Recurrence is ported to Dart (`recurrence.dart`) so instance expansion stays consistent with web. Club/event creation is deliberately not on Android — admins still use the web app for those.
+- [x] **Phase 4a — realtime (web + Android):** Supabase Realtime is enabled on `club_posts`, `event_attendees`, and `club_members` (migration `20260418_001_social_realtime.sql`). Web club / event detail pages and Android `ClubDetailScreen` / `EventDetailScreen` subscribe via `postgres_changes` and debounce reloads at 250ms. Payloads are ignored in favour of a fresh enriched fetch so RLS stays authoritative.
+- [ ] **Phase 4b — push (FCM / APNs):** Event-day reminders (scheduled), admin-update fan-out, and a `device_tokens` table. Blocked on user-supplied Firebase project + service account credentials; not started.
+
 ### External platform sync
 
 | Source | Method | Status |
@@ -322,7 +338,25 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 | parkrun | Athlete number scrape | [ ] Edge Function exists, not wired |
 | Race results | RunSignUp API + bib scrape | [ ] Not started |
 
-### Premium tier — training and coaching (~$6/month)
+### AI Coach (free, usage-capped)
+
+Claude-powered training advisor embedded in the web app. Reviews the runner's plan and recent runs; does not generate plans or prescribe medical/nutrition advice (see `decisions.md #12`).
+
+- [x] Server endpoint (`/api/coach/+server.ts`) with prompt-cached system prompt + context dump
+- [x] `CoachChat.svelte` UI with suggestion chips and cache-hit stats
+- [x] Daily usage limit of 10 messages per user (`user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
+- [x] Personality tones — `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) fed into the system prompt
+- [x] User preferences (date of birth, HR zones, resting/max HR, weekly mileage goal) fed into context for personalised advice
+
+### Funding and donations (free-with-donations pivot)
+
+- [x] All features free — `isLocked()` always returns `false` (see `decisions.md #18`)
+- [x] Transparent funding page at `/settings/upgrade` with real cost breakdown and progress bars
+- [x] `monthly_funding` table for donation tracking
+- [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)
+- [x] `ToastContainer.svelte` + `toast.svelte.ts` for transient success/error/info feedback
+
+### Premium tier — training and coaching (deferred, see decisions.md #18)
 
 **Structured training plan runner (workout execution):**
 
@@ -524,7 +558,7 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 |---|---|---|
 | iOS + Android app | Flutter + Dart | 1 |
 | Apple Watch | Native Swift + SwiftUI + WatchKit | 2 |
-| Wear OS watch | Flutter | 2 |
+| Wear OS watch | Native Kotlin + Compose-for-Wear | 2 |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | 2b |
 | Web maps | MapLibre GL JS (tiles via MapTiler, future: Protomaps self-hosted) | 2b |
 | Web deployment | Vercel | 2b |
@@ -561,7 +595,7 @@ These were considered during Android implementation and intentionally pushed to 
 
 - **OAuth sign-in (Google/Apple)** on Android — only email/password works against the same Supabase backend as the web app. Needs deep link config and Android signing setup. Tracked under Phase 3 — see "External platform sync".
 - **Strava and parkrun integrations** — moved to Phase 3 ("External platform sync"). Removed from the Android Settings UI in the meantime to avoid placeholder buttons.
-- **Heart rate from Bluetooth devices** — needs flutter_blue_plus and per-device GATT characteristic handling.
+- ~~**Heart rate from Bluetooth devices**~~ — shipped: `lib/ble_heart_rate.dart` with `flutter_blue_plus` against BLE Heart Rate Service 0x180D / characteristic 0x2A37, pairing UI in Settings, live BPM row during recording, `avg_bpm` written to `metadata` on save.
 - **Persistent disk tile cache** — currently in-memory only via flutter_map_cache. Persistent caching needs Hive or sqlite init.
 - ~~**Voice cues at custom intervals**~~ — shipped: configurable split interval in Settings (500m, 1km, 2km, 5km, or 0.5/1/2/5 mi).
 - ~~**History filter by activity type**~~ — shipped: filter chips on the History screen (All / Run / Walk / Cycle / Hike).
@@ -575,7 +609,7 @@ The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Conne
 ### Real bugs (fix before shipping the importer to real users)
 
 - [x] **External ID collision on re-import.** `ApiClient.saveRun` now upserts with `onConflict: 'external_id'` when `externalId` is set, so re-imports update the existing row.
-- [x] **Storage object leak when runs are deleted.** `ApiClient.deleteRun` now deletes both the row and the gzipped track file from the `runs` Storage bucket. Wired into `RunDetailScreen` and `HistoryScreen` bulk-delete flows.
+- [x] **Storage object leak when runs are deleted.** `ApiClient.deleteRun` now deletes both the row and the gzipped track file from the `runs` Storage bucket. Wired into `RunDetailScreen` and `RunsScreen` bulk-delete flows.
 - [x] **Public share pages can't read GPS tracks.** Added `is_public` column to `runs` table (migration `20260413_001_public_runs.sql`), RLS policy for anonymous read of public runs, Storage RLS policy for anonymous track download. Web share page uses `fetchPublicRun()`. Mobile share flow calls `makeRunPublic()` before opening the share sheet.
 
 ### Performance / UX improvements
@@ -600,5 +634,42 @@ The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Conne
 - **Go service as single point of failure** — The Go service handles WebSockets, background jobs, AND premium features. Keep these as separate goroutine pools so a spike in one doesn't starve the others. Health check each independently.
 
 ---
+
+## Competitor-parity backlog (unphased)
+
+Generated from `docs/competitors.md` and confirmed scope with the user. These are the features that would close the gap to the strongest existing apps (Strava / Garmin / Nike Run Club / AllTrails / Runna / Komoot). They are **deliberately unphased** — ordering depends on three decisions the user still owes:
+
+1. **Which competitor do we most want to displace first?** (Drives which bundle ships before the others — e.g. beating Runna means plan runner before segments; beating Strava means segments + social graph before plans.)
+2. **Pricing model:** free forever / freemium / pay-once. Gates how much of the list sits behind a paywall.
+3. **Premium boundary:** where the line runs between free and paid if freemium is chosen.
+
+Until those three are answered, treat this list as a menu, not a sequence. Rough sizing is in weeks of single-dev work; most items carry schema changes that need the usual codegen + CI parity check (see `schema_codegen.md`).
+
+| # | Feature | Rough size | Competitor it closes | Schema impact | Open decisions |
+|---|---|---|---|---|---|
+| 1 | **Training plan runner** — [x] web: schema + generator + editor + dashboard card + auto-match; [x] Android: engine port + plans list + create wizard + plan/workout detail + today's-workout card on Run tab idle; [ ] live structured-workout execution loop (**specced in [workout_execution.md](workout_execution.md)**, ~4 dev-days, no new schema) | 6–8 wk (web + Android shipped, execution loop specced + estimated ~4 days) | Runna, Garmin | `training_plans`, `plan_weeks`, `plan_workouts` (shipped) | Spec resolved — reuse existing audio-cue layer, band overlay on the run screen, zero schema impact. |
+| 2 | **External integrations (OAuth sync)**: Strava read + write, Garmin Connect, Health Connect, HealthKit, parkrun, RunSignUp | 4–6 wk + Garmin business approval | Strava, Garmin | `integrations` already exists — extend per provider; token refresh Edge Function | Webhook vs polling for Strava; Garmin app approval timeline |
+| 3 | **Segments + leaderboards** (segment creation, automatic matching on new runs, weekly / all-time boards) | 2–3 wk | Strava | `segments`, `segment_efforts`; PostGIS line matching | Public vs private segments; anti-cheat |
+| 4 | **Heatmap / popular-route discovery** (anonymised aggregation tile layer) | 2 wk | Strava, Komoot | Materialised tile table or a Go tile service | Opt-in vs opt-out privacy default |
+| 5 | **Trail / offline navigation** (turn-by-turn nav on a loaded route, offline tile packs, condition reports) | 3–4 wk | AllTrails, Komoot | `route_conditions` (user reports), tile-pack store on disk | Which routing engine for turn cues? |
+| 6 | **Social graph** (follow / unfollow, kudos, activity comments, privacy zones) | 2–3 wk | Strava, Nike Run Club | `follows`, `kudos`, `comments`, `privacy_zones` on `user_profiles` | Default profile visibility; block / report surface |
+| 7 | **Gear tracking** (shoes, bikes; mileage per item; retirement reminders) | 1 wk | Strava, Garmin | `gear`, `run_gear` (link table) | Manual only v1 vs future barcode import |
+| 8 | **Photos on runs and routes** (multi-photo per run, map-pinned, auto-attached from camera roll by timestamp) | 3–4 d | Strava, AllTrails | `run_photos`, `route_photos`; Storage bucket `photos` | Max photos per run; server-side thumbnailing? |
+| 9 | **Audio-coached / guided runs** (library of pre-recorded workouts, TTS-narrated pace cues) | 3–4 wk | Nike Run Club | `audio_workouts`, `audio_segments`; audio CDN strategy | Voice talent budget; TTS-only v1? |
+| 10 | **Race calendar + results import** (event discovery near me, entry links, auto-match results when you record the race) | 2 wk | Garmin, Runna | `races`, `race_results`; import from RunSignUp + parkrun | Scope: local only or worldwide? |
+| 11 | **Advanced analytics** (VDOT, training load / fitness / freshness curves, weekly/monthly breakdowns, race-time predictor) | 2 wk | Garmin, Runna | No new tables — derived from `runs` | Algorithm source of truth: Daniels vs Banister |
+| 12 | **Premium billing + feature gating** (Stripe Checkout, subscription webhook, `SubscriptionTier` honouring across web + mobile, customer portal) | 1–2 wk | All | `user_profiles.subscription_tier` already exists; add `stripe_customer_id`, `stripe_subscription_id` | Monthly vs annual; grandfather early users? |
+
+### Where each item lives in the repo
+
+For whichever items the user green-lights, here's where the new surface lands — so future sessions can pick one up without re-deriving the map:
+
+- **Web pages:** `apps/web/src/routes/<feature>/+page.svelte` + the data helpers in `src/lib/data.ts` (add a new section header). New types overlay in `src/lib/types.ts`.
+- **Mobile Android:** `apps/mobile_android/lib/screens/<feature>_screen.dart` + a service singleton in `apps/mobile_android/lib/<feature>_service.dart` if there's non-trivial network state. Tab additions in `home_screen.dart`; 6 tabs is the current ceiling — past that, collapse under an existing tab.
+- **Backend:** one migration per feature under `apps/backend/supabase/migrations/` with the same naming pattern (`YYYYMMDD_NNN_<feature>.sql`). Run `npm run gen:types && dart run scripts/gen_dart_models.dart` after each, commit both.
+- **Edge Functions** for OAuth exchanges / webhooks: `apps/backend/supabase/functions/<provider>-<action>/index.ts`. One function per provider action (e.g. `strava-webhook`, `garmin-import`).
+- **Decisions** for any non-obvious trade-off: append to `docs/decisions.md` in sequence (next free number is #11).
+- **Feature doc stub** in `docs/features.md` under a "Competitor-parity features" section (stubs added below, flesh out on delivery).
+- **Tests** — see `docs/testing.md` for the per-feature-area test map.
 
 *Last updated: April 2026*

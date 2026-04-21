@@ -1,23 +1,79 @@
+<script lang="ts">
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
+
+	$effect(() => {
+		if (browser && !auth.loading && auth.loggedIn) {
+			goto('/dashboard', { replaceState: true });
+		}
+	});
+
+	const showLanding = $derived(!browser || (!auth.loading && !auth.loggedIn));
+
+	const apps = [
+		{
+			icon: 'android',
+			name: 'Android',
+			tagline: 'Flutter · Material 3',
+			body: 'Record runs with live GPS, auto-pause, voice cues, and offline tile caching.'
+		},
+		{
+			icon: 'phone_iphone',
+			name: 'iOS',
+			tagline: 'Flutter · Cupertino',
+			body: 'HealthKit-friendly companion app with the same plans, routes, and history.'
+		},
+		{
+			icon: 'watch',
+			name: 'Apple Watch',
+			tagline: 'Native SwiftUI',
+			body: 'Standalone workouts. Leave your phone at home — splits, pace, and HR on the wrist.'
+		},
+		{
+			icon: 'watch',
+			name: 'Wear OS',
+			tagline: 'Kotlin · Compose',
+			body: 'First-class Pixel Watch and Galaxy Watch support with standalone GPS recording.'
+		},
+		{
+			icon: 'desktop_windows',
+			name: 'Web',
+			tagline: 'SvelteKit',
+			body: 'The review surface. Build routes, analyse splits, manage plans on a big screen.'
+		}
+	];
+</script>
+
+{#if !showLanding}
+	<div class="landing-loading">
+		<span>Loading...</span>
+	</div>
+{:else}
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
 		<span class="logo-icon">&#9654;</span> Run
 	</a>
-	<a href="/login" class="nav-signin">Sign In</a>
+	<div class="nav-links">
+		<a href="#apps" class="nav-link">Apps</a>
+		<a href="#features" class="nav-link">Features</a>
+		<a href="/login" class="nav-signin">Sign In</a>
+	</div>
 </nav>
 
 <main class="hero">
 	<h1>Plan routes.<br />Track runs.<br />Analyse everything.</h1>
 	<p class="hero-sub">
-		Import a route. Record on your phone or watch.
-		Review on a big screen. Free forever.
+		Record on your phone or watch. Review on a big screen.
+		One account across Android, iOS, Apple Watch, Wear OS, and the web. Free forever.
 	</p>
 	<div class="hero-actions">
-		<a href="/dashboard" class="btn btn-primary btn-lg">Open Dashboard</a>
-		<a href="/routes/new" class="btn btn-outline btn-lg">Plan a Route</a>
+		<a href="/login" class="btn btn-primary btn-lg">Get Started</a>
+		<a href="#apps" class="btn btn-outline btn-lg">See the Apps</a>
 	</div>
 </main>
 
-<section class="features">
+<section id="features" class="features">
 	<div class="feature">
 		<span class="feature-icon material-symbols">route</span>
 		<h3>Route Builder</h3>
@@ -40,7 +96,49 @@
 	</div>
 </section>
 
+<section id="apps" class="apps-section">
+	<div class="section-head">
+		<h2>Available on every device you run with</h2>
+		<p>Native experiences on each platform. One account syncs them all.</p>
+	</div>
+	<div class="apps-grid">
+		{#each apps as app}
+			<article class="app-card">
+				<span class="app-icon material-symbols">{app.icon}</span>
+				<h3>{app.name}</h3>
+				<span class="app-tagline">{app.tagline}</span>
+				<p>{app.body}</p>
+			</article>
+		{/each}
+	</div>
+</section>
+
+<section class="closing-cta">
+	<h2>Ready to log your next run?</h2>
+	<p>Create a free account — no credit card, no paywall.</p>
+	<a href="/login" class="btn btn-primary btn-lg">Sign in to continue</a>
+</section>
+
+<footer class="landing-footer">
+	<span>&copy; Run — track anywhere, review everywhere.</span>
+	<div class="footer-links">
+		<a href="/login">Sign In</a>
+		<a href="#apps">Apps</a>
+		<a href="#features">Features</a>
+	</div>
+</footer>
+{/if}
+
 <style>
+	.landing-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 100vh;
+		color: var(--color-text-tertiary);
+		background: var(--color-bg);
+	}
+
 	.landing-nav {
 		display: flex;
 		justify-content: space-between;
@@ -60,6 +158,23 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
+	}
+
+	.nav-links {
+		display: flex;
+		align-items: center;
+		gap: var(--space-lg);
+	}
+
+	.nav-link {
+		color: rgba(255, 255, 255, 0.72);
+		font-size: 0.9rem;
+		font-weight: 500;
+		transition: color var(--transition-fast);
+	}
+
+	.nav-link:hover {
+		color: #ffffff;
 	}
 
 	.nav-signin {
@@ -127,10 +242,11 @@
 	.hero-sub {
 		font-size: 1.25rem;
 		color: rgba(255, 255, 255, 0.65);
-		max-width: 32rem;
+		max-width: 34rem;
 		margin-bottom: var(--space-2xl);
 		position: relative;
 		z-index: 1;
+		line-height: 1.55;
 	}
 
 	.hero-actions {
@@ -248,12 +364,149 @@
 		line-height: 1.6;
 	}
 
+	.apps-section {
+		padding: 5rem var(--space-2xl) 6rem;
+		background: var(--color-bg-secondary);
+		border-top: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.section-head {
+		max-width: 44rem;
+		margin: 0 auto var(--space-2xl);
+		text-align: center;
+	}
+
+	.section-head h2 {
+		font-size: 2.25rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		margin-bottom: var(--space-md);
+	}
+
+	.section-head p {
+		color: var(--color-text-secondary);
+		font-size: 1.05rem;
+	}
+
+	.apps-grid {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: var(--space-lg);
+		max-width: 80rem;
+		margin: 0 auto;
+	}
+
+	.app-card {
+		padding: var(--space-xl);
+		border-radius: var(--radius-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-sm);
+		transition: all var(--transition-base);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.app-card:hover {
+		transform: translateY(-4px);
+		box-shadow: var(--shadow-lg);
+	}
+
+	.app-icon {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.75rem;
+		width: 3rem;
+		height: 3rem;
+		border-radius: var(--radius-md);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		margin-bottom: var(--space-sm);
+	}
+
+	.app-card h3 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+
+	.app-tagline {
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-text-tertiary);
+	}
+
+	.app-card p {
+		margin-top: var(--space-sm);
+		font-size: 0.88rem;
+		line-height: 1.55;
+		color: var(--color-text-secondary);
+	}
+
+	.closing-cta {
+		padding: 5rem var(--space-2xl);
+		text-align: center;
+		background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 100%);
+		color: #ffffff;
+	}
+
+	.closing-cta h2 {
+		font-size: 2rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		margin-bottom: var(--space-sm);
+	}
+
+	.closing-cta p {
+		color: rgba(255, 255, 255, 0.75);
+		margin-bottom: var(--space-xl);
+		font-size: 1.05rem;
+	}
+
+	.landing-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-lg) var(--space-2xl);
+		color: var(--color-text-tertiary);
+		font-size: 0.85rem;
+		background: var(--color-bg);
+		border-top: 1px solid var(--color-border);
+	}
+
+	.footer-links {
+		display: flex;
+		gap: var(--space-lg);
+	}
+
+	.footer-links a {
+		color: var(--color-text-secondary);
+		transition: color var(--transition-fast);
+	}
+
+	.footer-links a:hover {
+		color: var(--color-text);
+	}
+
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
 	}
 
+	@media (max-width: 960px) {
+		.features { grid-template-columns: repeat(2, 1fr); }
+		.apps-grid { grid-template-columns: repeat(2, 1fr); }
+	}
+
 	@media (max-width: 768px) {
 		h1 { font-size: 2.5rem; }
-		.features { grid-template-columns: repeat(2, 1fr); }
+		.nav-link { display: none; }
+		.section-head h2 { font-size: 1.75rem; }
+		.apps-grid { grid-template-columns: 1fr; }
+		.landing-footer { flex-direction: column; gap: var(--space-sm); }
 	}
 </style>

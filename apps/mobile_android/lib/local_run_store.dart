@@ -19,8 +19,16 @@ class LocalRunStore extends ChangeNotifier {
   final Set<String> _syncedIds = {};
 
   static const _inProgressFilename = 'in_progress.json';
+  // Sidecar file listing the ids of runs that have synced to the cloud.
+  // The per-run JSON used to carry a `synced` boolean and `markSynced`
+  // read-decoded-re-encoded-rewrote the whole run file just to flip that
+  // bool — for a 50-run offline backlog that was 50 full round-trips
+  // through the filesystem + JSON codec. The sidecar is a few kilobytes,
+  // written once per markSynced call (or once per batch).
+  static const _syncedIdsFilename = 'synced_ids.json';
 
   File get _inProgressFile => File('${_dir.path}/$_inProgressFilename');
+  File get _syncedIdsFile => File('${_dir.path}/$_syncedIdsFilename');
 
   List<Run> get runs => List.unmodifiable(_runs);
 
@@ -134,7 +142,7 @@ class LocalRunStore extends ChangeNotifier {
 
   Run _withLastModified(Run run, DateTime ts) {
     final metadata = Map<String, dynamic>.from(run.metadata ?? {});
-    metadata['last_modified_at'] = ts.toIso8601String();
+    metadata['last_modified_at'] = ts.toUtc().toIso8601String();
     return Run(
       id: run.id,
       startedAt: run.startedAt,
@@ -191,14 +199,16 @@ class LocalRunStore extends ChangeNotifier {
 
   /// Persist the current state of an in-progress recording. Called
   /// periodically during a run so a crash or force-kill doesn't lose
-  /// everything.
+  /// everything. The encode + write runs on a background isolate via
+  /// [compute] — for a long run the track grows to thousands of waypoints
+  /// and a sync encode on the UI thread jank-spikes every 10 seconds.
   Future<void> saveInProgress(Run run) async {
-    final file = _inProgressFile;
-    final data = {
+    final path = _inProgressFile.path;
+    final payload = {
       'run': run.toJson(),
       'saved_at': DateTime.now().toIso8601String(),
     };
-    await file.writeAsString(jsonEncode(data));
+    await compute(_encodeAndWriteJson, {'path': path, 'data': payload});
   }
 
   /// Load an in-progress run left over from a previous session, if any.
@@ -232,16 +242,35 @@ class LocalRunStore extends ChangeNotifier {
     }
   }
 
-  /// Mark a run as synced.
+  /// Mark a run as synced. Writes only the small sidecar file; the run's
+  /// own JSON is untouched. For sync loops that mark many runs at once,
+  /// prefer [markManySynced] which writes the sidecar once per batch.
   Future<void> markSynced(String runId) async {
-    final file = File('${_dir.path}/$runId.json');
-    if (!file.existsSync()) return;
-
-    final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    data['synced'] = true;
-    await file.writeAsString(jsonEncode(data));
     _syncedIds.add(runId);
+    await _persistSyncedIds();
     notifyListeners();
+  }
+
+  /// Mark several runs as synced and persist once — used by [SyncService]
+  /// after a `saveRunsBatch` call so N successful runs produce a single
+  /// sidecar write instead of N.
+  Future<void> markManySynced(Iterable<String> runIds) async {
+    if (runIds.isEmpty) return;
+    _syncedIds.addAll(runIds);
+    await _persistSyncedIds();
+    notifyListeners();
+  }
+
+  Future<void> _persistSyncedIds() async {
+    try {
+      await _syncedIdsFile.writeAsString(jsonEncode({
+        'ids': _syncedIds.toList(),
+      }));
+    } catch (e) {
+      // Not fatal — the in-memory set is still correct for the rest of
+      // the session; we'll retry on the next sync event.
+      debugPrint('Failed to persist synced ids sidecar: $e');
+    }
   }
 
   Future<void> _loadAll() async {
@@ -253,24 +282,81 @@ class LocalRunStore extends ChangeNotifier {
         .whereType<File>()
         .where((f) => f.path.endsWith('.json'))
         .where((f) => !f.path.endsWith(_inProgressFilename))
+        .where((f) => !f.path.endsWith(_syncedIdsFilename))
         .toList();
 
-    for (final file in files) {
-      try {
-        final data =
-            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-        final run = Run.fromJson(data['run'] as Map<String, dynamic>);
-        _runs.add(run);
-        if (data['synced'] == true) {
-          _syncedIds.add(run.id);
-        }
-      } catch (e) {
-        debugPrint('Failed to load run file ${file.path}: $e');
+    // Read the sidecar first. If present, it's the authoritative source
+    // of sync state — the per-run `synced` field is legacy and may be
+    // stale (markSynced no longer rewrites the run file).
+    Set<String>? sidecarIds = await _readSyncedIdsSidecar();
+
+    // Read all run files in parallel. Sequential reads meant cold-start
+    // scaled linearly with run count — a user with 500 runs would wait
+    // seconds on the first frame. `Future.wait` lets the scheduler batch
+    // the I/O while we decode whatever comes back.
+    final loaded = await Future.wait(
+      files.map(_readRunFile),
+      eagerError: false,
+    );
+    for (final entry in loaded) {
+      if (entry == null) continue;
+      _runs.add(entry.run);
+      if (sidecarIds != null) {
+        if (sidecarIds.contains(entry.run.id)) _syncedIds.add(entry.run.id);
+      } else if (entry.synced) {
+        // Migration path: no sidecar yet, read the legacy per-file flag.
+        _syncedIds.add(entry.run.id);
       }
+    }
+
+    // If we migrated from legacy per-file flags, write the sidecar now so
+    // the next launch takes the fast path.
+    if (sidecarIds == null && _syncedIds.isNotEmpty) {
+      await _persistSyncedIds();
     }
 
     // Sort newest first
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     notifyListeners();
   }
+
+  Future<Set<String>?> _readSyncedIdsSidecar() async {
+    final file = _syncedIdsFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      return (data['ids'] as List).cast<String>().toSet();
+    } catch (e) {
+      debugPrint('Failed to read synced_ids sidecar: $e');
+      return null;
+    }
+  }
+
+  Future<_LoadedRun?> _readRunFile(File file) async {
+    try {
+      final raw = await file.readAsString();
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final run = Run.fromJson(data['run'] as Map<String, dynamic>);
+      return _LoadedRun(run, data['synced'] == true);
+    } catch (e) {
+      debugPrint('Failed to load run file ${file.path}: $e');
+      return null;
+    }
+  }
+}
+
+class _LoadedRun {
+  final Run run;
+  final bool synced;
+  const _LoadedRun(this.run, this.synced);
+}
+
+/// Top-level helper invoked via [compute] so the heavy `jsonEncode` +
+/// blocking file write for a growing-track in-progress save doesn't run on
+/// the UI isolate. Keep it top-level so it can be serialised across the
+/// isolate boundary.
+Future<void> _encodeAndWriteJson(Map<String, dynamic> args) async {
+  final path = args['path'] as String;
+  final data = args['data'] as Map<String, dynamic>;
+  await File(path).writeAsString(jsonEncode(data));
 }

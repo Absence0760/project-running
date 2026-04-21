@@ -20,15 +20,19 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// The completed run data, available after stop().
     private(set) var finishedRun: FinishedRun?
 
+    let healthKit = HealthKitManager()
+
     private let locationManager = CLLocationManager()
     private var timer: Timer?
     private var startDate: Date?
 
     struct FinishedRun {
+        let id: String
         let startedAt: Date
         let durationSeconds: Int
         let distanceMetres: Double
         let track: [TrackPoint]
+        let averageBPM: Double?
     }
 
     struct TrackPoint: Codable {
@@ -38,12 +42,24 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let ts: String?
     }
 
+    /// Write the finished run's track to a JSON file in the app's caches
+    /// directory and return the URL, suitable for `WCSession.transferFile`.
+    /// The phone gzips + uploads to Supabase Storage on receipt.
+    func writeTrackJSON() throws -> URL {
+        guard let run = finishedRun else {
+            throw NSError(domain: "WorkoutManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "No finished run"])
+        }
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let url = caches.appendingPathComponent("\(run.id).json")
+        try JSONEncoder().encode(run.track).write(to: url, options: .atomic)
+        return url
+    }
+
     override init() {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
-        locationManager.allowsBackgroundLocationUpdates = true
     }
 
     // MARK: - Controls
@@ -54,9 +70,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
+        healthKit.reset()
 
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
+        healthKit.startWorkout()
 
         startDate = Date()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -71,6 +89,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         timer?.invalidate()
         timer = nil
         locationManager.stopUpdatingLocation()
+        healthKit.stopWorkout()
 
         let duration = Int(elapsedSeconds)
         let trackPoints = track.map { loc in
@@ -83,10 +102,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
 
         finishedRun = FinishedRun(
+            id: UUID().uuidString.lowercased(),
             startedAt: startDate ?? Date(),
             durationSeconds: duration,
             distanceMetres: distanceMetres,
-            track: trackPoints
+            track: trackPoints,
+            averageBPM: healthKit.averageBPM
         )
 
         state = .finished

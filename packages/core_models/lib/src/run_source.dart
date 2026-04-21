@@ -1,5 +1,6 @@
 enum RunSource {
   app,
+  watch,
   healthkit,
   healthconnect,
   strava,

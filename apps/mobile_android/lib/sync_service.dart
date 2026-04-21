@@ -15,7 +15,7 @@ import 'local_run_store.dart';
 ///
 /// Sync attempts are silent and best-effort — failures are logged but don't
 /// surface to the UI. The user can still trigger an explicit sync from the
-/// History screen.
+/// Runs screen.
 class SyncService with WidgetsBindingObserver {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
@@ -61,17 +61,18 @@ class SyncService with WidgetsBindingObserver {
 
     _syncing = true;
     debugPrint('SyncService: pushing ${unsynced.length} runs ($reason)');
-    int pushed = 0;
-    for (final run in unsynced) {
-      try {
-        await api.saveRun(run);
-        await runStore.markSynced(run.id);
-        pushed++;
-      } catch (e) {
-        debugPrint('SyncService: failed to push ${run.id}: $e');
-      }
+    try {
+      // saveRunsBatch uploads tracks 8-in-parallel and upserts rows in
+      // chunks of 100. Used to be a serial per-run saveRun call with
+      // per-run markSynced rewrite — an order of magnitude more
+      // round-trips on a user with many offline runs.
+      await api.saveRunsBatch(unsynced);
+      await runStore.markManySynced(unsynced.map((r) => r.id));
+      debugPrint('SyncService: pushed ${unsynced.length}');
+    } catch (e) {
+      debugPrint('SyncService: batch push failed ($reason): $e');
+    } finally {
+      _syncing = false;
     }
-    debugPrint('SyncService: pushed $pushed/${unsynced.length}');
-    _syncing = false;
   }
 }

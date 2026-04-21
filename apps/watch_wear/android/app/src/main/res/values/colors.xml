@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Background colour for the adaptive launcher icon. Picked to match
+      the dominant coral of the foreground PNG so the masked edge blends
+      seamlessly when Wear OS crops the icon to a circle. Tune toward
+      the exact PNG colour if a designer revisits the brand mark.
+    -->
+    <!-- Matches `coralDeep` from the shared Dusk palette
+         (`packages/ui_kit/lib/src/theme/app_theme.dart`). Keep in sync
+         when the palette shifts; the adaptive icon's mask edge blends
+         into this colour so a wrong hex shows up as a visible halo. -->
+    <color name="ic_launcher_background">#D97A54</color>
+</resources>

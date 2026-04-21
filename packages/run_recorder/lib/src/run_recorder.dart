@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:core_models/core_models.dart';
@@ -8,10 +9,27 @@ import 'package:uuid/uuid.dart';
 
 import 'run_snapshot.dart';
 
-/// Manages a live GPS recording session.
-///
-/// Streams position updates, calculates pace, and accumulates distance.
-/// A single lap recorded mid-run.
+/// Thrown by [RunRecorder.prepare] when device location services are turned
+/// off (system-level, distinct from app permission). The user must enable
+/// them in Settings before a run can start.
+class LocationServiceDisabledError extends Error {
+  @override
+  String toString() => 'Location services are disabled on this device';
+}
+
+/// Thrown by [RunRecorder.prepare] when the user denied the location
+/// permission prompt (or has previously set it to deniedForever).
+class LocationPermissionDeniedError extends Error {
+  final bool forever;
+  LocationPermissionDeniedError({this.forever = false});
+  @override
+  String toString() => forever
+      ? 'Location permission is permanently denied'
+      : 'Location permission was denied';
+}
+
+/// A single lap split marked mid-run. Captures the cumulative distance and
+/// duration at the moment the user tapped the lap button.
 class LapSplit {
   final int number;
   final DateTime timestamp;
@@ -33,12 +51,24 @@ class LapSplit {
       };
 }
 
+/// Manages a live GPS recording session: opens the position stream, filters
+/// noise, accumulates distance, and emits [RunSnapshot]s to the UI. Survives
+/// a missing/revoked GPS signal — [prepare] flips [prepared] even when the
+/// stream can't open, and a retry loop reopens the stream when services
+/// come back.
 class RunRecorder {
   static const _uuid = Uuid();
+
+  /// How often [prepare] retries opening the position stream when it is
+  /// currently absent (services/permission denied at start, or the stream
+  /// errored mid-run). Short enough that re-enabling Location in Settings
+  /// feels immediate; long enough to avoid thrash.
+  static const _gpsRetryInterval = Duration(seconds: 3);
 
   final _controller = StreamController<RunSnapshot>.broadcast();
   StreamSubscription<Position>? _positionSub;
   Timer? _timer;
+  Timer? _gpsRetryTimer;
   final List<LapSplit> _laps = [];
 
   /// All lap splits recorded so far.
@@ -51,12 +81,27 @@ class RunRecorder {
   final Stopwatch _stopwatch = Stopwatch();
   double _distanceMetres = 0;
   final List<Waypoint> _track = [];
+  // Single read-only view handed out on every snapshot. `UnmodifiableListView`
+  // wraps `_track` by reference — appending to `_track` is still visible
+  // through the view, and there's no new wrapper allocated per emission
+  // (which used to fire 1×/second minimum + once per GPS fix).
+  late final UnmodifiableListView<Waypoint> _trackView =
+      UnmodifiableListView(_track);
   /// Latest raw GPS fix — drives the blue dot on the live map and updates
   /// on every fix, independent of the track-append threshold.
   Waypoint? _currentWaypoint;
   /// Last position that was appended to [_track]. Used to gate the next
   /// track append + distance accumulation on real movement.
   Position? _lastTrackedPosition;
+
+  /// Cache for route-relative calculations in [_emitSnapshot]. When the
+  /// 1-second elapsed-time timer fires without a new GPS fix, the
+  /// `_currentWaypoint` reference is identical to the last one the route
+  /// math ran against — reuse the previous off-route / remaining values
+  /// instead of re-walking every segment of the loaded route.
+  Waypoint? _lastRouteCalcFor;
+  double? _cachedOffRoute;
+  double? _cachedRouteRemaining;
   DateTime? _lastTrackedPositionAt;
   bool _recording = false;
   bool _paused = false;
@@ -64,30 +109,47 @@ class RunRecorder {
   double _trackThresholdMetres = 3;
   double _maxSpeedMps = 10;
   double _accuracyGateMetres = 20;
+  // Rate-limits the "fix dropped for accuracy" log. An always-bad stream
+  // would otherwise spam at ~1 Hz for the entire run.
+  DateTime? _lastAccuracyDropLogAt;
+  // Remembered so the retry loop can re-open the position stream with the
+  // same accuracy setting the caller passed to [prepare].
+  LocationAccuracy _locationAccuracy = LocationAccuracy.high;
 
   /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
   /// per second after [begin] starts recording time.
   Stream<RunSnapshot> get snapshots => _controller.stream;
 
-  /// Whether [prepare] has completed and the position stream is running.
+  /// Whether [prepare] has completed. True even when GPS is unavailable —
+  /// the recorder accepts [begin] and emits time-only snapshots until a
+  /// fix arrives (or the retry loop re-opens the stream).
   bool get prepared => _prepared;
   bool _prepared = false;
 
   /// Whether [begin] has been called and time/distance are accumulating.
   bool get recording => _recording;
 
-  /// Open the GPS position stream and subscribe to it, without starting to
-  /// accumulate time or distance. Positions received in this phase still
-  /// drive the blue dot via [snapshots], so the map can show the runner's
-  /// location during a countdown before the run officially starts.
+  /// Prepare the recorder for a run. Resets state, flips [prepared] to true,
+  /// starts the self-healing GPS retry loop, and — if services + permission
+  /// are available — opens the position stream so fixes can drive the live
+  /// map during the countdown before [begin] is called.
   ///
-  /// Call [begin] when the countdown ends to flip on recording.
+  /// Call [begin] when the countdown ends to flip on recording. Because
+  /// [prepared] flips before the GPS checks, [begin] is usable even for
+  /// indoor / treadmill runs where GPS is unavailable at the start.
   ///
   /// [distanceFilterMetres] and [minMovementMetres] are combined into a single
   /// software threshold that gates when a GPS fix gets appended to the track
   /// and counted toward distance. The OS-level filter is always 0 so the blue
   /// dot can update at the GPS sensor's native rate, independent of this
   /// threshold.
+  ///
+  /// Throws [LocationServiceDisabledError] if device location services are
+  /// off. Throws [LocationPermissionDeniedError] if the user denies (or has
+  /// permanently denied — see [LocationPermissionDeniedError.forever]) the
+  /// permission prompt. Both errors leave [prepared] == true; the recorder
+  /// is still usable as a time-only session and the retry loop will re-open
+  /// the stream automatically when services / permission come back.
   Future<void> prepare({
     Route? route,
     int distanceFilterMetres = 3,
@@ -96,16 +158,12 @@ class RunRecorder {
     LocationAccuracy accuracy = LocationAccuracy.high,
     double accuracyGateMetres = 20,
   }) async {
-    // Ensure location permission
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.deniedForever ||
-        permission == LocationPermission.denied) {
-      throw Exception('Location permission denied');
-    }
-
+    // Reset state first and flip _prepared = true unconditionally. If GPS
+    // setup below throws, the recorder is still usable for a time-only
+    // (indoor / treadmill) run — begin() will start the stopwatch, the
+    // 1-second timer emits snapshots with a null currentPosition, and the
+    // live map falls back to its "Waiting for GPS..." placeholder. If GPS
+    // later becomes available the caller can call prepare() again.
     _startTime = null;
     _stopwatch
       ..stop()
@@ -116,6 +174,9 @@ class RunRecorder {
     _currentWaypoint = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastRouteCalcFor = null;
+    _cachedOffRoute = null;
+    _cachedRouteRemaining = null;
     _recording = false;
     _paused = false;
     _route = route;
@@ -123,10 +184,47 @@ class RunRecorder {
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
     _accuracyGateMetres = accuracyGateMetres;
+    _locationAccuracy = accuracy;
+    _lastAccuracyDropLogAt = null;
+    _prepared = true;
 
+    // Start the self-healing retry loop regardless of whether GPS is
+    // available right now. If the user has Location off at the start of
+    // the run and flips it on later, or if Android tears the stream down
+    // mid-run, the loop re-subscribes within a few seconds.
+    _startGpsRetryLoop();
+
+    // Device-level location services must be on before we even try to get a
+    // permission or open a position stream — otherwise getPositionStream
+    // silently produces nothing and the run never receives a fix.
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw LocationServiceDisabledError();
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever) {
+      throw LocationPermissionDeniedError(forever: true);
+    }
+    if (permission == LocationPermission.denied) {
+      throw LocationPermissionDeniedError();
+    }
+
+    _openPositionStream();
+  }
+
+  /// Subscribe to [Geolocator.getPositionStream] with the accuracy settings
+  /// remembered from the last [prepare] call. Any stream error (commonly
+  /// thrown when the user toggles Location off mid-run) cancels the
+  /// subscription and clears [_positionSub] — the retry loop picks it back
+  /// up once services are available again.
+  void _openPositionStream() {
+    _positionSub?.cancel();
     _positionSub = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
-        accuracy: accuracy,
+        accuracy: _locationAccuracy,
         // Receive every fix from the OS; movement filtering happens in
         // software so the blue dot can refresh without inflating the track.
         distanceFilter: 0,
@@ -134,12 +232,41 @@ class RunRecorder {
           notificationTitle: 'Run in progress',
           notificationText: 'Recording your run',
           enableWakeLock: true,
-          notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+          notificationIcon:
+              AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
         ),
       ),
-    ).listen(_onPosition);
+    ).listen(
+      _onPosition,
+      onError: (Object e, StackTrace st) {
+        debugPrint('RunRecorder: position stream error — $e');
+        _positionSub?.cancel();
+        _positionSub = null;
+      },
+      cancelOnError: true,
+    );
+  }
 
-    _prepared = true;
+  /// Periodically check whether GPS is available and (re-)open the
+  /// position stream if it's currently down. Idempotent — a healthy
+  /// stream is a no-op.
+  void _startGpsRetryLoop() {
+    _gpsRetryTimer?.cancel();
+    _gpsRetryTimer = Timer.periodic(_gpsRetryInterval, (_) async {
+      if (!_prepared) return;
+      if (_positionSub != null) return;
+      try {
+        if (!await Geolocator.isLocationServiceEnabled()) return;
+        final p = await Geolocator.checkPermission();
+        if (p == LocationPermission.denied ||
+            p == LocationPermission.deniedForever) return;
+      } catch (e) {
+        debugPrint('RunRecorder: GPS retry precheck failed — $e');
+        return;
+      }
+      if (!_prepared || _positionSub != null) return;
+      _openPositionStream();
+    });
   }
 
   /// Flip the recorder into recording mode. Must be called after [prepare]
@@ -161,9 +288,12 @@ class RunRecorder {
     _recording = true;
     _paused = false;
 
-    // 1-second timer for elapsed time updates.
+    // 1-second timer for elapsed time updates. Fires regardless of whether
+    // we've received a GPS fix yet — during warmup or an indoor run the
+    // stopwatch still ticks; snapshots just carry a null currentPosition
+    // and the UI falls back to its "Waiting for GPS..." placeholder.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_recording || _currentWaypoint == null) return;
+      if (!_recording) return;
       _emitSnapshot();
     });
   }
@@ -211,6 +341,9 @@ class RunRecorder {
     _currentWaypoint = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastRouteCalcFor = null;
+    _cachedOffRoute = null;
+    _cachedRouteRemaining = null;
     _recording = false;
     _paused = false;
     _route = route;
@@ -261,7 +394,20 @@ class RunRecorder {
   void _onPosition(Position pos) {
     if (_paused) return;
 
-    if (pos.accuracy > _accuracyGateMetres) return;
+    if (pos.accuracy > _accuracyGateMetres) {
+      final now = DateTime.now();
+      final last = _lastAccuracyDropLogAt;
+      if (last == null ||
+          now.difference(last) >= const Duration(seconds: 5)) {
+        _lastAccuracyDropLogAt = now;
+        debugPrint(
+          'RunRecorder: dropping fix — accuracy '
+          '${pos.accuracy.toStringAsFixed(1)}m > gate '
+          '${_accuracyGateMetres.toStringAsFixed(0)}m',
+        );
+      }
+      return;
+    }
 
     // Always refresh the raw current position so the blue dot updates on
     // every valid fix, independent of the track-append threshold. This
@@ -317,19 +463,48 @@ class RunRecorder {
 
   void _emitSnapshot() {
     final current = _currentWaypoint;
-    if (current == null) return;
-
     final elapsed = _stopwatch.elapsed;
     final pace = _calculatePace();
-    final offRoute = _offRouteDistance(current);
-    final remaining = _routeRemaining(current);
+
+    // Route-relative fields are only meaningful once we have a fix AND a
+    // route is loaded. When the 1-second timer fires without a new GPS
+    // fix (indoor mode, warmup, stationary runner) the position hasn't
+    // moved — the last cached off-route / remaining values are still
+    // correct. Skipping the O(R) segment projection over the full route
+    // on every tick is a real win on long routes (e.g. a 40 km
+    // imported ride with 2000 waypoints).
+    double? offRoute;
+    double? remaining;
+    if (current != null) {
+      if (identical(current, _lastRouteCalcFor)) {
+        offRoute = _cachedOffRoute;
+        remaining = _cachedRouteRemaining;
+      } else {
+        offRoute = _offRouteDistance(current);
+        remaining = _routeRemaining(current);
+        _lastRouteCalcFor = current;
+        _cachedOffRoute = offRoute;
+        _cachedRouteRemaining = remaining;
+      }
+    }
+
+    // Debug-only guard that the shared track view is still the one
+    // callers expect. The efficiency contract is that every snapshot
+    // carries the SAME `_trackView` reference (wrapping `_track` by
+    // reference). If someone reintroduces a per-emit wrapper
+    // allocation here, the reference changes per emit and we regress
+    // the allocation fix. Stripped in release.
+    assert(
+      _trackView.length == _track.length,
+      'Shared _trackView out of sync with _track.',
+    );
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
       distanceMetres: _distanceMetres,
       currentPaceSecondsPerKm: pace,
       currentPosition: current,
-      track: List.unmodifiable(_track),
+      track: _trackView,
       offRouteDistanceMetres: offRoute,
       routeRemainingMetres: remaining,
     ));
@@ -509,6 +684,8 @@ class RunRecorder {
     _stopwatch.stop();
     _timer?.cancel();
     _timer = null;
+    _gpsRetryTimer?.cancel();
+    _gpsRetryTimer = null;
     await _positionSub?.cancel();
     _positionSub = null;
 
@@ -531,6 +708,7 @@ class RunRecorder {
   /// Clean up resources.
   void dispose() {
     _timer?.cancel();
+    _gpsRetryTimer?.cancel();
     _positionSub?.cancel();
     _controller.close();
   }

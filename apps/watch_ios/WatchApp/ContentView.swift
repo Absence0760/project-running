@@ -2,74 +2,90 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var workoutManager = WorkoutManager()
-    @State private var syncing = false
-    @State private var synced = false
+    @StateObject private var connectivity = WatchConnectivityManager.shared
     @State private var syncError: String?
-    @State private var authenticated = false
+    @State private var thisRunSynced = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 switch workoutManager.state {
                 case .idle:
-                    PreRunView(workoutManager: workoutManager, authenticated: authenticated)
+                    PreRunView(
+                        workoutManager: workoutManager,
+                        queuedCount: connectivity.queuedCount
+                    )
                 case .recording:
-                    RunningView(workoutManager: workoutManager)
+                    RunningView(
+                        workoutManager: workoutManager,
+                        healthKit: workoutManager.healthKit
+                    )
                 case .finished:
                     PostRunView(
                         workoutManager: workoutManager,
-                        syncing: syncing,
-                        synced: synced,
+                        transferState: connectivity.transferState,
+                        thisRunSynced: thisRunSynced,
                         syncError: syncError,
                         onSync: syncRun,
-                        onDiscard: discardRun
+                        onSyncDirect: syncRunDirect,
+                        onDiscard: startNextRun
                     )
                 }
             }
         }
-        .task {
-            await autoSignIn()
-        }
-    }
-
-    private func autoSignIn() async {
-        do {
-            _ = try await SupabaseService.shared.signIn(
-                email: "runner@test.com",
-                password: "testtest"
-            )
-            authenticated = true
-        } catch {
-            // Will show "not signed in" in UI
-            authenticated = false
-        }
+        .task { await workoutManager.healthKit.requestAuthorization() }
     }
 
     private func syncRun() {
         guard let run = workoutManager.finishedRun else { return }
-        syncing = true
         syncError = nil
+        do {
+            let fileURL = try workoutManager.writeTrackJSON()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            var metadata: [String: Any] = [
+                "id": run.id,
+                "started_at": formatter.string(from: run.startedAt),
+                "duration_s": run.durationSeconds,
+                "distance_m": run.distanceMetres,
+                "source": "watch"
+            ]
+            if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
+            connectivity.transferRun(fileURL: fileURL, metadata: metadata)
+            thisRunSynced = true
+        } catch {
+            syncError = error.localizedDescription
+        }
+    }
 
+    /// Watch-sim-alone dev path: no phone, upload straight to local Supabase.
+    /// No-op in Release builds — the corresponding button is also hidden.
+    private func syncRunDirect() {
+        #if DEBUG
+        guard let run = workoutManager.finishedRun else { return }
+        syncError = nil
         Task {
             do {
-                try await SupabaseService.shared.syncRun(run)
+                try await syncRunDirectDebug(run)
                 await MainActor.run {
-                    syncing = false
-                    synced = true
+                    thisRunSynced = true
+                    connectivity.transferState = .completed
                 }
             } catch {
                 await MainActor.run {
-                    syncing = false
                     syncError = error.localizedDescription
                 }
             }
         }
+        #endif
     }
 
-    private func discardRun() {
-        syncing = false
-        synced = false
+    /// Return to the idle screen. Leaves any WCSession-queued transfers
+    /// intact — they continue delivering in the background when the phone
+    /// is next reachable.
+    private func startNextRun() {
         syncError = nil
+        thisRunSynced = false
         workoutManager.reset()
     }
 }
@@ -78,24 +94,24 @@ struct ContentView: View {
 
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
-    let authenticated: Bool
+    let queuedCount: Int
 
     var body: some View {
         VStack(spacing: 12) {
             Text("Ready to Run")
                 .font(.headline)
 
-            if !authenticated {
-                Text("Not signed in")
+            if queuedCount > 0 {
+                Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
                     .font(.caption2)
-                    .foregroundColor(.orange)
+                    .foregroundColor(.secondary)
             }
 
             Button("Start") {
                 workoutManager.start()
             }
             .buttonStyle(.borderedProminent)
-            .tint(.green)
+            .tint(AppTheme.coralDeep)
         }
     }
 }
@@ -104,6 +120,7 @@ struct PreRunView: View {
 
 struct RunningView: View {
     @ObservedObject var workoutManager: WorkoutManager
+    @ObservedObject var healthKit: HealthKitManager
 
     var body: some View {
         VStack(spacing: 8) {
@@ -125,6 +142,14 @@ struct RunningView: View {
                     Text(workoutManager.formattedPace)
                         .font(.headline)
                 }
+                VStack {
+                    Text("HR")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(healthKit.currentBPM.map { "\($0)" } ?? "—")
+                        .font(.headline)
+                        .foregroundColor(AppTheme.coral)
+                }
             }
 
             Text("\(workoutManager.track.count) GPS pts")
@@ -135,7 +160,7 @@ struct RunningView: View {
                 workoutManager.stop()
             }
             .buttonStyle(.borderedProminent)
-            .tint(.red)
+            .tint(AppTheme.error)
         }
     }
 }
@@ -144,10 +169,11 @@ struct RunningView: View {
 
 struct PostRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
-    let syncing: Bool
-    let synced: Bool
+    let transferState: WatchConnectivityManager.TransferState
+    let thisRunSynced: Bool
     let syncError: String?
     let onSync: () -> Void
+    let onSyncDirect: () -> Void
     let onDiscard: () -> Void
 
     var body: some View {
@@ -156,7 +182,6 @@ struct PostRunView: View {
                 Text("Run Complete")
                     .font(.headline)
 
-                // Summary stats
                 VStack(spacing: 6) {
                     HStack {
                         Label(workoutManager.formattedDistance, systemImage: "figure.run")
@@ -168,42 +193,55 @@ struct PostRunView: View {
                     HStack {
                         Label(workoutManager.formattedPace, systemImage: "speedometer")
                         Spacer()
-                        Label("\(workoutManager.track.count) pts", systemImage: "mappin.and.ellipse")
+                        if let bpm = workoutManager.finishedRun?.averageBPM {
+                            Label("\(Int(bpm.rounded())) bpm", systemImage: "heart.fill")
+                        } else {
+                            Label("\(workoutManager.track.count) pts", systemImage: "mappin.and.ellipse")
+                        }
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 4)
 
-                if synced {
-                    Label("Synced", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                if thisRunSynced {
+                    Label(syncedStatusText, systemImage: syncedStatusIcon)
+                        .foregroundColor(AppTheme.coral)
                         .font(.body)
+                        .multilineTextAlignment(.center)
 
-                    Button("Done") {
+                    Button("Start next run") {
                         onDiscard()
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.duskDeep)
                 } else {
                     if let error = syncError {
                         Text(error)
                             .font(.caption2)
-                            .foregroundColor(.red)
+                            .foregroundColor(AppTheme.error)
+                            .multilineTextAlignment(.center)
+                    } else if case .failed(let msg) = transferState {
+                        Text(msg)
+                            .font(.caption2)
+                            .foregroundColor(AppTheme.error)
                             .multilineTextAlignment(.center)
                     }
 
                     Button {
                         onSync()
                     } label: {
-                        if syncing {
-                            ProgressView()
-                        } else {
-                            Label("Sync Run", systemImage: "arrow.up.circle")
-                        }
+                        Label("Sync Run", systemImage: "arrow.up.circle")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-                    .disabled(syncing)
+                    .tint(AppTheme.coralDeep)
+
+                    #if DEBUG
+                    Button("DEBUG: Sync Direct") {
+                        onSyncDirect()
+                    }
+                    .font(.caption2)
+                    #endif
 
                     Button("Discard", role: .destructive) {
                         onDiscard()
@@ -212,5 +250,18 @@ struct PostRunView: View {
                 }
             }
         }
+    }
+
+    private var syncedStatusText: String {
+        switch transferState {
+        case .completed: return "Sent to phone"
+        case .failed: return "Queued — will retry"
+        default: return "Queued for sync"
+        }
+    }
+
+    private var syncedStatusIcon: String {
+        if case .completed = transferState { return "checkmark.circle.fill" }
+        return "clock.arrow.circlepath"
     }
 }

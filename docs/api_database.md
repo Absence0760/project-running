@@ -45,7 +45,8 @@ create index runs_public on runs (is_public, started_at desc) where is_public = 
 
 | Value | Meaning |
 |---|---|
-| `app` | Recorded live in this app |
+| `app` | Recorded live on the phone |
+| `watch` | Recorded live on a paired watch (Wear OS or Apple Watch) |
 | `healthkit` | Imported from Apple HealthKit |
 | `healthconnect` | Imported from Android Health Connect |
 | `strava` | Synced from Strava API |
@@ -163,6 +164,114 @@ create table user_profiles (
 );
 ```
 
+### `clubs` / `club_members` / `events` / `event_attendees` / `club_posts`
+
+The social layer. See `docs/clubs.md` for surfaces and `docs/roadmap.md § Clubs and events` for phasing. Added in `20260416_001_clubs_and_events.sql`.
+
+```sql
+create table clubs (
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid references auth.users not null,
+  name          text not null,
+  slug          text unique not null,                 -- URL-safe, generated from name
+  description   text,
+  avatar_url    text,
+  location_label text,                                -- freeform "Austin, TX" — no geo yet
+  is_public     boolean default true,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+create table club_members (
+  club_id     uuid references clubs on delete cascade not null,
+  user_id     uuid references auth.users on delete cascade not null,
+  role        text not null default 'member',         -- 'owner' | 'admin' | 'member'
+  joined_at   timestamptz default now(),
+  primary key (club_id, user_id)
+);
+
+-- One-off events. Recurrence is Phase 2 (see roadmap).
+create table events (
+  id              uuid primary key default gen_random_uuid(),
+  club_id         uuid references clubs on delete cascade not null,
+  title           text not null,
+  description     text,
+  starts_at       timestamptz not null,
+  duration_min    integer,
+  meet_lat        double precision,
+  meet_lng        double precision,
+  meet_label      text,
+  route_id        uuid references routes on delete set null,
+  distance_m      numeric(10, 2),
+  pace_target_sec integer,                            -- seconds per km
+  capacity        integer,
+  created_by      uuid references auth.users not null,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
+);
+
+create table event_attendees (
+  event_id   uuid references events on delete cascade not null,
+  user_id    uuid references auth.users on delete cascade not null,
+  status     text not null default 'going',            -- 'going' | 'maybe' | 'declined'
+  joined_at  timestamptz default now(),
+  primary key (event_id, user_id)
+);
+
+-- Owner/admin broadcast updates. event_id is optional — posts can be
+-- pinned to a specific event (shows on the event page) or general (shows on
+-- the club feed only).
+create table club_posts (
+  id          uuid primary key default gen_random_uuid(),
+  club_id     uuid references clubs on delete cascade not null,
+  event_id    uuid references events on delete cascade,
+  author_id   uuid references auth.users not null,
+  body        text not null,
+  created_at  timestamptz default now()
+);
+```
+
+**Helper functions** (RLS readability): `is_club_member(club_id)` and `is_club_admin(club_id)` — `security definer` functions that encapsulate the `club_members` lookup so every policy below can read cleanly. A trigger auto-enrolls the owner as an `owner`-role member on club insert, so the helpers work uniformly for owners too.
+
+**Narrow unions** (client-side, no DB CHECK): `ClubRole = 'owner' | 'admin' | 'member'`, `RsvpStatus = 'going' | 'maybe' | 'declined'`. See `apps/web/src/lib/types.ts`.
+
+---
+
+### `user_coach_usage`
+
+Daily usage tracking for the AI Coach. One row per user per day, incremented by the coach endpoint on every message. The daily limit prevents runaway API costs.
+
+```sql
+create table user_coach_usage (
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  usage_date  date not null default current_date,
+  message_count integer not null default 0,
+  primary key (user_id, usage_date)
+);
+```
+
+**RPCs:**
+
+- `increment_coach_usage(p_user_id uuid) → integer` — upserts today's row and returns the new count. `security definer` so the coach endpoint can call it in one round trip.
+- `get_coach_usage(p_user_id uuid) → integer` — read-only; returns today's count without incrementing. Used by `CoachChat.svelte` to show "N of M remaining" before the user types.
+
+---
+
+### `monthly_funding`
+
+Monthly funding tracker for the donate page's progress bar. One row per month, keyed by the first of the month (e.g. `'2026-05-01'`). Updated by the project owner when donations land. Publicly readable — the whole point is transparency.
+
+Write path: service role only. RLS is enabled with a single `select` policy (`using (true)`); there are no INSERT/UPDATE/DELETE policies by design. All writes go through direct SQL or a service-role context (e.g. a webhook or admin script). No client-side write policy will be added.
+
+```sql
+create table monthly_funding (
+  month             date primary key,
+  amount_received   numeric(10,2) not null default 0,
+  donor_count       integer not null default 0,
+  updated_at        timestamptz not null default now()
+);
+```
+
 ---
 
 ## Row-level security
@@ -219,6 +328,25 @@ create policy "users manage their own reviews"
   on route_reviews for all to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- user_coach_usage: users can read/insert/update their own rows only.
+alter table user_coach_usage enable row level security;
+-- (select/insert/update policies scoped to auth.uid() = user_id)
+
+-- monthly_funding: publicly readable by anyone. Write restricted to
+-- service role (project owner).
+alter table monthly_funding enable row level security;
+create policy "monthly_funding_public_read"
+  on monthly_funding for select using (true);
+
+-- clubs: public clubs readable by anyone; private clubs readable only by
+-- members (+ owner). Only authenticated users can create. Updates/deletes
+-- gated by is_club_admin and owner_id respectively.
+alter table clubs enable row level security;
+-- events, event_attendees, club_posts inherit visibility from the parent
+-- club. Admin-only inserts for events and posts. Users manage their own RSVP
+-- row and leave their own club membership row. See
+-- 20260416_001_clubs_and_events.sql for the full set.
 ```
 
 ---
@@ -319,6 +447,24 @@ Scheduled function (cron: every 4 hours) that refreshes Strava access tokens bef
 3. Update `integrations` with new access token and expiry
 
 No request body — triggered by Supabase cron, not by clients.
+
+---
+
+### `POST /delete-account`
+
+Permanently deletes the authenticated user's account and all associated data.
+
+**Flow:**
+1. Authenticate user via JWT
+2. Delete all Storage files in the `runs` bucket under `{user_id}/`
+3. Delete the auth user via `admin.deleteUser()` — row data in `runs`, `routes`, `user_profiles`, `user_settings`, etc. cascades automatically via `ON DELETE CASCADE` foreign keys
+
+**Response:**
+```json
+{ "ok": true }
+```
+
+No request body required. Irreversible.
 
 ---
 

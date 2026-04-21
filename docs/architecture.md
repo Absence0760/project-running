@@ -24,7 +24,7 @@ run-app/                          # Monorepo root
 │   ├── mobile_ios/               # Flutter iOS app target
 │   ├── mobile_android/           # Flutter Android app target
 │   ├── watch_ios/                # Native Swift + WatchKit (Xcode project)
-│   ├── watch_wear/               # Flutter Wear OS target
+│   ├── watch_wear/               # Native Kotlin + Compose-for-Wear OS app (not Flutter)
 │   ├── web/                      # SvelteKit web app (TypeScript)
 │   │   ├── src/
 │   │   │   ├── routes/           # SvelteKit file-based routes
@@ -79,7 +79,7 @@ scripts:
 │                                                                          │
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌─────────┐ ┌─────────────┐ │
 │  │ iOS app   │ │Android app│ │Apple Watch│ │ Wear OS │ │  Web app    │ │
-│  │ Flutter   │ │  Flutter  │ │Swift+WKit │ │ Flutter │ │ SvelteKit  │ │
+│  │ Flutter   │ │  Flutter  │ │Swift+WKit │ │ Kotlin  │ │ SvelteKit  │ │
 │  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └────┬────┘ └──────┬──────┘ │
 │        │             │       WatchConnectivity    │             │        │
 └────────┼─────────────┼─────────────┼─────────────┼─────────────┼────────┘
@@ -141,15 +141,18 @@ WatchKit Extension
 └── WatchConnectivity.swift    # Sync with iPhone
 ```
 
-### Wear OS app (Flutter)
+### Wear OS app (Kotlin + Compose-for-Wear)
 
-Flutter runs natively on Wear OS. Uses `compose_for_wear` plugin for watch-appropriate UI components (rounded layouts, rotary input, swipe-to-dismiss).
+Native Kotlin Android app targeting Wear OS 3+ (minSdk 30). Uses Jetpack Compose-for-Wear (`androidx.wear.compose:*`) for UI, `FusedLocationProviderClient` for GPS, `androidx.health:health-services-client` for HR, DataStore for local queue persistence, and OkHttp for Supabase REST calls. **Not Flutter** — see [decisions.md § 15](decisions.md).
+
+Talks to Supabase **directly** (standalone — no paired-phone dependency). Schema drift is caught by the Kotlin row classes generated from Supabase migrations via `scripts/gen_dart_models.dart`'s Kotlin emitter, same source-of-truth that drives the Dart `db_rows.dart`. Renaming a column regenerates both and breaks `watch_wear`'s `SupabaseClient.saveRun` at compile time.
 
 **Key responsibilities:**
-- Standalone GPS workout recording
-- Live metrics display (Tiles API for glanceable data)
-- Route navigation synced from phone via Data Layer
-- Sync to phone via `wear` Flutter plugin
+- Standalone GPS workout recording (`GpsRecorder` wrapping `FusedLocationProviderClient`)
+- Live HR via Health Services `MeasureClient`, averaged into `run.metadata.avg_bpm` on stop
+- DataStore-backed retry queue (`LocalRunStore`) — runs stay local until `SupabaseClient.saveRun` succeeds
+- Compose-for-Wear UI with `TimeText`, `Vignette`, `PositionIndicator`, `ScalingLazyColumn`
+- Tile / complication (deferred)
 
 ### Web app (SvelteKit)
 
@@ -180,9 +183,19 @@ src/routes/
 ├── runs/
 │   ├── +page.svelte            # Run history with filters
 │   └── [id]/+page.svelte       # Run detail — map + full analysis
+├── clubs/                       # Social layer — browse + create + detail
+├── plans/                       # Training plans list + create + detail
+├── explore/                     # Public route discovery (nearby, search)
+├── live/                        # Live spectator tracking
+├── api/coach/+server.ts         # Claude coach endpoint (server-side)
+├── share/                       # Public run/route share pages (no auth)
 └── settings/
-    ├── integrations/+page.svelte  # Connect Strava, Garmin, parkrun
-    └── account/+page.svelte       # Profile, subscription, data export
+    ├── +layout.svelte           # Tabbed settings layout
+    ├── account/+page.svelte     # Profile, display name, data export
+    ├── preferences/+page.svelte # Units, activity defaults, coach tone
+    ├── integrations/+page.svelte # Connect Strava, Garmin, parkrun
+    ├── devices/+page.svelte     # Per-device settings
+    └── upgrade/+page.svelte     # Funding transparency + donate
 ```
 
 **Route builder (web-specific):**
@@ -254,15 +267,26 @@ Manages a live GPS recording session. Streams position updates, calculates pace,
 
 ```dart
 class RunRecorder {
-  Stream<RunSnapshot> get snapshots;       // emits on every valid GPS fix once prepared
-  bool get prepared;                        // GPS stream open, not yet accumulating
-  bool get recording;                       // time + distance are accumulating
+  // Emits on every valid GPS fix once prepared, AND once per second after
+  // begin() — even without a fix (indoor / GPS warmup). RunSnapshot.currentPosition
+  // is nullable for the no-fix case.
+  Stream<RunSnapshot> get snapshots;
+  // True after prepare() — even when GPS is unavailable. begin() still works
+  // and the retry loop will reopen the stream when services come back.
+  bool get prepared;
+  // True once begin() has flipped on. Time + distance are accumulating.
+  bool get recording;
 
-  Future<void> prepare({                   // open GPS, foreground service, no-op clock
+  // Resets state, flips `prepared = true`, starts the GPS retry loop, then
+  // opens the position stream. Throws LocationServiceDisabledError /
+  // LocationPermissionDeniedError on failure but leaves `prepared = true`.
+  Future<void> prepare({
     Route? route,
     int distanceFilterMetres,
     double minMovementMetres,
     double maxSpeedMps,
+    LocationAccuracy accuracy,
+    double accuracyGateMetres,
   });
   void begin();                             // sync — flip recording on; start Stopwatch
   Future<void> start({...});                // convenience: prepare() + begin()
@@ -321,11 +345,14 @@ create table runs (
   started_at  timestamptz not null,
   duration_s  integer not null,
   distance_m  numeric not null,
-  track       jsonb,           -- array of {lat, lng, ele, ts}
+  track_url   text,            -- Storage path: {user_id}/{run_id}.json.gz
+  is_public   boolean default false,
   route_id    uuid references routes,
-  source      text not null,   -- 'recorded' | 'strava' | 'garmin' | 'parkrun'
+  source      text not null,   -- 'app' | 'strava' | 'garmin' | 'parkrun' | ...
   external_id text,            -- source platform's ID for deduplication
-  created_at  timestamptz default now()
+  metadata    jsonb,           -- source-specific extra fields
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
 );
 
 create table routes (
@@ -372,6 +399,9 @@ Thin TypeScript functions deployed to Supabase Edge Functions (Deno runtime).
 | `strava-import` | POST (user action) | OAuth token exchange, backfill last 90 days of activities |
 | `parkrun-import` | POST (user action) | Fetch athlete results page by athlete number, parse HTML, save runs |
 | `refresh-tokens` | Scheduled (cron) | Refresh expiring Strava access tokens before they expire |
+| `export-data` | POST (user action) | Export all user runs as GPX zip or CSV (GDPR) |
+| `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation |
+| `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) |
 
 ---
 
@@ -489,7 +519,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 |---|---|---|
 | iOS + Android UI | Flutter 3.x + Dart | Single codebase, ~80% shared |
 | Apple Watch | Swift 5 + SwiftUI + WatchKit | Separate Xcode project in monorepo |
-| Wear OS | Flutter + `wear` plugin | Compose for Wear via platform channel |
+| Wear OS | Native Kotlin + Jetpack Compose-for-Wear | Separate Gradle project in monorepo, schema-codegen'd Kotlin row classes — see [decisions.md § 15](decisions.md) |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to Vercel |
 | Web maps | MapLibre GL JS | Route builder, run GPS trace, live spectator |
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |
@@ -499,7 +529,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | Maps (mobile) | flutter_map + MapLibre | Route display, live position |
 | GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
 | Health sync | `health` pub.dev package | Abstracts HealthKit + Health Connect |
-| Local storage | `drift` (SQLite) | Offline-first run storage on mobile |
+| Local storage | JSON files via `path_provider` + `dart:convert` | Offline-first run storage on mobile Android (iOS not yet implemented) |
 | Backend | Supabase | Postgres + Auth + Storage + Edge Functions |
 | Auth | Supabase Auth | Apple Sign-In + Google Sign-In |
 | CI/CD | GitHub Actions | Per-app matrix jobs |

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'goals.dart';
 
@@ -90,6 +91,26 @@ enum ActivityType {
     }
   }
 
+  /// Average stride / step length in metres. Used as a fallback distance
+  /// estimate for indoor / treadmill runs where GPS never produces a fix —
+  /// the pedometer still counts steps, so `steps × strideMetres` gives a
+  /// rough distance that's better than the `0.00 km` we'd otherwise show.
+  /// Values are average-adult estimates; individual stride varies with
+  /// height, cadence, and fatigue. Cycling has no pedometer so its value
+  /// is unused.
+  double get strideMetres {
+    switch (this) {
+      case ActivityType.run:
+        return 1.1; // ~2000 steps/km at a moderate pace
+      case ActivityType.walk:
+        return 0.73; // ~1370 steps/km
+      case ActivityType.cycle:
+        return 0.0; // pedometer not meaningful for cycling
+      case ActivityType.hike:
+        return 0.85; // shorter than running, longer than walking
+    }
+  }
+
   /// Maximum plausible speed (metres/second). Position deltas implying
   /// anything faster than this are discarded as GPS corruption — the line
   /// shouldn't teleport across town because of one bad fix.
@@ -126,6 +147,14 @@ class Preferences extends ChangeNotifier {
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
   static const _kSplitIntervalMetres = 'split_interval_metres';
+  // Timestamp of the last successful runs-list fetch. Drives the
+  // delta-fetch path in RunsScreen so refreshes only pull rows modified
+  // since, instead of re-paging the entire history every time.
+  static const _kRunsLastFetchedAt = 'runs_last_fetched_at';
+  // Stable per-install identifier used to scope `user_device_settings`
+  // rows. Minted on first launch and never rotated — rotating would
+  // orphan the device's row and lose per-device preferences.
+  static const _kDeviceId = 'device_id';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -139,6 +168,7 @@ class Preferences extends ChangeNotifier {
   List<RunGoal> _goals = [];
   bool _advancedGps = false;
   int _splitIntervalMetres = 0;
+  String _deviceId = '';
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -149,6 +179,22 @@ class Preferences extends ChangeNotifier {
   /// Custom split interval in metres. 0 means use the activity-type default
   /// (1 km for run/walk/hike, 5 km for cycling).
   int get splitIntervalMetres => _splitIntervalMetres;
+
+  /// Stable per-install device identifier. Minted on first launch.
+  String get deviceId => _deviceId;
+
+  /// Timestamp of the last successful `getRuns` call. Used to drive the
+  /// delta-fetch path so refreshing the Runs tab only pulls rows updated
+  /// since the last visit. Null means "never fetched" — the first fetch
+  /// is full, subsequent ones are deltas.
+  DateTime? get runsLastFetchedAt {
+    final iso = _prefs.getString(_kRunsLastFetchedAt);
+    return iso == null ? null : DateTime.tryParse(iso);
+  }
+
+  Future<void> setRunsLastFetchedAt(DateTime when) async {
+    await _prefs.setString(_kRunsLastFetchedAt, when.toIso8601String());
+  }
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
   /// when current pace is more than 30s off in either direction.
@@ -166,6 +212,14 @@ class Preferences extends ChangeNotifier {
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
+
+    final existingDeviceId = _prefs.getString(_kDeviceId);
+    if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
+      _deviceId = existingDeviceId;
+    } else {
+      _deviceId = const Uuid().v4();
+      await _prefs.setString(_kDeviceId, _deviceId);
+    }
 
     final rawGoals = _prefs.getString(_kGoalsJson);
     if (rawGoals != null && rawGoals.isNotEmpty) {

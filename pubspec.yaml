@@ -9,7 +9,6 @@ dev_dependencies:
 workspace:
   - apps/mobile_android
   - apps/mobile_ios
-  - apps/watch_wear
   - packages/api_client
   - packages/core_models
   - packages/gpx_parser

@@ -1,9 +1,26 @@
 import Foundation
 import WatchConnectivity
 
-/// Syncs recorded runs and routes between Apple Watch and iPhone.
+/// Transfers completed runs from the Apple Watch to the paired iPhone over
+/// `WCSession.transferFile(_:metadata:)`. The phone owns the Supabase write —
+/// the watch just hands over the JSON track file + a metadata dict.
+/// WCSession picks the transport (Bluetooth / Wi-Fi P2P / iCloud relay),
+/// queues across app launches, and retries on its own. Queued transfers
+/// survive app closure and watch reboot, so a day of offline runs will all
+/// drain to Supabase the moment the phone companion app next activates its
+/// own `WCSession`.
 class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnectivityManager()
+
+    enum TransferState: Equatable {
+        case idle
+        case pending
+        case completed
+        case failed(String)
+    }
+
+    @Published var transferState: TransferState = .idle
+    @Published var queuedCount: Int = 0
 
     override init() {
         super.init()
@@ -13,23 +30,37 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    /// Send a completed run to the iPhone for syncing to Supabase.
-    func transferRun(_ runData: [String: Any]) {
-        guard WCSession.default.isReachable else {
-            // Queue for transfer when connection is restored
-            WCSession.default.transferUserInfo(runData)
+    /// Hand a finished run off to the phone. The file is copied into
+    /// WCSession's outbox synchronously, so the caller can reset UI state
+    /// immediately — WCSession owns delivery from here on.
+    func transferRun(fileURL: URL, metadata: [String: Any]) {
+        guard WCSession.default.activationState == .activated else {
+            DispatchQueue.main.async { self.transferState = .failed("WCSession not activated") }
             return
         }
-        WCSession.default.sendMessage(runData, replyHandler: nil)
+        WCSession.default.transferFile(fileURL, metadata: metadata)
+        DispatchQueue.main.async {
+            self.queuedCount += 1
+            self.transferState = .pending
+        }
     }
 
     // MARK: - WCSessionDelegate
 
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        // TODO: Handle activation state
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+
+    func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        DispatchQueue.main.async {
+            if self.queuedCount > 0 { self.queuedCount -= 1 }
+            if let error = error {
+                self.transferState = .failed(error.localizedDescription)
+            } else if self.queuedCount == 0 {
+                self.transferState = .completed
+            }
+        }
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        // TODO: Handle incoming route data from iPhone
+        // Future: handle route pushes from phone.
     }
 }

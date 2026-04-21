@@ -1,24 +1,73 @@
 name: Release Web
 
+# Tag: `web@1.2.3`. Builds the static SvelteKit site, deploys to GitHub
+# Pages, and attaches the build artifacts to a GitHub Release for
+# rollback (just re-deploy the older tag's build zip).
+#
+# Main-branch pushes still deploy separately via the project's existing
+# Pages workflow (for dev iteration); this workflow is the canonical
+# audited deploy path.
+
 on:
   push:
     tags:
-      - 'web/v*'
+      - 'web@*'
 
 jobs:
-  build:
-    name: Build Web (SvelteKit)
+  release:
+    name: Build + deploy web
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#web@}"
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
+
       - run: npm install --workspace=apps/web
-      - run: cp apps/web/.env.example apps/web/.env
+
+      - name: Copy dotenv
+        run: cp apps/web/.env.example apps/web/.env
+
       - run: npm run check --workspace=apps/web
       - run: npm run build --workspace=apps/web
-      - uses: actions/upload-artifact@v4
+        env:
+          PUBLIC_APP_VERSION: ${{ steps.version.outputs.name }}
+
+      - name: Package build for release
+        run: |
+          cd apps/web
+          zip -r web-build-${{ steps.version.outputs.name }}.zip build
+          mv web-build-${{ steps.version.outputs.name }}.zip ../../
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: web-build
-          path: apps/web/build/
+          path: apps/web/build
+
+      - id: pages
+        uses: actions/deploy-pages@v4
+
+      - name: Create GitHub Release + attach build zip
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Web ${{ steps.version.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          files: web-build-${{ steps.version.outputs.name }}.zip
+          generate_release_notes: true
