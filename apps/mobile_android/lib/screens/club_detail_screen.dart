@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../social_service.dart';
+import '../widgets/error_state.dart';
 import 'event_detail_screen.dart';
 
 class ClubDetailScreen extends StatefulWidget {
@@ -48,7 +49,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       _error = null;
     });
     try {
-      final club = await widget.social.fetchClubBySlug(widget.slug);
+      final club = await widget.social
+          .fetchClubBySlug(widget.slug)
+          .timeout(kBackendLoadTimeout);
       if (club == null) {
         if (mounted) setState(() => _loading = false);
         return;
@@ -56,7 +59,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       final results = await Future.wait([
         widget.social.fetchUpcomingEvents(club.row.id),
         widget.social.fetchClubPosts(club.row.id),
-      ]);
+      ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
         _club = club;
@@ -67,7 +70,16 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       if (_channel == null) {
         _channel = widget.social.subscribeToClub(club.row.id, _onRealtimeChange);
       }
-    } catch (e) {
+    } on TimeoutException catch (e) {
+      debugPrint('ClubDetailScreen._load timed out: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Connection timed out. Check your network and try again.';
+        });
+      }
+    } catch (e, s) {
+      debugPrint('ClubDetailScreen._load failed: $e\n$s');
       if (mounted) {
         setState(() {
           _error = e.toString();

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../recurrence.dart';
 import '../social_service.dart';
+import '../widgets/error_state.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -31,6 +32,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _loading = true;
   bool _busy = false;
   bool _submittingResult = false;
+  String? _loadError;
 
   RealtimeChannel? _channel;
   Timer? _debounce;
@@ -42,40 +44,65 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final club = await widget.social.fetchClubBySlug(widget.clubSlug);
-    final event = await widget.social.fetchEventById(widget.eventId);
-    if (event == null) {
-      if (mounted) setState(() => _loading = false);
-      return;
-    }
-    _activeInstance ??= event.nextInstanceStart;
-    final now = DateTime.now();
-    final horizon = now.add(const Duration(days: 120));
-    final instances = expandInstances(
-      event.toRecurrence(), now, horizon, max: 6,
-    );
-    final attendees = await widget.social.fetchAttendees(
-      event.row.id, _activeInstance!,
-    );
-    final results = await widget.social.fetchEventResults(
-      event.row.id, _activeInstance!,
-    );
-    if (!mounted) return;
     setState(() {
-      _event = event;
-      _club = club;
-      _attendees = attendees;
-      _results = results;
-      _instances = instances;
-      _loading = false;
+      _loading = true;
+      _loadError = null;
     });
-    if (_channel == null && club != null) {
-      _channel = widget.social.subscribeToEvent(
-        event.row.id,
-        club.row.id,
-        _onRealtimeChange,
+    try {
+      final clubFut =
+          widget.social.fetchClubBySlug(widget.clubSlug);
+      final eventFut = widget.social.fetchEventById(widget.eventId);
+      final headResults = await Future.wait([clubFut, eventFut])
+          .timeout(kBackendLoadTimeout);
+      final club = headResults[0] as ClubView?;
+      final event = headResults[1] as EventView?;
+      if (event == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      _activeInstance ??= event.nextInstanceStart;
+      final now = DateTime.now();
+      final horizon = now.add(const Duration(days: 120));
+      final instances = expandInstances(
+        event.toRecurrence(), now, horizon, max: 6,
       );
+      final bodyResults = await Future.wait([
+        widget.social.fetchAttendees(event.row.id, _activeInstance!),
+        widget.social.fetchEventResults(event.row.id, _activeInstance!),
+      ]).timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _event = event;
+        _club = club;
+        _attendees = bodyResults[0] as List<AttendeeView>;
+        _results = bodyResults[1] as List<EventResultView>;
+        _instances = instances;
+        _loading = false;
+      });
+      if (_channel == null && club != null) {
+        _channel = widget.social.subscribeToEvent(
+          event.row.id,
+          club.row.id,
+          _onRealtimeChange,
+        );
+      }
+    } on TimeoutException catch (e) {
+      debugPrint('EventDetailScreen._load timed out: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError =
+              'Connection timed out. Check your network and try again.';
+        });
+      }
+    } catch (e, s) {
+      debugPrint('EventDetailScreen._load failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = 'Couldn\'t load this event. Tap retry to try again.';
+        });
+      }
     }
   }
 
@@ -180,6 +207,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final theme = Theme.of(context);
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_loadError != null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: ErrorState(message: _loadError!, onRetry: _load),
+      );
     }
     final e = _event;
     if (e == null) {

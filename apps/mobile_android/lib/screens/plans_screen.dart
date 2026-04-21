@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../training.dart';
 import '../training_service.dart';
+import '../widgets/error_state.dart';
 import 'plan_detail_screen.dart';
 import 'plan_new_screen.dart';
 
@@ -18,6 +21,7 @@ class PlansScreen extends StatefulWidget {
 class _PlansScreenState extends State<PlansScreen> {
   List<TrainingPlanRow> _plans = const [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -37,16 +41,34 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final p = await widget.training.fetchMyPlans();
+      final p =
+          await widget.training.fetchMyPlans().timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
         _plans = p;
         _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } on TimeoutException catch (e) {
+      debugPrint('PlansScreen._load timed out: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Connection timed out. Check your network and try again.';
+        });
+      }
+    } catch (e, s) {
+      debugPrint('PlansScreen._load failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Couldn\'t load training plans. Tap retry to try again.';
+        });
+      }
     }
   }
 
@@ -80,7 +102,9 @@ class _PlansScreenState extends State<PlansScreen> {
           ? const _SignInPrompt()
           : _loading
           ? const Center(child: CircularProgressIndicator())
-          : _plans.isEmpty
+          : _error != null
+              ? ErrorState(message: _error!, onRetry: _load)
+              : _plans.isEmpty
               ? _Empty()
               : RefreshIndicator(
                   onRefresh: _load,

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../training.dart';
 import '../training_service.dart';
+import '../widgets/error_state.dart';
 
 class WorkoutDetailScreen extends StatefulWidget {
   final TrainingService training;
@@ -22,6 +25,7 @@ class WorkoutDetailScreen extends StatefulWidget {
 class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   PlanWorkoutRow? _workout;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -30,19 +34,48 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final w = await widget.training.fetchWorkout(widget.workoutId);
-    if (!mounted) return;
     setState(() {
-      _workout = w;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final w = await widget.training
+          .fetchWorkout(widget.workoutId)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _workout = w;
+        _loading = false;
+      });
+    } on TimeoutException catch (e) {
+      debugPrint('WorkoutDetailScreen._load timed out: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Connection timed out. Check your network and try again.';
+        });
+      }
+    } catch (e, s) {
+      debugPrint('WorkoutDetailScreen._load failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Couldn\'t load this workout. Tap retry to try again.';
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: ErrorState(message: _error!, onRetry: _load),
+      );
     }
     final w = _workout;
     if (w == null) {

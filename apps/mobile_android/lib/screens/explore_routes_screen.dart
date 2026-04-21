@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../widgets/error_state.dart';
 import 'route_detail_screen.dart';
 
 enum _ExploreMode { search, nearMe }
@@ -110,17 +113,25 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         sort: _sort,
         limit: _pageSize,
         offset: 0,
-      );
+      ).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
         _results = results;
         _hasMore = results.length >= _pageSize;
         _loading = false;
       });
-    } catch (e) {
+    } on TimeoutException catch (e) {
+      debugPrint('ExploreRoutesScreen._search timed out: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Search failed: $e';
+        _error = 'Connection timed out. Check your network and try again.';
+        _loading = false;
+      });
+    } catch (e, s) {
+      debugPrint('ExploreRoutesScreen._search failed: $e\n$s');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Search failed. Tap retry to try again.';
         _loading = false;
       });
     }
@@ -206,16 +217,24 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         lng: pos.longitude,
         radiusM: 50000,
         limit: 50,
-      );
+      ).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
         _results = results;
         _loading = false;
       });
-    } catch (e) {
+    } on TimeoutException catch (e) {
+      debugPrint('ExploreRoutesScreen._searchNearby timed out: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Could not find nearby routes: $e';
+        _error = 'Connection timed out. Check your network and try again.';
+        _loading = false;
+      });
+    } catch (e, s) {
+      debugPrint('ExploreRoutesScreen._searchNearby failed: $e\n$s');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not find nearby routes. Tap retry to try again.';
         _loading = false;
       });
     }
@@ -496,18 +515,9 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
 
   Widget _buildBody(ThemeData theme, DistanceUnit unit) {
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off, size: 48, color: theme.colorScheme.outline),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-            ],
-          ),
-        ),
+      return ErrorState(
+        message: _error!,
+        onRetry: _mode == _ExploreMode.nearMe ? _searchNearby : _search,
       );
     }
 

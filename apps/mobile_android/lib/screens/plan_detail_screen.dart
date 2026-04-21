@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../training.dart';
 import '../training_service.dart';
+import '../widgets/error_state.dart';
 import 'workout_detail_screen.dart';
 
 class PlanDetailScreen extends StatefulWidget {
@@ -23,6 +26,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   List<PlanWeekRow> _weeks = const [];
   Map<String, List<PlanWorkoutRow>> _byWeek = const {};
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -31,25 +35,54 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final res = await widget.training.fetchPlan(widget.planId);
-    if (!mounted) return;
-    final byWeek = <String, List<PlanWorkoutRow>>{};
-    for (final w in res.workouts) {
-      byWeek.putIfAbsent(w.weekId, () => []).add(w);
-    }
     setState(() {
-      _plan = res.plan;
-      _weeks = res.weeks;
-      _byWeek = byWeek;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final res = await widget.training
+          .fetchPlan(widget.planId)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      final byWeek = <String, List<PlanWorkoutRow>>{};
+      for (final w in res.workouts) {
+        byWeek.putIfAbsent(w.weekId, () => []).add(w);
+      }
+      setState(() {
+        _plan = res.plan;
+        _weeks = res.weeks;
+        _byWeek = byWeek;
+        _loading = false;
+      });
+    } on TimeoutException catch (e) {
+      debugPrint('PlanDetailScreen._load timed out: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Connection timed out. Check your network and try again.';
+        });
+      }
+    } catch (e, s) {
+      debugPrint('PlanDetailScreen._load failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Couldn\'t load this plan. Tap retry to try again.';
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: ErrorState(message: _error!, onRetry: _load),
+      );
     }
     final p = _plan;
     if (p == null) {

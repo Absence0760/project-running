@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../social_service.dart';
+import '../widgets/error_state.dart';
 import 'club_detail_screen.dart';
 
 class ClubsScreen extends StatefulWidget {
@@ -24,11 +25,6 @@ class _ClubsScreenState extends State<ClubsScreen> {
   List<ClubView> _mine = const [];
   final _searchCtrl = TextEditingController();
 
-  // Hard cap so a hanging Supabase request (backend unreachable, stale
-  // auth, blocked by RLS waiting on a lock) surfaces as an error the
-  // user can see and retry, rather than a permanent spinner.
-  static const _loadTimeout = Duration(seconds: 15);
-
   @override
   void initState() {
     super.initState();
@@ -49,7 +45,7 @@ class _ClubsScreenState extends State<ClubsScreen> {
       final results = await Future.wait([
         widget.social.browseClubs(query: _searchCtrl.text),
         widget.social.fetchMyClubs(),
-      ]).timeout(_loadTimeout);
+      ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
         _browse = results[0];
@@ -57,7 +53,7 @@ class _ClubsScreenState extends State<ClubsScreen> {
         _loading = false;
       });
     } on TimeoutException catch (e) {
-      debugPrint('ClubsScreen._load timed out after ${_loadTimeout.inSeconds}s: $e');
+      debugPrint('ClubsScreen._load timed out after ${kBackendLoadTimeout.inSeconds}s: $e');
       if (mounted) {
         setState(() {
           _loading = false;
@@ -137,7 +133,7 @@ class _ClubsScreenState extends State<ClubsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _ErrorState(message: _error!, onRetry: _load)
+              ? ErrorState(message: _error!, onRetry: _load)
               : list.isEmpty
               ? _Empty(tab: _tab)
               : RefreshIndicator(
@@ -281,40 +277,6 @@ class _ClubTile extends StatelessWidget {
               ),
             ),
             Icon(Icons.chevron_right, color: theme.colorScheme.outline),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off, size: 48, color: theme.colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.tonalIcon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
           ],
         ),
       ),
