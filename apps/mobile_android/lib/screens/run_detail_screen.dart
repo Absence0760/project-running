@@ -320,6 +320,7 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                     plannedRoute:
                         run.track.isEmpty ? _linkedRoute?.waypoints : null,
                     followRunner: false,
+                    activity: run.track.isNotEmpty ? _activityType : null,
                   ),
                   if (_loadingTrack)
                     const Positioned(

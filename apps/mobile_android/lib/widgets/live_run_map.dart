@@ -5,7 +5,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../preferences.dart' show ActivityType;
 import '../tile_cache.dart';
+import 'pace_segments.dart';
 
 /// Live map shown during a run, displaying the GPS track and current position.
 ///
@@ -31,6 +33,12 @@ class LiveRunMap extends StatefulWidget {
   /// of behind it.
   final double bottomPadding;
 
+  /// Activity type that produced this track. When non-null the track is
+  /// drawn as a per-segment pace heatmap (NRC-style) with an age-based
+  /// alpha fade; when null it falls back to the legacy single gradient
+  /// polyline — used by route_detail (no pace data) and manual-entry runs.
+  final ActivityType? activity;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -38,6 +46,7 @@ class LiveRunMap extends StatefulWidget {
     this.plannedRoute,
     this.followRunner = true,
     this.bottomPadding = 0,
+    this.activity,
   });
 
   @override
@@ -70,6 +79,12 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   // the points are identical and the smoothed view is still valid.
   List<LatLng>? _cachedSmoothedTrack;
   int _cachedSmoothedForLength = -1;
+
+  // Cached pace-heatmap polylines. Keyed by (length, activity) so a
+  // manual activity change during preload rebuilds the buckets.
+  List<Polyline>? _cachedPaceSegments;
+  int _cachedPaceSegmentsForLength = -1;
+  ActivityType? _cachedPaceSegmentsForActivity;
 
   String get _tileUrl {
     final key = dotenv.env['MAPTILER_KEY'] ?? '';
@@ -137,6 +152,31 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     return smoothed;
   }
 
+  /// Pace-coloured + age-faded polylines for [widget.track], cached by
+  /// (length, activity). Rebuilds at GPS rate as the track grows but
+  /// coalesces consecutive same-bucket segments, so a 10 km run typically
+  /// lands at a few dozen polylines rather than one-per-fix.
+  List<Polyline> _pacedSegmentsFor(
+    List<Waypoint> track,
+    List<LatLng> rendered,
+    ActivityType activity,
+  ) {
+    if (_cachedPaceSegments != null &&
+        _cachedPaceSegmentsForLength == track.length &&
+        _cachedPaceSegmentsForActivity == activity) {
+      return _cachedPaceSegments!;
+    }
+    final segs = buildPaceSegments(
+      track: track,
+      rendered: rendered,
+      activity: activity,
+    );
+    _cachedPaceSegments = segs;
+    _cachedPaceSegmentsForLength = track.length;
+    _cachedPaceSegmentsForActivity = activity;
+    return segs;
+  }
+
   /// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
   /// shows as a smoother line instead of a visible zig-zag. The first two
   /// and last two points are preserved unchanged. Display-only — the stored
@@ -195,6 +235,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       _userPanned = false;
       _cachedSmoothedTrack = null;
       _cachedSmoothedForLength = -1;
+      _cachedPaceSegments = null;
+      _cachedPaceSegmentsForLength = -1;
+      _cachedPaceSegmentsForActivity = null;
     }
 
     final pos = _latestPosition;
@@ -330,10 +373,13 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
               ),
 
             // Recorded track — Nike-Run-Club-style glowing line.
-            // Three stacked layers give the line depth against the dark
-            // map: a soft halo, a thin dark underline for contrast, and a
-            // bright indigo gradient on top that fades from dim (oldest
-            // point) to almost white at the current position.
+            // Stack from bottom to top:
+            //   1. outer halo (soft glow)
+            //   2. mid halo (denser glow)
+            //   3. dark underline (provides contrast without needing a
+            //      per-segment border, which would show visible seams
+            //      between coalesced pace buckets)
+            //   4. pace heatmap OR legacy gradient on top
             if (trackLatLngs.length >= 2) ...[
               PolylineLayer(
                 polylines: [
@@ -357,17 +403,33 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                 polylines: [
                   Polyline(
                     points: trackLatLngs,
-                    strokeWidth: 6,
-                    gradientColors: const [
-                      Color(0xFF4F46E5),
-                      Color(0xFF818CF8),
-                      Color(0xFFC7D2FE),
-                    ],
-                    borderStrokeWidth: 2,
-                    borderColor: const Color(0xFF1E1B4B),
+                    strokeWidth: 8,
+                    color: const Color(0xFF1E1B4B),
                   ),
                 ],
               ),
+              if (widget.activity != null)
+                PolylineLayer(
+                  polylines: _pacedSegmentsFor(
+                    widget.track,
+                    trackLatLngs,
+                    widget.activity!,
+                  ),
+                )
+              else
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: trackLatLngs,
+                      strokeWidth: 6,
+                      gradientColors: const [
+                        Color(0xFF4F46E5),
+                        Color(0xFF818CF8),
+                        Color(0xFFC7D2FE),
+                      ],
+                    ),
+                  ],
+                ),
             ],
 
             // Current position marker — drawn from the interpolated tween

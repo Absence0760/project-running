@@ -69,7 +69,8 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `route_simplify.dart` — Ramer–Douglas–Peucker track simplifier used when saving a run as a route (tested)
 - `health_connect_importer.dart` / `strava_importer.dart` — bulk importers
 - `mock_data.dart` — fallback data when Supabase returns nothing (dev only)
-- `widgets/live_run_map.dart` — live map with route overlay, off-route banner
+- `widgets/live_run_map.dart` — live map with route overlay, off-route banner, NRC-style pace heatmap (when `activity` is non-null, falls through to the legacy single gradient polyline otherwise)
+- `widgets/pace_segments.dart` — pure helpers `buildPaceSegments` / `paceBucketForSpeed` / `ageBandFor`. Pace-coloured, age-faded segment builder for the live track. No Flutter state — unit-tested in `test/pace_segments_test.dart`
 - `widgets/collapsible_panel.dart` — the run screen's expandable stats panel
 - `widgets/run_share_card.dart` — portrait share card + modal sheet; captures a PNG via `RepaintBoundary.toImage` and hands it to `share_plus`
 - `widgets/goal_editor_sheet.dart` — modal bottom sheet for creating/editing/deleting a `RunGoal` (type + period + target)
@@ -104,6 +105,7 @@ Test files in `test/`:
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
 - `training_test.dart` — 18 tests: VDOT, Riegel, pace derivation, plan generation (mirrors `apps/web/src/lib/training.test.ts`)
 - `ble_heart_rate_test.dart` — 9 tests: BLE HR characteristic 0x2A37 parser (8-bit/16-bit BPM, edge cases)
+- `pace_segments_test.dart` — 15 tests: pace-bucket clamping, activity-specific scaling, age-band partitioning, coalescing, vertex-sharing continuity, timestamp-less fallback — backs the NRC-style pace heatmap in `widgets/pace_segments.dart`
 - `architecture_guards_test.dart` — 14 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, etc.). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
 - plus `run_recorder`'s own tests in `packages/run_recorder/test/` (17 behavioural + 7 guards)
 

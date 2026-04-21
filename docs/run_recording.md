@@ -245,13 +245,27 @@ Smoothing cannot correct systematic offset from the road (GPS bias, not noise). 
 
 ### NRC-style polyline
 
-The live track is drawn as three stacked `PolylineLayer`s for a Nike-Run-Club-style glow:
+The live track is drawn as four stacked `PolylineLayer`s for a Nike-Run-Club-style glow and pace heatmap:
 
 1. **Outermost halo** — 18 px stroke, indigo at 18% alpha
 2. **Mid halo** — 10 px stroke, indigo at 35% alpha
-3. **Main line** — 6 px stroke, gradient from deep indigo (oldest) → pale lavender (newest), 2 px dark indigo border for contrast against dark map tiles
+3. **Dark underline** — 8 px stroke, deep indigo (`0xFF1E1B4B`), solid. Replaces the per-polyline border that the old single-gradient line used — a shared underline avoids visible seams at the boundaries between coalesced pace buckets on layer 4.
+4. **Pace heatmap** — per-segment polylines coloured by instantaneous speed and faded by age. Built by `buildPaceSegments` in `widgets/pace_segments.dart`, cached in `LiveRunMap` by `(track.length, activity)`. See below. When `LiveRunMap.activity` is null (route preview, manual-entry runs without activity metadata) this falls back to the legacy single 6 px gradient polyline (deep indigo → pale lavender).
 
-Rounded caps and joins are flutter_map's default. The gradient direction makes the line look like it's trailing behind a comet, brightening toward the blue dot.
+Rounded caps and joins are flutter_map's default.
+
+#### Pace heatmap
+
+Each segment (consecutive waypoint pair) is assigned two coordinates:
+
+- **Pace bucket** (0..5, slow → fast) from its instantaneous speed in m/s. Break-points are activity-specific: running ~7:30 → 3:45 per km, walking ~16:40 → 7:35, hiking shifted slower, cycling 12 → 36 km/h. Segments without timestamps (shouldn't happen for recorded runs; guards against manual-entry imports) fall back to the slowest bucket as a safe default.
+- **Age band** (0..2, oldest → newest) from its position along the track. Three bands at 1/3 boundaries give the run a "comet trail" fade: oldest segments render at 55 % alpha, mid at 80 %, newest at 100 %.
+
+Consecutive segments sharing both coordinates are coalesced into a single `Polyline` — a 10 km run with steady pacing typically lands at ~20 polylines, a hard-hard-easy interval session at ~50. Adjacent coalesced runs share their boundary vertex so there's no visible gap at bucket transitions.
+
+The six-colour ramp (red → orange → amber → lime → emerald → cyan) is fixed, so a steady 5:00/km pace renders the same colour across every run — you can eyeball a pace comparison between two runs by comparing hue.
+
+Mini-test list in `test/pace_segments_test.dart` covers bucket clamping, activity-specific scaling, uniform-pace coalescing, vertex-sharing continuity, and the no-timestamp fallback.
 
 ### Blue dot interpolation
 

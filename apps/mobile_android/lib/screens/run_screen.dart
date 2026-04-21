@@ -1388,6 +1388,7 @@ class _RunScreenState extends State<RunScreen> {
             currentPosition: stats.currentPosition,
             plannedRoute: _selectedRoute?.waypoints,
             bottomPadding: _statsOverlayHeight,
+            activity: _activityType,
           ),
         ),
 
