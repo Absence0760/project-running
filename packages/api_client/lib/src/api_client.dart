@@ -167,18 +167,35 @@ class ApiClient {
       ).toJson();
     }).toList();
 
-    final hasExternalIds =
-        runs.any((r) => r.externalId != null && r.externalId!.isNotEmpty);
-
     int saved = 0;
     for (var i = 0; i < rows.length; i += rowChunkSize) {
       final chunk = rows.skip(i).take(rowChunkSize).toList();
-      if (hasExternalIds) {
+      // Split each chunk by whether a row carries an external_id.
+      // Rows with an external_id upsert on that column so re-imports
+      // of Strava / Health Connect runs dedup correctly. Rows without
+      // an external_id (app-recorded) upsert on the primary key `id`,
+      // which is always set and is the correct dedup key for live runs.
+      // Using a single onConflict spec for a mixed batch would apply
+      // the external_id conflict clause to null-external_id rows,
+      // bypassing the partial unique index and creating duplicates.
+      final withExtId = chunk
+          .where((r) =>
+              (r[RunRow.colExternalId] as String?) != null &&
+              (r[RunRow.colExternalId] as String).isNotEmpty)
+          .toList();
+      final withoutExtId = chunk
+          .where((r) {
+            final id = r[RunRow.colExternalId] as String?;
+            return id == null || id.isEmpty;
+          })
+          .toList();
+      if (withExtId.isNotEmpty) {
         await _client
             .from(RunRow.table)
-            .upsert(chunk, onConflict: RunRow.colExternalId);
-      } else {
-        await _client.from(RunRow.table).upsert(chunk);
+            .upsert(withExtId, onConflict: RunRow.colExternalId);
+      }
+      if (withoutExtId.isNotEmpty) {
+        await _client.from(RunRow.table).upsert(withoutExtId);
       }
       saved += chunk.length;
       onProgress?.call(saved);
