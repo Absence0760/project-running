@@ -86,7 +86,7 @@ cd ../..
 dart run scripts/gen_dart_models.dart   # packages/core_models/lib/src/generated/db_rows.dart
 ```
 
-CI's `parity-types` job runs `npm run gen:types:check` and fails the build if the committed TS file is out of sync with the schema. There is no equivalent CI gate for the Dart generator yet — rely on `dart analyze` to flag stale references in `packages/api_client`.
+CI's `parity-types` job checks `database.types.ts`. The `schema-codegen-drift` job regenerates and diffs both `db_rows.dart` and `DbRows.kt` — all three are gated on PRs to `main`.
 
 Details, troubleshooting, and drift-detection test recipe: [../../docs/schema_codegen.md](../../docs/schema_codegen.md).
 

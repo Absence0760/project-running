@@ -87,7 +87,7 @@ Same generator (`scripts/gen_dart_models.dart`), same parse tree, second emitter
 
 If you add a new table that the Wear OS app needs to write, add it to `_kotlinTables` in `scripts/gen_dart_models.dart` and rerun. The Kotlin type mapping is narrower than Dart's `dynamic` — jsonb columns become `kotlinx.serialization.json.JsonElement`, so callers use the JSON tree API to read nested values.
 
-Kotlin has no `parity-types`-equivalent CI gate yet; rely on `./gradlew compileDebugKotlin` locally catching drift. Adding a CI check that regenerates the Kotlin file and fails on uncommitted diff is a TODO — same shape as the TS `gen:types:check` job.
+The `schema-codegen-drift` CI job regenerates both `db_rows.dart` and `DbRows.kt` and fails the PR if the committed files differ from the generator output — the same guarantee `parity-types` provides for TypeScript.
 
 ---
 
