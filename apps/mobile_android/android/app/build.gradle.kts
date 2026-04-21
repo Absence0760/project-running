@@ -65,4 +65,7 @@ flutter {
 dependencies {
     // Wearable Data Layer — pushes the Supabase session to the paired watch_wear app.
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    // NotificationCompat used by RunNotificationBridge to replace the
+    // geolocator foreground-service notification with live run stats.
+    implementation("androidx.core:core-ktx:1.13.1")
 }

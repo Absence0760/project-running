@@ -7,5 +7,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         WearAuthBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
+        RunNotificationBridge(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
     }
 }

@@ -17,6 +17,7 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../race_controller.dart';
+import '../run_notification_bridge.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -182,6 +183,11 @@ class _RunScreenState extends State<RunScreen> {
   // the blue dot sits in the visible area above the overlay, not behind it.
   final GlobalKey _statsOverlayKey = GlobalKey();
   double _statsOverlayHeight = 300;
+
+  // Replaces geolocator's "Run in progress" foreground-service notification
+  // with live time / distance / pace so the lock screen is useful mid-run.
+  final RunNotificationBridge _lockScreen = RunNotificationBridge();
+  DateTime? _lastNotificationAt;
 
   @override
   void initState() {
@@ -543,6 +549,35 @@ class _RunScreenState extends State<RunScreen> {
           );
         }
       }
+
+      _refreshLockScreenNotification();
+  }
+
+  /// Push the current stats to the native lock-screen notification,
+  /// throttled to ~1 Hz so a burst of GPS fixes doesn't spam the
+  /// NotificationManager. The native side reposts on geolocator's
+  /// channel + id, so this replaces (rather than duplicates) the
+  /// "Run in progress" row.
+  void _refreshLockScreenNotification() {
+    if (_state != _ScreenState.recording) return;
+    final now = DateTime.now();
+    final last = _lastNotificationAt;
+    if (last != null && now.difference(last).inMilliseconds < 900) return;
+    _lastNotificationAt = now;
+
+    final unit = widget.preferences.unit;
+    final timeStr = _formatDuration(_elapsed);
+    final distanceStr = UnitFormat.distance(_distanceMetres, unit);
+    final paceStr = _activityType.usesSpeed
+        ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
+        : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
+
+    _lockScreen.update(
+      title: _manualPaused ? '${_activityType.label} • paused' : _activityType.label,
+      text: '$timeStr  •  $distanceStr  •  $paceStr',
+      bigText:
+          'Time: $timeStr\nDistance: $distanceStr\n${_activityType.usesSpeed ? "Speed" : "Pace"}: $paceStr',
+    );
   }
 
   /// Serialise the in-progress run to disk. Runs every 10s via
@@ -713,6 +748,11 @@ class _RunScreenState extends State<RunScreen> {
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
     _holdToStopTicker?.cancel();
+    _lastNotificationAt = null;
+    // geolocator's stopForeground(STOP_FOREGROUND_REMOVE) removes the
+    // ongoing notification on stream cancel, but clear explicitly so a
+    // slow service teardown doesn't leave a stale row on the lock screen.
+    _lockScreen.clear();
     WakelockPlus.disable();
 
     // Tag the run with the chosen activity type + step count so the web
@@ -831,6 +871,8 @@ class _RunScreenState extends State<RunScreen> {
     _holdToStopProgress = 0;
     // Fire-and-forget — if we discarded mid-run, drop the in-progress file.
     widget.runStore.clearInProgress();
+    _lockScreen.clear();
+    _lastNotificationAt = null;
     WakelockPlus.disable();
     setState(() {
       _state = _ScreenState.idle;
