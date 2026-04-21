@@ -63,6 +63,14 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   LatLng? _tweenStart;
   LatLng? _tweenEnd;
 
+  // Cached smoothed track polyline. The tween controller drives ~1 Hz
+  // rebuilds of LiveRunMap and each previously re-ran two O(n) smoothing
+  // passes over the full track. Recompute only when the length changes —
+  // the recorder only appends to the track, so a matching length means
+  // the points are identical and the smoothed view is still valid.
+  List<LatLng>? _cachedSmoothedTrack;
+  int _cachedSmoothedForLength = -1;
+
   String get _tileUrl {
     final key = dotenv.env['MAPTILER_KEY'] ?? '';
     return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
@@ -111,6 +119,23 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   Waypoint? get _latestPosition =>
       widget.currentPosition ??
       (widget.track.isNotEmpty ? widget.track.last : null);
+
+  /// Smoothed polyline for [widget.track], cached by length. The recorder
+  /// only appends, so equal lengths imply identical points — returning the
+  /// cached list saves two O(n) smoothing passes + the raw LatLng
+  /// conversion on every rebuild (~1 Hz from the position tween, higher
+  /// during a hold-to-stop).
+  List<LatLng> _smoothedTrackFor(List<Waypoint> track) {
+    if (_cachedSmoothedTrack != null &&
+        _cachedSmoothedForLength == track.length) {
+      return _cachedSmoothedTrack!;
+    }
+    final raw = track.map((w) => LatLng(w.lat, w.lng)).toList();
+    final smoothed = _smoothTrack(_smoothTrack(raw));
+    _cachedSmoothedTrack = smoothed;
+    _cachedSmoothedForLength = track.length;
+    return smoothed;
+  }
 
   /// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
   /// shows as a smoother line instead of a visible zig-zag. The first two
@@ -168,6 +193,8 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       _tweenStart = null;
       _tweenEnd = null;
       _userPanned = false;
+      _cachedSmoothedTrack = null;
+      _cachedSmoothedForLength = -1;
     }
 
     final pos = _latestPosition;
@@ -203,13 +230,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final rawTrack = widget.track
-        .map((w) => LatLng(w.lat, w.lng))
-        .toList();
-    // Two 5-point smoothing passes — enough to tame walking-pace jitter
-    // without cutting corners on sharp turns. Doesn't snap to roads; that's
-    // blocked on backend map matching (see docs/roadmap.md).
-    final trackLatLngs = _smoothTrack(_smoothTrack(rawTrack));
+    final trackLatLngs = _smoothedTrackFor(widget.track);
     final plannedLatLngs = widget.plannedRoute
             ?.map((w) => LatLng(w.lat, w.lng))
             .toList() ??

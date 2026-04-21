@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:core_models/core_models.dart';
@@ -80,12 +81,27 @@ class RunRecorder {
   final Stopwatch _stopwatch = Stopwatch();
   double _distanceMetres = 0;
   final List<Waypoint> _track = [];
+  // Single read-only view handed out on every snapshot. `UnmodifiableListView`
+  // wraps `_track` by reference — appending to `_track` is still visible
+  // through the view, and there's no new wrapper allocated per emission
+  // (which used to fire 1×/second minimum + once per GPS fix).
+  late final UnmodifiableListView<Waypoint> _trackView =
+      UnmodifiableListView(_track);
   /// Latest raw GPS fix — drives the blue dot on the live map and updates
   /// on every fix, independent of the track-append threshold.
   Waypoint? _currentWaypoint;
   /// Last position that was appended to [_track]. Used to gate the next
   /// track append + distance accumulation on real movement.
   Position? _lastTrackedPosition;
+
+  /// Cache for route-relative calculations in [_emitSnapshot]. When the
+  /// 1-second elapsed-time timer fires without a new GPS fix, the
+  /// `_currentWaypoint` reference is identical to the last one the route
+  /// math ran against — reuse the previous off-route / remaining values
+  /// instead of re-walking every segment of the loaded route.
+  Waypoint? _lastRouteCalcFor;
+  double? _cachedOffRoute;
+  double? _cachedRouteRemaining;
   DateTime? _lastTrackedPositionAt;
   bool _recording = false;
   bool _paused = false;
@@ -155,6 +171,9 @@ class RunRecorder {
     _currentWaypoint = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastRouteCalcFor = null;
+    _cachedOffRoute = null;
+    _cachedRouteRemaining = null;
     _recording = false;
     _paused = false;
     _route = route;
@@ -318,6 +337,9 @@ class RunRecorder {
     _currentWaypoint = null;
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _lastRouteCalcFor = null;
+    _cachedOffRoute = null;
+    _cachedRouteRemaining = null;
     _recording = false;
     _paused = false;
     _route = route;
@@ -426,16 +448,46 @@ class RunRecorder {
     final current = _currentWaypoint;
     final elapsed = _stopwatch.elapsed;
     final pace = _calculatePace();
-    // Route-relative fields are only meaningful once we have a fix.
-    final offRoute = current == null ? null : _offRouteDistance(current);
-    final remaining = current == null ? null : _routeRemaining(current);
+
+    // Route-relative fields are only meaningful once we have a fix AND a
+    // route is loaded. When the 1-second timer fires without a new GPS
+    // fix (indoor mode, warmup, stationary runner) the position hasn't
+    // moved — the last cached off-route / remaining values are still
+    // correct. Skipping the O(R) segment projection over the full route
+    // on every tick is a real win on long routes (e.g. a 40 km
+    // imported ride with 2000 waypoints).
+    double? offRoute;
+    double? remaining;
+    if (current != null) {
+      if (identical(current, _lastRouteCalcFor)) {
+        offRoute = _cachedOffRoute;
+        remaining = _cachedRouteRemaining;
+      } else {
+        offRoute = _offRouteDistance(current);
+        remaining = _routeRemaining(current);
+        _lastRouteCalcFor = current;
+        _cachedOffRoute = offRoute;
+        _cachedRouteRemaining = remaining;
+      }
+    }
+
+    // Debug-only guard that the shared track view is still the one
+    // callers expect. The efficiency contract is that every snapshot
+    // carries the SAME `_trackView` reference (wrapping `_track` by
+    // reference). If someone reintroduces a per-emit wrapper
+    // allocation here, the reference changes per emit and we regress
+    // the allocation fix. Stripped in release.
+    assert(
+      _trackView.length == _track.length,
+      'Shared _trackView out of sync with _track.',
+    );
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
       distanceMetres: _distanceMetres,
       currentPaceSecondsPerKm: pace,
       currentPosition: current,
-      track: List.unmodifiable(_track),
+      track: _trackView,
       offRouteDistanceMetres: offRoute,
       routeRemainingMetres: remaining,
     ));

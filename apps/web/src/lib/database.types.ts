@@ -1022,6 +1022,13 @@ export type Database = {
           distance: string
         }[]
       }
+      popular_route_tags: {
+        Args: { tag_limit?: number }
+        Returns: {
+          route_count: number
+          tag: string
+        }[]
+      }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined

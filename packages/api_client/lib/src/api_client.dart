@@ -206,11 +206,33 @@ class ApiClient {
   ///
   /// Returned runs have an empty `track`. Use [fetchTrack] to download the
   /// GPS waypoints for a single run when its detail page is opened.
-  Future<List<Run>> getRuns({int limit = 50, DateTime? before}) async {
+  ///
+  /// [before] paginates backwards — pass the `startedAt` of the oldest
+  /// row from a previous page to get the next older batch.
+  ///
+  /// [updatedSince] enables delta fetches: only rows whose `last_modified_at`
+  /// (in metadata) is newer than the supplied timestamp are returned. The
+  /// caller stores its `lastFetchedAt` locally and passes it on subsequent
+  /// opens so we don't re-fetch the entire history on every Runs tab
+  /// visit.
+  Future<List<Run>> getRuns({
+    int limit = 50,
+    DateTime? before,
+    DateTime? updatedSince,
+  }) async {
     var query = _client.from(RunRow.table).select();
 
     if (before != null) {
       query = query.lt(RunRow.colStartedAt, before.toIso8601String());
+    }
+    if (updatedSince != null) {
+      // `last_modified_at` lives in metadata as an ISO-8601 string stamped
+      // by LocalRunStore on every write. `->>` projects the JSON field as
+      // text; Postgres lexicographic-compares ISO-8601 strings correctly.
+      query = query.gt(
+        "${RunRow.colMetadata}->>'last_modified_at'",
+        updatedSince.toIso8601String(),
+      );
     }
 
     final data = await query
@@ -393,23 +415,16 @@ class ApiClient {
   }
 
   /// The N most-used tags across public routes, for filter-chip population.
-  /// Client-side aggregation; see the web twin for the same approach.
+  /// Calls the `popular_route_tags` RPC so aggregation happens in Postgres
+  /// (one GIN-indexed scan, returns a few KB) instead of pulling up to
+  /// 500 rows down the wire and counting in memory.
   Future<List<String>> fetchPopularRouteTags({int limit = 20}) async {
     final rows = await _client
-        .from(RouteRow.table)
-        .select('tags')
-        .eq(RouteRow.colIsPublic, true)
-        .limit(500);
-    final counts = <String, int>{};
-    for (final row in (rows as List).cast<Map<String, dynamic>>()) {
-      final tags = (row['tags'] as List?)?.cast<String>() ?? const [];
-      for (final t in tags) {
-        counts[t] = (counts[t] ?? 0) + 1;
-      }
-    }
-    final sorted = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return sorted.take(limit).map((e) => e.key).toList();
+        .rpc('popular_route_tags', params: {'tag_limit': limit});
+    return (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map((r) => r['tag'] as String)
+        .toList();
   }
 
   Future<void> updateRouteTags(String routeId, List<String> tags) async {

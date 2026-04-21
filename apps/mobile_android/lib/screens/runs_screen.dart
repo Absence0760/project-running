@@ -152,10 +152,24 @@ class _RunsScreenState extends State<RunsScreen> {
     if (api == null || api.userId == null) return;
     setState(() => _fetching = true);
     try {
-      final remote = await api.getRuns(limit: 200);
+      // Delta-fetch on subsequent refreshes: the first pull populates the
+      // local store from scratch, every subsequent one only asks for rows
+      // modified since the last successful fetch. A user with hundreds
+      // of runs saves both the round-trip payload and the per-row
+      // saveFromRemote cost.
+      //
+      // The `since` cursor is snapshotted *before* the request so a run
+      // written by another device between the request and the response
+      // still gets picked up on the next refresh.
+      final since = widget.preferences.runsLastFetchedAt;
+      final fetchStartedAt = DateTime.now().toUtc();
+      final remote = since == null
+          ? await api.getRuns(limit: 200)
+          : await api.getRuns(limit: 200, updatedSince: since);
       for (final run in remote) {
         await widget.runStore.saveFromRemote(run);
       }
+      await widget.preferences.setRunsLastFetchedAt(fetchStartedAt);
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');
       if (mounted) {
@@ -184,14 +198,12 @@ class _RunsScreenState extends State<RunsScreen> {
     int synced = 0;
     String? lastError;
 
-    for (final run in unsynced) {
-      try {
-        await api.saveRun(run);
-        await widget.runStore.markSynced(run.id);
-        synced++;
-      } catch (e) {
-        lastError = e.toString();
-      }
+    try {
+      await api.saveRunsBatch(unsynced);
+      await widget.runStore.markManySynced(unsynced.map((r) => r.id));
+      synced = unsynced.length;
+    } catch (e) {
+      lastError = e.toString();
     }
 
     setState(() => _syncing = false);

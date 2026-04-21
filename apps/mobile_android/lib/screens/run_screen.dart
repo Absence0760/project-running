@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -84,13 +85,20 @@ class _RunScreenState extends State<RunScreen> {
   // Selected route (optional)
   cm.Route? _selectedRoute;
 
-  // Live stats
+  // Live stats. Mirror fields kept for internal consumers (_saveInProgress,
+  // _refreshLockScreenNotification, the _formattedX getters). The hot-path
+  // UI updates come through _statsNotifier so the per-second snapshot
+  // rebuilds only the subtrees that actually show these values — not the
+  // whole _buildRecording Stack (chips, banners tied to _gpsLost /
+  // _permissionLost, layout widgets).
   Duration _elapsed = Duration.zero;
   double _distanceMetres = 0;
   double? _pace;
   List<cm.Waypoint> _track = [];
   cm.Waypoint? _currentPosition;
   int _lastTickNotified = 0;
+  final ValueNotifier<_LiveStats> _statsNotifier =
+      ValueNotifier(_LiveStats.empty);
 
   // Manual pause only — there is no longer any auto-pause layer. The clock
   // runs continuously during a run (except when the user explicitly taps
@@ -105,6 +113,15 @@ class _RunScreenState extends State<RunScreen> {
   // GPS never produced a fix. Flipped true on the first non-null
   // snapshot.currentPosition; reset on discard.
   bool _everHadGpsFix = false;
+
+  // Running elevation gain, updated incrementally as new waypoints arrive
+  // in _onSnapshot. The naive O(n) rescan of the full track on every
+  // build was the hottest per-frame work in the run screen — a 60-minute
+  // run rescans 3600+ points every tween tick (~60 Hz). This field is
+  // the only authoritative source; reset on discard alongside the other
+  // live-stats fields.
+  double _elevationGainMetres = 0;
+  int _elevationProcessedCount = 0;
 
   // Reentrancy guard on start — prevents rapid taps from spawning
   // multiple recorders.
@@ -138,11 +155,10 @@ class _RunScreenState extends State<RunScreen> {
   int _pedometerRetries = 0;
   static const _pedometerMaxRetries = 5;
 
-  // Hold-to-stop progress (0..1) — drives the circular progress ring on
-  // the big red stop button, preventing accidental one-tap stops.
-  static const _holdToStopDuration = Duration(milliseconds: 800);
-  Timer? _holdToStopTicker;
-  double _holdToStopProgress = 0.0;
+  // Hold-to-stop UX — the progress ticker now lives inside
+  // _HoldToStopButton so the 60 Hz rebuild is scoped to that button,
+  // not the whole RunScreen. RunScreen just exposes `_stop` as the
+  // `onHoldComplete` callback; nothing else is needed here.
 
   // Laps
   int _lapCount = 0;
@@ -244,8 +260,19 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// Fires on both `Preferences` changes and `LocalRunStore` updates (e.g.
+  /// the 10-second incremental save during a run). Only trigger a rebuild
+  /// when the user can actually see the result — during active recording
+  /// the screen reads its stats from snapshots, not from the prefs or the
+  /// run store, so a full rebuild every 10s would be pure waste.
   void _onPrefsChange() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_state == _ScreenState.recording ||
+        _state == _ScreenState.countdown ||
+        _state == _ScreenState.paused) {
+      return;
+    }
+    setState(() {});
   }
 
   /// Ask for location + notification permissions but don't block the run on
@@ -479,15 +506,62 @@ class _RunScreenState extends State<RunScreen> {
         if (!_everHadGpsFix) _everHadGpsFix = true;
       }
 
-      setState(() {
-        _elapsed = snapshot.elapsed;
-        _distanceMetres = snapshot.distanceMetres;
-        _pace = snapshot.currentPaceSecondsPerKm;
-        _track = snapshot.track;
-        _currentPosition = snapshot.currentPosition;
-        _offRouteDistance = snapshot.offRouteDistanceMetres;
-        _routeRemaining = snapshot.routeRemainingMetres;
-      });
+      // Extend the elevation-gain accumulator with any new waypoints. The
+      // recorder only appends to the track (no reordering / truncation
+      // during a run), so processing just the tail is correct.
+      final track = snapshot.track;
+      if (track.length < _elevationProcessedCount) {
+        // Defensive reset — shouldn't happen unless the recorder was
+        // swapped out from under us (discard → new run inside the same
+        // lifecycle, which does go through _discard anyway).
+        _elevationGainMetres = 0;
+        _elevationProcessedCount = 0;
+      }
+      for (int i = _elevationProcessedCount == 0
+              ? 1
+              : _elevationProcessedCount;
+          i < track.length;
+          i++) {
+        final prev = track[i - 1].elevationMetres;
+        final curr = track[i].elevationMetres;
+        if (prev != null && curr != null && curr > prev) {
+          _elevationGainMetres += curr - prev;
+        }
+      }
+      _elevationProcessedCount = track.length;
+
+      // Update the mirror fields so internal consumers (_saveInProgress,
+      // _refreshLockScreenNotification, the _formattedX getters) see the
+      // latest values immediately. No setState — the UI rebuilds are
+      // driven by _statsNotifier below so only the stats-consuming
+      // subtrees rebuild, not the whole screen.
+      _elapsed = snapshot.elapsed;
+      _distanceMetres = snapshot.distanceMetres;
+      _pace = snapshot.currentPaceSecondsPerKm;
+      _track = track;
+      _currentPosition = snapshot.currentPosition;
+      _offRouteDistance = snapshot.offRouteDistanceMetres;
+      _routeRemaining = snapshot.routeRemainingMetres;
+      _statsNotifier.value = _LiveStats(
+        elapsed: _elapsed,
+        distanceMetres: _distanceMetres,
+        pace: _pace,
+        track: _track,
+        currentPosition: _currentPosition,
+        offRouteDistance: _offRouteDistance,
+        routeRemaining: _routeRemaining,
+      );
+      // Debug-only sanity check that the mirror fields and the notifier
+      // carry the same values. If a future edit updates one without the
+      // other (the classic regression path when someone "cleans up" the
+      // dual write), this trips immediately in dev builds. Stripped in
+      // release by the Dart compiler.
+      assert(() {
+        final v = _statsNotifier.value;
+        return v.elapsed == _elapsed &&
+            v.distanceMetres == _distanceMetres &&
+            identical(v.track, _track);
+      }(), 'Mirror fields and _statsNotifier desynced — update them together.');
 
       // Every auxiliary effect below runs behind its own try/catch — if any
       // one fails (TTS init error, network race-ping error, flaky route
@@ -754,38 +828,6 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
-  // Hold-to-stop gesture: ticker animates a progress ring around the stop
-  // button, calling _stop() when the full duration elapses. Cancelled if
-  // the user lifts their finger early.
-  void _startHoldToStop() {
-    _holdToStopTicker?.cancel();
-    final start = DateTime.now();
-    _holdToStopTicker = Timer.periodic(const Duration(milliseconds: 16), (t) {
-      final elapsed = DateTime.now().difference(start);
-      final progress =
-          (elapsed.inMilliseconds / _holdToStopDuration.inMilliseconds)
-              .clamp(0.0, 1.0);
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      setState(() => _holdToStopProgress = progress);
-      if (progress >= 1.0) {
-        t.cancel();
-        _holdToStopProgress = 0;
-        _stop();
-      }
-    });
-  }
-
-  void _cancelHoldToStop() {
-    _holdToStopTicker?.cancel();
-    _holdToStopTicker = null;
-    if (_holdToStopProgress != 0 && mounted) {
-      setState(() => _holdToStopProgress = 0);
-    }
-  }
-
   void _markLap() {
     if (_recorder == null) return;
     final n = _recorder!.lap();
@@ -808,7 +850,6 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
-    _holdToStopTicker?.cancel();
     _lastNotificationAt = null;
     // geolocator's stopForeground(STOP_FOREGROUND_REMOVE) removes the
     // ongoing notification on stream cancel, but clear explicitly so a
@@ -929,7 +970,6 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
-    _holdToStopTicker?.cancel();
     _recorder?.dispose();
     _recorder = null;
     _prepareFuture = null;
@@ -943,7 +983,9 @@ class _RunScreenState extends State<RunScreen> {
     _gpsLost = false;
     _permissionLost = false;
     _everHadGpsFix = false;
-    _holdToStopProgress = 0;
+    _elevationGainMetres = 0;
+    _elevationProcessedCount = 0;
+    _statsNotifier.value = _LiveStats.empty;
     // Fire-and-forget — if we discarded mid-run, drop the in-progress file.
     widget.runStore.clearInProgress();
     _lockScreen.clear();
@@ -984,8 +1026,8 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
-    _holdToStopTicker?.cancel();
     _recorder?.dispose();
+    _statsNotifier.dispose();
     super.dispose();
   }
 
@@ -1068,16 +1110,7 @@ class _RunScreenState extends State<RunScreen> {
     return '$cals';
   }
 
-  String get _formattedElevation {
-    if (_track.length < 2) return '0';
-    double gain = 0;
-    for (int i = 1; i < _track.length; i++) {
-      final prev = _track[i - 1].elevationMetres;
-      final curr = _track[i].elevationMetres;
-      if (prev != null && curr != null && curr > prev) gain += curr - prev;
-    }
-    return '${gain.round()}';
-  }
+  String get _formattedElevation => '${_elevationGainMetres.round()}';
 
   // ──────────────── Build ────────────────
 
@@ -1345,79 +1378,91 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   Widget _buildRecording(BuildContext context) {
-    // Measure the stats overlay after layout so the map can offset its
-    // follow-cam by the real height rather than a hard-coded guess.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final box = _statsOverlayKey.currentContext?.findRenderObject() as RenderBox?;
-      if (box == null || !box.hasSize) return;
-      final h = box.size.height;
-      if ((h - _statsOverlayHeight).abs() > 1 && mounted) {
-        setState(() => _statsOverlayHeight = h);
-      }
-    });
-
     return Stack(
       children: [
-        LiveRunMap(
-          track: _track,
-          currentPosition: _currentPosition,
-          plannedRoute: _selectedRoute?.waypoints,
-          bottomPadding: _statsOverlayHeight,
+        // Map — rebuilds only when snapshot track / currentPosition change,
+        // not on every parent setState (e.g. manual pause toggle, lap mark).
+        ValueListenableBuilder<_LiveStats>(
+          valueListenable: _statsNotifier,
+          builder: (context, stats, _) => LiveRunMap(
+            track: stats.track,
+            currentPosition: stats.currentPosition,
+            plannedRoute: _selectedRoute?.waypoints,
+            bottomPadding: _statsOverlayHeight,
+          ),
         ),
 
-        // "X to go" badge — top right when a route is selected
-        if (_routeRemaining != null)
-          Positioned(
-            top: 56,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 8),
-                ],
+        // "X to go" badge — top right when a route is selected. Listens
+        // to the snapshot notifier so it updates at GPS rate without
+        // triggering a full-screen rebuild.
+        ValueListenableBuilder<_LiveStats>(
+          valueListenable: _statsNotifier,
+          builder: (context, stats, _) {
+            final rem = stats.routeRemaining;
+            if (rem == null) return const SizedBox.shrink();
+            return Positioned(
+              top: 56,
+              right: 16,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 8),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.flag_rounded,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${UnitFormat.distance(rem, _unit)} to go',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.flag_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${UnitFormat.distance(_routeRemaining!, _unit)} to go',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-          ),
+            );
+          },
+        ),
 
-        if (_offRouteDistance != null &&
-            _offRouteDistance! > _offRouteThresholdMetres)
-          Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Card(
-                color: const Color(0xFFEF4444),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'Off route — ${_offRouteDistance!.round()}m away',
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+        // Off-route banner — listens to the notifier for the same reason.
+        ValueListenableBuilder<_LiveStats>(
+          valueListenable: _statsNotifier,
+          builder: (context, stats, _) {
+            final off = stats.offRouteDistance;
+            if (off == null || off <= _offRouteThresholdMetres) {
+              return const SizedBox.shrink();
+            }
+            return Positioned(
+              top: 60,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Card(
+                  color: const Color(0xFFEF4444),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    child: Text(
+                      'Off route — ${off.round()}m away',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
+        ),
         if (_permissionLost)
           const Positioned(
             top: 60,
@@ -1474,48 +1519,82 @@ class _RunScreenState extends State<RunScreen> {
           left: 0,
           right: 0,
           bottom: 0,
-          child: CollapsiblePanel(
-            key: _statsOverlayKey,
-            collapsedChild: _CollapsedStatsBar(
-              time: _formattedTime,
-              holdProgress: _holdToStopProgress,
-              onHoldStart: _startHoldToStop,
-              onHoldCancel: _cancelHoldToStop,
-            ),
-            expandedChild: _StatsOverlay(
-              time: _formattedTime,
-              distanceValue: _formattedDistanceValue,
-              distanceUnit: UnitFormat.distanceLabel(_unit),
-              primaryValue: _activityType.usesSpeed
-                  ? UnitFormat.speed(_pace, _unit)
-                  : _formattedPaceValue,
-              primaryUnit: _activityType.usesSpeed
-                  ? UnitFormat.speedLabel(_unit)
-                  : UnitFormat.paceLabel(_unit),
-              primaryLabel: _activityType.usesSpeed ? 'Speed' : 'Pace',
-              secondaryValue: _activityType.usesSpeed
-                  ? _formattedAvgSpeedValue
-                  : _formattedAvgPaceValue,
-              secondaryLabel:
-                  _activityType.usesSpeed ? 'Avg Speed' : 'Avg Pace',
-              calories: _formattedCalories,
-              elevation: _formattedElevation,
-              steps: '$_steps',
-              cadence: '$_cadence',
-              bpm: _currentBpm,
-              lapCount: _lapCount,
-              paused: _manualPaused,
-              holdProgress: _holdToStopProgress,
-              onHoldStart: _startHoldToStop,
-              onHoldCancel: _cancelHoldToStop,
-              onDiscard: _confirmDiscardMidRun,
-              onPauseToggle: _toggleManualPause,
-              onLap: _markLap,
+          // SizeChangedLayoutNotifier fires precisely when the overlay's
+          // size changes (panel expand/collapse). Scheduling the previous
+          // post-frame measurement from inside build() fired the callback
+          // on every frame of the run — cheap per call, but wasteful given
+          // the panel height stabilises immediately and only changes on
+          // user interaction.
+          child: NotificationListener<SizeChangedLayoutNotification>(
+            onNotification: _onOverlaySizeChanged,
+            child: SizeChangedLayoutNotifier(
+              child: CollapsiblePanel(
+                key: _statsOverlayKey,
+                // The collapsed bar only shows elapsed time; listen to the
+                // notifier so the clock ticks without rebuilding the
+                // enclosing Stack.
+                collapsedChild: ValueListenableBuilder<_LiveStats>(
+                  valueListenable: _statsNotifier,
+                  builder: (context, _, __) => _CollapsedStatsBar(
+                    time: _formattedTime,
+                    onHoldComplete: _stop,
+                  ),
+                ),
+                // Expanded panel reads every stat — wrap once so the whole
+                // body rebuilds on each snapshot, but the map, chips, and
+                // banners above do not.
+                expandedChild: ValueListenableBuilder<_LiveStats>(
+                  valueListenable: _statsNotifier,
+                  builder: (context, _, __) => _StatsOverlay(
+                    time: _formattedTime,
+                    distanceValue: _formattedDistanceValue,
+                    distanceUnit: UnitFormat.distanceLabel(_unit),
+                    primaryValue: _activityType.usesSpeed
+                        ? UnitFormat.speed(_pace, _unit)
+                        : _formattedPaceValue,
+                    primaryUnit: _activityType.usesSpeed
+                        ? UnitFormat.speedLabel(_unit)
+                        : UnitFormat.paceLabel(_unit),
+                    primaryLabel:
+                        _activityType.usesSpeed ? 'Speed' : 'Pace',
+                    secondaryValue: _activityType.usesSpeed
+                        ? _formattedAvgSpeedValue
+                        : _formattedAvgPaceValue,
+                    secondaryLabel:
+                        _activityType.usesSpeed ? 'Avg Speed' : 'Avg Pace',
+                    calories: _formattedCalories,
+                    elevation: _formattedElevation,
+                    steps: '$_steps',
+                    cadence: '$_cadence',
+                    bpm: _currentBpm,
+                    lapCount: _lapCount,
+                    paused: _manualPaused,
+                    onHoldComplete: _stop,
+                    onDiscard: _confirmDiscardMidRun,
+                    onPauseToggle: _toggleManualPause,
+                    onLap: _markLap,
+                  ),
+                ),
+              ),
             ),
           ),
         ),
       ],
     );
+  }
+
+  /// Remeasure the stats overlay after the collapsible panel has changed
+  /// size. Cheaper than the previous per-frame post-frame callback because
+  /// SizeChangedLayoutNotification only dispatches on real layout changes.
+  bool _onOverlaySizeChanged(SizeChangedLayoutNotification _) {
+    final box =
+        _statsOverlayKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    final h = box.size.height;
+    if ((h - _statsOverlayHeight).abs() > 1 && mounted) {
+      setState(() => _statsOverlayHeight = h);
+    }
+    return false;
   }
 
   Widget _buildFinished(BuildContext context) {
@@ -1610,9 +1689,7 @@ class _StatsOverlay extends StatelessWidget {
   final int? bpm;
   final int lapCount;
   final bool paused;
-  final double holdProgress;
-  final VoidCallback onHoldStart;
-  final VoidCallback onHoldCancel;
+  final VoidCallback onHoldComplete;
   final VoidCallback onDiscard;
   final VoidCallback onPauseToggle;
   final VoidCallback onLap;
@@ -1633,9 +1710,7 @@ class _StatsOverlay extends StatelessWidget {
     required this.bpm,
     required this.lapCount,
     required this.paused,
-    required this.holdProgress,
-    required this.onHoldStart,
-    required this.onHoldCancel,
+    required this.onHoldComplete,
     required this.onDiscard,
     required this.onPauseToggle,
     required this.onLap,
@@ -1748,9 +1823,7 @@ class _StatsOverlay extends StatelessWidget {
                   // Stop button — hold-to-stop, 800ms. Prevents accidental
                   // one-tap stops mid-run.
                   _HoldToStopButton(
-                    progress: holdProgress,
-                    onHoldStart: onHoldStart,
-                    onHoldCancel: onHoldCancel,
+                    onHoldComplete: onHoldComplete,
                   ),
                   const SizedBox(width: 16),
                   // Lap button
@@ -1866,20 +1939,53 @@ class _StepSample {
   const _StepSample(this.time, this.steps);
 }
 
+/// Immutable per-snapshot bundle fed through `_statsNotifier`. Wrapping
+/// this in a `ValueNotifier` + `ValueListenableBuilder` lets the hot-path
+/// subtrees rebuild without forcing a `setState` that would rebuild the
+/// entire recording screen at 1 Hz minimum. Only the subtrees that
+/// actually display these values listen; banners driven by other fields
+/// (`_gpsLost`, `_permissionLost`) continue to rebuild through their
+/// usual `setState` path.
+class _LiveStats {
+  final Duration elapsed;
+  final double distanceMetres;
+  final double? pace;
+  final List<cm.Waypoint> track;
+  final cm.Waypoint? currentPosition;
+  final double? offRouteDistance;
+  final double? routeRemaining;
+
+  const _LiveStats({
+    required this.elapsed,
+    required this.distanceMetres,
+    required this.pace,
+    required this.track,
+    required this.currentPosition,
+    required this.offRouteDistance,
+    required this.routeRemaining,
+  });
+
+  static const _LiveStats empty = _LiveStats(
+    elapsed: Duration.zero,
+    distanceMetres: 0,
+    pace: null,
+    track: [],
+    currentPosition: null,
+    offRouteDistance: null,
+    routeRemaining: null,
+  );
+}
+
 /// Minimal stats bar shown when the overlay is collapsed. Keeps time visible
 /// plus a hold-to-stop button so the runner can still abort without
 /// expanding first.
 class _CollapsedStatsBar extends StatelessWidget {
   final String time;
-  final double holdProgress;
-  final VoidCallback onHoldStart;
-  final VoidCallback onHoldCancel;
+  final VoidCallback onHoldComplete;
 
   const _CollapsedStatsBar({
     required this.time,
-    required this.holdProgress,
-    required this.onHoldStart,
-    required this.onHoldCancel,
+    required this.onHoldComplete,
   });
 
   @override
@@ -1899,11 +2005,9 @@ class _CollapsedStatsBar extends StatelessWidget {
             ),
           ),
           _HoldToStopButton(
-            progress: holdProgress,
             size: 48,
             iconSize: 24,
-            onHoldStart: onHoldStart,
-            onHoldCancel: onHoldCancel,
+            onHoldComplete: onHoldComplete,
           ),
         ],
       ),
@@ -1914,36 +2018,80 @@ class _CollapsedStatsBar extends StatelessWidget {
 /// Big red stop button that must be *held* for ~800 ms before the run is
 /// actually stopped. The circular progress ring grows during the hold so
 /// the user gets clear visual feedback. Cancels cleanly on release.
-class _HoldToStopButton extends StatelessWidget {
-  final double progress;
+class _HoldToStopButton extends StatefulWidget {
+  /// Fires after the user has held the button for [holdDuration]. Wired to
+  /// the run's `_stop` in RunScreen.
+  static const _holdDuration = Duration(milliseconds: 800);
+
+  final VoidCallback onHoldComplete;
   final double size;
   final double iconSize;
-  final VoidCallback onHoldStart;
-  final VoidCallback onHoldCancel;
 
   const _HoldToStopButton({
-    required this.progress,
-    required this.onHoldStart,
-    required this.onHoldCancel,
+    required this.onHoldComplete,
     this.size = 68,
     this.iconSize = 36,
   });
 
   @override
+  State<_HoldToStopButton> createState() => _HoldToStopButtonState();
+}
+
+/// Owns the 60 Hz progress ticker locally so the surrounding run screen
+/// (map, stats panel, banners) doesn't rebuild at 60 Hz during a hold.
+/// Only this ~68 px button rebuilds while the user holds the stop.
+class _HoldToStopButtonState extends State<_HoldToStopButton>
+    with SingleTickerProviderStateMixin {
+  Ticker? _ticker;
+  Duration _holdStart = Duration.zero;
+  double _progress = 0;
+
+  @override
+  void dispose() {
+    _ticker?.dispose();
+    super.dispose();
+  }
+
+  void _onPointerDown() {
+    _ticker?.dispose();
+    _holdStart = Duration.zero;
+    _ticker = createTicker((elapsed) {
+      if (_holdStart == Duration.zero) _holdStart = elapsed;
+      final held = elapsed - _holdStart;
+      final p = (held.inMilliseconds / _HoldToStopButton._holdDuration.inMilliseconds)
+          .clamp(0.0, 1.0);
+      if (p != _progress && mounted) setState(() => _progress = p);
+      if (p >= 1.0) {
+        _ticker?.dispose();
+        _ticker = null;
+        if (mounted) setState(() => _progress = 0);
+        widget.onHoldComplete();
+      }
+    })
+      ..start();
+  }
+
+  void _onPointerUpOrCancel() {
+    _ticker?.dispose();
+    _ticker = null;
+    if (_progress != 0 && mounted) setState(() => _progress = 0);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Listener(
-      onPointerDown: (_) => onHoldStart(),
-      onPointerUp: (_) => onHoldCancel(),
-      onPointerCancel: (_) => onHoldCancel(),
+      onPointerDown: (_) => _onPointerDown(),
+      onPointerUp: (_) => _onPointerUpOrCancel(),
+      onPointerCancel: (_) => _onPointerUpOrCancel(),
       child: SizedBox(
-        width: size,
-        height: size,
+        width: widget.size,
+        height: widget.size,
         child: Stack(
           alignment: Alignment.center,
           children: [
             Container(
-              width: size,
-              height: size,
+              width: widget.size,
+              height: widget.size,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.red,
@@ -1957,15 +2105,15 @@ class _HoldToStopButton extends StatelessWidget {
               ),
               child: Center(
                 child: Icon(Icons.stop_rounded,
-                    size: iconSize, color: Colors.white),
+                    size: widget.iconSize, color: Colors.white),
               ),
             ),
-            if (progress > 0)
+            if (_progress > 0)
               SizedBox(
-                width: size,
-                height: size,
+                width: widget.size,
+                height: widget.size,
                 child: CircularProgressIndicator(
-                  value: progress,
+                  value: _progress,
                   strokeWidth: 4,
                   color: Colors.white,
                   backgroundColor: Colors.transparent,

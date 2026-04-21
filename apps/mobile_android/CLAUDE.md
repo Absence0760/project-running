@@ -6,6 +6,7 @@ The most mature Flutter target in the monorepo. Almost every "Android" checkbox 
 
 - **Flutter** stable, Dart 3.x
 - **State management:** `StatefulWidget` + `setState` throughout. Stores (`LocalRunStore`, `LocalRouteStore`, `Preferences`) are plain `ChangeNotifier`-style singletons that screens subscribe to via `addListener` in `initState` and unsubscribe in `dispose`. No Provider, no Riverpod, no Bloc. If you add a new screen, follow the same pattern — do not introduce a DI framework.
+- **Hot-path exception — `run_screen.dart`:** the per-second `_onSnapshot` handler does NOT call `setState`. It updates mirror fields (for `_saveInProgress`, `_refreshLockScreenNotification`, and the `_formattedX` getters) then publishes to a `ValueNotifier<_LiveStats>`. The affected subtrees (map, off-route banner, route-remaining badge, stats panel) are wrapped in `ValueListenableBuilder`, so the rest of the recording tree (activity chips, GPS-lost / permission-revoked banners, layout) doesn't rebuild at GPS rate. If you add a new stat that updates per snapshot, put it behind the notifier, not in a `setState`. Control-state changes (state transitions, manual pause, lap mark) still go through `setState` — that cadence is low enough that a full rebuild is fine.
 - **Maps:** `flutter_map` with a MapLibre-compatible raster tile source. Cached via `flutter_map_cache` + `dio_cache_interceptor` for the disk-backed persistent tile cache. See [decisions.md § 8](../../docs/decisions.md) and [§ 5](../../docs/decisions.md).
 - **Recording:** delegates to `packages/run_recorder` — state machine, GPS filter chain, auto-pause, off-route detection, all live there. This app holds the UI and the screens; the recording logic is a package so the iOS and Wear OS apps can eventually reuse it.
 - **Auth / backend:** `packages/api_client` for Supabase. Google Sign-In is wired via the native `google_sign_in` package → exchanges the ID token through `ApiClient.signInWithGoogleIdToken`. Apple Sign-In scaffolded but not wired on Android (see the deferred list in `roadmap.md`).
@@ -95,7 +96,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Tests
 
-Test files in `test/` (107 tests total):
+Test files in `test/`:
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
 - `local_run_store_test.dart` — 16 tests: store persistence, sync state, in-progress save/load, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
@@ -103,7 +104,8 @@ Test files in `test/` (107 tests total):
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
 - `training_test.dart` — 18 tests: VDOT, Riegel, pace derivation, plan generation (mirrors `apps/web/src/lib/training.test.ts`)
 - `ble_heart_rate_test.dart` — 9 tests: BLE HR characteristic 0x2A37 parser (8-bit/16-bit BPM, edge cases)
-- plus `run_recorder`'s own 14 tests in `packages/run_recorder/test/`
+- `architecture_guards_test.dart` — 14 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, etc.). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
+- plus `run_recorder`'s own tests in `packages/run_recorder/test/` (17 behavioural + 7 guards)
 
 See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
 

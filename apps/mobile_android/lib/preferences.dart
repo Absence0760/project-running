@@ -147,6 +147,10 @@ class Preferences extends ChangeNotifier {
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
   static const _kSplitIntervalMetres = 'split_interval_metres';
+  // Timestamp of the last successful runs-list fetch. Drives the
+  // delta-fetch path in RunsScreen so refreshes only pull rows modified
+  // since, instead of re-paging the entire history every time.
+  static const _kRunsLastFetchedAt = 'runs_last_fetched_at';
   // Stable per-install identifier used to scope `user_device_settings`
   // rows. Minted on first launch and never rotated — rotating would
   // orphan the device's row and lose per-device preferences.
@@ -178,6 +182,19 @@ class Preferences extends ChangeNotifier {
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
+
+  /// Timestamp of the last successful `getRuns` call. Used to drive the
+  /// delta-fetch path so refreshing the Runs tab only pulls rows updated
+  /// since the last visit. Null means "never fetched" — the first fetch
+  /// is full, subsequent ones are deltas.
+  DateTime? get runsLastFetchedAt {
+    final iso = _prefs.getString(_kRunsLastFetchedAt);
+    return iso == null ? null : DateTime.tryParse(iso);
+  }
+
+  Future<void> setRunsLastFetchedAt(DateTime when) async {
+    await _prefs.setString(_kRunsLastFetchedAt, when.toIso8601String());
+  }
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
   /// when current pace is more than 30s off in either direction.
