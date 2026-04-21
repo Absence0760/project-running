@@ -387,7 +387,12 @@ export async function fetchPersonalRecords() {
 
 	for (const d of distances) {
 		const qualifying = runs.filter(
-			(r) => r.distance_m >= d.target - d.tolerance && r.distance_m <= d.target + d.tolerance
+			(r) =>
+				r.distance_m >= d.target - d.tolerance &&
+				r.distance_m <= d.target + d.tolerance &&
+				(['app', 'watch', 'strava', 'garmin', 'healthkit', 'healthconnect'] as const).includes(
+					r.source as 'app' | 'watch' | 'strava' | 'garmin' | 'healthkit' | 'healthconnect'
+				)
 		);
 		if (qualifying.length > 0) {
 			const best = qualifying.reduce((a, b) => (a.duration_s < b.duration_s ? a : b));
