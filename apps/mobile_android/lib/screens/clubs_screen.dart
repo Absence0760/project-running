@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../social_service.dart';
@@ -17,9 +19,15 @@ class _ClubsScreenState extends State<ClubsScreen> {
   // that points them at Browse.
   int _tab = 1; // 0 = Browse, 1 = My clubs
   bool _loading = true;
+  String? _error;
   List<ClubView> _browse = const [];
   List<ClubView> _mine = const [];
   final _searchCtrl = TextEditingController();
+
+  // Hard cap so a hanging Supabase request (backend unreachable, stale
+  // auth, blocked by RLS waiting on a lock) surfaces as an error the
+  // user can see and retry, rather than a permanent spinner.
+  static const _loadTimeout = Duration(seconds: 15);
 
   @override
   void initState() {
@@ -33,20 +41,37 @@ class _ClubsScreenState extends State<ClubsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait([
         widget.social.browseClubs(query: _searchCtrl.text),
         widget.social.fetchMyClubs(),
-      ]);
+      ]).timeout(_loadTimeout);
       if (!mounted) return;
       setState(() {
         _browse = results[0];
         _mine = results[1];
         _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } on TimeoutException catch (e) {
+      debugPrint('ClubsScreen._load timed out after ${_loadTimeout.inSeconds}s: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Connection timed out. Check your network and try again.';
+        });
+      }
+    } catch (e, s) {
+      debugPrint('ClubsScreen._load failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Couldn\'t load clubs. Tap retry to try again.';
+        });
+      }
     }
   }
 
@@ -111,7 +136,9 @@ class _ClubsScreenState extends State<ClubsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : list.isEmpty
+          : _error != null
+              ? _ErrorState(message: _error!, onRetry: _load)
+              : list.isEmpty
               ? _Empty(tab: _tab)
               : RefreshIndicator(
                   onRefresh: _load,
@@ -254,6 +281,40 @@ class _ClubTile extends StatelessWidget {
               ),
             ),
             Icon(Icons.chevron_right, color: theme.colorScheme.outline),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off, size: 48, color: theme.colorScheme.outline),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),
