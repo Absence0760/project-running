@@ -188,4 +188,48 @@ void main() {
       expect(r.debugElapsed, greaterThan(afterPause));
     });
   });
+
+  group('indoor / no-GPS mode', () {
+    test('RunSnapshot.currentPosition is nullable', () {
+      const snap = RunSnapshot(
+        elapsed: Duration(seconds: 10),
+        distanceMetres: 0,
+        currentPosition: null,
+      );
+      expect(snap.currentPosition, isNull);
+      expect(snap.elapsed, const Duration(seconds: 10));
+      expect(snap.distanceMetres, 0);
+      expect(snap.track, isEmpty);
+    });
+
+    test('timer emits a null-position snapshot when begin() runs without fixes',
+        () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      final received = <RunSnapshot>[];
+      final sub = r.snapshots.listen(received.add);
+      r.begin();
+      // The periodic timer fires at 1-second intervals; wait a hair longer
+      // so at least one tick lands even on a slow CI runner.
+      await Future.delayed(const Duration(milliseconds: 1200));
+      await sub.cancel();
+      await r.stop();
+      expect(received, isNotEmpty,
+          reason: 'Timer should fire without a GPS fix (indoor mode)');
+      expect(received.last.currentPosition, isNull);
+      expect(received.last.distanceMetres, 0);
+      expect(received.last.track, isEmpty);
+      expect(received.last.elapsed, greaterThan(Duration.zero));
+    });
+
+    test('injected fix during indoor mode populates currentPosition', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // Indoor timer-driven snapshot would have currentPosition == null.
+      // When a fix arrives, currentPosition populates and future snapshots
+      // carry it.
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      expect(r.debugCurrentWaypoint, isNotNull);
+      expect(r.debugTrack.length, 1);
+    });
+  });
 }

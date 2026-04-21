@@ -45,7 +45,7 @@ The app splits `prepare` and `begin` so all expensive setup happens during the 3
 
 What runs when (`run_screen.dart`):
 
-- **On tap Start**: `_beginCountdown` → `_ensurePermission` → `_preload`
+- **On tap Start**: `_beginCountdown` → `_maybeRequestPermission` → `_preload` (permission request is non-blocking; denial drops the run into time-only mode rather than aborting)
 - **`_preload` (t=0, countdown begins)**:
   - Create `RunRecorder`, subscribe to its `snapshots` stream
   - Subscribe to the pedometer stream (gated — step counts don't accrue until state is `recording`)
@@ -76,19 +76,24 @@ The 1-second elapsed-time timer inside `begin()` emits snapshots unconditionally
 
 ```
 1.  User taps Start on the idle screen
-2.  _ensurePermission() — request location + notifications if needed
+2.  _maybeRequestPermission() — requests FINE_LOCATION + POST_NOTIFICATIONS
+    (non-blocking; denial drops the run into time-only mode)
 3.  _beginCountdown() flips state to countdown and starts the 1s tick timer
 4.  _preload() kicks off asynchronously:
     - RunRecorder created
     - snapshots subscription attached (→ _onSnapshot)
     - Pedometer stream subscribed (counts gated on recording state)
     - Wakelock enabled
-    - _recorder.prepare() opens the GPS stream with a foreground service
-      notification ("Run in progress") and begins receiving positions
+    - _recorder.prepare() flips _prepared = true, starts the GPS retry
+      loop, then tries to open the GPS stream. If services or permission
+      are denied it throws a typed error but _prepared stays true — the
+      retry loop reopens the stream when conditions come back.
 5.  GPS fixes arriving during prepared update _currentWaypoint; snapshots
-    drive the blue dot; elapsed stays at 0; track stays empty
-6.  Countdown reaches 1 → _begin() runs:
-    - Awaits _prepareFuture (no-op in the common case)
+    drive the blue dot; elapsed stays at 0; track stays empty. With no
+    fix the map shows "Waiting for GPS..." — still fine, nothing blocks.
+6.  Countdown reaches 0 → _begin() runs:
+    - Awaits _prepareFuture (errors caught → _notifyGpsUnavailable snackbar,
+      run still starts)
     - _recorder.begin() flips on recording, starts Stopwatch, starts the
       1s elapsed-time timer
     - Stable _runId generated; _runStartedAtWall recorded
@@ -179,6 +184,8 @@ AndroidSettings(
   ),
 )
 ```
+
+The title / text above are only the *initial* state. Once recording begins, `_refreshLockScreenNotification` (run_screen, throttled to ~1 Hz) calls `RunNotificationBridge` which reposts on the same channel + id with live time / distance / pace — so the lock-screen row is live, not the static strings above. See hardening row 12.
 
 **`distanceFilter: 0`** is intentional. The OS-level `distanceFilter` gates position emission by physical distance — a value of 3 means no position until the device has physically moved 3 m. That starves the blue dot at slow walking speeds (the marker doesn't move until 3 m of accumulated motion crosses the threshold).
 
@@ -288,9 +295,9 @@ Each of these is a self-contained piece with its own purpose. Most can be tuned 
 | 7 | Permission watchdog | Poll `Geolocator.checkPermission()` every 5 s; banner if revoked | — |
 | 8 | Activity-type lock | Guard in `onSelected` to reject changes unless state is idle | — |
 | 9 | Indoor / no-GPS fallback | `RunRecorder.prepare` flips `_prepared` before opening the position stream and throws typed errors (`LocationServiceDisabledError` / `LocationPermissionDeniedError`) if GPS setup fails. `RunSnapshot.currentPosition` is nullable; the 1-second timer emits snapshots regardless of fix state. `_begin` catches prepare errors, shows a non-blocking snackbar, and the run proceeds as a time-only session. GPS-lost and permission-revoked banners stay dormant until the first real fix arrives, so indoor runs don't nag. | — |
-| 11 | GPS self-heal | `_gpsRetryTimer` inside `RunRecorder` polls every 3 s while `_prepared` is true and `_positionSub` is null. Once `isLocationServiceEnabled()` + `checkPermission()` both pass, it reopens the position stream with the accuracy settings remembered from `prepare()`. The stream subscription uses `onError`/`cancelOnError: true` so an Android-side disconnect (e.g. user toggles Location off mid-run) cleanly clears `_positionSub` and the retry loop takes over. Net effect: tracking resumes automatically when Location is re-enabled, whether the run started without GPS or lost it mid-run. | `_gpsRetryInterval` |
-| 12 | Live lock-screen notification (Android) | `RunNotificationBridge` (Kotlin) reposts on geolocator's `geolocator_channel_01` / id `75415` with `NotificationCompat.BigTextStyle`, `VISIBILITY_PUBLIC`, and `CATEGORY_WORKOUT` so the lock-screen row shows live time / distance / pace instead of the static "Run in progress". The Dart side (`RunNotificationBridge`, called from `_refreshLockScreenNotification` at the end of `_onSnapshot`) throttles to ~1 Hz. Explicitly cleared on stop / discard in addition to the foreground-service teardown. Constants in the bridge mirror `GeolocatorLocationService`; if a future geolocator release changes them, the replacement stops applying (ours becomes a second row) — fix by updating the constants in `RunNotificationBridge.kt`. | — |
 | 10 | LiveRunMap restart reset | `didUpdateWidget` wipes `_animatedLatLng`, tween endpoints, and `_userPanned` when the track clears for a new run, so the next first fix snaps cleanly and the follow-cam re-centres | — |
+| 11 | GPS self-heal | `_gpsRetryTimer` inside `RunRecorder` polls every 3 s while `_prepared` is true and `_positionSub` is null. Once `isLocationServiceEnabled()` + `checkPermission()` both pass, it reopens the position stream with the accuracy settings remembered from `prepare()`. The stream subscription uses `onError`/`cancelOnError: true` so an Android-side disconnect (e.g. user toggles Location off mid-run) cleanly clears `_positionSub` and the retry loop takes over. Net effect: tracking resumes automatically when Location is re-enabled, whether the run started without GPS or lost it mid-run. | `_gpsRetryInterval` |
+| 12 | Live lock-screen notification (Android) | `RunNotificationBridge` (Kotlin) pre-creates `geolocator_channel_01` with `VISIBILITY_PUBLIC` + `IMPORTANCE_LOW` (winning the race against geolocator's private-visibility default, which is immutable after creation), then reposts on that channel with `BigTextStyle` + `CATEGORY_WORKOUT` so the lock-screen row shows live time / distance / pace instead of the static "Run in progress". Posts are guarded by a runtime POST_NOTIFICATIONS check (Android 13+); if missing the bridge returns an error rather than silently no-opping. The Dart side (`RunNotificationBridge`, called from `_refreshLockScreenNotification` at the end of `_onSnapshot`) throttles to ~1 Hz. Explicitly cleared on stop / discard. Constants in the bridge mirror `GeolocatorLocationService`; if a future geolocator release changes them, the replacement stops applying — fix by updating the constants. | — |
 | + | Reentrancy guard on Start | `_startRequested` flag prevents double-taps from spawning multiple recorders | — |
 | + | No live auto-pause | Clock runs continuously; "moving time" computed as a derived metric at summary time instead | — |
 
@@ -315,7 +322,7 @@ Practical requirements on the device:
 
 - Location permission must be granted as **"Allow all the time"**, not "While using the app" — the latter stops feeding fixes the moment the app is backgrounded, regardless of the foreground service.
 - Battery optimisation must be **Unrestricted** for the app — aggressive OEM battery managers (Samsung, Xiaomi, Huawei) can kill foreground services otherwise.
-- The **Run in progress** notification must be visible in the shade whenever recording is active. If it's not, the foreground service didn't start.
+- A persistent notification showing live time / distance / pace (posted by `RunNotificationBridge` on geolocator's foreground-service channel) must be visible in the shade whenever recording is active. If it's absent, the foreground service (`geolocator_android`) did not start.
 
 When the app returns from background, the Flutter UI resumes and the next snapshot repaints the screen with the latest accumulated state — no data is lost.
 
@@ -367,4 +374,4 @@ All in `apps/mobile_android/lib/screens/run_screen.dart` unless noted.
 
 - **Line drift onto sidewalks/verges.** Consumer phone GPS is 3–8 m accurate under open sky, worse elsewhere. Smoothing reduces jitter but cannot correct bias. The real fix is backend map matching — tracked in the [roadmap](roadmap.md#future--map-matching-strava--nike-run-club-quality) as a self-hosted Valhalla / OSRM / GraphHopper deployment, post-run only.
 - **Resume recording after a crash.** The current recovery path saves the partial as a completed run. It does not re-enter recording mode on the recovered data — that would require preserving the full recorder state machine across process death, which is out of scope for the current persistence shape.
-- **Widget / integration test coverage.** Unit tests cover the `RunRecorder` state machine + filter chain (14 tests in `packages/run_recorder/test/run_recorder_test.dart`), the `movingTimeOf` helper (8 tests in `apps/mobile_android/test/run_stats_test.dart`), and `LocalRunStore` persistence (14 tests in `apps/mobile_android/test/local_run_store_test.dart`) — see [testing.md](testing.md) for the full list. The recording UI (`run_screen.dart`, `live_run_map.dart`, `collapsible_panel.dart`) and the sync pipeline have no widget or integration tests yet. Adding widget tests for state transitions would be a good next move.
+- **Widget / integration test coverage.** Unit tests cover the `RunRecorder` state machine + filter chain + indoor-mode timer (17 tests in `packages/run_recorder/test/run_recorder_test.dart`), the `movingTimeOf` helper (8 tests in `apps/mobile_android/test/run_stats_test.dart`), and `LocalRunStore` persistence (14 tests in `apps/mobile_android/test/local_run_store_test.dart`) — see [testing.md](testing.md) for the full list. The recording UI (`run_screen.dart`, `live_run_map.dart`, `collapsible_panel.dart`) and the sync pipeline have no widget or integration tests yet. The GPS self-heal retry loop + typed errors thrown from `prepare()` are not unit-tested either — both would require injecting a mock `GeolocatorPlatform.instance`.

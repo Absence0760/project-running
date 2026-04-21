@@ -27,10 +27,8 @@ class LocationPermissionDeniedError extends Error {
       : 'Location permission was denied';
 }
 
-/// Manages a live GPS recording session.
-///
-/// Streams position updates, calculates pace, and accumulates distance.
-/// A single lap recorded mid-run.
+/// A single lap split marked mid-run. Captures the cumulative distance and
+/// duration at the moment the user tapped the lap button.
 class LapSplit {
   final int number;
   final DateTime timestamp;
@@ -52,6 +50,11 @@ class LapSplit {
       };
 }
 
+/// Manages a live GPS recording session: opens the position stream, filters
+/// noise, accumulates distance, and emits [RunSnapshot]s to the UI. Survives
+/// a missing/revoked GPS signal — [prepare] flips [prepared] even when the
+/// stream can't open, and a retry loop reopens the stream when services
+/// come back.
 class RunRecorder {
   static const _uuid = Uuid();
 
@@ -98,25 +101,36 @@ class RunRecorder {
   /// per second after [begin] starts recording time.
   Stream<RunSnapshot> get snapshots => _controller.stream;
 
-  /// Whether [prepare] has completed and the position stream is running.
+  /// Whether [prepare] has completed. True even when GPS is unavailable —
+  /// the recorder accepts [begin] and emits time-only snapshots until a
+  /// fix arrives (or the retry loop re-opens the stream).
   bool get prepared => _prepared;
   bool _prepared = false;
 
   /// Whether [begin] has been called and time/distance are accumulating.
   bool get recording => _recording;
 
-  /// Open the GPS position stream and subscribe to it, without starting to
-  /// accumulate time or distance. Positions received in this phase still
-  /// drive the blue dot via [snapshots], so the map can show the runner's
-  /// location during a countdown before the run officially starts.
+  /// Prepare the recorder for a run. Resets state, flips [prepared] to true,
+  /// starts the self-healing GPS retry loop, and — if services + permission
+  /// are available — opens the position stream so fixes can drive the live
+  /// map during the countdown before [begin] is called.
   ///
-  /// Call [begin] when the countdown ends to flip on recording.
+  /// Call [begin] when the countdown ends to flip on recording. Because
+  /// [prepared] flips before the GPS checks, [begin] is usable even for
+  /// indoor / treadmill runs where GPS is unavailable at the start.
   ///
   /// [distanceFilterMetres] and [minMovementMetres] are combined into a single
   /// software threshold that gates when a GPS fix gets appended to the track
   /// and counted toward distance. The OS-level filter is always 0 so the blue
   /// dot can update at the GPS sensor's native rate, independent of this
   /// threshold.
+  ///
+  /// Throws [LocationServiceDisabledError] if device location services are
+  /// off. Throws [LocationPermissionDeniedError] if the user denies (or has
+  /// permanently denied — see [LocationPermissionDeniedError.forever]) the
+  /// permission prompt. Both errors leave [prepared] == true; the recorder
+  /// is still usable as a time-only session and the retry loop will re-open
+  /// the stream automatically when services / permission come back.
   Future<void> prepare({
     Route? route,
     int distanceFilterMetres = 3,

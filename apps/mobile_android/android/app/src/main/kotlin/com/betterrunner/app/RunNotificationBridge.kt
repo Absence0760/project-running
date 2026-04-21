@@ -1,11 +1,17 @@
 package com.betterrunner.app
 
+import android.Manifest
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -32,16 +38,16 @@ class RunNotificationBridge(
     messenger: BinaryMessenger,
 ) : MethodChannel.MethodCallHandler {
 
-    companion object {
-        private const val CHANNEL = "run_app/run_notification"
-        private const val GEOLOCATOR_CHANNEL_ID = "geolocator_channel_01"
-        private const val GEOLOCATOR_NOTIFICATION_ID = 75415
-    }
-
     private val methodChannel = MethodChannel(messenger, CHANNEL)
 
     init {
         methodChannel.setMethodCallHandler(this)
+        // Pre-create the notification channel with VISIBILITY_PUBLIC before
+        // geolocator does. lockscreenVisibility is immutable after channel
+        // creation, so winning the race is the only way to make live stats
+        // visible on the lock screen — the channel that exists at
+        // startForeground() time dictates what the system renders.
+        ensureChannelHasLockScreenVisibility()
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -51,6 +57,18 @@ class RunNotificationBridge(
                 val args = call.arguments as? Map<String, Any?>
                 if (args == null) {
                     result.error("bad_args", "update needs a Map", null)
+                    return
+                }
+                if (!hasPostNotificationsPermission()) {
+                    // NotificationManager.notify silently no-ops on
+                    // Android 13+ when POST_NOTIFICATIONS is not granted.
+                    // Report that up so Dart knows the lock screen is stale
+                    // rather than pretending we posted.
+                    result.error(
+                        "no_permission",
+                        "POST_NOTIFICATIONS not granted",
+                        null,
+                    )
                     return
                 }
                 val title = args["title"] as? String ?: "Running"
@@ -66,6 +84,40 @@ class RunNotificationBridge(
             }
             else -> result.notImplemented()
         }
+    }
+
+    private fun hasPostNotificationsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun ensureChannelHasLockScreenVisibility() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        // If geolocator already created the channel with VISIBILITY_PRIVATE
+        // we can't mutate lockscreenVisibility in place — but we can delete
+        // and recreate. If the channel doesn't exist yet we create it first
+        // so our settings stick before geolocator's do.
+        val existing = nm.getNotificationChannel(GEOLOCATOR_CHANNEL_ID)
+        if (existing != null &&
+            existing.lockscreenVisibility == Notification.VISIBILITY_PUBLIC) {
+            return
+        }
+        if (existing != null) nm.deleteNotificationChannel(GEOLOCATOR_CHANNEL_ID)
+        val channel = NotificationChannel(
+            GEOLOCATOR_CHANNEL_ID,
+            "Run in progress",
+            // LOW avoids the heads-up buzz while still showing on the
+            // lock screen — matches Strava / Nike Run Club behaviour.
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setShowBadge(false)
+        }
+        nm.createNotificationChannel(channel)
     }
 
     private fun post(title: String, text: String, bigText: String?) {
@@ -93,7 +145,7 @@ class RunNotificationBridge(
             // point of this bridge.
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(pending)
 
         if (!bigText.isNullOrBlank()) {
@@ -107,5 +159,16 @@ class RunNotificationBridge(
         // still alive; we've just swapped out what it renders.
         NotificationManagerCompat.from(context)
             .notify(GEOLOCATOR_NOTIFICATION_ID, builder.build())
+    }
+
+    companion object {
+        private const val CHANNEL = "run_app/run_notification"
+        // Mirrors com.baseflow.geolocator.GeolocatorLocationService:
+        //   CHANNEL_ID = "geolocator_channel_01"
+        //   ONGOING_NOTIFICATION_ID = 75415
+        // If a future geolocator release changes these, our replacement
+        // stops applying silently — update here if you see a second row.
+        private const val GEOLOCATOR_CHANNEL_ID = "geolocator_channel_01"
+        private const val GEOLOCATOR_NOTIFICATION_ID = 75415
     }
 }

@@ -267,15 +267,26 @@ Manages a live GPS recording session. Streams position updates, calculates pace,
 
 ```dart
 class RunRecorder {
-  Stream<RunSnapshot> get snapshots;       // emits on every valid GPS fix once prepared
-  bool get prepared;                        // GPS stream open, not yet accumulating
-  bool get recording;                       // time + distance are accumulating
+  // Emits on every valid GPS fix once prepared, AND once per second after
+  // begin() — even without a fix (indoor / GPS warmup). RunSnapshot.currentPosition
+  // is nullable for the no-fix case.
+  Stream<RunSnapshot> get snapshots;
+  // True after prepare() — even when GPS is unavailable. begin() still works
+  // and the retry loop will reopen the stream when services come back.
+  bool get prepared;
+  // True once begin() has flipped on. Time + distance are accumulating.
+  bool get recording;
 
-  Future<void> prepare({                   // open GPS, foreground service, no-op clock
+  // Resets state, flips `prepared = true`, starts the GPS retry loop, then
+  // opens the position stream. Throws LocationServiceDisabledError /
+  // LocationPermissionDeniedError on failure but leaves `prepared = true`.
+  Future<void> prepare({
     Route? route,
     int distanceFilterMetres,
     double minMovementMetres,
     double maxSpeedMps,
+    LocationAccuracy accuracy,
+    double accuracyGateMetres,
   });
   void begin();                             // sync — flip recording on; start Stopwatch
   Future<void> start({...});                // convenience: prepare() + begin()
@@ -518,7 +529,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | Maps (mobile) | flutter_map + MapLibre | Route display, live position |
 | GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
 | Health sync | `health` pub.dev package | Abstracts HealthKit + Health Connect |
-| Local storage | `drift` (SQLite) | Offline-first run storage on mobile |
+| Local storage | JSON files via `path_provider` + `dart:convert` | Offline-first run storage on mobile Android (iOS not yet implemented) |
 | Backend | Supabase | Postgres + Auth + Storage + Edge Functions |
 | Auth | Supabase Auth | Apple Sign-In + Google Sign-In |
 | CI/CD | GitHub Actions | Per-app matrix jobs |

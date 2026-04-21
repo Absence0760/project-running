@@ -55,7 +55,7 @@ Track position, pace, distance, and elapsed time using device GPS. Runs saved to
 - [x] Background location tracking (Android — geolocator foreground service)
 - [ ] Background location tracking (iOS)
 - [x] Real-time pace and distance display (Android)
-- [x] Auto-pause on stop detection (Android, toggleable)
+- [x] ~~Auto-pause on stop detection~~ (Android) — *removed*: replaced by moving time derived from the GPS track at summary time. See [decisions.md § 4](decisions.md).
 - [x] Manual pause/resume (Android)
 - [x] Lap markers (Android)
 - [x] Wakelock during run (Android)
@@ -63,6 +63,9 @@ Track position, pace, distance, and elapsed time using device GPS. Runs saved to
 - [x] Audio cues for splits and pace alerts via TTS (Android)
 - [x] Step count and cadence via pedometer (Android)
 - [x] Live HTTP tile cache so revisited tiles work without network (Android)
+- [x] GPS self-heal retry loop — recorder re-subscribes automatically when location services / permission come back mid-run (Android)
+- [x] Indoor / no-GPS mode — run proceeds as time-only when GPS is unavailable; stopwatch keeps ticking, `RunSnapshot.currentPosition` is nullable, and the live map falls back to "Waiting for GPS..." (Android)
+- [x] Live lock-screen notification — `RunNotificationBridge` replaces the static "Run in progress" with live time / distance / pace on the same geolocator foreground-service channel (Android)
 
 ### Route overlay during run
 
@@ -555,7 +558,7 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 |---|---|---|
 | iOS + Android app | Flutter + Dart | 1 |
 | Apple Watch | Native Swift + SwiftUI + WatchKit | 2 |
-| Wear OS watch | Flutter | 2 |
+| Wear OS watch | Native Kotlin + Compose-for-Wear | 2 |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | 2b |
 | Web maps | MapLibre GL JS (tiles via MapTiler, future: Protomaps self-hosted) | 2b |
 | Web deployment | Vercel | 2b |

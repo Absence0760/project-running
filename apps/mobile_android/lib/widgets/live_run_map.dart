@@ -337,8 +337,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
               ),
             ],
 
-            // Current position marker — drawn from the raw latest fix so it
-            // refreshes between track-append events.
+            // Current position marker — drawn from the interpolated tween
+            // position so the dot glides smoothly between GPS fixes, with
+            // the raw latest fix as a fallback on the very first frame.
             if (currentLatLng != null)
               MarkerLayer(
                 markers: [

@@ -116,19 +116,29 @@ If the phone isn't reachable (out of range / not yet paired / not signed in), th
 ```
 1.  Home screen → tap Start
       apps/mobile_android/lib/screens/home_screen.dart
-2.  Permission check (FINE_LOCATION + ACTIVITY_RECOGNITION)
+2.  _maybeRequestPermission() — FINE_LOCATION + POST_NOTIFICATIONS
+      (ACTIVITY_RECOGNITION is handled at first launch in
+      onboarding_screen.dart, not here). Non-blocking: denial drops the
+      run into time-only mode rather than aborting.
 3.  Navigator pushes RunScreen
       apps/mobile_android/lib/screens/run_screen.dart
 4.  initState: 3-second countdown begins, _preload() runs in parallel
       - RunRecorder instantiated (packages/run_recorder)
-      - RunRecorder.prepare() opens GPS stream, starts foreground service
+      - RunRecorder.prepare() flips _prepared = true, starts the GPS
+        retry loop, then tries to open the GPS stream. Throws
+        LocationServiceDisabledError / LocationPermissionDeniedError on
+        failure but _prepared stays true — the run remains usable.
       - pedometer subscribed; wakelock acquired
       - GPS fixes during countdown drive the blue dot but don't accumulate
 5.  Countdown hits 0 → _begin()
+      - Awaits _prepareFuture — on error, _notifyGpsUnavailable shows a
+        snackbar with a Settings shortcut; the run continues as a
+        time-only indoor session
       - RunRecorder.begin() flips recording on, starts the Stopwatch
       - Stable run id generated (uuid v4)
       - Incremental-save timer starts (every 10s → runs/in_progress.json)
-      - Auto-pause, GPS-lost, permission watchdogs start
+      - GPS-lost and permission watchdogs start (gated behind first real
+        fix, so indoor runs don't nag)
 6.  Each GPS fix:
       - accuracy > 20 m → dropped
       - delta/dt > maxSpeedMps → dropped (implausible)
@@ -204,7 +214,7 @@ The track-preservation step is specifically because cloud rows have empty `track
 ### Watch out
 
 - **`last_modified_at` is on `metadata`, not a real column.** See [metadata.md](metadata.md#internal--runtime-only). That means conflict resolution depends on both sides writing it consistently. If a non-Android client (web, watch) starts editing runs, it needs to stamp this key too — or the Android client will ignore its edits as "older than local".
-- **No WorkManager-based periodic sync yet.** The roadmap has it unchecked. Current triggers cover foreground + connectivity change only. A run made offline with the app force-killed will sit unsynced until the user relaunches the app.
+- **WorkManager-based periodic sync is live** (`background_sync.dart`, hourly with a network constraint). A run made offline with the app force-killed still syncs without a manual relaunch, though the hourly cadence means there may be up to 1 hour of delay. Foreground + connectivity-change triggers still cover the fast path.
 - **No push from web or watch**. The web app writes directly to Supabase via `supabase-js`; it has no local store, so "sync" doesn't apply. The watch writes directly via `SupabaseService.swift`. Both rely on real-time connectivity and have no offline queue.
 - **Pull currently has no auto-trigger.** It only runs when the user taps the History screen's pull button. If you're debugging "why haven't I seen the web's new run on Android?", the answer is almost certainly "pull hasn't been triggered."
 

@@ -68,7 +68,7 @@ Pure-function tests for two helpers in `lib/run_stats.dart`:
 - Slow → fast → slow run → picks the fast middle 5 km
 - Regression: a 10 km in 1:14:34 does **not** surface as a 37:17 fastest 5k
 
-### `packages/run_recorder/test/run_recorder_test.dart` — 14 tests
+### `packages/run_recorder/test/run_recorder_test.dart` — 17 tests
 
 The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hooks (see below) to bypass the real geolocator stream and inject synthetic `Position` objects directly into `_onPosition`.
 
@@ -91,6 +91,13 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 - Pause drops incoming positions entirely (track doesn't grow, distance doesn't accumulate)
 - Resume clears `_lastTrackedPosition` so the pause-duration gap isn't counted
 - `Stopwatch` stops during pause — asserted with `Future.delayed(50ms)` on both sides
+
+**Indoor / no-GPS mode (3 tests):**
+- `RunSnapshot.currentPosition` is nullable (construct with `null` and read back)
+- The 1-second timer emits snapshots with `currentPosition: null` when `begin()` runs without any injected fix — the stopwatch ticks even for a treadmill run
+- An injected fix after begin populates `currentWaypoint` normally (indoor → outdoor transition)
+
+**Not covered (require mocking `GeolocatorPlatform.instance`):** typed errors thrown from `prepare()`, the `_gpsRetryTimer` retry loop, position-stream `onError` cleanup, `stop`/`dispose` cancelling the retry timer.
 
 ### `apps/mobile_android/test/local_run_store_test.dart` — 16 tests
 

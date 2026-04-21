@@ -32,10 +32,10 @@ class RunNotificationBridge {
     }
   }
 
-  /// Cancel the replacement notification. Usually unnecessary — the
-  /// geolocator service stops its own notification when the stream closes,
-  /// which removes our replacement too — but exposed for discard paths
-  /// that want to clean up early.
+  /// Cancel the replacement notification. Called from `_stop` and
+  /// `_discard` in `run_screen` so the lock-screen row disappears the
+  /// moment the run ends, even if the geolocator foreground-service
+  /// teardown races the UI transition.
   Future<void> clear() async {
     try {
       await _channel.invokeMethod<void>('clear');

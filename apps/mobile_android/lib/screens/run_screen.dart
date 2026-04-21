@@ -241,12 +241,19 @@ class _RunScreenState extends State<RunScreen> {
     if (mounted) setState(() {});
   }
 
-  /// Ask for location permission but don't block the run on the result —
-  /// denying it drops the run into a time-only indoor mode rather than
-  /// stopping it outright. The downstream [RunRecorder.prepare] call
-  /// surfaces the denied case as a snackbar via [_notifyGpsUnavailable].
+  /// Ask for location + notification permissions but don't block the run on
+  /// the result — denying location drops the run into a time-only indoor
+  /// mode rather than stopping it outright. Denying notifications disables
+  /// the live lock-screen stats via [RunNotificationBridge] but otherwise
+  /// lets the run proceed. The downstream [RunRecorder.prepare] call
+  /// surfaces the denied location case as a snackbar via
+  /// [_notifyGpsUnavailable].
   Future<void> _maybeRequestPermission() async {
     await Permission.location.request();
+    // POST_NOTIFICATIONS on Android 13+ — without this,
+    // NotificationManager.notify silently no-ops and the lock-screen stats
+    // never appear. Idempotent; skipped by the OS on older versions.
+    await Permission.notification.request();
   }
 
   Future<void> _selectRoute() async {
@@ -327,8 +334,9 @@ class _RunScreenState extends State<RunScreen> {
     // Open the GPS stream now so the first fix is already in hand when the
     // run starts. Positions received during this phase drive the blue dot
     // but don't accumulate into the track or distance. Errors propagate on
-    // _prepareFuture so _begin can abort the countdown instead of entering
-    // a "recording" state with no GPS stream behind it.
+    // _prepareFuture so _begin can surface them via _notifyGpsUnavailable
+    // (non-blocking snackbar) and proceed in time-only indoor mode — the
+    // recorder's retry loop self-heals once services come back.
     final adv = widget.preferences.advancedGps;
     _prepareFuture = _recorder!.prepare(
       route: _selectedRoute,

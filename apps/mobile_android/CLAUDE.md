@@ -34,6 +34,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `onboarding_screen.dart` — first-launch permission ask
 - `sign_in_screen.dart` — email/password + Google sign-in
 - `home_screen.dart` — the dashboard + nav tabs host
+- `run_screen.dart` — the primary recording screen (countdown, live stats, route overlay, finish summary); hosts the recorder state machine and all the hardening described in [../../docs/run_recording.md](../../docs/run_recording.md)
 - `dashboard_screen.dart` — weekly mileage, PBs, goal progress
 - `runs_screen.dart` — run list with sorting, FAB opens `add_run_screen`
 - `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
@@ -75,6 +76,10 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `widgets/todays_workout_card.dart` — Run tab idle-state priority card when an active plan has a workout scheduled today
 - `social_service.dart` — `ChangeNotifier` wrapping all Supabase calls for clubs / events / posts
 - `training_service.dart` — `ChangeNotifier` wrapping Supabase calls for training plans + workouts
+- `ble_heart_rate.dart` — BLE chest-strap GATT client for live BPM stream (tested); wires into the run screen via `BleHeartRate.stream`
+- `race_controller.dart` — live-race orchestration: pings spectator feed, auto-submits finisher time to the leaderboard
+- `settings_sync.dart` — reads/writes the user-preferences row so settings roam across devices
+- `backup.dart` — export + import of the local run / route stores (troubleshooting + device-swap path)
 - `recurrence.dart` — Dart port of `apps/web/src/lib/recurrence.ts`, keep in sync
 - `training.dart` — Dart port of `apps/web/src/lib/training.ts` (VDOT, Riegel, plan generator); keep in sync, 17-test mirror suite in `test/training_test.dart`
 
