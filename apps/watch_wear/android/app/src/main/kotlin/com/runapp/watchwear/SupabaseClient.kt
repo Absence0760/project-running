@@ -180,7 +180,7 @@ class SupabaseClient(
                 RunRow.COL_STARTED_AT to startedAtIso,
                 RunRow.COL_DURATION_S to durationS,
                 RunRow.COL_DISTANCE_M to distanceM,
-                RunRow.COL_SOURCE to "app",
+                RunRow.COL_SOURCE to "watch",
                 RunRow.COL_TRACK_URL to path,
                 RunRow.COL_METADATA to metadata,
             )

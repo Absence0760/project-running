@@ -45,7 +45,8 @@ create index runs_public on runs (is_public, started_at desc) where is_public = 
 
 | Value | Meaning |
 |---|---|
-| `app` | Recorded live in this app |
+| `app` | Recorded live on the phone |
+| `watch` | Recorded live on a paired watch (Wear OS or Apple Watch) |
 | `healthkit` | Imported from Apple HealthKit |
 | `healthconnect` | Imported from Android Health Connect |
 | `strava` | Synced from Strava API |

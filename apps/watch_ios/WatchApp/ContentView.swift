@@ -48,7 +48,7 @@ struct ContentView: View {
                 "started_at": formatter.string(from: run.startedAt),
                 "duration_s": run.durationSeconds,
                 "distance_m": run.distanceMetres,
-                "source": "app"
+                "source": "watch"
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
             connectivity.transferRun(fileURL: fileURL, metadata: metadata)

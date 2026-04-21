@@ -84,7 +84,7 @@ actor SupabaseService {
             duration_s: run.durationSeconds,
             distance_m: run.distanceMetres,
             track_url: objectPath,
-            source: "app"
+            source: "watch"
         )
 
         let url = URL(string: "\(baseURL)/rest/v1/runs")!

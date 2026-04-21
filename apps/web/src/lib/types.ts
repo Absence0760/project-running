@@ -54,6 +54,7 @@ export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_
 // these unions and let the generated types flow through.
 export type RunSource =
 	| 'app'
+	| 'watch'
 	| 'healthkit'
 	| 'healthconnect'
 	| 'strava'
