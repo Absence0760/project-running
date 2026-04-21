@@ -378,7 +378,6 @@ class _RunScreenState extends State<RunScreen> {
       minMovementMetres: adv ? 1 : _activityType.minMovementMetres,
       maxSpeedMps: _activityType.maxSpeedMps,
       accuracy: adv ? LocationAccuracy.best : LocationAccuracy.high,
-      accuracyGateMetres: adv ? 10 : 20,
     );
   }
 

@@ -87,6 +87,25 @@ void main() {
       expect(r.debugTrack.length, 1);
     });
 
+    test('default accuracy gate accepts realistic ~15m GPS fixes', () {
+      // Regression guard: an earlier Advanced-GPS path tightened the gate to
+      // 10m, which silently rejected almost every real-world fix (phones
+      // routinely report 15–30m horizontal accuracy outdoors). If the default
+      // prepare params ever drop below this, the live map freezes and
+      // distance stays at 0 in Advanced mode.
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(
+        makePosition(metresEast: 0, secondsFromStart: 0, accuracy: 15),
+      );
+      r.debugInjectPosition(
+        makePosition(metresEast: 5, secondsFromStart: 2, accuracy: 15),
+      );
+      expect(r.debugCurrentWaypoint, isNotNull);
+      expect(r.debugTrack.length, 2);
+      expect(r.debugDistanceMetres, closeTo(5, 0.5));
+    });
+
     test('movement threshold rejects sub-3m jitter', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();

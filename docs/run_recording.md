@@ -196,7 +196,7 @@ With `distanceFilter: 0` we receive every fix the sensor produces (~1 Hz on most
 Every incoming `Position` goes through:
 
 1. **Paused gate** — if `_paused`, drop (Stopwatch is also paused, so elapsed doesn't advance).
-2. **Accuracy filter** — `pos.accuracy > 20` → drop. 20 m is a compromise between rejecting urban-canyon corruption and keeping sparse fixes alive.
+2. **Accuracy filter** — `pos.accuracy > _accuracyGateMetres` (default 20) → drop. 20 m is a compromise between rejecting urban-canyon corruption and keeping sparse fixes alive. Drops log via `debugPrint`, rate-limited to once per 5 s so an always-bad stream doesn't flood. Tightening below 20 m silently rejects realistic outdoor fixes — see [decisions.md § 21](decisions.md).
 3. **Always** update `_currentWaypoint` (blue dot).
 4. **If not recording**, emit snapshot and return. Track and distance are untouched.
 5. **First tracked position** — set `_lastTrackedPosition` + `_lastTrackedPositionAt`, append to track, no distance delta yet.
@@ -219,6 +219,23 @@ Every incoming `Position` goes through:
 | hike | 3 | 2 | 6 | 1000 |
 
 `trackThresholdMetres` in the recorder is `max(distanceFilterMetres, minMovementMetres)` — i.e. the more conservative of the two knobs.
+
+### Advanced GPS override
+
+A user-facing toggle (Settings > Advanced GPS, mobile_android only) overrides the per-activity knobs for higher-fidelity recording on devices with capable chips:
+
+| Knob | Normal | Advanced GPS |
+|---|---|---|
+| `accuracy` | `LocationAccuracy.high` | `LocationAccuracy.best` |
+| `distanceFilterMetres` | per-activity (3 or 5) | 2 |
+| `minMovementMetres` | per-activity (2 or 4) | 1 |
+| `accuracyGateMetres` | 20 (default) | 20 (default) |
+
+`maxSpeedMps` stays on the per-activity value.
+
+The accuracy gate stays at the 20 m default in both modes — it has to, because the reported `pos.accuracy` is a real-world uncertainty estimate, not a knob the OS scales down when you ask for `best`. A tighter gate silently rejects the 15–30 m fixes that consumer phones routinely produce outdoors. See [decisions.md § 21](decisions.md).
+
+The toggle is per-device (SharedPreferences, not synced) and applies at `RunRecorder.prepare()` time — flipping it mid-run has no effect until the next run. It's only read in `run_screen.dart:_preload`.
 
 ### Display smoothing
 

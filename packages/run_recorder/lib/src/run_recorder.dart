@@ -109,6 +109,9 @@ class RunRecorder {
   double _trackThresholdMetres = 3;
   double _maxSpeedMps = 10;
   double _accuracyGateMetres = 20;
+  // Rate-limits the "fix dropped for accuracy" log. An always-bad stream
+  // would otherwise spam at ~1 Hz for the entire run.
+  DateTime? _lastAccuracyDropLogAt;
   // Remembered so the retry loop can re-open the position stream with the
   // same accuracy setting the caller passed to [prepare].
   LocationAccuracy _locationAccuracy = LocationAccuracy.high;
@@ -182,6 +185,7 @@ class RunRecorder {
     _maxSpeedMps = maxSpeedMps;
     _accuracyGateMetres = accuracyGateMetres;
     _locationAccuracy = accuracy;
+    _lastAccuracyDropLogAt = null;
     _prepared = true;
 
     // Start the self-healing retry loop regardless of whether GPS is
@@ -390,7 +394,20 @@ class RunRecorder {
   void _onPosition(Position pos) {
     if (_paused) return;
 
-    if (pos.accuracy > _accuracyGateMetres) return;
+    if (pos.accuracy > _accuracyGateMetres) {
+      final now = DateTime.now();
+      final last = _lastAccuracyDropLogAt;
+      if (last == null ||
+          now.difference(last) >= const Duration(seconds: 5)) {
+        _lastAccuracyDropLogAt = now;
+        debugPrint(
+          'RunRecorder: dropping fix — accuracy '
+          '${pos.accuracy.toStringAsFixed(1)}m > gate '
+          '${_accuracyGateMetres.toStringAsFixed(0)}m',
+        );
+      }
+      return;
+    }
 
     // Always refresh the raw current position so the blue dot updates on
     // every valid fix, independent of the track-append threshold. This
