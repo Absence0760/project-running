@@ -74,10 +74,8 @@ android {
     // produces an installable (though untrusted) APK. CI supplies the
     // real keystore via secrets.
     val keystoreFile = rootProject.file("key.properties")
-    val keystoreProps = java.util.Properties().apply {
-        if (keystoreFile.exists()) {
-            load(java.io.FileInputStream(keystoreFile))
-        }
+    val keystoreProps = Properties().apply {
+        if (keystoreFile.exists()) keystoreFile.inputStream().use { load(it) }
     }
 
     signingConfigs {
