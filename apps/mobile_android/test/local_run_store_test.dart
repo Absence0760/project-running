@@ -197,6 +197,22 @@ void main() {
       expect(store.runs, isEmpty);
     });
 
+    test('unsyncedCount is never negative when sidecar has orphan IDs', () async {
+      // Write a sidecar with an ID that has no corresponding run file.
+      // This can happen if the user clears app storage between the sidecar
+      // write and the run file write, or vice versa.
+      File('${tempDir.path}/synced_ids.json')
+          .writeAsStringSync('{"ids":["ghost-id-1","ghost-id-2"]}');
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      // No run files exist, but two ghost IDs are in the sidecar.
+      expect(store.runs, isEmpty);
+      expect(store.unsyncedCount, greaterThanOrEqualTo(0));
+      expect(store.unsyncedCount, 0);
+    });
+
     test('init loads multiple runs sorted newest-first', () async {
       // Seed two valid run files directly, with different startedAt.
       final older = {

@@ -35,7 +35,7 @@ class LocalRunStore extends ChangeNotifier {
   List<Run> get unsyncedRuns =>
       _runs.where((r) => !_syncedIds.contains(r.id)).toList();
 
-  int get unsyncedCount => _runs.length - _syncedIds.length;
+  int get unsyncedCount => unsyncedRuns.length;
 
   /// Call once at startup. Pass [overrideDirectory] in tests to avoid the
   /// `path_provider` plugin channel — the store will write runs to the
