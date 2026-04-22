@@ -128,13 +128,16 @@ List<DateTime> expandInstances(
       ? [_dartWeekday(e.startsAt)]
       : e.byday!;
   // Anchor on the Sunday of startsAt's week so weekIndex * 7 == elapsed weeks.
-  final anchor = DateTime(e.startsAt.year, e.startsAt.month, e.startsAt.day)
-      .subtract(Duration(days: e.startsAt.weekday % 7));
+  // startsAt may be a UTC DateTime from Supabase; convert to local so the
+  // extracted date fields match the user's wall-clock day.
+  final localStart = e.startsAt.toLocal();
+  final anchor = DateTime(localStart.year, localStart.month, localStart.day)
+      .subtract(Duration(days: localStart.weekday % 7));
 
   for (var dayOffset = 0; dayOffset < max * stepDays * 7; dayOffset++) {
     final d = anchor.add(Duration(days: dayOffset));
     if (d.isBefore(
-      DateTime(e.startsAt.year, e.startsAt.month, e.startsAt.day),
+      DateTime(localStart.year, localStart.month, localStart.day),
     )) {
       continue;
     }
@@ -149,9 +152,9 @@ List<DateTime> expandInstances(
       d.year,
       d.month,
       d.day,
-      e.startsAt.hour,
-      e.startsAt.minute,
-      e.startsAt.second,
+      localStart.hour,
+      localStart.minute,
+      localStart.second,
     );
     if (stamped.isBefore(e.startsAt)) continue;
     if (!stamped.isBefore(from)) {
