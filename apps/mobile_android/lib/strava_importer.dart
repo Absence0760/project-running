@@ -166,7 +166,7 @@ class StravaImporter {
       distanceMetres: distance,
       track: track,
       source: RunSource.strava,
-      externalId: stravaId,
+      externalId: 'strava:$stravaId',
       metadata: {
         'title': name.isEmpty ? 'Strava import' : name,
         'imported_from': 'strava',

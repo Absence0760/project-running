@@ -82,7 +82,7 @@ class HealthConnectImporter {
           distanceMetres: distance,
           track: const [], // Health Connect doesn't expose route geometry
           source: RunSource.healthconnect,
-          externalId: point.uuid,
+          externalId: 'healthconnect:${point.uuid}',
           metadata: metadata,
         ));
       } catch (e) {
