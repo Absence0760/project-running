@@ -478,7 +478,13 @@ class _RunScreenState extends State<RunScreen> {
       (_) => _checkPermission(),
     );
 
-    if (widget.preferences.audioCues) widget.audioCues.announceStart();
+    if (widget.preferences.audioCues) {
+      try {
+        widget.audioCues.announceStart();
+      } catch (e) {
+        debugPrint('announceStart failed: $e');
+      }
+    }
 
     setState(() => _state = _ScreenState.recording);
 
@@ -908,11 +914,15 @@ class _RunScreenState extends State<RunScreen> {
     });
 
     if (widget.preferences.audioCues) {
-      widget.audioCues.announceFinish(
-        distanceMetres: run.distanceMetres,
-        elapsed: run.duration,
-        unit: widget.preferences.unit,
-      );
+      try {
+        await widget.audioCues.announceFinish(
+          distanceMetres: run.distanceMetres,
+          elapsed: run.duration,
+          unit: widget.preferences.unit,
+        );
+      } catch (e) {
+        debugPrint('announceFinish failed: $e');
+      }
     }
 
     await widget.runStore.save(run);
