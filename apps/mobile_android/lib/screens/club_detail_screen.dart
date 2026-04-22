@@ -129,8 +129,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     );
     if (ok != true) return;
     setState(() => _busy = true);
-    await widget.social.leaveClub(c.row.id);
-    await _load();
+    try {
+      await widget.social.leaveClub(c.row.id);
+      await _load();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _submitPost() async {
