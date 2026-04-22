@@ -280,6 +280,7 @@ class _RunsScreenState extends State<RunsScreen> {
     );
     if (ok != true) return;
     final ids = Set<String>.from(_selected);
+    final failedIds = <String>{};
     final api = widget.apiClient;
     if (api != null && api.userId != null) {
       final runsToDelete =
@@ -287,18 +288,36 @@ class _RunsScreenState extends State<RunsScreen> {
       for (final run in runsToDelete) {
         try {
           await api.deleteRun(run);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('deleteRun failed for ${run.id}: $e');
+          failedIds.add(run.id);
+        }
       }
     }
-    await widget.runStore.deleteMany(ids);
+    // Only delete locally the runs whose remote delete succeeded.
+    // Runs whose remote delete failed are kept locally so they don't
+    // silently resurface on the next sync.
+    // TODO: queue failed deletes for retry — see data-sync audit P0-1.
+    await widget.runStore.deleteMany(ids.difference(failedIds));
     if (!mounted) return;
     setState(() {
       _selecting = false;
       _selected.clear();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Deleted $count run${count == 1 ? '' : 's'}')),
-    );
+    if (failedIds.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${ids.length - failedIds.length} deleted; '
+            '${failedIds.length} could not be removed from the cloud.',
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $count run${count == 1 ? '' : 's'}')),
+      );
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────
