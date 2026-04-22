@@ -682,7 +682,7 @@ List<int> _runToFitBytes(Run r) {
 
   // -- Data CRC --
   var crc = 0;
-  for (var i = 0; i < out.length; i++) {
+  for (var i = 14; i < out.length; i++) {
     crc = _fitCrc(crc, out[i]);
   }
   out.add(crc & 0xFF);
