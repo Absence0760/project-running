@@ -114,7 +114,7 @@
 		if (stats.count > 0) {
 			lines.push(`Longest: ${formatDistance(stats.longest)}`);
 			lines.push(
-				`Avg pace: ${formatPace(stats.duration, stats.distance)} /km`,
+				`Avg pace: ${formatPace(stats.duration, stats.distance)}`,
 			);
 		}
 		const text = lines.join('\n');
@@ -218,7 +218,7 @@
 							<span class="run-dist">{formatDistance(run.distance_m)}</span>
 							<span class="run-time">{formatDuration(run.duration_s)}</span>
 							<span class="run-pace"
-								>{formatPace(run.duration_s, run.distance_m)} /km</span
+								>{formatPace(run.duration_s, run.distance_m)}</span
 							>
 						</a>
 					{/each}

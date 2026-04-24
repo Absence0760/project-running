@@ -11,6 +11,7 @@
 	import { fetchRuns, deleteRuns } from '$lib/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import type { Run, RunSource } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
@@ -19,23 +20,25 @@
 	let activityFilter = $state<string>('all');
 	type SortKey = 'newest' | 'oldest' | 'longest' | 'fastest';
 	let sortKey = $state<SortKey>('newest');
-	type DateRange = 'today' | 'week' | 'month' | 'year' | 'all';
+	type DateRange = 'today' | 'week' | 'month' | 'year' | 'all' | 'custom';
 	// Default to "all" on web so history is fully visible on first
 	// open. (Android defaults to "week" because its list is the main
 	// surface; web has a richer dashboard above.)
 	let dateRange = $state<DateRange>('all');
+	/// ISO yyyy-mm-dd bounds for the custom-range picker. Empty string
+	/// means unbounded on that side.
+	let customFrom = $state('');
+	let customTo = $state('');
 
-	/// Lower bound for the selected date range in local time. `null`
-	/// means "no cutoff — show everything". Mirrors Android's
-	/// `_rangeCutoff` so a runner switching between devices with the
-	/// same range selected sees the same subset.
-	function rangeCutoff(range: DateRange): Date | null {
+	/// Lower-bound / upper-bound cutoffs in local time for the selected
+	/// range. `null` on either side means "no cutoff on this side".
+	function rangeBounds(range: DateRange): { from: Date | null; to: Date | null } {
 		const now = new Date();
 		switch (range) {
 			case 'today': {
 				const d = new Date(now);
 				d.setHours(0, 0, 0, 0);
-				return d;
+				return { from: d, to: null };
 			}
 			case 'week': {
 				// Monday-start week, matching Android's `weekStartLocal`.
@@ -43,18 +46,23 @@
 				d.setHours(0, 0, 0, 0);
 				const dow = (d.getDay() + 6) % 7; // 0 = Mon
 				d.setDate(d.getDate() - dow);
-				return d;
+				return { from: d, to: null };
 			}
 			case 'month': {
 				const d = new Date(now);
 				d.setHours(0, 0, 0, 0);
 				d.setDate(d.getDate() - 30);
-				return d;
+				return { from: d, to: null };
 			}
 			case 'year':
-				return new Date(now.getFullYear(), 0, 1);
+				return { from: new Date(now.getFullYear(), 0, 1), to: null };
+			case 'custom': {
+				const from = customFrom ? new Date(customFrom + 'T00:00:00') : null;
+				const to = customTo ? new Date(customTo + 'T23:59:59.999') : null;
+				return { from, to };
+			}
 			case 'all':
-				return null;
+				return { from: null, to: null };
 		}
 	}
 
@@ -115,14 +123,16 @@
 	}
 
 	let filteredRuns = $derived.by(() => {
-		const cutoff = rangeCutoff(dateRange);
+		const { from, to } = rangeBounds(dateRange);
 		const out = runs.filter((r) => {
 			if (sourceFilter !== 'all' && r.source !== sourceFilter) return false;
 			if (activityFilter !== 'all') {
 				const type = (r.metadata as Record<string, unknown> | null)?.activity_type ?? 'run';
 				if (type !== activityFilter) return false;
 			}
-			if (cutoff && new Date(r.started_at) < cutoff) return false;
+			const startedAt = new Date(r.started_at);
+			if (from && startedAt < from) return false;
+			if (to && startedAt > to) return false;
 			return true;
 		});
 		// Sort in-place on the filtered copy so the user's chosen key
@@ -216,7 +226,7 @@
 			{/each}
 		</div>
 		<div class="filters" style="margin-top: var(--space-xs)">
-			{#each [{v: 'all', l: 'All time'}, {v: 'today', l: 'Today'}, {v: 'week', l: 'This week'}, {v: 'month', l: 'Last 30 days'}, {v: 'year', l: 'This year'}] as r (r.v)}
+			{#each [{v: 'all', l: 'All time'}, {v: 'today', l: 'Today'}, {v: 'week', l: 'This week'}, {v: 'month', l: 'Last 30 days'}, {v: 'year', l: 'This year'}, {v: 'custom', l: 'Custom…'}] as r (r.v)}
 				<button
 					class="filter-btn"
 					class:active={dateRange === r.v}
@@ -226,6 +236,28 @@
 				</button>
 			{/each}
 		</div>
+		{#if dateRange === 'custom'}
+			<div class="date-picker-row">
+				<label>
+					From
+					<input type="date" bind:value={customFrom} />
+				</label>
+				<label>
+					To
+					<input type="date" bind:value={customTo} />
+				</label>
+				{#if customFrom || customTo}
+					<button
+						type="button"
+						class="link-btn"
+						onclick={() => {
+							customFrom = '';
+							customTo = '';
+						}}>Clear</button
+					>
+				{/if}
+			</div>
+		{/if}
 		<div class="sort-row" style="margin-top: var(--space-xs)">
 			<label class="sort-label">
 				Sort
@@ -278,7 +310,7 @@
 								</div>
 								<div class="run-stat">
 									<span class="run-stat-value"
-										>{formatPace(run.duration_s, run.distance_m)} /km</span
+										>{formatPace(run.duration_s, run.distance_m)}</span
 									>
 									<span class="run-stat-label">Pace</span>
 								</div>
@@ -288,7 +320,7 @@
 				{:else}
 					<a href="/runs/{run.id}" class="run-card">
 						<div class="run-map-placeholder">
-							<span class="material-symbols">map</span>
+							<RunTrackPreview trackUrl={run.track_url} />
 						</div>
 						<div class="run-details">
 							<div class="run-top">
@@ -308,7 +340,7 @@
 								</div>
 								<div class="run-stat">
 									<span class="run-stat-value"
-										>{formatPace(run.duration_s, run.distance_m)} /km</span
+										>{formatPace(run.duration_s, run.distance_m)}</span
 									>
 									<span class="run-stat-label">Pace</span>
 								</div>
@@ -507,6 +539,28 @@
 		font-family: 'Material Symbols Outlined';
 	}
 
+	.date-picker-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-top: var(--space-sm);
+		flex-wrap: wrap;
+	}
+	.date-picker-row label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.date-picker-row input[type='date'] {
+		padding: 0.35rem 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text-primary);
+		font-size: 0.85rem;
+	}
 	.sort-row {
 		display: flex;
 		align-items: center;

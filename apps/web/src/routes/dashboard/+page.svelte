@@ -23,6 +23,7 @@
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
 	import { fmtPace, fmtKm, WORKOUT_KIND_LABEL } from '$lib/training';
 	import { loadSettings, effective } from '$lib/settings';
+	import { setUnit } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		loadGoals,
@@ -35,7 +36,7 @@
 	import type { Run, RunSource, ActivePlanOverview } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
-	let weeklyMileage = $state<{ week: string; distance_km: number }[]>([]);
+	let weeklyMileage = $state<{ week: string; distance_m: number }[]>([]);
 	let personalRecords = $state<{ distance: string; time_s: number; date: string }[]>([]);
 	let planOverview = $state<ActivePlanOverview | null>(null);
 	let loading = $state(true);
@@ -163,7 +164,10 @@
 				const settings = await loadSettings(uid);
 				weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
 				const unit = effective<string>(settings, 'preferred_unit');
-				if (unit === 'mi') preferredUnit = 'mi';
+				if (unit === 'mi' || unit === 'km') {
+					preferredUnit = unit;
+					setUnit(unit);
+				}
 			}
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
@@ -188,23 +192,24 @@
 	let mileageData = $derived.by(() => {
 		if (mileageView === 'weekly') return weeklyMileage;
 
-		// Group runs by month or year
+		// Group runs by month or year. Distance stays in metres so the
+		// render-time formatter can honor the user's preferred unit.
 		const groups = new Map<string, number>();
 		for (const run of filteredRuns) {
 			const d = new Date(run.started_at);
 			const key = mileageView === 'monthly'
 				? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
 				: String(d.getFullYear());
-			groups.set(key, (groups.get(key) ?? 0) + run.distance_m / 1000);
+			groups.set(key, (groups.get(key) ?? 0) + run.distance_m);
 		}
-		return Array.from(groups.entries()).map(([week, distance_km]) => ({
+		return Array.from(groups.entries()).map(([week, distance_m]) => ({
 			week,
-			distance_km: Math.round(distance_km * 10) / 10
+			distance_m: Math.round(distance_m),
 		}));
 	});
 
 	let maxBar = $derived(
-		mileageData.length > 0 ? Math.max(...mileageData.map((w) => w.distance_km)) : 1
+		mileageData.length > 0 ? Math.max(...mileageData.map((w) => w.distance_m)) : 1
 	);
 </script>
 
@@ -293,15 +298,12 @@
 		     `weekly_mileage_goal_m` value Android's dashboard reads). -->
 		{#if weeklyGoalMetres != null && weeklyGoalMetres > 0}
 			{@const pct = Math.min(100, Math.round((thisWeekDistance / weeklyGoalMetres) * 100))}
-			{@const goalDisplay = preferredUnit === 'mi'
-				? `${(weeklyGoalMetres / 1609.344).toFixed(1)} mi`
-				: `${(weeklyGoalMetres / 1000).toFixed(1)} km`}
 			<div class="goal-card">
 				<header class="goal-header">
 					<div>
 						<span class="goal-title">Weekly goal</span>
 						<span class="goal-sub">
-							{formatDistance(thisWeekDistance)} of {goalDisplay}
+							{formatDistance(thisWeekDistance)} of {formatDistance(weeklyGoalMetres)}
 						</span>
 					</div>
 					<span class="goal-pct">{pct}%</span>
@@ -448,7 +450,7 @@
 						? formatPace(
 								thisWeekRuns.reduce((s, r) => s + r.duration_s, 0),
 								thisWeekDistance,
-							) + ' /km'
+							)
 						: '--'}
 				</span>
 				<span class="stat-sub">average</span>
@@ -481,10 +483,10 @@
 			<div class="chart">
 				{#each mileageData as week}
 					<div class="bar-col">
-						<div class="bar-tooltip">{week.distance_km.toFixed(1)} km</div>
+						<div class="bar-tooltip">{formatDistance(week.distance_m)}</div>
 						<div
 							class="bar"
-							style="height: {(week.distance_km / maxBar) * 100}%"
+							style="height: {(week.distance_m / maxBar) * 100}%"
 						></div>
 						<span class="bar-label">{week.week.split(' ')[0]}</span>
 					</div>
@@ -537,7 +539,7 @@
 								<span class="run-distance">{formatDistance(run.distance_m)}</span>
 							</div>
 							<div class="run-meta">
-								<span class="run-pace">{formatPace(run.duration_s, run.distance_m)} /km</span>
+								<span class="run-pace">{formatPace(run.duration_s, run.distance_m)}</span>
 								<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
 							</div>
 						</a>
@@ -571,18 +573,21 @@
 			</div>
 		</label>
 		<label class="field">
-			<span class="field-label">Distance (km)</span>
+			<span class="field-label">Distance ({preferredUnit})</span>
 			<input
 				type="number"
 				min="0"
 				step="0.5"
-				value={eg.distanceMetres != null ? eg.distanceMetres / 1000 : ''}
+				value={eg.distanceMetres != null
+					? (preferredUnit === 'mi' ? eg.distanceMetres / 1609.344 : eg.distanceMetres / 1000)
+					: ''}
 				placeholder="—"
 				oninput={(e) => {
 					const v = (e.currentTarget as HTMLInputElement).value;
+					const perUnit = preferredUnit === 'mi' ? 1609.344 : 1000;
 					editingGoal = {
 						...eg,
-						distanceMetres: v === '' ? undefined : Math.max(0, parseFloat(v) * 1000),
+						distanceMetres: v === '' ? undefined : Math.max(0, parseFloat(v) * perUnit),
 					};
 				}}
 				class="input"

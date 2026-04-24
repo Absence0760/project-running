@@ -7,7 +7,7 @@
 		{ href: '/settings/integrations', label: 'Integrations', icon: 'link' },
 		{ href: '/settings/devices', label: 'Devices', icon: 'devices' },
 		{ href: '/settings/upgrade', label: 'Pro & support', icon: 'favorite' },
-		{ href: '/legal/licenses', label: 'Licenses', icon: 'description' },
+		{ href: '/settings/licenses', label: 'Licenses', icon: 'description' },
 	];
 </script>
 

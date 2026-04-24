@@ -441,7 +441,7 @@
 					>{formatPace(
 						movingSeconds > 0 ? movingSeconds : run.duration_s,
 						run.distance_m
-					)} /km</span
+					)}</span
 				>
 				<span class="key-stat-label">Avg Pace</span>
 			</div>
@@ -586,7 +586,7 @@
 			<div class="share-stat">
 				<div class="share-stat-label">Pace</div>
 				<div class="share-stat-value">
-					{formatPace(run.duration_s, run.distance_m)} /km
+					{formatPace(run.duration_s, run.distance_m)}
 				</div>
 			</div>
 		</div>

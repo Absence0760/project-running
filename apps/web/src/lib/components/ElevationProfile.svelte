@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { formatDistance } from '$lib/units.svelte';
+
 	let { elevations = [], totalDistance = 0 }: { elevations: number[]; totalDistance: number } =
 		$props();
 
@@ -63,7 +65,7 @@
 
 		<text x={padding.left} y={height - 2} class="x-label">0</text>
 		<text x={padding.left + plotWidth} y={height - 2} class="x-label" text-anchor="end">
-			{(totalDistance / 1000).toFixed(1)} km
+			{formatDistance(totalDistance)}
 		</text>
 	{:else}
 		<text x={width / 2} y={height / 2} text-anchor="middle" class="empty-label">

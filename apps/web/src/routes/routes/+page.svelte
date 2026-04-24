@@ -3,6 +3,7 @@
 	import { formatDistance } from '$lib/mock-data';
 	import { fetchRoutes } from '$lib/data';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
+	import TrackPreview from '$lib/components/TrackPreview.svelte';
 	import type { Route } from '$lib/types';
 
 	let routes = $state<Route[]>([]);
@@ -47,7 +48,11 @@
 			{#each routes as route}
 				<a href="/routes/{route.id}" class="route-card">
 					<div class="route-map-placeholder">
-						<span class="material-symbols">route</span>
+						{#if route.waypoints && route.waypoints.length > 1}
+							<TrackPreview points={route.waypoints} />
+						{:else}
+							<span class="material-symbols">route</span>
+						{/if}
 					</div>
 					<div class="route-info">
 						<h3>{route.name}</h3>

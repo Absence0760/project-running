@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { supabase } from '$lib/supabase';
+import { setUnit } from '$lib/units.svelte';
 
 interface User {
 	id: string;
@@ -71,6 +72,7 @@ function createAuthStore() {
 				preferred_unit: profile.preferred_unit ?? 'km',
 				subscription_tier: profile.subscription_tier ?? 'free',
 			};
+			setUnit(user.preferred_unit);
 		} else {
 			// Profile doesn't exist yet — create it
 			await supabase.from('user_profiles').upsert({
@@ -87,6 +89,7 @@ function createAuthStore() {
 				preferred_unit: 'km',
 				subscription_tier: 'free',
 			};
+			setUnit('km');
 		}
 	}
 

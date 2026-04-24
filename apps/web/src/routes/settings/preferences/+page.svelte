@@ -9,6 +9,7 @@
 		type LoadedSettings,
 	} from '$lib/settings';
 	import { applyTheme, loadTheme, type Theme } from '$lib/theme';
+	import { setUnit } from '$lib/units.svelte';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -53,6 +54,7 @@
 		try {
 			settings = await loadSettings(auth.user.id);
 			preferredUnit = effective(settings, 'preferred_unit', 'km') ?? 'km';
+			setUnit(preferredUnit);
 			paceFormat = effective(settings, 'units_pace_format', 'min_per_km') ?? 'min_per_km';
 			defaultActivity = effective(settings, 'default_activity_type', 'run') ?? 'run';
 			weekStartDay = effective(settings, 'week_start_day', 'monday') ?? 'monday';
@@ -117,6 +119,9 @@
 		}).eq('id', auth.user.id);
 
 		await updateUniversal(auth.user.id, changes);
+		// Propagate to the app-wide unit signal so every view re-renders
+		// with the new label without a full reload.
+		setUnit(preferredUnit);
 		saving = false; saved = true;
 		setTimeout(() => (saved = false), 2000);
 	}

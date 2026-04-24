@@ -98,18 +98,10 @@ export function formatDuration(seconds: number): string {
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function formatPace(seconds: number, metres: number): string {
-	if (metres === 0) return '--:--';
-	const paceSecondsPerKm = seconds / (metres / 1000);
-	const m = Math.floor(paceSecondsPerKm / 60);
-	const s = Math.round(paceSecondsPerKm % 60);
-	return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-export function formatDistance(metres: number): string {
-	if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
-	return `${Math.round(metres)} m`;
-}
+// Formatters were moved to `lib/units.svelte.ts` so they can honor the
+// user's `preferred_unit` setting reactively. Re-exported here to avoid
+// breaking the many existing importers from `$lib/mock-data`.
+export { formatPace, formatDistance, formatPaceNoSuffix } from './units.svelte';
 
 export function formatDate(iso: string): string {
 	return new Date(iso).toLocaleDateString('en-GB', {

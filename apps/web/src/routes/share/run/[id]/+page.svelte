@@ -21,8 +21,8 @@
 
 	let track = $derived(run?.track ?? []);
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
-	let pageTitle = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km Run — Better Runner` : 'Run — Better Runner');
-	let pageDesc = $derived(run ? `${(run.distance_m / 1000).toFixed(1)} km in ${formatDuration(run.duration_s)} — ${formatPace(run.duration_s, run.distance_m)} /km` : '');
+	let pageTitle = $derived(run ? `${formatDistance(run.distance_m)} Run — Better Runner` : 'Run — Better Runner');
+	let pageDesc = $derived(run ? `${formatDistance(run.distance_m)} in ${formatDuration(run.duration_s)} — ${formatPace(run.duration_s, run.distance_m)}` : '');
 </script>
 
 <svelte:head>
@@ -55,7 +55,7 @@
 				<span class="meta-sep">&middot;</span>
 				<span>{formatDuration(run.duration_s)}</span>
 				<span class="meta-sep">&middot;</span>
-				<span>{formatPace(run.duration_s, run.distance_m)} /km</span>
+				<span>{formatPace(run.duration_s, run.distance_m)}</span>
 				<span class="meta-sep">&middot;</span>
 				<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
 			</div>

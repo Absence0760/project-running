@@ -76,6 +76,13 @@ async function fetchTrack(path: string) {
 	return JSON.parse(json);
 }
 
+/// Public wrapper for list-page thumbnail fetches. Same pipeline as
+/// the detail-page track loader but exposed so the runs list can lazy-
+/// download track blobs as cards scroll into view.
+export async function fetchTrackByPath(path: string) {
+	return fetchTrack(path);
+}
+
 /** Decompress a gzipped ArrayBuffer using the browser's DecompressionStream. */
 async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 	const ds = new (globalThis as any).DecompressionStream('gzip');
@@ -548,19 +555,20 @@ export async function fetchWeeklyMileage() {
 
 	if (!runs || runs.length === 0) return [];
 
-	// Group by ISO week
+	// Group by ISO week. Keep distance in metres so render-time
+	// formatting can honor the user's preferred unit.
 	const weeks = new Map<string, number>();
 	for (const run of runs) {
 		const d = new Date(run.started_at);
 		const weekStart = new Date(d);
 		weekStart.setDate(d.getDate() - d.getDay());
 		const key = weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-		weeks.set(key, (weeks.get(key) ?? 0) + run.distance_m / 1000);
+		weeks.set(key, (weeks.get(key) ?? 0) + run.distance_m);
 	}
 
 	return Array.from(weeks.entries())
 		.slice(-12)
-		.map(([week, distance_km]) => ({ week, distance_km: Math.round(distance_km * 10) / 10 }));
+		.map(([week, distance_m]) => ({ week, distance_m: Math.round(distance_m) }));
 }
 
 export async function fetchPersonalRecords() {
