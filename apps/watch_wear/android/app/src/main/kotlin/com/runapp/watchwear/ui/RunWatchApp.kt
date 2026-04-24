@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,8 +24,11 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -73,15 +78,26 @@ import com.runapp.watchwear.RunViewModel
 import com.runapp.watchwear.Stage
 import com.runapp.watchwear.system.BatteryOptimization
 import android.app.Activity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 
 @Composable
 fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false) {
     val state by vm.state.collectAsStateWithLifecycle()
+    // Brief 3-2-1 overlay between permission grant and the ViewModel's
+    // `start()` call. UI-only — the recording service isn't live during
+    // the countdown. Mirrors the user-visible behaviour on Android.
+    var showCountdown by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
         if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-            vm.start()
+            showCountdown = true
         }
     }
 
@@ -168,7 +184,50 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     onDiscard = vm::discard,
                 )
             }
+
+            if (showCountdown) {
+                CountdownOverlay(
+                    onComplete = {
+                        showCountdown = false
+                        vm.start()
+                    },
+                    onCancel = { showCountdown = false },
+                )
+            }
         }
+    }
+}
+
+/// Full-screen 3-2-1 countdown shown between permission grant and the
+/// ViewModel's `start()`. A tap anywhere cancels and returns to PreRun,
+/// matching the Android pattern.
+@Composable
+private fun CountdownOverlay(
+    onComplete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    var count by remember { mutableIntStateOf(3) }
+    LaunchedEffect(Unit) {
+        // 3 → 2 → 1, one second each, then fire `onComplete`.
+        for (n in 3 downTo 1) {
+            count = n
+            delay(1000L)
+        }
+        onComplete()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .clickable(onClick = onCancel),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.display1,
+            color = DuskPalette.parchment,
+            fontSize = 84.sp,
+        )
     }
 }
 
@@ -799,13 +858,75 @@ private fun RunningScreen(
             ) {
                 Text("Lap", style = MaterialTheme.typography.caption2)
             }
-            Button(
-                onClick = onStop,
+            HoldToStopButton(onStop = onStop)
+        }
+    }
+}
+
+/// Stop button that requires an ~800 ms press before firing `onStop`.
+/// A circular progress ring fills around the button during the hold;
+/// releasing early cancels. Prevents a single accidental tap from ending
+/// a long run — the single most damaging mis-tap a runner can make.
+@Composable
+private fun HoldToStopButton(onStop: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var progress by remember { mutableFloatStateOf(0f) }
+    var holdJob by remember { mutableStateOf<Job?>(null) }
+    val holdDurationMs = 800L
+
+    Box(
+        modifier = Modifier
+            .size(ButtonDefaults.DefaultButtonSize)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    holdJob?.cancel()
+                    holdJob = scope.launch {
+                        val startMs = System.currentTimeMillis()
+                        while (isActive) {
+                            val elapsed = System.currentTimeMillis() - startMs
+                            progress = (elapsed.toFloat() / holdDurationMs)
+                                .coerceAtMost(1f)
+                            if (elapsed >= holdDurationMs) {
+                                onStop()
+                                progress = 0f
+                                break
+                            }
+                            delay(16)
+                        }
+                    }
+                    waitForUpOrCancellation()
+                    holdJob?.cancel()
+                    holdJob = null
+                    progress = 0f
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        // Ring fills from 0 → 1 during the hold. Only drawn while held so
+        // it doesn't compete visually with the Pause / Lap buttons when
+        // the runner is just looking at their stats.
+        if (progress > 0f) {
+            CircularProgressIndicator(
+                progress = progress,
                 modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
-                colors = ButtonDefaults.primaryButtonColors(),
-            ) {
-                Text("Stop")
-            }
+                strokeWidth = 3.dp,
+                indicatorColor = MaterialTheme.colors.onPrimary,
+                trackColor = Color.Transparent,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(ButtonDefaults.DefaultButtonSize - 6.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colors.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Stop",
+                style = MaterialTheme.typography.caption2,
+                color = MaterialTheme.colors.onPrimary,
+            )
         }
     }
 }

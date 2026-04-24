@@ -94,12 +94,12 @@ See [features § Live GPS run recording](features.md#live-gps-run-recording), [f
 |---|---|---|---|---|---|---|
 | Live GPS recording | ✓ | Partial | N/A | ✓ | ✓ | iOS: `RunScreen` scaffolded but `RunRecorder` not wired. Web: browsers cannot record a run reliably — reviewing only. |
 | Background location tracking | ✓ | Partial | N/A | ✓ | ✓ | iOS recorder has background mode wired in Info.plist but recording loop not end-to-end. |
-| 3-second start countdown | ✓ | ✗ | N/A | ✗ | ✗ | Android-only today. Watches start immediately on tap. |
+| 3-second start countdown | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS shows a full-screen 3-2-1 overlay between permission grant and `vm.start()` (tap to cancel). Apple Watch still starts immediately. |
 | Manual pause / resume | ✓ | ✗ | N/A | ✓ | ✓ | |
-| Hold-to-stop (prevents accidental stop) | ✓ | ✗ | N/A | ✗ | ✗ | |
-| Lap markers | ✓ | ✗ | N/A | ✗ | ✗ | |
+| Hold-to-stop (prevents accidental stop) | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS requires an 800 ms press on the Stop button; a circular progress ring fills during the hold and releasing early cancels. |
+| Lap markers | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS exposes a Lap button during recording; splits render on the PostRun screen and persist into `run.metadata.laps` on sync. |
 | Wakelock during run | ✓ | N/A | N/A | N/A | N/A | watchOS / Wear OS handle their own wake policies. |
-| Activity types (run / walk / cycle / hike) | ✓ | ✗ | N/A | ✗ | ✗ | Watches record as "run" today; no picker. |
+| Activity types (run / walk / cycle / hike) | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS has a CompactChip on the PreRun screen that cycles run → walk → hike → cycle; the choice stamps into `metadata.activity_type` on save. Apple Watch still records as "run". |
 | TTS audio cues (splits + pace alerts) | ✓ | ✗ | N/A | ✗ | ✗ | |
 | Haptic pace alerts | ✓ | ✗ | N/A | ✗ | ✓ | Android fires `HapticFeedback.heavyImpact()` alongside the TTS when the runner drifts >30 s off target — two pulses for "speed up", one for "slow down". Wear OS has no usable haptic API for this; Apple Watch uses WatchKit haptic types. |
 | Step count via pedometer | ✓ | ✗ | N/A | ✗ | ✗ | Browsers have no pedometer sensor. |

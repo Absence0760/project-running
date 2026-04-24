@@ -220,8 +220,10 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   UI doesn't yet have a low-color "ambient" branch. Wire
   `AmbientLifecycleObserver` + a dimmed Compose render path. (Glanceable
   watch face complication is a separate, larger item.)
-- **Pause / resume.** No way to pause mid-run.
-- **Laps / splits.**
+- **TTS audio cues.** `android.speech.tts.TextToSpeech` works on Wear OS
+  but no voice-feedback path is wired into the recording service yet.
+- **Live HTTP tile cache.** Watches today use pre-downloaded route tiles
+  only; a runtime tile cache for revisited areas is not wired.
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).
@@ -230,6 +232,29 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   this session as compiles-cleanly code; verifying it actually
   records 60+ minutes without dropping samples requires putting it on a
   watch and going for a real run.
+
+## Recording UX — what's shipped on the Running screen
+
+What the UI exposes during a recording, for quick reference when reading
+`ui/RunWatchApp.kt`:
+
+- **Pre-run activity picker.** `CompactChip` on `PreRunScreen` cycles
+  `run → walk → hike → cycle`; the choice flows through to
+  `metadata.activity_type` on save.
+- **3-second start countdown.** Between permission grant and
+  `vm.start()`, a full-screen `CountdownOverlay` shows `3 → 2 → 1`
+  (tap anywhere to cancel). UI-only — the recording service isn't live
+  during the countdown.
+- **Pause / resume.** `||` button toggles to `Go`; stage flips
+  `Running ↔ Paused`. The foreground service owns the actual pause state
+  via `RunRecordingService.pause / resume`.
+- **Lap button.** `vm.markLap()` → service appends to the laps list;
+  `FinishedSummary.laps` powers the splits table on `PostRunScreen`
+  and writes `metadata.laps` on sync.
+- **Hold-to-stop.** `HoldToStopButton` requires an 800 ms press before
+  `vm.stop()` fires; a circular progress ring fills during the hold,
+  releasing early cancels. Stops a single accidental tap from ending a
+  long run.
 
 ## Before reporting a task done
 
