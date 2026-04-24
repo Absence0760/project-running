@@ -19,6 +19,44 @@
 	let activityFilter = $state<string>('all');
 	type SortKey = 'newest' | 'oldest' | 'longest' | 'fastest';
 	let sortKey = $state<SortKey>('newest');
+	type DateRange = 'today' | 'week' | 'month' | 'year' | 'all';
+	// Default to "all" on web so history is fully visible on first
+	// open. (Android defaults to "week" because its list is the main
+	// surface; web has a richer dashboard above.)
+	let dateRange = $state<DateRange>('all');
+
+	/// Lower bound for the selected date range in local time. `null`
+	/// means "no cutoff — show everything". Mirrors Android's
+	/// `_rangeCutoff` so a runner switching between devices with the
+	/// same range selected sees the same subset.
+	function rangeCutoff(range: DateRange): Date | null {
+		const now = new Date();
+		switch (range) {
+			case 'today': {
+				const d = new Date(now);
+				d.setHours(0, 0, 0, 0);
+				return d;
+			}
+			case 'week': {
+				// Monday-start week, matching Android's `weekStartLocal`.
+				const d = new Date(now);
+				d.setHours(0, 0, 0, 0);
+				const dow = (d.getDay() + 6) % 7; // 0 = Mon
+				d.setDate(d.getDate() - dow);
+				return d;
+			}
+			case 'month': {
+				const d = new Date(now);
+				d.setHours(0, 0, 0, 0);
+				d.setDate(d.getDate() - 30);
+				return d;
+			}
+			case 'year':
+				return new Date(now.getFullYear(), 0, 1);
+			case 'all':
+				return null;
+		}
+	}
 
 	// Multi-select + bulk delete. Selection mode is off by default —
 	// toggling on replaces the card's link behaviour with a checkbox
@@ -77,12 +115,14 @@
 	}
 
 	let filteredRuns = $derived.by(() => {
+		const cutoff = rangeCutoff(dateRange);
 		const out = runs.filter((r) => {
 			if (sourceFilter !== 'all' && r.source !== sourceFilter) return false;
 			if (activityFilter !== 'all') {
 				const type = (r.metadata as Record<string, unknown> | null)?.activity_type ?? 'run';
 				if (type !== activityFilter) return false;
 			}
+			if (cutoff && new Date(r.started_at) < cutoff) return false;
 			return true;
 		});
 		// Sort in-place on the filtered copy so the user's chosen key
@@ -172,6 +212,17 @@
 				>
 					<span class="material-symbols" style="font-size: 0.9rem; vertical-align: middle">{act.icon}</span>
 					{act.label}
+				</button>
+			{/each}
+		</div>
+		<div class="filters" style="margin-top: var(--space-xs)">
+			{#each [{v: 'all', l: 'All time'}, {v: 'today', l: 'Today'}, {v: 'week', l: 'This week'}, {v: 'month', l: 'Last 30 days'}, {v: 'year', l: 'This year'}] as r (r.v)}
+				<button
+					class="filter-btn"
+					class:active={dateRange === r.v}
+					onclick={() => (dateRange = r.v as DateRange)}
+				>
+					{r.l}
 				</button>
 			{/each}
 		</div>

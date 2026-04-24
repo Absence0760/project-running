@@ -71,7 +71,7 @@ See [features § Full-screen route builder](features.md#full-screen-route-builde
 | Elevation preview while drawing | ✗ | ✗ | ✓ | N/A | N/A | |
 | Route library (list saved routes) | ✓ | Partial | ✓ | ✗ | ✗ | iOS: screen exists with mock data; no API fetch. |
 | Route detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | iOS: scaffold only. |
-| Public / private toggle per route | ✓ | ✗ | ✓ | N/A | N/A | |
+| Public / private toggle per route | ✓ | ✗ | ✓ | N/A | N/A | Bidirectional on both: Android's globe icon on `route_detail_screen.dart`; web's owner-only `Public` / `Private` button on `/routes/[id]` (added in parallel with the explicit Share button; `setRoutePublic(id, bool)` in `data.ts` with optimistic UI + rollback). |
 | Shareable route link | ✓ | ✗ | ✓ | N/A | N/A | Web makes the route public and copies the link in one action. |
 | Export route as GPX | Partial | ✗ | ✓ | N/A | N/A | Android: share-run-as-GPX is shipped; share-route-as-GPX not yet. |
 | Export route as KML | ✗ | ✗ | ✓ | N/A | N/A | |
@@ -142,7 +142,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Delete run | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Bulk delete / multi-select | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `Select` button on the runs list enters selection mode (checkbox cards, sticky "N selected / Delete" bar). Confirm dialog guards the destructive write; `deleteRuns(ids)` runs per-item deletes in parallel so a single 4xx doesn't kill the batch. |
 | History sort (newest / oldest / longest / fastest) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `<select>` in the runs list header. Client-side sort on the already-filtered list so the chosen key persists through filter flips. |
-| Date filter | ✓ | ✗ | ✗ | ✗ | ✗ | Web has source + activity-type filters instead. |
+| Date filter | ✓ | ✗ | ✓ | ✗ | ✗ | Web: chip row on `/runs` matching Android's buckets (All time / Today / This week / Last 30 days / This year), composes with source + activity-type + sort. `rangeCutoff(range)` mirrors Android's `_rangeCutoff` with a Monday-start week. |
 | Activity-type filter | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Source filter (All / Recorded / Strava / parkrun / HealthKit) | ✓ | ✗ | ✓ | ✗ | ✗ | Android: source chip row on `runs_screen.dart` (All / Recorded / Watch / Strava / parkrun / HealthKit / Health Connect), composes with the activity-type and date filters. |
 | Share run as GPX | ✓ | ✗ | ✓ | ✗ | ✗ | Web: Download button on run detail → `toRunGpx` builds GPX 1.1 with per-point `<time>` so the trace round-trips into Strava / Garmin / Komoot as a real activity, not just a route. |

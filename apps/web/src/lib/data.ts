@@ -149,6 +149,19 @@ export async function deleteRuns(ids: string[]): Promise<{ failed: string[] }> {
 	return { failed };
 }
 
+/// Flip a route's visibility. Mirrors the Android
+/// `ApiClient.setRoutePublic` signature — bidirectional (public ↔
+/// private) rather than the one-way `makeRoutePublic` the old Share
+/// flow assumed. RLS guards ownership; the caller should still gate
+/// the UI so non-owners never see the control.
+export async function setRoutePublic(id: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase
+		.from('routes')
+		.update({ is_public: isPublic })
+		.eq('id', id);
+	if (error) throw error;
+}
+
 export async function makeRunPublic(id: string): Promise<void> {
 	const { error } = await supabase
 		.from('runs')

@@ -2,8 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags } from '$lib/data';
-	import { supabase } from '$lib/supabase';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -113,14 +112,49 @@
 
 	async function handleShare() {
 		if (!route) return;
-		// Make route public if it isn't already
+		// Share requires the route to be publicly reachable. If the
+		// owner hasn't flipped the visibility yet, flip it for them and
+		// tell them what happened. Mirrors the one-tap Share-on-Android
+		// flow, but we no longer silently conflate the two — a separate
+		// public/private toggle below lets the owner revert.
 		if (!route.is_public) {
-			await supabase.from('routes').update({ is_public: true }).eq('id', route.id);
-			route.is_public = true;
+			try {
+				await setRoutePublic(route.id, true);
+				route = { ...route, is_public: true };
+				showToast('Route is now public so the link works.', 'info');
+			} catch (e) {
+				showToast(`Couldn't make public: ${e}`, 'error');
+				return;
+			}
 		}
 		shareLink = `${window.location.origin}/share/route/${route.id}`;
 		shareCopied = false;
 	}
+
+	/// Bidirectional public/private toggle. Owner-only. Optimistic
+	/// update with rollback on error — keeps the click snappy on a
+	/// slow network while still being honest when the RLS write fails.
+	async function togglePublic() {
+		if (!route) return;
+		const next = !route.is_public;
+		// Optimistic flip so the icon changes immediately.
+		route = { ...route, is_public: next };
+		try {
+			await setRoutePublic(route.id, next);
+			showToast(next ? 'Route is now public.' : 'Route is private again.', 'success');
+			// If we just made it private, clearing any prior share link
+			// below the button avoids surfacing a dead URL.
+			if (!next) {
+				shareLink = '';
+				shareCopied = false;
+			}
+		} catch (e) {
+			// Roll back on failure so the UI matches reality.
+			route = { ...route, is_public: !next };
+			showToast(`Couldn't update visibility: ${e}`, 'error');
+		}
+	}
+
 
 	async function copyShareLink() {
 		await navigator.clipboard.writeText(shareLink);
@@ -186,6 +220,20 @@
 			<div class="actions">
 				<button class="btn btn-outline" onclick={handleExportGpx}>GPX</button>
 				<button class="btn btn-outline" onclick={handleExportKml}>KML</button>
+				{#if isOwner}
+					<button
+						class="btn btn-outline"
+						onclick={togglePublic}
+						title={route.is_public
+							? 'Public — tap to make private'
+							: 'Private — tap to make public'}
+					>
+						<span class="material-symbols">
+							{route.is_public ? 'public' : 'public_off'}
+						</span>
+						{route.is_public ? 'Public' : 'Private'}
+					</button>
+				{/if}
 				<button class="btn btn-primary" onclick={handleShare}>Share</button>
 			</div>
 		</header>
