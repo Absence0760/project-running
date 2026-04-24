@@ -41,6 +41,9 @@ class _RunsScreenState extends State<RunsScreen> {
   _RunsSort _sort = _RunsSort.newest;
   _RunsRange _range = _RunsRange.week;
   ActivityType? _activityFilter;
+  /// `null` means "all sources" — the default. Non-null values match
+  /// `Run.source` exactly; see `RunSource` in `core_models`.
+  RunSource? _sourceFilter;
 
   // Derived view — recomputed when the store, filter, or sort changes,
   // never on an unrelated rebuild. Keeps scroll jank down at 10k+ runs.
@@ -77,8 +80,8 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   void _recompute() {
-    _visible =
-        _filterAndSort(widget.runStore.runs, _range, _sort, _activityFilter);
+    _visible = _filterAndSort(
+      widget.runStore.runs, _range, _sort, _activityFilter, _sourceFilter);
     _unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
   }
 
@@ -87,6 +90,7 @@ class _RunsScreenState extends State<RunsScreen> {
     _RunsRange range,
     _RunsSort sort,
     ActivityType? activityFilter,
+    RunSource? sourceFilter,
   ) {
     final cutoff = _rangeCutoff(range);
     var filtered = cutoff == null
@@ -98,6 +102,9 @@ class _RunsScreenState extends State<RunsScreen> {
             r.metadata?['activity_type'] as String?);
         return type == activityFilter;
       }).toList();
+    }
+    if (sourceFilter != null) {
+      filtered = filtered.where((r) => r.source == sourceFilter).toList();
     }
     switch (sort) {
       case _RunsSort.newest:
@@ -545,6 +552,48 @@ class _RunsScreenState extends State<RunsScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              // Source filter — matches the web's dashboard chip row so
+              // a runner filtering by "Strava-imported only" on both
+              // surfaces sees the same subset. `null` = all sources.
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('All sources'),
+                      selected: _sourceFilter == null,
+                      onSelected: (_) {
+                        setState(() {
+                          _sourceFilter = null;
+                          _recompute();
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    for (final entry in const [
+                      (RunSource.app, 'Recorded'),
+                      (RunSource.watch, 'Watch'),
+                      (RunSource.strava, 'Strava'),
+                      (RunSource.parkrun, 'parkrun'),
+                      (RunSource.healthkit, 'HealthKit'),
+                      (RunSource.healthconnect, 'Health Connect'),
+                    ]) ...[
+                      FilterChip(
+                        label: Text(entry.$2),
+                        selected: _sourceFilter == entry.$1,
+                        onSelected: (_) {
+                          setState(() {
+                            _sourceFilter = entry.$1;
+                            _recompute();
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
           );
         }
@@ -565,6 +614,7 @@ class _RunsScreenState extends State<RunsScreen> {
                   onPressed: () {
                     setState(() {
                       _activityFilter = null;
+                      _sourceFilter = null;
                       _range = _RunsRange.all;
                       _recompute();
                     });

@@ -134,12 +134,131 @@ export async function deleteRun(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Delete a batch of runs plus their Storage track files. One RLS-scoped
+/// REST call per delete because Supabase's batch delete doesn't return
+/// the pre-delete `track_url` we need to clean up Storage. Runs in
+/// parallel via `Promise.allSettled` — individual failures don't stop
+/// the rest. Returns the ids that failed so the caller can surface them.
+export async function deleteRuns(ids: string[]): Promise<{ failed: string[] }> {
+	if (ids.length === 0) return { failed: [] };
+	const failed: string[] = [];
+	const results = await Promise.allSettled(ids.map((id) => deleteRun(id)));
+	for (let i = 0; i < results.length; i++) {
+		if (results[i].status === 'rejected') failed.push(ids[i]);
+	}
+	return { failed };
+}
+
 export async function makeRunPublic(id: string): Promise<void> {
 	const { error } = await supabase
 		.from('runs')
 		.update({ is_public: true })
 		.eq('id', id);
 	if (error) throw error;
+}
+
+/// Save a run's GPS track as a reusable saved route. Runs the track
+/// through Douglas-Peucker to shed GPS jitter before persisting (same
+/// 10 m epsilon the Android path uses), sums elevation gain, and
+/// inserts a `routes` row for the current user. Throws if the run has
+/// no track (manual-entry runs); the caller should gate the button.
+///
+/// Returns the new route id so the caller can navigate to it.
+export async function saveRunAsRoute(
+	runId: string,
+	name: string,
+	track: Array<{ lat: number; lng: number; ele?: number | null }>,
+): Promise<{ id: string }> {
+	const { simplifyTrack, computeElevationGain } = await import('./route_simplify');
+	if (track.length < 2) throw new Error('Not enough GPS points to save a route');
+	const simplified = simplifyTrack(track, 10);
+
+	const waypoints = simplified.map((p) => ({
+		lat: p.lat,
+		lng: p.lng,
+		...(p.ele != null ? { ele: p.ele } : {}),
+	}));
+	// Distance — sum of segment lengths. Haversine would be marginally
+	// more accurate; equirectangular is more than close enough at
+	// running scales and matches the Android save-as-route path.
+	let distance = 0;
+	for (let i = 1; i < simplified.length; i++) {
+		const a = simplified[i - 1];
+		const b = simplified[i];
+		const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+		const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+		const midLat = ((a.lat + b.lat) / 2 * Math.PI) / 180;
+		const x = dLng * Math.cos(midLat);
+		const y = dLat;
+		distance += Math.sqrt(x * x + y * y) * 6_371_000;
+	}
+	const elevation = computeElevationGain(simplified);
+
+	const { data: authUser } = await supabase.auth.getUser();
+	const userId = authUser.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+
+	const { data, error } = await supabase
+		.from('routes')
+		.insert({
+			user_id: userId,
+			name,
+			waypoints,
+			distance_m: distance,
+			elevation_m: elevation,
+			is_public: false,
+		})
+		.select('id')
+		.single();
+	if (error) throw error;
+
+	// Back-link the run to its new route for convenience on the
+	// run-detail page. Best-effort — the route insert is the important
+	// bit. Swallow any RLS or FK miss silently.
+	try {
+		await supabase.from('runs').update({ route_id: data.id }).eq('id', runId);
+	} catch (_) {}
+
+	return { id: data.id };
+}
+
+/// Insert a manually-entered run. No GPS track, no track file —
+/// `track_url` stays null and downstream readers (run detail map,
+/// dashboards) already handle the "no track" path. `source` is always
+/// `'app'` so the run picks up the "Recorded" label in the UI; the
+/// `metadata.manual_entry = true` flag lets the detail page show
+/// "Manual entry" instead of the map.
+export async function createManualRun(input: {
+	startedAt: string; // ISO UTC
+	durationS: number;
+	distanceM: number;
+	activityType?: 'run' | 'walk' | 'hike' | 'cycle';
+	notes?: string | null;
+}): Promise<{ id: string }> {
+	const { data: authUser } = await supabase.auth.getUser();
+	const userId = authUser.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+
+	const metadata: Record<string, unknown> = {
+		manual_entry: true,
+		activity_type: input.activityType ?? 'run',
+	};
+	if (input.notes && input.notes.trim()) metadata.notes = input.notes.trim();
+
+	const { data, error } = await supabase
+		.from('runs')
+		.insert({
+			user_id: userId,
+			started_at: input.startedAt,
+			duration_s: input.durationS,
+			distance_m: input.distanceM,
+			source: 'app',
+			metadata,
+		})
+		.select('id')
+		.single();
+	if (error) throw error;
+	return { id: data.id };
 }
 
 export async function updateRunMetadata(

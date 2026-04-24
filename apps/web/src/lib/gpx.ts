@@ -34,6 +34,45 @@ ${trackpoints}
 }
 
 /**
+ * Generate a GPX XML from a run — includes per-point `<time>` so the
+ * trace round-trips into Strava / Garmin / Komoot as a real activity
+ * (not just a route). Leaves a `<trkpt>` without `<ele>` when the
+ * point didn't carry elevation; mirrors what GPX 1.1 allows.
+ */
+export function toRunGpx(
+	name: string,
+	startedAtIso: string,
+	track: Array<{ lat: number; lng: number; ele?: number | null; ts?: string | null }>,
+): string {
+	const trackpoints = track
+		.map((p) => {
+			const parts: string[] = [`<trkpt lat="${p.lat}" lon="${p.lng}">`];
+			if (p.ele != null) parts.push(`<ele>${p.ele}</ele>`);
+			if (p.ts) parts.push(`<time>${p.ts}</time>`);
+			parts.push('</trkpt>');
+			return '      ' + parts.join('');
+		})
+		.join('\n');
+
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BetterRunner"
+  xmlns="http://www.topografix.com/GPX/1/1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>${escapeXml(name)}</name>
+    <time>${startedAtIso}</time>
+  </metadata>
+  <trk>
+    <name>${escapeXml(name)}</name>
+    <trkseg>
+${trackpoints}
+    </trkseg>
+  </trk>
+</gpx>`;
+}
+
+/**
  * Trigger a file download in the browser.
  */
 export function downloadFile(content: string, filename: string, mimeType: string) {

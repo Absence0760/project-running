@@ -132,26 +132,26 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Run detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | |
 | Elevation chart on run detail | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Lap splits table | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Heart-rate zone breakdown | ✗ | ✗ | ✓ | ✗ | ✗ | |
-| Interactive elevation + pace chart | ✗ | ✗ | ✓ | ✗ | ✗ | |
-| Trace animation replay | ✗ | ✗ | ✓ | ✗ | ✗ | |
-| Best-effort auto-detection (1k / 5k / 10k / HM / FM within a run) | ✗ | ✗ | ✓ | ✗ | ✗ | |
-| PB comparison on same route | ✗ | ✗ | ✓ | ✗ | ✗ | |
-| Edit run title / notes | ✓ | ✗ | ✗ | ✗ | ✗ | |
-| Manual run entry | ✓ | ✗ | ✗ | ✗ | ✗ | |
+| Heart-rate zone breakdown | ✗ | ✗ | Partial | ✗ | ✗ | Web's `/runs/[id]` renders a zone-breakdown panel using **hardcoded** 8 / 32 / 35 / 20 / 5 % values — it's a placeholder, not computed from HR data. A real breakdown needs per-point BPM stored on the track; today only scalar `metadata.avg_bpm` is persisted. Schema change pending. |
+| Interactive elevation + pace chart | ✓ | ✗ | ✓ | ✗ | ✗ | Android: `run_detail_screen.dart` renders a tap/drag crosshair chart with pace-zone colouring (matches the roadmap's Phase 3 spec). Web equivalent on `/runs/[id]`. |
+| Trace animation replay | ✓ | ✗ | ✓ | ✗ | ✗ | Android: FAB on the run-detail map drives an `AnimationController` that advances a pointer along `run.track`; a moving marker renders on `LiveRunMap` via the existing `currentPosition` param. Duration fixed at 15 s regardless of run length. |
+| Best-effort auto-detection (1k / 5k / 10k / HM / FM within a run) | ✓ | ✗ | ✓ | ✗ | ✗ | Android: dashboard `_bestEffortCache` + run-detail best-efforts section. |
+| PB comparison on same route | ✓ | ✗ | ✓ | ✗ | ✗ | Android: run-detail "Personal best on \{route name\}" section shows PB, time delta, attempt ranking when the run is stamped with a `route_id`. |
+| Edit run title / notes | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `updateRunMetadata(id, { title, notes })` on `/runs/[id]`. |
+| Manual run entry | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `/runs/new` form (date-time, activity type, distance km, duration min + sec, notes) → `createManualRun` inserts with `source='app'` + `metadata.manual_entry=true`. |
 | Delete run | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Bulk delete / multi-select | ✓ | ✗ | ✗ | ✗ | ✗ | |
-| History sort (newest / oldest / longest / fastest) | ✓ | ✗ | ✗ | ✗ | ✗ | |
+| Bulk delete / multi-select | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `Select` button on the runs list enters selection mode (checkbox cards, sticky "N selected / Delete" bar). Confirm dialog guards the destructive write; `deleteRuns(ids)` runs per-item deletes in parallel so a single 4xx doesn't kill the batch. |
+| History sort (newest / oldest / longest / fastest) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `<select>` in the runs list header. Client-side sort on the already-filtered list so the chosen key persists through filter flips. |
 | Date filter | ✓ | ✗ | ✗ | ✗ | ✗ | Web has source + activity-type filters instead. |
 | Activity-type filter | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Source filter (All / Recorded / Strava / parkrun / HealthKit) | ✗ | ✗ | ✓ | ✗ | ✗ | |
-| Share run as GPX | ✓ | ✗ | ✗ | ✗ | ✗ | |
-| Share run as image card | ✓ | ✗ | ✗ | ✗ | ✗ | |
-| Save history run as a reusable route | ✓ | ✗ | ✗ | ✗ | ✗ | |
+| Source filter (All / Recorded / Strava / parkrun / HealthKit) | ✓ | ✗ | ✓ | ✗ | ✗ | Android: source chip row on `runs_screen.dart` (All / Recorded / Watch / Strava / parkrun / HealthKit / Health Connect), composes with the activity-type and date filters. |
+| Share run as GPX | ✓ | ✗ | ✓ | ✗ | ✗ | Web: Download button on run detail → `toRunGpx` builds GPX 1.1 with per-point `<time>` so the trace round-trips into Strava / Garmin / Komoot as a real activity, not just a route. |
+| Share run as image card | ✓ | ✗ | ✗ | ✗ | ✗ | Would need a canvas-based map snapshot + stats overlay on web — deferred. |
+| Save history run as a reusable route | ✓ | ✗ | ✓ | ✗ | ✗ | Web: "Save as route" icon on run detail prompts for a name, runs the track through Douglas-Peucker (10 m ε, port of `apps/mobile_android/lib/route_simplify.dart` → `apps/web/src/lib/route_simplify.ts`), writes a `routes` row, and back-links `runs.route_id` to the new route. |
 | Weekly mileage summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Calendar heatmap of runs | ✗ | ✗ | ✓ | ✗ | ✗ | |
+| Calendar heatmap of runs | ✓ | ✗ | ✓ | ✗ | ✗ | Android: `_RunHeatmap` on the dashboard — 7 × 20-week grid, colour intensity scales by per-day run count, theme-aware primary tint. |
 | Personal records table (5k / 10k / HM / FM) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | Partial | ✗ | ✗ | Web shows stat cards but doesn't expose goal configuration. |
+| Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | Partial | ✗ | ✗ | Web now reads the universal settings bag's `weekly_mileage_goal_m` and renders a progress card on the dashboard; editing still happens in Settings → Preferences. Android's richer multi-metric goal editor (distance / time / pace / run count × week / month) is not yet mirrored on web — that would need the `RunGoal` model ported to TS. |
 | Week / month / year mileage toggle | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Browsable period summary (prev / next + share) | ✓ | ✗ | ✗ | ✗ | ✗ | |
 

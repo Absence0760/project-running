@@ -10,7 +10,8 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata } from '$lib/data';
+	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute } from '$lib/data';
+	import { toRunGpx, downloadFile } from '$lib/gpx';
 	import { movingTimeSeconds, elevationGainMetres } from '$lib/run_stats';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -80,6 +81,45 @@
 		} catch (e) {
 			showToast(`Share failed: ${e}`, 'error');
 		}
+	}
+
+	async function handleSaveAsRoute() {
+		if (!run?.track || run.track.length < 2) return;
+		const defaultName =
+			((run.metadata as Record<string, unknown> | null)?.title as string) ||
+			`Route from ${new Date(run.started_at).toLocaleDateString()}`;
+		const name = window.prompt('Name this route', defaultName);
+		if (!name || !name.trim()) return;
+		try {
+			const { id } = await saveRunAsRoute(
+				run.id,
+				name.trim(),
+				run.track.map((p) => ({ lat: p.lat, lng: p.lng, ele: p.ele ?? null })),
+			);
+			showToast('Saved as route.', 'success');
+			goto(`/routes/${id}`);
+		} catch (e) {
+			showToast(`Save failed: ${e}`, 'error');
+		}
+	}
+
+	function handleDownloadGpx() {
+		if (!run?.track || run.track.length < 2) return;
+		const title =
+			((run.metadata as Record<string, unknown> | null)?.title as string) ||
+			`Run ${new Date(run.started_at).toISOString().slice(0, 10)}`;
+		const gpx = toRunGpx(
+			title,
+			run.started_at,
+			run.track.map((p) => ({
+				lat: p.lat,
+				lng: p.lng,
+				ele: p.ele ?? null,
+				ts: p.ts ?? null,
+			})),
+		);
+		const safeName = title.replace(/[^a-z0-9\-_. ]/gi, '_').replace(/\s+/g, '_');
+		downloadFile(gpx, `${safeName}.gpx`, 'application/gpx+xml');
 	}
 
 	/**
@@ -213,6 +253,22 @@
 						</button>
 						<button class="icon-btn" title="Share link" onclick={handleShare}>
 							<span class="material-symbols">share</span>
+						</button>
+						<button
+							class="icon-btn"
+							title="Download GPX"
+							onclick={handleDownloadGpx}
+							disabled={!run?.track || run.track.length < 2}
+						>
+							<span class="material-symbols">download</span>
+						</button>
+						<button
+							class="icon-btn"
+							title="Save as route"
+							onclick={handleSaveAsRoute}
+							disabled={!run?.track || run.track.length < 2}
+						>
+							<span class="material-symbols">bookmark_add</span>
 						</button>
 						<button class="icon-btn danger" title="Delete" onclick={handleDelete}>
 							<span class="material-symbols">delete</span>

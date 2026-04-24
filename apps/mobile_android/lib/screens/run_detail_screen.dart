@@ -35,17 +35,71 @@ class RunDetailScreen extends StatefulWidget {
   State<RunDetailScreen> createState() => _RunDetailScreenState();
 }
 
-class _RunDetailScreenState extends State<RunDetailScreen> {
+class _RunDetailScreenState extends State<RunDetailScreen>
+    with SingleTickerProviderStateMixin {
   late Run run = widget.run;
   bool _loadingTrack = false;
   bool _trackFetchFailed = false;
   Route? _linkedRoute;
+
+  /// Animation state for the "replay" feature. `null` index = not
+  /// replaying. Non-null = the current step into `run.track`.
+  AnimationController? _replayController;
+  int? _replayIndex;
 
   @override
   void initState() {
     super.initState();
     _loadLinkedRoute();
     _maybeFetchTrack();
+  }
+
+  @override
+  void dispose() {
+    _replayController?.dispose();
+    super.dispose();
+  }
+
+  /// Toggle trace replay. Builds the controller lazily on first tap so a
+  /// `TickerProvider` isn't burning CPU on every run-detail open.
+  /// Duration is deliberately fixed at 15 s rather than scaled to run
+  /// length — a 10 k replay should feel about the same as a marathon's.
+  void _toggleReplay() {
+    final ctl = _replayController;
+    if (ctl == null) {
+      if (run.track.length < 2) return;
+      final c = AnimationController(
+        vsync: this,
+        duration: const Duration(seconds: 15),
+      );
+      c.addListener(() {
+        final len = run.track.length;
+        final idx = (c.value * (len - 1)).floor().clamp(0, len - 1);
+        if (idx != _replayIndex) {
+          setState(() => _replayIndex = idx);
+        }
+      });
+      c.addStatusListener((s) {
+        if (s == AnimationStatus.completed) {
+          setState(() => _replayIndex = null);
+        }
+      });
+      _replayController = c;
+      c.forward(from: 0);
+      setState(() => _replayIndex = 0);
+      return;
+    }
+    if (ctl.isAnimating) {
+      ctl.stop();
+    } else {
+      // Restart from 0 if we're at the end; otherwise resume.
+      if (ctl.value >= 1.0) {
+        ctl.forward(from: 0);
+      } else {
+        ctl.forward();
+      }
+    }
+    setState(() {});
   }
 
   /// If the run is attached to a saved route (manual-entry runs usually
@@ -321,7 +375,28 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
                         run.track.isEmpty ? _linkedRoute?.waypoints : null,
                     followRunner: false,
                     activity: run.track.isNotEmpty ? _activityType : null,
+                    currentPosition: _replayIndex != null &&
+                            _replayIndex! < run.track.length
+                        ? run.track[_replayIndex!]
+                        : null,
                   ),
+                  if (run.track.length >= 2)
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: FloatingActionButton.small(
+                        heroTag: 'run-trace-replay',
+                        onPressed: _toggleReplay,
+                        tooltip: _replayController?.isAnimating == true
+                            ? 'Pause replay'
+                            : 'Replay this run',
+                        child: Icon(
+                          _replayController?.isAnimating == true
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                        ),
+                      ),
+                    ),
                   if (_loadingTrack)
                     const Positioned(
                       top: 12,

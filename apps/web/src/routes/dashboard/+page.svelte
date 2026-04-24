@@ -12,6 +12,8 @@
 	} from '$lib/mock-data';
 	import { fetchRuns, fetchWeeklyMileage, fetchPersonalRecords, fetchActivePlanOverview } from '$lib/data';
 	import { fmtPace, fmtKm, WORKOUT_KIND_LABEL } from '$lib/training';
+	import { loadSettings, effective } from '$lib/settings';
+	import { auth } from '$lib/stores/auth.svelte';
 	import type { Run, RunSource, ActivePlanOverview } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
@@ -21,6 +23,12 @@
 	let loading = $state(true);
 	let mileageView = $state<'weekly' | 'monthly' | 'yearly'>('weekly');
 	let sourceFilter = $state<RunSource | 'all'>('all');
+	/// User's weekly mileage goal in metres, from the universal settings
+	/// bag (`weekly_mileage_goal_m` — shared with Android + mobile iOS).
+	/// Null until loaded; null-stays-null if the user hasn't set one yet,
+	/// in which case the progress card hides itself.
+	let weeklyGoalMetres = $state<number | null>(null);
+	let preferredUnit = $state<'km' | 'mi'>('km');
 
 	const sources: { value: RunSource | 'all'; label: string }[] = [
 		{ value: 'all', label: 'All' },
@@ -37,6 +45,20 @@
 			fetchPersonalRecords(),
 			fetchActivePlanOverview(),
 		]);
+		// Best-effort load of the user's weekly-mileage goal from the
+		// settings bag. A missing bag (new user, or RLS blip) just
+		// leaves `weeklyGoalMetres = null` and the goal card stays hidden.
+		try {
+			const uid = auth.user?.id;
+			if (uid) {
+				const settings = await loadSettings(uid);
+				weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
+				const unit = effective<string>(settings, 'preferred_unit');
+				if (unit === 'mi') preferredUnit = 'mi';
+			}
+		} catch (_) {
+			// silent — goal card is additive, not load-blocking
+		}
 		loading = false;
 	});
 
@@ -125,6 +147,33 @@
 				</div>
 				<span class="material-symbols">chevron_right</span>
 			</a>
+		{/if}
+
+		<!-- Weekly goal progress — hides when the user hasn't set one.
+		     Configure via Settings → Preferences (writes the same
+		     `weekly_mileage_goal_m` value Android's dashboard reads). -->
+		{#if weeklyGoalMetres != null && weeklyGoalMetres > 0}
+			{@const pct = Math.min(100, Math.round((thisWeekDistance / weeklyGoalMetres) * 100))}
+			{@const goalDisplay = preferredUnit === 'mi'
+				? `${(weeklyGoalMetres / 1609.344).toFixed(1)} mi`
+				: `${(weeklyGoalMetres / 1000).toFixed(1)} km`}
+			<div class="goal-card">
+				<header class="goal-header">
+					<div>
+						<span class="goal-title">Weekly goal</span>
+						<span class="goal-sub">
+							{formatDistance(thisWeekDistance)} of {goalDisplay}
+						</span>
+					</div>
+					<span class="goal-pct">{pct}%</span>
+				</header>
+				<div class="goal-bar">
+					<div class="goal-fill" style="width: {pct}%"></div>
+				</div>
+				<p class="goal-edit-hint">
+					<a href="/settings/preferences">Edit goal</a>
+				</p>
+			</div>
 		{/if}
 
 		<!-- Stat cards -->
@@ -438,6 +487,61 @@
 		gap: var(--space-md);
 		margin-bottom: var(--space-xl);
 	}
+
+	.goal-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-lg);
+		padding: 1rem 1.25rem;
+		margin-bottom: var(--space-lg);
+	}
+	.goal-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin-bottom: 0.6rem;
+	}
+	.goal-title {
+		display: block;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.goal-sub {
+		display: block;
+		font-size: 1rem;
+		font-weight: 600;
+		margin-top: 0.2rem;
+	}
+	.goal-pct {
+		font-size: 1.4rem;
+		font-weight: 800;
+		color: var(--color-primary);
+	}
+	.goal-bar {
+		height: 0.55rem;
+		background: var(--color-bg-tertiary);
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+	.goal-fill {
+		height: 100%;
+		background: var(--color-primary);
+		border-radius: 9999px;
+		transition: width 0.4s ease;
+	}
+	.goal-edit-hint {
+		margin: 0.5rem 0 0;
+		font-size: 0.78rem;
+		text-align: right;
+	}
+	.goal-edit-hint a {
+		color: var(--color-text-tertiary);
+		text-decoration: none;
+	}
+	.goal-edit-hint a:hover { text-decoration: underline; }
 
 	.stat-card {
 		background: var(--color-surface);

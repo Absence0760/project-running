@@ -206,6 +206,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                Text('Last 20 Weeks', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _RunHeatmap(runs: runs, weeks: 20),
+                  ),
+                ),
+                const SizedBox(height: 24),
                 if (hasAnyPb) ...[
                   Text('Personal Bests', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
@@ -699,5 +708,120 @@ class _SummaryStat extends StatelessWidget {
             )),
       ],
     );
+  }
+}
+
+/// GitHub-style activity heatmap — a 7×[weeks] grid of squares, intensity
+/// scaled to the day's run count. Rightmost column is the current week;
+/// leftmost is `weeks - 1` weeks ago. Mirrors the web dashboard's
+/// calendar-heatmap component so a runner switching between devices
+/// sees the same shape.
+class _RunHeatmap extends StatelessWidget {
+  final List<Run> runs;
+  final int weeks;
+  const _RunHeatmap({required this.runs, this.weeks = 20});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    // Today in local time; column index 0 = start of the leftmost week.
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = weekStartLocal(now);
+    final gridStart = weekStart.subtract(Duration(days: 7 * (weeks - 1)));
+
+    // Build count-per-day map keyed by `YYYY-MM-DD`. One pass over runs
+    // plus O(1) lookup per cell keeps the render cheap even at 10k+ runs.
+    final counts = <String, int>{};
+    for (final r in runs) {
+      final d = r.startedAt.toLocal();
+      final key = '${d.year}-${d.month}-${d.day}';
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    // Intensity: 0 runs → empty square; 1 run → light; 2 → medium;
+    // 3+ → darkest. Uses the theme primary with varying opacity so it
+    // adapts to dark/light mode.
+    Color cellColour(int count) {
+      if (count <= 0) return theme.colorScheme.surfaceContainerHighest;
+      if (count == 1) return theme.colorScheme.primary.withValues(alpha: 0.35);
+      if (count == 2) return theme.colorScheme.primary.withValues(alpha: 0.65);
+      return theme.colorScheme.primary;
+    }
+
+    return LayoutBuilder(builder: (context, constraints) {
+      // Target cell size keeps the grid comfortable on most phones but
+      // scales down gracefully on narrow screens. 2 dp gap between cells.
+      const gap = 2.0;
+      final cellSize = ((constraints.maxWidth - gap * (weeks - 1)) / weeks)
+          .clamp(8.0, 16.0);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var w = 0; w < weeks; w++) ...[
+                Column(
+                  children: [
+                    for (var d = 0; d < 7; d++) ...[
+                      Builder(builder: (_) {
+                        final day = gridStart.add(Duration(days: w * 7 + d));
+                        // Don't colour future days — they're outside the
+                        // scale and look weird with an "empty" state.
+                        final isFuture = day.isAfter(today);
+                        final count = isFuture
+                            ? 0
+                            : counts['${day.year}-${day.month}-${day.day}'] ?? 0;
+                        return Container(
+                          width: cellSize,
+                          height: cellSize,
+                          margin: EdgeInsets.only(
+                            bottom: d < 6 ? gap : 0,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isFuture
+                                ? Colors.transparent
+                                : cellColour(count),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+                if (w < weeks - 1) SizedBox(width: gap),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('Less',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline)),
+              const SizedBox(width: 6),
+              for (final c in [0, 1, 2, 3]) ...[
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: cellColour(c),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 3),
+              ],
+              const SizedBox(width: 3),
+              Text('More',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline)),
+            ],
+          ),
+        ],
+      );
+    });
   }
 }
