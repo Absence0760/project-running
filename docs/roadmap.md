@@ -53,7 +53,7 @@ The primary differentiator. Users export a KML from Google My Maps or any other 
 Track position, pace, distance, and elapsed time using device GPS. Runs saved to local storage first — no backend required at this stage.
 
 - [x] Background location tracking (Android — geolocator foreground service)
-- [ ] Background location tracking (iOS)
+- [x] Background location tracking (iOS — CLLocationManager background mode via run_recorder; Info.plist UIBackgroundModes:location + NSLocationAlwaysAndWhenInUseUsageDescription; verified on simulator)
 - [x] Real-time pace and distance display (Android)
 - [x] ~~Auto-pause on stop detection~~ (Android) — *removed*: replaced by moving time derived from the GPS track at summary time. See [decisions.md § 4](decisions.md).
 - [x] Manual pause/resume (Android)
@@ -102,7 +102,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 ### Cloud sync + auth
 
 - [x] Supabase Auth with email/password sign-in and sign-up
-- [x] Google and Apple OAuth scaffolded (needs provider credentials to enable)
+- [x] Google and Apple OAuth scaffolded (needs provider credentials to enable); iOS: Apple Sign-In scaffolded behind _kAppleSignInEnabled = false pending Services ID setup
 - [x] Auth callback route for OAuth redirect
 - [x] Onboarding flow on first launch with location permission request (Android)
 - [x] Offline-only mode — runs work without backend or auth (Android)
