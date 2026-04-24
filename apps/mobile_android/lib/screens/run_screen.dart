@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -625,6 +626,16 @@ class _RunScreenState extends State<RunScreen> {
           if (canAlert && diff.abs() > 30) {
             _lastPaceAlertAt = DateTime.now();
             widget.audioCues.announcePaceAlert(tooSlow: diff > 0);
+            // Haptic companion to the TTS so the runner notices even
+            // with headphones paused or ambient noise masking the cue.
+            // Two-pulse for "speed up", single strong pulse for "slow
+            // down" — the direction is distinguishable by feel alone.
+            HapticFeedback.heavyImpact();
+            if (diff > 0) {
+              Future<void>.delayed(const Duration(milliseconds: 180), () {
+                HapticFeedback.heavyImpact();
+              });
+            }
           }
         }
       } catch (e) {

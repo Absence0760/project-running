@@ -60,7 +60,7 @@ Track position, pace, distance, and elapsed time using device GPS. Runs saved to
 - [x] Lap markers (Android)
 - [x] Wakelock during run (Android)
 - [x] Activity types — run, walk, cycle, hike — with per-type pace/speed display, calorie multipliers, split intervals, and GPS filters (Android)
-- [x] Audio cues for splits and pace alerts via TTS (Android)
+- [x] Audio cues for splits and pace alerts via TTS (Android) — pace alerts also fire `HapticFeedback.heavyImpact()` (double pulse for "speed up", single for "slow down") so the cue lands with headphones paused
 - [x] Step count and cadence via pedometer (Android)
 - [x] Live HTTP tile cache so revisited tiles work without network (Android)
 - [x] GPS self-heal retry loop — recorder re-subscribes automatically when location services / permission come back mid-run (Android)

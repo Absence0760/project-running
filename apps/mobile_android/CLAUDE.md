@@ -63,7 +63,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `local_run_store.dart` / `local_route_store.dart` — `ChangeNotifier`-style on-disk stores
 - `preferences.dart` — SharedPreferences wrapper for settings
 - `tile_cache.dart` — disk-backed map tile cache glue
-- `audio_cues.dart` — TTS for splits and pace alerts
+- `audio_cues.dart` — TTS for splits and pace alerts. Pace alerts are paired with a `HapticFeedback.heavyImpact()` pulse in `run_screen.dart` (two pulses for "speed up", one for "slow down") so the cue registers with headphones paused
 - `run_stats.dart` — pace/distance/split formatting helpers (tested)
 - `goals.dart` — `RunGoal` model + pure `evaluateGoal` for dashboard goal cards (tested)
 - `route_simplify.dart` — Ramer–Douglas–Peucker track simplifier used when saving a run as a route (tested)

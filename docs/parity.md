@@ -101,16 +101,16 @@ See [features § Live GPS run recording](features.md#live-gps-run-recording), [f
 | Wakelock during run | ✓ | N/A | N/A | N/A | N/A | watchOS / Wear OS handle their own wake policies. |
 | Activity types (run / walk / cycle / hike) | ✓ | ✗ | N/A | ✗ | ✗ | Watches record as "run" today; no picker. |
 | TTS audio cues (splits + pace alerts) | ✓ | ✗ | N/A | ✗ | ✗ | |
-| Haptic pace alerts | ✗ | ✗ | N/A | ✗ | ✓ | Wear OS explicitly has no haptics available for this; Apple Watch supports it via WatchKit haptic types. |
+| Haptic pace alerts | ✓ | ✗ | N/A | ✗ | ✓ | Android fires `HapticFeedback.heavyImpact()` alongside the TTS when the runner drifts >30 s off target — two pulses for "speed up", one for "slow down". Wear OS has no usable haptic API for this; Apple Watch uses WatchKit haptic types. |
 | Step count via pedometer | ✓ | ✗ | N/A | ✗ | ✗ | Browsers have no pedometer sensor. |
-| Heart rate via device sensor | ✗ | ✗ | N/A | ✓ | ✓ | Phones rely on an external HR sensor via the platform's health store; not wired today. |
+| Heart rate via device sensor | ✓ | ✗ | N/A | ✓ | ✓ | Android pairs with an external BLE chest strap (HR Service `0x180D` / characteristic `0x2A37`) via `lib/ble_heart_rate.dart`; live BPM appears on the run screen and `avg_bpm` writes to `run.metadata` on save. iOS chest-strap pairing not wired. Watches use the built-in wrist sensor. |
 | Live HTTP tile cache (offline revisits) | ✓ | ✗ | N/A | ✗ | ✗ | Watches use pre-downloaded route tiles only. |
 | GPS self-heal retry | ✓ | ✗ | N/A | ✗ | ✗ | |
 | Indoor / no-GPS mode (time-only) | ✓ | ✗ | N/A | ✗ | ✗ | |
 | Live lock-screen / ongoing notification | ✓ | ✗ | N/A | ✓ | ✓ | Watches post persistent workout notifications via their platform workout session APIs. |
 | Crash checkpoint recovery | ✓ | ✗ | N/A | ✓ | ✓ | |
 | Ultra-length (10h+) run support | ✗ | ✗ | N/A | ✓ | ✗ | Streaming track writer + rolling HR shipped on Wear OS. Apple Watch hasn't been stress-tested at ultra length. |
-| Live race mode (Arm / Go / End + pings) | ✗ | ✗ | Partial | ✓ | ✗ | Wear OS orchestrates; web `/live/{id}` displays (simulated). |
+| Live race mode (Arm / Go / End + pings) | Partial | ✗ | Partial | ✓ | ✗ | Android is participant-only — `RaceController` shows the "Race armed / LIVE" banner on the idle run tab, stamps the recorded run with `event_id`, posts `race_pings` at 10s cadence, and submits the finisher time to `event_results` on stop. Organiser Arm/Go/End controls live on Wear OS only. Web `/live/{id}` displays the spectator map (still simulated pending WebSocket service). |
 
 ## Route overlay during run
 

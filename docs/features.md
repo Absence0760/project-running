@@ -73,6 +73,8 @@ During recording, the screen shows a dark full-screen map with:
 
 **Hold-to-stop**: the red stop button requires an 800 ms press before the run ends. A circular progress ring animates around the button during the hold; releasing early cancels. Prevents accidental one-tap stops mid-run.
 
+**Pace cues — TTS + haptic**: when the runner drifts more than 30 s / km off the target pace (rate-limited to at most one cue per 30 s), the app fires a TTS callout ("Pick up the pace" / "Slow down") *and* a haptic pulse: two `heavyImpact` pulses for "speed up", one for "slow down". The direction is distinguishable by feel alone, so the cue registers with earbuds paused or ambient noise masking the speech.
+
 **Background recording**: GPS tracking continues when the screen is off or the user switches apps, via the foreground service notification. Requires the user to grant location permission as "Allow all the time" and to disable battery optimisation for the app.
 
 **Crash-safe persistence**: the current run state is serialised to disk every 10 seconds. If the app is killed mid-run (OOM, force-stop, battery), the next launch promotes the partial data to a completed run tagged `recovered_from_crash` and shows a snackbar: *"Recovered unfinished run — X.XX km, Y min"*. Tiny runs (< 3 waypoints or < 50 m) are dropped silently.
