@@ -1,6 +1,39 @@
 import 'package:core_models/core_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Registered key names for the `user_settings` / `user_device_settings` bags.
+///
+/// Keep in sync with [docs/settings.md](../../../docs/settings.md). Using
+/// these constants everywhere (instead of string literals) is how we avoid
+/// the class of bugs where one client writes `weeklyMileageGoal` and another
+/// reads `weekly_mileage_goal_m`.
+class SettingsKeys {
+  SettingsKeys._();
+
+  // Universal (U) or universal-default-with-device-override (UD)
+  static const preferredUnit = 'preferred_unit';
+  static const defaultActivityType = 'default_activity_type';
+  static const hrZones = 'hr_zones';
+  static const restingHrBpm = 'resting_hr_bpm';
+  static const maxHrBpm = 'max_hr_bpm';
+  static const dateOfBirth = 'date_of_birth';
+  static const privacyDefault = 'privacy_default';
+  static const stravaAutoShare = 'strava_auto_share';
+  static const coachPersonality = 'coach_personality';
+  static const weeklyMileageGoalMetres = 'weekly_mileage_goal_m';
+  static const weekStartDay = 'week_start_day';
+  static const mapStyle = 'map_style';
+  static const unitsPaceFormat = 'units_pace_format';
+  static const autoPauseEnabled = 'auto_pause_enabled';
+  static const autoPauseSpeedMps = 'auto_pause_speed_mps';
+
+  // Device (D)
+  static const voiceFeedbackEnabled = 'voice_feedback_enabled';
+  static const voiceFeedbackIntervalKm = 'voice_feedback_interval_km';
+  static const hapticFeedbackEnabled = 'haptic_feedback_enabled';
+  static const keepScreenOn = 'keep_screen_on';
+}
+
 /// Typed accessor for `user_settings` + `user_device_settings`.
 ///
 /// The DB stores two opaque jsonb bags; this class is the only place that
