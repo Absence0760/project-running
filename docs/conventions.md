@@ -40,7 +40,7 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 ### Swift
 
 - Follow [Apple's API Design Guidelines](https://swift.org/documentation/api-design-guidelines/) — that's the canonical reference for the watch app.
-- `WorkoutManager`, `LocationManager`, one class per file, files named for the class.
+- `WorkoutManager`, `HealthKitManager`, `CheckpointStore` — one class per file, files named for the class.
 
 ### SQL
 

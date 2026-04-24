@@ -101,7 +101,7 @@ The iOS simulator doesn't have real GPS. To test run recording and route navigat
 2. In Simulator: **Features → Location → Freeway Drive** — simulates movement along a road
 3. In Simulator: **Features → Location → City Run** — simulates a running pace through a city
 
-Use **Freeway Drive** or **City Run** to test the live recording screen, auto-pause, and off-route detection.
+Use **Freeway Drive** or **City Run** to test the live recording screen. Auto-pause is not a feature — moving time is derived from the GPS track at summary time (see [../../docs/decisions.md § 4](../../docs/decisions.md)). Off-route detection is implemented in `packages/run_recorder` but has no UI surface on iOS yet.
 
 ---
 

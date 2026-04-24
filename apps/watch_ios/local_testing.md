@@ -62,10 +62,27 @@ To verify pairing: in the watch simulator, you should see the watch face. If it 
 
 ### Route navigation
 
-1. Select a route in the iOS app and send it to the watch
-2. Start a run on the watch with the route loaded
-3. The watch shows a simplified map with position and remaining distance
-4. Off-route deviation triggers a haptic alert at 50m
+Not yet implemented. `RouteNavigator.swift` is a scaffold (no nearest-segment math, no haptic wiring), and there is no phone-side UI for pushing a route to the watch. See `reviews/watch-ios/gap-analysis.md` items M3 (route preview) and M4 (mini-map) for the planned shape.
+
+### Pause / resume
+
+1. Tap Pause mid-run — elapsed time freezes, GPS and HealthKit session pause
+2. Tap Resume — everything continues from where it paused
+3. Tap Stop from either running or paused state — produces a `FinishedRun` with active-only duration
+
+### Haptic pace alerts
+
+1. Before starting: tap one of the pace presets (5:00/km through 7:30/km) in `PreRunView`
+2. Start the run — once `distanceMetres > 200`, pace deviation of ±15 s/km triggers `WKInterfaceDevice.current().play(.notification)`
+3. Debounce: at most once per 30 seconds per direction (too-fast / too-slow are tracked independently)
+4. Haptics are no-ops in the watchOS simulator — verify on a physical device
+
+### Crash checkpoint recovery
+
+1. Start a run on a physical watch
+2. Force-quit the WatchApp process (Digital Crown + drag up to close)
+3. Re-launch — a "Recover unsaved run?" prompt appears with distance + duration from the most recent 15s checkpoint
+4. Tap Recover to route into `PostRunView` with the recovered track, or Discard to clear the checkpoint
 
 ### GPS simulation on watch
 

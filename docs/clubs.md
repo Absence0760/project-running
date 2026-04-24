@@ -79,7 +79,7 @@ Organisers can turn an event instance into a live, server-coordinated race: ever
 
 - Remote auto-start of the recorder on the `running` signal. Today the user still taps Start; plumbing the permission flow + countdown into a remote trigger is a Wear-specific engineering task.
 - Apple Watch (watchOS Swift) race-armed UI. The `event_results` upload path exists; the "armed" screen is the missing piece.
-- Mobile iOS Flutter — the app is still scaffolded per [apps/mobile_ios/CLAUDE.md](../apps/mobile_ios/CLAUDE.md), so race mode doesn't surface there yet.
+- Mobile iOS Flutter — Phase 1 foundations landed (auth, local stores, GPS recording via `run_recorder`) but the clubs / race-mode UI has not been ported yet. Port `mobile_android/lib/race_controller.dart` + the Run-tab banner when that work is picked up.
 - Spectator map. Today the spectator page is a live-updating list; adding a MapLibre view of runner dots is a straightforward extension using the existing `/live/[id]` pattern.
 
 ### Event results

@@ -28,7 +28,7 @@ Per [`roadmap.md` § Phase 2](../../docs/roadmap.md), the current checkbox statu
 - [x] Standalone workout session (no phone required) — background GPS via `allowsBackgroundLocationUpdates = true`; crash checkpoint recovery in `CheckpointStore.swift` writes a 15s snapshot to UserDefaults + incremental track JSON to Caches; on next launch the user is offered "Recover unsaved run?"
 - [x] Heart rate via HealthKit sensor
 - [x] Haptic pace alerts — target pace set via preset list in `PreRunView`; `WKInterfaceDevice.current().play(.notification)` fires when pace leaves the ±15 s/km band, debounced to once per 30s per direction
-- [ ] Syncs run data via Watch Connectivity framework — watch side wired; blocked on `mobile_ios` sign-in UI merging
+- [ ] Syncs run data via Watch Connectivity framework — watch side wired (`WCSession.transferFile`); phone-side receiver + sign-in UI live; checkbox remains unticked pending end-to-end verification on paired physical devices
 - [ ] Route preview on watch face before starting
 - [ ] Live position on mini-map during run
 - [ ] Off-route haptic + "recalculating" indicator
@@ -42,11 +42,11 @@ Per [`roadmap.md` § Phase 2](../../docs/roadmap.md), the current checkbox statu
 
 In Release builds the watch does **not** talk to Supabase directly. On run finish, `WorkoutManager.writeTrackJSON()` serialises the track to a file in the Caches directory and `WatchConnectivityManager.transferRun(fileURL:metadata:)` hands it off via `WCSession.transferFile(_:metadata:)`. The paired iPhone is responsible for gzipping, uploading to the `runs` Storage bucket, and inserting the row via the shared `packages/api_client`. WCSession picks the transport (Bluetooth / Wi-Fi P2P / iCloud relay), queues across app launches, and retries on its own — so the watch needs no Supabase credentials, no anon key, and no internet connectivity.
 
-The phone-side receiver is **built**: `WatchIngestBridge.swift` in `apps/mobile_ios/ios/Runner/` implements `session(_:didReceive file:)` and calls the `run_app/watch_ingest` Flutter method channel; `main.dart` `WatchIngest.attach(api)` saves the run via `api_client`. The remaining blocker is `mobile_ios` sign-in UI — until that merges, `api.saveRun` throws "Not authenticated" and the run is queued in `WatchIngestBridge.pending` (lost on restart). See `reviews/watch-ios/gap-analysis.md` H3.
+The phone-side receiver is **built**: `WatchIngestBridge.swift` in `apps/mobile_ios/ios/Runner/` implements `session(_:didReceive file:)` and calls the `run_app/watch_ingest` Flutter method channel; `main.dart` `WatchIngest.attach(api)` saves the run via `api_client`. `mobile_ios` now has email/password sign-in (Apple Sign-In scaffolded behind a compile flag). Payloads received before the user signs in are persisted by `WatchIngestQueue` (`apps/mobile_ios/lib/watch_ingest_queue.dart`) and replayed on the next `AuthChangeEvent.signedIn` — see [`docs/decisions.md § 22`](../../docs/decisions.md).
 
 `SupabaseService.swift` still exists but is wrapped in `#if DEBUG` — it gives watch-sim-alone developers a direct upload path via the "DEBUG: Sync Direct" button, signing in with seed creds against `http://127.0.0.1:54321`. Release builds compile that file out entirely: the watch binary ships without any Supabase client, anon key, or credential-handling code. Rationale: [decisions.md § 14](../../docs/decisions.md).
 
-Metadata dict sent with each run file: `{id, started_at, duration_s, distance_m, source}` — the phone supplies `user_id` from its own authenticated session when inserting the row. The file contents are a raw JSON array of `{lat, lng, ele, ts}` points; the phone compresses before upload.
+Metadata dict sent with each run file: `{id, started_at, duration_s, distance_m, source, avg_bpm?}` — the phone supplies `user_id` from its own authenticated session when inserting the row. `activity_type` is read on the phone side if present but is not currently sent by the watch (see `reviews/data-sync-audit/watches.md` — low priority). The file contents are a raw JSON array of `{lat, lng, ele, ts}` points; the phone compresses before upload.
 
 ## Building and testing
 
@@ -70,7 +70,7 @@ This is exactly what `.github/workflows/ci.yml`'s `build-watch-swift` job runs o
 
 - SwiftUI-first. Don't mix in UIKit-on-watchOS / WatchKit ObjC unless a framework genuinely requires it.
 - State flow: `@StateObject` in the view that owns the lifecycle, `@ObservedObject` in views that consume it, `@Published` on the manager properties. No Combine `Subject`s in the public API if a `@Published` will do.
-- File-per-concern, not file-per-view. `WorkoutManager`, `LocationManager`, etc. are each their own file; views can group.
+- File-per-concern, not file-per-view. `WorkoutManager`, `HealthKitManager`, `CheckpointStore`, etc. are each their own file; views can group.
 - Swift conventions follow [Apple's API Design Guidelines](https://swift.org/documentation/api-design-guidelines/) — same case style, same parameter labelling.
 
 ## Before reporting a task done

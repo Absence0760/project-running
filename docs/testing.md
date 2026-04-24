@@ -43,7 +43,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **142 tests across 10 files** — 107 Dart unit tests in mobile_android (8 test files), 14 in run_recorder, and 21 TypeScript unit tests in the web app. No widget tests, no integration tests, no golden tests yet.
+Total: **at least 161 tests across 12 documented files** — 107 Dart unit tests in mobile_android (8 test files), 17 in mobile_ios (1 test file — ported from mobile_android when the Phase 1 iOS catchup landed), 14 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No widget tests, no integration tests, no golden tests yet. The mobile_android count drifted above 107 before this section was last refreshed — `find apps packages -name '*_test.dart'` is the ground truth.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -194,6 +194,14 @@ Dart mirror of `apps/web/src/lib/training.test.ts`. The Dart engine (`lib/traini
 - `resolveTrainingPaces`: 2 tests (recent 5k anchor, fallback)
 - `phaseFor`: 2 tests (phase splits, final week)
 - `generatePlan`: 7 tests (week count, day distribution, taper volume, race week, intervals, no-input fallback, stepback)
+
+### `apps/mobile_ios/test/local_run_store_test.dart` — 17 tests
+
+Ported from `apps/mobile_android/test/local_run_store_test.dart` when the iOS Phase 1 catchup landed (April 2026, `fa16c73`). Same coverage shape: round-trip save, unsyncedCount, delete + deleteMany, in-progress crash recovery save/load/clear, corrupt-file tolerance, sidecar orphan handling, newest-first ordering.
+
+### `packages/core_models/test/run_source_test.dart` — 2 tests
+
+Regression for the `RunSource.watch` enum-map regen. Constructs a `Run` with `source: RunSource.watch`, asserts `toJson()['source'] == 'watch'` and `fromJson({'source': 'watch'}).source == RunSource.watch`. Existed to catch the crash that would otherwise hit `_$RunSourceEnumMap[instance.source]!` on any serialisation of a watch-originated run.
 
 ### `apps/web/src/lib/training.test.ts` — 21 tests
 

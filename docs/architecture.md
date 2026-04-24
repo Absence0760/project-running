@@ -134,11 +134,12 @@ A standalone Xcode project living at `apps/watch_ios/`. Separate from Flutter �
 
 **Architecture pattern:**
 ```
-WatchKit Extension
-├── WorkoutManager.swift       # HealthKit workout session
-├── LocationManager.swift      # GPS tracking
-├── RouteNavigator.swift       # Off-route detection
-└── WatchConnectivity.swift    # Sync with iPhone
+WatchApp/
+├── WorkoutManager.swift           # HealthKit + GPS + run lifecycle
+├── HealthKitManager.swift         # Heart rate sensor
+├── CheckpointStore.swift          # 15s crash checkpoint + recovery
+├── RouteNavigator.swift           # Off-route detection (stub — not wired)
+└── WatchConnectivityManager.swift # Sync with iPhone
 ```
 
 ### Wear OS app (Kotlin + Compose-for-Wear)
