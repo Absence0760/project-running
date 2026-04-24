@@ -10,6 +10,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 |---|---|
 | Anything at all, first time in a session | [docs/architecture.md](docs/architecture.md) — the map |
 | Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
+| Checking which platforms a feature ships on | [docs/parity.md](docs/parity.md) — feature × platform matrix, single source of truth for drift |
 | Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
 | Touching a user setting / preference | [docs/settings.md](docs/settings.md) — universal + per-device prefs registry |
@@ -50,7 +51,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 
 Concretely, before you report a task as done:
 
-1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
+1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `parity.md` (flip cells for every platform the change affects), `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
 2. **Schema change** — regenerate both type files (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`). Update `api_database.md` if a column, index, or RLS policy moved. See [schema_codegen.md](docs/schema_codegen.md).
 3. **New convention or house rule** — add it to `docs/conventions.md`.
 4. **Non-obvious decision or trade-off** — append an entry to `docs/decisions.md`. One paragraph. Don't rewrite history entries.

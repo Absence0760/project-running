@@ -21,7 +21,7 @@ Each feature has:
 
 ### GPX / KML import
 
-**Phase:** 1 | **Platform:** iOS, Android, Web
+**Phase:** 1 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#import)
 
 **Why:** The primary differentiator. No competitor provides a clean route import pipeline. Runners plan routes in various tools (Google My Maps, Komoot, AllTrails) — the friction of the current export/import workflow is the gap to fill.
 
@@ -48,7 +48,7 @@ Routes are stored locally in JSON files (mobile Android via `path_provider` + `d
 
 ### Live GPS run recording
 
-**Phase:** 1 | **Platform:** Android (shipped); iOS (not yet implemented — scaffold only)
+**Phase:** 1 | **Platform:** Android (shipped); iOS (not yet implemented — scaffold only) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** The core product function. Without this nothing else matters.
 
@@ -95,7 +95,7 @@ See [run_recording.md](run_recording.md) for the full technical reference.
 
 ### Route overlay during run
 
-**Phase:** 1 | **Platform:** iOS, Android
+**Phase:** 1 | **Platform:** iOS, Android | **Parity:** [see matrix](parity.md#route-overlay-during-run)
 
 **Why:** Turns a passive GPS tracker into an active navigation tool. Key for users running unfamiliar routes — the feature that makes importing a route actually useful.
 
@@ -120,7 +120,7 @@ The map auto-centres on the user's position during the run (follow mode). Users 
 
 ### Run history
 
-**Phase:** 1 | **Platform:** iOS, Android, Web
+**Phase:** 1 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#run-history-and-analytics)
 
 **Why:** The reason users come back every day. The history screen is what makes the app feel like a training log, not just a timer.
 
@@ -144,7 +144,7 @@ A weekly summary card at the top of the history list shows total distance and ru
 
 ### Cloud sync and auth
 
-**Phase:** 1 | **Platform:** iOS, Android, Web
+**Phase:** 1 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#auth-and-onboarding)
 
 **Why:** Without this, uninstalling the app loses all data. Cross-device access (phone + watch + web) requires a server-side record of all runs.
 
@@ -169,7 +169,7 @@ Sync strategy: write-to-local-first, sync-in-background. Runs are written to JSO
 
 ### Apple Watch standalone GPS recording
 
-**Phase:** 2 | **Platform:** Apple Watch (native Swift)
+**Phase:** 2 | **Platform:** Apple Watch (native Swift) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** The killer feature gap vs. every competitor. Strava, NRC, and AllTrails all require the phone nearby or produce inferior data when the watch is standalone. Runners who leave their phone at home have no good option today.
 
@@ -196,7 +196,7 @@ On Stop: run is saved to watch-local storage as an `HKWorkout`. `WCSession` tran
 
 ### Wear OS standalone GPS recording
 
-**Phase:** 2 | **Platform:** Wear OS (native Kotlin + Compose-for-Wear)
+**Phase:** 2 | **Platform:** Wear OS (native Kotlin + Compose-for-Wear) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** NRC dropped Wear OS support. Android users with Pixel Watch or Galaxy Watch have no dedicated standalone running app. A genuine gap in a growing market.
 
@@ -216,7 +216,7 @@ On Stop: run transferred to phone via Wear Data Layer API. Phone app ingests and
 
 ### Route navigation on watch
 
-**Phase:** 2 | **Platform:** Apple Watch, Wear OS
+**Phase:** 2 | **Platform:** Apple Watch, Wear OS | **Parity:** [see matrix](parity.md#route-overlay-during-run)
 
 **Why:** The combination of standalone GPS + route navigation is what no single competitor delivers on both watch platforms. It's the feature a trail runner or race-day runner most needs.
 
@@ -237,7 +237,7 @@ The map on the watch does not pan or zoom — it auto-scales to always show both
 
 ### Glanceable tiles and complications
 
-**Phase:** 2 | **Platform:** Apple Watch, Wear OS
+**Phase:** 2 | **Platform:** Apple Watch, Wear OS | **Parity:** not in matrix — platform-specific OS surfaces (watchOS complication, Wear OS tile) with no phone / web counterpart.
 
 **Why:** The watch is most useful when data is available without opening an app. Tiles and complications are how the OS surfaces running data in context.
 
@@ -265,7 +265,7 @@ The map on the watch does not pan or zoom — it auto-scales to always show both
 
 ### Full-screen route builder (web)
 
-**Phase:** 2b | **Platform:** Web
+**Phase:** 2b | **Platform:** Web | **Parity:** [see matrix](parity.md#builder-and-library)
 
 **Why:** Planning routes is fundamentally a desktop task — you want a large screen, precise mouse control, and the ability to cross-reference maps side by side. The mobile route builder is a convenience; the web route builder is the power tool.
 
@@ -296,7 +296,7 @@ Saved routes appear immediately in the mobile apps on next open.
 
 ### Analytics dashboard (web)
 
-**Phase:** 2b | **Platform:** Web
+**Phase:** 2b | **Platform:** Web | **Parity:** [see matrix](parity.md#run-history-and-analytics)
 
 **Why:** Reviewing running data is much better on a large screen. This is the screen a runner opens on Monday morning to review last week and plan ahead.
 
@@ -321,7 +321,7 @@ Saved routes appear immediately in the mobile apps on next open.
 
 ### Deep run analysis (web)
 
-**Phase:** 2b | **Platform:** Web
+**Phase:** 2b | **Platform:** Web | **Parity:** [see matrix](parity.md#run-history-and-analytics)
 
 **Why:** The full GPS trace, split tables, and HR zone breakdowns are the features that make a running app worth paying for. They're much more useful on a big screen.
 
@@ -349,7 +349,7 @@ Full-page view for a single run:
 
 ### In-app route builder (mobile)
 
-**Phase:** 3 | **Platform:** iOS, Android
+**Phase:** 3 | **Platform:** iOS, Android | **Parity:** [see matrix](parity.md#builder-and-library)
 
 **Why:** Users should be able to plan routes on their phone without needing a computer. Strava paywalls this. Komoot does it well on mobile. This is a top acquisition driver.
 
@@ -372,7 +372,7 @@ Gesture UX: pinch to zoom, long-press to undo last waypoint, double-tap to finis
 
 ### Premium tier
 
-**Phase:** 3 | **Platform:** iOS, Android, Web
+**Phase:** 3 | **Platform:** iOS, Android, Web | **Parity:** [see matrix — paywall](parity.md#paywall-and-funding) and [matrix — training plans](parity.md#training-plans-and-workouts)
 
 **Why:** The business model. Free users generate the user base; premium users generate revenue. The paywall should feel fair — the free app is genuinely great; premium adds intelligence.
 
@@ -408,7 +408,7 @@ Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store +
 
 ### Community route library
 
-**Phase:** 3 | **Platform:** iOS, Android, Web
+**Phase:** 3 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#discovery)
 
 **Why:** Network effects and organic SEO. Every public route creates an indexed page. Discovery of "popular routes near me" creates engagement loops that keep users returning.
 
@@ -429,7 +429,7 @@ Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store +
 
 ## AI Coach
 
-**Phase:** 3 (shipped) | **Platform:** Web
+**Phase:** 3 (shipped) | **Platform:** Web | **Parity:** [see matrix](parity.md#ai-coach)
 
 **Why:** Runners want a "second opinion" on their plan adherence without hiring a human coach. The coach is grounded in the user's actual data (plan, recent runs, settings) and deliberately scoped to avoid liability (no plan generation, no medical/nutrition advice).
 
@@ -466,7 +466,7 @@ See `decisions.md #12` for the rationale.
 
 ## Funding transparency
 
-**Phase:** 3 (shipped) | **Platform:** Web
+**Phase:** 3 (shipped) | **Platform:** Web | **Parity:** [see matrix](parity.md#paywall-and-funding)
 
 **Why:** The app uses a free-with-donations model (see `decisions.md #18`). Transparency about costs builds trust and motivates donations.
 
@@ -491,7 +491,7 @@ Data is read from the `monthly_funding` table (publicly readable, owner-writable
 
 ## Custom dialogs and toast system
 
-**Phase:** 3 (shipped) | **Platform:** Web
+**Phase:** 3 (shipped) | **Platform:** Web | **Parity:** not in matrix — shared-UI infrastructure, not a user-facing feature row.
 
 **Why:** Browser `confirm()`/`alert()`/`prompt()` are unstyled, block the main thread, and break the app's visual language.
 

@@ -502,9 +502,9 @@ The database schema is the single source of truth. Today, each client hand-write
 
 A single markdown table that lists every user-visible feature with a checkmark per platform. Reviewed during every PR that adds or changes a feature.
 
-- [ ] New section in `docs/features.md` (or a new `docs/parity.md`) with a table: **Feature × [Android, iOS, Web, Wear OS, Apple Watch]**, each cell `✓` / `✗` / `Partial` / `N/A`.
-- [ ] Link from each feature's "Phase X" entry in `docs/features.md` to its row in the matrix.
-- [ ] PR template checkbox: "Updated the feature parity matrix if this PR adds or changes a user-visible feature."
+- [x] New section in `docs/features.md` (or a new `docs/parity.md`) with a table: **Feature × [Android, iOS, Web, Wear OS, Apple Watch]**, each cell `✓` / `✗` / `Partial` / `N/A`. Shipped as [`docs/parity.md`](parity.md).
+- [x] Link from each feature's "Phase X" entry in `docs/features.md` to its row in the matrix. Each feature's spec now has a `**Parity:** [see matrix](parity.md#...)` line immediately under its header.
+- [x] PR template checkbox: "Updated the feature parity matrix if this PR adds or changes a user-visible feature." Lives in [`.github/pull_request_template.md`](../.github/pull_request_template.md) under *Docs checklist*.
 - [ ] Periodically audit: grep the matrix for rows with mismatched ticks, confirm each asymmetry is intentional (e.g. Android has a pedometer, web can't have one — that's a permanent `✗`), and open follow-up tickets for unintentional gaps.
 
 **Expected effect**: the `activity_type` / `surface` / `moving_time` drift we spent hours hunting becomes visible on page load. Asymmetries are either documented-as-intentional or immediately visible as bugs.
