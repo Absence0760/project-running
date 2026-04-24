@@ -166,6 +166,45 @@ export type Database = {
         }
         Relationships: []
       }
+      device_tokens: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          id: string
+          last_seen_at: string
+          locale: string | null
+          notifications_enabled: boolean
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          locale?: string | null
+          notifications_enabled?: boolean
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          locale?: string | null
+          notifications_enabled?: boolean
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       event_attendees: {
         Row: {
           event_id: string
@@ -351,6 +390,51 @@ export type Database = {
           },
         ]
       }
+      fitness_snapshots: {
+        Row: {
+          acute_load: number | null
+          chronic_load: number | null
+          computed_at: string
+          created_at: string
+          id: string
+          notes: string | null
+          qualifying_run_count: number
+          source: string
+          training_stress_bal: number | null
+          user_id: string
+          vdot: number | null
+          vo2_max: number | null
+        }
+        Insert: {
+          acute_load?: number | null
+          chronic_load?: number | null
+          computed_at?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          qualifying_run_count?: number
+          source?: string
+          training_stress_bal?: number | null
+          user_id: string
+          vdot?: number | null
+          vo2_max?: number | null
+        }
+        Update: {
+          acute_load?: number | null
+          chronic_load?: number | null
+          computed_at?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          qualifying_run_count?: number
+          source?: string
+          training_stress_bal?: number | null
+          user_id?: string
+          vdot?: number | null
+          vo2_max?: number | null
+        }
+        Relationships: []
+      }
       integrations: {
         Row: {
           access_token: string | null
@@ -416,6 +500,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      personal_records: {
+        Row: {
+          achieved_at: string
+          best_time_s: number
+          distance: string
+          run_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          achieved_at: string
+          best_time_s: number
+          distance: string
+          run_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string
+          best_time_s?: number
+          distance?: string
+          run_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_records_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plan_weeks: {
         Row: {
@@ -982,6 +1101,29 @@ export type Database = {
       is_race_director: { Args: { target_club: string }; Returns: boolean }
       is_user_pro: { Args: { p_user_id: string }; Returns: boolean }
       join_club_by_token: { Args: { token: string }; Returns: string }
+      latest_fitness_snapshot: {
+        Args: never
+        Returns: {
+          acute_load: number | null
+          chronic_load: number | null
+          computed_at: string
+          created_at: string
+          id: string
+          notes: string | null
+          qualifying_run_count: number
+          source: string
+          training_stress_bal: number | null
+          user_id: string
+          vdot: number | null
+          vo2_max: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fitness_snapshots"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       nearby_routes: {
         Args: {
           lat: number
@@ -1031,6 +1173,10 @@ export type Database = {
       }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
+        Returns: undefined
+      }
+      refresh_personal_records_for_user: {
+        Args: { p_user_id: string }
         Returns: undefined
       }
       search_public_routes: {

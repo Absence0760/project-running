@@ -96,6 +96,8 @@ Details, troubleshooting, and drift-detection test recipe: [../../docs/schema_co
 
 `{YYYYMMDD}_{NNN}_{description}.sql` — date, three-digit ordinal within the day, underscore-separated description. Matches the existing files exactly.
 
+**Gotcha with multiple migrations on the same day:** Supabase's CLI parses the migration *version* as the longest numeric prefix before the first underscore — i.e. `YYYYMMDD` only. The `_NNN_` ordinal is purely cosmetic and does **not** disambiguate. Two files with different `NNN` on the same day both register as version `YYYYMMDD` and the second `supabase db reset` fails with `duplicate key value violates unique constraint "schema_migrations_pkey"`. Until we introduce more migrations on a single day than the convention was designed for, walk across consecutive dates instead (`20260506_001_*`, `20260507_001_*`, `20260508_001_*`). If you genuinely need same-day disambiguation in one PR, swap to a time-suffix scheme (`YYYYMMDDhhmmss_description.sql` is what `supabase migration new` emits by default) and update this doc.
+
 ### Creating one
 
 ```bash

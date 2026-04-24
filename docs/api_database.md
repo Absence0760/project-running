@@ -274,6 +274,107 @@ create table monthly_funding (
 
 ---
 
+### `device_tokens`
+
+Push-notification device tokens. One row per (user, device). Prepared in
+migration `20260506_001_device_tokens.sql` for the Phase 4b Clubs push
+flows (event-day reminders, admin-update fan-out) but no sender is wired
+today — the table exists so clients can register tokens on sign-in
+without blocking on the server side.
+
+```sql
+create table device_tokens (
+  id                     uuid primary key default gen_random_uuid(),
+  user_id                uuid not null references auth.users(id) on delete cascade,
+  platform               text not null check (platform in ('ios', 'android', 'web')),
+  token                  text not null,
+  app_version            text,
+  locale                 text,
+  notifications_enabled  boolean not null default true,
+  last_seen_at           timestamptz not null default now(),
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now(),
+  unique (user_id, token)
+);
+```
+
+Indexes: `device_tokens_active` (partial index on `user_id` where
+`notifications_enabled`, the fan-out read shape) and
+`device_tokens_platform` (for platform-wide audits). RLS scopes reads /
+writes to `auth.uid() = user_id`; the push worker reads with the
+service-role key to fan out. A trigger touches `updated_at` on update.
+
+---
+
+### `fitness_snapshots`
+
+Time-series store for Pro-tier training-load metrics (VDOT, VO2 max,
+ATL, CTL, TSB). Prepared in migration `20260507_001_fitness_snapshots.sql`.
+No endpoint writes to it yet — the Pro tier today unlocks "unlimited AI
+Coach" and "priority processing" (see `decisions.md § 23`); the
+recovery-advisor / race-predictor features that will consume this table
+are tracked under `roadmap.md § Phase 3 — Premium tier`.
+
+```sql
+create table fitness_snapshots (
+  id                     uuid primary key default gen_random_uuid(),
+  user_id                uuid not null references auth.users(id) on delete cascade,
+  computed_at            timestamptz not null default now(),
+  vdot                   numeric(5, 2),
+  vo2_max                numeric(5, 2),
+  acute_load             numeric(8, 2),
+  chronic_load           numeric(8, 2),
+  training_stress_bal    numeric(8, 2),
+  qualifying_run_count   integer not null default 0,
+  source                 text not null default 'server'
+                          check (source in ('server', 'client')),
+  notes                  text,
+  created_at             timestamptz not null default now()
+);
+```
+
+Index `fitness_snapshots_user_time` on `(user_id, computed_at desc)`
+covers both the "latest snapshot" + "time window" read shapes. RLS:
+users see and write their own rows; the server-side recompute job
+writes via service role. RPC `latest_fitness_snapshot()` exists as a
+single-round-trip convenience for dashboard cards.
+
+---
+
+### `personal_records`
+
+Cache table for per-distance PBs (`5k` / `10k` / `half_marathon` /
+`marathon`). Backed by triggers on `runs` so reads are a single indexed
+lookup instead of the full aggregation that
+[`personal_records()`](#personal_records-1) does. Shipped in migration
+`20260508_001_personal_records_cache.sql`. The existing
+`personal_records()` SQL function stays in place for callers that
+haven't migrated.
+
+```sql
+create table personal_records (
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  distance      text not null check (distance in ('5k', '10k', 'half_marathon', 'marathon')),
+  best_time_s   integer not null,
+  run_id        uuid references runs(id) on delete set null,
+  achieved_at   timestamptz not null,
+  updated_at    timestamptz not null default now(),
+  primary key (user_id, distance)
+);
+```
+
+Triggers: `runs_personal_records_insert / update / delete` call
+`refresh_personal_records_for_user(uid)`, a `security definer` helper
+that deletes + re-inserts the caller's four rows (full rebuild per
+user on any run change — simpler to reason about than incremental).
+Backfill runs once in the migration via a `do $$ for uid in … $$` loop.
+Second index `personal_records_distance_time` on `(distance,
+best_time_s asc)` prepared for a future leaderboard view. RLS today
+scopes reads to the owner; broader read policy is a follow-up when
+the leaderboard UI lands.
+
+---
+
 ## Row-level security
 
 RLS is enabled on every table. Policies ensure users can only access their own data, with a specific carve-out for public routes.

@@ -199,7 +199,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
   - [ ] Token refresh worker (moved from Edge Function)
   - [ ] Data export worker (moved from Edge Function)
 - [ ] Set up Upstash Redis for live position streams
-- [ ] Add `personal_records` summary table with insert trigger
+- [x] Add `personal_records` summary table with insert trigger (migration `20260508_001_personal_records_cache.sql` — table, `refresh_personal_records_for_user(uid)` helper, insert / update / delete triggers, backfill; `security definer` writes, reads scoped to owner)
 - [ ] Add `jobs` table for Go worker queue
 - [ ] Migrate Strava webhook, token refresh, data export from Edge Functions to Go service
 
@@ -333,7 +333,7 @@ Phased rollout so the schema doesn't sprawl. MVP is club-owned events only, enum
 - [x] **Phase 2 — recurrence + invites:** Enum recurrence (`weekly` / `biweekly` / `monthly` + `byday[]` + `until_date`) with instance expansion on the client; per-instance RSVPs (`event_attendees` pkey extended with `instance_start`); join policies (`open` / `request` / `invite`) with a pending-requests admin panel; shareable invite tokens on clubs + `/clubs/join/[token]` landing route; one-level threaded replies on posts. Migration: `20260417_001_phase2_social.sql`.
 - [x] **Phase 3 — Android mirror:** `clubs_screen.dart` (Browse + My clubs), `club_detail_screen.dart` (feed / events / members tabs with threaded post replies and member post composer), `event_detail_screen.dart` (per-instance RSVP + admin update composer), `upcoming_event_card.dart` replaces the Last-Run card on the Run tab when the user has RSVP'd `going` to an event within 48h. Clubs added as a 6th bottom-nav tab. Recurrence is ported to Dart (`recurrence.dart`) so instance expansion stays consistent with web. Club/event creation is deliberately not on Android — admins still use the web app for those.
 - [x] **Phase 4a — realtime (web + Android):** Supabase Realtime is enabled on `club_posts`, `event_attendees`, and `club_members` (migration `20260418_001_social_realtime.sql`). Web club / event detail pages and Android `ClubDetailScreen` / `EventDetailScreen` subscribe via `postgres_changes` and debounce reloads at 250ms. Payloads are ignored in favour of a fresh enriched fetch so RLS stays authoritative.
-- [ ] **Phase 4b — push (FCM / APNs):** Event-day reminders (scheduled), admin-update fan-out, and a `device_tokens` table. Blocked on user-supplied Firebase project + service account credentials; not started.
+- [ ] **Phase 4b — push (FCM / APNs):** Event-day reminders (scheduled), admin-update fan-out. `device_tokens` table is shipped (migration `20260506_001_device_tokens.sql` — platform-checked `token` rows, `notifications_enabled` per-device toggle, partial index on active tokens, self-scoped RLS, trigger on `updated_at`); the sender + client-side token registration are blocked on user-supplied Firebase / APNs credentials.
 
 ### External platform sync
 
@@ -451,7 +451,7 @@ The foundation under both the generator and any hand-built plan: a data model fo
 - [ ] Enable PostGIS extension in Supabase
 - [ ] Add `geom geography(LineString, 4326)` column to `routes` with spatial index
 - [ ] Add `training_plans` table for generated plans
-- [ ] Add `fitness_snapshots` table for VO2 max and training load history
+- [x] Add `fitness_snapshots` table for VO2 max and training load history (migration `20260507_001_fitness_snapshots.sql` — `vdot`, `vo2_max`, ATL / CTL / TSB columns, `qualifying_run_count`, `source` check, `latest_fitness_snapshot()` RPC. Server-side recompute job + advisor UI still pending.)
 - [ ] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles`
 - [ ] Apply for Garmin Connect developer program
 

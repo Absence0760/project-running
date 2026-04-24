@@ -179,6 +179,72 @@ class ClubRow {
   };
 }
 
+/// Row shape for the `device_tokens` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class DeviceTokenRow {
+  static const String table = 'device_tokens';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colPlatform = 'platform';
+  static const String colToken = 'token';
+  static const String colAppVersion = 'app_version';
+  static const String colLocale = 'locale';
+  static const String colNotificationsEnabled = 'notifications_enabled';
+  static const String colLastSeenAt = 'last_seen_at';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String userId;
+  final String platform;
+  final String token;
+  final String? appVersion;
+  final String? locale;
+  final bool notificationsEnabled;
+  final DateTime lastSeenAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const DeviceTokenRow({
+    required this.id,
+    required this.userId,
+    required this.platform,
+    required this.token,
+    this.appVersion,
+    this.locale,
+    required this.notificationsEnabled,
+    required this.lastSeenAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory DeviceTokenRow.fromJson(Map<String, dynamic> json) => DeviceTokenRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    platform: json['platform'] as String,
+    token: json['token'] as String,
+    appVersion: json['app_version'] as String?,
+    locale: json['locale'] as String?,
+    notificationsEnabled: json['notifications_enabled'] as bool,
+    lastSeenAt: DateTime.parse(json['last_seen_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colPlatform: platform,
+    colToken: token,
+    colAppVersion: appVersion,
+    colLocale: locale,
+    colNotificationsEnabled: notificationsEnabled,
+    colLastSeenAt: lastSeenAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `event_attendees` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class EventAttendeeRow {
@@ -427,6 +493,82 @@ class EventRow {
   };
 }
 
+/// Row shape for the `fitness_snapshots` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class FitnessSnapshotRow {
+  static const String table = 'fitness_snapshots';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colComputedAt = 'computed_at';
+  static const String colVdot = 'vdot';
+  static const String colVo2Max = 'vo2_max';
+  static const String colAcuteLoad = 'acute_load';
+  static const String colChronicLoad = 'chronic_load';
+  static const String colTrainingStressBal = 'training_stress_bal';
+  static const String colQualifyingRunCount = 'qualifying_run_count';
+  static const String colSource = 'source';
+  static const String colNotes = 'notes';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final DateTime computedAt;
+  final double? vdot;
+  final double? vo2Max;
+  final double? acuteLoad;
+  final double? chronicLoad;
+  final double? trainingStressBal;
+  final int qualifyingRunCount;
+  final String source;
+  final String? notes;
+  final DateTime createdAt;
+
+  const FitnessSnapshotRow({
+    required this.id,
+    required this.userId,
+    required this.computedAt,
+    this.vdot,
+    this.vo2Max,
+    this.acuteLoad,
+    this.chronicLoad,
+    this.trainingStressBal,
+    required this.qualifyingRunCount,
+    required this.source,
+    this.notes,
+    required this.createdAt,
+  });
+
+  factory FitnessSnapshotRow.fromJson(Map<String, dynamic> json) => FitnessSnapshotRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    computedAt: DateTime.parse(json['computed_at'] as String),
+    vdot: (json['vdot'] as num?)?.toDouble(),
+    vo2Max: (json['vo2_max'] as num?)?.toDouble(),
+    acuteLoad: (json['acute_load'] as num?)?.toDouble(),
+    chronicLoad: (json['chronic_load'] as num?)?.toDouble(),
+    trainingStressBal: (json['training_stress_bal'] as num?)?.toDouble(),
+    qualifyingRunCount: (json['qualifying_run_count'] as num).toInt(),
+    source: json['source'] as String,
+    notes: json['notes'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colComputedAt: computedAt.toIso8601String(),
+    colVdot: vdot,
+    colVo2Max: vo2Max,
+    colAcuteLoad: acuteLoad,
+    colChronicLoad: chronicLoad,
+    colTrainingStressBal: trainingStressBal,
+    colQualifyingRunCount: qualifyingRunCount,
+    colSource: source,
+    colNotes: notes,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `integrations` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class IntegrationRow {
@@ -535,6 +677,52 @@ class MonthlyFundingRow {
     colMonth: month.toIso8601String(),
     colAmountReceived: amountReceived,
     colDonorCount: donorCount,
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `personal_records` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class PersonalRecordRow {
+  static const String table = 'personal_records';
+  static const String colUserId = 'user_id';
+  static const String colDistance = 'distance';
+  static const String colBestTimeS = 'best_time_s';
+  static const String colRunId = 'run_id';
+  static const String colAchievedAt = 'achieved_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String userId;
+  final String distance;
+  final int bestTimeS;
+  final String? runId;
+  final DateTime achievedAt;
+  final DateTime updatedAt;
+
+  const PersonalRecordRow({
+    required this.userId,
+    required this.distance,
+    required this.bestTimeS,
+    this.runId,
+    required this.achievedAt,
+    required this.updatedAt,
+  });
+
+  factory PersonalRecordRow.fromJson(Map<String, dynamic> json) => PersonalRecordRow(
+    userId: json['user_id'] as String,
+    distance: json['distance'] as String,
+    bestTimeS: (json['best_time_s'] as num).toInt(),
+    runId: json['run_id'] as String?,
+    achievedAt: DateTime.parse(json['achieved_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colDistance: distance,
+    colBestTimeS: bestTimeS,
+    colRunId: runId,
+    colAchievedAt: achievedAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
