@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import 'local_route_store.dart';
+import 'local_run_store.dart';
 import 'preferences.dart';
 import 'screens/home_screen.dart';
 
@@ -25,6 +27,21 @@ Future<void> main() async {
 
   final preferences = Preferences();
   await preferences.init();
+
+  final runStore = LocalRunStore();
+  await runStore.init();
+
+  // Crash recovery: if a previous session left an in-progress run, load it
+  // and surface it so the user can decide to save or discard. For now we
+  // silently load it into the store; the run screen will handle the recovery
+  // prompt once it is wired to LocalRunStore.
+  final inProgress = await runStore.loadInProgress();
+  if (inProgress != null) {
+    debugPrint('Recovered in-progress run: ${inProgress.id}');
+  }
+
+  final routeStore = LocalRouteStore();
+  await routeStore.init();
 
   ApiClient? api;
   if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
@@ -52,14 +69,27 @@ Future<void> main() async {
     WatchIngest.attach(api);
   }
 
-  runApp(RunApp(apiClient: api, preferences: preferences));
+  runApp(RunApp(
+    apiClient: api,
+    preferences: preferences,
+    runStore: runStore,
+    routeStore: routeStore,
+  ));
 }
 
 class RunApp extends StatelessWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
+  final LocalRunStore runStore;
+  final LocalRouteStore routeStore;
 
-  const RunApp({super.key, this.apiClient, required this.preferences});
+  const RunApp({
+    super.key,
+    this.apiClient,
+    required this.preferences,
+    required this.runStore,
+    required this.routeStore,
+  });
 
   @override
   Widget build(BuildContext context) {
