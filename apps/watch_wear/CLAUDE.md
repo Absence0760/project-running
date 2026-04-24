@@ -233,16 +233,12 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
 - **Live map during recording.** The RunningScreen is pure stats —
   there's no route overlay, no follow-cam, no tile rendering. Adding
   one would unlock the dependent items below (route nav + tile cache).
-- **Route navigation on watch.** No route preview, no live position on
-  a mini-map, no off-route haptic — blocked on the live map above. The
-  pure math helpers are already ported (see `recording/RouteMath.kt` —
-  `offRouteDistanceM` and `routeRemainingM`, 17 mirror tests against
-  the Dart twin in `run_recorder.dart`), so once route data reaches the
-  watch the alert banner + "X to go" badge are a small wiring change.
-- **Route sync to the watch.** No plumbing today — `SupabaseClient` has
-  no `fetchRoutes`, and the Wearable Data Layer session bridge doesn't
-  push routes. Either path (direct fetch from Wear, or phone handoff)
-  would unlock the route-overlay cells in `docs/parity.md`.
+- **Live map during recording / live position marker on a route.** The
+  RunningScreen is still pure stats. The off-route banner + "X to go"
+  badge ship without a map (the math runs per GPS sample); the
+  *visual* position marker on the planned route is blocked on adding
+  a tile renderer, which is a multi-day platform project in its own
+  right. Not started.
 - **Live HTTP tile cache.** Blocked on the live map; pre-downloaded
   tiles are still the only path.
 - **Google Sign-In on the watch** (today only email/password direct
@@ -296,6 +292,15 @@ What the UI exposes during a recording, for quick reference when reading
   detail render without special-casing. The RunningScreen banner reads
   "No GPS — time only" when no fix has landed yet, and "GPS lost"
   after a mid-run drop, so the runner can tell the two apart.
+- **Route overlay (no map).** Pre-run Route chip → `Stage.RoutePicker`
+  (backed by `LocalRouteStore` + `SupabaseClient.fetchRoutes`).
+  Selected waypoints flow via `ACTION_START` extras into
+  `RunRecordingService.parseRouteWaypoints`, which calls
+  `RouteMath.offRouteDistanceM` + `routeRemainingM` per GPS sample.
+  `RunningScreen` renders the "Off route · N m" banner (with hysteresis
+  at 40 m / 20 m and a double-haptic on entry) and a "X.XX km to go"
+  badge under the distance readout. The *visual* position marker on a
+  rendered route is still deferred — no live map yet.
 
 ## Before reporting a task done
 

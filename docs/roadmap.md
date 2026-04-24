@@ -168,12 +168,14 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Route navigation on watch
 
-Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported to Kotlin as `watch_wear:recording/RouteMath.kt` with a 17-test mirror suite against the Dart twin — so the maths is ready. The items below are blocked on two upstream gaps: (a) route data sync to the watch (neither direct Supabase fetch nor phone-handoff is wired), and (b) a live-map renderer during recording.
+Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported to Kotlin as `watch_wear:recording/RouteMath.kt` with a 17-test mirror suite against the Dart twin. Route data syncs to the watch via `SupabaseClient.fetchRoutes` + `LocalRouteStore`. The pre-run Route chip + picker wire a selection into the recording loop, and `RunningScreen` renders the off-route banner (with hysteresis + haptic) and the "X to go" badge. What's left: rendering the route *visually* during a run, which requires a live map on the watch.
 
-- [ ] Route sync to the watch (direct `SupabaseClient.fetchRoutes` or Wearable Data Layer handoff, plus a local route cache + pre-run picker)
-- [ ] Route preview on watch face before starting
-- [ ] Live position on mini-map during run
-- [ ] Off-route haptic + "recalculating" indicator (math is ready — `RouteMath.offRouteDistanceM` — just needs route data + a banner / haptic trigger)
+- [x] Route sync to the watch (`SupabaseClient.fetchRoutes` + `LocalRouteStore` DataStore cache; drains on picker open)
+- [x] Pre-run Route chip + picker screen (`Stage.RoutePicker` with "None" + per-route chips)
+- [x] Off-route haptic + banner on `RunningScreen` (threshold 40 m on / 20 m off, double `HapticFeedback.LongPress` on entry)
+- [x] "X.XX km to go" badge on `RunningScreen` under the distance readout
+- [ ] Route preview on watch face before starting (needs a renderer)
+- [ ] Live position on mini-map during run (needs a renderer; "Live position marker on planned route" cell in parity.md stays ✗ until this lands)
 
 ### Glanceable tiles and complications
 

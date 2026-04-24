@@ -41,6 +41,11 @@ object RecordingRepository {
         val locationAvailable: Boolean = true,
         val activityType: String = "run",
         val laps: List<Lap> = emptyList(),
+        /// Populated by `RunRecordingService` on every GPS sample when a
+        /// route was passed to `ACTION_START`. Null when no route is
+        /// loaded for this run.
+        val offRouteDistanceM: Double? = null,
+        val routeRemainingM: Double? = null,
     ) {
         val isActive: Boolean get() = stage == Stage.Recording || stage == Stage.Paused
     }

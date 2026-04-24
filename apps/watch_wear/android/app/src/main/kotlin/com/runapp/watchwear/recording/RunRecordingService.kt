@@ -75,6 +75,11 @@ class RunRecordingService : Service() {
     private var startedAtMs = 0L
     private var runId: String = ""
     private var activityType: String = "run"
+    /// Planned route waypoints for this run, parsed once from the
+    /// ACTION_START intent. Empty when the runner didn't pick a route;
+    /// `RouteMath` helpers below skip when this is empty.
+    private var routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng> =
+        emptyList()
 
     // Rolling HR aggregation instead of a list of every sample.
     // `bpmSum` / `bpmCount` let us compute avg in O(1) regardless of
@@ -103,6 +108,7 @@ class RunRecordingService : Service() {
             ACTION_START -> startRecording(
                 intent.getStringExtra(EXTRA_RUN_ID) ?: UUID.randomUUID().toString(),
                 intent.getStringExtra(EXTRA_ACTIVITY_TYPE) ?: "run",
+                intent.getStringExtra(EXTRA_ROUTE_WAYPOINTS_JSON),
             )
             ACTION_PAUSE -> pauseRecording()
             ACTION_RESUME -> resumeRecording()
@@ -123,7 +129,7 @@ class RunRecordingService : Service() {
 
     // ----- Lifecycle -----
 
-    private fun startRecording(id: String, activity: String) {
+    private fun startRecording(id: String, activity: String, routeWaypointsJson: String?) {
         if (RecordingRepository.metrics.value.isActive) return
 
         runId = id
@@ -137,6 +143,7 @@ class RunRecordingService : Service() {
         bpmSum = 0
         bpmCount = 0
         tickIndex = 0
+        routeWaypoints = parseRouteWaypoints(routeWaypointsJson)
 
         val file = TrackWriter.fileFor(applicationContext, runId)
         trackWriter = TrackWriter(file).also { it.open() }
@@ -340,13 +347,49 @@ class RunRecordingService : Service() {
         lastLocation = asLoc
         val elapsedS = activeElapsedMs() / 1000.0
         val pace = if (newDistance >= 50.0 && elapsedS > 0) elapsedS / newDistance * 1000.0 else null
+        val posLL = RouteMath.LatLng(p.lat, p.lng)
+        val offRoute = if (routeWaypoints.isNotEmpty())
+            RouteMath.offRouteDistanceM(posLL, routeWaypoints) else null
+        val remaining = if (routeWaypoints.isNotEmpty())
+            RouteMath.routeRemainingM(posLL, routeWaypoints) else null
         RecordingRepository.update {
             it.copy(
                 distanceM = newDistance,
                 paceSecPerKm = pace,
                 latestPoint = p,
                 trackPointCount = trackWriter?.pointCount ?: 0,
+                offRouteDistanceM = offRoute,
+                routeRemainingM = remaining,
             )
+        }
+    }
+
+    /// Parse the JSON array emitted by `RunViewModel.start()` (format:
+    /// `[{"lat":.., "lng":..}, ...]`). Quietly returns empty on any
+    /// parse failure — an empty list disables the `RouteMath` calls in
+    /// `onGps` so the run proceeds as a no-route recording.
+    private fun parseRouteWaypoints(
+        json: String?,
+    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> {
+        if (json.isNullOrEmpty()) return emptyList()
+        return try {
+            val parser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            val arr = parser.parseToJsonElement(json) as? kotlinx.serialization.json.JsonArray
+                ?: return emptyList()
+            arr.mapNotNull { el ->
+                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                val lat = obj["lat"]
+                    ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+                    ?.content?.toDoubleOrNull()
+                    ?: return@mapNotNull null
+                val lng = obj["lng"]
+                    ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+                    ?.content?.toDoubleOrNull()
+                    ?: return@mapNotNull null
+                RouteMath.LatLng(lat, lng)
+            }
+        } catch (_: Throwable) {
+            emptyList()
         }
     }
 
@@ -483,6 +526,9 @@ class RunRecordingService : Service() {
         const val ACTION_LAP = "com.runapp.watchwear.action.MARK_LAP"
         const val EXTRA_RUN_ID = "run_id"
         const val EXTRA_ACTIVITY_TYPE = "activity_type"
+        /// JSON array of `{"lat": .., "lng": ..}` objects — the picked
+        /// route's waypoints. Optional; absent means "no route overlay".
+        const val EXTRA_ROUTE_WAYPOINTS_JSON = "route_waypoints_json"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "run_recording"
@@ -500,11 +546,19 @@ class RunRecordingService : Service() {
         private const val GPS_RETRY_INTERVAL_MS = 10_000L
         private const val GPS_STALL_MS = 30_000L
 
-        fun start(context: Context, runId: String, activityType: String) {
+        fun start(
+            context: Context,
+            runId: String,
+            activityType: String,
+            routeWaypointsJson: String? = null,
+        ) {
             val intent = Intent(context, RunRecordingService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_RUN_ID, runId)
                 putExtra(EXTRA_ACTIVITY_TYPE, activityType)
+                if (!routeWaypointsJson.isNullOrEmpty()) {
+                    putExtra(EXTRA_ROUTE_WAYPOINTS_JSON, routeWaypointsJson)
+                }
             }
             context.startForegroundService(intent)
         }

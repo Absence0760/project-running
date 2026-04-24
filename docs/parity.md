@@ -118,9 +118,9 @@ See [features § Route overlay during run](features.md#route-overlay-during-run)
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Live position marker on planned route | ✓ | ✗ | N/A | ✗ | Partial | Apple Watch has `RouteNavigator` scaffolded; not wired to a planned route yet. Wear OS has no live map during recording, so this row is blocked behind the live-map initiative in `apps/watch_wear/CLAUDE.md`. |
-| Off-route detection and alert | ✓ | ✗ | N/A | Partial | ✗ | Wear OS has the pure math ported to Kotlin (`recording/RouteMath.kt` — `offRouteDistanceM`, 17 unit tests mirroring the Dart twin). No route sync to the watch yet, so it isn't wired to a live recording — the alert banner + haptic lands when route sync does. |
-| Distance remaining to end of route | ✓ | ✗ | N/A | Partial | ✗ | Same story as off-route — `RouteMath.routeRemainingM` is shipped and tested on Wear; no route is loaded into a recording yet, so the "X to go" badge has nothing to show. |
+| Live position marker on planned route | ✓ | ✗ | N/A | ✗ | Partial | Apple Watch has `RouteNavigator` scaffolded; not wired to a planned route yet. Wear OS still has no live map during recording — the marker row is blocked behind the live-map initiative, which is genuinely multi-day work and intentionally not in scope yet. |
+| Off-route detection and alert | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: the pre-run Route chip opens a picker; the selected route's waypoints flow through `ACTION_START` into `RunRecordingService`, which calls `RouteMath.offRouteDistanceM` per GPS sample. `RunningScreen` shows an "Off route · N m" banner above the distance readout; entering the off-route state fires a double `HapticFeedback.LongPress`. Hysteresis (alert >40 m, clear <20 m) prevents boundary chatter. |
+| Distance remaining to end of route | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: `RouteMath.routeRemainingM` runs alongside off-route per GPS sample; `RunningScreen` renders "X.XX km to go" under the elapsed-distance line whenever a route is loaded. Hidden when `selectedRoute` is null. |
 
 ## Run history and analytics
 

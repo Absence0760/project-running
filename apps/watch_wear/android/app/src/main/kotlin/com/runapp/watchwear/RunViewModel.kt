@@ -28,7 +28,7 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.UUID
 
-enum class Stage { PreRun, Running, Paused, PostRun, SignIn }
+enum class Stage { PreRun, Running, Paused, PostRun, SignIn, RoutePicker }
 
 data class UiState(
     val stage: Stage = Stage.PreRun,
@@ -53,6 +53,20 @@ data class UiState(
     val activityType: String = "run",
     val lapCount: Int = 0,
     val activeRace: ActiveRaceState? = null,
+    /// Routes the user has saved, populated from `LocalRouteStore` on
+    /// launch and refreshed from Supabase whenever PreRun is entered.
+    val routes: List<SavedRoute> = emptyList(),
+    /// The route the runner picked on the PreRun screen, if any. Flows
+    /// into `RunRecordingService` at `start()` time so the off-route
+    /// banner + "X to go" badge have a polyline to work against.
+    val selectedRoute: SavedRoute? = null,
+    val routesLoading: Boolean = false,
+    /// Live off-route distance in metres (perpendicular distance to the
+    /// nearest segment). Null when no route is loaded. Published by the
+    /// recording service per GPS sample via `RouteMath.offRouteDistanceM`.
+    val offRouteDistanceM: Double? = null,
+    /// Live "distance to end of route" in metres. Null when no route.
+    val routeRemainingM: Double? = null,
 )
 
 data class ActiveRaceState(
@@ -91,6 +105,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val store = LocalRunStore(application)
     private val sessionStore = SessionStore(application)
     private val sessionBridge = SessionBridge(application)
+    private val routeStore = LocalRouteStore(application)
     private val checkpoints = CheckpointStore(application)
     private val networkWatcher = NetworkWatcher(application)
     private val raceClient = RaceSessionClient(
@@ -123,6 +138,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         checkBatteryOptimisation()
         checkBatteryLevel()
         checkRecovery()
+        loadCachedRoutes()
     }
 
     private fun observeRecording() {
@@ -141,6 +157,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             locationAvailable = m.locationAvailable,
                             activityType = m.activityType,
                             lapCount = m.laps.size,
+                            offRouteDistanceM = m.offRouteDistanceM,
+                            routeRemainingM = m.routeRemainingM,
                         )
                         maybePushRacePing(m)
                     }
@@ -416,6 +434,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         if (_state.value.stage != Stage.PreRun) return
         checkBatteryLevel()
         val runId = UUID.randomUUID().toString()
+        val route = _state.value.selectedRoute
         _state.value = _state.value.copy(
             stage = Stage.Running,
             elapsedMs = 0,
@@ -426,13 +445,78 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             syncError = null,
             thisRunId = runId,
             thisRunSynced = false,
+            offRouteDistanceM = null,
+            routeRemainingM = null,
         )
-        RunRecordingService.start(getApplication(), runId, _state.value.activityType)
+        RunRecordingService.start(
+            context = getApplication(),
+            runId = runId,
+            activityType = _state.value.activityType,
+            routeWaypointsJson = route?.waypointsAsJson(),
+        )
     }
 
     fun setActivityType(type: String) {
         if (_state.value.stage != Stage.PreRun) return
         _state.value = _state.value.copy(activityType = type)
+    }
+
+    // ----- Routes -----
+
+    /// Populate the initial route list from the DataStore cache so the
+    /// picker has something to show during a cold-launch offline. The
+    /// network refresh in `refreshRoutes` fires when the user opens
+    /// the picker.
+    private fun loadCachedRoutes() {
+        viewModelScope.launch {
+            try {
+                val cached = routeStore.current()
+                if (cached.isNotEmpty()) {
+                    _state.value = _state.value.copy(routes = cached)
+                }
+            } catch (_: Throwable) { /* empty cache is fine */ }
+        }
+    }
+
+    /// Pull saved routes from Supabase and overwrite the local cache.
+    /// Called when the user opens the picker; failures leave the
+    /// cached list intact so the UI doesn't blank out.
+    fun refreshRoutes() {
+        if (!authReady.value) return
+        _state.value = _state.value.copy(routesLoading = true)
+        viewModelScope.launch {
+            try {
+                val fresh = supabase.fetchRoutes()
+                routeStore.save(fresh)
+                _state.value = _state.value.copy(routes = fresh, routesLoading = false)
+            } catch (_: Throwable) {
+                _state.value = _state.value.copy(routesLoading = false)
+            }
+        }
+    }
+
+    fun openRoutePicker() {
+        _state.value = _state.value.copy(stage = Stage.RoutePicker)
+        refreshRoutes()
+    }
+
+    fun closeRoutePicker() {
+        if (_state.value.stage != Stage.RoutePicker) return
+        _state.value = _state.value.copy(stage = Stage.PreRun)
+    }
+
+    fun selectRoute(route: SavedRoute) {
+        _state.value = _state.value.copy(
+            selectedRoute = route,
+            stage = Stage.PreRun,
+        )
+    }
+
+    fun clearSelectedRoute() {
+        _state.value = _state.value.copy(
+            selectedRoute = null,
+            stage = Stage.PreRun,
+        )
     }
 
     fun markLap() {
@@ -553,11 +637,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             supabase.clearCredentials()
             sessionStore.clear()
+            routeStore.clear()
             authReady.value = false
             _state.value = _state.value.copy(
                 authed = false,
                 authError = null,
                 stage = Stage.PreRun,
+                routes = emptyList(),
+                selectedRoute = null,
             )
         }
     }

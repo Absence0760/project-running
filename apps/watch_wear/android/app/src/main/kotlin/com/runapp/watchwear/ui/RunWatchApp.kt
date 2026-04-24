@@ -134,11 +134,13 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
                             activityType = state.activityType,
                             activeRace = state.activeRace,
+                            selectedRouteName = state.selectedRoute?.name,
                             onCycleActivity = {
                                 val order = listOf("run", "walk", "hike", "cycle")
                                 val next = order[(order.indexOf(state.activityType) + 1) % order.size]
                                 vm.setActivityType(next)
                             },
+                            onOpenRoutePicker = vm::openRoutePicker,
                             onStart = {
                                 permissionLauncher.launch(
                                     arrayOf(
@@ -175,6 +177,8 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     // with `locationAvailable=false` it tells us the run
                     // is indoor / no-GPS rather than mid-run signal loss.
                     noGpsYet = state.distanceM == 0.0,
+                    offRouteDistanceM = state.offRouteDistanceM,
+                    routeRemainingM = state.routeRemainingM,
                     ambient = isAmbient,
                     onPause = vm::pause,
                     onResume = vm::resume,
@@ -189,6 +193,14 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     onSync = vm::sync,
                     onStartNext = vm::startNextRun,
                     onDiscard = vm::discard,
+                )
+                Stage.RoutePicker -> RoutePickerScreen(
+                    routes = state.routes,
+                    selectedId = state.selectedRoute?.id,
+                    loading = state.routesLoading,
+                    onPick = vm::selectRoute,
+                    onClear = vm::clearSelectedRoute,
+                    onCancel = vm::closeRoutePicker,
                 )
             }
 
@@ -326,7 +338,9 @@ private fun PreRunScreen(
     activeRace: com.runapp.watchwear.ActiveRaceState?,
     pendingRecoveryDistance: Double?,
     activityType: String,
+    selectedRouteName: String?,
     onCycleActivity: () -> Unit,
+    onOpenRoutePicker: () -> Unit,
     onStart: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
@@ -448,7 +462,24 @@ private fun PreRunScreen(
                 },
                 colors = ChipDefaults.secondaryChipColors(),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
+            // Route chip — tap opens the picker. Only shown when signed
+            // in since routes require a network fetch. Label shows the
+            // selected route name or "Pick route" when none is chosen.
+            if (authed) {
+                CompactChip(
+                    onClick = onOpenRoutePicker,
+                    label = {
+                        Text(
+                            selectedRouteName ?: "Pick route",
+                            style = MaterialTheme.typography.caption2,
+                            maxLines = 1,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                )
+                Spacer(Modifier.height(6.dp))
+            }
             Button(
                 onClick = onStart,
                 modifier = Modifier.size(ButtonDefaults.LargeButtonSize + 20.dp),
@@ -751,6 +782,8 @@ private fun RunningScreen(
     paused: Boolean,
     locationAvailable: Boolean,
     noGpsYet: Boolean,
+    offRouteDistanceM: Double?,
+    routeRemainingM: Double?,
     ambient: Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -758,6 +791,24 @@ private fun RunningScreen(
     onStop: () -> Unit,
 ) {
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // Off-route hysteresis: alert above 40 m, clear below 20 m. Single
+    // haptic pulse when the state flips to "off" — drivers an alert
+    // without the pulsing-every-tick spam a flat threshold would cause
+    // at the boundary.
+    var wasOffRoute by remember { mutableStateOf(false) }
+    val currentlyOffRoute = offRouteDistanceM != null && offRouteDistanceM > 40
+    val backOnRoute = offRouteDistanceM != null && offRouteDistanceM < 20
+    LaunchedEffect(currentlyOffRoute, backOnRoute) {
+        if (currentlyOffRoute && !wasOffRoute) {
+            wasOffRoute = true
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            delay(180)
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        } else if (backOnRoute && wasOffRoute) {
+            wasOffRoute = false
+        }
+    }
     // Ambient mode: OEM burn-in protection rules apply — pure-black
     // background, thin outlined text, no solid fills, and the content
     // shifts a few dp each minute (handled by the system if we use the
@@ -814,6 +865,14 @@ private fun RunningScreen(
             )
             Spacer(Modifier.height(2.dp))
         }
+        if (wasOffRoute && offRouteDistanceM != null) {
+            Text(
+                "Off route · ${offRouteDistanceM.toInt()} m",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.warning,
+            )
+            Spacer(Modifier.height(2.dp))
+        }
         Text(
             formatElapsed(elapsedMs),
             style = MaterialTheme.typography.display2,
@@ -824,6 +883,13 @@ private fun RunningScreen(
             "%.2f km".format(distanceM / 1000.0),
             style = MaterialTheme.typography.body2,
         )
+        if (routeRemainingM != null && routeRemainingM > 1.0) {
+            Text(
+                "%.2f km to go".format(routeRemainingM / 1000.0),
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.lilac,
+            )
+        }
         if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
             Text(
                 "${formatPace(paceSecPerKm)} /km",
@@ -882,6 +948,104 @@ private fun RunningScreen(
                 Text("Lap", style = MaterialTheme.typography.caption2)
             }
             HoldToStopButton(onStop = onStop)
+        }
+    }
+}
+
+/// Pre-run route picker. Compact list of the user's saved routes; tap
+/// to select, "None" to clear the current selection, "Cancel" to back
+/// out without changing it. Refreshing the list happens in the
+/// ViewModel (`refreshRoutes`) when the stage flips to RoutePicker —
+/// the UI here only renders what's in `state.routes`.
+@Composable
+private fun RoutePickerScreen(
+    routes: List<com.runapp.watchwear.SavedRoute>,
+    selectedId: String?,
+    loading: Boolean,
+    onPick: (com.runapp.watchwear.SavedRoute) -> Unit,
+    onClear: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val listState = rememberScalingLazyListState()
+    ScalingLazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        autoCentering = AutoCenteringParams(itemIndex = 0),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 24.dp),
+    ) {
+        item {
+            Text(
+                "Route",
+                style = MaterialTheme.typography.title3,
+            )
+        }
+        if (loading && routes.isEmpty()) {
+            item {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.height(16.dp),
+                )
+            }
+        }
+        item {
+            Chip(
+                onClick = onClear,
+                label = {
+                    Text(
+                        "None",
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = if (selectedId == null)
+                    ChipDefaults.primaryChipColors()
+                else ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        items(routes.size) { i ->
+            val r = routes[i]
+            val isSelected = r.id == selectedId
+            Chip(
+                onClick = { onPick(r) },
+                label = {
+                    Column {
+                        Text(
+                            r.name,
+                            style = MaterialTheme.typography.caption2,
+                            maxLines = 1,
+                        )
+                        Text(
+                            "%.2f km".format(r.distanceM / 1000.0),
+                            style = MaterialTheme.typography.caption3,
+                            color = DuskPalette.haze,
+                        )
+                    }
+                },
+                colors = if (isSelected)
+                    ChipDefaults.primaryChipColors()
+                else ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (routes.isEmpty() && !loading) {
+            item {
+                Text(
+                    "No saved routes. Build a route on the phone or web first.",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.haze,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                )
+            }
+        }
+        item {
+            Chip(
+                onClick = onCancel,
+                label = { Text("Cancel") },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
