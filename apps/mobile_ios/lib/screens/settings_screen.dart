@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
+
 /// Account settings and integrations management.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final Preferences preferences;
+
+  const SettingsScreen({super.key, required this.preferences});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _useKilometres = true;
-  bool _darkMode = false;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final prefs = widget.preferences;
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -43,14 +45,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Use kilometres'),
-            subtitle: Text(_useKilometres ? 'km, m' : 'mi, ft'),
-            value: _useKilometres,
-            onChanged: (v) => setState(() => _useKilometres = v),
-          ),
-          SwitchListTile(
-            title: const Text('Dark mode'),
-            value: _darkMode,
-            onChanged: (v) => setState(() => _darkMode = v),
+            subtitle: Text(prefs.useMiles ? 'mi, ft' : 'km, m'),
+            value: !prefs.useMiles,
+            onChanged: (v) {
+              prefs.setUseMiles(!v);
+              setState(() {});
+            },
           ),
           const Divider(),
 

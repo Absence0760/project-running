@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import 'run_screen.dart';
 import 'runs_screen.dart';
 import 'routes_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final Preferences preferences;
+
+  const HomeScreen({super.key, required this.preferences});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -15,17 +18,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final _screens = const [
-    RunScreen(),
-    RunsScreen(),
-    RoutesScreen(),
-    SettingsScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const RunScreen(),
+      const RunsScreen(),
+      const RoutesScreen(),
+      SettingsScreen(preferences: widget.preferences),
+    ];
+
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {

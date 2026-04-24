@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import 'preferences.dart';
 import 'screens/home_screen.dart';
 
 /// Compile-time Supabase config. Secrets are passed to `flutter run` via
@@ -21,6 +22,9 @@ const _devPassword = String.fromEnvironment('DEV_USER_PASSWORD');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final preferences = Preferences();
+  await preferences.init();
 
   ApiClient? api;
   if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
@@ -48,12 +52,14 @@ Future<void> main() async {
     WatchIngest.attach(api);
   }
 
-  runApp(RunApp(apiClient: api));
+  runApp(RunApp(apiClient: api, preferences: preferences));
 }
 
 class RunApp extends StatelessWidget {
   final ApiClient? apiClient;
-  const RunApp({super.key, this.apiClient});
+  final Preferences preferences;
+
+  const RunApp({super.key, this.apiClient, required this.preferences});
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +67,7 @@ class RunApp extends StatelessWidget {
       title: 'Run',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      home: const HomeScreen(),
+      home: HomeScreen(preferences: preferences),
     );
   }
 }
