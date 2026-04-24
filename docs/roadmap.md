@@ -149,9 +149,9 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Apple Watch standalone GPS recording
 
-- [ ] Standalone workout session (no phone required)
+- [x] Standalone workout session (no phone required)
 - [x] Heart rate via HealthKit sensor (live BPM in `RunningView`, `avg_bpm` forwarded in run metadata)
-- [ ] Haptic pace alerts (above / below target)
+- [x] Haptic pace alerts (above / below target)
 - [ ] Syncs run data via Watch Connectivity framework
 
 ### Wear OS standalone GPS recording
