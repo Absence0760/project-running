@@ -94,26 +94,65 @@ struct ContentView: View {
 
 // MARK: - Pre-Run View
 
+private let pacePresets: [(label: String, secondsPerKm: Double)] = [
+    ("5:00/km", 300),
+    ("5:30/km", 330),
+    ("6:00/km", 360),
+    ("6:30/km", 390),
+    ("7:00/km", 420),
+    ("7:30/km", 450),
+]
+
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
     let queuedCount: Int
+    @State private var selectedPaceIndex: Int? = nil
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Ready to Run")
-                .font(.headline)
+        ScrollView {
+            VStack(spacing: 12) {
+                Text("Ready to Run")
+                    .font(.headline)
 
-            if queuedCount > 0 {
-                Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+                if queuedCount > 0 {
+                    Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
-            Button("Start") {
-                workoutManager.start()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Target pace")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    ForEach(pacePresets.indices, id: \.self) { i in
+                        Button(pacePresets[i].label) {
+                            if selectedPaceIndex == i {
+                                selectedPaceIndex = nil
+                                workoutManager.targetPaceSecondsPerKm = nil
+                            } else {
+                                selectedPaceIndex = i
+                                workoutManager.targetPaceSecondsPerKm = pacePresets[i].secondsPerKm
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(selectedPaceIndex == i ? AppTheme.coral : .primary)
+                        .buttonStyle(.plain)
+                    }
+
+                    if selectedPaceIndex == nil {
+                        Text("None — tap to set")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Button("Start") {
+                    workoutManager.start()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.coralDeep)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(AppTheme.coralDeep)
         }
     }
 }

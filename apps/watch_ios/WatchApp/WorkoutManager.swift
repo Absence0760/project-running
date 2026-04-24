@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import WatchKit
 
 /// Manages run recording: timer, GPS tracking, distance and pace calculation.
 class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -23,11 +24,16 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     let healthKit = HealthKitManager()
 
+    var targetPaceSecondsPerKm: Double? = nil
+    let paceToleranceSeconds: Double = 15
+
     private let locationManager = CLLocationManager()
     private var timer: Timer?
     private var startDate: Date?
     private var pausedAt: Date?
     private var totalPausedInterval: TimeInterval = 0
+    private var lastTooFastHaptic: Date? = nil
+    private var lastTooSlowHaptic: Date? = nil
 
     struct FinishedRun {
         let id: String
@@ -149,6 +155,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         finishedRun = nil
         pausedAt = nil
         totalPausedInterval = 0
+        lastTooFastHaptic = nil
+        lastTooSlowHaptic = nil
         state = .idle
     }
 
@@ -216,6 +224,25 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard segmentTime > 0 else { return }
 
         // seconds per km
-        currentPace = (segmentTime / segmentDistance) * 1000
+        let pace = (segmentTime / segmentDistance) * 1000
+        currentPace = pace
+        checkPaceAlert(pace: pace)
+    }
+
+    private func checkPaceAlert(pace: Double) {
+        guard let target = targetPaceSecondsPerKm, distanceMetres > 200 else { return }
+        let now = Date()
+        let debounce: TimeInterval = 30
+        if pace < target - paceToleranceSeconds {
+            if lastTooFastHaptic.map({ now.timeIntervalSince($0) > debounce }) ?? true {
+                WKInterfaceDevice.current().play(.notification)
+                lastTooFastHaptic = now
+            }
+        } else if pace > target + paceToleranceSeconds {
+            if lastTooSlowHaptic.map({ now.timeIntervalSince($0) > debounce }) ?? true {
+                WKInterfaceDevice.current().play(.notification)
+                lastTooSlowHaptic = now
+            }
+        }
     }
 }
