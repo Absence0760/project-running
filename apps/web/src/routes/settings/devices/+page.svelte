@@ -129,6 +129,153 @@
 			d.device_id === deviceId ? { ...d, prefs: rest } : d,
 		);
 	}
+
+	/// Key-level editor. The catalogue below mirrors the D-scope and
+	/// UD-overridable keys from `docs/settings.md`. Each entry carries
+	/// a typed value-editor shape the dialog renders into. U-scope
+	/// keys are deliberately excluded — you can't override a universal
+	/// value on a single device, so offering to do so would be a lie.
+	interface KeyEditor {
+		key: string;
+		label: string;
+		shape:
+			| { kind: 'bool' }
+			| { kind: 'number'; min?: number; max?: number; step?: number; unit?: string }
+			| { kind: 'enum'; options: Array<{ value: string; label: string }> };
+	}
+
+	const overridableKeys: KeyEditor[] = [
+		// Device-scope (D) — per-browser / per-device only.
+		{ key: 'voice_feedback_enabled', label: 'Voice feedback (TTS)', shape: { kind: 'bool' } },
+		{
+			key: 'voice_feedback_interval_km',
+			label: 'Voice interval',
+			shape: { kind: 'number', min: 0.1, max: 10, step: 0.1, unit: 'km' },
+		},
+		{ key: 'haptic_feedback_enabled', label: 'Haptic feedback', shape: { kind: 'bool' } },
+		{ key: 'keep_screen_on', label: 'Keep screen on', shape: { kind: 'bool' } },
+		// Universal-with-device-override (UD).
+		{
+			key: 'preferred_unit',
+			label: 'Preferred unit',
+			shape: {
+				kind: 'enum',
+				options: [
+					{ value: 'km', label: 'Kilometres' },
+					{ value: 'mi', label: 'Miles' },
+				],
+			},
+		},
+		{
+			key: 'default_activity_type',
+			label: 'Default activity',
+			shape: {
+				kind: 'enum',
+				options: [
+					{ value: 'run', label: 'Run' },
+					{ value: 'walk', label: 'Walk' },
+					{ value: 'hike', label: 'Hike' },
+					{ value: 'cycle', label: 'Cycle' },
+				],
+			},
+		},
+		{
+			key: 'map_style',
+			label: 'Map style',
+			shape: {
+				kind: 'enum',
+				options: [
+					{ value: 'streets', label: 'Streets' },
+					{ value: 'satellite', label: 'Satellite' },
+					{ value: 'outdoors', label: 'Outdoors' },
+					{ value: 'dark', label: 'Dark' },
+				],
+			},
+		},
+		{
+			key: 'units_pace_format',
+			label: 'Pace format',
+			shape: {
+				kind: 'enum',
+				options: [
+					{ value: 'min_per_km', label: 'Minutes per km' },
+					{ value: 'min_per_mi', label: 'Minutes per mile' },
+					{ value: 'kph', label: 'km/h' },
+					{ value: 'mph', label: 'mph' },
+				],
+			},
+		},
+		{ key: 'auto_pause_enabled', label: 'Auto-pause', shape: { kind: 'bool' } },
+		{
+			key: 'auto_pause_speed_mps',
+			label: 'Auto-pause threshold',
+			shape: { kind: 'number', min: 0.1, max: 3, step: 0.1, unit: 'm/s' },
+		},
+	];
+
+	let addingForDevice = $state<string | null>(null);
+	let addKey = $state<string>('voice_feedback_enabled');
+	let addValueBool = $state<boolean>(false);
+	let addValueNumber = $state<string>('');
+	let addValueEnum = $state<string>('');
+
+	function currentEditor(): KeyEditor {
+		return overridableKeys.find((k) => k.key === addKey) ?? overridableKeys[0];
+	}
+
+	function openAddDialog(deviceId: string) {
+		addingForDevice = deviceId;
+		const device = devices.find((d) => d.device_id === deviceId);
+		const existing = device?.prefs ?? {};
+		// Default to the first key that's not already overridden; fall
+		// back to the first key if every key is set (the user will
+		// just overwrite).
+		const firstMissing =
+			overridableKeys.find((k) => !(k.key in existing))?.key ??
+			overridableKeys[0].key;
+		addKey = firstMissing;
+		resetAddValues();
+	}
+
+	function resetAddValues() {
+		const ed = currentEditor();
+		if (ed.shape.kind === 'bool') addValueBool = true;
+		else if (ed.shape.kind === 'number') addValueNumber = '';
+		else if (ed.shape.kind === 'enum') addValueEnum = ed.shape.options[0].value;
+	}
+
+	$effect(() => {
+		// Reset input state whenever the key changes — otherwise a
+		// stale value from a prior key bleeds across.
+		addKey;
+		resetAddValues();
+	});
+
+	async function commitAddOverride() {
+		if (!auth.user || !addingForDevice) return;
+		const device = devices.find((d) => d.device_id === addingForDevice);
+		if (!device) return;
+		const ed = currentEditor();
+		let value: unknown;
+		if (ed.shape.kind === 'bool') value = addValueBool;
+		else if (ed.shape.kind === 'number') {
+			const n = parseFloat(addValueNumber);
+			if (!Number.isFinite(n)) return;
+			value = n;
+		} else if (ed.shape.kind === 'enum') value = addValueEnum;
+
+		const next = { ...device.prefs, [addKey]: value };
+		const { error } = await supabase
+			.from('user_device_settings')
+			.update({ prefs: next, updated_at: new Date().toISOString() })
+			.eq('user_id', auth.user.id)
+			.eq('device_id', addingForDevice);
+		if (error) return;
+		devices = devices.map((d) =>
+			d.device_id === addingForDevice ? { ...d, prefs: next } : d,
+		);
+		addingForDevice = null;
+	}
 </script>
 
 <div class="page">
@@ -159,21 +306,19 @@
 							<span>{platformLabel(d.platform)}</span>
 							<span class="sep">&middot;</span>
 							<span>Last seen {formatDate(d.last_seen_at)}</span>
-							{#if overrideCount(d.prefs) > 0}
-								<span class="sep">&middot;</span>
-								<button
-									type="button"
-									class="override-link"
-									onclick={() => toggleExpand(d.device_id)}
-								>
-									{overrideCount(d.prefs)} pref override{overrideCount(d.prefs) === 1 ? '' : 's'}
-									<span class="material-symbols chev">
-										{expanded === d.device_id ? 'expand_less' : 'expand_more'}
-									</span>
-								</button>
-							{/if}
+							<span class="sep">&middot;</span>
+							<button
+								type="button"
+								class="override-link"
+								onclick={() => toggleExpand(d.device_id)}
+							>
+								{overrideCount(d.prefs)} pref override{overrideCount(d.prefs) === 1 ? '' : 's'}
+								<span class="material-symbols chev">
+									{expanded === d.device_id ? 'expand_less' : 'expand_more'}
+								</span>
+							</button>
 						</div>
-						{#if expanded === d.device_id && overrideCount(d.prefs) > 0}
+						{#if expanded === d.device_id}
 							<ul class="overrides">
 								{#each Object.entries(d.prefs) as [k, v]}
 									<li>
@@ -189,6 +334,15 @@
 										</button>
 									</li>
 								{/each}
+								<li class="override-add-row">
+									<button
+										type="button"
+										class="override-add-btn"
+										onclick={() => openAddDialog(d.device_id)}
+									>
+										+ Add override
+									</button>
+								</li>
 							</ul>
 						{/if}
 					</div>
@@ -220,6 +374,61 @@
 	onconfirm={() => { if (confirmingRemove) removeDevice(confirmingRemove); }}
 	oncancel={() => (confirmingRemove = null)}
 />
+
+{#if addingForDevice}
+	{@const ed = currentEditor()}
+	<div class="backdrop" onclick={() => (addingForDevice = null)} role="presentation"></div>
+	<div class="add-dialog" role="dialog" aria-label="Add device override">
+		<h3>Add override</h3>
+		<label class="field">
+			<span class="field-label">Key</span>
+			<select bind:value={addKey} class="input">
+				{#each overridableKeys as k}
+					<option value={k.key}>{k.label} — <code>{k.key}</code></option>
+				{/each}
+			</select>
+		</label>
+		<label class="field">
+			<span class="field-label">Value</span>
+			{#if ed.shape.kind === 'bool'}
+				<div class="toggle-row">
+					<button type="button" class="toggle-btn" class:active={addValueBool === true}
+						onclick={() => (addValueBool = true)}>On</button>
+					<button type="button" class="toggle-btn" class:active={addValueBool === false}
+						onclick={() => (addValueBool = false)}>Off</button>
+				</div>
+			{:else if ed.shape.kind === 'number'}
+				<div class="unit-row">
+					<input
+						type="number"
+						class="input"
+						bind:value={addValueNumber}
+						min={ed.shape.min}
+						max={ed.shape.max}
+						step={ed.shape.step ?? 0.1}
+					/>
+					{#if ed.shape.unit}<span class="unit">{ed.shape.unit}</span>{/if}
+				</div>
+			{:else}
+				<select bind:value={addValueEnum} class="input">
+					{#each ed.shape.options as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+			{/if}
+		</label>
+		<p class="dialog-hint">
+			Writes to <code>user_device_settings.prefs.{addKey}</code>. On mobile
+			clients this value will override the universal setting for this device only.
+		</p>
+		<div class="dialog-actions">
+			<button type="button" class="btn-secondary" onclick={() => (addingForDevice = null)}>
+				Cancel
+			</button>
+			<button type="button" class="btn-primary" onclick={commitAddOverride}>Save</button>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }
@@ -331,5 +540,114 @@
 	.override-clear:hover {
 		color: var(--color-danger);
 		border-color: var(--color-danger);
+	}
+	.override-add-row {
+		grid-template-columns: 1fr !important;
+	}
+	.override-add-btn {
+		background: transparent;
+		border: 1px dashed var(--color-border);
+		color: var(--color-primary);
+		border-radius: var(--radius-sm);
+		padding: 0.35rem 0.8rem;
+		font-size: 0.8rem;
+		cursor: pointer;
+		text-align: center;
+	}
+	.override-add-btn:hover {
+		border-color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+	}
+
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 100;
+	}
+	.add-dialog {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: 1.5rem;
+		width: min(92vw, 22rem);
+		z-index: 101;
+		display: grid;
+		gap: 0.9rem;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+	}
+	.add-dialog h3 {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 700;
+	}
+	.field { display: grid; gap: 0.3rem; }
+	.field-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.input {
+		padding: 0.5rem 0.7rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-family: inherit;
+	}
+	.toggle-row { display: flex; gap: 0.3rem; }
+	.toggle-btn {
+		padding: 0.4rem 0.9rem;
+		background: transparent;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+	.toggle-btn.active {
+		background: var(--color-primary);
+		color: white;
+		border-color: var(--color-primary);
+	}
+	.unit-row { display: flex; align-items: center; gap: 0.4rem; }
+	.unit { color: var(--color-text-tertiary); font-size: 0.85rem; }
+	.dialog-hint {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		margin: 0;
+	}
+	.dialog-hint code {
+		font-family: ui-monospace, monospace;
+		background: var(--color-bg-tertiary);
+		padding: 0.1rem 0.3rem;
+		border-radius: var(--radius-sm);
+	}
+	.dialog-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.4rem;
+	}
+	.btn-primary,
+	.btn-secondary {
+		padding: 0.5rem 1rem;
+		border-radius: var(--radius-md);
+		font-size: 0.88rem;
+		font-weight: 600;
+		cursor: pointer;
+		border: 1px solid transparent;
+	}
+	.btn-primary { background: var(--color-primary); color: white; }
+	.btn-secondary {
+		background: transparent;
+		color: var(--color-text-secondary);
+		border-color: var(--color-border);
 	}
 </style>

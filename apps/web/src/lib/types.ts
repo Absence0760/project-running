@@ -21,6 +21,13 @@ export interface TrackPoint {
 	lng: number;
 	ele?: number;
 	ts?: string;
+	/// Per-point heart rate in BPM when the recorder captured HR
+	/// samples alongside GPS. Optional: most historical runs only
+	/// carry scalar `metadata.avg_bpm`. When every point has `bpm`
+	/// the run-detail zone breakdown computes real zones; otherwise
+	/// it falls back to a "No HR samples on this run" message. See
+	/// `docs/metadata.md`.
+	bpm?: number;
 }
 
 // `track` is populated on-demand by `data.ts#fetchRunById` from the gzipped

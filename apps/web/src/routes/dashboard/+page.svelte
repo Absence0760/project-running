@@ -10,7 +10,17 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRuns, fetchWeeklyMileage, fetchPersonalRecords, fetchActivePlanOverview, fetchNextRsvpedEvent } from '$lib/data';
+	import {
+		fetchRuns,
+		fetchWeeklyMileage,
+		fetchPersonalRecords,
+		fetchActivePlanOverview,
+		fetchNextRsvpedEvent,
+		fetchFitnessSnapshots,
+		insertFitnessSnapshot,
+		type FitnessSnapshotRow,
+	} from '$lib/data';
+	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
 	import { fmtPace, fmtKm, WORKOUT_KIND_LABEL } from '$lib/training';
 	import { loadSettings, effective } from '$lib/settings';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -38,6 +48,28 @@
 	let weeklyGoalMetres = $state<number | null>(null);
 	let preferredUnit = $state<'km' | 'mi'>('km');
 	let upcomingEvent = $state<Awaited<ReturnType<typeof fetchNextRsvpedEvent>>>(null);
+	let fitnessHistory = $state<FitnessSnapshotRow[]>([]);
+	let liveSnap = $derived(computeSnapshot(runs));
+
+	/// Normalised VO2 max sparkline points for the trend chart. Kept
+	/// in the script (not as `{@const}` under `<svg>`, which Svelte 5
+	/// rejects — const-tags must be immediate children of block tags
+	/// like `#if` / `#each`, not HTML elements).
+	let trendPath = $derived.by(() => {
+		const vals = fitnessHistory.map((s) => s.vo2_max ?? 0).filter((v) => v > 0);
+		if (vals.length < 2) return '';
+		const lo = Math.min(...vals);
+		const hi = Math.max(...vals);
+		const range = Math.max(0.5, hi - lo);
+		const stepX = 200 / (vals.length - 1);
+		return vals
+			.map((v, i) => {
+				const x = i * stepX;
+				const y = 36 - ((v - lo) / range) * 32;
+				return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+			})
+			.join(' ');
+	});
 
 	// Multi-metric goals — local-only today, per browser. Load on
 	// mount; every edit writes back synchronously. See `lib/goals.ts`.
@@ -105,13 +137,23 @@
 
 	onMount(async () => {
 		goals = loadGoals();
-		[runs, weeklyMileage, personalRecords, planOverview, upcomingEvent] = await Promise.all([
+		[runs, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
 			fetchRuns(),
 			fetchWeeklyMileage(),
 			fetchPersonalRecords(),
 			fetchActivePlanOverview(),
 			fetchNextRsvpedEvent(48),
+			fetchFitnessSnapshots(60),
 		]);
+		// Compute a fresh snapshot from today's runs and persist it so
+		// the trend chart accumulates history over time. Best-effort —
+		// an RLS blip just leaves the chart with yesterday's data.
+		const snap = computeSnapshot(runs);
+		try {
+			await insertFitnessSnapshot(snap);
+		} catch (_) {
+			/* silent */
+		}
 		// Best-effort load of the user's weekly-mileage goal from the
 		// settings bag. A missing bag (new user, or RLS blip) just
 		// leaves `weeklyGoalMetres = null` and the goal card stays hidden.
@@ -271,6 +313,64 @@
 					<a href="/settings/preferences">Edit goal</a>
 				</p>
 			</div>
+		{/if}
+
+		<!-- Fitness snapshot — VO2 max + training-load (ATL / CTL / TSB)
+		     + a rule-based recovery advice line. Computed client-side
+		     from recent runs via `lib/fitness.ts`; persisted to
+		     `fitness_snapshots` on every dashboard open so the trend
+		     chart has history. Hides when the user has no qualifying
+		     runs yet (short / non-recording sources only). -->
+		{#if liveSnap.vo2Max != null || liveSnap.chronicLoad != null}
+			<section class="fitness-card">
+				<div class="fitness-row">
+					<div class="fitness-metric">
+						<span class="fitness-label">VO₂ max</span>
+						<span class="fitness-value">
+							{liveSnap.vo2Max != null ? liveSnap.vo2Max.toFixed(1) : '—'}
+						</span>
+						<span class="fitness-unit">ml/kg/min</span>
+					</div>
+					{#if liveSnap.chronicLoad != null}
+						<div class="fitness-metric">
+							<span class="fitness-label">CTL (fitness)</span>
+							<span class="fitness-value">{liveSnap.chronicLoad.toFixed(0)}</span>
+							<span class="fitness-unit">42-day avg TSS</span>
+						</div>
+						<div class="fitness-metric">
+							<span class="fitness-label">ATL (fatigue)</span>
+							<span class="fitness-value">
+								{liveSnap.acuteLoad != null ? liveSnap.acuteLoad.toFixed(0) : '—'}
+							</span>
+							<span class="fitness-unit">7-day avg TSS</span>
+						</div>
+						<div class="fitness-metric">
+							<span class="fitness-label">TSB (form)</span>
+							<span
+								class="fitness-value"
+								class:tsb-neg={(liveSnap.trainingStressBal ?? 0) < -10}
+								class:tsb-pos={(liveSnap.trainingStressBal ?? 0) > 10}
+							>
+								{liveSnap.trainingStressBal != null
+									? (liveSnap.trainingStressBal > 0 ? '+' : '') + liveSnap.trainingStressBal.toFixed(0)
+									: '—'}
+							</span>
+							<span class="fitness-unit">CTL − ATL</span>
+						</div>
+					{/if}
+				</div>
+				<p class="fitness-advice">
+					{recoveryAdvice(liveSnap.trainingStressBal, liveSnap.chronicLoad)}
+				</p>
+				{#if trendPath}
+					<!-- Trend sparkline: VO2 max over the persisted
+					     snapshot history. Rendered as an inline SVG path
+					     — no chart lib needed for a shape this simple. -->
+					<svg class="trend" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+						<path d={trendPath} stroke="currentColor" stroke-width="1.5" fill="none" />
+					</svg>
+				{/if}
+			</section>
 		{/if}
 
 		<!-- Multi-metric goals — local-only. Shows a card per goal with
@@ -835,6 +935,57 @@
 	}
 	.event-arrow {
 		color: var(--color-text-tertiary);
+	}
+
+	.fitness-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: 1rem 1.25rem;
+		margin-bottom: var(--space-lg);
+		color: var(--color-primary);
+	}
+	.fitness-row {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+	}
+	.fitness-metric {
+		display: flex;
+		flex-direction: column;
+	}
+	.fitness-label {
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.fitness-value {
+		font-size: 1.5rem;
+		font-weight: 800;
+		margin-top: 0.1rem;
+		color: var(--color-text);
+	}
+	.fitness-value.tsb-neg { color: var(--color-danger); }
+	.fitness-value.tsb-pos { color: #2e7d32; }
+	.fitness-unit {
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+		margin-top: 0.15rem;
+	}
+	.fitness-advice {
+		margin: 0.25rem 0 0;
+		font-size: 0.88rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.trend {
+		width: 100%;
+		height: 40px;
+		margin-top: 0.5rem;
+		display: block;
 	}
 
 	.goals-section {

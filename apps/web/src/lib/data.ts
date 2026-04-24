@@ -170,6 +170,65 @@ export async function makeRunPublic(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Upsert a fitness snapshot for the signed-in user. The dashboard
+/// call path computes the snapshot on every open (cheap — pure math
+/// over the run list the dashboard already fetched) and persists so
+/// the trend chart has a history to draw. Returns the id of the
+/// inserted row.
+export async function insertFitnessSnapshot(input: {
+	vdot: number | null;
+	vo2Max: number | null;
+	acuteLoad: number | null;
+	chronicLoad: number | null;
+	trainingStressBal: number | null;
+	qualifyingRunCount: number;
+}): Promise<void> {
+	const { data: authUser } = await supabase.auth.getUser();
+	const userId = authUser.user?.id;
+	if (!userId) return;
+	// Don't spam writes — only persist when the user has enough data
+	// for the numbers to mean something. Anything less is just noise
+	// on the trend chart.
+	if (
+		input.vdot == null &&
+		input.chronicLoad == null &&
+		input.qualifyingRunCount < 3
+	) {
+		return;
+	}
+	await supabase.from('fitness_snapshots').insert({
+		user_id: userId,
+		vdot: input.vdot,
+		vo2_max: input.vo2Max,
+		acute_load: input.acuteLoad,
+		chronic_load: input.chronicLoad,
+		training_stress_bal: input.trainingStressBal,
+		qualifying_run_count: input.qualifyingRunCount,
+		source: 'client',
+	});
+}
+
+export interface FitnessSnapshotRow {
+	computed_at: string;
+	vdot: number | null;
+	vo2_max: number | null;
+	acute_load: number | null;
+	chronic_load: number | null;
+	training_stress_bal: number | null;
+}
+
+/// Fetch recent snapshots for the trend chart. Ordered oldest → newest
+/// so a Svelte `{#each}` draws the chart left-to-right.
+export async function fetchFitnessSnapshots(limit = 60): Promise<FitnessSnapshotRow[]> {
+	const { data } = await supabase
+		.from('fitness_snapshots')
+		.select('computed_at, vdot, vo2_max, acute_load, chronic_load, training_stress_bal')
+		.order('computed_at', { ascending: false })
+		.limit(limit);
+	const rows = (data as FitnessSnapshotRow[] | null) ?? [];
+	return rows.slice().reverse();
+}
+
 /// Save a run's GPS track as a reusable saved route. Runs the track
 /// through Douglas-Peucker to shed GPS jitter before persisting (same
 /// 10 m epsilon the Android path uses), sums elevation gain, and

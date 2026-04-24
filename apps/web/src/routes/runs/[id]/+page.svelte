@@ -31,6 +31,25 @@
 	onMount(async () => {
 		run = await fetchRunById(pageData.id);
 		loading = false;
+		// Best-effort: pull the user's HR zones from the settings bag
+		// so zone breakdowns on this run use the runner's own
+		// thresholds rather than defaults. Silent on failure.
+		try {
+			const uid = auth.user?.id;
+			if (uid) {
+				const { loadSettings, effective } = await import('$lib/settings');
+				const settings = await loadSettings(uid);
+				const zones = effective<Record<string, number>>(settings, 'hr_zones');
+				if (zones) {
+					const z1 = zones.z1, z2 = zones.z2, z3 = zones.z3, z4 = zones.z4, z5 = zones.z5;
+					if ([z1, z2, z3, z4, z5].every((z) => typeof z === 'number' && z > 0)) {
+						zoneCutoffs = [z1, z2, z3, z4, z5];
+					}
+				}
+			}
+		} catch (_) {
+			/* noop */
+		}
 	});
 
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
@@ -103,6 +122,61 @@
 		}
 	}
 
+	let generatingImage = $state(false);
+	let shareCardEl: HTMLElement | undefined;
+
+	/// Render the off-screen `.share-card` DOM node to a 1080×1080 PNG
+	/// via `html-to-image`, then either invoke the Web Share API (with
+	/// the PNG as a File) or fall back to a plain download + toast
+	/// when Web Share isn't available or doesn't accept files.
+	async function handleShareImage() {
+		if (!run || generatingImage) return;
+		generatingImage = true;
+		try {
+			// Dynamic import keeps the 30 KB lib out of the initial
+			// bundle for users who never click Share-as-image.
+			const { toPng } = await import('html-to-image');
+			if (!shareCardEl) throw new Error('share card not ready');
+			const dataUrl = await toPng(shareCardEl, {
+				pixelRatio: 2,
+				cacheBust: true,
+			});
+			const title =
+				((run.metadata as Record<string, unknown> | null)?.title as string) ||
+				`Run ${new Date(run.started_at).toISOString().slice(0, 10)}`;
+			const fileName =
+				title.replace(/[^a-z0-9\-_. ]/gi, '_').replace(/\s+/g, '_') + '.png';
+
+			// Try Web Share API first — on mobile this pops the OS
+			// share sheet with the image pre-attached, which is the
+			// whole point of this feature. Fall through to a download
+			// on desktop browsers that don't implement share-with-files.
+			const blob = await (await fetch(dataUrl)).blob();
+			const file = new File([blob], fileName, { type: 'image/png' });
+			if (
+				typeof navigator.share === 'function' &&
+				navigator.canShare &&
+				navigator.canShare({ files: [file] })
+			) {
+				await navigator.share({ title, files: [file] });
+			} else {
+				const a = document.createElement('a');
+				a.href = dataUrl;
+				a.download = fileName;
+				a.click();
+				showToast('Image saved.', 'success');
+			}
+		} catch (e) {
+			const msg = (e as Error).message;
+			// User cancelling a Web Share sheet raises; that's fine.
+			if (!msg.includes('abort') && !msg.includes('cancel')) {
+				showToast(`Couldn't generate image: ${msg}`, 'error');
+			}
+		} finally {
+			generatingImage = false;
+		}
+	}
+
 	function handleDownloadGpx() {
 		if (!run?.track || run.track.length < 2) return;
 		const title =
@@ -169,13 +243,62 @@
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
 
-	const hrZones = [
-		{ zone: 'Zone 1', label: 'Recovery', pct: 8, color: '#90CAF9' },
-		{ zone: 'Zone 2', label: 'Easy', pct: 32, color: '#4CAF50' },
-		{ zone: 'Zone 3', label: 'Aerobic', pct: 35, color: '#FFC107' },
-		{ zone: 'Zone 4', label: 'Threshold', pct: 20, color: '#FF9800' },
-		{ zone: 'Zone 5', label: 'Max', pct: 5, color: '#F44336' },
+	/// Real HR zone breakdown. Requires per-point `bpm` on the track —
+	/// which watch and phone recorders will start writing alongside GPS
+	/// over the course of the next few recording passes. When the
+	/// track carries BPM samples, we compute a %-of-time-in-zone
+	/// distribution from the user's own zone thresholds (settings bag
+	/// `hr_zones`, falling back to sensible defaults keyed off max
+	/// HR). When it doesn't, the panel reports "No HR samples on this
+	/// run" instead of rendering fake percentages.
+	const zoneDefs = [
+		{ zone: 'Zone 1', label: 'Recovery', color: '#90CAF9' },
+		{ zone: 'Zone 2', label: 'Easy', color: '#4CAF50' },
+		{ zone: 'Zone 3', label: 'Aerobic', color: '#FFC107' },
+		{ zone: 'Zone 4', label: 'Threshold', color: '#FF9800' },
+		{ zone: 'Zone 5', label: 'Max', color: '#F44336' },
 	];
+
+	/// Per-point BPM samples, if the track has any. Empty array signals
+	/// the fallback-copy path below.
+	let bpmSamples = $derived.by(() => {
+		const track = run?.track ?? [];
+		const out: number[] = [];
+		for (const p of track) {
+			const b = p.bpm;
+			if (typeof b === 'number' && b >= 30 && b <= 230) out.push(b);
+		}
+		return out;
+	});
+
+	/// Zone upper bounds (BPM) from the user's settings bag, or sane
+	/// defaults keyed off their max HR (or 220 − 30 when unknown).
+	/// Fetched once on mount in the existing settings load path; we
+	/// fall back here when they're absent.
+	let zoneCutoffs = $state<[number, number, number, number, number] | null>(null);
+
+	let hrZones = $derived.by(() => {
+		const samples = bpmSamples;
+		if (samples.length === 0) return [];
+		// Cutoffs default to the classic Karvonen-ish bands at 60 / 70
+		// / 80 / 90 / 100 % of max HR when the user hasn't set them.
+		const cutoffs = zoneCutoffs ?? [114, 133, 152, 171, 190];
+		const counts = [0, 0, 0, 0, 0];
+		for (const b of samples) {
+			let z = 0;
+			if (b <= cutoffs[0]) z = 0;
+			else if (b <= cutoffs[1]) z = 1;
+			else if (b <= cutoffs[2]) z = 2;
+			else if (b <= cutoffs[3]) z = 3;
+			else z = 4;
+			counts[z]++;
+		}
+		const total = samples.length;
+		return zoneDefs.map((def, i) => ({
+			...def,
+			pct: Math.round((counts[i] / total) * 100),
+		}));
+	});
 
 	let baseTrack = $derived(run ? (run.track ?? generateMockTrack(run.distance_m)) : []);
 	let elevations = $derived(baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30));
@@ -269,6 +392,14 @@
 							disabled={!run?.track || run.track.length < 2}
 						>
 							<span class="material-symbols">bookmark_add</span>
+						</button>
+						<button
+							class="icon-btn"
+							title="Share as image"
+							onclick={handleShareImage}
+							disabled={generatingImage}
+						>
+							<span class="material-symbols">image</span>
 						</button>
 						<button class="icon-btn danger" title="Delete" onclick={handleDelete}>
 							<span class="material-symbols">delete</span>
@@ -377,27 +508,44 @@
 			</table>
 		</section>
 
-		<!-- HR zones -->
+		<!-- HR zones — real distribution when the track carries per-
+		     point BPM samples, honest "no data" card otherwise. The
+		     recording clients (phone + watches) will start writing
+		     `bpm` alongside GPS over the next few recording passes;
+		     historical runs that only stored `metadata.avg_bpm` render
+		     the empty-state copy. -->
 		<section class="section">
 			<h2>Heart Rate Zones</h2>
-			<div class="hr-bar">
-				{#each hrZones as zone}
-					<div
-						class="hr-segment"
-						style="width: {zone.pct}%; background: {zone.color}"
-						title="{zone.zone}: {zone.pct}%"
-					></div>
-				{/each}
-			</div>
-			<div class="hr-legend">
-				{#each hrZones as zone}
-					<div class="hr-legend-item">
-						<span class="hr-dot" style="background: {zone.color}"></span>
-						<span class="hr-zone-name">{zone.label}</span>
-						<span class="hr-zone-pct">{zone.pct}%</span>
-					</div>
-				{/each}
-			</div>
+			{#if hrZones.length > 0}
+				<div class="hr-bar">
+					{#each hrZones as zone}
+						<div
+							class="hr-segment"
+							style="width: {zone.pct}%; background: {zone.color}"
+							title="{zone.zone}: {zone.pct}%"
+						></div>
+					{/each}
+				</div>
+				<div class="hr-legend">
+					{#each hrZones as zone}
+						<div class="hr-legend-item">
+							<span class="hr-dot" style="background: {zone.color}"></span>
+							<span class="hr-zone-name">{zone.label}</span>
+							<span class="hr-zone-pct">{zone.pct}%</span>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="hr-empty">
+					{#if avgBpm != null}
+						Only the run's average heart rate was captured ({avgBpm}&nbsp;bpm).
+						A full zone distribution needs per-point samples, which the
+						recording apps will start writing alongside GPS soon.
+					{:else}
+						No heart-rate data on this run.
+					{/if}
+				</p>
+			{/if}
 		</section>
 	</aside>
 </div>
@@ -411,6 +559,42 @@
 	oncancel={() => showDeleteConfirm = false}
 	danger
 />
+
+<!-- Off-screen share card. 1080 square, rendered to PNG by
+     `html-to-image` when the user taps Share-as-image. Lives outside
+     the main layout so it doesn't affect scrolling; positioned
+     `fixed` at top:-9999px so it still has real layout dimensions
+     (pure `display:none` would zero them out and break the canvas
+     capture). Background tint + gradient matches the dashboard
+     primary, independent of the active theme. -->
+<div
+	bind:this={shareCardEl}
+	class="share-card"
+	aria-hidden="true"
+>
+	<div class="share-card-inner">
+		<div class="share-card-eyebrow">Better Runner</div>
+		<div class="share-card-stats">
+			<div class="share-stat">
+				<div class="share-stat-label">Distance</div>
+				<div class="share-stat-value">{formatDistance(run.distance_m)}</div>
+			</div>
+			<div class="share-stat">
+				<div class="share-stat-label">Time</div>
+				<div class="share-stat-value">{formatDuration(run.duration_s)}</div>
+			</div>
+			<div class="share-stat">
+				<div class="share-stat-label">Pace</div>
+				<div class="share-stat-value">
+					{formatPace(run.duration_s, run.distance_m)} /km
+				</div>
+			</div>
+		</div>
+		<div class="share-card-date">
+			{formatDate(run.started_at)}
+		</div>
+	</div>
+</div>
 {/if}
 
 <style>
@@ -710,5 +894,67 @@
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1rem;
+	}
+
+	.hr-empty {
+		font-size: 0.88rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.share-card {
+		position: fixed;
+		top: -9999px;
+		left: -9999px;
+		width: 1080px;
+		height: 1080px;
+		background: linear-gradient(135deg, #F2A07B 0%, #B9A7E8 55%, #6B4C8A 100%);
+		color: #FFFFFF;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 96px;
+		font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+	}
+	.share-card-inner {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+	}
+	.share-card-eyebrow {
+		font-size: 48px;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		opacity: 0.9;
+	}
+	.share-card-stats {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 64px;
+	}
+	.share-stat {
+		display: flex;
+		flex-direction: column;
+	}
+	.share-stat-label {
+		font-size: 32px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		opacity: 0.7;
+	}
+	.share-stat-value {
+		font-size: 120px;
+		font-weight: 900;
+		line-height: 1;
+		margin-top: 8px;
+	}
+	.share-card-date {
+		font-size: 42px;
+		font-weight: 600;
+		opacity: 0.75;
 	}
 </style>

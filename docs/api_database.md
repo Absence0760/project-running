@@ -58,10 +58,16 @@ create index runs_public on runs (is_public, started_at desc) where is_public = 
 
 ```json
 [
-  { "lat": 51.5074, "lng": -0.1278, "ele": 12.4, "ts": "2025-04-05T08:00:00Z" },
-  { "lat": 51.5075, "lng": -0.1279, "ele": 12.6, "ts": "2025-04-05T08:00:05Z" }
+  { "lat": 51.5074, "lng": -0.1278, "ele": 12.4, "ts": "2025-04-05T08:00:00Z", "bpm": 142 },
+  { "lat": 51.5075, "lng": -0.1279, "ele": 12.6, "ts": "2025-04-05T08:00:05Z", "bpm": 145 }
 ]
 ```
+
+`lat` / `lng` are required; `ele`, `ts`, and `bpm` are optional per-point fields.
+`bpm` carries per-sample heart rate (integer, 30–230) when the recorder captured
+HR alongside GPS — used by the run-detail zone-distribution card. Most historical
+runs only carry scalar `metadata.avg_bpm`; consumers should gracefully fall back
+when `bpm` is absent.
 
 **`metadata` shape (source-dependent):**
 
