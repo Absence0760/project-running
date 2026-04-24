@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
@@ -168,6 +169,12 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     lapCount = state.lapCount,
                     paused = state.stage == Stage.Paused,
                     locationAvailable = state.locationAvailable,
+                    // `distanceM == 0.0` is the poor man's "no point yet"
+                    // check — the recorder only moves the counter when
+                    // GPS has delivered its first usable fix. Combined
+                    // with `locationAvailable=false` it tells us the run
+                    // is indoor / no-GPS rather than mid-run signal loss.
+                    noGpsYet = state.distanceM == 0.0,
                     ambient = isAmbient,
                     onPause = vm::pause,
                     onResume = vm::resume,
@@ -743,12 +750,14 @@ private fun RunningScreen(
     lapCount: Int,
     paused: Boolean,
     locationAvailable: Boolean,
+    noGpsYet: Boolean,
     ambient: Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onLap: () -> Unit,
     onStop: () -> Unit,
 ) {
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     // Ambient mode: OEM burn-in protection rules apply — pure-black
     // background, thin outlined text, no solid fills, and the content
     // shifts a few dp each minute (handled by the system if we use the
@@ -794,7 +803,12 @@ private fun RunningScreen(
     ) {
         if (!locationAvailable) {
             Text(
-                "GPS lost",
+                // "No GPS — time only" when we've never had a fix
+                // (indoor / treadmill); "GPS lost" once we've had at
+                // least one point and then lost it, so the user knows
+                // this is a recoverable mid-run drop vs. the intended
+                // indoor mode.
+                if (noGpsYet) "No GPS — time only" else "GPS lost",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.warning,
             )
@@ -837,14 +851,20 @@ private fun RunningScreen(
         ) {
             if (paused) {
                 Button(
-                    onClick = onResume,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onResume()
+                    },
                     modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
                 ) {
                     Text("Go")
                 }
             } else {
                 Button(
-                    onClick = onPause,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onPause()
+                    },
                     modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
                     colors = ButtonDefaults.secondaryButtonColors(),
                 ) {
@@ -852,7 +872,10 @@ private fun RunningScreen(
                 }
             }
             Button(
-                onClick = onLap,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLap()
+                },
                 modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
                 colors = ButtonDefaults.secondaryButtonColors(),
             ) {

@@ -101,12 +101,12 @@ See [features § Live GPS run recording](features.md#live-gps-run-recording), [f
 | Wakelock during run | ✓ | N/A | N/A | N/A | N/A | watchOS / Wear OS handle their own wake policies. |
 | Activity types (run / walk / cycle / hike) | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS has a CompactChip on the PreRun screen that cycles run → walk → hike → cycle; the choice stamps into `metadata.activity_type` on save. Apple Watch still records as "run". |
 | TTS audio cues (splits + pace alerts) | ✓ | ✗ | N/A | ✗ | ✗ | |
-| Haptic pace alerts | ✓ | ✗ | N/A | ✗ | ✓ | Android fires `HapticFeedback.heavyImpact()` alongside the TTS when the runner drifts >30 s off target — two pulses for "speed up", one for "slow down". Wear OS has no usable haptic API for this; Apple Watch uses WatchKit haptic types. |
+| Haptic pace alerts | ✓ | ✗ | N/A | ✗ | ✓ | Android fires `HapticFeedback.heavyImpact()` alongside the TTS when the runner drifts >30 s off target — two pulses for "speed up", one for "slow down". Wear OS's `LocalHapticFeedback` works (lap / pause / resume buttons pulse on tap today) but there is no *pace-alert* trigger because the Wear recording flow doesn't accept a target pace yet; pace haptics will follow Android's pattern once the input is wired. Apple Watch uses WatchKit haptic types. |
 | Step count via pedometer | ✓ | ✗ | N/A | ✗ | ✗ | Browsers have no pedometer sensor. |
 | Heart rate via device sensor | ✓ | ✗ | N/A | ✓ | ✓ | Android pairs with an external BLE chest strap (HR Service `0x180D` / characteristic `0x2A37`) via `lib/ble_heart_rate.dart`; live BPM appears on the run screen and `avg_bpm` writes to `run.metadata` on save. iOS chest-strap pairing not wired. Watches use the built-in wrist sensor. |
-| Live HTTP tile cache (offline revisits) | ✓ | ✗ | N/A | ✗ | ✗ | Watches use pre-downloaded route tiles only. |
-| GPS self-heal retry | ✓ | ✗ | N/A | ✗ | ✗ | |
-| Indoor / no-GPS mode (time-only) | ✓ | ✗ | N/A | ✗ | ✗ | |
+| Live HTTP tile cache (offline revisits) | ✓ | ✗ | N/A | N/A | N/A | Watches render pure stats during recording — no live map, so there's nothing to cache. Tracked as a follow-up of the *Route navigation on watch* roadmap row rather than a recording feature. |
+| GPS self-heal retry | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: `RunRecordingService` runs a 10 s watchdog — if `locationAvailable=true` and we've had at least one point but nothing for 30 s, the service cancels the subscription and re-calls `subscribeToGps()`. |
+| Indoor / no-GPS mode (time-only) | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: the recorder's elapsed clock ticks unconditionally; `TrackWriter` produces a valid empty `[]` track when no points arrive, so upload works. The RunningScreen banner reads "No GPS — time only" when no fix has landed yet (vs. "GPS lost" mid-run). |
 | Live lock-screen / ongoing notification | ✓ | ✗ | N/A | ✓ | ✓ | Watches post persistent workout notifications via their platform workout session APIs. |
 | Crash checkpoint recovery | ✓ | ✗ | N/A | ✓ | ✓ | |
 | Ultra-length (10h+) run support | ✗ | ✗ | N/A | ✓ | ✗ | Streaming track writer + rolling HR shipped on Wear OS. Apple Watch hasn't been stress-tested at ultra length. |

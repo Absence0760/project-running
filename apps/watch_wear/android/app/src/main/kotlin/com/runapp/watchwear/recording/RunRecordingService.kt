@@ -53,6 +53,7 @@ class RunRecordingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var gpsJob: Job? = null
+    private var gpsWatchdogJob: Job? = null
     private var hrJob: Job? = null
     private var tickerJob: Job? = null
     private var checkpointJob: Job? = null
@@ -64,6 +65,12 @@ class RunRecordingService : Service() {
     private var trackWriter: TrackWriter? = null
 
     private var lastLocation: Location? = null
+    /// Wall-clock timestamp of the most recent GPS point delivered while
+    /// Recording. Used by the self-heal watchdog to re-subscribe if the
+    /// FusedLocationProviderClient stream goes silent despite availability
+    /// reporting true. `0L` means "no point received yet in this run" —
+    /// the indoor / no-GPS case, which is a legitimate state.
+    private var lastPointAtMs = 0L
     private val laps = mutableListOf<RecordingRepository.Lap>()
     private var startedAtMs = 0L
     private var runId: String = ""
@@ -126,6 +133,7 @@ class RunRecordingService : Service() {
         pausedSinceMs = 0
         laps.clear()
         lastLocation = null
+        lastPointAtMs = 0L
         bpmSum = 0
         bpmCount = 0
         tickIndex = 0
@@ -147,13 +155,29 @@ class RunRecordingService : Service() {
             )
         }
 
-        gpsJob = scope.launch {
-            gps.stream().collect { event ->
-                when (event) {
-                    is GpsEvent.Point -> if (!isPaused()) onGps(event.point)
-                    is GpsEvent.Availability -> RecordingRepository.update {
-                        it.copy(locationAvailable = event.available)
-                    }
+        subscribeToGps()
+        // Self-heal watchdog. FusedLocationProviderClient is usually
+        // self-correcting when the underlying provider blips — availability
+        // flips false → true and the same subscription resumes. But there
+        // are edge cases (process-level weirdness, leaked callbacks, the
+        // provider reporting available while producing nothing) where the
+        // stream goes silent despite reporting healthy. If we're Recording,
+        // availability is true, and we've had at least one point but
+        // nothing in the last [GPS_STALL_MS], cancel and re-subscribe.
+        gpsWatchdogJob = scope.launch {
+            while (true) {
+                delay(GPS_WATCHDOG_INTERVAL_MS)
+                if (isPaused()) continue
+                val state = RecordingRepository.metrics.value
+                if (state.stage != RecordingRepository.Stage.Recording) continue
+                if (!state.locationAvailable) continue
+                if (lastPointAtMs == 0L) continue // never had a point — indoor run, legitimate
+                val since = System.currentTimeMillis() - lastPointAtMs
+                if (since > GPS_STALL_MS) {
+                    subscribeToGps()
+                    // Reset the window so the next check doesn't flip-flop
+                    // if the new subscription also takes a moment to emit.
+                    lastPointAtMs = System.currentTimeMillis()
                 }
             }
         }
@@ -219,6 +243,7 @@ class RunRecordingService : Service() {
 
     private fun stopRecording() {
         gpsJob?.cancel(); gpsJob = null
+        gpsWatchdogJob?.cancel(); gpsWatchdogJob = null
         hrJob?.cancel(); hrJob = null
         tickerJob?.cancel(); tickerJob = null
         checkpointJob?.cancel(); checkpointJob = null
@@ -266,7 +291,25 @@ class RunRecordingService : Service() {
 
     // ----- GPS handler -----
 
+    /// (Re)subscribe to the GPS stream. Cancels any existing subscription
+    /// first so we don't double-stream. Called from `startRecording` and
+    /// from the self-heal watchdog.
+    private fun subscribeToGps() {
+        gpsJob?.cancel()
+        gpsJob = scope.launch {
+            gps.stream().collect { event ->
+                when (event) {
+                    is GpsEvent.Point -> if (!isPaused()) onGps(event.point)
+                    is GpsEvent.Availability -> RecordingRepository.update {
+                        it.copy(locationAvailable = event.available)
+                    }
+                }
+            }
+        }
+    }
+
     private fun onGps(p: GpsPoint) {
+        lastPointAtMs = System.currentTimeMillis()
         trackWriter?.append(p)
         val asLoc = Location("").apply {
             latitude = p.lat; longitude = p.lng; time = p.epochMs
@@ -433,6 +476,11 @@ class RunRecordingService : Service() {
         // every Nth tick to avoid hammering NotificationManager over a
         // 10-hour run (72,000 → 7,200 refreshes).
         private const val NOTIFICATION_THROTTLE_TICKS = 10
+        // GPS self-heal watchdog: how often to check for a stalled stream,
+        // and how long without a point counts as stalled. Set well above
+        // the 1 s request cadence so a normal hiccup doesn't retrigger.
+        private const val GPS_WATCHDOG_INTERVAL_MS = 10_000L
+        private const val GPS_STALL_MS = 30_000L
 
         fun start(context: Context, runId: String, activityType: String) {
             val intent = Intent(context, RunRecordingService::class.java).apply {

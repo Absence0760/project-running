@@ -222,8 +222,21 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   watch face complication is a separate, larger item.)
 - **TTS audio cues.** `android.speech.tts.TextToSpeech` works on Wear OS
   but no voice-feedback path is wired into the recording service yet.
-- **Live HTTP tile cache.** Watches today use pre-downloaded route tiles
-  only; a runtime tile cache for revisited areas is not wired.
+- **Haptic pace alerts.** `LocalHapticFeedback` works and already fires
+  on lap / pause / resume as a UX confirmation, but there's no *pace
+  alert* trigger because the Wear recording flow doesn't accept a
+  target pace yet. When the target-pace input lands (universal-bag or
+  a per-device setting), wire the pace-drift haptic the same way
+  Android does — two pulses for "speed up", one for "slow down".
+- **Pedometer.** `Sensor.TYPE_STEP_COUNTER` / Health Services
+  `DataType.STEPS` is not subscribed; `metadata.steps` is not written.
+- **Live map during recording.** The RunningScreen is pure stats —
+  there's no route overlay, no follow-cam, no tile rendering. Adding
+  one would unlock the dependent items below (route nav + tile cache).
+- **Route navigation on watch.** No route preview, no live position on
+  a mini-map, no off-route haptic — blocked on the live map above.
+- **Live HTTP tile cache.** Blocked on the live map; pre-downloaded
+  tiles are still the only path.
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).
@@ -255,6 +268,21 @@ What the UI exposes during a recording, for quick reference when reading
   `vm.stop()` fires; a circular progress ring fills during the hold,
   releasing early cancels. Stops a single accidental tap from ending a
   long run.
+- **Haptic confirmations.** Pause / Resume / Lap buttons fire
+  `LocalHapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)`
+  on tap — the runner feels a confirmation pulse on every control
+  action, not just the countdown-less Start.
+- **GPS self-heal retry.** `RunRecordingService` tracks `lastPointAtMs`
+  and runs a 10 s watchdog while `stage == Recording`. If the stream
+  goes silent for 30 s despite `locationAvailable=true`, it cancels
+  and re-calls `subscribeToGps()`. Initial no-fix is not treated as a
+  stall (that's indoor mode).
+- **Indoor / no-GPS mode.** The elapsed clock ticks regardless of GPS;
+  distance stays 0 until the first fix lands. `TrackWriter.close()`
+  produces a valid empty `[]` track, so the upload and downstream run
+  detail render without special-casing. The RunningScreen banner reads
+  "No GPS — time only" when no fix has landed yet, and "GPS lost"
+  after a mid-run drop, so the runner can tell the two apart.
 
 ## Before reporting a task done
 
