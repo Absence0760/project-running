@@ -6,13 +6,27 @@
 
 A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a SvelteKit web app, sharing a single Supabase backend and MapLibre GL JS for route planning and navigation.
 
-The architecture is designed around three principles:
+The architecture is designed around four principles:
 
-- **Offline first** — runs record and save locally; sync happens in the background
-- **Platform parity** — watch apps are standalone GPS computers, not thin companions
-- **Open data** — import and export via standard formats (GPX, FIT, TCX) and official APIs
+- **Web is the canonical feature surface** — every user-facing feature lives on the web app unless it is physically impossible there. Mobile and watches are web-equivalent + platform-additive. See [decisions.md § 24](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
+- **Offline first** — runs record and save locally; sync happens in the background.
+- **Platform parity** — watch apps are standalone GPS computers, not thin companions. (This principle lives in tension with the web-canonical rule; watches lead on the physical-exception features, web leads on everything else.)
+- **Open data** — import and export via standard formats (GPX, FIT, TCX) and official APIs.
 
 The web app and mobile apps are separate codebases — different languages, different UI frameworks — but share exactly the same Supabase backend, database schema, and REST API. No duplication of business logic.
+
+### Web-canonical model in one screen
+
+| Class of feature | Lives on | Mirrored on |
+|---|---|---|
+| Route builder, route library, discovery, public share pages | Web | Mobile (read + view) |
+| Dashboard, run analysis, calendar heatmap, personal records, history filters / sort | Web | Mobile |
+| Clubs, events, posts, live race organiser controls | Web | Mobile (participant + admin) |
+| Training plans, AI Coach, paywall / Pro tier, donations | Web | Mobile (read-mostly) |
+| **Live GPS recording, sensors (HR, pedometer), haptics, crash-safe recording, watch complications** | Mobile / watch | N/A on web |
+| **Route import via OS share sheet, bulk Strava ZIP, HealthKit / Health Connect** | Mobile | N/A on web (drag-and-drop substitutes) |
+
+New product work starts on web. Drift in the mobile → web direction (Android has X that web doesn't) is closed by building the web version; drift in the web → mobile direction (web has X that mobile doesn't) is closed by porting down. The [parity matrix](parity.md) is the living checklist for both directions.
 
 ---
 

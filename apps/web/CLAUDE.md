@@ -1,6 +1,10 @@
-# Project Overview
+# apps/web — AI session notes
 
-This is a SvelteKit web template deployed to GitHub Pages.
+**The web app is the canonical feature surface for the whole product.** Every user-facing feature lives here unless it is physically impossible in a browser (live GPS recording, device sensors, haptics, OS share sheets — see the exceptions table in [../../docs/decisions.md § 24](../../docs/decisions.md)). Mobile (Flutter Android / iOS) and watch (Wear OS Kotlin / watchOS Swift) clients *mirror* this surface and *add* things only a device in hand or on the wrist can do.
+
+**Working rule:** when you're asked to build a feature, build it here first. When you're asked to fix drift between web and mobile, close it by bringing web up to parity with mobile (not the reverse) unless the feature is a physical exception. See [../../docs/parity.md](../../docs/parity.md) for the live matrix — rows where this app is `✗` or `Partial` on a non-exception feature are the backlog.
+
+Deployed to GitHub Pages for the static site; Vercel adapter is used when a server runtime is needed (the `/api/coach/+server.ts` Claude endpoint, for example).
 
 ## Stack
 

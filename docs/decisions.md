@@ -353,6 +353,40 @@ Infrastructure from #18 is largely reusable: the `GATED_FEATURES` registry, `is_
 
 ---
 
+## 24. Web is the canonical feature surface; mobile and watches are platform-additive
+
+**Decided:** April 2026 · supersedes the informal "parity per platform" default
+
+Every user-facing feature lives on the web app unless it is physically impossible there. Mobile (Android / iOS Flutter) and watch (watch_ios Swift / watch_wear Kotlin) clients are expected to **mirror the web's feature surface** and then **add things only a device in the pocket or on the wrist can do** (live GPS recording, sensor access, on-device crash recovery, ambient-mode rendering, haptics, OS share sheets, etc.). The web is the reference; the other clients are extensions.
+
+**Why:** for a solo-dev, small-team product, maintaining full feature parity across five clients scales poorly. Concentrating net-new product surface on one platform — the one with the fastest iteration loop, the richest input devices, the best tooling, and the broadest discoverability — keeps the monorepo honest. Parity work becomes "mirror to mobile" rather than "pick a feature and find out which of five platforms it's missing on." The [cross-platform parity enforcement initiative](roadmap.md#future--cross-platform-parity-enforcement) stops being an N-way problem and becomes a one-way flow.
+
+**Physical exceptions** (stay platform-led; web row stays `N/A` in `parity.md`):
+
+| Feature | Why web can't lead |
+|---|---|
+| Live GPS recording | Browsers can't do reliable background location over a multi-hour run |
+| Pedometer / cadence | No browser step-counter sensor |
+| Heart rate via device sensor | HealthKit / Health Connect / BLE GATT are OS-level APIs |
+| Haptic alerts during a run | Vibration API is unreliable and has no background access |
+| OS share sheets | Platform-specific by definition |
+| Watch complications / tiles | Platform-native |
+| Crash-safe recording | Needs a foreground service (Android) / workout session (watchOS) |
+| Offline-only mode | Every web route is online by design |
+| Import via OS share target (GPX / KML files) | Mobile intents; web uses drag-and-drop instead |
+
+**How to apply it:**
+
+1. **New features.** Build on web first. Port to mobile only after the web surface is real. The exception is features that *start* in one of the rows above — those are designed on the platform that owns them.
+2. **Bug fixes / polish.** When the divergence is a gap in web's coverage of an otherwise-mirrored feature (e.g. "Android has X but web doesn't"), close it on web first. That inverts the drift pressure: instead of "is mobile up to date?", the question becomes "is web covering everything?"
+3. **The matrix.** `parity.md` rows where web is `✗` or `Partial` on a non-physical-exception feature are now flagged as **"gap vs web-canonical principle"** in the Notes column — they're the backlog to close, in order of impact.
+
+**Trade-off:** mobile users who open the app before the web mirror lands will see fewer features than a user who lands on the web first. Historically this happened in the reverse direction — Android led on recording, history, sync, clubs, plans; web caught up. We're explicitly flipping the order for *new* work from this decision onward; *existing* drift in the other direction (Android ahead of web on, e.g., multi-goal editor, browsable period summary) gets closed the same way — by building the web version first and letting mobile stay where it is until the web lands.
+
+**Don't re-litigate unless:** a non-trivial segment of active users uses the mobile app without ever touching the web (analytics check), or a genuinely web-hostile feature category emerges (ARKit-style AR, deep watch-complication work, etc.) where the web-first rule would hold the category back.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

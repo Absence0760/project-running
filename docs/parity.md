@@ -7,7 +7,7 @@ description: Single table listing every user-visible feature with a per-platform
 
 The app ships on five surfaces — **Android**, **iOS**, **Web**, **Wear OS**, **Apple Watch** — and features drift between them. This doc is the single place where that drift is visible. Every user-facing feature has a row, every platform has a column, and every cell is either `✓`, `✗`, `Partial`, or `N/A`.
 
-See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-platform-parity-enforcement) for why this exists.
+See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-platform-parity-enforcement) for why this exists, and [decisions.md § 24](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) for the web-canonical rule that shapes how gaps get closed.
 
 ## Legend
 
@@ -17,6 +17,7 @@ See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-plat
 | `Partial` | Scaffold, mock-data screen, or wired for read-only but missing the full flow. Expand in the **Notes** column. |
 | `✗` | Not started. May be a genuine gap (drift) or a planned future item. |
 | `N/A` | Intentionally not applicable — the platform cannot reasonably provide the feature (e.g. pedometer in a browser). Expand in the **Notes** column so it isn't rediscovered as "missing". |
+| 🔸 in Notes | This row is a **gap against the web-canonical principle** ([decisions.md § 24](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)) — web is `✗` or `Partial` on a feature that is *not* a physical exception. Close these by building the web version, not by adding to the matrix's tail. |
 
 **Columns:**
 
@@ -57,8 +58,8 @@ See [features § GPX / KML import](features.md#gpx--kml-import).
 | GPX import | ✓ | ✗ | ✓ | N/A | N/A | iOS roadmap item unticked. |
 | KML / KMZ import | ✓ | ✗ | ✓ | N/A | N/A | |
 | GeoJSON import | ✓ | ✗ | ✓ | N/A | N/A | |
-| TCX import | ✓ | ✗ | ✗ | N/A | N/A | Android-only via `LocalRouteStore`. |
-| Strava ZIP bulk import | ✓ | ✗ | ✗ | N/A | N/A | Android-only. Web relies on Strava OAuth sync once Phase 3 lands that. |
+| TCX import | ✓ | ✗ | ✗ | N/A | N/A | Android-only via `LocalRouteStore`. 🔸 gap vs web-canonical — web should accept TCX drag-and-drop alongside GPX/KML/GeoJSON. |
+| Strava ZIP bulk import | ✓ | ✗ | ✗ | N/A | N/A | Android-only. Web relies on Strava OAuth sync once Phase 3 lands that. 🔸 gap vs web-canonical — uploading a Strava export zip in a browser is the obvious place for bulk import. |
 
 ### Builder and library
 
@@ -132,7 +133,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Run detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | |
 | Elevation chart on run detail | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Lap splits table | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Heart-rate zone breakdown | ✗ | ✗ | Partial | ✗ | ✗ | Web's `/runs/[id]` renders a zone-breakdown panel using **hardcoded** 8 / 32 / 35 / 20 / 5 % values — it's a placeholder, not computed from HR data. A real breakdown needs per-point BPM stored on the track; today only scalar `metadata.avg_bpm` is persisted. Schema change pending. |
+| Heart-rate zone breakdown | ✗ | ✗ | Partial | ✗ | ✗ | Web's `/runs/[id]` renders a zone-breakdown panel using **hardcoded** 8 / 32 / 35 / 20 / 5 % values — it's a placeholder, not computed from HR data. A real breakdown needs per-point BPM stored on the track; today only scalar `metadata.avg_bpm` is persisted. Schema change pending. 🔸 gap vs web-canonical — when the track carries HR samples, compute real zones on web first. |
 | Interactive elevation + pace chart | ✓ | ✗ | ✓ | ✗ | ✗ | Android: `run_detail_screen.dart` renders a tap/drag crosshair chart with pace-zone colouring (matches the roadmap's Phase 3 spec). Web equivalent on `/runs/[id]`. |
 | Trace animation replay | ✓ | ✗ | ✓ | ✗ | ✗ | Android: FAB on the run-detail map drives an `AnimationController` that advances a pointer along `run.track`; a moving marker renders on `LiveRunMap` via the existing `currentPosition` param. Duration fixed at 15 s regardless of run length. |
 | Best-effort auto-detection (1k / 5k / 10k / HM / FM within a run) | ✓ | ✗ | ✓ | ✗ | ✗ | Android: dashboard `_bestEffortCache` + run-detail best-efforts section. |
@@ -146,14 +147,14 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Activity-type filter | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Source filter (All / Recorded / Strava / parkrun / HealthKit) | ✓ | ✗ | ✓ | ✗ | ✗ | Android: source chip row on `runs_screen.dart` (All / Recorded / Watch / Strava / parkrun / HealthKit / Health Connect), composes with the activity-type and date filters. |
 | Share run as GPX | ✓ | ✗ | ✓ | ✗ | ✗ | Web: Download button on run detail → `toRunGpx` builds GPX 1.1 with per-point `<time>` so the trace round-trips into Strava / Garmin / Komoot as a real activity, not just a route. |
-| Share run as image card | ✓ | ✗ | ✗ | ✗ | ✗ | Would need a canvas-based map snapshot + stats overlay on web — deferred. |
+| Share run as image card | ✓ | ✗ | ✗ | ✗ | ✗ | Would need a canvas-based map snapshot + stats overlay on web — deferred. 🔸 gap vs web-canonical — build on web first (html-to-image or server-side rendered PNG), then mobile can reuse the same URL. |
 | Save history run as a reusable route | ✓ | ✗ | ✓ | ✗ | ✗ | Web: "Save as route" icon on run detail prompts for a name, runs the track through Douglas-Peucker (10 m ε, port of `apps/mobile_android/lib/route_simplify.dart` → `apps/web/src/lib/route_simplify.ts`), writes a `routes` row, and back-links `runs.route_id` to the new route. |
 | Weekly mileage summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Calendar heatmap of runs | ✓ | ✗ | ✓ | ✗ | ✗ | Android: `_RunHeatmap` on the dashboard — 7 × 20-week grid, colour intensity scales by per-day run count, theme-aware primary tint. |
 | Personal records table (5k / 10k / HM / FM) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | Partial | ✗ | ✗ | Web now reads the universal settings bag's `weekly_mileage_goal_m` and renders a progress card on the dashboard; editing still happens in Settings → Preferences. Android's richer multi-metric goal editor (distance / time / pace / run count × week / month) is not yet mirrored on web — that would need the `RunGoal` model ported to TS. |
+| Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | Partial | ✗ | ✗ | Web now reads the universal settings bag's `weekly_mileage_goal_m` and renders a progress card on the dashboard; editing still happens in Settings → Preferences. Android's richer multi-metric goal editor (distance / time / pace / run count × week / month) is not yet mirrored on web — that would need the `RunGoal` model ported to TS. 🔸 gap vs web-canonical — port `RunGoal` + editor to web first; Android can then migrate its local store to the same shape. |
 | Week / month / year mileage toggle | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Browsable period summary (prev / next + share) | ✓ | ✗ | ✗ | ✗ | ✗ | |
+| Browsable period summary (prev / next + share) | ✓ | ✗ | ✗ | ✗ | ✗ | 🔸 gap vs web-canonical — dedicated `/dashboard/period` or `/runs/period/[type]/[date]` screen with prev/next navigation and share, mirroring Android's `period_summary_screen.dart`. |
 
 ## Sync and backup
 
@@ -164,7 +165,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Auto-sync on connectivity change | ✓ | ✗ | N/A | ✗ | ✓ | Apple Watch syncs on reconnect; Wear OS `drainQueue` is manual / app-start today. |
 | Background periodic sync (WorkManager etc.) | ✓ | ✗ | N/A | ✗ | ✗ | |
 | Conflict resolution (newer-wins) | ✓ | ✗ | ✓ | N/A | N/A | |
-| Backup all runs as JSON | ✓ | ✗ | ✗ | N/A | N/A | Web has CSV export (GDPR) instead. |
+| Backup all runs as JSON | ✓ | ✗ | ✗ | N/A | N/A | Web has CSV export (GDPR) instead — arguably the same feature, different file format. Not flagged as a gap. |
 | Download all data as CSV (GDPR) | ✗ | ✗ | ✓ | N/A | N/A | |
 
 ## Integrations
@@ -174,11 +175,11 @@ See [features § External platform sync (OAuth)](features.md#external-platform-s
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | Connect / disconnect integrations UI | ✓ | Partial | ✓ | N/A | N/A | iOS: settings screen present; flows mocked. |
-| Strava OAuth live sync | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired end-to-end on any client. |
-| parkrun athlete-number import | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired. Web lets the user enter the athlete number. |
+| Strava OAuth live sync | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired end-to-end on any client. 🔸 gap vs web-canonical — wire web first; OAuth redirect flows are cleanest in a browser. |
+| parkrun athlete-number import | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired. Web lets the user enter the athlete number. 🔸 gap vs web-canonical — the `parkrun-import` Edge Function takes `{ athleteNumber }`; calling it from the web settings page is a one-button ship. |
 | HealthKit (iOS / Apple Watch) | ✗ | ✗ | N/A | N/A | ✓ | Apple Watch reads HR and forwards `avg_bpm`. Phone HealthKit importer not started. |
 | Health Connect (Android) | ✓ | N/A | N/A | N/A | N/A | Summary-only — no GPS routes. |
-| Garmin Connect | ✗ | ✗ | ✗ | N/A | N/A | Blocked on developer-program application. |
+| Garmin Connect | ✗ | ✗ | ✗ | N/A | N/A | Blocked on developer-program application. 🔸 gap vs web-canonical once unblocked — OAuth flow belongs in the browser first. |
 
 ## Social — clubs and events
 
@@ -195,7 +196,7 @@ See [docs/clubs.md](clubs.md). No features.md section yet — update this row-bl
 | Recurring events (per-instance RSVP) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Invite tokens / join links | ✓ | ✗ | ✓ | N/A | N/A | |
 | Join-request approval flow | ✗ | ✗ | ✓ | N/A | N/A | Web-only admin surface. |
-| Upcoming-event card on home (within 48h) | ✓ | ✗ | ✗ | N/A | N/A | |
+| Upcoming-event card on home (within 48h) | ✓ | ✗ | ✗ | N/A | N/A | 🔸 gap vs web-canonical — promote a card to the web dashboard when the user has a going-RSVP for an event in the next 48 h; mirror Android's `upcoming_event_card.dart`. |
 | Realtime subscriptions (posts / RSVPs / members) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Push notifications (event reminders, admin updates) | ✗ | ✗ | ✗ | ✗ | ✗ | Phase 4b, blocked on FCM / APNs credentials. |
 
@@ -211,13 +212,13 @@ See [docs/training.md](training.md) and [docs/workout_execution.md](workout_exec
 | Edit per-day workouts | Partial | ✗ | ✓ | ✗ | ✗ | Android plan editor is still basic. |
 | Workout detail screen | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | "Today's workout" card on home / dashboard | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Structured-workout execution loop (live rep targets) | ✗ | ✗ | ✗ | ✗ | ✗ | Specced in workout_execution.md; not started. |
+| Structured-workout execution loop (live rep targets) | ✗ | ✗ | ✗ | ✗ | ✗ | Specced in workout_execution.md; not started. *Physical exception for the live-rep-tracking part* (needs the recorder) but the planner / review UI belongs on web first. |
 | Auto-link completed run to planned workout | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Adherence % + weekly summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | VDOT / Riegel pace derivation | ✓ | ✗ | ✓ | ✗ | ✗ | Derivation engine shared via `core_models`. |
-| Adaptive plan generator (phase-banded) | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred; see [features § Premium tier](features.md#premium-tier). |
-| VO2 max estimate | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred. |
-| Recovery advisor (ATL / CTL / TSB) | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred. |
+| Adaptive plan generator (phase-banded) | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred; see [features § Premium tier](features.md#premium-tier). 🔸 gap vs web-canonical — VDOT / Riegel math is pure and `lib/training.ts` already hosts the derivation; the generator belongs on web first. |
+| VO2 max estimate | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred. Schema (`fitness_snapshots`) is shipped (`20260507_001`). 🔸 gap vs web-canonical — Cooper-formula estimator + trend chart on web first. |
+| Recovery advisor (ATL / CTL / TSB) | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred. Schema shipped. 🔸 gap vs web-canonical — load math + recommendation card on web first. |
 
 ## AI Coach
 
@@ -238,8 +239,8 @@ See [features § Deep run analysis (web)](features.md#deep-run-analysis-web) and
 |---|---|---|---|---|---|---|
 | Public run share page (`/share/run/{id}`) | ✗ | ✗ | ✓ | N/A | N/A | Link generation is web-only; the page renders anywhere. |
 | Public route share page (`/share/route/{id}`) | ✗ | ✗ | ✓ | N/A | N/A | |
-| Live spectator page (`/live/{run_id}`) | ✗ | ✗ | Partial | N/A | N/A | Currently simulated; WebSocket to Go service not wired. |
-| Runner shares a live-tracking link before start | ✗ | ✗ | ✗ | ✗ | ✗ | Not started. |
+| Live spectator page (`/live/{run_id}`) | ✗ | ✗ | Partial | N/A | N/A | Currently simulated; WebSocket to Go service not wired. 🔸 gap vs web-canonical — the spectator surface *is* web; finish it here. |
+| Runner shares a live-tracking link before start | ✗ | ✗ | ✗ | ✗ | ✗ | Not started. *Physical exception for the trigger* (it's during recording, which is mobile-led) but the shareable landing page lives on web. |
 
 ## Paywall and funding
 
@@ -248,12 +249,12 @@ See [docs/paywall.md](paywall.md), [features § Pro tier](features.md#pro-tier),
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | Pro tier ($9.99 / mo) — server enforcement | N/A | N/A | ✓ | N/A | N/A | `is_user_pro(uid)` RPC + `subscription_tier` column are shared; all clients read `user_profiles` the same way. Server rule lives on the web because the coach endpoint is web-owned. |
-| Pro "Get Pro" checkout UI | ✗ | ✗ | Partial | N/A | N/A | Web shows a $9.99/mo Pro card with a "Get Pro" CTA; the button is a placeholder toast until the RevenueCat web SDK is wired. Mobile doesn't yet expose a Pro purchase flow. |
+| Pro "Get Pro" checkout UI | ✗ | ✗ | Partial | N/A | N/A | Web shows a $9.99/mo Pro card with a "Get Pro" CTA; the button is a placeholder toast until the RevenueCat web SDK is wired. Mobile doesn't yet expose a Pro purchase flow. 🔸 gap vs web-canonical — ship web checkout first; mobile can follow with App Store / Play Store purchases via RevenueCat. |
 | Unlimited AI Coach for Pro users | N/A | N/A | ✓ | N/A | N/A | `/api/coach/+server.ts` skips the 10/day cap when `is_user_pro(uid)` is true. Coach chat is web-only today. |
-| Priority processing for Pro users | N/A | N/A | Partial | N/A | N/A | Marketing claim backed by the coach-cap bypass; concrete per-endpoint enforcement (queue priority, rate-limit hints) is a follow-up. |
+| Priority processing for Pro users | N/A | N/A | Partial | N/A | N/A | Marketing claim backed by the coach-cap bypass; concrete per-endpoint enforcement (queue priority, rate-limit hints) is a follow-up. 🔸 gap vs web-canonical — tier-aware rate limits on Edge Functions first, then the Go service when it lands. |
 | One-off Donate button | ✗ | ✗ | ✓ | N/A | N/A | Web `/settings/upgrade` has a single Donate button linking to an external provider. Mobile has no in-app donation flow. |
 | Paywall feature gate (registry-driven) | ✓ | ✓ | ✓ | N/A | N/A | `isLocked()` still returns `false` for every key — no feature is hidden behind Pro today. Infra kept so a future Pro-only feature can flip one return. |
-| RevenueCat subscription wiring (web) | N/A | N/A | ✗ | N/A | N/A | Webhook + `subscription_tier` + `is_pro()` helpers are in place; the web SDK `Purchases.configure(...)` + checkout flow is not. |
+| RevenueCat subscription wiring (web) | N/A | N/A | ✗ | N/A | N/A | Webhook + `subscription_tier` + `is_pro()` helpers are in place; the web SDK `Purchases.configure(...)` + checkout flow is not. 🔸 gap vs web-canonical — blocks the "Get Pro" CTA above. |
 | RevenueCat subscription wiring (mobile) | ✗ | ✗ | N/A | N/A | N/A | `purchases_flutter` package not added; `main.dart` initialisation + `PurchasesConfiguration` pending on both platforms. |
 
 ## Settings and preferences
@@ -309,8 +310,8 @@ Written to `user_device_settings.prefs`; a dedicated per-device editor is not wi
 |---|---|---|---|---|---|---|
 | Device ID mint + `user_device_settings` row on first launch | ✓ | ✓ | ✓ | ✗ | ✗ | Both mobile clients mint a UUID on first launch via `Preferences` and upsert the device row on sign-in through `SettingsService.load`. See [settings.md § Client responsibilities](settings.md#client-responsibilities). |
 | Device list / labels screen | ✗ | ✗ | ✓ | N/A | N/A | Web: `/settings/devices`. No mobile equivalent yet. |
-| Per-device override editor UI | ✗ | ✗ | ✗ | ✗ | ✗ | The DB + registry are ready; no client has built the override surface yet. |
-| Remove a device / wipe local settings | ✗ | ✗ | Partial | ✗ | ✗ | Web can delete rows but doesn't clear local cached settings. |
+| Per-device override editor UI | ✗ | ✗ | ✗ | ✗ | ✗ | The DB + registry are ready; no client has built the override surface yet. 🔸 gap vs web-canonical — the "edit my phone's / watch's overrides from my laptop" use case is the obvious one. |
+| Remove a device / wipe local settings | ✗ | ✗ | Partial | ✗ | ✗ | Web can delete rows but doesn't clear local cached settings. 🔸 gap vs web-canonical — make the web device list the authoritative management UI. |
 
 ### App-level settings (not in the registry)
 
@@ -318,13 +319,13 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Dark mode / theme toggle | ✓ | ✗ | ✗ | N/A | N/A | Web follows the OS colour scheme; iOS has no toggle yet. |
+| Dark mode / theme toggle | ✓ | ✗ | ✗ | N/A | N/A | Web follows the OS colour scheme; iOS has no toggle yet. 🔸 gap vs web-canonical — an explicit light/dark/auto toggle belongs on web settings. |
 | Offline-only mode switch | ✓ | ✗ | N/A | N/A | N/A | Mirror of the offline-only sync behaviour. |
 | HR monitor pairing (BLE) | ✓ | ✗ | N/A | N/A | N/A | External chest-strap pairing; watches use their built-in sensor instead. |
 | Advanced GPS filter tuning | ✓ | ✗ | N/A | ✗ | ✗ | Per-activity-type speed / accuracy thresholds. |
-| Licenses / open-source notices | ✓ | ✓ | ✗ | ✗ | ✗ | |
+| Licenses / open-source notices | ✓ | ✓ | ✗ | ✗ | ✗ | 🔸 gap vs web-canonical — a `/legal/licenses` page is trivially shippable. |
 | App version display | ✓ | ✓ | ✓ | ✗ | ✗ | |
-| Manage premium subscription | ✗ | ✗ | ✗ | N/A | N/A | Deferred — see [paywall.md](paywall.md). |
+| Manage premium subscription | ✗ | ✗ | ✗ | N/A | N/A | Deferred — see [paywall.md](paywall.md). 🔸 gap vs web-canonical — billing-portal link or embedded cancel/upgrade on `/settings/upgrade` belongs on web first. |
 | Funding / donation surface | ✗ | ✗ | ✓ | N/A | N/A | Web-only; see row under *Paywall and funding*. |
 
 ## Map and tile layer
