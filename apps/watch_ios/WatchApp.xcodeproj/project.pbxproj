@@ -10,7 +10,6 @@
 		A1B2C3D4E5F60001000A0001 /* RunApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0001 /* RunApp.swift */; };
 		A1B2C3D4E5F60001000A0002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0002 /* ContentView.swift */; };
 		A1B2C3D4E5F60001000A0003 /* WorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */; };
-		A1B2C3D4E5F60001000A0004 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0004 /* LocationManager.swift */; };
 		A1B2C3D4E5F60001000A0005 /* RouteNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */; };
 		A1B2C3D4E5F60001000A0006 /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */; };
 		A1B2C3D4E5F60001000A000B /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */; };
@@ -26,7 +25,6 @@
 		A1B2C3D4E5F60002000A0001 /* RunApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunApp.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManager.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60002000A0004 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteNavigator.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
@@ -70,7 +68,6 @@
 				A1B2C3D4E5F60002000A0001 /* RunApp.swift */,
 				A1B2C3D4E5F60002000A0002 /* ContentView.swift */,
 				A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */,
-				A1B2C3D4E5F60002000A0004 /* LocationManager.swift */,
 				A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */,
 				A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */,
 				A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */,
@@ -174,7 +171,6 @@
 				A1B2C3D4E5F60001000A0001 /* RunApp.swift in Sources */,
 				A1B2C3D4E5F60001000A0002 /* ContentView.swift in Sources */,
 				A1B2C3D4E5F60001000A0003 /* WorkoutManager.swift in Sources */,
-				A1B2C3D4E5F60001000A0004 /* LocationManager.swift in Sources */,
 				A1B2C3D4E5F60001000A0005 /* RouteNavigator.swift in Sources */,
 				A1B2C3D4E5F60001000A0006 /* WatchConnectivityManager.swift in Sources */,
 				A1B2C3D4E5F60001000A000B /* SupabaseService.swift in Sources */,
