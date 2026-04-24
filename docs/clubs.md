@@ -72,14 +72,14 @@ Organisers can turn an event instance into a live, server-coordinated race: ever
 
 - Web event page: admin race-control panel (Arm → GO → End), `auto_approve` checkbox before arming. Attendees see a "Race armed" / "Race LIVE" banner with live elapsed. Approval buttons on pending rows for admins.
 - `/live/event/{id}/{instance_start}`: public-ish spectator page. Live-ranked list of runners on course (distance, pace, elapsed) driven by `race_pings`, plus the finisher leaderboard below.
-- Mobile Android `lib/race_controller.dart` polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop.
-- Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows.
+- Mobile Android: `lib/race_controller.dart` handles the **participant** side — polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop. **Organiser Arm / Fire Go / End** controls now also live on Android (`SocialService.armRace / startRace / endRace` + the race-control card on `event_detail_screen.dart`, gated on `ClubView.isRaceDirector`), with live state updates via the existing `subscribeToEvent` realtime channel extended to `race_sessions`.
+- Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows. No organiser controls on Wear by design — typing admin actions on a wrist is a bad UX; use web or Android phone instead.
 
 **Not wired yet** (deferred follow-ups):
 
 - Remote auto-start of the recorder on the `running` signal. Today the user still taps Start; plumbing the permission flow + countdown into a remote trigger is a Wear-specific engineering task.
 - Apple Watch (watchOS Swift) race-armed UI. The `event_results` upload path exists; the "armed" screen is the missing piece.
-- Mobile iOS Flutter — Phase 1 foundations landed (auth, local stores, GPS recording via `run_recorder`) but the clubs / race-mode UI has not been ported yet. Port `mobile_android/lib/race_controller.dart` + the Run-tab banner when that work is picked up.
+- Mobile iOS Flutter — Phase 1 foundations landed (auth, local stores, GPS recording via `run_recorder`) but the clubs / race-mode UI (participant *and* organiser) has not been ported yet. Port `mobile_android/lib/race_controller.dart`, the Run-tab banner, and the `event_detail_screen.dart` race-control card when that work is picked up.
 - Spectator map. Today the spectator page is a live-updating list; adding a MapLibre view of runner dots is a straightforward extension using the existing `/live/[id]` pattern.
 
 ### Event results

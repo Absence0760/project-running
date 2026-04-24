@@ -536,6 +536,120 @@ class SocialService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetch the current race session for a specific event instance.
+  /// Returns null when no session exists (the admin hasn't armed it
+  /// yet). Read-only — mutation methods below write.
+  Future<RaceSessionRow?> fetchRaceSession(
+    String eventId,
+    DateTime instance,
+  ) async {
+    try {
+      final row = await _c
+          .from(RaceSessionRow.table)
+          .select()
+          .eq(RaceSessionRow.colEventId, eventId)
+          .eq(RaceSessionRow.colInstanceStart, instance.toIso8601String())
+          .maybeSingle();
+      if (row == null) return null;
+      return RaceSessionRow.fromJson(row);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Put the race session into the `armed` state. Upsert on the
+  /// composite key, resetting `started_at` / `finished_at` so a rearm
+  /// after a finished race starts from a clean slate (common pattern
+  /// when testing a recurring event). [autoApprove] flows into the
+  /// `auto_approve` column and the participant-submit pipeline reads
+  /// it to decide whether to flip new results to `approved` on insert.
+  ///
+  /// Mirrors `apps/web/src/lib/data.ts:armRace`. Keep the two in sync
+  /// — the rest of the stack expects both clients to write identical
+  /// rows.
+  Future<RaceSessionRow> armRace({
+    required String eventId,
+    required DateTime instance,
+    bool autoApprove = true,
+  }) async {
+    if (_uid == null) throw Exception('Not authenticated');
+    final now = DateTime.now().toUtc().toIso8601String();
+    final row = await _c
+        .from(RaceSessionRow.table)
+        .upsert(
+          {
+            RaceSessionRow.colEventId: eventId,
+            RaceSessionRow.colInstanceStart: instance.toIso8601String(),
+            RaceSessionRow.colStatus: 'armed',
+            RaceSessionRow.colStartedAt: null,
+            RaceSessionRow.colStartedBy: null,
+            RaceSessionRow.colFinishedAt: null,
+            RaceSessionRow.colAutoApprove: autoApprove,
+            RaceSessionRow.colUpdatedAt: now,
+          },
+          onConflict:
+              '${RaceSessionRow.colEventId},${RaceSessionRow.colInstanceStart}',
+        )
+        .select()
+        .single();
+    notifyListeners();
+    return RaceSessionRow.fromJson(row);
+  }
+
+  /// Fire the starting gun — flips the session to `running` and stamps
+  /// `started_at` + `started_by`. Requires a row already in `armed`
+  /// state; returns the updated row. The spectator leaderboard and the
+  /// participants' watches pick up the change via their race_sessions
+  /// realtime subscriptions.
+  Future<RaceSessionRow> startRace({
+    required String eventId,
+    required DateTime instance,
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+    final now = DateTime.now().toUtc().toIso8601String();
+    final row = await _c
+        .from(RaceSessionRow.table)
+        .update({
+          RaceSessionRow.colStatus: 'running',
+          RaceSessionRow.colStartedAt: now,
+          RaceSessionRow.colStartedBy: uid,
+          RaceSessionRow.colUpdatedAt: now,
+        })
+        .eq(RaceSessionRow.colEventId, eventId)
+        .eq(RaceSessionRow.colInstanceStart, instance.toIso8601String())
+        .select()
+        .single();
+    notifyListeners();
+    return RaceSessionRow.fromJson(row);
+  }
+
+  /// Flip the session to a terminal state — `finished` (happy path) or
+  /// `cancelled` (stopped the race before it began or mid-run for
+  /// weather / safety). In both cases the banner on participants'
+  /// watches clears.
+  Future<RaceSessionRow> endRace({
+    required String eventId,
+    required DateTime instance,
+    String status = 'finished',
+  }) async {
+    if (_uid == null) throw Exception('Not authenticated');
+    final now = DateTime.now().toUtc().toIso8601String();
+    final row = await _c
+        .from(RaceSessionRow.table)
+        .update({
+          RaceSessionRow.colStatus: status,
+          RaceSessionRow.colFinishedAt: now,
+          RaceSessionRow.colUpdatedAt: now,
+        })
+        .eq(RaceSessionRow.colEventId, eventId)
+        .eq(RaceSessionRow.colInstanceStart, instance.toIso8601String())
+        .select()
+        .single();
+    notifyListeners();
+    return RaceSessionRow.fromJson(row);
+  }
+
   /// Recent runs for the current user, newest first. Used by the Submit
   /// Time flow to let users attach an existing run to an event. Kept on
   /// SocialService (rather than a per-screen fetcher) so the event
@@ -728,6 +842,21 @@ class SocialService extends ChangeNotifier {
             type: PostgresChangeFilterType.eq,
             column: 'club_id',
             value: clubId,
+          ),
+          callback: (_) => onChange(),
+        )
+        // Race-session transitions (armed → running → finished). The
+        // event detail screen refreshes the admin control panel +
+        // status banner when a row flips; participants' watches pick
+        // up the same change via `RaceController`'s own channel.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'race_sessions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'event_id',
+            value: eventId,
           ),
           callback: (_) => onChange(),
         )

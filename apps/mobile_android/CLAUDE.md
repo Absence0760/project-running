@@ -48,7 +48,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `settings_screen.dart` — preferences, integrations, data export
 - `clubs_screen.dart` — Browse / My clubs, 6th bottom-nav tab
 - `club_detail_screen.dart` — feed (threaded), upcoming events, members, join/leave
-- `event_detail_screen.dart` — per-instance RSVP + admin update composer
+- `event_detail_screen.dart` — per-instance RSVP + admin update composer + admin-only Race control card (Arm / Fire Go / End / Cancel, gated on `ClubView.isRaceDirector`, backed by `SocialService.armRace` / `startRace` / `endRace`)
 - `plans_screen.dart` — Training plans list (accessed from Run tab idle button)
 - `plan_new_screen.dart` — Wizard with live pace + week-outline preview
 - `plan_detail_screen.dart` — Hero + progress ring + today card + week grid

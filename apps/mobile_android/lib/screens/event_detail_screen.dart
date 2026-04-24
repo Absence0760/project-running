@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -27,11 +28,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   ClubView? _club;
   List<AttendeeView> _attendees = const [];
   List<EventResultView> _results = const [];
+  RaceSessionRow? _raceSession;
   DateTime? _activeInstance;
   List<DateTime> _instances = const [];
   bool _loading = true;
   bool _busy = false;
   bool _submittingResult = false;
+  /// Set while an arm/go/end mutation is in flight so the admin can't
+  /// fire three buttons in quick succession. Separate from [_busy]
+  /// (which gates RSVP writes) so a slow network on one doesn't block
+  /// the other.
+  bool _raceBusy = false;
+  bool _autoApproveOnArm = true;
   String? _loadError;
 
   RealtimeChannel? _channel;
@@ -69,6 +77,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final bodyResults = await Future.wait([
         widget.social.fetchAttendees(event.row.id, _activeInstance!),
         widget.social.fetchEventResults(event.row.id, _activeInstance!),
+        widget.social.fetchRaceSession(event.row.id, _activeInstance!),
       ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
@@ -76,6 +85,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _club = club;
         _attendees = bodyResults[0] as List<AttendeeView>;
         _results = bodyResults[1] as List<EventResultView>;
+        _raceSession = bodyResults[2] as RaceSessionRow?;
         _instances = instances;
         _loading = false;
       });
@@ -129,10 +139,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (e == null) return;
     final attendees = await widget.social.fetchAttendees(e.row.id, dt);
     final results = await widget.social.fetchEventResults(e.row.id, dt);
+    final race = await widget.social.fetchRaceSession(e.row.id, dt);
     if (mounted) {
       setState(() {
         _attendees = attendees;
         _results = results;
+        _raceSession = race;
       });
     }
   }
@@ -180,6 +192,53 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (e == null || inst == null) return;
     await widget.social.removeEventResult(e.row.id, inst);
     await _load();
+  }
+
+  /// Arm / Fire Go / End dispatcher. Uses the current `_raceSession`
+  /// state to decide which mutation to run. Errors surface as a
+  /// snackbar; successful writes leave the realtime channel to push
+  /// the UI back into sync (belt-and-suspenders: we also reload on
+  /// return in case realtime is slow).
+  Future<void> _raceMutation(_RaceAction action) async {
+    final e = _event;
+    final inst = _activeInstance;
+    if (e == null || inst == null || _raceBusy) return;
+    setState(() => _raceBusy = true);
+    try {
+      final social = widget.social;
+      final row = switch (action) {
+        _RaceAction.arm => await social.armRace(
+            eventId: e.row.id,
+            instance: inst,
+            autoApprove: _autoApproveOnArm,
+          ),
+        _RaceAction.go => await social.startRace(
+            eventId: e.row.id,
+            instance: inst,
+          ),
+        _RaceAction.end => await social.endRace(
+            eventId: e.row.id,
+            instance: inst,
+            status: 'finished',
+          ),
+        _RaceAction.cancel => await social.endRace(
+            eventId: e.row.id,
+            instance: inst,
+            status: 'cancelled',
+          ),
+      };
+      if (mounted) {
+        setState(() => _raceSession = row);
+      }
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Race control failed: $err')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _raceBusy = false);
+    }
   }
 
   Future<void> _rsvp(String status) async {
@@ -324,6 +383,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       fmtPace(e.row.paceTargetSec!)),
               ],
             ),
+          ],
+          if (_club?.isRaceDirector == true) ...[
+            const SizedBox(height: 24),
+            _buildRaceControl(theme, active),
           ],
           const SizedBox(height: 24),
           Text(
@@ -476,7 +539,135 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     ];
     return '${months[d.month - 1]} ${d.day}';
   }
+
+  /// Admin-only "Race control" panel. Visible to owners / admins /
+  /// race directors. Renders the state machine as a single status line
+  /// + primary CTA; secondary destructive actions (cancel / reset)
+  /// sit below at reduced visual weight.
+  Widget _buildRaceControl(ThemeData theme, DateTime active) {
+    final race = _raceSession;
+    final status = race?.status ?? 'idle';
+    final banner = switch (status) {
+      'armed' => 'Armed — waiting for GO',
+      'running' => 'Running — live',
+      'finished' => 'Finished',
+      'cancelled' => 'Cancelled',
+      _ => 'Not armed',
+    };
+    final bannerColour = switch (status) {
+      'armed' => theme.colorScheme.tertiary,
+      'running' => theme.colorScheme.primary,
+      'finished' => theme.colorScheme.outline,
+      'cancelled' => theme.colorScheme.error,
+      _ => theme.colorScheme.outline,
+    };
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.sports_score, size: 18, color: bannerColour),
+                const SizedBox(width: 6),
+                Text(
+                  'RACE CONTROL',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              banner,
+              style: theme.textTheme.titleMedium?.copyWith(color: bannerColour),
+            ),
+            const SizedBox(height: 8),
+            if (status == 'idle' || status == 'finished' || status == 'cancelled') ...[
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  'Auto-approve submitted times',
+                  style: theme.textTheme.bodySmall,
+                ),
+                value: _autoApproveOnArm,
+                onChanged: (v) => setState(() => _autoApproveOnArm = v ?? true),
+              ),
+              FilledButton.icon(
+                onPressed: _raceBusy ? null : () => _raceMutation(_RaceAction.arm),
+                icon: const Icon(Icons.bolt),
+                label: const Text('Arm race'),
+              ),
+            ] else if (status == 'armed') ...[
+              Text(
+                'Tap Fire Go when the race begins. Participants\' watches '
+                'show the armed banner now.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: _raceBusy
+                        ? null
+                        : () => _raceMutation(_RaceAction.go),
+                    icon: const Icon(Icons.flag),
+                    label: const Text('Fire Go'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _raceBusy
+                        ? null
+                        : () => _raceMutation(_RaceAction.cancel),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ] else if (status == 'running') ...[
+              if (race?.startedAt != null)
+                Text(
+                  'Started at ${fmtEventDate(race!.startedAt!.toLocal())}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: _raceBusy
+                        ? null
+                        : () => _raceMutation(_RaceAction.end),
+                    icon: const Icon(Icons.stop_circle),
+                    label: const Text('End race'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _raceBusy
+                        ? null
+                        : () => _raceMutation(_RaceAction.cancel),
+                    child: const Text('Cancel race'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+enum _RaceAction { arm, go, end, cancel }
 
 class _AdminUpdateComposer extends StatefulWidget {
   final Future<void> Function(String body) onSubmit;
