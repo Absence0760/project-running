@@ -17,7 +17,15 @@
 </script>
 
 {#if showImport}
-	<ImportRoute onclose={() => (showImport = false)} />
+	<ImportRoute
+		onclose={() => (showImport = false)}
+		onimport={async () => {
+			// Refetch after a multi-route import — the modal closes
+			// itself but the list on this page won't refresh on its own
+			// (we're already at /routes, so `goto` is a no-op).
+			routes = await fetchRoutes();
+		}}
+	/>
 {/if}
 
 <div class="page">
