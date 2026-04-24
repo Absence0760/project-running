@@ -33,6 +33,7 @@
 
 	async function removeDevice(deviceId: string) {
 		if (!auth.user) return;
+		const isSelf = deviceId === currentDeviceId;
 		const { error } = await supabase
 			.from('user_device_settings')
 			.delete()
@@ -41,6 +42,21 @@
 		if (error) return;
 		devices = devices.filter((d) => d.device_id !== deviceId);
 		confirmingRemove = null;
+
+		// When the user resets *this* browser, also clear the local
+		// device-id + any in-flight settings caches. Previously the
+		// row was deleted server-side but the browser kept its minted
+		// device id, so the next write re-created the empty row.
+		if (isSelf && typeof localStorage !== 'undefined') {
+			try {
+				localStorage.removeItem('run_app.device_id');
+			} catch (_) {
+				/* quota / access denied — noop */
+			}
+			// Force a full reload so stores are re-initialised with
+			// a fresh device id.
+			window.location.reload();
+		}
 	}
 
 	function platformIcon(p: string): string {
@@ -80,6 +96,39 @@
 	function overrideCount(prefs: Record<string, unknown>): number {
 		return Object.keys(prefs).length;
 	}
+
+	let expanded = $state<string | null>(null);
+
+	function toggleExpand(deviceId: string) {
+		expanded = expanded === deviceId ? null : deviceId;
+	}
+
+	function formatPrefValue(v: unknown): string {
+		if (v === null || v === undefined) return '—';
+		if (typeof v === 'boolean') return v ? 'on' : 'off';
+		if (typeof v === 'object') return JSON.stringify(v);
+		return String(v);
+	}
+
+	/// Drop a single override key from a device. The rest of the row
+	/// stays. Mutates the in-memory list optimistically — the next
+	/// reload re-reads from the server so a failure would be caught on
+	/// next open.
+	async function clearOverride(deviceId: string, key: string) {
+		if (!auth.user) return;
+		const device = devices.find((d) => d.device_id === deviceId);
+		if (!device) return;
+		const { [key]: _dropped, ...rest } = device.prefs;
+		const { error } = await supabase
+			.from('user_device_settings')
+			.update({ prefs: rest, updated_at: new Date().toISOString() })
+			.eq('user_id', auth.user.id)
+			.eq('device_id', deviceId);
+		if (error) return;
+		devices = devices.map((d) =>
+			d.device_id === deviceId ? { ...d, prefs: rest } : d,
+		);
+	}
 </script>
 
 <div class="page">
@@ -112,15 +161,48 @@
 							<span>Last seen {formatDate(d.last_seen_at)}</span>
 							{#if overrideCount(d.prefs) > 0}
 								<span class="sep">&middot;</span>
-								<span>{overrideCount(d.prefs)} pref override{overrideCount(d.prefs) === 1 ? '' : 's'}</span>
+								<button
+									type="button"
+									class="override-link"
+									onclick={() => toggleExpand(d.device_id)}
+								>
+									{overrideCount(d.prefs)} pref override{overrideCount(d.prefs) === 1 ? '' : 's'}
+									<span class="material-symbols chev">
+										{expanded === d.device_id ? 'expand_less' : 'expand_more'}
+									</span>
+								</button>
 							{/if}
 						</div>
+						{#if expanded === d.device_id && overrideCount(d.prefs) > 0}
+							<ul class="overrides">
+								{#each Object.entries(d.prefs) as [k, v]}
+									<li>
+										<code>{k}</code>
+										<span class="override-value">{formatPrefValue(v)}</span>
+										<button
+											type="button"
+											class="override-clear"
+											title="Clear this override"
+											onclick={() => clearOverride(d.device_id, k)}
+										>
+											Clear
+										</button>
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</div>
-					{#if d.device_id !== currentDeviceId}
-						<button class="remove-btn" onclick={() => (confirmingRemove = d.device_id)} title="Remove device">
-							<span class="material-symbols">close</span>
-						</button>
-					{/if}
+					<button
+						class="remove-btn"
+						onclick={() => (confirmingRemove = d.device_id)}
+						title={d.device_id === currentDeviceId
+							? 'Reset this device (wipes local cache and re-registers)'
+							: 'Remove device'}
+					>
+						<span class="material-symbols">
+							{d.device_id === currentDeviceId ? 'refresh' : 'close'}
+						</span>
+					</button>
 				</div>
 			{/each}
 		</div>
@@ -129,9 +211,11 @@
 
 <ConfirmDialog
 	open={confirmingRemove !== null}
-	title="Remove device"
-	message="Remove this device and its per-device preferences? This cannot be undone."
-	confirmLabel="Remove"
+	title={confirmingRemove === currentDeviceId ? 'Reset this device?' : 'Remove device'}
+	message={confirmingRemove === currentDeviceId
+		? 'Wipes the per-device preferences for this browser, clears the local device id, and reloads. Universal preferences stay put.'
+		: 'Remove this device and its per-device preferences? This cannot be undone.'}
+	confirmLabel={confirmingRemove === currentDeviceId ? 'Reset' : 'Remove'}
 	danger
 	onconfirm={() => { if (confirmingRemove) removeDevice(confirmingRemove); }}
 	oncancel={() => (confirmingRemove = null)}
@@ -197,4 +281,55 @@
 	.remove-btn:hover { color: var(--color-danger); background: rgba(229, 57, 53, 0.08); }
 	.muted { color: var(--color-text-tertiary); }
 	.material-symbols { font-family: 'Material Symbols Outlined', system-ui; font-weight: normal; display: inline-block; line-height: 1; }
+
+	.override-link {
+		background: none;
+		border: none;
+		color: var(--color-primary);
+		cursor: pointer;
+		padding: 0;
+		font: inherit;
+		font-size: inherit;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+	}
+	.override-link .chev { font-size: 1rem; }
+	.overrides {
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0.5rem 0.75rem;
+		background: var(--color-bg-tertiary);
+		border-radius: var(--radius-md);
+		display: grid;
+		gap: 0.35rem;
+	}
+	.overrides li {
+		display: grid;
+		grid-template-columns: minmax(8rem, 1fr) auto auto;
+		align-items: center;
+		gap: 0.8rem;
+		font-size: 0.82rem;
+	}
+	.overrides code {
+		font-family: ui-monospace, monospace;
+		color: var(--color-text-secondary);
+	}
+	.override-value {
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.override-clear {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text-tertiary);
+		border-radius: var(--radius-sm);
+		padding: 0.2rem 0.6rem;
+		font-size: 0.75rem;
+		cursor: pointer;
+	}
+	.override-clear:hover {
+		color: var(--color-danger);
+		border-color: var(--color-danger);
+	}
 </style>

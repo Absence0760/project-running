@@ -40,6 +40,46 @@
 	let passwordStatus = $state<string | null>(null);
 	let passwordError = $state<string | null>(null);
 
+	let parkrunImporting = $state(false);
+
+	/// Kick the existing `parkrun-import` Edge Function with the
+	/// user's stashed athlete number. The function does the scrape +
+	/// runs insert; we just surface a status toast with what came
+	/// back. One-button import — no OAuth, no tokens to manage.
+	async function handleParkrunImport() {
+		if (!parkrunNumber || parkrunNumber.trim().length === 0 || parkrunImporting) return;
+		parkrunImporting = true;
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not signed in');
+			const url = `${import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/parkrun-import`;
+			const resp = await fetch(url, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ athleteNumber: parkrunNumber.trim() }),
+			});
+			if (!resp.ok) {
+				const body = await resp.json().catch(() => ({}));
+				throw new Error(body.error ?? `HTTP ${resp.status}`);
+			}
+			const body = await resp.json().catch(() => ({}));
+			const imported = (body.imported as number) ?? 0;
+			showToast(
+				imported > 0
+					? `Imported ${imported} parkrun result${imported === 1 ? '' : 's'}.`
+					: 'No new parkrun results since last import.',
+				'success',
+			);
+		} catch (err) {
+			showToast(`parkrun import failed: ${(err as Error).message}`, 'error');
+		} finally {
+			parkrunImporting = false;
+		}
+	}
+
 	onMount(async () => {
 		if (!auth.user) return;
 		// Load settings bag for DOB / HR fields.
@@ -208,6 +248,16 @@
 			<label>
 				<span class="label-text">parkrun Athlete Number</span>
 				<input type="text" bind:value={parkrunNumber} placeholder="A123456" />
+				{#if parkrunNumber && parkrunNumber.trim().length > 0}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm parkrun-import-btn"
+						onclick={handleParkrunImport}
+						disabled={parkrunImporting}
+					>
+						{parkrunImporting ? 'Importing…' : 'Pull latest parkrun results'}
+					</button>
+				{/if}
 			</label>
 			<label>
 				<span class="label-text">Date of Birth</span>

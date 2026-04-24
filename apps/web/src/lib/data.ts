@@ -840,6 +840,51 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 
 // --- Events ---
 
+/// The next event the signed-in user has RSVP'd `going` to within the
+/// given window. Returns null when nothing matches — the dashboard
+/// card hides itself.
+///
+/// Mirrors `SocialService.fetchNextRsvpedEvent` on Android so both
+/// surfaces show the same card at the same moment in time.
+export async function fetchNextRsvpedEvent(
+	windowHours = 48,
+): Promise<{
+	event_id: string;
+	instance_start: string;
+	club_slug: string;
+	title: string;
+	meet_label: string | null;
+} | null> {
+	const { data: { user } } = await supabase.auth.getUser();
+	if (!user) return null;
+	const now = new Date();
+	const horizon = new Date(now.getTime() + windowHours * 3600_000);
+	const { data } = await supabase
+		.from('event_attendees')
+		.select(
+			'event_id, instance_start, events(title, meet_label, clubs(slug))',
+		)
+		.eq('user_id', user.id)
+		.eq('status', 'going')
+		.gte('instance_start', now.toISOString())
+		.lte('instance_start', horizon.toISOString())
+		.order('instance_start', { ascending: true })
+		.limit(1);
+	const row = (data as Array<Record<string, unknown>> | null)?.[0];
+	if (!row) return null;
+	const ev = row.events as
+		| { title: string; meet_label: string | null; clubs: { slug: string } }
+		| null;
+	if (!ev) return null;
+	return {
+		event_id: row.event_id as string,
+		instance_start: row.instance_start as string,
+		club_slug: ev.clubs.slug,
+		title: ev.title,
+		meet_label: ev.meet_label ?? null,
+	};
+}
+
 export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta[]> {
 	// For recurring series, `starts_at` can be in the past even though the
 	// next instance is in the future. Pull anything that's either (a) one-off

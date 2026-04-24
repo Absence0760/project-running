@@ -27,6 +27,20 @@
 	function handleDonate() {
 		window.open(DONATE_URL, '_blank', 'noopener,noreferrer');
 	}
+
+	/// Opens the billing portal where the Pro subscription was started.
+	/// Mobile purchases route through the App Store / Play Store — those
+	/// users need to cancel on-device. Web purchases route through the
+	/// RevenueCat web SDK (not yet wired — see decisions.md § 23), which
+	/// will expose a portal URL. For now, a toast explains what to do.
+	function handleManageSubscription() {
+		// TODO: once the RevenueCat web SDK lands, call `Purchases.getCustomerInfo()`
+		// and redirect to `managementURL` directly.
+		showToast(
+			'Manage your subscription where you started it — App Store / Play Store / billing portal.',
+			'info',
+		);
+	}
 </script>
 
 <div class="page">
@@ -77,6 +91,9 @@
 				Thanks for supporting Better Runner. Manage your subscription from
 				the App Store, Play Store, or billing portal where you started it.
 			</p>
+			<button class="btn-secondary" onclick={handleManageSubscription}>
+				Manage subscription
+			</button>
 		{:else}
 			<button class="btn-primary" onclick={handleGetPro} disabled={purchasing}>
 				{purchasing ? 'Redirecting…' : `Get Pro — $${PRO_PRICE_MONTHLY}/mo`}

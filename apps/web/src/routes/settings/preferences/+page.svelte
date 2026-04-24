@@ -8,6 +8,7 @@
 		effective,
 		type LoadedSettings,
 	} from '$lib/settings';
+	import { applyTheme, loadTheme, type Theme } from '$lib/theme';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -27,6 +28,16 @@
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let stravaAutoShare = $state(false);
 
+	// Theme — persisted to localStorage, not the cross-device settings
+	// bag. Intentionally per-browser: a dark laptop + a light iPad is a
+	// common setup and a bag-scoped preference would fight that.
+	let theme = $state<Theme>('auto');
+
+	function changeTheme(next: Theme) {
+		theme = next;
+		applyTheme(next);
+	}
+
 	// HR zones
 	let z1 = $state('');
 	let z2 = $state('');
@@ -35,6 +46,9 @@
 	let z5 = $state('');
 
 	onMount(async () => {
+		// Theme is local-only so it's available even before the bag loads.
+		theme = loadTheme();
+
 		if (!auth.user) return;
 		try {
 			settings = await loadSettings(auth.user.id);
@@ -152,6 +166,29 @@
 						<option value="monday">Monday</option>
 						<option value="sunday">Sunday</option>
 					</select>
+				</label>
+				<label>
+					<span class="label-text">Theme</span>
+					<div class="toggle-row">
+						<button
+							class="toggle-btn"
+							class:active={theme === 'auto'}
+							onclick={() => changeTheme('auto')}
+							type="button"
+						>Auto</button>
+						<button
+							class="toggle-btn"
+							class:active={theme === 'light'}
+							onclick={() => changeTheme('light')}
+							type="button"
+						>Light</button>
+						<button
+							class="toggle-btn"
+							class:active={theme === 'dark'}
+							onclick={() => changeTheme('dark')}
+							type="button"
+						>Dark</button>
+					</div>
 				</label>
 			</div>
 		</section>

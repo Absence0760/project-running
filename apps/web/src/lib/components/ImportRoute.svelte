@@ -105,11 +105,11 @@
 				{:else}
 					<span class="material-symbols">upload_file</span>
 					<p>Drag & drop a route file here</p>
-					<p class="drop-hint">GPX, KML, KMZ, or GeoJSON</p>
+					<p class="drop-hint">GPX, KML, KMZ, GeoJSON, or TCX</p>
 					<p class="drop-hint">Works with Google Maps, Google Earth, Strava, Garmin, and more</p>
 					<label class="browse-btn">
 						Browse files
-						<input type="file" accept=".gpx,.kml,.kmz,.geojson,.json" onchange={handleFileSelect} hidden />
+						<input type="file" accept=".gpx,.kml,.kmz,.geojson,.json,.tcx" onchange={handleFileSelect} hidden />
 					</label>
 				{/if}
 			</div>

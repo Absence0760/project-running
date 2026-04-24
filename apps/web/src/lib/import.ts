@@ -37,7 +37,69 @@ export async function parseRouteFile(file: File): Promise<ImportedRoute> {
 		return parseGeoJson(text);
 	}
 
-	throw new Error(`Unsupported file format: .${ext}. Use GPX, KML, KMZ, or GeoJSON.`);
+	if (ext === 'tcx') {
+		const text = await file.text();
+		return parseTcx(text);
+	}
+
+	throw new Error(`Unsupported file format: .${ext}. Use GPX, KML, KMZ, GeoJSON, or TCX.`);
+}
+
+// --- TCX ---
+
+/**
+ * Parse a Garmin Training Center XML (TCX) file. TCX wraps track
+ * points in `<Trackpoint>` elements with `<Position>` children; also
+ * carries per-point `<AltitudeMeters>` and `<Time>`, which we keep for
+ * downstream elevation / timing consumers.
+ *
+ * Uses the same `buildRoute` helper as the GPX path so the distance
+ * and elevation summary are computed identically. Falls back to the
+ * file's root activity `<Id>` as the name when `<Notes>` is missing —
+ * Garmin exports tend to omit Notes but always include Id.
+ */
+function parseTcx(xml: string): ImportedRoute {
+	const doc = new DOMParser().parseFromString(xml, 'text/xml');
+	const name =
+		doc.querySelector('Activity > Notes')?.textContent?.trim() ||
+		doc.querySelector('Activity > Id')?.textContent?.trim() ||
+		doc.querySelector('Courses > Course > Name')?.textContent?.trim() ||
+		'Imported Route';
+
+	// `<Trackpoint>` is the canonical element across Activities and
+	// Courses. Some exports name the container differently — fall back
+	// to any `Trackpoint` descendant if the primary scan turns up empty.
+	const tps = Array.from(doc.querySelectorAll('Trackpoint'));
+	if (tps.length === 0) {
+		throw new Error('TCX file contains no track points');
+	}
+
+	const waypoints: TrackPoint[] = [];
+	for (const tp of tps) {
+		const pos = tp.querySelector('Position');
+		if (!pos) continue;
+		const latStr = pos.querySelector('LatitudeDegrees')?.textContent;
+		const lngStr = pos.querySelector('LongitudeDegrees')?.textContent;
+		if (!latStr || !lngStr) continue;
+		const lat = parseFloat(latStr);
+		const lng = parseFloat(lngStr);
+		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+		const eleStr = tp.querySelector('AltitudeMeters')?.textContent;
+		const ele = eleStr ? parseFloat(eleStr) : undefined;
+		const tsStr = tp.querySelector('Time')?.textContent;
+		waypoints.push({
+			lat,
+			lng,
+			ele: Number.isFinite(ele as number) ? (ele as number) : undefined,
+			ts: tsStr || undefined,
+		});
+	}
+
+	if (waypoints.length === 0) {
+		throw new Error('TCX file: no track points had valid Position data');
+	}
+
+	return buildRoute(name, waypoints);
 }
 
 // --- GPX ---

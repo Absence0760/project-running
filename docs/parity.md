@@ -58,7 +58,7 @@ See [features § GPX / KML import](features.md#gpx--kml-import).
 | GPX import | ✓ | ✗ | ✓ | N/A | N/A | iOS roadmap item unticked. |
 | KML / KMZ import | ✓ | ✗ | ✓ | N/A | N/A | |
 | GeoJSON import | ✓ | ✗ | ✓ | N/A | N/A | |
-| TCX import | ✓ | ✗ | ✗ | N/A | N/A | Android-only via `LocalRouteStore`. 🔸 gap vs web-canonical — web should accept TCX drag-and-drop alongside GPX/KML/GeoJSON. |
+| TCX import | ✓ | ✗ | ✓ | N/A | N/A | Web: `parseTcx` added to `lib/import.ts`; the import drop-zone accepts `.tcx` alongside GPX/KML/KMZ/GeoJSON. Preserves per-point elevation + timestamp. |
 | Strava ZIP bulk import | ✓ | ✗ | ✗ | N/A | N/A | Android-only. Web relies on Strava OAuth sync once Phase 3 lands that. 🔸 gap vs web-canonical — uploading a Strava export zip in a browser is the obvious place for bulk import. |
 
 ### Builder and library
@@ -152,9 +152,9 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Weekly mileage summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Calendar heatmap of runs | ✓ | ✗ | ✓ | ✗ | ✗ | Android: `_RunHeatmap` on the dashboard — 7 × 20-week grid, colour intensity scales by per-day run count, theme-aware primary tint. |
 | Personal records table (5k / 10k / HM / FM) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | Partial | ✗ | ✗ | Web now reads the universal settings bag's `weekly_mileage_goal_m` and renders a progress card on the dashboard; editing still happens in Settings → Preferences. Android's richer multi-metric goal editor (distance / time / pace / run count × week / month) is not yet mirrored on web — that would need the `RunGoal` model ported to TS. 🔸 gap vs web-canonical — port `RunGoal` + editor to web first; Android can then migrate its local store to the same shape. |
+| Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | Partial | ✗ | ✗ | Web: dashboard Goals section with inline editor; `lib/goals.ts` ports the Android `RunGoal` model with three targets (distance / time / run count) per goal and a week/month period. Stored in localStorage. Avg-pace targets skipped for a follow-up — cycling-aware distance-weighted pace is the most complex metric on Android and least commonly used. Scalar `weekly_mileage_goal_m` from the settings bag still drives the separate "Weekly goal" progress card above. |
 | Week / month / year mileage toggle | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Browsable period summary (prev / next + share) | ✓ | ✗ | ✗ | ✗ | ✗ | 🔸 gap vs web-canonical — dedicated `/dashboard/period` or `/runs/period/[type]/[date]` screen with prev/next navigation and share, mirroring Android's `period_summary_screen.dart`. |
+| Browsable period summary (prev / next + share) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `/dashboard/period/[type]/[date]` — prev/next arrows shift by week or month, type toggle switches period, share button uses Web Share API with clipboard fallback. Linked from the This-Week stat card on the dashboard. |
 
 ## Sync and backup
 
@@ -176,7 +176,7 @@ See [features § External platform sync (OAuth)](features.md#external-platform-s
 |---|---|---|---|---|---|---|
 | Connect / disconnect integrations UI | ✓ | Partial | ✓ | N/A | N/A | iOS: settings screen present; flows mocked. |
 | Strava OAuth live sync | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired end-to-end on any client. 🔸 gap vs web-canonical — wire web first; OAuth redirect flows are cleanest in a browser. |
-| parkrun athlete-number import | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired. Web lets the user enter the athlete number. 🔸 gap vs web-canonical — the `parkrun-import` Edge Function takes `{ athleteNumber }`; calling it from the web settings page is a one-button ship. |
+| parkrun athlete-number import | ✗ | ✗ | ✓ | N/A | N/A | Web: "Pull latest parkrun results" button on `/settings/account` shows once the athlete number is set. Calls the existing `parkrun-import` Edge Function, surfaces an imported-count toast. |
 | HealthKit (iOS / Apple Watch) | ✗ | ✗ | N/A | N/A | ✓ | Apple Watch reads HR and forwards `avg_bpm`. Phone HealthKit importer not started. |
 | Health Connect (Android) | ✓ | N/A | N/A | N/A | N/A | Summary-only — no GPS routes. |
 | Garmin Connect | ✗ | ✗ | ✗ | N/A | N/A | Blocked on developer-program application. 🔸 gap vs web-canonical once unblocked — OAuth flow belongs in the browser first. |
@@ -196,7 +196,7 @@ See [docs/clubs.md](clubs.md). No features.md section yet — update this row-bl
 | Recurring events (per-instance RSVP) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Invite tokens / join links | ✓ | ✗ | ✓ | N/A | N/A | |
 | Join-request approval flow | ✗ | ✗ | ✓ | N/A | N/A | Web-only admin surface. |
-| Upcoming-event card on home (within 48h) | ✓ | ✗ | ✗ | N/A | N/A | 🔸 gap vs web-canonical — promote a card to the web dashboard when the user has a going-RSVP for an event in the next 48 h; mirror Android's `upcoming_event_card.dart`. |
+| Upcoming-event card on home (within 48h) | ✓ | ✗ | ✓ | N/A | N/A | Web: `fetchNextRsvpedEvent(48)` on dashboard mount; card renders above stats when a matching RSVP exists, links to the event detail page. |
 | Realtime subscriptions (posts / RSVPs / members) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Push notifications (event reminders, admin updates) | ✗ | ✗ | ✗ | ✗ | ✗ | Phase 4b, blocked on FCM / APNs credentials. |
 
@@ -310,8 +310,8 @@ Written to `user_device_settings.prefs`; a dedicated per-device editor is not wi
 |---|---|---|---|---|---|---|
 | Device ID mint + `user_device_settings` row on first launch | ✓ | ✓ | ✓ | ✗ | ✗ | Both mobile clients mint a UUID on first launch via `Preferences` and upsert the device row on sign-in through `SettingsService.load`. See [settings.md § Client responsibilities](settings.md#client-responsibilities). |
 | Device list / labels screen | ✗ | ✗ | ✓ | N/A | N/A | Web: `/settings/devices`. No mobile equivalent yet. |
-| Per-device override editor UI | ✗ | ✗ | ✗ | ✗ | ✗ | The DB + registry are ready; no client has built the override surface yet. 🔸 gap vs web-canonical — the "edit my phone's / watch's overrides from my laptop" use case is the obvious one. |
-| Remove a device / wipe local settings | ✗ | ✗ | Partial | ✗ | ✗ | Web can delete rows but doesn't clear local cached settings. 🔸 gap vs web-canonical — make the web device list the authoritative management UI. |
+| Per-device override editor UI | ✗ | ✗ | Partial | ✗ | ✗ | Web: expanding a device row on `/settings/devices` lists its current `prefs` key/value pairs with a per-row Clear button. Read + delete only today; adding a new override (with key picker + typed value input) is a follow-up. |
+| Remove a device / wipe local settings | ✗ | ✗ | ✓ | ✗ | ✗ | Web: resetting the current device deletes its `user_device_settings` row, clears the cached `run_app.device_id` localStorage key, and reloads so the stores reinitialise with a fresh device id. Removing another device just deletes the server row. |
 
 ### App-level settings (not in the registry)
 
@@ -319,13 +319,13 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Dark mode / theme toggle | ✓ | ✗ | ✗ | N/A | N/A | Web follows the OS colour scheme; iOS has no toggle yet. 🔸 gap vs web-canonical — an explicit light/dark/auto toggle belongs on web settings. |
+| Dark mode / theme toggle | ✓ | ✗ | ✓ | N/A | N/A | Web: three-way `Auto / Light / Dark` toggle in `/settings/preferences`. Applied via `html[data-theme]` (CSS duplicates the dark block for the explicit override; media query still fires for auto). Persisted to localStorage, per-browser (intentional — a dark laptop + light tablet is common). |
 | Offline-only mode switch | ✓ | ✗ | N/A | N/A | N/A | Mirror of the offline-only sync behaviour. |
 | HR monitor pairing (BLE) | ✓ | ✗ | N/A | N/A | N/A | External chest-strap pairing; watches use their built-in sensor instead. |
 | Advanced GPS filter tuning | ✓ | ✗ | N/A | ✗ | ✗ | Per-activity-type speed / accuracy thresholds. |
-| Licenses / open-source notices | ✓ | ✓ | ✗ | ✗ | ✗ | 🔸 gap vs web-canonical — a `/legal/licenses` page is trivially shippable. |
+| Licenses / open-source notices | ✓ | ✓ | ✓ | ✗ | ✗ | Web: `/legal/licenses` with dep + licence list and map-data / OSM attribution. Linked from the settings sidebar. |
 | App version display | ✓ | ✓ | ✓ | ✗ | ✗ | |
-| Manage premium subscription | ✗ | ✗ | ✗ | N/A | N/A | Deferred — see [paywall.md](paywall.md). 🔸 gap vs web-canonical — billing-portal link or embedded cancel/upgrade on `/settings/upgrade` belongs on web first. |
+| Manage premium subscription | ✗ | ✗ | Partial | N/A | N/A | Web: "Manage subscription" button on `/settings/upgrade` when the user is Pro. Currently a toast explaining the App Store / Play Store / billing-portal flow — swaps for a real `managementURL` deep-link once the RevenueCat web SDK is wired. |
 | Funding / donation surface | ✗ | ✗ | ✓ | N/A | N/A | Web-only; see row under *Paywall and funding*. |
 
 ## Map and tile layer

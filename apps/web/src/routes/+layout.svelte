@@ -1,10 +1,20 @@
 <script lang="ts">
 	import '../app.css';
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { initTheme } from '$lib/theme';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+
+	// Apply the persisted theme on first client mount. Users with a
+	// saved non-auto preference may see a brief flash on first paint —
+	// that's the cost of not using a blocking script tag in app.html;
+	// acceptable for now.
+	onMount(() => {
+		initTheme();
+	});
 
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
