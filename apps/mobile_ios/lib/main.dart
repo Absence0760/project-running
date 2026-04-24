@@ -6,12 +6,16 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/sign_in_screen.dart';
+import 'watch_ingest_queue.dart';
 
 /// Compile-time Supabase config. Secrets are passed to `flutter run` via
 /// `apps/mobile_ios/dart_defines.json` (gitignored) because inline
@@ -32,9 +36,8 @@ Future<void> main() async {
   await runStore.init();
 
   // Crash recovery: if a previous session left an in-progress run, load it
-  // and surface it so the user can decide to save or discard. For now we
-  // silently load it into the store; the run screen will handle the recovery
-  // prompt once it is wired to LocalRunStore.
+  // so the run screen can surface a recovery prompt when it is wired to
+  // LocalRunStore.
   final inProgress = await runStore.loadInProgress();
   if (inProgress != null) {
     debugPrint('Recovered in-progress run: ${inProgress.id}');
@@ -42,6 +45,9 @@ Future<void> main() async {
 
   final routeStore = LocalRouteStore();
   await routeStore.init();
+
+  final watchQueue = WatchIngestQueue();
+  await watchQueue.init();
 
   ApiClient? api;
   if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
@@ -60,13 +66,32 @@ Future<void> main() async {
     }
   }
 
-  // Wire up the Apple Watch → iPhone → Supabase ingest path. The Swift
-  // side of the Runner project owns a `WCSessionDelegate`; when a file
-  // lands it decodes the gzipped track, combines it with the metadata
-  // dict the watch attached, and forwards to Dart via a method channel.
-  // Here we subscribe and write each incoming run via `ApiClient.saveRun`.
+  // Wire up the Apple Watch → iPhone → Supabase ingest path. When the user
+  // is authenticated, saves directly. When unauthenticated, queues the
+  // payload to disk so it survives an app restart and is replayed on
+  // the next sign-in event.
   if (api != null) {
-    WatchIngest.attach(api);
+    final isSignedIn = api.userId != null;
+    if (isSignedIn) {
+      WatchIngest.attach(api, watchQueue);
+    }
+
+    // Re-attach WatchIngest and drain the queue whenever auth state becomes
+    // signed-in. This covers: (a) sign-in from SignInScreen, (b) session
+    // restored from storage on a cold launch where the user was already
+    // signed in. The subscription is held for the lifetime of the app.
+    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      if (event.event == AuthChangeEvent.signedIn) {
+        WatchIngest.attach(api!, watchQueue);
+        try {
+          watchQueue.drain(api).catchError((e) {
+            debugPrint('Watch ingest queue drain failed: $e');
+          });
+        } catch (e) {
+          debugPrint('Watch ingest queue drain error: $e');
+        }
+      }
+    });
   }
 
   runApp(RunApp(
@@ -74,14 +99,16 @@ Future<void> main() async {
     preferences: preferences,
     runStore: runStore,
     routeStore: routeStore,
+    watchQueue: watchQueue,
   ));
 }
 
-class RunApp extends StatelessWidget {
+class RunApp extends StatefulWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
+  final WatchIngestQueue watchQueue;
 
   const RunApp({
     super.key,
@@ -89,16 +116,51 @@ class RunApp extends StatelessWidget {
     required this.preferences,
     required this.runStore,
     required this.routeStore,
+    required this.watchQueue,
   });
 
+  @override
+  State<RunApp> createState() => _RunAppState();
+}
+
+class _RunAppState extends State<RunApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Run',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      home: HomeScreen(preferences: preferences),
+      home: _resolveHome(),
     );
+  }
+
+  Widget _resolveHome() {
+    final api = widget.apiClient;
+
+    // No Supabase configured — go straight to the app (offline-only mode).
+    if (api == null) {
+      return _onboardingOrHome();
+    }
+
+    final isSignedIn = api.userId != null;
+    if (!isSignedIn) {
+      return SignInScreen(
+        apiClient: api,
+        onSignedIn: () => setState(() {}),
+      );
+    }
+
+    return _onboardingOrHome();
+  }
+
+  Widget _onboardingOrHome() {
+    if (!widget.preferences.onboarded) {
+      return OnboardingScreen(
+        preferences: widget.preferences,
+        onDone: () => setState(() {}),
+      );
+    }
+    return HomeScreen(preferences: widget.preferences);
   }
 }
 
@@ -108,14 +170,36 @@ class RunApp extends StatelessWidget {
 /// avg_bpm?, track: [{lat, lng, ele?, ts?}]}`. We construct a
 /// `core_models.Run` and upload via `ApiClient.saveRun` — same path
 /// any other recording source uses, so web + Android see it identically.
+///
+/// When the user is not authenticated, the payload is persisted to the
+/// [WatchIngestQueue] on disk and replayed on the next sign-in.
 class WatchIngest {
   static const _channel = MethodChannel('run_app/watch_ingest');
 
-  static void attach(ApiClient api) {
+  static void attach(ApiClient api, WatchIngestQueue queue) {
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'run') return null;
       final args = call.arguments as Map<Object?, Object?>?;
       if (args == null) return false;
+
+      if (api.userId == null) {
+        // User is not signed in — persist to disk for later replay.
+        try {
+          final payload = Map<String, dynamic>.fromEntries(
+            args.entries
+                .where((e) => e.key is String)
+                .map((e) => MapEntry(e.key as String, e.value)),
+          );
+          await queue.enqueue(payload);
+        } catch (e) {
+          debugPrint('Watch ingest queue write failed: $e');
+        }
+        // Return false so WatchIngestBridge re-queues on its side too,
+        // ensuring the run is not lost if the app process restarts before
+        // our queue file is written.
+        return false;
+      }
+
       try {
         final run = _runFromArgs(args);
         await api.saveRun(run);
