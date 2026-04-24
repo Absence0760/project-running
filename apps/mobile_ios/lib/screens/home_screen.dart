@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../local_route_store.dart';
+import '../local_run_store.dart';
 import '../preferences.dart';
 import 'run_screen.dart';
 import 'runs_screen.dart';
@@ -8,8 +10,15 @@ import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Preferences preferences;
+  final LocalRunStore? runStore;
+  final LocalRouteStore? routeStore;
 
-  const HomeScreen({super.key, required this.preferences});
+  const HomeScreen({
+    super.key,
+    required this.preferences,
+    this.runStore,
+    this.routeStore,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -20,11 +29,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final runStore = widget.runStore;
+    final prefs = widget.preferences;
+
     final screens = [
-      const RunScreen(),
+      runStore != null
+          ? RunScreen(runStore: runStore, preferences: prefs)
+          : const _OfflineRunPlaceholder(),
       const RunsScreen(),
       const RoutesScreen(),
-      SettingsScreen(preferences: widget.preferences),
+      SettingsScreen(preferences: prefs),
     ];
 
     return Scaffold(
@@ -40,6 +54,19 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.route), label: 'Routes'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
         ],
+      ),
+    );
+  }
+}
+
+class _OfflineRunPlaceholder extends StatelessWidget {
+  const _OfflineRunPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Text('Run recording not available in offline mode.'),
       ),
     );
   }

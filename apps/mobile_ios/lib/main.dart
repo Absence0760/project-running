@@ -160,7 +160,11 @@ class _RunAppState extends State<RunApp> {
         onDone: () => setState(() {}),
       );
     }
-    return HomeScreen(preferences: widget.preferences);
+    return HomeScreen(
+      preferences: widget.preferences,
+      runStore: widget.runStore,
+      routeStore: widget.routeStore,
+    );
   }
 }
 
