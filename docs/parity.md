@@ -259,10 +259,10 @@ See [docs/settings.md](settings.md) for the full registry of known keys (`user_s
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Display name | ✓ | Partial | ✓ | N/A | N/A | iOS: scaffold shows a mocked profile row. |
-| Email address (view) | ✓ | Partial | ✓ | N/A | N/A | |
-| Change password | ✓ | ✗ | ✓ | N/A | N/A | Both call `supabase.auth.updateUser`. |
-| Delete account | ✓ | ✗ | ✓ | N/A | N/A | Both call the `delete-account` Edge Function. |
+| Display name | ✓ | ✓ | ✓ | N/A | N/A | Mobile shows the signed-in email; dedicated display-name editor is web-only. |
+| Email address (view) | ✓ | ✓ | ✓ | N/A | N/A | |
+| Change password | ✓ | ✓ | ✓ | N/A | N/A | All three call `supabase.auth.updateUser`. |
+| Delete account | ✓ | ✓ | ✓ | N/A | N/A | All three call the `delete-account` Edge Function. |
 | Sign out | ✓ | ✓ | ✓ | N/A | N/A | Watches sign out when the paired phone does. |
 
 ### Universal preferences (U / UD scope)
@@ -272,20 +272,20 @@ Written to `user_settings.prefs` and propagate across devices.
 | Key | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | [`preferred_unit`](settings.md#keys) (km / mi) | ✓ | ✓ | ✓ | N/A | N/A | Android dual-writes the legacy `profiles.preferred_unit` column through `SettingsSyncService`. Watches inherit from the paired phone. |
-| [`default_activity_type`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | Editor shipped; the Android run screen's activity picker still defaults to `run` and doesn't consume the bag value yet. |
-| [`hr_zones`](settings.md#keys) (5-band editor) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| [`resting_hr_bpm`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| [`max_hr_bpm`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| [`date_of_birth`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| [`privacy_default`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | Editor shipped; no per-run visibility selector is wired on Android yet, so the value is set-and-roam only. |
-| [`strava_auto_share`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | Toggle shipped on both; enforcement lands when Strava OAuth sync ships. |
-| [`coach_personality`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | Only consumed by the web coach; Android edits it for cross-device roaming. |
-| [`weekly_mileage_goal_m`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | Settings editor writes straight to the bag. The Android dashboard's multi-goal UI still uses a separate local `RunGoal` list — reconciling them is a follow-up. |
-| [`week_start_day`](settings.md#keys) | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| [`map_style`](settings.md#keys) (UD) | ✓ | ✗ | ✓ | ✗ | ✗ | Editor shipped on both; Android's map tile layer doesn't yet swap based on this value. |
-| [`units_pace_format`](settings.md#keys) (UD) | ✓ | ✗ | ✓ | ✗ | ✗ | Editor shipped; Android still derives pace format from `preferred_unit` at render time. |
-| [`auto_pause_enabled`](settings.md#keys) (UD) | ✓ | ✗ | ✓ | ✗ | ✗ | Editor shipped. Android removed live auto-pause (derived post-run); the key is still valid for future watch use. |
-| [`auto_pause_speed_mps`](settings.md#keys) (UD) | ✓ | ✗ | ✓ | ✗ | ✗ | |
+| [`default_activity_type`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped on all three clients. Neither mobile run screen's activity picker consumes the bag value yet. |
+| [`hr_zones`](settings.md#keys) (5-band editor) | ✓ | ✓ | ✓ | ✗ | ✗ | |
+| [`resting_hr_bpm`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |
+| [`max_hr_bpm`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |
+| [`date_of_birth`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |
+| [`privacy_default`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped; no per-run visibility selector is wired on mobile yet, so the value is set-and-roam only. |
+| [`strava_auto_share`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Toggle shipped on all three; enforcement lands when Strava OAuth sync ships. |
+| [`coach_personality`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Only consumed by the web coach; mobile edits it for cross-device roaming. |
+| [`weekly_mileage_goal_m`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Settings editor writes straight to the bag. The Android dashboard's multi-goal UI still uses a separate local `RunGoal` list — reconciling them is a follow-up. |
+| [`week_start_day`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |
+| [`map_style`](settings.md#keys) (UD) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped on all three; mobile's map tile layer doesn't yet swap based on this value. |
+| [`units_pace_format`](settings.md#keys) (UD) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped; mobile still derives pace format from `preferred_unit` at render time. |
+| [`auto_pause_enabled`](settings.md#keys) (UD) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped. Android removed live auto-pause (derived post-run); the key is still valid for iOS run recording and future watch use. |
+| [`auto_pause_speed_mps`](settings.md#keys) (UD) | ✓ | ✓ | ✓ | ✗ | ✗ | |
 
 ### Device-scoped preferences (D)
 
@@ -293,8 +293,8 @@ Written to `user_device_settings.prefs`; a dedicated per-device editor is not wi
 
 | Key | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| [`voice_feedback_enabled`](settings.md#keys) | ✓ | ✗ | ✗ | ✗ | ✗ | Android's "Spoken split announcements" toggle now dual-writes the device bag (overlay-on-signin + push-on-change in `SettingsSyncService`). |
-| [`voice_feedback_interval_km`](settings.md#keys) | ✓ | ✗ | ✗ | ✗ | ✗ | Android's "Split interval" control dual-writes; unit conversion metres ↔ km happens in `SettingsSyncService`. |
+| [`voice_feedback_enabled`](settings.md#keys) | ✓ | ✓ | ✗ | ✗ | ✗ | Mobile's "Spoken split announcements" toggle dual-writes the device bag (overlay-on-signin + push-on-change in `SettingsSyncService`). |
+| [`voice_feedback_interval_km`](settings.md#keys) | ✓ | ✓ | ✗ | ✗ | ✗ | Mobile's "Split interval" control dual-writes; unit conversion metres ↔ km happens in `SettingsSyncService`. |
 | [`haptic_feedback_enabled`](settings.md#keys) | N/A | N/A | N/A | N/A | Partial | Apple Watch ships haptic pace alerts but the on/off toggle isn't surfaced yet. Wear OS has no haptics ([decisions.md § 15](decisions.md)). |
 | [`keep_screen_on`](settings.md#keys) | ✓ | ✗ | N/A | N/A | N/A | Android wakelock during a run is unconditional; the toggle UI is still TODO. |
 
@@ -302,7 +302,7 @@ Written to `user_device_settings.prefs`; a dedicated per-device editor is not wi
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Device ID mint + `user_device_settings` row on first launch | ✓ | ✗ | ✓ | ✗ | ✗ | See [settings.md § Client responsibilities](settings.md#client-responsibilities). |
+| Device ID mint + `user_device_settings` row on first launch | ✓ | ✓ | ✓ | ✗ | ✗ | Both mobile clients mint a UUID on first launch via `Preferences` and upsert the device row on sign-in through `SettingsService.load`. See [settings.md § Client responsibilities](settings.md#client-responsibilities). |
 | Device list / labels screen | ✗ | ✗ | ✓ | N/A | N/A | Web: `/settings/devices`. No mobile equivalent yet. |
 | Per-device override editor UI | ✗ | ✗ | ✗ | ✗ | ✗ | The DB + registry are ready; no client has built the override surface yet. |
 | Remove a device / wipe local settings | ✗ | ✗ | Partial | ✗ | ✗ | Web can delete rows but doesn't clear local cached settings. |

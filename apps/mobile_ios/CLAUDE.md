@@ -17,7 +17,8 @@ Dart files under `lib/`:
 - `screens/sign_in_screen.dart` — email/password + Apple Sign-In button (gated behind `_kAppleSignInEnabled = false` pending Services ID setup)
 - `screens/onboarding_screen.dart` — three-page first-launch flow with geolocator-based location permission request
 - `screens/run_screen.dart` — **wired**: `RunRecorder` from `packages/run_recorder`; state machine idle → countdown → recording → paused → finished; saves to `LocalRunStore` on stop with incremental crash-safe persistence every 10s
-- `screens/settings_screen.dart` — unit toggle wired to `Preferences.setUseMiles`
+- `screens/settings_screen.dart` — full settings surface: account (change password + delete account via `delete-account` Edge Function), preferences (units, audio cues, split interval, default activity, map style, pace format, auto-pause), profile & training (DOB, HR zones, resting/max HR, weekly goal, week start, privacy default, Strava auto-share, coach personality). All bag-backed keys round-trip through `SettingsSyncService`; Android-only tiles (BLE pairing, Strava ZIP import, backup/restore, advanced-GPS, dark mode) are deliberately omitted.
+- `settings_sync.dart` — **verbatim port** of `mobile_android/lib/settings_sync.dart`. Keep in sync; when a key is added to the Android twin, mirror it here. Long-term this wants to live in a shared package; copy-then-converge for now.
 
 Native iOS files under `ios/Runner/`:
 

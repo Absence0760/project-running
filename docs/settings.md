@@ -64,12 +64,20 @@ keys. Adding a new key is a client change + an entry below — no migration.
 
 ## Where it's wired today
 
-- **Dart clients** (`mobile_android`, future `mobile_ios`, `watch_wear`):
-  `SettingsService` in [`packages/api_client/lib/src/settings_service.dart`](../packages/api_client/lib/src/settings_service.dart).
-  Device ID is minted and cached in `Preferences` (`mobile_android/lib/preferences.dart`,
-  key `device_id`). The `SettingsSyncService` in `mobile_android/lib/settings_sync.dart`
-  pulls the universal bag on sign-in and dual-writes `preferred_unit` from
-  the settings screen toggle.
+- **Dart clients** (`mobile_android`, `mobile_ios`):
+  `SettingsService` in [`packages/api_client/lib/src/settings_service.dart`](../packages/api_client/lib/src/settings_service.dart),
+  with string-constant key names in `SettingsKeys` so clients can't drift on
+  spellings. Device ID is minted and cached in `Preferences`
+  (`mobile_*/lib/preferences.dart`, key `device_id`).
+  `SettingsSyncService` lives as a verbatim twin in
+  `mobile_android/lib/settings_sync.dart` and `mobile_ios/lib/settings_sync.dart`
+  — it pulls both bags on sign-in, overlays `preferred_unit`,
+  `voice_feedback_enabled`, and `voice_feedback_interval_km` onto local
+  `Preferences`, and exposes `updateUniversal` / `updateDevice`
+  passthroughs the settings screen uses for bag-only keys. Both mobile
+  settings screens edit the full universal + device registry (profile,
+  HR, pace, privacy, coach, map style, auto-pause, weekly goal, coach
+  personality, Strava auto-share).
 - **Web**: [`apps/web/src/lib/settings.ts`](../apps/web/src/lib/settings.ts).
   Device ID is minted once in `localStorage` (key `run_app.device_id`). The
   account page at `/settings/account` dual-writes `preferred_unit` to both
@@ -79,8 +87,10 @@ keys. Adding a new key is a client change + an entry below — no migration.
   clients prefer the bag and fall back to the column. A follow-up migration
   drops the column once every client has cut over.
 - **Not yet wired**: `watch_ios` (Swift), `watch_wear` (Kotlin), and the
-  per-device settings editor UI on any client. The DB + registry are ready;
-  adding surfaces on those is ~30 min each.
+  per-device settings editor UI on any client (the DB holds the device
+  rows, but no phone-side UI lets the user override a universal value on
+  a specific device yet). The DB + registry are ready; adding surfaces on
+  those is ~30 min each.
 
 ## Adding a new key
 

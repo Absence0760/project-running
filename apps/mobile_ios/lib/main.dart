@@ -15,6 +15,7 @@ import 'preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/sign_in_screen.dart';
+import 'settings_sync.dart';
 import 'watch_ingest_queue.dart';
 
 /// Compile-time Supabase config. Secrets are passed to `flutter run` via
@@ -49,6 +50,8 @@ Future<void> main() async {
   final watchQueue = WatchIngestQueue();
   await watchQueue.init();
 
+  final settingsSync = SettingsSyncService(preferences: preferences);
+
   ApiClient? api;
   if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
     try {
@@ -59,6 +62,15 @@ Future<void> main() async {
           await api.signIn(email: _devEmail, password: _devPassword);
         } catch (e) {
           debugPrint('Auto sign-in failed: $e');
+        }
+      }
+      if (api.userId != null) {
+        // Best-effort cloud-settings pull; offline launches just keep the
+        // local prefs as the source of truth.
+        try {
+          await settingsSync.onSignedIn();
+        } catch (e) {
+          debugPrint('Settings sync on startup failed: $e');
         }
       }
     } catch (e) {
@@ -90,6 +102,9 @@ Future<void> main() async {
         } catch (e) {
           debugPrint('Watch ingest queue drain error: $e');
         }
+        settingsSync.onSignedIn().catchError((e) {
+          debugPrint('Settings sync on signedIn failed: $e');
+        });
       }
     });
   }
@@ -100,6 +115,7 @@ Future<void> main() async {
     runStore: runStore,
     routeStore: routeStore,
     watchQueue: watchQueue,
+    settingsSync: settingsSync,
   ));
 }
 
@@ -109,6 +125,7 @@ class RunApp extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final WatchIngestQueue watchQueue;
+  final SettingsSyncService? settingsSync;
 
   const RunApp({
     super.key,
@@ -117,6 +134,7 @@ class RunApp extends StatefulWidget {
     required this.runStore,
     required this.routeStore,
     required this.watchQueue,
+    this.settingsSync,
   });
 
   @override
@@ -164,6 +182,8 @@ class _RunAppState extends State<RunApp> {
       preferences: widget.preferences,
       runStore: widget.runStore,
       routeStore: widget.routeStore,
+      apiClient: widget.apiClient,
+      settingsSync: widget.settingsSync,
     );
   }
 }
