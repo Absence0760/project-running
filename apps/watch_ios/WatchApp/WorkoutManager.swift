@@ -6,6 +6,7 @@ import WatchKit
 class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     enum State {
         case idle
+        case recovering
         case recording
         case paused
         case finished
@@ -19,8 +20,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// Raw GPS track recorded during the run.
     @Published var track: [CLLocation] = []
 
-    /// The completed run data, available after stop().
-    private(set) var finishedRun: FinishedRun?
+    /// The completed run data, available after stop() or recovery.
+    var finishedRun: FinishedRun?
 
     let healthKit = HealthKitManager()
 
@@ -29,11 +30,15 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     private let locationManager = CLLocationManager()
     private var timer: Timer?
+    private var checkpointTimer: Timer?
     private var startDate: Date?
     private var pausedAt: Date?
     private var totalPausedInterval: TimeInterval = 0
     private var lastTooFastHaptic: Date? = nil
     private var lastTooSlowHaptic: Date? = nil
+    private var currentRunId: String?
+    private var checkpointStore: CheckpointStore?
+    private var writtenPointCount: Int = 0
 
     struct FinishedRun {
         let id: String
@@ -74,7 +79,14 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     // MARK: - Controls
 
+    func checkForPendingRecovery() {
+        guard CheckpointStore.peekCheckpoint() != nil else { return }
+        state = .recovering
+    }
+
     func start() {
+        let runId = UUID().uuidString.lowercased()
+        currentRunId = runId
         track = []
         distanceMetres = 0
         elapsedSeconds = 0
@@ -82,17 +94,28 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         finishedRun = nil
         pausedAt = nil
         totalPausedInterval = 0
+        writtenPointCount = 0
+        lastTooFastHaptic = nil
+        lastTooSlowHaptic = nil
         healthKit.reset()
+
+        let store = CheckpointStore(runId: runId)
+        checkpointStore = store
 
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
         healthKit.startWorkout()
 
-        startDate = Date()
+        let start = Date()
+        startDate = start
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self, let startDate = self.startDate else { return }
             guard self.state == .recording else { return }
             self.elapsedSeconds = Date().timeIntervalSince(startDate) - self.totalPausedInterval
+        }
+
+        checkpointTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            self?.writeCheckpoint()
         }
 
         state = .recording
@@ -120,10 +143,14 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             totalPausedInterval += Date().timeIntervalSince(pausedAt)
             self.pausedAt = nil
         }
+        checkpointTimer?.invalidate()
+        checkpointTimer = nil
         timer?.invalidate()
         timer = nil
         locationManager.stopUpdatingLocation()
         healthKit.stopWorkout()
+        checkpointStore?.clear()
+        checkpointStore = nil
 
         let duration = Int(elapsedSeconds)
         let trackPoints = track.map { loc in
@@ -148,6 +175,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func reset() {
+        checkpointTimer?.invalidate()
+        checkpointTimer = nil
         track = []
         distanceMetres = 0
         elapsedSeconds = 0
@@ -155,8 +184,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         finishedRun = nil
         pausedAt = nil
         totalPausedInterval = 0
+        writtenPointCount = 0
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
+        checkpointStore = nil
+        currentRunId = nil
         state = .idle
     }
 
@@ -186,23 +218,68 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - CLLocationManagerDelegate
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        var newPoints: [TrackPointRecord] = []
         for location in locations {
-            // Filter out inaccurate readings
             guard location.horizontalAccuracy >= 0, location.horizontalAccuracy < 30 else { continue }
 
             if let last = track.last {
                 let delta = location.distance(from: last)
-                // Ignore tiny movements (GPS jitter) and implausible jumps
                 if delta > 2 && delta < 100 {
                     distanceMetres += delta
                 }
             }
 
             track.append(location)
+            newPoints.append(TrackPointRecord(
+                lat: location.coordinate.latitude,
+                lng: location.coordinate.longitude,
+                ele: location.altitude > -999 ? location.altitude : nil,
+                ts: ISO8601DateFormatter().string(from: location.timestamp)
+            ))
         }
 
-        // Calculate current pace (seconds per km) from last ~200m
+        if !newPoints.isEmpty {
+            checkpointStore?.appendTrackPoints(newPoints)
+        }
+
         updatePace()
+    }
+
+    private func writeCheckpoint() {
+        guard let store = checkpointStore,
+              let runId = currentRunId,
+              let start = startDate else { return }
+        let cp = RunCheckpoint(
+            id: runId,
+            startedAt: start,
+            distanceMetres: distanceMetres,
+            activeDurationSeconds: elapsedSeconds,
+            pausedIntervalSeconds: totalPausedInterval,
+            trackPointCount: track.count,
+            cacheFileURL: store.trackFileURL
+        )
+        store.write(checkpoint: cp)
+    }
+
+    func recoverRun() -> FinishedRun? {
+        guard let cp = CheckpointStore.peekCheckpoint() else { return nil }
+        let store = CheckpointStore(runId: cp.id)
+        let pts = store.loadTrackPoints()
+        let trackPoints = pts.map { p in
+            TrackPoint(lat: p.lat, lng: p.lng, ele: p.ele, ts: p.ts)
+        }
+        return FinishedRun(
+            id: cp.id,
+            startedAt: cp.startedAt,
+            durationSeconds: Int(cp.activeDurationSeconds),
+            distanceMetres: cp.distanceMetres,
+            track: trackPoints,
+            averageBPM: nil
+        )
+    }
+
+    func clearRecovery() {
+        CheckpointStore.clearStatic()
     }
 
     private func updatePace() {

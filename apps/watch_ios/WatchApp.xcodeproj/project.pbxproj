@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1B2C3D4E5F60001000A000E /* CheckpointStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A000D /* CheckpointStore.swift */; };
 		A1B2C3D4E5F60001000A0001 /* RunApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0001 /* RunApp.swift */; };
 		A1B2C3D4E5F60001000A0002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0002 /* ContentView.swift */; };
 		A1B2C3D4E5F60001000A0003 /* WorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */; };
@@ -22,6 +23,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1B2C3D4E5F60002000A000D /* CheckpointStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointStore.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0001 /* RunApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunApp.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManager.swift; sourceTree = "<group>"; };
@@ -65,6 +67,7 @@
 		A1B2C3D4E5F60006000A0002 /* WatchApp */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F60002000A000D /* CheckpointStore.swift */,
 				A1B2C3D4E5F60002000A0001 /* RunApp.swift */,
 				A1B2C3D4E5F60002000A0002 /* ContentView.swift */,
 				A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */,
@@ -168,6 +171,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D4E5F60001000A000E /* CheckpointStore.swift in Sources */,
 				A1B2C3D4E5F60001000A0001 /* RunApp.swift in Sources */,
 				A1B2C3D4E5F60001000A0002 /* ContentView.swift in Sources */,
 				A1B2C3D4E5F60001000A0003 /* WorkoutManager.swift in Sources */,

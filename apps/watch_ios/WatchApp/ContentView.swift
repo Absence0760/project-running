@@ -15,6 +15,8 @@ struct ContentView: View {
                         workoutManager: workoutManager,
                         queuedCount: connectivity.queuedCount
                     )
+                case .recovering:
+                    RecoveryView(workoutManager: workoutManager, onRecover: recoverRun, onDiscard: discardRecovery)
                 case .recording:
                     RunningView(
                         workoutManager: workoutManager,
@@ -35,7 +37,10 @@ struct ContentView: View {
                 }
             }
         }
-        .task { await workoutManager.healthKit.requestAuthorization() }
+        .task {
+            await workoutManager.healthKit.requestAuthorization()
+            workoutManager.checkForPendingRecovery()
+        }
     }
 
     private func syncRun() {
@@ -80,6 +85,23 @@ struct ContentView: View {
             }
         }
         #endif
+    }
+
+    private func recoverRun() {
+        guard let run = workoutManager.recoverRun() else {
+            discardRecovery()
+            return
+        }
+        workoutManager.clearRecovery()
+        workoutManager.finishedRun = run
+        workoutManager.distanceMetres = run.distanceMetres
+        workoutManager.elapsedSeconds = TimeInterval(run.durationSeconds)
+        workoutManager.state = .finished
+    }
+
+    private func discardRecovery() {
+        workoutManager.clearRecovery()
+        workoutManager.state = .idle
     }
 
     /// Return to the idle screen. Leaves any WCSession-queued transfers
@@ -242,6 +264,58 @@ struct PausedView: View {
             }
             .font(.caption)
         }
+    }
+}
+
+// MARK: - Recovery View
+
+struct RecoveryView: View {
+    let workoutManager: WorkoutManager
+    let onRecover: () -> Void
+    let onDiscard: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                Text("Unsaved Run")
+                    .font(.headline)
+
+                if let cp = CheckpointStore.peekCheckpoint() {
+                    let dateStr = Self.formatDate(cp.startedAt)
+                    let distStr = String(format: "%.1f km", cp.distanceMetres / 1000)
+                    let durStr = Self.formatDuration(cp.activeDurationSeconds)
+                    Text("Recover unsaved run from \(dateStr), \(distStr), \(durStr)?")
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                }
+
+                Button("Recover") {
+                    onRecover()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.coralDeep)
+
+                Button("Discard", role: .destructive) {
+                    onDiscard()
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private static func formatDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
+    }
+
+    private static func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m) min"
     }
 }
 
