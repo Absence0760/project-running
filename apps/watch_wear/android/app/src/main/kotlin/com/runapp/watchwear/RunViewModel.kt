@@ -67,6 +67,13 @@ data class UiState(
     val offRouteDistanceM: Double? = null,
     /// Live "distance to end of route" in metres. Null when no route.
     val routeRemainingM: Double? = null,
+    /// User-picked target pace for this run, in seconds per kilometre.
+    /// Null means "no target — don't fire pace alerts". Set via the
+    /// pre-run Pace chip; flows through `ACTION_START` to the service.
+    val targetPaceSecPerKm: Int? = null,
+    /// Live step count for the current run from the pedometer. Null
+    /// when the device has no step sensor or no samples have arrived.
+    val steps: Int? = null,
 )
 
 data class ActiveRaceState(
@@ -159,6 +166,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             lapCount = m.laps.size,
                             offRouteDistanceM = m.offRouteDistanceM,
                             routeRemainingM = m.routeRemainingM,
+                            steps = m.steps,
                         )
                         maybePushRacePing(m)
                     }
@@ -453,12 +461,29 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             runId = runId,
             activityType = _state.value.activityType,
             routeWaypointsJson = route?.waypointsAsJson(),
+            targetPaceSecPerKm = _state.value.targetPaceSecPerKm,
         )
     }
 
     fun setActivityType(type: String) {
         if (_state.value.stage != Stage.PreRun) return
         _state.value = _state.value.copy(activityType = type)
+    }
+
+    /// Cycle the pre-run target pace through the standard options.
+    /// `null` means "no target"; the chip label renders "Pace: off".
+    /// The other values were picked to cover the common marathon +
+    /// half-marathon + parkrun training paces a club runner cares about
+    /// — it's not a configurable list, because typing numbers on a 46mm
+    /// screen is miserable. If a runner wants a custom target, they
+    /// should set it on the phone once the universal-bag integration
+    /// lands and ride it across devices.
+    fun cycleTargetPace() {
+        if (_state.value.stage != Stage.PreRun) return
+        val order = listOf<Int?>(null, 240, 270, 300, 330, 360, 390, 420)
+        val idx = order.indexOf(_state.value.targetPaceSecPerKm)
+        val next = order[(idx + 1) % order.size]
+        _state.value = _state.value.copy(targetPaceSecPerKm = next)
     }
 
     // ----- Routes -----
@@ -575,6 +600,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     avgBpm = m.avgBpm,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
+                    steps = m.steps,
                 )
             )
             RecordingRepository.reset()
@@ -789,6 +815,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val metadata: JsonObject = buildJsonObject {
             put("activity_type", run.activityType)
             if (run.avgBpm != null) put("avg_bpm", run.avgBpm)
+            if (run.steps != null && run.steps > 0) put("steps", run.steps)
             if (run.laps.isNotEmpty()) {
                 put("laps", buildJsonArray {
                     var prevMs = 0L

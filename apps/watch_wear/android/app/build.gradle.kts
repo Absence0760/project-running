@@ -60,6 +60,14 @@ android {
         // seed-creds and no emulator-synthesised HR leaking into runs.
         buildConfigField("boolean", "BYPASS_LOGIN", envFlag("BYPASS_LOGIN").toString())
         buildConfigField("boolean", "ENABLE_HR", envFlag("ENABLE_HR").toString())
+        // TTS defaults **on** — unlike ENABLE_HR, there's no emulator
+        // quirk to guard against. The TTS engine degrades gracefully if
+        // a voice isn't installed. Set DISABLE_TTS=true in
+        // `.env.local` if you're developing in a quiet space.
+        buildConfigField(
+            "boolean", "ENABLE_TTS",
+            (!envFlag("DISABLE_TTS")).toString(),
+        )
     }
 
     buildFeatures {

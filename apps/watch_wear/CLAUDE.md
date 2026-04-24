@@ -220,27 +220,14 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   UI doesn't yet have a low-color "ambient" branch. Wire
   `AmbientLifecycleObserver` + a dimmed Compose render path. (Glanceable
   watch face complication is a separate, larger item.)
-- **TTS audio cues.** `android.speech.tts.TextToSpeech` works on Wear OS
-  but no voice-feedback path is wired into the recording service yet.
-- **Haptic pace alerts.** `LocalHapticFeedback` works and already fires
-  on lap / pause / resume as a UX confirmation, but there's no *pace
-  alert* trigger because the Wear recording flow doesn't accept a
-  target pace yet. When the target-pace input lands (universal-bag or
-  a per-device setting), wire the pace-drift haptic the same way
-  Android does — two pulses for "speed up", one for "slow down".
-- **Pedometer.** `Sensor.TYPE_STEP_COUNTER` / Health Services
-  `DataType.STEPS` is not subscribed; `metadata.steps` is not written.
-- **Live map during recording.** The RunningScreen is pure stats —
-  there's no route overlay, no follow-cam, no tile rendering. Adding
-  one would unlock the dependent items below (route nav + tile cache).
 - **Live map during recording / live position marker on a route.** The
   RunningScreen is still pure stats. The off-route banner + "X to go"
   badge ship without a map (the math runs per GPS sample); the
   *visual* position marker on the planned route is blocked on adding
   a tile renderer, which is a multi-day platform project in its own
   right. Not started.
-- **Live HTTP tile cache.** Blocked on the live map; pre-downloaded
-  tiles are still the only path.
+- **Live HTTP tile cache.** Blocked on the live map above;
+  pre-downloaded tiles are still the only path.
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).
@@ -301,6 +288,34 @@ What the UI exposes during a recording, for quick reference when reading
   at 40 m / 20 m and a double-haptic on entry) and a "X.XX km to go"
   badge under the distance readout. The *visual* position marker on a
   rendered route is still deferred — no live map yet.
+- **TTS audio cues.** `recording/TtsAnnouncer.kt` wraps
+  `android.speech.tts.TextToSpeech` with an async init + flush-queued
+  speak. `RunRecordingService` announces "Run started" on begin,
+  a split on each completed kilometre ("1 kilometre. Pace 5 minutes
+  30 seconds per kilometre" — same phrasing as Android's
+  `audio_cues.dart`), pace-drift nudges from `firePaceAlert`, and a
+  finish summary in `stopRecording`. Gated on `BuildConfig.ENABLE_TTS`
+  (defaults on; set `DISABLE_TTS=true` in `.env.local` to silence).
+- **Target-pace picker + haptic pace alerts.** Pre-run **Pace** chip
+  cycles `off / 4:00 / 4:30 / 5:00 / 5:30 / 6:00 / 6:30 / 7:00 /km` via
+  `RunViewModel.cycleTargetPace`. `start()` passes the value through
+  `EXTRA_TARGET_PACE_SEC_PER_KM`; the service compares live pace every
+  GPS sample (after the 50 m stabilisation gate used for pace) and
+  calls `firePaceAlert(tooSlow)` when drift > 30 s/km, rate-limited to
+  one alert per 30 s. Haptic fires via `VibratorManager` — a
+  `createWaveform(longArrayOf(0, 180, 180, 180), ...)` double pulse
+  for "speed up", a `createOneShot(220, DEFAULT_AMPLITUDE)` single
+  pulse for "slow down", paired with a TTS nudge. Matches the
+  two-pulse vs single-pulse pattern on Android.
+- **Pedometer.** `Pedometer.kt` wraps `Sensor.TYPE_STEP_COUNTER` with a
+  per-run baseline subtraction so the flow yields cumulative steps
+  since recording started. `RunRecordingService` collects into
+  `RecordingRepository.Metrics.steps`; `QueuedRun.steps` persists the
+  final count; `pushRun` writes `run.metadata.steps` when non-zero.
+  Requires `ACTIVITY_RECOGNITION` at runtime — requested alongside
+  `ACCESS_FINE_LOCATION` + `BODY_SENSORS` by `permissionLauncher`.
+  `RunningScreen` surfaces the live count as a `"N steps"` caption
+  beneath `bpm`.
 
 ## Before reporting a task done
 

@@ -135,17 +135,24 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             activityType = state.activityType,
                             activeRace = state.activeRace,
                             selectedRouteName = state.selectedRoute?.name,
+                            targetPaceSecPerKm = state.targetPaceSecPerKm,
                             onCycleActivity = {
                                 val order = listOf("run", "walk", "hike", "cycle")
                                 val next = order[(order.indexOf(state.activityType) + 1) % order.size]
                                 vm.setActivityType(next)
                             },
+                            onCyclePace = vm::cycleTargetPace,
                             onOpenRoutePicker = vm::openRoutePicker,
                             onStart = {
                                 permissionLauncher.launch(
                                     arrayOf(
                                         Manifest.permission.ACCESS_FINE_LOCATION,
                                         Manifest.permission.BODY_SENSORS,
+                                        // Needed for `TYPE_STEP_COUNTER` on
+                                        // API 29+. Granting is not blocking
+                                        // — the step flow is silent if the
+                                        // user denies.
+                                        Manifest.permission.ACTIVITY_RECOGNITION,
                                     )
                                 )
                             },
@@ -168,6 +175,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     distanceM = state.distanceM,
                     paceSecPerKm = state.paceSecPerKm,
                     bpm = state.bpm,
+                    steps = state.steps,
                     lapCount = state.lapCount,
                     paused = state.stage == Stage.Paused,
                     locationAvailable = state.locationAvailable,
@@ -339,7 +347,9 @@ private fun PreRunScreen(
     pendingRecoveryDistance: Double?,
     activityType: String,
     selectedRouteName: String?,
+    targetPaceSecPerKm: Int?,
     onCycleActivity: () -> Unit,
+    onCyclePace: () -> Unit,
     onOpenRoutePicker: () -> Unit,
     onStart: () -> Unit,
     onSignIn: () -> Unit,
@@ -478,8 +488,24 @@ private fun PreRunScreen(
                     },
                     colors = ChipDefaults.secondaryChipColors(),
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
             }
+            // Pace-target chip — tap cycles off / 4:00 / 4:30 / … / 7:00.
+            // When non-null, the service fires a double-pulse vibration
+            // + TTS nudge whenever the live pace drifts >30 s from the
+            // target (rate-limited to one alert per 30 s).
+            CompactChip(
+                onClick = onCyclePace,
+                label = {
+                    Text(
+                        if (targetPaceSecPerKm == null) "Pace: off"
+                        else "Pace ${formatPace(targetPaceSecPerKm.toDouble())}/km",
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = ChipDefaults.secondaryChipColors(),
+            )
+            Spacer(Modifier.height(6.dp))
             Button(
                 onClick = onStart,
                 modifier = Modifier.size(ButtonDefaults.LargeButtonSize + 20.dp),
@@ -778,6 +804,7 @@ private fun RunningScreen(
     distanceM: Double,
     paceSecPerKm: Double?,
     bpm: Int?,
+    steps: Int?,
     lapCount: Int,
     paused: Boolean,
     locationAvailable: Boolean,
@@ -902,6 +929,13 @@ private fun RunningScreen(
                 "$bpm bpm",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.coral,
+            )
+        }
+        if (steps != null && steps > 0) {
+            Text(
+                "$steps steps",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.haze,
             )
         }
         if (lapCount > 0) {

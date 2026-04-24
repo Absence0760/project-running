@@ -29,6 +29,11 @@ data class QueuedRun(
     val avgBpm: Double? = null,
     val activityType: String = "run",
     val laps: List<QueuedLap> = emptyList(),
+    /// Cumulative step count for the run — captured from the
+    /// `TYPE_STEP_COUNTER` sensor during recording. Written to
+    /// `run.metadata.steps` on upload. Null when the device has no
+    /// pedometer or the sensor never emitted.
+    val steps: Int? = null,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "watch_wear")
