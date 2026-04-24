@@ -20,6 +20,8 @@ struct ContentView: View {
                         workoutManager: workoutManager,
                         healthKit: workoutManager.healthKit
                     )
+                case .paused:
+                    PausedView(workoutManager: workoutManager)
                 case .finished:
                     PostRunView(
                         workoutManager: workoutManager,
@@ -156,11 +158,50 @@ struct RunningView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
 
-            Button("Stop") {
-                workoutManager.stop()
+            HStack(spacing: 12) {
+                Button("Pause") {
+                    workoutManager.pause()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.duskDeep)
+
+                Button("Stop") {
+                    workoutManager.stop()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.error)
+            }
+        }
+    }
+}
+
+// MARK: - Paused View
+
+struct PausedView: View {
+    @ObservedObject var workoutManager: WorkoutManager
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Paused")
+                .font(.headline)
+
+            VStack(spacing: 4) {
+                Text(workoutManager.formattedElapsed)
+                    .font(.system(.title3, design: .monospaced))
+                Text(workoutManager.formattedDistance)
+                    .font(.body)
+            }
+
+            Button("Resume") {
+                workoutManager.resume()
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.error)
+            .tint(AppTheme.coralDeep)
+
+            Button("Stop", role: .destructive) {
+                workoutManager.stop()
+            }
+            .font(.caption)
         }
     }
 }

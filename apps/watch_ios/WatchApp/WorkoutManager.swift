@@ -6,6 +6,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     enum State {
         case idle
         case recording
+        case paused
         case finished
     }
 
@@ -25,6 +26,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var timer: Timer?
     private var startDate: Date?
+    private var pausedAt: Date?
+    private var totalPausedInterval: TimeInterval = 0
 
     struct FinishedRun {
         let id: String
@@ -71,6 +74,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
+        pausedAt = nil
+        totalPausedInterval = 0
         healthKit.reset()
 
         locationManager.requestWhenInUseAuthorization()
@@ -80,13 +85,35 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         startDate = Date()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self, let startDate = self.startDate else { return }
-            self.elapsedSeconds = Date().timeIntervalSince(startDate)
+            guard self.state == .recording else { return }
+            self.elapsedSeconds = Date().timeIntervalSince(startDate) - self.totalPausedInterval
         }
 
         state = .recording
     }
 
+    func pause() {
+        guard state == .recording else { return }
+        pausedAt = Date()
+        locationManager.stopUpdatingLocation()
+        healthKit.pauseSession()
+        state = .paused
+    }
+
+    func resume() {
+        guard state == .paused, let pausedAt else { return }
+        totalPausedInterval += Date().timeIntervalSince(pausedAt)
+        self.pausedAt = nil
+        locationManager.startUpdatingLocation()
+        healthKit.resumeSession()
+        state = .recording
+    }
+
     func stop() {
+        if state == .paused, let pausedAt {
+            totalPausedInterval += Date().timeIntervalSince(pausedAt)
+            self.pausedAt = nil
+        }
         timer?.invalidate()
         timer = nil
         locationManager.stopUpdatingLocation()
@@ -120,6 +147,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
+        pausedAt = nil
+        totalPausedInterval = 0
         state = .idle
     }
 
