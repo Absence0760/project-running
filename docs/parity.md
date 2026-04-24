@@ -59,7 +59,7 @@ See [features § GPX / KML import](features.md#gpx--kml-import).
 | KML / KMZ import | ✓ | ✗ | ✓ | N/A | N/A | |
 | GeoJSON import | ✓ | ✗ | ✓ | N/A | N/A | |
 | TCX import | ✓ | ✗ | ✓ | N/A | N/A | Web: `parseTcx` added to `lib/import.ts`; the import drop-zone accepts `.tcx` alongside GPX/KML/KMZ/GeoJSON. Preserves per-point elevation + timestamp. |
-| Strava ZIP bulk import | ✓ | ✗ | ✗ | N/A | N/A | Android-only. Web relies on Strava OAuth sync once Phase 3 lands that. 🔸 gap vs web-canonical — uploading a Strava export zip in a browser is the obvious place for bulk import. |
+| Strava ZIP bulk import | ✓ | ✗ | ✓ | N/A | N/A | Shipped on web: `/settings/integrations` → "Bulk import from a Strava export" — parses `activities.csv` + per-activity GPX/TCX files, dedupes against already-imported Strava IDs, reports live progress. iOS still pending. |
 
 ### Builder and library
 
@@ -147,7 +147,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Activity-type filter | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Source filter (All / Recorded / Strava / parkrun / HealthKit) | ✓ | ✗ | ✓ | ✗ | ✗ | Android: source chip row on `runs_screen.dart` (All / Recorded / Watch / Strava / parkrun / HealthKit / Health Connect), composes with the activity-type and date filters. |
 | Share run as GPX | ✓ | ✗ | ✓ | ✗ | ✗ | Web: Download button on run detail → `toRunGpx` builds GPX 1.1 with per-point `<time>` so the trace round-trips into Strava / Garmin / Komoot as a real activity, not just a route. |
-| Share run as image card | ✓ | ✗ | ✗ | ✗ | ✗ | Would need a canvas-based map snapshot + stats overlay on web — deferred. 🔸 gap vs web-canonical — build on web first (html-to-image or server-side rendered PNG), then mobile can reuse the same URL. |
+| Share run as image card | ✓ | ✗ | ✓ | ✗ | ✗ | Shipped on web (`/runs/[id]` → "Share as image") — uses `html-to-image` to render a 1080×1080 gradient card with stats and falls back to a PNG download when the Web Share API is unavailable. Android has its own share-sheet integration. 🔸 gap vs web-canonical — watch surfaces to follow if ever needed. |
 | Save history run as a reusable route | ✓ | ✗ | ✓ | ✗ | ✗ | Web: "Save as route" icon on run detail prompts for a name, runs the track through Douglas-Peucker (10 m ε, port of `apps/mobile_android/lib/route_simplify.dart` → `apps/web/src/lib/route_simplify.ts`), writes a `routes` row, and back-links `runs.route_id` to the new route. |
 | Weekly mileage summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Calendar heatmap of runs | ✓ | ✗ | ✓ | ✗ | ✗ | Android: `_RunHeatmap` on the dashboard — 7 × 20-week grid, colour intensity scales by per-day run count, theme-aware primary tint. |
@@ -175,7 +175,7 @@ See [features § External platform sync (OAuth)](features.md#external-platform-s
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | Connect / disconnect integrations UI | ✓ | Partial | ✓ | N/A | N/A | iOS: settings screen present; flows mocked. |
-| Strava OAuth live sync | ✗ | ✗ | ✗ | N/A | N/A | Edge Function exists, not wired end-to-end on any client. 🔸 gap vs web-canonical — wire web first; OAuth redirect flows are cleanest in a browser. |
+| Strava OAuth live sync | ✗ | ✗ | ✓ | N/A | N/A | Shipped on web: connect button on `/settings/integrations` redirects to Strava's `/oauth/authorize`, the callback POSTs the code to the `strava-import` Edge Function, and the function exchanges it for tokens + backfills the last 90 days of run/walk/hike activities (GPS streams included). A "Sync now" button re-triggers the backfill. Webhook-driven realtime sync (`strava-webhook`) still needs the activity-detail branch wired; manual sync is the current path. |
 | parkrun athlete-number import | ✗ | ✗ | ✓ | N/A | N/A | Web: "Pull latest parkrun results" button on `/settings/account` shows once the athlete number is set. Calls the existing `parkrun-import` Edge Function, surfaces an imported-count toast. |
 | HealthKit (iOS / Apple Watch) | ✗ | ✗ | N/A | N/A | ✓ | Apple Watch reads HR and forwards `avg_bpm`. Phone HealthKit importer not started. |
 | Health Connect (Android) | ✓ | N/A | N/A | N/A | N/A | Summary-only — no GPS routes. |
@@ -216,9 +216,9 @@ See [docs/training.md](training.md) and [docs/workout_execution.md](workout_exec
 | Auto-link completed run to planned workout | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Adherence % + weekly summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | VDOT / Riegel pace derivation | ✓ | ✗ | ✓ | ✗ | ✗ | Derivation engine shared via `core_models`. |
-| Adaptive plan generator (phase-banded) | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred; see [features § Premium tier](features.md#premium-tier). 🔸 gap vs web-canonical — VDOT / Riegel math is pure and `lib/training.ts` already hosts the derivation; the generator belongs on web first. |
-| VO2 max estimate | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred. Schema (`fitness_snapshots`) is shipped (`20260507_001`). 🔸 gap vs web-canonical — Cooper-formula estimator + trend chart on web first. |
-| Recovery advisor (ATL / CTL / TSB) | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred. Schema shipped. 🔸 gap vs web-canonical — load math + recommendation card on web first. |
+| Adaptive plan generator (phase-banded) | ✗ | ✗ | ✓ | ✗ | ✗ | Shipped on web at `/plans/new` — `lib/training.ts` holds the generator (VDOT + Riegel derivations, phase-banded workout templates) and the wizard persists via `training_plans` + `plan_weeks` + `plan_workouts`. Mobile consumes the generated plan read-side (Android plan detail screen) but cannot yet kick off generation. 🔸 gap vs web-canonical — mobile "new plan" flow to follow. |
+| VO2 max estimate | ✗ | ✗ | ✓ | ✗ | ✗ | Shipped on web: `lib/fitness.ts` computes VDOT/VO2 max from the user's best recent qualifying run; the dashboard card renders the latest snapshot plus a sparkline trend from `fitness_snapshots`. 🔸 gap vs web-canonical — mobile dashboard card to follow. |
+| Recovery advisor (ATL / CTL / TSB) | ✗ | ✗ | ✓ | ✗ | ✗ | Shipped on web: `lib/fitness.ts` exposes EWMA-based ATL (7-day) / CTL (42-day) / TSB; dashboard renders the numbers plus a rule-based recovery advice string. 🔸 gap vs web-canonical — mobile dashboard card to follow. |
 
 ## AI Coach
 
@@ -239,7 +239,7 @@ See [features § Deep run analysis (web)](features.md#deep-run-analysis-web) and
 |---|---|---|---|---|---|---|
 | Public run share page (`/share/run/{id}`) | ✗ | ✗ | ✓ | N/A | N/A | Link generation is web-only; the page renders anywhere. |
 | Public route share page (`/share/route/{id}`) | ✗ | ✗ | ✓ | N/A | N/A | |
-| Live spectator page (`/live/{run_id}`) | ✗ | ✗ | Partial | N/A | N/A | Currently simulated; WebSocket to Go service not wired. 🔸 gap vs web-canonical — the spectator surface *is* web; finish it here. |
+| Live spectator page (`/live/{run_id}`) | ✗ | ✗ | ✓ | N/A | N/A | Shipped on web: `live_run_pings` table (migration `20260509_001`) streams GPS samples via Supabase Realtime; `/live/{run_id}` subscribes, hydrates any backlog on join, and renders the trace + stats in real time. Falls back to a "demo" animation after 5 s of silence so the page is still useful for previews. Mobile recorder writes are a follow-up — the contract is: insert one `{run_id, user_id, lat, lng, elapsed_s, distance_m, bpm?, ele?}` row per sample, delete on finish. |
 | Runner shares a live-tracking link before start | ✗ | ✗ | ✗ | ✗ | ✗ | Not started. *Physical exception for the trigger* (it's during recording, which is mobile-led) but the shareable landing page lives on web. |
 
 ## Paywall and funding
@@ -249,12 +249,12 @@ See [docs/paywall.md](paywall.md), [features § Pro tier](features.md#pro-tier),
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | Pro tier ($9.99 / mo) — server enforcement | N/A | N/A | ✓ | N/A | N/A | `is_user_pro(uid)` RPC + `subscription_tier` column are shared; all clients read `user_profiles` the same way. Server rule lives on the web because the coach endpoint is web-owned. |
-| Pro "Get Pro" checkout UI | ✗ | ✗ | Partial | N/A | N/A | Web shows a $9.99/mo Pro card with a "Get Pro" CTA; the button is a placeholder toast until the RevenueCat web SDK is wired. Mobile doesn't yet expose a Pro purchase flow. 🔸 gap vs web-canonical — ship web checkout first; mobile can follow with App Store / Play Store purchases via RevenueCat. |
+| Pro "Get Pro" checkout UI | ✗ | ✗ | ✓ | N/A | N/A | Shipped on web: `/settings/upgrade` "Get Pro" button now calls the RevenueCat web SDK when `PUBLIC_REVENUECAT_WEB_API_KEY` is set; unconfigured builds fall back to the placeholder toast. Mobile purchase flow still pending. |
 | Unlimited AI Coach for Pro users | N/A | N/A | ✓ | N/A | N/A | `/api/coach/+server.ts` skips the 10/day cap when `is_user_pro(uid)` is true. Coach chat is web-only today. |
 | Priority processing for Pro users | N/A | N/A | Partial | N/A | N/A | Marketing claim backed by the coach-cap bypass; concrete per-endpoint enforcement (queue priority, rate-limit hints) is a follow-up. 🔸 gap vs web-canonical — tier-aware rate limits on Edge Functions first, then the Go service when it lands. |
 | One-off Donate button | ✗ | ✗ | ✓ | N/A | N/A | Web `/settings/upgrade` has a single Donate button linking to an external provider. Mobile has no in-app donation flow. |
 | Paywall feature gate (registry-driven) | ✓ | ✓ | ✓ | N/A | N/A | `isLocked()` still returns `false` for every key — no feature is hidden behind Pro today. Infra kept so a future Pro-only feature can flip one return. |
-| RevenueCat subscription wiring (web) | N/A | N/A | ✗ | N/A | N/A | Webhook + `subscription_tier` + `is_pro()` helpers are in place; the web SDK `Purchases.configure(...)` + checkout flow is not. 🔸 gap vs web-canonical — blocks the "Get Pro" CTA above. |
+| RevenueCat subscription wiring (web) | N/A | N/A | ✓ | N/A | N/A | Shipped on web: `@revenuecat/purchases-js` wired via `$lib/revenuecat.ts`; `/settings/upgrade` "Get Pro" CTA calls `Purchases.purchase(...)` with the Supabase user id as the app user id. Manage-subscription button redirects to `CustomerInfo.managementURL`. Env-gated by `PUBLIC_REVENUECAT_WEB_API_KEY`; builds without a key still compile and fall back to the placeholder toast, so local dev / previews work end-to-end. |
 | RevenueCat subscription wiring (mobile) | ✗ | ✗ | N/A | N/A | N/A | `purchases_flutter` package not added; `main.dart` initialisation + `PurchasesConfiguration` pending on both platforms. |
 
 ## Settings and preferences

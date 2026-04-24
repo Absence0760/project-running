@@ -340,6 +340,85 @@ export async function createManualRun(input: {
 	return { id: data.id };
 }
 
+/// Insert a run from an importer (Strava zip, GPX bulk, etc). Uploads
+/// an optional `track` to the Storage bucket and stores the path in
+/// `track_url`. For callers without a GPS track, pass `track: undefined`
+/// and the row is saved without one, same as a scalar row from parkrun.
+export async function saveRun(input: {
+	started_at: string;
+	distance_m: number;
+	duration_s: number;
+	elevation_m: number | null;
+	source: string;
+	metadata: Record<string, unknown> | null;
+	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
+	title?: string | null;
+}): Promise<{ id: string }> {
+	const { data: authUser } = await supabase.auth.getUser();
+	const userId = authUser.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+
+	const row: Record<string, unknown> = {
+		user_id: userId,
+		started_at: input.started_at,
+		distance_m: input.distance_m,
+		duration_s: input.duration_s,
+		elevation_m: input.elevation_m,
+		source: input.source,
+		metadata: input.metadata,
+	};
+	if (input.title) row.title = input.title;
+
+	const { data, error } = await supabase
+		.from('runs')
+		.insert(row)
+		.select('id')
+		.single();
+	if (error) throw error;
+	const runId = data.id as string;
+
+	if (input.track && input.track.length >= 2) {
+		try {
+			const path = `${userId}/${runId}.json.gz`;
+			const encoded = new TextEncoder().encode(JSON.stringify(input.track));
+			const gzipped = await gzipBytes(encoded);
+			const { error: upErr } = await supabase.storage
+				.from('runs')
+				.upload(path, new Blob([gzipped], { type: 'application/gzip' }), {
+					contentType: 'application/gzip',
+					upsert: true,
+				});
+			if (!upErr) {
+				await supabase.from('runs').update({ track_url: path }).eq('id', runId);
+			}
+		} catch (_) {
+			// Track upload is best-effort — the scalar row is still valid.
+		}
+	}
+
+	return { id: runId };
+}
+
+async function gzipBytes(data: Uint8Array): Promise<Uint8Array> {
+	const cs = new (globalThis as any).CompressionStream('gzip');
+	const stream = new Response(data).body!.pipeThrough(cs);
+	const chunks: Uint8Array[] = [];
+	const reader = stream.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value as Uint8Array);
+	}
+	const total = chunks.reduce((a, c) => a + c.length, 0);
+	const out = new Uint8Array(total);
+	let offset = 0;
+	for (const c of chunks) {
+		out.set(c, offset);
+		offset += c.length;
+	}
+	return out;
+}
+
 export async function updateRunMetadata(
 	id: string,
 	fields: { title?: string; notes?: string },

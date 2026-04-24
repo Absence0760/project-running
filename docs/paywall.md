@@ -151,12 +151,15 @@ secrets (`supabase secrets set REVENUECAT_WEBHOOK_SECRET=whsec_...`).
 
 ### Client → RevenueCat SDK
 
-**Web**: use the `@revenuecat/purchases-js` package (or a simple
-fetch to RevenueCat's REST API). Configure with the RevenueCat project
-API key and the Supabase user id as the `app_user_id`. Show a checkout
-flow and let RevenueCat handle payment + receipt validation. After a
-successful purchase, the webhook fires and the server updates the tier;
-the client refetches the profile to see the change.
+**Web (shipped)**: `@revenuecat/purchases-js` is wired via
+`apps/web/src/lib/revenuecat.ts`. `/settings/upgrade` "Get Pro" button
+calls `Purchases.purchase(...)` with the Supabase user id as the
+`appUserId`. The `managementURL` on `CustomerInfo` backs the
+"Manage subscription" button. Env-gated by `PUBLIC_REVENUECAT_WEB_API_KEY`;
+builds without the key fall back to the original "coming soon" toast so
+local dev and previews still compile. After a successful purchase the
+`revenuecat-webhook` Edge Function flips `subscription_tier` server-side
+and the web re-fetches the user profile via `auth.fetchUser()`.
 
 **Android (Flutter)**: use `purchases_flutter` package. Initialise in
 `main.dart` after sign-in with the user id as `appUserId`. The
@@ -176,7 +179,7 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_WEBHOOK_SECRET` | Supabase function env | HMAC signing secret from RevenueCat |
 | `REVENUECAT_API_KEY_IOS` | iOS app `.env` / CI secrets | RevenueCat project API key for iOS |
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
-| `REVENUECAT_API_KEY_WEB` | Web `.env` / CI secrets | RevenueCat project API key for web |
+| `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
 
 ## Donation flow (user perspective)
 

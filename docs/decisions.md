@@ -387,6 +387,20 @@ Every user-facing feature lives on the web app unless it is physically impossibl
 
 ---
 
+## 25. Live spectator tracking uses Supabase Realtime, not a custom WebSocket service
+
+**Decided:** April 2026 · supersedes the original "Go service behind `/live/*`" plan.
+
+The spectator page at `/live/{run_id}` streams a runner's in-progress GPS trace to anyone with the link. The earlier plan was to stand up a dedicated Go WebSocket service that held per-run channels. We shipped it instead as a new `live_run_pings` table (migration `20260509_001`) on the realtime publication, subscribed from the browser via `supabase.channel(...).on('postgres_changes', ...)`.
+
+**Why:** a custom Go service adds a whole deployable (container, scaling, health checks, certs) for a feature where the read pattern is trivial — "stream rows inserted for `run_id = X`". Supabase Realtime already offers that over logical replication; piggybacking on it keeps the feature at zero operational cost and lets the mobile recorder write to the same table it would write any other row into.
+
+**Trade-off:** Postgres WAL isn't a free lunch at scale — very high-frequency broadcasters (sub-second ping cadence × many concurrent runners) can pressure the replication slot. The recorder contract is one ping every 3–10 s, which is fine, and the `cleanup_stale_live_run_pings()` helper (callable from the service role) sweeps anything older than 4 hours so orphan rows don't pile up. If usage ever moves us past the realtime limits we revisit; until then we avoid a Go service we don't need.
+
+**Don't re-litigate unless:** realtime throughput becomes the bottleneck, or we need server-authoritative coordination (a race starter gun that must fan out to N participants with < 250 ms jitter, for example) that belongs in an in-process hub.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

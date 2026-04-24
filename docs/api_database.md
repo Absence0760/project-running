@@ -381,6 +381,37 @@ the leaderboard UI lands.
 
 ---
 
+### `live_run_pings`
+
+Ephemeral per-sample GPS feed for the `/live/{run_id}` spectator page.
+Shipped in migration `20260509_001_live_run_pings.sql`.
+
+```sql
+create table live_run_pings (
+  id            bigserial primary key,
+  run_id        uuid not null references runs(id) on delete cascade,
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  at            timestamptz not null default now(),
+  lat           double precision not null,
+  lng           double precision not null,
+  ele           double precision,
+  elapsed_s     integer,
+  distance_m    double precision,
+  bpm           integer
+);
+```
+
+- Added to `supabase_realtime` publication so change streams fan out to
+  subscribed browsers.
+- RLS: `select` when the parent run is public or owned by the caller;
+  `insert` / `delete` restricted to `auth.uid() = user_id` and (for
+  insert) a live run owned by the caller.
+- Recorder contract: one row per GPS sample (3–10 s cadence), delete
+  on finish. `cleanup_stale_live_run_pings()` (callable via service
+  role) wipes rows older than 4 hours as a safety net.
+
+---
+
 ## Row-level security
 
 RLS is enabled on every table. Policies ensure users can only access their own data, with a specific carve-out for public routes.

@@ -4,6 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
 	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
+	import { supabase } from '$lib/supabase';
 
 	let { data } = $props();
 
@@ -13,76 +14,166 @@
 	let elapsed = $state(0);
 	let distance = $state(0);
 	let currentPace = $state('--:--');
-	let status = $state<'connecting' | 'live' | 'finished' | 'error'>('connecting');
-	let interval: ReturnType<typeof setInterval>;
+	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error';
+	let status = $state<Status>('connecting');
+	let demoTicker: ReturnType<typeof setInterval> | null = null;
+	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
-	// Simulated runner position (demo mode)
-	const baseLat = -37.8136;
-	const baseLng = 144.9631;
-	let angle = 0;
+	// Runner position + completed trace. Held as mutable module-scope
+	// state rather than `$state` because MapLibre mutates the GeoJSON
+	// source directly and the chrome doesn't need to re-render on every
+	// tick (only the stat strip below does).
+	const traceCoords: [number, number][] = [];
+
+	// Used to compute the initial map centre when the first ping arrives
+	// so the view snaps to the runner regardless of geography.
+	let centred = false;
+
+	// Defaults that match the simulation: Melbourne CBD so the map isn't
+	// blank during `connecting` or `demo` with no credentials.
+	const fallbackLat = -37.8136;
+	const fallbackLng = 144.9631;
+
+	function ensureMarker(lat: number, lng: number) {
+		if (!map) return;
+		if (!runnerMarker) {
+			const el = document.createElement('div');
+			el.className = 'runner-dot';
+			runnerMarker = new maplibregl.Marker({ element: el })
+				.setLngLat([lng, lat])
+				.addTo(map);
+		} else {
+			runnerMarker.setLngLat([lng, lat]);
+		}
+	}
+
+	function pushPing(ping: {
+		lat: number;
+		lng: number;
+		distance_m?: number | null;
+		elapsed_s?: number | null;
+	}) {
+		traceCoords.push([ping.lng, ping.lat]);
+		ensureMarker(ping.lat, ping.lng);
+		if (!centred) {
+			map.jumpTo({ center: [ping.lng, ping.lat], zoom: 15 });
+			centred = true;
+		} else {
+			map.panTo([ping.lng, ping.lat], { animate: true });
+		}
+		if (ping.distance_m != null) distance = ping.distance_m;
+		if (ping.elapsed_s != null) elapsed = ping.elapsed_s;
+		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
+
+		const source = map.getSource('live-trace') as maplibregl.GeoJSONSource | undefined;
+		source?.setData({
+			type: 'Feature',
+			properties: {},
+			geometry: { type: 'LineString', coordinates: traceCoords },
+		});
+	}
+
+	async function hydrateBacklog() {
+		// Fetch any pings already logged for this run so a spectator
+		// joining mid-run sees the trace so far, not just what arrives
+		// after they connect.
+		const { data: rows, error } = await supabase
+			.from('live_run_pings')
+			.select('lat, lng, distance_m, elapsed_s, at')
+			.eq('run_id', data.id)
+			.order('at', { ascending: true });
+		if (error || !rows || rows.length === 0) return false;
+		for (const row of rows) pushPing(row);
+		return true;
+	}
+
+	function subscribeLive() {
+		realtimeChannel = supabase
+			.channel(`live-run:${data.id}`)
+			.on(
+				'postgres_changes',
+				{
+					event: 'INSERT',
+					schema: 'public',
+					table: 'live_run_pings',
+					filter: `run_id=eq.${data.id}`,
+				},
+				(payload) => {
+					const row = payload.new as {
+						lat: number;
+						lng: number;
+						distance_m: number | null;
+						elapsed_s: number | null;
+					};
+					pushPing(row);
+					if (status !== 'live') status = 'live';
+				},
+			)
+			.subscribe();
+	}
+
+	function startDemo() {
+		// Keeps the spectator page informative for demos and in
+		// development — when no pings are flowing, a synthesised track
+		// animates around the fallback centre so the surface still
+		// looks alive. Badge flips to "demo" so it's obvious this isn't
+		// a real feed.
+		status = 'demo';
+		ensureMarker(fallbackLat, fallbackLng);
+		map.jumpTo({ center: [fallbackLng, fallbackLat], zoom: 15 });
+		let angle = 0;
+		demoTicker = setInterval(() => {
+			angle += 0.02;
+			elapsed += 3;
+			distance += 12 + Math.random() * 5;
+			const lng = fallbackLng + Math.cos(angle) * 0.005;
+			const lat = fallbackLat + Math.sin(angle) * 0.003;
+			pushPing({ lat, lng, distance_m: distance, elapsed_s: elapsed });
+		}, 3000);
+	}
 
 	onMount(() => {
 		map = new maplibregl.Map({
 			container: mapContainer,
 			style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-			center: [baseLng, baseLat],
-			zoom: 15
+			center: [fallbackLng, fallbackLat],
+			zoom: 15,
 		});
-
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-		// Runner marker
-		const el = document.createElement('div');
-		el.className = 'runner-dot';
-		runnerMarker = new maplibregl.Marker({ element: el })
-			.setLngLat([baseLng, baseLat])
-			.addTo(map);
-
-		map.on('load', () => {
-			// Trace line for completed path
+		map.on('load', async () => {
 			map.addSource('live-trace', {
 				type: 'geojson',
-				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
+				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } },
 			});
-
 			map.addLayer({
 				id: 'live-trace-line',
 				type: 'line',
 				source: 'live-trace',
 				paint: { 'line-color': '#3b82f6', 'line-width': 3 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 
-			// Simulate live updates (replace with WebSocket in Phase 2)
-			status = 'live';
-			const traceCoords: [number, number][] = [];
+			const hadBacklog = await hydrateBacklog();
+			subscribeLive();
 
-			interval = setInterval(() => {
-				angle += 0.02;
-				elapsed += 3;
-				distance += 12 + Math.random() * 5;
-
-				const lng = baseLng + Math.cos(angle) * 0.005;
-				const lat = baseLat + Math.sin(angle) * 0.003;
-
-				traceCoords.push([lng, lat]);
-				runnerMarker.setLngLat([lng, lat]);
-				map.panTo([lng, lat], { animate: true });
-
-				currentPace = formatPace(elapsed, distance);
-
-				const source = map.getSource('live-trace') as maplibregl.GeoJSONSource;
-				source?.setData({
-					type: 'Feature',
-					properties: {},
-					geometry: { type: 'LineString', coordinates: traceCoords }
-				});
-			}, 3000);
+			if (hadBacklog) {
+				status = 'live';
+			} else {
+				// No data yet — give the recorder a short grace period to
+				// emit a ping before falling back to the demo animation.
+				setTimeout(() => {
+					if (status === 'connecting' && traceCoords.length === 0) {
+						startDemo();
+					}
+				}, 5000);
+			}
 		});
 	});
 
 	onDestroy(() => {
-		clearInterval(interval);
+		if (demoTicker) clearInterval(demoTicker);
+		if (realtimeChannel) supabase.removeChannel(realtimeChannel);
 		map?.remove();
 	});
 </script>
@@ -101,11 +192,13 @@
 		<div class="live-logo">
 			<span class="logo-icon">&#9654;</span> Run
 		</div>
-		<div class="live-badge" class:active={status === 'live'}>
+		<div class="live-badge" class:active={status === 'live'} class:demo={status === 'demo'}>
 			{#if status === 'connecting'}
 				Connecting...
 			{:else if status === 'live'}
 				<span class="pulse-dot"></span> LIVE
+			{:else if status === 'demo'}
+				Demo
 			{:else if status === 'finished'}
 				Finished
 			{:else}
@@ -127,7 +220,7 @@
 				<span class="live-stat-label">Elapsed</span>
 			</div>
 			<div class="live-stat">
-				<span class="live-stat-value">{currentPace} /km</span>
+				<span class="live-stat-value">{currentPace}</span>
 				<span class="live-stat-label">Pace</span>
 			</div>
 		</div>
@@ -177,6 +270,11 @@
 	.live-badge.active {
 		background: #dcfce7;
 		color: #16a34a;
+	}
+
+	.live-badge.demo {
+		background: #fef3c7;
+		color: #92400e;
 	}
 
 	.pulse-dot {

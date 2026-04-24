@@ -102,23 +102,31 @@ final data = await health.getHealthDataFromTypes(
 
 All activities the user has recorded on Strava — including those synced from Garmin, Apple Watch, and other devices. GPS streams, HR data, splits, and segment efforts.
 
-### Auth flow
+### Auth flow (web, shipped)
 
-Strava uses standard OAuth 2.0. Access tokens expire every 6 hours; refresh tokens are long-lived.
+Strava uses standard OAuth 2.0. Access tokens expire every 6 hours; refresh tokens are long-lived. The scheduled `refresh-tokens` Edge Function rotates them hourly; `strava-import` also does an on-demand refresh when a `sync` action finds the stored token inside its expiry window.
 
 ```
-1. User taps "Connect Strava" in Settings
-2. App opens: https://www.strava.com/oauth/authorize
-     ?client_id={CLIENT_ID}
-     &response_type=code
-     &redirect_uri=https://app.runapp.com/auth/strava/callback
-     &scope=activity:read_all
-3. User grants access on Strava website
-4. Strava redirects to callback with ?code={AUTH_CODE}
-5. Edge Function: POST /strava-import exchanges code for tokens
-6. Tokens stored in integrations table (server-side only, never in client)
-7. Webhook subscription registered
+1. User clicks "Connect" next to Strava on /settings/integrations
+2. Browser redirected to:
+     https://www.strava.com/oauth/authorize
+       ?client_id={PUBLIC_STRAVA_CLIENT_ID}
+       &response_type=code
+       &redirect_uri={origin}/settings/integrations
+       &approval_prompt=auto
+       &scope=activity:read_all,read
+3. User approves on Strava
+4. Strava redirects back to /settings/integrations?code=...&scope=...
+5. Web calls `supabase.functions.invoke('strava-import', { action: 'connect', code, scope })`
+6. Edge Function exchanges code for tokens, stores in `integrations`,
+   and triggers an immediate 90-day backfill
+7. Subsequent "Sync now" button on the integrations card calls
+   `invoke('strava-import', { action: 'sync', lookbackDays })`
 ```
+
+Web env vars:
+- `PUBLIC_STRAVA_CLIENT_ID` — public client ID baked into the OAuth URL.
+- `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` — Edge Function only.
 
 ### Webhook (real-time sync)
 

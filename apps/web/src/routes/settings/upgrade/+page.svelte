@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import {
+		startProCheckout,
+		managementUrl,
+		isRevenueCatConfigured,
+	} from '$lib/revenuecat';
 
 	// External donation link. One-off donations are intentionally routed
 	// through an external provider so the app doesn't have to own a payment
@@ -15,10 +20,33 @@
 	const isPro = $derived(auth.isPro);
 
 	async function handleGetPro() {
-		// RevenueCat web SDK is not wired yet — see docs/paywall.md.
+		const userId = auth.user?.id;
+		if (!userId) {
+			showToast('Sign in to upgrade to Pro.', 'error');
+			return;
+		}
+		if (!isRevenueCatConfigured()) {
+			// Dev / preview builds without a RevenueCat key fall back to
+			// the original placeholder so the page stays usable end-to-
+			// end without a real billing account.
+			showToast('Pro checkout is not configured on this build.', 'info');
+			return;
+		}
 		purchasing = true;
 		try {
-			showToast('Pro checkout is coming soon — thanks for your patience.', 'info');
+			const { purchased } = await startProCheckout(userId);
+			if (purchased) {
+				showToast('Welcome to Pro! Refreshing your subscription…', 'success');
+				// The revenuecat-webhook Edge Function flips the tier
+				// server-side; refetch the profile so the UI picks up the
+				// change without a full reload.
+				await auth.fetchUser();
+			}
+		} catch (err) {
+			showToast(
+				`Checkout failed: ${err instanceof Error ? err.message : String(err)}`,
+				'error',
+			);
 		} finally {
 			purchasing = false;
 		}
@@ -30,16 +58,34 @@
 
 	/// Opens the billing portal where the Pro subscription was started.
 	/// Mobile purchases route through the App Store / Play Store — those
-	/// users need to cancel on-device. Web purchases route through the
-	/// RevenueCat web SDK (not yet wired — see decisions.md § 23), which
-	/// will expose a portal URL. For now, a toast explains what to do.
-	function handleManageSubscription() {
-		// TODO: once the RevenueCat web SDK lands, call `Purchases.getCustomerInfo()`
-		// and redirect to `managementURL` directly.
-		showToast(
-			'Manage your subscription where you started it — App Store / Play Store / billing portal.',
-			'info',
-		);
+	/// users need to cancel on-device. For web purchases the RevenueCat
+	/// SDK exposes a `managementURL` on CustomerInfo; we redirect there.
+	async function handleManageSubscription() {
+		const userId = auth.user?.id;
+		if (!userId) return;
+		if (!isRevenueCatConfigured()) {
+			showToast(
+				'Manage your subscription where you started it — App Store / Play Store / billing portal.',
+				'info',
+			);
+			return;
+		}
+		try {
+			const url = await managementUrl(userId);
+			if (url) {
+				window.open(url, '_blank', 'noopener,noreferrer');
+			} else {
+				showToast(
+					'No active web subscription found — manage in the App Store / Play Store instead.',
+					'info',
+				);
+			}
+		} catch (err) {
+			showToast(
+				`Could not open billing portal: ${err instanceof Error ? err.message : String(err)}`,
+				'error',
+			);
+		}
 	}
 </script>
 

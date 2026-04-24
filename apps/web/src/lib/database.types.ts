@@ -480,6 +480,53 @@ export type Database = {
         }
         Relationships: []
       }
+      live_run_pings: {
+        Row: {
+          at: string
+          bpm: number | null
+          distance_m: number | null
+          elapsed_s: number | null
+          ele: number | null
+          id: number
+          lat: number
+          lng: number
+          run_id: string
+          user_id: string
+        }
+        Insert: {
+          at?: string
+          bpm?: number | null
+          distance_m?: number | null
+          elapsed_s?: number | null
+          ele?: number | null
+          id?: number
+          lat: number
+          lng: number
+          run_id: string
+          user_id: string
+        }
+        Update: {
+          at?: string
+          bpm?: number | null
+          distance_m?: number | null
+          elapsed_s?: number | null
+          ele?: number | null
+          id?: number
+          lat?: number
+          lng?: number
+          run_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_run_pings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_funding: {
         Row: {
           amount_received: number
@@ -1092,6 +1139,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cleanup_stale_live_run_pings: { Args: never; Returns: number }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }

@@ -1,6 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { fetchIntegrations, connectIntegration, disconnectIntegration } from '$lib/data';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import {
+		stravaAuthUrl,
+		completeStravaOAuth,
+		syncStrava,
+		isStravaConfigured,
+	} from '$lib/strava';
+	import { importStravaZip, type StravaZipProgress } from '$lib/strava-zip';
 
 	interface IntegrationUI {
 		provider: string;
@@ -13,7 +23,7 @@
 	}
 
 	const providers: Omit<IntegrationUI, 'connected' | 'lastSync' | 'loading'>[] = [
-		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically via webhook', icon: '🟠' },
+		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically from your Strava account', icon: '🟠' },
 		{ provider: 'parkrun', name: 'parkrun', description: 'Import your complete parkrun history', icon: '🟣' },
 		{ provider: 'garmin', name: 'Garmin Connect', description: 'Sync runs from Garmin devices', icon: '🔵' },
 		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Synced on-device via the iOS app', icon: '❤️' },
@@ -25,20 +35,71 @@
 
 	let pageLoading = $state(true);
 
-	onMount(async () => {
+	async function refreshIntegrations() {
 		const saved = await fetchIntegrations();
-		for (const s of saved) {
-			const idx = integrations.findIndex((i) => i.provider === s.provider);
-			if (idx >= 0) {
-				integrations[idx].connected = true;
-				integrations[idx].lastSync = s.last_sync_at;
+		for (const ui of integrations) {
+			const match = saved.find((s) => s.provider === ui.provider);
+			ui.connected = Boolean(match);
+			ui.lastSync = match?.last_sync_at ?? null;
+		}
+	}
+
+	onMount(async () => {
+		await refreshIntegrations();
+
+		// OAuth callback: Strava redirects back to this page with a
+		// `code` in the URL. Exchange it for tokens, then strip the
+		// params so a refresh doesn't replay a dead single-use code.
+		const params = $page.url.searchParams;
+		if (params.has('code') && params.has('scope')) {
+			const strava = integrations.find((i) => i.provider === 'strava');
+			if (strava) strava.loading = true;
+			try {
+				const result = await completeStravaOAuth(params);
+				await refreshIntegrations();
+				showToast(
+					`Strava connected. ${result.imported} runs imported, ${result.skipped} already present.`,
+					'success',
+				);
+			} catch (err) {
+				showToast(`Strava connect failed: ${err instanceof Error ? err.message : err}`, 'error');
+			} finally {
+				if (strava) strava.loading = false;
+				// Remove the OAuth params from history so a refresh is clean.
+				goto('/settings/integrations', { replaceState: true, noScroll: true });
 			}
 		}
+
 		pageLoading = false;
 	});
 
 	async function toggle(index: number) {
 		const item = integrations[index];
+
+		if (item.provider === 'strava') {
+			if (item.connected) {
+				item.loading = true;
+				try {
+					await disconnectIntegration('strava');
+					item.connected = false;
+					item.lastSync = null;
+					showToast('Strava disconnected.', 'success');
+				} finally {
+					item.loading = false;
+				}
+				return;
+			}
+			if (!isStravaConfigured()) {
+				showToast('Strava is not configured on this build (missing PUBLIC_STRAVA_CLIENT_ID).', 'error');
+				return;
+			}
+			// Redirect the window directly — Strava's OAuth page doesn't
+			// frame cleanly and the callback must come back to us.
+			window.location.href = stravaAuthUrl(window.location.origin);
+			return;
+		}
+
+		// Fallback for the non-OAuth providers (placeholder-connect).
 		item.loading = true;
 		try {
 			if (item.connected) {
@@ -51,6 +112,51 @@
 			}
 		} catch (err) {
 			console.error('Integration toggle failed:', err);
+		} finally {
+			item.loading = false;
+		}
+	}
+
+	// --- Strava bulk-zip import ---
+
+	let zipProgress = $state<StravaZipProgress | null>(null);
+	let zipError = $state('');
+
+	async function handleZipSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		zipError = '';
+		zipProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: 'Reading archive…' };
+		try {
+			const result = await importStravaZip(file, (p) => {
+				zipProgress = { ...p };
+			});
+			showToast(
+				`Strava zip import: ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
+				'success',
+			);
+		} catch (err) {
+			zipError = err instanceof Error ? err.message : String(err);
+		} finally {
+			input.value = '';
+			// Leave the final summary visible for a moment, then clear.
+			setTimeout(() => (zipProgress = null), 4000);
+		}
+	}
+
+	async function handleSyncStrava(index: number) {
+		const item = integrations[index];
+		item.loading = true;
+		try {
+			const result = await syncStrava();
+			await refreshIntegrations();
+			showToast(
+				`Strava sync complete. ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
+				'success',
+			);
+		} catch (err) {
+			showToast(`Strava sync failed: ${err instanceof Error ? err.message : err}`, 'error');
 		} finally {
 			item.loading = false;
 		}
@@ -84,22 +190,84 @@
 							</span>
 						{/if}
 					</div>
-					<button
-						class="btn"
-						class:btn-disconnect={integration.connected}
-						class:btn-connect={!integration.connected}
-						disabled={integration.loading}
-						onclick={() => toggle(i)}
-					>
-						{#if integration.loading}
-							...
-						{:else}
-							{integration.connected ? 'Disconnect' : 'Connect'}
+					<div class="btn-group">
+						{#if integration.connected && integration.provider === 'strava'}
+							<button
+								class="btn btn-sync"
+								disabled={integration.loading}
+								onclick={() => handleSyncStrava(i)}
+							>
+								{integration.loading ? 'Syncing...' : 'Sync now'}
+							</button>
 						{/if}
-					</button>
+						<button
+							class="btn"
+							class:btn-disconnect={integration.connected}
+							class:btn-connect={!integration.connected}
+							disabled={integration.loading}
+							onclick={() => toggle(i)}
+						>
+							{#if integration.loading}
+								...
+							{:else}
+								{integration.connected ? 'Disconnect' : 'Connect'}
+							{/if}
+						</button>
+					</div>
 				</div>
 			{/each}
 		</div>
+
+		<section class="card bulk-import">
+			<h2>Bulk import from a Strava export</h2>
+			<p class="card-sub">
+				Import your full Strava history in one go. Download your data from
+				<a href="https://www.strava.com/athlete/delete_your_account" target="_blank" rel="noopener noreferrer"
+					>Strava → Settings → My Account → Download Your Data</a
+				>, then drop the zip here. Runs already imported from your connected
+				Strava account are skipped.
+			</p>
+			<label class="zip-btn">
+				Choose Strava export zip
+				<input type="file" accept=".zip,application/zip" onchange={handleZipSelect} hidden />
+			</label>
+			{#if zipError}
+				<p class="zip-error">{zipError}</p>
+			{/if}
+			{#if zipProgress}
+				<div class="zip-progress">
+					{#if zipProgress.total > 0}
+						<div class="zip-bar">
+							<div
+								class="zip-bar-fill"
+								style="width: {Math.min(
+									100,
+									Math.round(
+										((zipProgress.imported + zipProgress.skipped + zipProgress.failed) /
+											zipProgress.total) *
+											100,
+									),
+								)}%"
+							></div>
+						</div>
+					{/if}
+					<p class="zip-status">
+						{#if zipProgress.total === 0}
+							{zipProgress.currentName ?? '…'}
+						{:else}
+							{zipProgress.imported + zipProgress.skipped + zipProgress.failed} /
+							{zipProgress.total} · {zipProgress.imported} imported ·
+							{zipProgress.skipped} skipped{zipProgress.failed
+								? ` · ${zipProgress.failed} failed`
+								: ''}
+							{#if zipProgress.currentName}
+								<br /><span class="zip-current">{zipProgress.currentName}</span>
+							{/if}
+						{/if}
+					</p>
+				</div>
+			{/if}
+		</section>
 	{/if}
 </div>
 
@@ -212,5 +380,80 @@
 	.btn-disconnect:hover:not(:disabled) {
 		border-color: var(--color-danger);
 		color: var(--color-danger);
+	}
+	.btn-group {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		flex-shrink: 0;
+	}
+	.btn-sync {
+		background: var(--color-secondary, var(--color-primary));
+		color: white;
+		border: none;
+	}
+	.btn-sync:hover:not(:disabled) {
+		filter: brightness(1.08);
+	}
+	.card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		margin-top: var(--space-xl);
+	}
+	.card h2 {
+		font-size: 1rem;
+		font-weight: 700;
+		margin: 0 0 var(--space-xs);
+	}
+	.card-sub {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-md);
+		line-height: 1.45;
+	}
+	.card-sub a {
+		color: var(--color-primary);
+	}
+	.zip-btn {
+		display: inline-block;
+		padding: 0.5rem 0.9rem;
+		background: var(--color-primary);
+		color: white;
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.zip-btn:hover { filter: brightness(1.05); }
+	.zip-error {
+		margin: var(--space-sm) 0 0;
+		font-size: 0.85rem;
+		color: var(--color-danger, #e53935);
+	}
+	.zip-progress {
+		margin-top: var(--space-md);
+	}
+	.zip-bar {
+		width: 100%;
+		height: 6px;
+		background: var(--color-border);
+		border-radius: 999px;
+		overflow: hidden;
+	}
+	.zip-bar-fill {
+		height: 100%;
+		background: var(--color-primary);
+		transition: width 150ms linear;
+	}
+	.zip-status {
+		margin: 0.5rem 0 0;
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+	.zip-current {
+		color: var(--color-text-tertiary);
+		font-size: 0.75rem;
 	}
 </style>

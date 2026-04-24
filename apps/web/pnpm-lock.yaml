@@ -11,6 +11,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.89.0
         version: 0.89.0
+      '@revenuecat/purchases-js':
+        specifier: ^1.36.0
+        version: 1.36.0
       '@supabase/ssr':
         specifier: ^0.1.0
         version: 0.1.0(@supabase/supabase-js@2.101.1)
@@ -403,6 +406,9 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@revenuecat/purchases-js@1.36.0':
+    resolution: {integrity: sha512-gnyubtmoDZNMOrKp8haevGqa+kajeiaw9nTtIXMwf7rwzZA5MAff36PlwD5MQzT/TOMgSuZZmQAdZqyPrz9qSw==}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.13':
     resolution: {integrity: sha512-5ZiiecKH2DXAVJTNN13gNMUcCDg4Jy8ZjbXEsPnqa248wgOVeYRX0iqXXD5Jz4bI9BFHgKsI2qmyJynstbmr+g==}
@@ -1812,6 +1818,8 @@ snapshots:
   '@oxc-project/types@0.123.0': {}
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@revenuecat/purchases-js@1.36.0': {}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.13':
     optional: true
