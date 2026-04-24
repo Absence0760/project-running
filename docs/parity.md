@@ -243,13 +243,18 @@ See [features § Deep run analysis (web)](features.md#deep-run-analysis-web) and
 
 ## Paywall and funding
 
-See [docs/paywall.md](paywall.md), [features § Funding transparency](features.md#funding-transparency), and [features § Custom dialogs and toast system](features.md#custom-dialogs-and-toast-system).
+See [docs/paywall.md](paywall.md), [features § Pro tier](features.md#pro-tier), and [features § One-off donations](features.md#one-off-donations).
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Paywall feature gate (registry-driven) | ✓ | ✓ | ✓ | N/A | N/A | All gates currently return unlocked — see decisions.md #18. |
-| Transparent funding page | ✗ | ✗ | ✓ | N/A | N/A | |
-| RevenueCat premium subscription management | ✗ | ✗ | ✗ | N/A | N/A | Not wired; deferred. |
+| Pro tier ($9.99 / mo) — server enforcement | N/A | N/A | ✓ | N/A | N/A | `is_user_pro(uid)` RPC + `subscription_tier` column are shared; all clients read `user_profiles` the same way. Server rule lives on the web because the coach endpoint is web-owned. |
+| Pro "Get Pro" checkout UI | ✗ | ✗ | Partial | N/A | N/A | Web shows a $9.99/mo Pro card with a "Get Pro" CTA; the button is a placeholder toast until the RevenueCat web SDK is wired. Mobile doesn't yet expose a Pro purchase flow. |
+| Unlimited AI Coach for Pro users | N/A | N/A | ✓ | N/A | N/A | `/api/coach/+server.ts` skips the 10/day cap when `is_user_pro(uid)` is true. Coach chat is web-only today. |
+| Priority processing for Pro users | N/A | N/A | Partial | N/A | N/A | Marketing claim backed by the coach-cap bypass; concrete per-endpoint enforcement (queue priority, rate-limit hints) is a follow-up. |
+| One-off Donate button | ✗ | ✗ | ✓ | N/A | N/A | Web `/settings/upgrade` has a single Donate button linking to an external provider. Mobile has no in-app donation flow. |
+| Paywall feature gate (registry-driven) | ✓ | ✓ | ✓ | N/A | N/A | `isLocked()` still returns `false` for every key — no feature is hidden behind Pro today. Infra kept so a future Pro-only feature can flip one return. |
+| RevenueCat subscription wiring (web) | N/A | N/A | ✗ | N/A | N/A | Webhook + `subscription_tier` + `is_pro()` helpers are in place; the web SDK `Purchases.configure(...)` + checkout flow is not. |
+| RevenueCat subscription wiring (mobile) | ✗ | ✗ | N/A | N/A | N/A | `purchases_flutter` package not added; `main.dart` initialisation + `PurchasesConfiguration` pending on both platforms. |
 
 ## Settings and preferences
 

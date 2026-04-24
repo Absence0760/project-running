@@ -330,6 +330,29 @@ The fix is `WatchIngestQueue`: when `WatchIngest.attach` receives a run payload 
 
 ---
 
+## 23. Pro tier reintroduced at $9.99/mo alongside one-off donations
+
+**Decided:** April 2026 · supersedes [§ 18](#18-free-with-donations-instead-of-paid-subscription)
+
+Decision #18 pivoted the app to "everything free, funded by donations" with a transparent cost-breakdown page. Donations are unpredictable and the Claude API bill is the only cost that scales with active usage, so the 10-message daily cap on the coach was the sole cost-control lever. That cap hits heavy users before it hits casual users — exactly the opposite of what we want — and gives nothing back to people willing to pay.
+
+The new model is a **Pro tier at $9.99 / month** that unlocks two things:
+
+- **Unlimited AI Coach.** The 10 / day cap still applies to the free tier (cost control); Pro users bypass it. Server-side enforcement lives in `/api/coach/+server.ts` via the `is_user_pro(uid)` RPC.
+- **Priority processing.** Pro requests are routed ahead of the free queue at rate-limit boundaries. Today this is a marketing claim with no enforcement beyond the unlimited-coach bypass; concrete enforcement (Edge Function queue priority, client throttle hints) lands as needed.
+
+The `/settings/upgrade` page replaces the transparent funding page with a two-card layout: a Pro plan card ($9.99/mo, feature bullets, "Get Pro" CTA) and a single "Donate" card linking to an external one-off payment provider. Cost breakdown, per-month progress bars, donor count, and the tiered donation buttons are gone — those stats were a nice-to-have that didn't move conversion.
+
+Infrastructure from #18 is largely reusable: the `GATED_FEATURES` registry, `is_user_pro` / `is_pro` SQL helpers, the `subscription_tier` column, the RevenueCat webhook, and the `user_coach_usage` table all stay. The only registry change is renaming `priority_sync` → `priority_processing` with broader copy. The `monthly_funding` table stays in place (orphaned but not dropped); if transparency becomes a differentiator later it's a one-migration revival.
+
+**Why:** A clear, price-anchored value proposition ("$9.99 for unlimited chat and priority handling") converts better than an open-ended donation ask, and it aligns cost with usage — heavy coach users are exactly who benefits, and they're the ones generating the API spend.
+
+**Trade-off:** Re-adds the subscription friction that #18 explicitly avoided. The one-off Donate button is retained so users who don't want a subscription still have a path to support the project. RevenueCat's web SDK is not yet wired; the "Get Pro" button is a placeholder toast until it lands.
+
+**Don't re-litigate unless:** conversion is <0.5% after 3 months of marketing the tier, or Pro users complain that "priority processing" isn't observable (at which point we either enforce it concretely or rename the bullet).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

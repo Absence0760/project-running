@@ -68,8 +68,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		global: { headers: { Authorization: `Bearer ${body.access_token}` } }
 	});
 
-	// Daily usage limit. BYPASS_PAYWALL skips in dev so you don't burn
-	// through the quota while iterating on prompts.
+	// Daily usage limit for free users. Pro subscribers are unlimited.
+	// BYPASS_PAYWALL skips the check in dev so you don't burn through the
+	// quota while iterating on prompts.
 	const DAILY_LIMIT = 10;
 	const bypassLimit = env.BYPASS_PAYWALL === 'true';
 	if (!bypassLimit) {
@@ -80,19 +81,24 @@ export const POST: RequestHandler = async ({ request }) => {
 				headers: { 'content-type': 'application/json' }
 			});
 		}
-		const { data: newCount } = await supabase.rpc('increment_coach_usage', {
+		const { data: isPro } = await supabase.rpc('is_user_pro', {
 			p_user_id: authUser.id,
 		});
-		if (typeof newCount === 'number' && newCount > DAILY_LIMIT) {
-			return new Response(
-				JSON.stringify({
-					error: 'daily_limit',
-					message: `You've used all ${DAILY_LIMIT} coach messages for today. Come back tomorrow!`,
-					used: newCount,
-					limit: DAILY_LIMIT,
-				}),
-				{ status: 429, headers: { 'content-type': 'application/json' } }
-			);
+		if (isPro !== true) {
+			const { data: newCount } = await supabase.rpc('increment_coach_usage', {
+				p_user_id: authUser.id,
+			});
+			if (typeof newCount === 'number' && newCount > DAILY_LIMIT) {
+				return new Response(
+					JSON.stringify({
+						error: 'daily_limit',
+						message: `You've used all ${DAILY_LIMIT} coach messages for today. Upgrade to Pro for unlimited chats, or come back tomorrow!`,
+						used: newCount,
+						limit: DAILY_LIMIT,
+					}),
+					{ status: 429, headers: { 'content-type': 'application/json' } }
+				);
+			}
 		}
 	}
 

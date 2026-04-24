@@ -348,15 +348,24 @@ Claude-powered training advisor embedded in the web app. Reviews the runner's pl
 - [x] Personality tones — `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) fed into the system prompt
 - [x] User preferences (date of birth, HR zones, resting/max HR, weekly mileage goal) fed into context for personalised advice
 
-### Funding and donations (free-with-donations pivot)
+### Monetisation — Pro tier + one-off donations
 
-- [x] All features free — `isLocked()` always returns `false` (see `decisions.md #18`)
-- [x] Transparent funding page at `/settings/upgrade` with real cost breakdown and progress bars
-- [x] `monthly_funding` table for donation tracking
+The original free-with-donations pivot (`decisions.md #18`) was superseded by the Pro-tier revival (`decisions.md #23`). Infrastructure from the donations era is kept: no features are hidden behind the paywall today; Pro changes behaviour inside two features (coach cap, processing priority) rather than gating screens.
+
+- [x] Core gate infrastructure — `isLocked()` still returns `false` for every registered key (see `decisions.md #18` for why we retained the scaffolding)
+- [x] `/settings/upgrade` page rewritten as a two-card layout: Pro plan ($9.99 / mo) + one-off Donate button (see `decisions.md #23`)
+- [x] `/api/coach/+server.ts` skips the 10 / day rate limit for users where `is_user_pro(uid)` is true
+- [x] `features.ts` — `isPro()` helper + `priority_processing` feature-registry entry
+- [x] `monthly_funding` table retained but no longer read by the UI
 - [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)
 - [x] `ToastContainer.svelte` + `toast.svelte.ts` for transient success/error/info feedback
+- [ ] RevenueCat web SDK wired behind the "Get Pro" button (`Purchases.configure` + checkout flow)
+- [ ] `purchases_flutter` wired on mobile — "Get Pro" flow on Android + iOS
+- [ ] Tier-aware rate-limiting on Edge Functions / Go service so the *priority processing* bullet has concrete enforcement beyond the coach-cap bypass
 
-### Premium tier — training and coaching (deferred, see decisions.md #18)
+### Premium tier — training and coaching (deferred, see decisions.md #18 and #23)
+
+This section predates the Pro-tier revival and tracks features that were *originally* premium-gated (structured workout runner, plan generator, VO2 max, race predictor, recovery advisor). Under the current model (`decisions.md #23`) Pro unlocks **unlimited coach + priority processing** rather than gating whole features — so the items below are roadmap work, not paywall work, until product direction says otherwise.
 
 **Structured training plan runner (workout execution):**
 

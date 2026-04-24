@@ -1,42 +1,61 @@
 # Paywall
 
-## Current model: free with donations
+## Current model: Pro subscription + optional donations
 
-**Everything is free.** The app pivoted from a paid subscription model
-to a donation-funded model. `isLocked()` in `features.ts` always
-returns `false` — no feature is gated behind a paywall. The gate
-infrastructure (tiers, `ProGate` component, server-side checks) is
-retained so features can be re-gated later if needed.
+**Every feature is available to every signed-in user** — `isLocked()` in
+`features.ts` always returns `false`, so no screen is hidden behind a
+paywall. What the Pro tier changes is behaviour *inside* two features:
 
-The donate/funding page at `/settings/upgrade` shows a transparent
-cost breakdown (Supabase, Claude API, MapTiler, etc.) with progress
-bars showing how much of the monthly server cost is covered by
-donations. Donation data is stored in the `monthly_funding` table
-(see `api_database.md`).
+- **AI Coach.** Free users get 10 messages / day (cost-control for the
+  Claude API bill). Pro users get no cap.
+- **Priority processing.** Pro requests are routed ahead of free at
+  rate-limit / queue boundaries. Today this is a marketing claim with
+  enforcement limited to the coach-cap bypass; concrete enforcement
+  (Edge Function priority, client throttle hints) lands over time.
 
-## Tiers (infrastructure retained)
+`/settings/upgrade` shows a two-card layout: a Pro plan card
+($9.99 / month, feature bullets, "Get Pro" CTA) and a one-off Donate
+button that links to an external payment provider. The transparent
+cost breakdown, monthly progress bars, donor count, and tiered
+donation buttons that existed under the previous donations-only model
+are gone — see [decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
+
+The `monthly_funding` table stays in the schema (orphaned but not
+dropped); reviving transparent funding later is a one-page revert.
+
+## Tiers
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Everything |
-| `pro` | RevenueCat (not currently sold) | Same as free (gate is disabled) |
-| `lifetime` | RevenueCat (not currently sold) | Same as free (gate is disabled) |
+| `free` | Default for every new account | Every feature. AI coach capped at 10 messages / day. Standard request priority. |
+| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + unlimited AI coach + priority processing. |
+| `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
 constraint enforces the three valid values. The `is_pro()` SQL helper
-returns `true` for both `pro` and `lifetime`.
+(and its `p_user_id uuid` variant `is_user_pro(uid)`) returns `true`
+for both `pro` and `lifetime`.
 
-## Gated features (currently all unlocked)
+## Pro perks and where they're enforced
 
-| Feature key | Label | Where gated (if re-enabled) |
+| Perk | Feature key | Enforcement point |
 |---|---|---|
-| `ai_coach` | AI Coach | Server: `/api/coach/+server.ts` checks tier (skipped when `isLocked` returns false). Client: `CoachChat.svelte` shows `<ProGate>`. Currently ungated; usage limited to 10 messages/day instead (see `user_coach_usage` table). |
-| `priority_sync` | Priority Background Sync | Mobile: `main.dart` skips `registerBackgroundSync()` for free users. Currently ungated. |
+| Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_user_pro(uid)` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
+| Priority processing | `priority_processing` | Marketing claim today. Planned enforcement: tier-aware rate limiting on Edge Functions + Go service once it lands. The registry entry is documentation; no client code currently branches on it. |
 
-All features are free. The AI Coach has a **daily usage limit of 10
-messages per user** (enforced server-side via `increment_coach_usage`
-RPC) instead of a paywall, keeping API costs manageable without
-charging users.
+These perks are **behaviour changes**, not gated screens, so they do
+not call through `isLocked()`. `isLocked()` remains the correct hook
+for a future feature that should be hidden entirely behind Pro (e.g.
+"live spectator link") — flip it to return `!isPro()` for the key.
+
+## Client-side `isPro()` helper
+
+`apps/web/src/lib/features.ts` exports `isPro()` — reads the auth
+store's cached `user_profiles.subscription_tier` and returns true for
+`pro` / `lifetime`. Use it for conditional UI flourishes (a "Pro"
+badge, a "Pro — unlimited" label next to the coach input). Never use
+it as the sole check for anything expensive: always mirror the check
+server-side with the `is_user_pro(uid)` RPC.
 
 ## Adding a new gated feature
 

@@ -370,39 +370,31 @@ Gesture UX: pinch to zoom, long-press to undo last waypoint, double-tap to finis
 
 ---
 
-### Premium tier
+### Pro tier
 
-**Phase:** 3 | **Platform:** iOS, Android, Web | **Parity:** [see matrix — paywall](parity.md#paywall-and-funding) and [matrix — training plans](parity.md#training-plans-and-workouts)
+**Phase:** 3 | **Platform:** iOS, Android, Web | **Parity:** [see matrix — paywall](parity.md#paywall-and-funding)
 
-**Why:** The business model. Free users generate the user base; premium users generate revenue. The paywall should feel fair — the free app is genuinely great; premium adds intelligence.
+**Why:** A price-anchored value proposition converts better than an open-ended donation ask and aligns cost with usage — heavy coach users are exactly who benefits, and they're the ones generating the Claude API spend. See [decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
 
 **Spec:**
 
-Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store + Play Store in-app purchases).
+Price: **$9.99 / month**. Managed via RevenueCat (abstracts App Store + Play Store + Stripe web checkout). The Pro tier is the only paying tier marketed today; the `lifetime` tier exists in the schema as a future option.
 
 **Free forever:**
-- Unlimited run recording
-- Route import (GPX, KML, GPX)
-- Route builder (mobile + web)
-- Run history with map
-- Basic stats (distance, pace, time)
-- Strava, HealthKit, Health Connect sync
-- parkrun import
+- Every feature. Recording, routes, plans, clubs, sync, imports, dashboard, public share pages.
+- AI Coach — capped at 10 messages / day (enforced server-side via `increment_coach_usage`).
+- Standard processing priority.
 
-**Premium:**
-- Training plans (5k, 10k, half, full marathon — adaptive based on current fitness)
-- VO2 max estimate (calculated from pace and HR data)
-- Recovery advisor (days to next hard run, based on training load)
-- Race pace calculator
-- HR zone analysis
-- Splits comparison vs. personal best
-- Advanced elevation analysis
-- Offline maps
+**Pro:**
+- **Unlimited AI Coach** — no 10 / day cap. Server skips the rate-limit block when `is_user_pro(uid)` returns true.
+- **Priority processing** — Pro requests routed ahead of the free queue when the service is under heavy load. Today this is a marketing claim implemented via the coach-cap bypass; tier-aware rate-limiting on other endpoints lands over time.
+
+**Donations:** a one-off "Donate" button on `/settings/upgrade` links to an external payment provider (GitHub Sponsors placeholder today). Donations are kept alongside the subscription because a chunk of users will want to chip in without committing to a recurring charge.
 
 **Done when:**
-- In-app purchase flow works on both iOS and Android
-- Premium features gate correctly — non-paying users see a paywall prompt, not a crash
-- RevenueCat webhook updates `subscription_tier` in Supabase within 60 seconds of purchase
+- RevenueCat web SDK is wired behind the "Get Pro" button.
+- `/api/coach` returns 200 with no rate-limit response for pro users, and 429 with the "Upgrade to Pro or come back tomorrow" copy for free users who hit 10.
+- The account tier flips to `pro` within 60 seconds of a successful RevenueCat purchase (webhook → `user_profiles.subscription_tier`).
 
 ---
 
@@ -439,7 +431,7 @@ Claude-powered chat embedded in the web app via `CoachChat.svelte`. The server e
 
 **Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
 
-**Usage limits:** 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. The UI shows "N of M remaining" before the user types. `BYPASS_PAYWALL=true` skips the limit in dev.
+**Usage limits:** Free users get 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. Pro users (`is_user_pro(uid)` → `true`) bypass the cap entirely. The UI shows "N of M remaining" for free users; Pro users see "Unlimited". `BYPASS_PAYWALL=true` skips the limit in dev.
 
 **What the coach does:**
 - Critique adherence (hitting planned sessions, mileage, pace targets)
@@ -459,33 +451,32 @@ See `decisions.md #12` for the rationale.
 **Done when:**
 - Coach responds within 3 seconds on a warm cache
 - Personality tone is audibly different across the three presets
-- Usage limit rejects at 11th message with a clear "come back tomorrow" message
+- Free-user usage limit rejects at the 11th message with "upgrade to Pro or come back tomorrow" copy
+- Pro users see no rate-limit message regardless of send count
 - Context includes the user's plan and last 20 runs
 
 ---
 
-## Funding transparency
+## One-off donations
 
 **Phase:** 3 (shipped) | **Platform:** Web | **Parity:** [see matrix](parity.md#paywall-and-funding)
 
-**Why:** The app uses a free-with-donations model (see `decisions.md #18`). Transparency about costs builds trust and motivates donations.
+**Why:** A chunk of users want to support the project without committing to a recurring subscription. Keeping a one-off "Donate" button on the upgrade page next to the Pro plan lets them chip in without friction. See [decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations) for why the prior transparent-funding page was simplified.
 
 **Spec:**
 
-The `/settings/upgrade` page shows:
-- A line-item cost breakdown (Supabase, Claude API, MapTiler, domain, misc)
-- A progress bar for server costs covered this month
-- A progress bar for total costs (server + dev time) covered this month
-- Donor count for the current month
-- Donation tiers with icons and accent colors (gel, day of servers, week, month)
-- A full feature list confirming everything is free
+The `/settings/upgrade` page shows a single Donate card below the Pro plan card:
 
-Data is read from the `monthly_funding` table (publicly readable, owner-writable).
+- A short headline + one sentence of copy.
+- A single "Donate" button that opens an external payment provider (GitHub Sponsors placeholder today; swap for Stripe / Ko-fi / Buy Me a Coffee as preferred).
+- No in-app amount picker, no recurring option, no progress bars, no cost breakdown.
+
+The `monthly_funding` table stays in the schema but is no longer read by the page. If transparent funding ever returns as a marketing angle, reviving it is a one-page revert — history is preserved in git.
 
 **Done when:**
-- Progress bars reflect the current month's `monthly_funding` row
-- Cost breakdown matches actual infrastructure spend
-- Donation buttons link to external payment
+- Clicking Donate opens the external link in a new tab.
+- Pro users see the same Donate card (a subscription doesn't preclude one-offs).
+- No references to `monthly_funding` remain on the upgrade page.
 
 ---
 
