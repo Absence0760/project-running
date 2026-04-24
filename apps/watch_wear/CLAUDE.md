@@ -272,11 +272,16 @@ What the UI exposes during a recording, for quick reference when reading
   `LocalHapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)`
   on tap — the runner feels a confirmation pulse on every control
   action, not just the countdown-less Start.
-- **GPS self-heal retry.** `RunRecordingService` tracks `lastPointAtMs`
-  and runs a 10 s watchdog while `stage == Recording`. If the stream
-  goes silent for 30 s despite `locationAvailable=true`, it cancels
-  and re-calls `subscribeToGps()`. Initial no-fix is not treated as a
-  stall (that's indoor mode).
+- **GPS self-heal retry.** `RunRecordingService.gpsRetryJob` mirrors
+  the `_startGpsRetryLoop` shape from
+  `packages/run_recorder/lib/src/run_recorder.dart`: a 10 s poll that
+  re-subscribes whenever the subscription is dead. Primary trigger is
+  `gpsJob?.isActive != true` (same as Android's `_positionSub == null`);
+  secondary Wear-only trigger is "stream silent for >30 s mid-run",
+  added because `FusedLocationProviderClient` can keep a callback
+  registered while silently emitting nothing — a failure mode
+  Geolocator surfaces as a stream error. Initial no-fix
+  (`lastPointAtMs == 0L`) is explicitly not a stall; that's indoor mode.
 - **Indoor / no-GPS mode.** The elapsed clock ticks regardless of GPS;
   distance stays 0 until the first fix lands. `TrackWriter.close()`
   produces a valid empty `[]` track, so the upload and downstream run

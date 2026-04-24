@@ -53,7 +53,7 @@ class RunRecordingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var gpsJob: Job? = null
-    private var gpsWatchdogJob: Job? = null
+    private var gpsRetryJob: Job? = null
     private var hrJob: Job? = null
     private var tickerJob: Job? = null
     private var checkpointJob: Job? = null
@@ -156,28 +156,44 @@ class RunRecordingService : Service() {
         }
 
         subscribeToGps()
-        // Self-heal watchdog. FusedLocationProviderClient is usually
-        // self-correcting when the underlying provider blips — availability
-        // flips false → true and the same subscription resumes. But there
-        // are edge cases (process-level weirdness, leaked callbacks, the
-        // provider reporting available while producing nothing) where the
-        // stream goes silent despite reporting healthy. If we're Recording,
-        // availability is true, and we've had at least one point but
-        // nothing in the last [GPS_STALL_MS], cancel and re-subscribe.
-        gpsWatchdogJob = scope.launch {
+        // Self-healing GPS retry loop. Mirrors Android's
+        // `_startGpsRetryLoop` in `packages/run_recorder/lib/src/run_recorder.dart`:
+        // a periodic timer that (re-)opens the stream whenever the
+        // subscription is dead. Two triggers, in priority order:
+        //
+        // 1. **Subscription died** (`gpsJob?.isActive != true`). Same
+        //    shape as Android's `_positionSub == null` check. Covers
+        //    service-level crashes, explicit cancellation, scope
+        //    teardown, and the future "we'll null it on error" path.
+        //
+        // 2. **Stream silent mid-run** (Wear-specific). On the mobile
+        //    Geolocator, a dead stream errors and we see it as
+        //    `_positionSub == null`. FusedLocationProviderClient on Wear
+        //    doesn't — the callback can stay registered while silently
+        //    emitting nothing. So we additionally treat a recording
+        //    that's received at least one point but nothing for
+        //    [GPS_STALL_MS] as degenerate and force a resubscribe.
+        //
+        // Indoor / never-had-a-fix (`lastPointAtMs == 0L`) is NOT a
+        // stall — it's a legitimate state and Android's loop would also
+        // noop on it (the subscription is alive, just no fix yet).
+        gpsRetryJob = scope.launch {
             while (true) {
-                delay(GPS_WATCHDOG_INTERVAL_MS)
-                if (isPaused()) continue
-                val state = RecordingRepository.metrics.value
-                if (state.stage != RecordingRepository.Stage.Recording) continue
-                if (!state.locationAvailable) continue
-                if (lastPointAtMs == 0L) continue // never had a point — indoor run, legitimate
-                val since = System.currentTimeMillis() - lastPointAtMs
-                if (since > GPS_STALL_MS) {
+                delay(GPS_RETRY_INTERVAL_MS)
+                if (RecordingRepository.metrics.value.stage !=
+                    RecordingRepository.Stage.Recording) continue
+
+                val jobAlive = gpsJob?.isActive == true
+                val now = System.currentTimeMillis()
+                val silentMidRun = lastPointAtMs > 0 &&
+                    (now - lastPointAtMs) > GPS_STALL_MS
+
+                if (!jobAlive || silentMidRun) {
                     subscribeToGps()
-                    // Reset the window so the next check doesn't flip-flop
-                    // if the new subscription also takes a moment to emit.
-                    lastPointAtMs = System.currentTimeMillis()
+                    // Reset the staleness window so we don't thrash if
+                    // the fresh subscription also takes a few seconds
+                    // to start emitting.
+                    if (silentMidRun) lastPointAtMs = now
                 }
             }
         }
@@ -243,7 +259,7 @@ class RunRecordingService : Service() {
 
     private fun stopRecording() {
         gpsJob?.cancel(); gpsJob = null
-        gpsWatchdogJob?.cancel(); gpsWatchdogJob = null
+        gpsRetryJob?.cancel(); gpsRetryJob = null
         hrJob?.cancel(); hrJob = null
         tickerJob?.cancel(); tickerJob = null
         checkpointJob?.cancel(); checkpointJob = null
@@ -476,10 +492,12 @@ class RunRecordingService : Service() {
         // every Nth tick to avoid hammering NotificationManager over a
         // 10-hour run (72,000 → 7,200 refreshes).
         private const val NOTIFICATION_THROTTLE_TICKS = 10
-        // GPS self-heal watchdog: how often to check for a stalled stream,
-        // and how long without a point counts as stalled. Set well above
-        // the 1 s request cadence so a normal hiccup doesn't retrigger.
-        private const val GPS_WATCHDOG_INTERVAL_MS = 10_000L
+        // GPS self-heal retry loop — mirrors the Android run_recorder.
+        // [GPS_RETRY_INTERVAL_MS] is how often to poll; [GPS_STALL_MS]
+        // is the Wear-specific "subscription alive but silent" threshold
+        // — set well above the 1 s request cadence so a normal hiccup
+        // doesn't retrigger a fresh subscription.
+        private const val GPS_RETRY_INTERVAL_MS = 10_000L
         private const val GPS_STALL_MS = 30_000L
 
         fun start(context: Context, runId: String, activityType: String) {
