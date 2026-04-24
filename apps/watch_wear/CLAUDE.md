@@ -234,7 +234,15 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   there's no route overlay, no follow-cam, no tile rendering. Adding
   one would unlock the dependent items below (route nav + tile cache).
 - **Route navigation on watch.** No route preview, no live position on
-  a mini-map, no off-route haptic — blocked on the live map above.
+  a mini-map, no off-route haptic — blocked on the live map above. The
+  pure math helpers are already ported (see `recording/RouteMath.kt` —
+  `offRouteDistanceM` and `routeRemainingM`, 17 mirror tests against
+  the Dart twin in `run_recorder.dart`), so once route data reaches the
+  watch the alert banner + "X to go" badge are a small wiring change.
+- **Route sync to the watch.** No plumbing today — `SupabaseClient` has
+  no `fetchRoutes`, and the Wearable Data Layer session bridge doesn't
+  push routes. Either path (direct fetch from Wear, or phone handoff)
+  would unlock the route-overlay cells in `docs/parity.md`.
 - **Live HTTP tile cache.** Blocked on the live map; pre-downloaded
   tiles are still the only path.
 - **Google Sign-In on the watch** (today only email/password direct

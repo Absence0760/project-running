@@ -168,9 +168,12 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Route navigation on watch
 
+Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported to Kotlin as `watch_wear:recording/RouteMath.kt` with a 17-test mirror suite against the Dart twin — so the maths is ready. The items below are blocked on two upstream gaps: (a) route data sync to the watch (neither direct Supabase fetch nor phone-handoff is wired), and (b) a live-map renderer during recording.
+
+- [ ] Route sync to the watch (direct `SupabaseClient.fetchRoutes` or Wearable Data Layer handoff, plus a local route cache + pre-run picker)
 - [ ] Route preview on watch face before starting
 - [ ] Live position on mini-map during run
-- [ ] Off-route haptic + "recalculating" indicator
+- [ ] Off-route haptic + "recalculating" indicator (math is ready — `RouteMath.offRouteDistanceM` — just needs route data + a banner / haptic trigger)
 
 ### Glanceable tiles and complications
 
