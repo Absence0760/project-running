@@ -40,6 +40,7 @@ Map<String, dynamic> _$RunToJson(Run instance) => <String, dynamic>{
 
 const _$RunSourceEnumMap = {
   RunSource.app: 'app',
+  RunSource.watch: 'watch',
   RunSource.healthkit: 'healthkit',
   RunSource.healthconnect: 'healthconnect',
   RunSource.strava: 'strava',
