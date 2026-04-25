@@ -133,8 +133,8 @@ class BleHeartRate {
     _sub = null;
     try {
       await _device?.disconnect();
-    } catch (_) {
-      // best-effort
+    } catch (e) {
+      debugPrint('[BleHeartRate.disconnect] $e');
     }
     _device = null;
   }

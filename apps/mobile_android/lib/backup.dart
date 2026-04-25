@@ -445,7 +445,8 @@ class BackupService {
                   : null,
             ),
       ];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[backup._decodeTrack] $e');
       return const [];
     }
   }

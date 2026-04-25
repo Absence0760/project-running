@@ -91,9 +91,8 @@ class TileCache {
           await e.file.delete();
           toFree -= e.size;
           deleted++;
-        } catch (_) {
-          // Skip anything we can't delete; it'll be considered again next
-          // launch.
+        } catch (e) {
+          debugPrint('[TileCache._trimToBudget] delete failed: $e');
         }
       }
       debugPrint(

@@ -291,7 +291,8 @@ class TrainingService extends ChangeNotifier {
           .maybeSingle();
       if (plan == null) return null;
       return TrainingPlanRow.fromJson(plan);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[TrainingService.fetchPlanForWorkout] $e');
       return null;
     }
   }
