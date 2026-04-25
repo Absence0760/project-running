@@ -692,7 +692,7 @@ List<int> _runToFitBytes(Run r) {
   // -- Data CRC --
   var crc = 0;
   for (var i = 14; i < out.length; i++) {
-    crc = _fitCrc(crc, out[i]);
+    crc = fitCrc(crc, out[i]);
   }
   out.add(crc & 0xFF);
   out.add((crc >> 8) & 0xFF);
@@ -700,7 +700,8 @@ List<int> _runToFitBytes(Run r) {
   return out;
 }
 
-int _fitCrc(int crc, int byte) {
+@visibleForTesting
+int fitCrc(int crc, int byte) {
   const table = [
     0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
     0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
