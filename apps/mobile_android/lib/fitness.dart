@@ -209,7 +209,7 @@ FitnessSnapshot computeSnapshot(Iterable<Run> runs, {DateTime? now}) {
 /// thresholds 1:1.
 String recoveryAdvice(double? tsb, double? ctl) {
   if (tsb == null || ctl == null) {
-    return 'Not enough data yet — log a few runs and try again.';
+    return 'Not enough data yet — log a few runs with HR and try again.';
   }
   if (ctl < 10) {
     return 'Fitness is still building. Focus on consistency; one quality '
