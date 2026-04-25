@@ -197,8 +197,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
     final route = widget.route;
-    final isOwner = widget.apiClient?.userId != null;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(route.name),
@@ -212,17 +210,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               PopupMenuItem(value: 'kml', child: Text('Share as KML')),
             ],
           ),
-          if (isOwner)
+          if (_isOwner)
             IconButton(
               icon: Icon(_isPublic ? Icons.public : Icons.public_off),
               tooltip: _isPublic ? 'Make private' : 'Make public',
               onPressed: _togglePublic,
             ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Delete route',
-            onPressed: () => _confirmDelete(context),
-          ),
+          if (_isOwner)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Delete route',
+              onPressed: () => _confirmDelete(context),
+            ),
         ],
       ),
       body: SafeArea(

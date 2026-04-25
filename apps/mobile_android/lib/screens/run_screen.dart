@@ -1135,6 +1135,7 @@ class _RunScreenState extends State<RunScreen> {
     // Clear the in-progress file now that we've got the authoritative run.
     await widget.runStore.clearInProgress();
 
+    if (!mounted) return;
     setState(() {
       _finishedRun = run;
       _state = _ScreenState.finished;

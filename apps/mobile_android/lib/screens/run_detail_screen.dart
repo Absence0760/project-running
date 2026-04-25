@@ -292,6 +292,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       createdAt: run.createdAt,
     );
     await widget.runStore.update(updated);
+    if (!mounted) return;
     setState(() => run = updated);
   }
 
@@ -1243,7 +1244,9 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (api != null && api.userId != null) {
       try {
         await api.makeRunPublic(run.id);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('makeRunPublic failed: $e');
+      }
     }
     if (!mounted) return;
     await showRunShareSheet(

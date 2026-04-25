@@ -67,7 +67,9 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
     try {
       final tags = await api.fetchPopularRouteTags();
       if (mounted) setState(() => _popularTags = tags);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('fetchPopularRouteTags failed: $e');
+    }
   }
 
   @override
