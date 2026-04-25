@@ -177,6 +177,21 @@ Easiest for cross-network testing: web `.env.local` and the mobile app both poin
 2. Click **Sync now** → activities populate. Filter `/runs` by Source: Strava to verify.
 3. Disconnect → row removed from `integrations`; subsequent sync attempts return "not connected".
 
+### Garmin bulk import
+
+Garmin Connect's live OAuth API is gated on Garmin's developer-program approval, so the web ships a **bulk FIT importer** as the user-side path instead.
+
+**Test path**
+1. `/settings/integrations` → **Bulk import from a Garmin export** → **Choose Garmin export**.
+2. Pick either:
+   - A single `.fit` file (Garmin Connect → any activity → **Export Original**), or
+   - The big `.zip` from `Garmin → Account Management → Request Your Data` (multi-GB, contains every recorded activity).
+3. Watch the progress bar — `imported / skipped / failed` should converge as files are decoded. The current filename ticks underneath.
+4. Verify on `/runs` that new rows appear with the **garmin** source pill, and the run-detail map renders the trace from the FIT records. Open the run-detail HR-zones card — `metadata.avg_bpm` and the time-weighted zone breakdown should both populate when the FIT carries HR samples.
+5. Re-import the same file — every row should land in **skipped** (matched on `metadata.garmin_id` for FIT entries, on `started_at|distance_m` for any GPX/TCX originals nested inside the bundle).
+
+The FIT decoder (`fit-file-parser`) is dynamic-imported so the integrations page is only ~260 KB heavier when a Garmin file is actually picked.
+
 ### parkrun import
 
 No OAuth — the user types their parkrun athlete number into `/settings/account`.

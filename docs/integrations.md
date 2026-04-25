@@ -302,7 +302,11 @@ OAuth 2.0, identical pattern to Strava.
 
 ### Interim approach (pre-approval)
 
-Garmin Connect mobile app syncs to HealthKit (iOS) and Health Connect (Android) automatically. Users who install Garmin Connect alongside your app will have their Garmin runs available via the HealthKit/Health Connect import with no extra work.
+Two paths today, both unblocked:
+
+**Web — bulk FIT import.** `/settings/integrations` ships a "Bulk import from a Garmin export" card that accepts either a single `.fit` file (Garmin Connect → activity → "Export Original") or the full `.zip` from `Garmin → Account Management → Request Your Data`. Implementation in `apps/web/src/lib/garmin-zip.ts` + `garmin-fit.ts`; FIT decoding uses `fit-file-parser` and is dynamic-imported so the binary decoder is only fetched when a user picks a file. Dedupes on the FIT `file_id` message (`time_created-serial_number`) with a `started_at|distance_m` composite fallback for `.gpx` / `.tcx` originals inside the bundle.
+
+**Mobile — HealthKit / Health Connect.** Garmin Connect mobile app syncs to HealthKit (iOS) and Health Connect (Android) automatically. Users who install Garmin Connect alongside your app will have their Garmin runs available via the HealthKit/Health Connect import with no extra work.
 
 ---
 

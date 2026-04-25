@@ -11,6 +11,7 @@
 		isStravaConfigured,
 	} from '$lib/strava';
 	import { importStravaZip, type StravaZipProgress } from '$lib/strava-zip';
+	import { importGarminBundle, type GarminZipProgress } from '$lib/garmin-zip';
 
 	interface IntegrationUI {
 		provider: string;
@@ -25,7 +26,7 @@
 	const providers: Omit<IntegrationUI, 'connected' | 'lastSync' | 'loading'>[] = [
 		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically from your Strava account', icon: '🟠' },
 		{ provider: 'parkrun', name: 'parkrun', description: 'Import your complete parkrun history', icon: '🟣' },
-		{ provider: 'garmin', name: 'Garmin Connect', description: 'Sync runs from Garmin devices', icon: '🔵' },
+		{ provider: 'garmin', name: 'Garmin Connect', description: 'Bulk-import .fit files (single activity or full Account Data export). Live OAuth needs Garmin developer-program approval.', icon: '🔵' },
 		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Synced on-device via the iOS app', icon: '❤️' },
 	];
 
@@ -145,6 +146,33 @@
 		}
 	}
 
+	// --- Garmin bulk import (single .fit OR full Account Data .zip) ---
+
+	let garminProgress = $state<GarminZipProgress | null>(null);
+	let garminError = $state('');
+
+	async function handleGarminSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		garminError = '';
+		garminProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: 'Reading file…' };
+		try {
+			const result = await importGarminBundle(file, (p) => {
+				garminProgress = { ...p };
+			});
+			showToast(
+				`Garmin import: ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
+				'success',
+			);
+		} catch (err) {
+			garminError = err instanceof Error ? err.message : String(err);
+		} finally {
+			input.value = '';
+			setTimeout(() => (garminProgress = null), 4000);
+		}
+	}
+
 	async function handleSyncStrava(index: number) {
 		const item = integrations[index];
 		item.loading = true;
@@ -259,6 +287,59 @@
 								: ''}
 							{#if zipProgress.currentName}
 								<br /><span class="zip-current">{zipProgress.currentName}</span>
+							{/if}
+						{/if}
+					</p>
+				</div>
+			{/if}
+		</section>
+
+		<section class="card bulk-import">
+			<h2>Bulk import from a Garmin export</h2>
+			<p class="card-sub">
+				Drop a single <code>.fit</code> file (Garmin Connect → activity → "Export Original")
+				or the <code>.zip</code> from
+				<a href="https://www.garmin.com/account/datamanagement/exportdata/" target="_blank" rel="noopener noreferrer"
+					>Garmin → Account Management → Request Your Data</a
+				>. We parse <code>.fit</code> and any user-uploaded <code>.gpx</code> /
+				<code>.tcx</code> originals inside the bundle. Already-imported runs (matched on
+				the FIT file id) are skipped.
+			</p>
+			<label class="zip-btn">
+				Choose Garmin export
+				<input type="file" accept=".fit,.zip,application/octet-stream,application/zip" onchange={handleGarminSelect} hidden />
+			</label>
+			{#if garminError}
+				<p class="zip-error">{garminError}</p>
+			{/if}
+			{#if garminProgress}
+				<div class="zip-progress">
+					{#if garminProgress.total > 0}
+						<div class="zip-bar">
+							<div
+								class="zip-bar-fill"
+								style="width: {Math.min(
+									100,
+									Math.round(
+										((garminProgress.imported + garminProgress.skipped + garminProgress.failed) /
+											garminProgress.total) *
+											100,
+									),
+								)}%"
+							></div>
+						</div>
+					{/if}
+					<p class="zip-status">
+						{#if garminProgress.total === 0}
+							{garminProgress.currentName ?? '…'}
+						{:else}
+							{garminProgress.imported + garminProgress.skipped + garminProgress.failed} /
+							{garminProgress.total} · {garminProgress.imported} imported ·
+							{garminProgress.skipped} skipped{garminProgress.failed
+								? ` · ${garminProgress.failed} failed`
+								: ''}
+							{#if garminProgress.currentName}
+								<br /><span class="zip-current">{garminProgress.currentName}</span>
 							{/if}
 						{/if}
 					</p>

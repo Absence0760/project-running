@@ -36,6 +36,9 @@ src/
     theme.ts        # light/dark/auto theme toggle, persisted in localStorage
     training.ts     # VDOT, Riegel, plan generator, week phasing
     training.test.ts  # node:test suite for the training engine — `npx tsx --test`
+    strava-zip.ts   # Strava bulk-export ZIP importer (parses CSV + per-activity GPX/TCX)
+    garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
+    garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
   routes/
     +layout.svelte  # App shell with sidebar nav (auth guard)
     dashboard/      # Weekly mileage, PBs, calendar heatmap

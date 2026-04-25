@@ -179,7 +179,7 @@ See [features § External platform sync (OAuth)](features.md#external-platform-s
 | parkrun athlete-number import | ✗ | ✗ | ✓ | N/A | N/A | Web: "Pull latest parkrun results" button on `/settings/account` shows once the athlete number is set. Calls the existing `parkrun-import` Edge Function, surfaces an imported-count toast. |
 | HealthKit (iOS / Apple Watch) | ✗ | ✗ | N/A | N/A | ✓ | Apple Watch reads HR and forwards `avg_bpm`. Phone HealthKit importer not started. |
 | Health Connect (Android) | ✓ | N/A | N/A | N/A | N/A | Summary-only — no GPS routes. |
-| Garmin Connect | ✗ | ✗ | ✗ | N/A | N/A | Blocked on developer-program application. 🔸 gap vs web-canonical once unblocked — OAuth flow belongs in the browser first. |
+| Garmin Connect | ✗ | ✗ | Partial | N/A | N/A | **Live OAuth + webhook sync** is still blocked on Garmin's developer-program approval (NDA, multi-week review, integration call) — neither side can be implemented client-side. **Bulk-import path shipped on web** (`/settings/integrations` → "Bulk import from a Garmin export"): accepts a single `.fit` from "Export Original" or the full `.zip` from `Garmin → Account Management → Request Your Data`. Parses FIT via `fit-file-parser` (lazy-loaded so it only ships when triggered), routes user-uploaded `.gpx` / `.tcx` originals through the existing `parseRouteFile`, dedupes on `metadata.garmin_id` (`<file_id.time_created>-<file_id.serial>`) with a `started_at|distance_m` composite fallback. 🔸 OAuth flow remains the gap; flip to ✓ when Garmin grants developer-program access. |
 
 ## Social — clubs and events
 
