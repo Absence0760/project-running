@@ -1303,8 +1303,11 @@ class _RunScreenState extends State<RunScreen> {
       case 'start':
         await _startStructuredWorkout(wo);
       case 'detail':
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
+        // The detail screen pops with the PlanWorkoutRow when the user
+        // taps "Start workout" — pick that up and load the runner so
+        // the user lands back on the run tab, ready to tap GO.
+        final result = await Navigator.of(context).push<PlanWorkoutRow?>(
+          MaterialPageRoute<PlanWorkoutRow?>(
             builder: (_) => WorkoutDetailScreen(
               training: widget.training,
               planId: planId,
@@ -1313,6 +1316,9 @@ class _RunScreenState extends State<RunScreen> {
           ),
         );
         _refreshPlanOverview();
+        if (result != null && mounted) {
+          await _startStructuredWorkout(result);
+        }
     }
   }
 

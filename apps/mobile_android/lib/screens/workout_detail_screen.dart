@@ -158,6 +158,23 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 ],
               ),
             ),
+          ] else if (w.kind != 'rest') ...[
+            const SizedBox(height: 16),
+            // Start workout — pops with the workout row so the run-screen
+            // entry path (today's-workout card → "View details") loads
+            // it into the WorkoutRunner. Other callers (plan_detail row
+            // tap) can ignore the result.
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(context).pop(w),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start workout'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
           ],
           if (w.notes != null && w.notes!.isNotEmpty) ...[
             const SizedBox(height: 16),
