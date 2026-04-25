@@ -16,7 +16,7 @@ export function toGpx(
 		.join('\n');
 
 	return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="BetterRunner"
+<gpx version="1.1" creator="RunApp"
   xmlns="http://www.topografix.com/GPX/1/1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
@@ -55,7 +55,7 @@ export function toRunGpx(
 		.join('\n');
 
 	return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="BetterRunner"
+<gpx version="1.1" creator="RunApp"
   xmlns="http://www.topografix.com/GPX/1/1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
