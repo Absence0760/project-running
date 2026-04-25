@@ -116,7 +116,7 @@ function createAuthStore() {
 		supabase.auth.getSession().then(({ data: { session } }) => {
 			if (session) {
 				loggedIn = true;
-				fetchUser(session.user.id, session.user.email ?? '');
+				fetchUser(session.user.id, session.user.email ?? '').catch(console.error);
 			}
 			loading = false;
 		});
