@@ -22,6 +22,8 @@
 	} from '$lib/data';
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
 	import { WORKOUT_KIND_LABEL } from '$lib/training';
+	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
+	import type { PlanWorkout } from '$lib/types';
 	import { loadSettings, effective } from '$lib/settings';
 	import { fmtKm, fmtPace, setUnit } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -77,6 +79,11 @@
 	let goals = $state<RunGoal[]>([]);
 	let showGoalEditor = $state(false);
 	let editingGoal = $state<RunGoal | null>(null);
+
+	/// Today's-workout modal — opened by clicking the today card. Hosted
+	/// on the dashboard directly so we don't need to round-trip through
+	/// /plans/[id] with a `?edit=` query.
+	let editingWorkout = $state<PlanWorkout | null>(null);
 
 	function openNewGoal() {
 		editingGoal = {
@@ -221,10 +228,11 @@
 	{:else}
 		{#if planOverview?.todayWorkout}
 			{@const t = planOverview.todayWorkout}
-			<a
+			<button
 				class="today-card"
 				class:done={!!t.completed_run_id}
-				href="/plans/{planOverview.plan.id}?edit={t.id}"
+				type="button"
+				onclick={() => (editingWorkout = t)}
 			>
 				<div class="today-left">
 					<span class="today-label">TODAY'S WORKOUT</span>
@@ -249,7 +257,7 @@
 					<span class="plan-name">{planOverview.plan.name}</span>
 					<span class="plan-progress">{planOverview.completionPct}% done</span>
 				</div>
-			</a>
+			</button>
 		{:else if !planOverview}
 			<a class="plan-promo" href="/plans?new=1">
 				<div>
@@ -566,6 +574,19 @@
 	{/if}
 </div>
 
+{#if editingWorkout}
+	<WorkoutEditor
+		workout={editingWorkout}
+		onClose={() => (editingWorkout = null)}
+		onSaved={async () => {
+			editingWorkout = null;
+			// Re-fetch the active plan overview so the today card picks up
+			// any changes (e.g. new target distance / pace) without a refresh.
+			planOverview = await fetchActivePlanOverview();
+		}}
+	/>
+{/if}
+
 {#if showGoalEditor && editingGoal}
 	{@const eg = editingGoal}
 	<div class="modal-backdrop" onclick={() => (showGoalEditor = false)} role="presentation"></div>
@@ -826,6 +847,10 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		color: inherit;
+		font: inherit;
+		text-align: left;
+		width: 100%;
+		cursor: pointer;
 		transition: transform var(--transition-base), box-shadow var(--transition-base);
 	}
 	.today-card:hover {

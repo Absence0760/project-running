@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fetchPlan } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
@@ -31,18 +30,7 @@
 		loading = false;
 	}
 
-	onMount(async () => {
-		await load();
-		// Deep-link from the dashboard's "Today's workout" card lands on
-		// /plans/[id]?edit=<wid> — open the editor for that workout
-		// directly, then strip the query so a refresh doesn't relaunch.
-		const editId = $page.url.searchParams.get('edit');
-		if (editId) {
-			const target = workouts.find((w) => w.id === editId);
-			if (target) editing = target;
-			goto(`/plans/${id}`, { replaceState: true, noScroll: true });
-		}
-	});
+	onMount(load);
 
 	let workoutsByWeek = $derived.by(() => {
 		const m = new Map<string, PlanWorkout[]>();
