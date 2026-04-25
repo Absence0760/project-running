@@ -13,7 +13,7 @@
 	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute, fetchWorkout } from '$lib/data';
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/gpx';
-	import { movingTimeSeconds, elevationGainMetres } from '$lib/run_stats';
+	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/run_stats';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -465,19 +465,7 @@
 	let baseTrack = $derived(run ? (run.track ?? generateMockTrack(run.distance_m)) : []);
 	let elevations = $derived(baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30));
 
-	let splits = $derived.by(() => {
-		if (!run) return [];
-		const distanceKm = run.distance_m / 1000;
-		const numSplits = Math.ceil(distanceKm);
-		const avgPaceSec = run.duration_s / distanceKm;
-		return Array.from({ length: numSplits }, (_, i) => {
-			const variance = (Math.random() - 0.5) * 20;
-			const splitPace = avgPaceSec + variance;
-			const splitDistance = i < numSplits - 1 ? 1000 : (distanceKm - Math.floor(distanceKm)) * 1000 || 1000;
-			const elevation = Math.round((Math.random() - 0.3) * 15);
-			return { km: i + 1, pace_s: Math.round(splitPace), distance_m: splitDistance, elevation_m: elevation };
-		});
-	});
+	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
 
 	function generateMockTrack(distanceM: number) {
 		const points = Math.max(50, Math.round(distanceM / 20));
@@ -753,32 +741,37 @@
 			</section>
 		{/if}
 
-		<!-- Splits -->
-		<section class="section">
-			<h2>Splits</h2>
-			<table class="splits-table">
-				<thead>
-					<tr>
-						<th>Km</th>
-						<th>Pace</th>
-						<th>Elev</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each splits as split}
+		<!-- Splits — only rendered when the GPS track carries timestamps -->
+		{#if splits.length > 0}
+			{@const hasElevation = splits.some((s) => s.elevation_m != null)}
+			<section class="section">
+				<h2>Splits</h2>
+				<table class="splits-table">
+					<thead>
 						<tr>
-							<td>{split.km}</td>
-							<td class="split-pace">
-								{Math.floor(split.pace_s / 60)}:{String(split.pace_s % 60).padStart(2, '0')}
-							</td>
-							<td class="split-elev" class:positive={split.elevation_m > 0} class:negative={split.elevation_m < 0}>
-								{split.elevation_m > 0 ? '+' : ''}{split.elevation_m} m
-							</td>
+							<th>Km</th>
+							<th>Pace</th>
+							{#if hasElevation}<th>Elev</th>{/if}
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</section>
+					</thead>
+					<tbody>
+						{#each splits as split}
+							<tr>
+								<td>{split.km}</td>
+								<td class="split-pace">
+									{Math.floor(split.pace_s / 60)}:{String(split.pace_s % 60).padStart(2, '0')}
+								</td>
+								{#if hasElevation}
+									<td class="split-elev" class:positive={(split.elevation_m ?? 0) > 0} class:negative={(split.elevation_m ?? 0) < 0}>
+										{(split.elevation_m ?? 0) > 0 ? '+' : ''}{split.elevation_m ?? '—'} m
+									</td>
+								{/if}
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
+		{/if}
 
 		<!-- HR zones — real distribution when the track carries per-
 		     point BPM samples, honest "no data" card otherwise. The
