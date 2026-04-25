@@ -677,7 +677,7 @@ export async function fetchWeeklyMileage() {
 	for (const run of runs) {
 		const d = new Date(run.started_at);
 		const weekStart = new Date(d);
-		weekStart.setDate(d.getDate() - d.getDay());
+		weekStart.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday-start, matches goals.ts
 		const key = weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 		weeks.set(key, (weeks.get(key) ?? 0) + run.distance_m);
 	}
