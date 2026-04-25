@@ -663,11 +663,14 @@ export async function deleteRoute(id: string): Promise<void> {
 // --- Dashboard stats ---
 
 export async function fetchWeeklyMileage() {
-	// Try to compute from real runs
+	const { data: { user } } = await supabase.auth.getUser();
+	if (!user) return [];
 	const { data: runs } = await supabase
 		.from('runs')
 		.select('started_at, distance_m')
-		.order('started_at', { ascending: true });
+		.eq('user_id', user.id)
+		.order('started_at', { ascending: true })
+		.limit(2000);
 
 	if (!runs || runs.length === 0) return [];
 
