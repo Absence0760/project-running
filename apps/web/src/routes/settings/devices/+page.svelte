@@ -374,55 +374,67 @@
 
 {#if addingForDevice}
 	{@const ed = currentEditor()}
-	<div class="backdrop" onclick={() => (addingForDevice = null)} role="presentation"></div>
-	<div class="add-dialog" role="dialog" aria-label="Add device override">
-		<h3>Add override</h3>
-		<label class="field">
-			<span class="field-label">Key</span>
-			<select bind:value={addKey} class="input">
-				{#each overridableKeys as k}
-					<option value={k.key}>{k.label} — <code>{k.key}</code></option>
-				{/each}
-			</select>
-		</label>
-		<label class="field">
-			<span class="field-label">Value</span>
-			{#if ed.shape.kind === 'bool'}
-				<div class="toggle-row">
-					<button type="button" class="toggle-btn" class:active={addValueBool === true}
-						onclick={() => (addValueBool = true)}>On</button>
-					<button type="button" class="toggle-btn" class:active={addValueBool === false}
-						onclick={() => (addValueBool = false)}>Off</button>
-				</div>
-			{:else if ed.shape.kind === 'number'}
-				<div class="unit-row">
-					<input
-						type="number"
-						class="input"
-						bind:value={addValueNumber}
-						min={ed.shape.min}
-						max={ed.shape.max}
-						step={ed.shape.step ?? 0.1}
-					/>
-					{#if ed.shape.unit}<span class="unit">{ed.shape.unit}</span>{/if}
-				</div>
-			{:else}
-				<select bind:value={addValueEnum} class="input">
-					{#each ed.shape.options as opt}
-						<option value={opt.value}>{opt.label}</option>
+	<div class="modal-backdrop" onclick={() => (addingForDevice = null)} role="presentation"></div>
+	<div class="modal modal-narrow" role="dialog" aria-modal="true" aria-label="Add device override">
+		<header class="modal-header">
+			<h2>Add override</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (addingForDevice = null)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body add-dialog-body">
+			<label class="field">
+				<span class="field-label">Key</span>
+				<select bind:value={addKey} class="input">
+					{#each overridableKeys as k}
+						<option value={k.key}>{k.label} — {k.key}</option>
 					{/each}
 				</select>
-			{/if}
-		</label>
-		<p class="dialog-hint">
-			Writes to <code>user_device_settings.prefs.{addKey}</code>. On mobile
-			clients this value will override the universal setting for this device only.
-		</p>
-		<div class="dialog-actions">
-			<button type="button" class="btn btn-outline btn-sm" onclick={() => (addingForDevice = null)}>
-				Cancel
-			</button>
-			<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>Save</button>
+			</label>
+			<label class="field">
+				<span class="field-label">Value</span>
+				{#if ed.shape.kind === 'bool'}
+					<div class="toggle-row">
+						<button type="button" class="toggle-btn" class:active={addValueBool === true}
+							onclick={() => (addValueBool = true)}>On</button>
+						<button type="button" class="toggle-btn" class:active={addValueBool === false}
+							onclick={() => (addValueBool = false)}>Off</button>
+					</div>
+				{:else if ed.shape.kind === 'number'}
+					<div class="unit-row">
+						<input
+							type="number"
+							class="input"
+							bind:value={addValueNumber}
+							min={ed.shape.min}
+							max={ed.shape.max}
+							step={ed.shape.step ?? 0.1}
+						/>
+						{#if ed.shape.unit}<span class="unit">{ed.shape.unit}</span>{/if}
+					</div>
+				{:else}
+					<select bind:value={addValueEnum} class="input">
+						{#each ed.shape.options as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+				{/if}
+			</label>
+			<p class="dialog-hint">
+				Writes to <code>user_device_settings.prefs.{addKey}</code>. On mobile
+				clients this value will override the universal setting for this device only.
+			</p>
+			<div class="dialog-actions">
+				<button type="button" class="btn btn-outline btn-sm" onclick={() => (addingForDevice = null)}>
+					Cancel
+				</button>
+				<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>Save</button>
+			</div>
 		</div>
 	</div>
 {/if}
@@ -556,31 +568,10 @@
 		background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 	}
 
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: 100;
-	}
-	.add-dialog {
-		position: fixed;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		width: min(92vw, 22rem);
-		z-index: 101;
+	/* Add-override reuses canonical .modal-* classes from app.css. */
+	.add-dialog-body {
 		display: grid;
 		gap: 0.9rem;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-	}
-	.add-dialog h3 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 700;
 	}
 	.field { display: grid; gap: 0.3rem; }
 	.field-label {

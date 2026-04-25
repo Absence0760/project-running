@@ -722,7 +722,7 @@
 					<p class="workout-name">
 						{linkedWorkout.notes ?? linkedWorkout.kind}
 						<span class="workout-target">
-							· {Math.round((linkedWorkout.target_distance_metres ?? 0) / 1000 * 10) / 10} km planned
+							· {Math.round((linkedWorkout.target_distance_m ?? 0) / 1000 * 10) / 10} km planned
 						</span>
 					</p>
 				{/if}

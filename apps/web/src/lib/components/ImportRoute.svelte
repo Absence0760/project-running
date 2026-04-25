@@ -113,14 +113,23 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onclose}>
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal" onclick={(e) => e.stopPropagation()}>
-		<header class="modal-header">
-			<h2>Import Route</h2>
-			<button class="close-btn" onclick={onclose}>&times;</button>
-		</header>
+<div class="modal-backdrop" onclick={onclose} role="presentation"></div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	class="modal"
+	role="dialog"
+	aria-modal="true"
+	aria-label="Import Route"
+	onclick={(e) => e.stopPropagation()}
+>
+	<header class="modal-header">
+		<h2>Import Route</h2>
+		<button class="modal-close" onclick={onclose} aria-label="Close">
+			<span class="material-symbols">close</span>
+		</button>
+	</header>
 
+	<div class="modal-body">
 		{#if error}
 			<div class="error">{error}</div>
 		{/if}
@@ -219,50 +228,8 @@
 </div>
 
 <style>
-	.overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 100;
-	}
-
-	.modal {
-		background: var(--color-surface);
-		border-radius: var(--radius-lg);
-		width: 100%;
-		max-width: 32rem;
-		padding: var(--space-xl);
-		box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.2));
-	}
-
-	.modal-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: var(--space-lg);
-	}
-
-	h2 {
-		font-size: 1.25rem;
-		font-weight: 700;
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		color: var(--color-text-tertiary);
-		cursor: pointer;
-		padding: 0;
-		line-height: 1;
-	}
-
-	.close-btn:hover {
-		color: var(--color-text);
-	}
+	/* .modal-backdrop / .modal / .modal-header / .modal-close /
+	   .modal-body live in app.css. */
 
 	.error {
 		background: var(--color-danger-light, #fef2f2);

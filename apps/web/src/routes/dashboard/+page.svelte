@@ -568,9 +568,20 @@
 
 {#if showGoalEditor && editingGoal}
 	{@const eg = editingGoal}
-	<div class="backdrop" onclick={() => (showGoalEditor = false)} role="presentation"></div>
-	<div class="goal-editor" role="dialog" aria-label="Edit goal">
-		<h3>Edit goal</h3>
+	<div class="modal-backdrop" onclick={() => (showGoalEditor = false)} role="presentation"></div>
+	<div class="modal" role="dialog" aria-modal="true" aria-label="Edit goal">
+		<header class="modal-header">
+			<h2>Edit goal</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (showGoalEditor = false)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body goal-editor-body">
 		<label class="field">
 			<span class="field-label">Period</span>
 			<div class="toggle-row">
@@ -634,7 +645,7 @@
 			<input
 				type="text"
 				inputmode="numeric"
-				pattern="[0-9]{1,2}:[0-9]{2}"
+				pattern={'[0-9]{1,2}:[0-9]{2}'}
 				placeholder={preferredUnit === 'mi' ? '8:00' : '5:00'}
 				value={eg.paceSecPerKm != null
 					? (() => {
@@ -684,16 +695,17 @@
 		</p>
 		<div class="goal-editor-actions">
 			{#if goals.some((x) => x.id === eg.id)}
-				<button type="button" class="btn-danger" onclick={() => deleteGoal(eg.id)}>
+				<button type="button" class="btn btn-danger" onclick={() => deleteGoal(eg.id)}>
 					Delete
 				</button>
 			{/if}
-			<button type="button" class="btn-secondary" onclick={() => (showGoalEditor = false)}>
+			<button type="button" class="btn btn-secondary" onclick={() => (showGoalEditor = false)}>
 				Cancel
 			</button>
-			<button type="button" class="btn-primary" onclick={() => commitGoal(eg)}>
+			<button type="button" class="btn btn-primary" onclick={() => commitGoal(eg)}>
 				Save
 			</button>
+		</div>
 		</div>
 	</div>
 {/if}
@@ -1182,31 +1194,11 @@
 		background: #2e7d32;
 	}
 
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: 100;
-	}
-	.goal-editor {
-		position: fixed;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		width: min(92vw, 22rem);
-		z-index: 101;
+	/* Goal editor reuses the canonical .modal-* classes from app.css.
+	   Only field-level styling stays local. */
+	.goal-editor-body {
 		display: grid;
 		gap: 0.9rem;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-	}
-	.goal-editor h3 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 700;
 	}
 	.field { display: grid; gap: 0.3rem; }
 	.field-label {
@@ -1250,7 +1242,7 @@
 		justify-content: flex-end;
 		gap: 0.4rem;
 	}
-	.btn-danger {
+	.goal-editor-actions .btn-danger {
 		margin-right: auto;
 	}
 

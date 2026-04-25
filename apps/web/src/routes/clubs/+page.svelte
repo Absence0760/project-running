@@ -359,58 +359,6 @@
 		color: var(--color-text-tertiary);
 	}
 
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: 200;
-	}
-	.modal {
-		position: fixed;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: min(38rem, calc(100vw - 2rem));
-		max-height: calc(100vh - 4rem);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		box-shadow: var(--shadow-lg);
-		z-index: 201;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: var(--space-md) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
-		flex-shrink: 0;
-	}
-	.modal-header h2 {
-		font-size: 1.05rem;
-		font-weight: 700;
-	}
-	.modal-close {
-		background: none;
-		border: none;
-		color: var(--color-text-secondary);
-		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.3rem;
-		border-radius: var(--radius-sm);
-		transition: background var(--transition-fast);
-	}
-	.modal-close:hover {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text);
-	}
-	.modal-body {
-		padding: var(--space-lg);
-		overflow-y: auto;
-	}
+	/* .modal-backdrop / .modal / .modal-header / .modal-close /
+	   .modal-body live in app.css. */
 </style>

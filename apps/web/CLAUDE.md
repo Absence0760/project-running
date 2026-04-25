@@ -88,6 +88,7 @@ pnpm check      # Type-check
 - Prefer `@sveltejs/adapter-static` for GitHub Pages output (output dir: `build/`)
 - `BASE_PATH` env var is set to `/<repo-name>` during CI builds for correct asset paths
 - Buttons: don't define `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-outline`, `.btn-danger`, or `.btn-sm` locally — they live in `app.css` globally. Page-specific variants (`.btn-google`, `.btn-save`, etc.) extend the base. See [conventions § Web buttons](../../docs/conventions.md#web-buttons).
+- Modals: don't define `.modal-backdrop`, `.modal`, `.modal-header`, `.modal-close`, `.modal-body`, `.modal-wide`, or `.modal-narrow` locally — they live in `app.css` globally. Every create / edit dialog (clubs, plans, runs, events, goals, device overrides, workout editor, import route, ConfirmDialog) uses the same shape. See [conventions § Web modals](../../docs/conventions.md#web-modals).
 - Page width: list / detail pages cap at `72rem`, settings tabs at `64rem`, focused single-form pages at `40–48rem`. Padding is `var(--space-xl) var(--space-2xl)`, left-aligned (no `margin: 0 auto`). See [conventions § Web page padding](../../docs/conventions.md#web-page-padding).
 
 ## Create-flow modal pattern
@@ -96,7 +97,7 @@ Every create surface (`/clubs`, `/plans`, `/runs`, `/clubs/[slug]`) opens a moda
 
 The standalone `/new` routes (`/clubs/new`, `/plans/new`, `/runs/new`, `/clubs/[slug]/events/new`) are kept as **thin page wrappers** around the same editor components so deep links and browser back work unchanged. When you add a new editor, follow this same shape — never duplicate the form between the modal and the standalone route.
 
-The modal markup is currently inlined in each list page (backdrop + centered card + close button + scrollable body). If a fifth modal lands, extract a generic `<Modal>` component before duplicating again.
+The modal shell uses the canonical `.modal-backdrop` / `.modal` / `.modal-header` / `.modal-close` / `.modal-body` classes from `app.css`. Pages and components must not redefine those locally — only field-level layout (e.g. a `.goal-editor-body { display: grid }` for a specific dialog's contents). See [conventions § Web modals](../../docs/conventions.md#web-modals).
 ## Deployment
 
 - **GitHub Pages**: push to `main` triggers `.github/workflows/deploy.yml`, which builds and deploys automatically

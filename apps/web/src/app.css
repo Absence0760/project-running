@@ -301,3 +301,89 @@ img {
 	padding: var(--space-xs) var(--space-md);
 	font-size: 0.8rem;
 }
+
+/*
+ * Canonical modal pattern. Every create / edit dialog in the app
+ * should use this shape — backdrop + centered card + header bar with
+ * close button + scrollable body. Defined globally so individual
+ * pages don't duplicate the styles (and don't drift apart).
+ *
+ * Markup contract:
+ *   {#if show}
+ *     <div class="modal-backdrop" onclick={close} role="presentation"></div>
+ *     <div class="modal" role="dialog" aria-modal="true" aria-label="...">
+ *       <header class="modal-header">
+ *         <h2>Title</h2>
+ *         <button class="modal-close" onclick={close} aria-label="Close">
+ *           <span class="material-symbols">close</span>
+ *         </button>
+ *       </header>
+ *       <div class="modal-body">…form / content…</div>
+ *     </div>
+ *   {/if}
+ *
+ * `.modal-wide` widens to 56rem for plan / route / multi-column forms;
+ * `.modal-narrow` shrinks to 24rem for confirmation-style dialogs.
+ */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 200;
+}
+.modal {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: min(38rem, calc(100vw - 2rem));
+	max-height: calc(100vh - 4rem);
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-lg);
+	z-index: 201;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.modal-wide {
+	/* Plan editor renders the form + live preview side-by-side. */
+	width: min(64rem, calc(100vw - 2rem));
+}
+.modal-narrow {
+	width: min(24rem, calc(100vw - 2rem));
+}
+.modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--space-md) var(--space-lg);
+	border-bottom: 1px solid var(--color-border);
+	flex-shrink: 0;
+}
+.modal-header h2 {
+	font-size: 1.05rem;
+	font-weight: 700;
+	margin: 0;
+}
+.modal-close {
+	background: none;
+	border: none;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.3rem;
+	border-radius: var(--radius-sm);
+	transition: background var(--transition-fast);
+}
+.modal-close:hover {
+	background: var(--color-bg-tertiary);
+	color: var(--color-text);
+}
+.modal-body {
+	padding: var(--space-lg);
+	overflow-y: auto;
+}

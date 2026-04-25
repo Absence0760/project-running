@@ -159,6 +159,33 @@ Canonical button styles live in `apps/web/src/app.css` under the comma-separated
 
 The `/settings/upgrade`, `/login`, and `/` (landing) surfaces deliberately ship larger marketing-CTA buttons; those override the canonical sizes via Svelte-scoped local rules and are documented exceptions, not the pattern.
 
+## Web modals
+
+Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.modal`, `.modal-header`, `.modal-close`, `.modal-body`, plus `.modal-wide` for the form-with-side-panel case and `.modal-narrow` for confirmation-style dialogs). Every dialog in the app uses this shape: a centered card on a 50%-opacity backdrop, with a header bar that holds the title + an `×` close button, and a scrollable body. Side-drawer / right-rail variants are not the convention — when you find one (`apps/web/src/lib/components/WorkoutEditor.svelte` was the last holdout), convert it.
+
+**Markup contract:**
+
+```svelte
+{#if show}
+  <div class="modal-backdrop" onclick={close} role="presentation"></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="...">
+    <header class="modal-header">
+      <h2>Title</h2>
+      <button class="modal-close" type="button" aria-label="Close" onclick={close}>
+        <span class="material-symbols">close</span>
+      </button>
+    </header>
+    <div class="modal-body">
+      …form / content / actions row at the bottom…
+    </div>
+  </div>
+{/if}
+```
+
+**Don't redefine `.modal*` classes in a page or component.** Pages that *host* the modal (e.g. `/clubs`, `/plans`, `/runs`, `/clubs/[slug]`, `/dashboard` for goals, `/settings/devices` for overrides) provide local CSS *only* for body-level layout (e.g. `.goal-editor-body { display: grid; gap: 0.9rem }`) — never the backdrop, card, header, or close button. Components that own their own modal (`WorkoutEditor`, `ImportRoute`, `ConfirmDialog`) follow the same rule.
+
+`ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
+
 ## Commit and PR conventions
 
 - Branch: `dev` is the working branch. `main` is the PR target. See [decisions.md § 6](decisions.md).

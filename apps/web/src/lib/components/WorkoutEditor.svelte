@@ -76,21 +76,22 @@
 	}
 </script>
 
-<div class="backdrop" role="presentation" onclick={onClose}>
-	<div
-		class="drawer"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Edit workout"
-		onclick={(e) => e.stopPropagation()}
-	>
-		<header>
-			<span class="date">{workout.scheduled_date}</span>
-			<button class="close" onclick={onClose} aria-label="Close">
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
+<div class="modal-backdrop" role="presentation" onclick={onClose}></div>
+<div
+	class="modal"
+	role="dialog"
+	aria-modal="true"
+	aria-label="Edit workout"
+	onclick={(e) => e.stopPropagation()}
+>
+	<header class="modal-header">
+		<h2>Edit workout · <span class="date">{workout.scheduled_date}</span></h2>
+		<button class="modal-close" onclick={onClose} aria-label="Close">
+			<span class="material-symbols">close</span>
+		</button>
+	</header>
 
+	<div class="modal-body">
 		<label>
 			<span>Kind</span>
 			<select bind:value={kind}>
@@ -155,8 +156,8 @@
 		{/if}
 
 		<div class="actions">
-			<button class="btn-secondary" onclick={onClose} disabled={busy}>Cancel</button>
-			<button class="btn-primary" onclick={save} disabled={busy}>
+			<button class="btn btn-secondary" onclick={onClose} disabled={busy}>Cancel</button>
+			<button class="btn btn-primary" onclick={save} disabled={busy}>
 				{busy ? 'Saving…' : 'Save'}
 			</button>
 		</div>
@@ -164,42 +165,17 @@
 </div>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.45);
-		display: flex;
-		justify-content: flex-end;
-		z-index: 100;
-	}
-	.drawer {
-		background: var(--color-bg);
-		width: 24rem;
-		max-width: 100vw;
-		padding: var(--space-lg);
+	/* Canonical .modal-backdrop / .modal / .modal-header / .modal-close /
+	   .modal-body live in app.css; only field-level styling stays
+	   here. */
+	.modal-body {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		overflow-y: auto;
-	}
-	header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: var(--space-sm);
 	}
 	.date {
-		font-size: 0.78rem;
-		letter-spacing: 0.08em;
 		color: var(--color-primary);
 		font-weight: 700;
-		text-transform: uppercase;
-	}
-	.close {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-text-secondary);
 	}
 	label,
 	fieldset {
