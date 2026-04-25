@@ -23,6 +23,7 @@
 	let saving = $state(false);
 	let saved = $state(false);
 	let exporting = $state(false);
+	let exportingJson = $state(false);
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
@@ -154,6 +155,35 @@
 			}).join('\n');
 			downloadFile(header + rows, 'runs_export.csv', 'text/csv');
 		} finally { exporting = false; }
+	}
+
+	/// Single-file `runs.json` download. Same row shape as the
+	/// `runs.json` entry inside a Full backup ZIP (and Android's
+	/// equivalent), so scripts that consume one consume the other.
+	/// `user_id` is stripped so the file is re-homeable; tracks aren't
+	/// included — use the Full backup for a lossless copy with GPS.
+	async function handleExportJson() {
+		const userId = auth.user?.id;
+		if (!userId) return;
+		exportingJson = true;
+		try {
+			const { data, error } = await supabase
+				.from('runs')
+				.select('*')
+				.eq('user_id', userId)
+				.order('started_at', { ascending: false });
+			if (error) throw error;
+			const runs = (data ?? []).map((r) => {
+				const { user_id: _uid, ...rest } = r as Record<string, unknown>;
+				return rest;
+			});
+			const ts = new Date().toISOString().replace(/[:.]/g, '-');
+			downloadFile(JSON.stringify(runs, null, 2), `runs-${ts}.json`, 'application/json');
+		} catch (e) {
+			showToast(`Export failed: ${(e as Error).message}`, 'error');
+		} finally {
+			exportingJson = false;
+		}
 	}
 
 	async function handleBackup() {
@@ -502,14 +532,24 @@
 		{#if restoreError}<p class="error-text">Restore failed: {restoreError}</p>{/if}
 	</section>
 
-	<!-- Data Export (CSV) -->
+	<!-- Data Export -->
 	<section class="card">
-		<h2>Data Export (CSV)</h2>
-		<p class="section-desc">Summary CSV for spreadsheet analysis. No GPS traces — use Full backup for a lossless copy.</p>
-		<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting}>
-			<span class="material-symbols">download</span>
-			{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
-		</button>
+		<h2>Data Export</h2>
+		<p class="section-desc">
+			CSV for spreadsheet analysis, or a single <code>runs.json</code> for scripts —
+			same row shape as the <code>runs.json</code> inside a Full backup. No GPS traces in either;
+			use Full backup for a lossless copy.
+		</p>
+		<div class="btn-row">
+			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson}>
+				<span class="material-symbols">download</span>
+				{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
+			</button>
+			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson}>
+				<span class="material-symbols">code</span>
+				{exportingJson ? 'Exporting...' : 'Export All Runs (JSON)'}
+			</button>
+		</div>
 	</section>
 
 	<ConfirmDialog

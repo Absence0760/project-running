@@ -109,7 +109,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] UUID run IDs to avoid sync collisions across devices
 - [x] Pull remote runs from Supabase, merge with local store (Android)
 - [x] Bulk sync button for unsynced runs (Android)
-- [x] Backup all runs as JSON via system share sheet (Android)
+- [x] Backup all runs as JSON via system share sheet (Android, web)
 - [x] Auto-sync on connectivity change and app foreground (Android — via
       `connectivity_plus` + lifecycle observer)
 - [x] Conflict resolution: newer-wins by `last_modified_at` timestamp (Android)
