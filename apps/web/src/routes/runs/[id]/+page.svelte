@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import RunMap from '$lib/components/RunMap.svelte';
+	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import {
 		formatDuration,
@@ -25,6 +25,11 @@
 	let run = $state<Run | null>(null);
 	let loading = $state(true);
 	let linkedWorkout = $state<PlanWorkout | null>(null);
+	/// Selected segment from the map. Set when the user clicks a point
+	/// on the trace; cleared by tapping the overlay's close button or
+	/// re-clicking the same area is reset by the next selection. Drives
+	/// the floating "Segment details" card overlaying the map.
+	let selectedSegment = $state<SelectedSegment | null>(null);
 	let editing = $state(false);
 	let editTitle = $state('');
 	let editNotes = $state('');
@@ -502,7 +507,67 @@
 	</a>
 	<div class="run-detail-body">
 	<main class="map-panel">
-		<RunMap track={baseTrack} animatable />
+		<RunMap
+			track={baseTrack}
+			animatable
+			onSegmentSelect={(seg) => (selectedSegment = seg)}
+		/>
+		<!-- Nike-style segment-detail card. Click any point on the trace
+		     to drop a pin and see ±150 m of stats around that location:
+		     distance covered, elapsed time (when the track has per-point
+		     timestamps), avg pace, avg HR, elevation gain / loss. -->
+		{#if selectedSegment}
+			<aside class="segment-card">
+				<header class="segment-card-head">
+					<span class="segment-eyebrow">SEGMENT</span>
+					<button
+						class="segment-close"
+						aria-label="Close segment details"
+						onclick={() => (selectedSegment = null)}
+					>
+						<span class="material-symbols">close</span>
+					</button>
+				</header>
+				<div class="segment-grid">
+					<div class="segment-stat">
+						<span class="segment-stat-label">Distance</span>
+						<span class="segment-stat-value">{formatDistance(selectedSegment.distance_m)}</span>
+					</div>
+					{#if selectedSegment.duration_s != null}
+						<div class="segment-stat">
+							<span class="segment-stat-label">Time</span>
+							<span class="segment-stat-value">{formatDuration(selectedSegment.duration_s)}</span>
+						</div>
+					{/if}
+					{#if selectedSegment.avg_pace_sec_per_km != null}
+						<div class="segment-stat">
+							<span class="segment-stat-label">Pace</span>
+							<span class="segment-stat-value">
+								{formatPace(selectedSegment.avg_pace_sec_per_km, 1000)}
+							</span>
+						</div>
+					{/if}
+					{#if selectedSegment.avg_bpm != null}
+						<div class="segment-stat">
+							<span class="segment-stat-label">Avg HR</span>
+							<span class="segment-stat-value">{selectedSegment.avg_bpm} bpm</span>
+						</div>
+					{/if}
+					{#if selectedSegment.ele_gain_m > 0 || selectedSegment.ele_loss_m > 0}
+						<div class="segment-stat">
+							<span class="segment-stat-label">Elev</span>
+							<span class="segment-stat-value">
+								{#if selectedSegment.ele_gain_m > 0}+{selectedSegment.ele_gain_m}m{/if}
+								{#if selectedSegment.ele_gain_m > 0 && selectedSegment.ele_loss_m > 0}
+									·
+								{/if}
+								{#if selectedSegment.ele_loss_m > 0}−{selectedSegment.ele_loss_m}m{/if}
+							</span>
+						</div>
+					{/if}
+				</div>
+			</aside>
+		{/if}
 	</main>
 
 	<aside class="stats-panel">
@@ -849,6 +914,81 @@
 	.map-panel {
 		flex: 3;
 		background: var(--color-bg-tertiary);
+		position: relative;
+	}
+
+	.segment-card {
+		position: absolute;
+		left: 12px;
+		bottom: 12px;
+		min-width: 16rem;
+		max-width: calc(100% - 24px);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+		padding: 0.6rem 0.8rem;
+		z-index: 5;
+	}
+
+	.segment-card-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.4rem;
+	}
+
+	.segment-eyebrow {
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		color: var(--color-primary);
+	}
+
+	.segment-close {
+		background: transparent;
+		border: none;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		padding: 0.1rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-sm);
+	}
+
+	.segment-close:hover {
+		color: var(--color-text);
+		background: var(--color-bg-tertiary);
+	}
+
+	.segment-close .material-symbols {
+		font-size: 1.05rem;
+	}
+
+	.segment-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+		gap: 0.4rem 0.9rem;
+	}
+
+	.segment-stat {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.segment-stat-label {
+		font-size: 0.65rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-tertiary);
+	}
+
+	.segment-stat-value {
+		font-size: 0.95rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stats-panel {

@@ -7,7 +7,30 @@
 	import { getMapStyle, mapStyleUrl } from '$lib/map-style.svelte';
 	import type { TrackPoint } from '$lib/types';
 
-	let { track = [], animatable = false }: { track: TrackPoint[]; animatable?: boolean } = $props();
+	/// Segment-detail callback. When set, clicks anywhere on the map
+	/// snap to the nearest track point, compute a small window (±150 m
+	/// of cumulative track distance) around it, and fire `onSegmentSelect`
+	/// with stats for that window. The host page renders the popup. Set
+	/// to `null` from the host to clear the highlight.
+	export interface SelectedSegment {
+		startIdx: number;
+		endIdx: number;
+		clickIdx: number;
+		distance_m: number;
+		duration_s: number | null;
+		avg_pace_sec_per_km: number | null;
+		avg_bpm: number | null;
+		ele_gain_m: number;
+		ele_loss_m: number;
+		mid: TrackPoint;
+	}
+
+	interface Props {
+		track: TrackPoint[];
+		animatable?: boolean;
+		onSegmentSelect?: (seg: SelectedSegment | null) => void;
+	}
+	let { track = [], animatable = false, onSegmentSelect }: Props = $props();
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -114,6 +137,139 @@
 
 	let startMarker: maplibregl.Marker | undefined;
 	let endMarker: maplibregl.Marker | undefined;
+	let segmentMarker: maplibregl.Marker | undefined;
+
+	/// Cumulative distance from start to each track index, in metres.
+	/// Computed once when the track is mounted; lookups are O(log n) by
+	/// linear scan since tracks are typically <2k points.
+	let cumulativeM: number[] = [];
+
+	function buildCumulative(coords: [number, number][]): number[] {
+		const out = new Array(coords.length).fill(0);
+		for (let i = 1; i < coords.length; i++) {
+			out[i] = out[i - 1] + haversine(coords[i - 1], coords[i]);
+		}
+		return out;
+	}
+
+	/// Find the nearest track index to a click point. Linear scan — the
+	/// runs we render top out around 2k points, well below the cost of
+	/// building a spatial index.
+	function nearestTrackIdx(lng: number, lat: number, coords: [number, number][]): number {
+		let bestIdx = 0;
+		let bestDist = Infinity;
+		for (let i = 0; i < coords.length; i++) {
+			const d = haversine([lng, lat], coords[i]);
+			if (d < bestDist) {
+				bestDist = d;
+				bestIdx = i;
+			}
+		}
+		return bestIdx;
+	}
+
+	/// Build a segment of the track centred on `clickIdx`, expanding
+	/// outwards until the distance window (±150 m of cumulative track
+	/// length) is reached. Computes pace + HR + elevation deltas.
+	const SEGMENT_RADIUS_M = 150;
+
+	function buildSegment(clickIdx: number): SelectedSegment | null {
+		if (track.length < 2 || cumulativeM.length !== track.length) return null;
+		const target = cumulativeM[clickIdx];
+		let startIdx = clickIdx;
+		while (startIdx > 0 && cumulativeM[startIdx - 1] >= target - SEGMENT_RADIUS_M) startIdx--;
+		let endIdx = clickIdx;
+		while (
+			endIdx < cumulativeM.length - 1 &&
+			cumulativeM[endIdx + 1] <= target + SEGMENT_RADIUS_M
+		)
+			endIdx++;
+		if (startIdx === endIdx) {
+			// Edge of the track — widen by one neighbour so we have a real
+			// segment rather than a single-point degenerate.
+			if (endIdx < cumulativeM.length - 1) endIdx++;
+			else if (startIdx > 0) startIdx--;
+		}
+
+		const distance_m = cumulativeM[endIdx] - cumulativeM[startIdx];
+
+		// Duration + pace come from per-point timestamps when present.
+		const startTs = track[startIdx]?.ts;
+		const endTs = track[endIdx]?.ts;
+		let duration_s: number | null = null;
+		let avg_pace_sec_per_km: number | null = null;
+		if (startTs && endTs) {
+			const dt = (Date.parse(endTs) - Date.parse(startTs)) / 1000;
+			if (Number.isFinite(dt) && dt > 0) {
+				duration_s = Math.round(dt);
+				if (distance_m > 10) {
+					avg_pace_sec_per_km = Math.round(dt / (distance_m / 1000));
+				}
+			}
+		}
+
+		// HR + elevation deltas walk only the segment slice.
+		let bpmSum = 0;
+		let bpmCount = 0;
+		let eleGain = 0;
+		let eleLoss = 0;
+		for (let i = startIdx; i <= endIdx; i++) {
+			const b = track[i]?.bpm;
+			if (typeof b === 'number' && b >= 30 && b <= 230) {
+				bpmSum += b;
+				bpmCount++;
+			}
+			if (i > startIdx) {
+				const prev = track[i - 1]?.ele;
+				const cur = track[i]?.ele;
+				if (typeof prev === 'number' && typeof cur === 'number') {
+					const delta = cur - prev;
+					if (delta > 0) eleGain += delta;
+					else eleLoss += -delta;
+				}
+			}
+		}
+
+		return {
+			startIdx,
+			endIdx,
+			clickIdx,
+			distance_m,
+			duration_s,
+			avg_pace_sec_per_km,
+			avg_bpm: bpmCount > 0 ? Math.round(bpmSum / bpmCount) : null,
+			ele_gain_m: Math.round(eleGain),
+			ele_loss_m: Math.round(eleLoss),
+			mid: track[clickIdx],
+		};
+	}
+
+	/// Update / re-create the highlighted segment overlay on the map.
+	/// Idempotent — safe to call repeatedly with different segments.
+	function renderSegmentHighlight(seg: SelectedSegment | null) {
+		if (!map) return;
+		const src = map.getSource('selected-segment') as maplibregl.GeoJSONSource | undefined;
+		if (!seg) {
+			src?.setData({ type: 'FeatureCollection', features: [] });
+			segmentMarker?.remove();
+			segmentMarker = undefined;
+			return;
+		}
+		const slice = trackCoords.slice(seg.startIdx, seg.endIdx + 1);
+		src?.setData({
+			type: 'Feature',
+			properties: {},
+			geometry: { type: 'LineString', coordinates: slice },
+		});
+		const at: [number, number] = [seg.mid.lng, seg.mid.lat];
+		if (!segmentMarker) {
+			const el = document.createElement('div');
+			el.className = 'segment-pin';
+			segmentMarker = new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map);
+		} else {
+			segmentMarker.setLngLat(at);
+		}
+	}
 
 	// Re-add every custom source/layer/marker the component owns. Called
 	// after the initial style load and again whenever the user picks a
@@ -220,6 +376,30 @@
 		if (!endMarker) {
 			endMarker = new maplibregl.Marker({ color: '#ef4444' }).setLngLat(coords[coords.length - 1]).addTo(map);
 		}
+
+		// Empty selected-segment source + layers; populated when the user
+		// clicks. Rendered above the base trace so the highlight reads
+		// clearly against the underlying line.
+		if (onSegmentSelect) {
+			map.addSource('selected-segment', {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: 'selected-segment-casing',
+				type: 'line',
+				source: 'selected-segment',
+				paint: { 'line-color': '#f59e0b', 'line-width': 9, 'line-opacity': 0.35 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+			});
+			map.addLayer({
+				id: 'selected-segment-line',
+				type: 'line',
+				source: 'selected-segment',
+				paint: { 'line-color': '#f59e0b', 'line-width': 5 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+			});
+		}
 	}
 
 	let trackCoords: [number, number][] = [];
@@ -246,7 +426,33 @@
 
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
+		cumulativeM = buildCumulative(trackCoords);
+
 		map.on('load', () => addOverlays(trackCoords, trackBounds, true));
+
+		// Segment-detail click handler. Snaps to the nearest track point,
+		// builds a ±150 m window, and reports stats up to the host.
+		// Repeat clicks update the highlight; clicking outside the
+		// trace area still snaps to whatever's closest, which matches
+		// the runner's likely intent ("show me the bit near here").
+		if (onSegmentSelect) {
+			map.on('click', (e) => {
+				if (trackCoords.length < 2) return;
+				const idx = nearestTrackIdx(e.lngLat.lng, e.lngLat.lat, trackCoords);
+				const seg = buildSegment(idx);
+				renderSegmentHighlight(seg);
+				onSegmentSelect(seg);
+			});
+			// Cursor hint: turn into a pointer over the trace so users know
+			// it's clickable. Falls back gracefully if either layer hasn't
+			// mounted yet.
+			map.on('mouseenter', 'trace-line', () => {
+				map.getCanvas().style.cursor = 'pointer';
+			});
+			map.on('mouseleave', 'trace-line', () => {
+				map.getCanvas().style.cursor = '';
+			});
+		}
 	});
 
 	// Reactive map-style swap. The first run after `map` is created is
@@ -325,5 +531,14 @@
 		background: #f59e0b;
 		border: 2px solid white;
 		box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3), 0 1px 4px rgba(0, 0, 0, 0.3);
+	}
+
+	:global(.segment-pin) {
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		background: #f59e0b;
+		border: 3px solid white;
+		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 2px 6px rgba(0, 0, 0, 0.35);
 	}
 </style>
