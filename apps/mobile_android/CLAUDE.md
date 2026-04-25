@@ -77,6 +77,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `widgets/upcoming_event_card.dart` — Run tab idle-state card shown when the user has a `going` RSVP within 48h
 - `widgets/todays_workout_card.dart` — Run tab idle-state priority card when an active plan has a workout scheduled today
 - `widgets/plan_calendar.dart` — Dart port of `apps/web/src/lib/components/PlanCalendar.svelte`. Month-by-month grid with prev/next chevrons, Monday-first DOW row, kind-coloured cells, completed-tick. Renders on `plan_detail_screen` between the today card and the week cards.
+- `widgets/workout_edit_sheet.dart` — modal bottom sheet for inline edit of a `PlanWorkoutRow` (kind, target distance, target pace, notes). Opened via the pencil button or long-press on a workout row in `plan_detail_screen`; saves through `TrainingService.updateWorkout`.
 - `social_service.dart` — `ChangeNotifier` wrapping all Supabase calls for clubs / events / posts
 - `training_service.dart` — `ChangeNotifier` wrapping Supabase calls for training plans + workouts
 - `ble_heart_rate.dart` — BLE chest-strap GATT client for live BPM stream (tested); wires into the run screen via `BleHeartRate.stream`

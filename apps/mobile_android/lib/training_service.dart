@@ -279,4 +279,28 @@ class TrainingService extends ChangeNotifier {
     }).eq('id', workoutId);
     notifyListeners();
   }
+
+  /// Patch the editable fields on a planned workout. Pass any subset
+  /// of [kind], [targetDistanceM], [targetPaceSecPerKm], [notes].
+  /// Server-side RLS scopes writes to the plan owner.
+  Future<void> updateWorkout(
+    String workoutId, {
+    String? kind,
+    double? targetDistanceM,
+    int? targetPaceSecPerKm,
+    String? notes,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (kind != null) patch[PlanWorkoutRow.colKind] = kind;
+    if (targetDistanceM != null) {
+      patch[PlanWorkoutRow.colTargetDistanceM] = targetDistanceM;
+    }
+    if (targetPaceSecPerKm != null) {
+      patch[PlanWorkoutRow.colTargetPaceSecPerKm] = targetPaceSecPerKm;
+    }
+    if (notes != null) patch[PlanWorkoutRow.colNotes] = notes;
+    if (patch.isEmpty) return;
+    await _c.from(PlanWorkoutRow.table).update(patch).eq('id', workoutId);
+    notifyListeners();
+  }
 }

@@ -7,6 +7,7 @@ import '../training.dart';
 import '../training_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/plan_calendar.dart';
+import '../widgets/workout_edit_sheet.dart';
 import 'workout_detail_screen.dart';
 
 class PlanDetailScreen extends StatefulWidget {
@@ -387,6 +388,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               );
               _load();
             },
+      onLongPress: () => _editWorkout(wo),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         margin: const EdgeInsets.only(top: 4),
@@ -420,9 +422,35 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ],
             if (wo.completedRunId != null)
               Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 16),
+            // Inline edit affordance — discoverable button alongside the
+            // long-press gesture. Hidden on rest days; nothing to edit.
+            if (!isRest)
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  splashRadius: 18,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Edit workout',
+                  icon: Icon(Icons.edit_outlined,
+                      color: theme.colorScheme.outline),
+                  onPressed: () => _editWorkout(wo),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _editWorkout(PlanWorkoutRow wo) async {
+    final ok = await showWorkoutEditSheet(
+      context,
+      workout: wo,
+      training: widget.training,
+    );
+    if (ok) await _load();
   }
 }
