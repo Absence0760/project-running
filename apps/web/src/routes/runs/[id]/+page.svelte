@@ -10,7 +10,8 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute } from '$lib/data';
+	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute, fetchWorkout } from '$lib/data';
+	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/gpx';
 	import { movingTimeSeconds, elevationGainMetres } from '$lib/run_stats';
 	import { goto } from '$app/navigation';
@@ -23,6 +24,7 @@
 
 	let run = $state<Run | null>(null);
 	let loading = $state(true);
+	let linkedWorkout = $state<PlanWorkout | null>(null);
 	let editing = $state(false);
 	let editTitle = $state('');
 	let editNotes = $state('');
@@ -31,6 +33,17 @@
 	onMount(async () => {
 		run = await fetchRunById(pageData.id);
 		loading = false;
+		// If the recorder linked this run to a structured workout, pull
+		// the planned workout row so the review section can show its
+		// title alongside the per-step planned/actual table.
+		const planWorkoutId = (run?.metadata as Record<string, unknown> | null)?.['plan_workout_id'];
+		if (typeof planWorkoutId === 'string') {
+			try {
+				linkedWorkout = await fetchWorkout(planWorkoutId);
+			} catch (_) {
+				/* silent — review section just hides the workout-name row */
+			}
+		}
 		// Best-effort: pull the user's HR zones from the settings bag
 		// so zone breakdowns on this run use the runner's own
 		// thresholds rather than defaults. Silent on failure.
@@ -55,6 +68,81 @@
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
 	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
 	let estimatedCalories = $derived(run ? Math.round(70 * 1.0 * run.distance_m / 1000) : 0);
+
+	/// Structured-workout review. The recorder writes three keys on
+	/// `runs.metadata` after a planned workout: `plan_workout_id`,
+	/// `workout_step_results` (per-step planned-vs-actual), and
+	/// `workout_adherence`. See docs/metadata.md for the full shape.
+	interface WorkoutStepResult {
+		step_index: number;
+		kind: string;
+		rep_index?: number;
+		rep_total?: number;
+		target_distance_m: number;
+		actual_distance_m: number;
+		target_pace_sec_per_km: number;
+		actual_pace_sec_per_km: number | null;
+		duration_s: number;
+		status: 'completed' | 'skipped';
+	}
+
+	let workoutStepResults = $derived.by<WorkoutStepResult[]>(() => {
+		const v = (run?.metadata as Record<string, unknown> | null)?.['workout_step_results'];
+		return Array.isArray(v) ? (v as WorkoutStepResult[]) : [];
+	});
+
+	let workoutAdherence = $derived(
+		(run?.metadata as Record<string, unknown> | null)?.['workout_adherence'] as
+			| 'completed'
+			| 'partial'
+			| 'abandoned'
+			| undefined,
+	);
+
+	function stepLabel(s: WorkoutStepResult): string {
+		switch (s.kind) {
+			case 'warmup':
+				return 'Warmup';
+			case 'cooldown':
+				return 'Cooldown';
+			case 'steady':
+				return 'Steady';
+			case 'rep':
+				return s.rep_index && s.rep_total
+					? `Rep ${s.rep_index}/${s.rep_total}`
+					: 'Rep';
+			case 'recovery':
+				return s.rep_index && s.rep_total
+					? `Recovery ${s.rep_index}/${s.rep_total - 1}`
+					: 'Recovery';
+			default:
+				return s.kind;
+		}
+	}
+
+	function formatPaceSec(s: number | null): string {
+		if (s == null || !Number.isFinite(s) || s <= 0) return '—';
+		const m = Math.floor(s / 60);
+		const sec = Math.round(s % 60);
+		return `${m}:${sec.toString().padStart(2, '0')}/km`;
+	}
+
+	function paceDeltaLabel(s: WorkoutStepResult): string {
+		if (s.actual_pace_sec_per_km == null) return '—';
+		const d = s.actual_pace_sec_per_km - s.target_pace_sec_per_km;
+		if (Math.abs(d) < 1) return 'on pace';
+		const sign = d > 0 ? '+' : '−';
+		return `${sign}${Math.abs(Math.round(d))}s`;
+	}
+
+	function paceDeltaClass(s: WorkoutStepResult): string {
+		if (s.actual_pace_sec_per_km == null) return 'neutral';
+		const d = Math.abs(s.actual_pace_sec_per_km - s.target_pace_sec_per_km);
+		const tol = 10; // matches the recorder's default tolerance
+		if (d <= tol) return 'on';
+		if (d <= tol * 2) return 'amber';
+		return 'off';
+	}
 
 	function startEdit() {
 		editTitle = runTitle;
@@ -551,6 +639,55 @@
 			<ElevationProfile {elevations} totalDistance={run.distance_m} />
 		</section>
 
+		<!-- Structured workout review — only shown when the recorder
+		     linked this run to a planned `plan_workouts` row. Driven
+		     entirely by `metadata.workout_step_results` so the table
+		     stays in sync without a second query. -->
+		{#if workoutStepResults.length > 0}
+			<section class="section workout-review">
+				<header class="workout-header">
+					<h2>Workout</h2>
+					{#if workoutAdherence}
+						<span class="workout-adherence workout-adherence-{workoutAdherence}">
+							{workoutAdherence}
+						</span>
+					{/if}
+				</header>
+				{#if linkedWorkout}
+					<p class="workout-name">
+						{linkedWorkout.notes ?? linkedWorkout.kind}
+						<span class="workout-target">
+							· {Math.round((linkedWorkout.target_distance_metres ?? 0) / 1000 * 10) / 10} km planned
+						</span>
+					</p>
+				{/if}
+				<table class="workout-table">
+					<thead>
+						<tr>
+							<th>Step</th>
+							<th class="num">Plan</th>
+							<th class="num">Actual</th>
+							<th class="num">Pace</th>
+							<th class="num">Δ</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each workoutStepResults as s}
+							<tr class:skipped={s.status === 'skipped'}>
+								<td>{stepLabel(s)}</td>
+								<td class="num">{(s.target_distance_m / 1000).toFixed(2)} km</td>
+								<td class="num">{(s.actual_distance_m / 1000).toFixed(2)} km</td>
+								<td class="num">{formatPaceSec(s.actual_pace_sec_per_km)}</td>
+								<td class="num pace-delta pace-delta-{paceDeltaClass(s)}">
+									{s.status === 'skipped' ? 'skip' : paceDeltaLabel(s)}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
+		{/if}
+
 		<!-- Splits -->
 		<section class="section">
 			<h2>Splits</h2>
@@ -854,6 +991,88 @@
 	.split-elev.positive {
 		color: var(--color-danger);
 	}
+
+	.workout-review .workout-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+
+	.workout-adherence {
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 0.15rem 0.5rem;
+		border-radius: 9999px;
+	}
+
+	.workout-adherence-completed {
+		background: rgba(16, 185, 129, 0.12);
+		color: #10b981;
+	}
+
+	.workout-adherence-partial {
+		background: rgba(245, 158, 11, 0.12);
+		color: #d97706;
+	}
+
+	.workout-adherence-abandoned {
+		background: rgba(239, 68, 68, 0.12);
+		color: #ef4444;
+	}
+
+	.workout-name {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-sm);
+	}
+
+	.workout-target {
+		color: var(--color-text-tertiary);
+	}
+
+	.workout-table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+
+	.workout-table th {
+		text-align: left;
+		font-size: 0.7rem;
+		font-weight: 500;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: var(--space-sm) 0;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.workout-table th.num,
+	.workout-table td.num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.workout-table td {
+		padding: var(--space-sm) 0;
+		font-size: 0.82rem;
+		border-bottom: 1px solid var(--color-bg-secondary);
+	}
+
+	.workout-table tr.skipped td {
+		opacity: 0.55;
+	}
+
+	.pace-delta {
+		font-weight: 600;
+	}
+
+	.pace-delta-on { color: #10b981; }
+	.pace-delta-amber { color: #d97706; }
+	.pace-delta-off { color: #ef4444; }
+	.pace-delta-neutral { color: var(--color-text-tertiary); }
 
 	.split-elev.negative {
 		color: var(--color-secondary);

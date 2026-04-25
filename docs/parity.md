@@ -213,7 +213,7 @@ See [docs/training.md](training.md) and [docs/workout_execution.md](workout_exec
 | Edit per-day workouts | Partial | ✗ | ✓ | ✗ | ✗ | Android plan editor is still basic. |
 | Workout detail screen | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | "Today's workout" card on home / dashboard | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Structured-workout execution loop (live rep targets) | ✗ | ✗ | ✗ | ✗ | ✗ | Specced in workout_execution.md; not started. *Physical exception for the live-rep-tracking part* (needs the recorder) but the planner / review UI belongs on web first. |
+| Structured-workout execution loop (live rep targets) | ✗ | ✗ | Partial | ✗ | ✗ | Specced in workout_execution.md. **Live execution loop** (band UI, audio cues, auto-advance) is a *physical exception* — needs the recorder, so mobile / watch only. **Planner shipped on web** (`/plans/new`, `/plans/[id]`, `/plans/[id]/workouts/[wid]`) and **post-run review shipped on web**: `/runs/[id]` renders a "Workout" section when `metadata.plan_workout_id` is set, with a planned-vs-actual table per step (label / planned km / actual km / actual pace / delta), a colour-coded adherence pill (`completed` / `partial` / `abandoned`), and the linked workout's name fetched via `fetchWorkout(id)`. Goes live as soon as a recorder writes the three metadata keys (`plan_workout_id`, `workout_step_results`, `workout_adherence`) — registered in metadata.md. |
 | Auto-link completed run to planned workout | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Adherence % + weekly summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | VDOT / Riegel pace derivation | ✓ | ✗ | ✓ | ✗ | ✗ | Derivation engine shared via `core_models`. |
