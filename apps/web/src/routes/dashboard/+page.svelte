@@ -251,7 +251,7 @@
 				</div>
 			</a>
 		{:else if !planOverview}
-			<a class="plan-promo" href="/plans/new">
+			<a class="plan-promo" href="/plans?new=1">
 				<div>
 					<span class="today-label">TRAINING PLANS</span>
 					<h3>Pick a goal race and we'll schedule the weeks</h3>

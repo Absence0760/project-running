@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
@@ -17,7 +18,16 @@
 		loading = false;
 	}
 
-	onMount(load);
+	onMount(async () => {
+		await load();
+		// Deep-link from the dashboard's "Pick a goal race" CTA: opening
+		// `/plans?new=1` lands here with the create-plan modal already
+		// open. Strip the query so a refresh doesn't re-open the modal.
+		if ($page.url.searchParams.get('new') === '1') {
+			showPlanModal = true;
+			goto('/plans', { replaceState: true, noScroll: true });
+		}
+	});
 
 	const eventLabels: Record<string, string> = {
 		distance_5k: '5K',
