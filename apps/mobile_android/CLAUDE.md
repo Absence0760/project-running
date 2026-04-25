@@ -106,7 +106,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 Test files in `test/`:
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
-- `local_run_store_test.dart` — 16 tests: store persistence, sync state, in-progress save/load, edge cases
+- `local_run_store_test.dart` — 17 tests: store persistence, sync state, in-progress save/load, deleteMany batch, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
 - `goals_test.dart` — 20 tests: goal evaluation (distance/time/pace/run-count, weekly/monthly, multi-target)
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
@@ -120,10 +120,12 @@ Test files in `test/`:
 - `workout_review_section_test.dart` — 11 tests for `widgets/workout_review_section.dart`: hidden when metadata absent / empty / null, header + adherence pill rendered with one row per step, kind-specific labels (Warmup / Rep i/n / Recovery i/n / Cooldown), strikethrough + "skip" label for skipped steps, em-dash + neutral colour when actual pace is null, signed `+/−Ns` delta label, and tone classification thresholds (`on` / `amber` / `off` against the 10 s tolerance) plus `formatPace` formatting
 - `fitness_card_test.dart` — 5 widget tests for `widgets/fitness_card.dart`: hidden with no runs, hidden when no runs qualify (sub-3 km / sub-5 min), populated card renders all six stat labels + the recovery-advice icon + the qualifying-run count, em-dash placeholder when VDOT can't be computed but qualifying runs exist, plus a smoke test for the `FitnessStat` value-over-label primitive
 - `metadata_registry_test.dart` — 2 tests: (1) every `runs.metadata` key referenced in Dart source is registered in [docs/metadata.md](../../docs/metadata.md) — catches cross-client drift like `metadata.activityType` vs `metadata.activity_type` at CI time; (2) a soft "dead-key" info log surfacing registered keys that no Dart reader touches (may be web/watch/EF-only). Fails on unknown-key writes; purely informational on the reverse direction.
-- `architecture_guards_test.dart` — 18 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
+- `recurrence_test.dart` — 8 tests: weekly / biweekly / monthly `expandInstances`, hour/minute local-tz preservation, `count` cap, `until` cap, non-recurring single-instance
+- `importer_external_id_test.dart` — 2 tests: `StravaImporter` ZIP import produces `strava:<id>` prefix; source-text guard confirms `HealthConnectImporter` uses `healthconnect:<uuid>` prefix
+- `architecture_guards_test.dart` — 20 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
 - plus `run_recorder`'s own tests in `packages/run_recorder/test/` — 17 behavioural + 7 guards + 13 `workout_runner_test.dart` (step expansion, auto-advance, halfway / last-50m progress, skip / abandon, pace-adherence wayBehind, results JSON shape)
 
-See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
+See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for `FitnessCard`, `WorkoutExecutionBand`, `WorkoutReviewSection`, and `PlanCalendar` (14 `testWidgets` calls total); all other screens and widgets are uncovered.
 
 ## Running it locally
 
