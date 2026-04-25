@@ -84,6 +84,7 @@
 			period: 'week',
 			distanceMetres: undefined,
 			timeSeconds: undefined,
+			paceSecPerKm: undefined,
 			runCount: undefined,
 		};
 		showGoalEditor = true;
@@ -98,6 +99,7 @@
 		const hasAny =
 			(g.distanceMetres ?? 0) > 0 ||
 			(g.timeSeconds ?? 0) > 0 ||
+			(g.paceSecPerKm ?? 0) > 0 ||
 			(g.runCount ?? 0) > 0;
 		if (!hasAny) {
 			// "Save" on an empty goal is effectively delete.
@@ -402,7 +404,7 @@
 			{#if goals.length === 0}
 				<p class="goals-empty">
 					No goals yet. Set a weekly or monthly target for distance, time,
-					or number of runs.
+					avg pace, or number of runs.
 				</p>
 			{:else}
 				<div class="goal-grid">
@@ -621,6 +623,39 @@
 						...eg,
 						timeSeconds: v === '' ? undefined : Math.max(0, parseFloat(v) * 60),
 					};
+				}}
+				class="input"
+			/>
+		</label>
+		<label class="field">
+			<span class="field-label">
+				Avg pace (mm:ss / {preferredUnit === 'mi' ? 'mi' : 'km'})
+			</span>
+			<input
+				type="text"
+				inputmode="numeric"
+				pattern="[0-9]{1,2}:[0-9]{2}"
+				placeholder={preferredUnit === 'mi' ? '8:00' : '5:00'}
+				value={eg.paceSecPerKm != null
+					? (() => {
+						const perDisplay = preferredUnit === 'mi' ? eg.paceSecPerKm * 1.609344 : eg.paceSecPerKm;
+						const m = Math.floor(perDisplay / 60);
+						const s = Math.round(perDisplay % 60);
+						return `${m}:${s.toString().padStart(2, '0')}`;
+					})()
+					: ''}
+				oninput={(e) => {
+					const raw = (e.currentTarget as HTMLInputElement).value.trim();
+					if (raw === '') {
+						editingGoal = { ...eg, paceSecPerKm: undefined };
+						return;
+					}
+					const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+					if (!m) return; // wait for a complete mm:ss
+					const perDisplay = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+					if (perDisplay <= 0) return;
+					const perKm = preferredUnit === 'mi' ? perDisplay / 1.609344 : perDisplay;
+					editingGoal = { ...eg, paceSecPerKm: perKm };
 				}}
 				class="input"
 			/>

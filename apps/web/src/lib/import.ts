@@ -95,11 +95,15 @@ function parseTcx(xml: string): ImportedRoute[] {
 			const eleStr = tp.querySelector('AltitudeMeters')?.textContent;
 			const ele = eleStr ? parseFloat(eleStr) : undefined;
 			const tsStr = tp.querySelector('Time')?.textContent;
+			// TCX `<HeartRateBpm><Value>180</Value></HeartRateBpm>`.
+			const hrStr = tp.querySelector('HeartRateBpm > Value')?.textContent;
+			const bpm = hrStr ? parseInt(hrStr, 10) : NaN;
 			waypoints.push({
 				lat,
 				lng,
 				ele: Number.isFinite(ele as number) ? (ele as number) : undefined,
 				ts: tsStr || undefined,
+				bpm: Number.isFinite(bpm) && bpm >= 30 && bpm <= 230 ? bpm : undefined,
 			});
 		}
 
@@ -157,11 +161,29 @@ function parseGpx(xml: string): ImportedRoute[] {
 }
 
 function toWaypoints(points: Element[]): TrackPoint[] {
-	return points.map((pt) => ({
-		lat: parseFloat(pt.getAttribute('lat') ?? '0'),
-		lng: parseFloat(pt.getAttribute('lon') ?? '0'),
-		ele: parseFloat(pt.querySelector('ele')?.textContent ?? '0') || undefined,
-	}));
+	return points.map((pt) => {
+		const ts = pt.querySelector('time')?.textContent?.trim() || undefined;
+		// Garmin's `gpxtpx:TrackPointExtension` puts `<hr>` under
+		// `<extensions>`; namespace prefixes vary by exporter so match
+		// any element with localName === 'hr' (or 'heartrate').
+		let bpm: number | undefined;
+		const ext = pt.getElementsByTagName('extensions')[0];
+		if (ext) {
+			const hrEls = ext.getElementsByTagNameNS('*', 'hr');
+			const node = hrEls[0] ?? ext.getElementsByTagNameNS('*', 'heartrate')[0];
+			if (node?.textContent) {
+				const v = parseInt(node.textContent, 10);
+				if (Number.isFinite(v) && v >= 30 && v <= 230) bpm = v;
+			}
+		}
+		return {
+			lat: parseFloat(pt.getAttribute('lat') ?? '0'),
+			lng: parseFloat(pt.getAttribute('lon') ?? '0'),
+			ele: parseFloat(pt.querySelector('ele')?.textContent ?? '0') || undefined,
+			ts,
+			bpm,
+		};
+	});
 }
 
 // --- KML ---

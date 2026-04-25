@@ -1,9 +1,8 @@
-/// Multi-metric user goals, ported in spirit from
-/// `apps/mobile_android/lib/goals.dart`. The web version intentionally
-/// ships a narrower subset for now — distance / time / run-count
-/// targets, week or month period. Avg-pace targets are the most
-/// complex metric on Android (cycling-aware, distance-weighted) and
-/// the least commonly used; revisit when a user actually asks.
+/// Multi-metric user goals, ported from `apps/mobile_android/lib/goals.dart`.
+/// Four target kinds — distance, time, average pace, run count — over a
+/// week or month period. Pace targets are distance-weighted and exclude
+/// cycling (a single long bike ride would otherwise dominate the
+/// average and make the metric meaningless for runners).
 ///
 /// Stored in `localStorage` under a single JSON blob, mirroring the
 /// local-first shape of the Android version. Not bag-synced today —
@@ -22,11 +21,15 @@ export interface RunGoal {
 	title?: string;
 	distanceMetres?: number;
 	timeSeconds?: number;
+	/// Lower-is-better target. Stored canonically as seconds per
+	/// kilometre regardless of the user's display unit; the editor
+	/// converts on the way in and out.
+	paceSecPerKm?: number;
 	runCount?: number;
 }
 
 export interface TargetProgress {
-	kind: 'distance' | 'time' | 'runCount';
+	kind: 'distance' | 'time' | 'pace' | 'runCount';
 	label: string;
 	currentLabel: string;
 	targetLabel: string;
@@ -105,6 +108,14 @@ function formatMinutes(s: number): string {
 	return `${m}m`;
 }
 
+/// `secondsPerKm` -> `mm:ss/km` (or "—" if zero / negative).
+export function formatPaceSecPerKm(secPerKm: number): string {
+	if (!isFinite(secPerKm) || secPerKm <= 0) return '—';
+	const m = Math.floor(secPerKm / 60);
+	const s = Math.round(secPerKm % 60);
+	return `${m}:${s.toString().padStart(2, '0')}/km`;
+}
+
 /// Pure evaluator. Given a goal and the full run list, compute progress
 /// per active target. Mirrors the shape of `evaluateGoal` in
 /// `goals.dart` — active-target list, aggregate percent, overall
@@ -122,6 +133,12 @@ export function evaluateGoal(
 	});
 	const totalMetres = inPeriod.reduce((s, r) => s + r.distance_m, 0);
 	const totalSeconds = inPeriod.reduce((s, r) => s + r.duration_s, 0);
+
+	// Pace calculations exclude cycling — a distance-weighted average
+	// would otherwise be dominated by a single long bike ride.
+	const paceEligible = inPeriod.filter(
+		(r) => (r.metadata?.['activity_type'] as string | undefined) !== 'cycle',
+	);
 
 	const targets: TargetProgress[] = [];
 
@@ -145,6 +162,33 @@ export function evaluateGoal(
 			targetLabel: formatMinutes(goal.timeSeconds),
 			percent: pct,
 			complete: totalSeconds >= goal.timeSeconds,
+		});
+	}
+	if (goal.paceSecPerKm != null && goal.paceSecPerKm > 0) {
+		const paceMetres = paceEligible.reduce((s, r) => s + r.distance_m, 0);
+		const paceSeconds = paceEligible.reduce((s, r) => s + r.duration_s, 0);
+		const current = paceMetres > 10 ? paceSeconds / (paceMetres / 1000) : 0;
+		// Lower-is-better. If we don't yet have any running data, percent
+		// is 0; if we beat the target, 100; otherwise (target / current).
+		let percent: number;
+		let complete: boolean;
+		if (current <= 0) {
+			percent = 0;
+			complete = false;
+		} else if (current <= goal.paceSecPerKm) {
+			percent = 1;
+			complete = true;
+		} else {
+			percent = Math.max(0, Math.min(1, goal.paceSecPerKm / current));
+			complete = false;
+		}
+		targets.push({
+			kind: 'pace',
+			label: 'Avg pace',
+			currentLabel: current > 0 ? formatPaceSecPerKm(current) : '—',
+			targetLabel: formatPaceSecPerKm(goal.paceSecPerKm),
+			percent,
+			complete,
 		});
 	}
 	if (goal.runCount != null && goal.runCount > 0) {

@@ -259,16 +259,40 @@
 		{ zone: 'Zone 5', label: 'Max', color: '#F44336' },
 	];
 
-	/// Per-point BPM samples, if the track has any. Empty array signals
-	/// the fallback-copy path below.
-	let bpmSamples = $derived.by(() => {
+	/// Per-point BPM samples paired with their timestamps so the zone
+	/// breakdown can be time-weighted instead of sample-count-weighted.
+	/// Sample-count is a fine proxy when sampling is regular (~1 Hz),
+	/// but Strava streams and watch FIT files often emit irregularly,
+	/// and time-weighting is what every other running app shows.
+	let bpmTimedSamples = $derived.by(() => {
 		const track = run?.track ?? [];
-		const out: number[] = [];
+		const out: { bpm: number; tMs: number | null }[] = [];
 		for (const p of track) {
 			const b = p.bpm;
-			if (typeof b === 'number' && b >= 30 && b <= 230) out.push(b);
+			if (typeof b !== 'number' || b < 30 || b > 230) continue;
+			const tMs = p.ts ? Date.parse(p.ts) : NaN;
+			out.push({ bpm: b, tMs: Number.isFinite(tMs) ? tMs : null });
 		}
 		return out;
+	});
+
+	let bpmSamples = $derived(bpmTimedSamples.map((s) => s.bpm));
+
+	/// Min / max / avg from the per-point BPM stream. Avg is a simple
+	/// arithmetic mean of samples — close enough for display, not the
+	/// time-integrated form.
+	let bpmStats = $derived.by(() => {
+		const samples = bpmSamples;
+		if (samples.length === 0) return null;
+		let min = samples[0];
+		let max = samples[0];
+		let sum = 0;
+		for (const b of samples) {
+			if (b < min) min = b;
+			if (b > max) max = b;
+			sum += b;
+		}
+		return { min, max, avg: Math.round(sum / samples.length) };
 	});
 
 	/// Zone upper bounds (BPM) from the user's settings bag, or sane
@@ -277,28 +301,73 @@
 	/// fall back here when they're absent.
 	let zoneCutoffs = $state<[number, number, number, number, number] | null>(null);
 
+	function zoneIndex(bpm: number, cutoffs: [number, number, number, number, number]): number {
+		if (bpm <= cutoffs[0]) return 0;
+		if (bpm <= cutoffs[1]) return 1;
+		if (bpm <= cutoffs[2]) return 2;
+		if (bpm <= cutoffs[3]) return 3;
+		return 4;
+	}
+
 	let hrZones = $derived.by(() => {
-		const samples = bpmSamples;
+		const samples = bpmTimedSamples;
 		if (samples.length === 0) return [];
 		// Cutoffs default to the classic Karvonen-ish bands at 60 / 70
 		// / 80 / 90 / 100 % of max HR when the user hasn't set them.
 		const cutoffs = zoneCutoffs ?? [114, 133, 152, 171, 190];
-		const counts = [0, 0, 0, 0, 0];
-		for (const b of samples) {
-			let z = 0;
-			if (b <= cutoffs[0]) z = 0;
-			else if (b <= cutoffs[1]) z = 1;
-			else if (b <= cutoffs[2]) z = 2;
-			else if (b <= cutoffs[3]) z = 3;
-			else z = 4;
-			counts[z]++;
+
+		// Time-weighted when timestamps are available on every sample.
+		// Each sample's "weight" is half the gap to the previous sample
+		// + half the gap to the next, so the zone of a long-held BPM
+		// dominates over a momentary spike. When timestamps are absent
+		// (e.g. Strava streams without time series) fall back to count.
+		const haveTime = samples.every((s) => s.tMs !== null);
+		const weights = new Array(samples.length).fill(1);
+		if (haveTime) {
+			const ts = samples.map((s) => s.tMs as number);
+			for (let i = 0; i < ts.length; i++) {
+				const prev = i > 0 ? ts[i] - ts[i - 1] : 0;
+				const next = i < ts.length - 1 ? ts[i + 1] - ts[i] : 0;
+				// Cap any single gap at 30 s so a paused recording can't
+				// inflate one sample's slice into the entire run.
+				const w = Math.min(30000, prev / 2) + Math.min(30000, next / 2);
+				weights[i] = Math.max(0, w);
+			}
 		}
-		const total = samples.length;
+
+		const totals = [0, 0, 0, 0, 0];
+		let totalWeight = 0;
+		for (let i = 0; i < samples.length; i++) {
+			const z = zoneIndex(samples[i].bpm, cutoffs);
+			totals[z] += weights[i];
+			totalWeight += weights[i];
+		}
+		if (totalWeight <= 0) {
+			// Degenerate — no time elapsed between samples. Fall back to
+			// sample count so we still render something.
+			for (let i = 0; i < samples.length; i++) {
+				totals[zoneIndex(samples[i].bpm, cutoffs)] += 1;
+			}
+			totalWeight = samples.length;
+		}
+
+		// `seconds` is meaningful only when haveTime; otherwise it's a
+		// proxy unit and we hide it from the UI.
 		return zoneDefs.map((def, i) => ({
 			...def,
-			pct: Math.round((counts[i] / total) * 100),
+			pct: Math.round((totals[i] / totalWeight) * 100),
+			seconds: haveTime ? Math.round(totals[i] / 1000) : null,
 		}));
 	});
+
+	function formatZoneTime(s: number): string {
+		const h = Math.floor(s / 3600);
+		const m = Math.floor((s % 3600) / 60);
+		const sec = s % 60;
+		if (h > 0) return `${h}h ${m}m`;
+		if (m > 0) return `${m}m ${sec}s`;
+		return `${sec}s`;
+	}
 
 	let baseTrack = $derived(run ? (run.track ?? generateMockTrack(run.distance_m)) : []);
 	let elevations = $derived(baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30));
@@ -518,12 +587,19 @@
 		<section class="section">
 			<h2>Heart Rate Zones</h2>
 			{#if hrZones.length > 0}
+				{#if bpmStats}
+					<div class="hr-stats">
+						<div class="hr-stat"><span class="hr-stat-label">Avg</span><span class="hr-stat-value">{bpmStats.avg}</span></div>
+						<div class="hr-stat"><span class="hr-stat-label">Min</span><span class="hr-stat-value">{bpmStats.min}</span></div>
+						<div class="hr-stat"><span class="hr-stat-label">Max</span><span class="hr-stat-value">{bpmStats.max}</span></div>
+					</div>
+				{/if}
 				<div class="hr-bar">
 					{#each hrZones as zone}
 						<div
 							class="hr-segment"
 							style="width: {zone.pct}%; background: {zone.color}"
-							title="{zone.zone}: {zone.pct}%"
+							title="{zone.zone}: {zone.pct}%{zone.seconds != null ? ` (${formatZoneTime(zone.seconds)})` : ''}"
 						></div>
 					{/each}
 				</div>
@@ -532,6 +608,9 @@
 						<div class="hr-legend-item">
 							<span class="hr-dot" style="background: {zone.color}"></span>
 							<span class="hr-zone-name">{zone.label}</span>
+							{#if zone.seconds != null}
+								<span class="hr-zone-time">{formatZoneTime(zone.seconds)}</span>
+							{/if}
 							<span class="hr-zone-pct">{zone.pct}%</span>
 						</div>
 					{/each}
@@ -821,6 +900,38 @@
 		font-weight: 600;
 		font-family: 'SF Mono', 'Menlo', monospace;
 		font-size: 0.75rem;
+	}
+
+	.hr-zone-time {
+		color: var(--color-text-secondary);
+		font-family: 'SF Mono', 'Menlo', monospace;
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.hr-stats {
+		display: flex;
+		gap: var(--space-md);
+		margin-bottom: var(--space-sm);
+	}
+
+	.hr-stat {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		min-width: 3rem;
+	}
+
+	.hr-stat-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+
+	.hr-stat-value {
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.run-date-sub {
