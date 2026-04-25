@@ -74,7 +74,7 @@ See [features § Full-screen route builder](features.md#full-screen-route-builde
 | Route detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | iOS: scaffold only. |
 | Public / private toggle per route | ✓ | ✗ | ✓ | N/A | N/A | Bidirectional on both: Android's globe icon on `route_detail_screen.dart`; web's owner-only `Public` / `Private` button on `/routes/[id]` (added in parallel with the explicit Share button; `setRoutePublic(id, bool)` in `data.ts` with optimistic UI + rollback). |
 | Shareable route link | ✓ | ✗ | ✓ | N/A | N/A | Web makes the route public and copies the link in one action. |
-| Export route as GPX | Partial | ✗ | ✓ | N/A | N/A | Android: share-run-as-GPX is shipped; share-route-as-GPX not yet. |
+| Export route as GPX | ✓ | ✗ | ✓ | N/A | N/A | Android: share button on `route_detail_screen.dart` writes the route's waypoints to a temp `.gpx` and hands it to the system share sheet. |
 | Export route as KML | ✗ | ✗ | ✓ | N/A | N/A | |
 
 ### Discovery

@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
@@ -199,6 +203,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       appBar: AppBar(
         title: Text(route.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share),
+            tooltip: 'Share as GPX',
+            onPressed: () => _shareAsGpx(context),
+          ),
           if (isOwner)
             IconButton(
               icon: Icon(_isPublic ? Icons.public : Icons.public_off),
@@ -401,6 +410,29 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     );
   }
 
+  Future<void> _shareAsGpx(BuildContext context) async {
+    final route = widget.route;
+    try {
+      final tmp = await getTemporaryDirectory();
+      final safe = route.name
+              .replaceAll(RegExp(r'[^a-zA-Z0-9-_ ]'), '')
+              .replaceAll(RegExp(r'\s+'), '_');
+      final filename = (safe.isEmpty ? 'route' : safe);
+      final file = File('${tmp.path}/$filename.gpx');
+      await file.writeAsString(_routeToGpx(route));
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/gpx+xml')],
+        text: route.name,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share GPX: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -457,6 +489,37 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         return 'ROAD';
     }
   }
+}
+
+String _routeToGpx(cm.Route route) {
+  String esc(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+
+  final buf = StringBuffer();
+  buf.writeln('<?xml version="1.0" encoding="UTF-8"?>');
+  buf.writeln(
+      '<gpx version="1.1" creator="Run" xmlns="http://www.topografix.com/GPX/1/1">');
+  buf.writeln('  <metadata>');
+  buf.writeln('    <name>${esc(route.name)}</name>');
+  buf.writeln('    <time>${DateTime.now().toUtc().toIso8601String()}</time>');
+  buf.writeln('  </metadata>');
+  buf.writeln('  <trk>');
+  buf.writeln('    <name>${esc(route.name)}</name>');
+  buf.writeln('    <trkseg>');
+  for (final w in route.waypoints) {
+    buf.write('      <trkpt lat="${w.lat}" lon="${w.lng}">');
+    if (w.elevationMetres != null) {
+      buf.write('<ele>${w.elevationMetres}</ele>');
+    }
+    buf.writeln('</trkpt>');
+  }
+  buf.writeln('    </trkseg>');
+  buf.writeln('  </trk>');
+  buf.writeln('</gpx>');
+  return buf.toString();
 }
 
 class _Stat extends StatelessWidget {
