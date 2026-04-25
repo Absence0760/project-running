@@ -29,6 +29,8 @@
 	let weeklyMileageGoal = $state('');
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let stravaAutoShare = $state(false);
+	let voiceFeedbackEnabled = $state(false);
+	let voiceFeedbackIntervalKm = $state('1.0');
 
 	// Theme — persisted to localStorage, not the cross-device settings
 	// bag. Intentionally per-browser: a dark laptop + a light iPad is a
@@ -76,6 +78,10 @@
 			weeklyMileageGoal = (effective<number>(settings, 'weekly_mileage_goal_m') ?? '')?.toString() ?? '';
 			coachPersonality = effective(settings, 'coach_personality', 'supportive') ?? 'supportive';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
+			voiceFeedbackEnabled = effective(settings, 'voice_feedback_enabled', false) ?? false;
+			voiceFeedbackIntervalKm = (
+				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
+			).toString();
 
 			const zones = effective<Record<string, number>>(settings, 'hr_zones');
 			if (zones) {
@@ -105,6 +111,8 @@
 			auto_pause_speed_mps: parseFloat(autoPauseSpeed) || 0.8,
 			coach_personality: coachPersonality,
 			strava_auto_share: stravaAutoShare,
+			voice_feedback_enabled: voiceFeedbackEnabled,
+			voice_feedback_interval_km: parseFloat(voiceFeedbackIntervalKm) || 1.0,
 		};
 		if (weeklyMileageGoal) {
 			changes.weekly_mileage_goal_m = parseInt(weeklyMileageGoal, 10) || null;
@@ -228,6 +236,22 @@
 					<label>
 						<span class="label-text">Auto-pause speed (m/s)</span>
 						<input type="number" bind:value={autoPauseSpeed} step="0.1" min="0.1" max="3" />
+					</label>
+				{/if}
+				<label class="checkbox-label">
+					<input type="checkbox" bind:checked={voiceFeedbackEnabled} />
+					<span>Spoken split announcements (mobile + watch)</span>
+				</label>
+				{#if voiceFeedbackEnabled}
+					<label>
+						<span class="label-text">Split interval (km)</span>
+						<input
+							type="number"
+							bind:value={voiceFeedbackIntervalKm}
+							step="0.5"
+							min="0.5"
+							max="10"
+						/>
 					</label>
 				{/if}
 				<label>
