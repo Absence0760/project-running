@@ -38,8 +38,12 @@ function createAuthStore() {
 		if (session) {
 			loggedIn = true;
 			loading = false;
-			// Don't await — fetch profile in background so navigation isn't blocked
-			fetchUser(session.user.id, session.user.email ?? '').catch(console.error);
+			// Awaited so callers like auth/callback can navigate after the
+			// profile is hydrated. Trade-off: refreshSession resolves ~50–200 ms
+			// later (one extra DB round-trip). The background fetch on
+			// onAuthStateChange is intentionally not awaited (it fires on every
+			// visibility change and we don't want to block there).
+			await fetchUser(session.user.id, session.user.email ?? '').catch(console.error);
 		} else {
 			loggedIn = false;
 			user = null;
