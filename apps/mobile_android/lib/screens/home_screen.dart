@@ -106,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
           runStore: widget.runStore,
           routeStore: widget.routeStore,
           preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
         ),
       ),
       _KeepAlive(

@@ -12,6 +12,7 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../route_simplify.dart';
 import '../run_stats.dart';
+import '../settings_sync.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/run_share_card.dart';
 
@@ -22,6 +23,7 @@ class RunDetailScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final ApiClient? apiClient;
+  final SettingsSyncService? settingsSync;
 
   const RunDetailScreen({
     super.key,
@@ -30,6 +32,7 @@ class RunDetailScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     this.apiClient,
+    this.settingsSync,
   });
 
   @override
@@ -869,7 +872,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   List<Widget> _buildHrZoneBreakdown(ThemeData theme) {
     final stats = bpmStatsOf(run.track);
     if (stats == null) return const [];
-    final buckets = hrZoneBreakdown(run.track);
+    final buckets = hrZoneBreakdown(run.track, cutoffs: _userHrCutoffs());
     if (buckets.isEmpty) return const [];
 
     const colors = [
@@ -988,6 +991,30 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       const SizedBox(height: 8),
       const Divider(),
     ];
+  }
+
+  /// Pull the user's `hr_zones` from the universal settings bag.
+  /// Returns null when not signed in / not configured / malformed —
+  /// `hrZoneBreakdown` falls back to the default 60/70/80/90/100 %
+  /// HR-max bands in that case.
+  List<int>? _userHrCutoffs() {
+    final svc = widget.settingsSync?.service;
+    if (svc == null) return null;
+    final raw = svc.effective<Map>(SettingsKeys.hrZones);
+    if (raw == null) return null;
+    final out = <int>[];
+    for (final k in const ['z1', 'z2', 'z3', 'z4', 'z5']) {
+      final v = raw[k];
+      if (v is! num) return null;
+      out.add(v.round());
+    }
+    if (out.length != 5) return null;
+    // Cutoffs must be strictly increasing for the zone-index math to make
+    // sense; reject malformed configurations.
+    for (var i = 1; i < out.length; i++) {
+      if (out[i] <= out[i - 1]) return null;
+    }
+    return out;
   }
 
   static String _formatZoneSeconds(int s) {

@@ -11,6 +11,7 @@ import '../goals.dart';
 import '../local_run_store.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../settings_sync.dart';
 import 'run_detail_screen.dart';
 
 enum PeriodType { week, month }
@@ -165,6 +166,7 @@ class PeriodSummaryScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
+  final SettingsSyncService? settingsSync;
 
   const PeriodSummaryScreen({
     super.key,
@@ -173,6 +175,7 @@ class PeriodSummaryScreen extends StatefulWidget {
     required this.runStore,
     required this.routeStore,
     required this.preferences,
+    this.settingsSync,
   });
 
   @override
@@ -332,6 +335,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                       runStore: widget.runStore,
                       routeStore: widget.routeStore,
                       preferences: widget.preferences,
+                      settingsSync: widget.settingsSync,
                     ),
                   ),
                 ),

@@ -6,6 +6,7 @@ import '../goals.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../settings_sync.dart';
 import 'add_run_screen.dart';
 import 'run_detail_screen.dart';
 
@@ -19,12 +20,14 @@ class RunsScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
+  final SettingsSyncService? settingsSync;
   const RunsScreen({
     super.key,
     this.apiClient,
     required this.runStore,
     required this.routeStore,
     required this.preferences,
+    this.settingsSync,
   });
 
   @override
@@ -652,6 +655,7 @@ class _RunsScreenState extends State<RunsScreen> {
                   routeStore: widget.routeStore,
                   preferences: widget.preferences,
                   apiClient: widget.apiClient,
+                  settingsSync: widget.settingsSync,
                 ),
               ),
             );
