@@ -2,6 +2,8 @@
 
 Live execution loop for running a `plan_workouts` row inside the existing `RunRecorder`. Phase 2 of the training-plan feature — the schema + editor + generator are shipped; this is the "start the workout" experience.
 
+> **Status:** v1 shipped on Android. `packages/run_recorder/lib/src/workout_runner.dart` is the state machine + step expander; `apps/mobile_android/lib/widgets/workout_execution_band.dart` is the overlay; entry is via the today's-workout card on the Run tab ("Start workout"). On `recorder.stop()` the run picks up `plan_workout_id`, `workout_step_results`, and `workout_adherence` so the existing web review section on `/runs/[id]` lights up automatically. Below is the original spec; what shipped largely follows it. v1 deferrals: `rewindStep` is not surfaced in the UI (state machine has no rewind today; abandon + restart works); the entry point is the today's-workout card (no Start button on `workout_detail_screen` yet — long-press / detail screen is for reading only); ghost pacer remains a follow-up.
+
 ## Product contract
 
 The user opens a planned workout (from `todays_workout_card` or `workout_detail_screen`) and taps **Start workout**. They get the familiar run screen plus:

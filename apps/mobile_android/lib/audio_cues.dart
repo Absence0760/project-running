@@ -1,4 +1,9 @@
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:run_recorder/run_recorder.dart' show
+    PaceDriftEvent,
+    StepProgressKind,
+    WorkoutStep,
+    WorkoutStepKind;
 
 import 'preferences.dart';
 
@@ -76,6 +81,69 @@ class AudioCues {
   Future<void> announcePaceAlert({required bool tooSlow}) async {
     await _init();
     await _tts.speak(tooSlow ? 'Pick up the pace' : 'Slow down');
+  }
+
+  /// Announce a structured-workout step transition. Reuses the same
+  /// TTS engine the splits cues use; failures are swallowed by the
+  /// caller's try/catch (layered-resilience contract).
+  Future<void> announceWorkoutStepTransition(WorkoutStep step) async {
+    await _init();
+    await _tts.speak(_workoutStepUtterance(step));
+  }
+
+  /// In-step progress cue ("halfway" / "fifty metres to go").
+  Future<void> announceWorkoutStepProgress(
+      WorkoutStep step, StepProgressKind kind) async {
+    await _init();
+    final phrase = switch (kind) {
+      StepProgressKind.halfway => 'Halfway through this rep',
+      StepProgressKind.lastFiftyMetres => 'Fifty metres to go',
+    };
+    await _tts.speak(phrase);
+  }
+
+  /// Pace-drift nudge when the runner has been more than the tolerance
+  /// off pace for ~45 s. Verb is signed.
+  Future<void> announceWorkoutPaceDrift(PaceDriftEvent e) async {
+    await _init();
+    final verb = e.ahead ? 'Ease up' : 'Pick it up';
+    final delta = e.deltaSecPerKm;
+    final dir = e.ahead ? 'ahead' : 'behind';
+    await _tts.speak('$verb — $delta seconds $dir pace.');
+  }
+
+  /// Final cue when the last step's auto-advance fires.
+  Future<void> announceWorkoutComplete() async {
+    await _init();
+    await _tts.speak('Workout complete. Nice work.');
+  }
+
+  String _workoutStepUtterance(WorkoutStep step) {
+    final paceM = step.targetPaceSecPerKm ~/ 60;
+    final paceS = step.targetPaceSecPerKm % 60;
+    final paceTail = paceS == 0
+        ? '$paceM minutes per kilometre'
+        : '$paceM $paceS per kilometre';
+    final dist = _spokenDistance(step.targetDistanceMetres);
+    final intro = switch (step.kind) {
+      WorkoutStepKind.warmup => 'Warmup',
+      WorkoutStepKind.rep => step.repIndex != null && step.repTotal != null
+          ? 'Rep ${step.repIndex} of ${step.repTotal}'
+          : 'Rep',
+      WorkoutStepKind.recovery => 'Recovery',
+      WorkoutStepKind.steady => 'Steady',
+      WorkoutStepKind.cooldown => 'Cooldown',
+    };
+    return '$intro. $dist at $paceTail.';
+  }
+
+  String _spokenDistance(double metres) {
+    if (metres >= 1000) {
+      final km = metres / 1000;
+      if (km == km.roundToDouble()) return '${km.round()} kilometres';
+      return '${km.toStringAsFixed(1)} kilometres';
+    }
+    return '${metres.round()} metres';
   }
 
   Future<void> stop() async {

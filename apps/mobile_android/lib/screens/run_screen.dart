@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
+import 'package:core_models/core_models.dart' show PlanWorkoutRow, TrainingPlanRow;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -24,11 +25,13 @@ import '../race_controller.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
+import '../training.dart';
 import '../training_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/upcoming_event_card.dart';
+import '../widgets/workout_execution_band.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'plans_screen.dart';
@@ -47,6 +50,11 @@ class RunScreen extends StatefulWidget {
   final TrainingService training;
   final BleHeartRate heartRate;
   final cm.Route? initialRoute;
+  /// Pre-loaded planned workout. When set, the run starts in
+  /// "structured workout" mode — the [WorkoutExecutionBand] mounts and
+  /// `_finishRun` writes `plan_workout_id` + `workout_step_results` +
+  /// `workout_adherence` to `runs.metadata`.
+  final PlanWorkoutRow? initialWorkout;
 
   const RunScreen({
     super.key,
@@ -60,6 +68,7 @@ class RunScreen extends StatefulWidget {
     required this.training,
     required this.heartRate,
     this.initialRoute,
+    this.initialWorkout,
   });
 
   @override
@@ -171,6 +180,16 @@ class _RunScreenState extends State<RunScreen> {
   // `default_activity_type` setting (mirrored into Preferences).
   ActivityType _activityType = ActivityType.run;
 
+  // ── Structured workout execution ──
+  // Mounted when the run was started from a planned workout. The
+  // runner consumes _onSnapshot output and emits transition / drift
+  // events into _workoutEventsSub. Band UI listens via _workoutBand.
+  WorkoutRunner? _workoutRunner;
+  StreamSubscription<WorkoutExecEvent>? _workoutEventsSub;
+  String? _activeWorkoutId;
+  final ValueNotifier<WorkoutBandState> _workoutBand =
+      ValueNotifier(WorkoutBandState.empty);
+
   // Pace alerts
   DateTime? _lastPaceAlertAt;
 
@@ -227,8 +246,133 @@ class _RunScreenState extends State<RunScreen> {
     _activityType =
         ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
+    _maybePreloadWorkoutRunner();
     _refreshUpcomingEvent();
     _refreshPlanOverview();
+  }
+
+  /// Build a [WorkoutRunner] from the incoming planned workout — its
+  /// `structure` jsonb plus the plan's `paces` bag — so the run starts
+  /// already aware of its first step.
+  Future<void> _maybePreloadWorkoutRunner() async {
+    final wo = widget.initialWorkout;
+    if (wo == null) return;
+    Map<String, int> paces = const {};
+    try {
+      final plan = await widget.training.fetchPlanForWorkout(wo);
+      paces = _pacesFromPlan(plan);
+    } catch (e) {
+      debugPrint('Failed to load plan paces for workout ${wo.id}: $e');
+    }
+    if (!mounted) return;
+    final structure = wo.structure is Map<String, dynamic>
+        ? wo.structure as Map<String, dynamic>
+        : null;
+    final steps = expandWorkoutSteps(
+      structure: structure,
+      paces: paces,
+      toleranceSecPerKm: wo.targetPaceToleranceSec ?? 10,
+      fallbackDistanceMetres: wo.targetDistanceM,
+      fallbackPaceSecPerKm: wo.targetPaceSecPerKm,
+    );
+    if (steps.isEmpty) return;
+    final runner = WorkoutRunner(steps: steps);
+    _workoutEventsSub = runner.events.listen(_onWorkoutEvent);
+    _workoutRunner = runner;
+    _activeWorkoutId = wo.id;
+    _publishWorkoutBand();
+  }
+
+  /// Build the symbolic pace bag that resolves `'easy'`, `'jog'`,
+  /// `'tempo'`, etc. for [expandWorkoutSteps]. Plans on this codebase
+  /// don't store an explicit `paces` jsonb today — we re-derive from
+  /// the goal pace using the same `resolveTrainingPaces` helper the
+  /// generator uses, which keeps the running-time bands identical to
+  /// what the editor showed.
+  Map<String, int> _pacesFromPlan(TrainingPlanRow? plan) {
+    if (plan == null) return const {};
+    try {
+      final tp = resolveTrainingPaces(
+        goalDistanceM: plan.goalDistanceM,
+        goalTimeSec: plan.goalTimeSeconds,
+        recent5kSec: plan.current5kSeconds,
+      );
+      return <String, int>{
+        'easy': tp.easy,
+        'jog': tp.easy + 60,
+        'marathon': tp.marathon,
+        'tempo': tp.tempo,
+        'interval': tp.interval,
+        'repetition': tp.repetition,
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  void _onWorkoutEvent(WorkoutExecEvent e) {
+    if (e is StepTransitionEvent) {
+      _publishWorkoutBand();
+      if (widget.preferences.audioCues) {
+        try {
+          widget.audioCues.announceWorkoutStepTransition(e.step);
+        } catch (err) {
+          debugPrint('announceWorkoutStepTransition failed: $err');
+        }
+      }
+    } else if (e is StepProgressEvent) {
+      if (widget.preferences.audioCues) {
+        try {
+          widget.audioCues.announceWorkoutStepProgress(e.step, e.kind);
+        } catch (err) {
+          debugPrint('announceWorkoutStepProgress failed: $err');
+        }
+      }
+    } else if (e is PaceDriftEvent) {
+      if (widget.preferences.audioCues) {
+        try {
+          widget.audioCues.announceWorkoutPaceDrift(e);
+        } catch (err) {
+          debugPrint('announceWorkoutPaceDrift failed: $err');
+        }
+      }
+    } else if (e is WorkoutCompleteEvent) {
+      _publishWorkoutBand();
+      if (widget.preferences.audioCues) {
+        try {
+          widget.audioCues.announceWorkoutComplete();
+        } catch (err) {
+          debugPrint('announceWorkoutComplete failed: $err');
+        }
+      }
+    } else if (e is WorkoutAbandonedEvent) {
+      _publishWorkoutBand();
+    }
+  }
+
+  void _publishWorkoutBand() {
+    final runner = _workoutRunner;
+    if (runner == null) {
+      _workoutBand.value = WorkoutBandState.empty;
+      return;
+    }
+    final step = runner.currentStep;
+    final progress = step == null
+        ? 1.0
+        : (runner.stepDistanceMetres / step.targetDistanceMetres)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    _workoutBand.value = WorkoutBandState(
+      step: step,
+      totalSteps: runner.steps.length,
+      currentIndex: runner.currentStepIndex,
+      progress: progress,
+      remainingMetres: runner.stepRemainingMetres,
+      actualPaceSecPerKm: runner.stepAveragePaceSecPerKm,
+      adherence: runner.paceAdherence,
+      complete: runner.isComplete && step == null,
+      abandoned: false,
+    );
   }
 
   Future<void> _refreshUpcomingEvent() async {
@@ -544,6 +688,16 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   void _onSnapshot(RunSnapshot snapshot) {
+      // Drive the structured-workout runner first so its event stream
+      // (transitions, drift cues) is in sync with this snapshot. The
+      // runner is purely a snapshot consumer; it doesn't fire setState
+      // — _publishWorkoutBand pushes the new state via _workoutBand.
+      final wr = _workoutRunner;
+      if (wr != null && !wr.isComplete) {
+        wr.onSnapshot(snapshot);
+        _publishWorkoutBand();
+      }
+
       final unit = widget.preferences.unit;
 
       // Only count GPS-backed snapshots as evidence that the sensor is
@@ -941,6 +1095,25 @@ class _RunScreenState extends State<RunScreen> {
     await _hrSub?.cancel();
     _hrSub = null;
 
+    // Structured-workout review trail. Three keys are registered in
+    // [docs/metadata.md]: plan_workout_id, workout_step_results,
+    // workout_adherence. The web run-detail "Workout" section reads
+    // them to render a planned-vs-actual table. _activeWorkoutId
+    // covers both the in-app "tap card → load runner" entry and the
+    // pass-as-prop entry; metadata is written whenever a runner ran.
+    final runner = _workoutRunner;
+    final activeWorkoutId = _activeWorkoutId ?? widget.initialWorkout?.id;
+    if (runner != null && activeWorkoutId != null) {
+      metadata['plan_workout_id'] = activeWorkoutId;
+      metadata['workout_step_results'] =
+          runner.snapshotResults().map((r) => r.toJson()).toList();
+      metadata['workout_adherence'] = switch (runner.adherence()) {
+        WorkoutAdherence.completed => 'completed',
+        WorkoutAdherence.partial => 'partial',
+        WorkoutAdherence.abandoned => 'abandoned',
+      };
+    }
+
     // Prefer the stable id generated at _begin() over the recorder's
     // stop-time uuid so the saved run matches any incremental in-progress
     // file that may have been written while recording.
@@ -1089,9 +1262,161 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
+    _workoutEventsSub?.cancel();
+    _workoutRunner?.dispose();
+    _workoutBand.dispose();
     _recorder?.dispose();
     _statsNotifier.dispose();
     super.dispose();
+  }
+
+  /// Bottom-sheet picker shown when the user taps today's-workout card.
+  /// "Start workout" loads the structured runner inline; "View details"
+  /// pushes the existing detail screen.
+  Future<void> _showWorkoutEntryChoice(
+      PlanWorkoutRow wo, String planId) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.play_arrow),
+              title: const Text('Start workout'),
+              subtitle: const Text(
+                'Run with live step targets, audio cues, and a planned-vs-actual review.',
+              ),
+              onTap: () => Navigator.pop(ctx, 'start'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('View details'),
+              onTap: () => Navigator.pop(ctx, 'detail'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'start':
+        await _startStructuredWorkout(wo);
+      case 'detail':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkoutDetailScreen(
+              training: widget.training,
+              planId: planId,
+              workoutId: wo.id,
+            ),
+          ),
+        );
+        _refreshPlanOverview();
+    }
+  }
+
+  /// Load a planned workout into the current run-screen state — builds
+  /// the [WorkoutRunner], hooks the band, and leaves the user in the
+  /// idle screen ready to tap GO. Reused by today's-workout card; safe
+  /// to call when no workout is currently set, idempotent if the same
+  /// workout is selected twice.
+  Future<void> _startStructuredWorkout(PlanWorkoutRow wo) async {
+    if (_state != _ScreenState.idle) return;
+    Map<String, int> paces = const {};
+    try {
+      final plan = await widget.training.fetchPlanForWorkout(wo);
+      paces = _pacesFromPlan(plan);
+    } catch (e) {
+      debugPrint('fetchPlanForWorkout failed for ${wo.id}: $e');
+    }
+    if (!mounted) return;
+    final structure = wo.structure is Map<String, dynamic>
+        ? wo.structure as Map<String, dynamic>
+        : null;
+    final steps = expandWorkoutSteps(
+      structure: structure,
+      paces: paces,
+      toleranceSecPerKm: wo.targetPaceToleranceSec ?? 10,
+      fallbackDistanceMetres: wo.targetDistanceM,
+      fallbackPaceSecPerKm: wo.targetPaceSecPerKm,
+    );
+    if (steps.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This workout has no runnable structure.'),
+          ),
+        );
+      }
+      return;
+    }
+    _workoutEventsSub?.cancel();
+    _workoutRunner?.dispose();
+    final runner = WorkoutRunner(steps: steps);
+    _workoutEventsSub = runner.events.listen(_onWorkoutEvent);
+    setState(() {
+      _workoutRunner = runner;
+      _activeWorkoutId = wo.id;
+    });
+    _publishWorkoutBand();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Workout loaded · ${steps.length} step${steps.length == 1 ? '' : 's'} — tap GO to start'),
+        ),
+      );
+    }
+  }
+
+  void _onSkipWorkoutStep() {
+    final r = _workoutRunner;
+    if (r == null) return;
+    r.skipStep();
+    _publishWorkoutBand();
+  }
+
+  void _onAbandonWorkout() async {
+    final r = _workoutRunner;
+    if (r == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Abandon workout?'),
+        content: const Text(
+          'The structured plan stops here; the recorder keeps running '
+          'as a free run. You can stop anytime to save what you did.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Abandon'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      r.abandon();
+      _workoutBand.value = WorkoutBandState(
+        step: null,
+        totalSteps: r.steps.length,
+        currentIndex: r.currentStepIndex,
+        progress: 0,
+        remainingMetres: 0,
+        actualPaceSecPerKm: null,
+        adherence: PaceAdherence.onPace,
+        complete: false,
+        abandoned: true,
+      );
+    }
   }
 
   // ──────────────── Formatting ────────────────
@@ -1340,19 +1665,10 @@ class _RunScreenState extends State<RunScreen> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: TodaysWorkoutCard(
                             overview: _planOverview!,
-                            onTap: () async {
-                              final overview = _planOverview!;
-                              await Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => WorkoutDetailScreen(
-                                    training: widget.training,
-                                    planId: overview.plan.id,
-                                    workoutId: overview.todayWorkout!.id,
-                                  ),
-                                ),
-                              );
-                              _refreshPlanOverview();
-                            },
+                            onTap: () => _showWorkoutEntryChoice(
+                              _planOverview!.todayWorkout!,
+                              _planOverview!.plan.id,
+                            ),
                           ),
                         ),
                       if (lastRun != null)
@@ -1460,6 +1776,22 @@ class _RunScreenState extends State<RunScreen> {
             activity: _activityType,
           ),
         ),
+
+        // Structured-workout band — only mounts when the run was
+        // started from a planned workout. Reads through its own
+        // ValueListenable so the band rebuilds on transitions /
+        // progress without forcing a Stack-wide rebuild.
+        if (_workoutRunner != null)
+          Positioned(
+            top: MediaQuery.of(context).padding.top,
+            left: 0,
+            right: 0,
+            child: WorkoutExecutionBand(
+              state: _workoutBand,
+              onSkip: _onSkipWorkoutStep,
+              onAbandon: _onAbandonWorkout,
+            ),
+          ),
 
         // "X to go" badge — top right when a route is selected. Listens
         // to the snapshot notifier so it updates at GPS rate without

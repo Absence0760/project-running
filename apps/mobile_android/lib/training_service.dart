@@ -272,6 +272,30 @@ class TrainingService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Look up the plan that owns a given workout. Walks via `plan_weeks`
+  /// because `plan_workouts` doesn't carry a direct `plan_id` column.
+  /// Returns null when the row is missing or the user lacks RLS access.
+  Future<TrainingPlanRow?> fetchPlanForWorkout(PlanWorkoutRow wo) async {
+    try {
+      final week = await _c
+          .from(PlanWeekRow.table)
+          .select()
+          .eq('id', wo.weekId)
+          .maybeSingle();
+      if (week == null) return null;
+      final w = PlanWeekRow.fromJson(week);
+      final plan = await _c
+          .from(TrainingPlanRow.table)
+          .select()
+          .eq('id', w.planId)
+          .maybeSingle();
+      if (plan == null) return null;
+      return TrainingPlanRow.fromJson(plan);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> markCompleted(String workoutId, String? runId) async {
     await _c.from('plan_workouts').update({
       'completed_run_id': runId,
