@@ -194,12 +194,14 @@
 
 			const res = await fetch('/api/coach', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: {
+					'content-type': 'application/json',
+					'Authorization': `Bearer ${token}`,
+				},
 				body: JSON.stringify({
 					messages,
 					plan_id: planId,
 					recent_runs_limit: runsLimit,
-					access_token: token
 				})
 			});
 			if (!res.ok) {

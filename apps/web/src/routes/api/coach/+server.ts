@@ -46,7 +46,6 @@ interface CoachRequest {
 	/// [1, 100] server-side so a runaway client can't blow up the prompt.
 	/// Defaults to 20 if absent — matches the original behaviour.
 	recent_runs_limit?: number;
-	access_token: string; // user's Supabase JWT — used to scope the data pull
 }
 
 const DEFAULT_RUNS_LIMIT = 20;
@@ -81,6 +80,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		);
 	}
 
+	const authHeader = request.headers.get('authorization');
+	const accessToken = authHeader?.replace(/^Bearer\s+/i, '');
+	if (!accessToken) {
+		return new Response(JSON.stringify({ error: 'not authenticated' }), {
+			status: 401,
+			headers: { 'content-type': 'application/json' }
+		});
+	}
+
 	let body: CoachRequest;
 	try {
 		body = await request.json();
@@ -91,17 +99,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 	}
 
-	if (!body.access_token) {
-		return new Response(JSON.stringify({ error: 'not authenticated' }), {
-			status: 401,
-			headers: { 'content-type': 'application/json' }
-		});
-	}
-
 	// Scope every data read to the caller's JWT so RLS does its job — the
 	// server never sees another user's runs or plans.
 	const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-		global: { headers: { Authorization: `Bearer ${body.access_token}` } }
+		global: { headers: { Authorization: `Bearer ${accessToken}` } }
 	});
 
 	// Resolve the caller's tier first — every downstream limit (daily
