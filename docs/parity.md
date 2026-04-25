@@ -329,7 +329,7 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 | Advanced GPS filter tuning | ✓ | ✗ | N/A | ✗ | ✗ | Per-activity-type speed / accuracy thresholds. |
 | Licenses / open-source notices | ✓ | ✓ | ✓ | ✗ | ✗ | Web: `/legal/licenses` with dep + licence list and map-data / OSM attribution. Linked from the settings sidebar. |
 | App version display | ✓ | ✓ | ✓ | ✗ | ✗ | |
-| Manage premium subscription | ✗ | ✗ | Partial | N/A | N/A | Web: "Manage subscription" button on `/settings/upgrade` when the user is Pro. Currently a toast explaining the App Store / Play Store / billing-portal flow — swaps for a real `managementURL` deep-link once the RevenueCat web SDK is wired. |
+| Manage premium subscription | ✗ | ✗ | ✓ | N/A | N/A | Web: "Manage subscription" button on `/settings/upgrade` when the user is Pro. Calls `managementUrl(userId)` (`lib/revenuecat.ts`) which pulls `managementURL` off the user's RevenueCat `CustomerInfo` and opens the billing portal in a new tab. Falls back to a "manage where you bought it" toast when the build has no `PUBLIC_REVENUECAT_WEB_API_KEY` (preview / dev) or when the active subscription was started in App Store / Play Store rather than on the web. |
 | Funding / donation surface | ✗ | ✗ | ✓ | N/A | N/A | Web-only; see row under *Paywall and funding*. |
 
 ## Map and tile layer
