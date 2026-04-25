@@ -23,7 +23,7 @@ Each row: what the key is, its shape, which platforms *write* it, which platform
 
 | Key | Shape | Writers | Readers | Required? | Notes |
 |---|---|---|---|---|---|
-| `title` | `string` — user-entered display title | `mobile_android/screens/run_detail_screen.dart` (edit dialog), `mobile_android/strava_importer.dart` (default from Strava activity name) | `mobile_android/screens/run_detail_screen.dart` | Optional; falls back to the formatted start date when absent | Strava imports default to the Strava activity name or `"Strava import"`. Not currently editable on the web — only Android. |
+| `title` | `string` — user-entered display title | `mobile_android/screens/run_detail_screen.dart` (edit dialog), `mobile_android/strava_importer.dart` (default from Strava activity name), `apps/web/src/lib/data.ts` (`saveRun`, via Strava and Garmin importers) | `mobile_android/screens/run_detail_screen.dart` | Optional; falls back to the formatted start date when absent | Strava imports default to the Strava activity name. Android also writes it; not currently editable on the web. |
 | `notes` | `string` — free-form user notes | `mobile_android/screens/run_detail_screen.dart` (edit dialog) | `mobile_android/screens/run_detail_screen.dart` | Optional; empty string when absent | Not currently read on the web. |
 
 ### Import provenance
@@ -36,6 +36,11 @@ Set by importers when bulk-loading runs from third parties. None of these are re
 | `imported_at` | `string` (ISO 8601) | Same as above | — | Optional | Client wall-clock time of the import, not the original run time. |
 | `health_connect_type` | `string` — a `HealthWorkoutActivityType` enum name | `mobile_android/health_connect_importer.dart` | — | Optional | Preserves the raw Health Connect type even after `activity_type` narrows it to our enum. Useful if we ever want to recover the original classification. |
 | `strava_activity_type` | `string` — raw Strava activity type (e.g. `Run`, `Hike`, `Ride`) | `mobile_android/strava_importer.dart` | — | Optional | Same rationale as `health_connect_type`. |
+| `strava_id` | `string` — Strava activity id | `apps/web/src/lib/strava-zip.ts` | `apps/web/src/lib/strava-zip.ts` (dedupe check) | Optional | Used by the web Strava ZIP importer to skip already-imported activities. |
+| `garmin_id` | `string` — Garmin file id (`<time_created>-<serial>`) | `apps/web/src/lib/garmin-zip.ts` | `apps/web/src/lib/garmin-zip.ts` (dedupe check) | Optional | Used by the web Garmin ZIP importer to skip already-imported activities. |
+| `max_bpm` | `number` — peak heart rate in BPM for the run | `apps/web/src/lib/garmin-zip.ts` | — | Optional | Written by the Garmin ZIP importer when `maxBpm` is present in the parsed FIT data. No UI consumer yet. |
+| `source_file` | `string` — original filename from the ZIP archive | `apps/web/src/lib/garmin-zip.ts` | — | Optional | Written by the Garmin ZIP importer for both FIT and GPX files. Audit/debug aid. |
+| `elevation_m` | `number` — total elevation gain in metres | `apps/web/src/lib/data.ts` (`saveRun`, via Strava and Garmin importers) | — | Optional | Stored here because the `runs` table has no `elevation_m` column; that column exists only on `routes`. Populated for Strava and Garmin imports when ascent data is present. |
 
 ### Parkrun fields
 
