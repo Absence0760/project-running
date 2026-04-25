@@ -39,6 +39,7 @@
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
+		{ href: '/explore', label: 'Explore', icon: 'explore', accent: '#7FB3C2' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
 		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
