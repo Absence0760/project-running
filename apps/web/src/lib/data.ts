@@ -360,16 +360,20 @@ export async function saveRun(input: {
 	const userId = authUser.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
+	// elevation_m and title are not columns on `runs` (elevation_m lives on
+	// `routes`; title has no DB column). Merge both into metadata so they
+	// survive the round-trip. See docs/metadata.md for the registered keys.
+	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+	if (input.title) mergedMetadata.title = input.title;
+	if (input.elevation_m != null) mergedMetadata.elevation_m = input.elevation_m;
 	const row: Record<string, unknown> = {
 		user_id: userId,
 		started_at: input.started_at,
 		distance_m: input.distance_m,
 		duration_s: input.duration_s,
-		elevation_m: input.elevation_m,
 		source: input.source,
-		metadata: input.metadata,
+		metadata: mergedMetadata,
 	};
-	if (input.title) row.title = input.title;
 
 	const { data, error } = await supabase
 		.from('runs')
