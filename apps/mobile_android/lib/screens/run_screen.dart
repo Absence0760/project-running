@@ -6,10 +6,12 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -430,6 +432,37 @@ class _RunScreenState extends State<RunScreen> {
   /// Flip the run on. All expensive setup was already done in [_preload];
   /// this is synchronous aside from a last-resort await on the prepare
   /// future in case it hasn't completed yet.
+  /// Pre-mint the run id (so the live URL is stable across the
+  /// "share now → tap GO later" gap) and hand it to the system share
+  /// sheet. The web spectator page at `/live/{run_id}` is empty until
+  /// the runner starts pushing pings — that's a documented behaviour
+  /// of `apps/web/src/routes/live/[run_id]`.
+  Future<void> _shareLiveLink() async {
+    _runId ??= _uuid.v4();
+    final base = _liveLinkBase();
+    final url = '$base/live/${_runId!}';
+    try {
+      await Share.share(url, subject: 'Track me live');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share live link: $e')),
+        );
+      }
+    }
+  }
+
+  /// Base URL of the spectator web app. Reads `WEB_BASE_URL` from
+  /// `.env.local` when set; otherwise falls back to the production host
+  /// so a freshly-installed app still produces a working link.
+  String _liveLinkBase() {
+    final fromEnv = dotenv.env['WEB_BASE_URL'] ?? '';
+    if (fromEnv.isNotEmpty) {
+      return fromEnv.replaceAll(RegExp(r'/+$'), '');
+    }
+    return 'https://app.runapp.com';
+  }
+
   Future<void> _begin() async {
     // In the common case prepare has already completed during the 3-second
     // countdown, so this await is a no-op. On a slow device it waits for
@@ -449,7 +482,10 @@ class _RunScreenState extends State<RunScreen> {
     _recorder!.begin();
 
     // Stable run id + wall-clock start time for incremental persistence.
-    _runId = _uuid.v4();
+    // If the user pre-minted the id (e.g. by tapping "Share live link"
+    // before pressing GO) reuse it so the spectator URL they already
+    // copied stays valid.
+    _runId ??= _uuid.v4();
     _runStartedAtWall = DateTime.now();
 
     // Reset the pedometer baseline so steps taken during the countdown
@@ -1209,6 +1245,11 @@ class _RunScreenState extends State<RunScreen> {
                                   ? 'Choose route'
                                   : 'Change route',
                             ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _shareLiveLink,
+                            icon: const Icon(Icons.podcasts),
+                            label: const Text('Share live link'),
                           ),
                           TextButton.icon(
                             onPressed: () async {
