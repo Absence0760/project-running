@@ -90,13 +90,10 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<h1>Pro &amp; support</h1>
-		<p class="subtitle">
-			Upgrade for unlimited coach chat and priority processing, or chip in
-			one-off to help cover server costs.
-		</p>
-	</header>
+	<p class="subtitle">
+		Upgrade for unlimited coach chat and priority processing, or chip in
+		one-off to help cover server costs.
+	</p>
 
 	<section class="card pro-card" class:active={isPro}>
 		<header class="pro-header">
@@ -174,9 +171,8 @@
 	.subtitle {
 		color: var(--color-text-secondary);
 		font-size: 0.95rem;
-		max-width: 32rem;
-		margin: 0 auto;
 		line-height: 1.5;
+		margin-bottom: var(--space-lg);
 	}
 
 	.card {

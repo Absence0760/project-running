@@ -340,14 +340,15 @@
 	<div class="run-detail"><p class="loading-text">&nbsp;</p></div>
 {:else if run}
 <div class="run-detail">
+	<a href="/runs" class="back-link page-back">
+		<span class="material-symbols">arrow_back</span> All runs
+	</a>
+	<div class="run-detail-body">
 	<main class="map-panel">
 		<RunMap track={baseTrack} animatable />
 	</main>
 
 	<aside class="stats-panel">
-		<a href="/runs" class="back-link top-back">
-			<span class="material-symbols">arrow_back</span> All runs
-		</a>
 		<header class="detail-header">
 			<div>
 				<h1>{runTitle || formatDate(run.started_at)}</h1>
@@ -548,6 +549,7 @@
 			{/if}
 		</section>
 	</aside>
+	</div>
 </div>
 
 <ConfirmDialog
@@ -606,7 +608,26 @@
 
 	.run-detail {
 		display: flex;
+		flex-direction: column;
 		height: 100vh;
+	}
+
+	.run-detail-body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.page-back {
+		padding: 0.6rem var(--space-lg);
+		font-size: 0.9rem;
+		font-weight: 500;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+	.page-back .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
 	}
 
 	.map-panel {
@@ -653,15 +674,6 @@
 
 	.back-link:hover {
 		color: var(--color-primary);
-	}
-
-	.top-back {
-		font-size: 0.85rem;
-		font-weight: 500;
-		margin-bottom: var(--space-sm);
-	}
-	.top-back .material-symbols {
-		font-size: 1.1rem;
 	}
 
 	.activity-badge {

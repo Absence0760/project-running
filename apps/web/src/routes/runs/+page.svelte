@@ -183,7 +183,6 @@
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<h1>Runs</h1>
 			<div class="title-actions">
 				{#if selecting}
 					<button class="link-btn" onclick={selectAllVisible} type="button"
@@ -319,9 +318,11 @@
 					</button>
 				{:else}
 					<a href="/runs/{run.id}" class="run-card">
-						<div class="run-map-placeholder">
-							<RunTrackPreview trackUrl={run.track_url} />
-						</div>
+						{#if run.track_url}
+							<div class="run-map-placeholder">
+								<RunTrackPreview trackUrl={run.track_url} />
+							</div>
+						{/if}
 						<div class="run-details">
 							<div class="run-top">
 								<span class="run-date">{formatDate(run.started_at)}</span>
@@ -444,11 +445,11 @@
 
 	.run-card {
 		display: flex;
-		gap: var(--space-lg);
+		flex-direction: column;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
+		overflow: hidden;
 		transition: all var(--transition-fast);
 		text-decoration: none;
 		color: inherit;
@@ -460,14 +461,12 @@
 	}
 
 	.run-map-placeholder {
-		width: 5rem;
-		height: 5rem;
+		width: 100%;
+		height: 8rem;
 		background: var(--color-bg-tertiary);
-		border-radius: var(--radius-md);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		flex-shrink: 0;
 	}
 
 	.run-map-placeholder .material-symbols {
@@ -479,6 +478,7 @@
 	.run-details {
 		flex: 1;
 		min-width: 0;
+		padding: var(--space-md) var(--space-lg);
 	}
 
 	.run-top {
@@ -486,6 +486,7 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: var(--space-sm);
+		gap: var(--space-sm);
 	}
 
 	.run-date {
@@ -501,11 +502,13 @@
 		border-radius: 9999px;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
+		white-space: nowrap;
 	}
 
 	.run-stats {
 		display: flex;
-		gap: var(--space-xl);
+		justify-content: space-between;
+		gap: var(--space-md);
 	}
 
 	.run-stat {
@@ -585,7 +588,7 @@
 	.title-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-end;
 		margin-bottom: var(--space-sm);
 	}
 	.title-actions {

@@ -43,7 +43,6 @@
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<h1>Clubs</h1>
 			<a href="/clubs/new" class="btn-primary">
 				<span class="material-symbols">add</span>
 				Create club
@@ -131,8 +130,7 @@
 <style>
 	.page {
 		max-width: 64rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 
 	.page-header {
@@ -142,7 +140,7 @@
 	.title-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-end;
 		margin-bottom: var(--space-md);
 	}
 

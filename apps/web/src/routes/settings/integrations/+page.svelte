@@ -164,10 +164,7 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<h1>Integrations</h1>
-		<p class="page-sub">Connect external services to sync your runs automatically.</p>
-	</header>
+	<p class="page-sub">Connect external services to sync your runs automatically.</p>
 
 	{#if pageLoading}
 		<p class="loading-text">&nbsp;</p>
@@ -290,6 +287,7 @@
 	.page-sub {
 		color: var(--color-text-secondary);
 		font-size: 0.9rem;
+		margin-bottom: var(--space-lg);
 	}
 
 	.loading-text {

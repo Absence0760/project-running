@@ -29,7 +29,6 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1>Routes</h1>
 		<div class="header-actions">
 			<a href="/explore" class="btn btn-outline">
 				<span class="material-symbols">explore</span>
@@ -100,7 +99,7 @@
 
 	.page-header {
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-end;
 		align-items: center;
 		margin-bottom: var(--space-xl);
 		gap: var(--space-md);

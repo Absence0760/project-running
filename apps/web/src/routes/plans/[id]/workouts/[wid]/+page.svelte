@@ -203,8 +203,7 @@
 <style>
 	.page {
 		max-width: 48rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 	.back {
 		display: inline-flex;

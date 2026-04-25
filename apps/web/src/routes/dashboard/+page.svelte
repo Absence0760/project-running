@@ -214,10 +214,6 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<h1>Dashboard</h1>
-	</header>
-
 	{#if loading}
 		<p class="loading-text">&nbsp;</p>
 	{:else}

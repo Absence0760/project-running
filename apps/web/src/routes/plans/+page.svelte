@@ -67,7 +67,6 @@
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<h1>Training plans</h1>
 			<a href="/plans/new" class="btn-primary">
 				<span class="material-symbols">add</span>
 				New plan
@@ -161,8 +160,7 @@
 <style>
 	.page {
 		max-width: 64rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 	.page-header {
 		margin-bottom: var(--space-lg);
@@ -170,7 +168,7 @@
 	.title-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-end;
 	}
 	h1 {
 		font-size: 1.75rem;

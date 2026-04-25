@@ -229,10 +229,6 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<h1>Account</h1>
-	</header>
-
 	<!-- Profile -->
 	<section class="card">
 		<h2>Profile</h2>

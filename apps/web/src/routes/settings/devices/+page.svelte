@@ -279,10 +279,7 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<h1>Devices</h1>
-		<p class="subtitle">Every app and browser that has signed into your account.</p>
-	</header>
+	<p class="subtitle">Every app and browser that has signed into your account.</p>
 
 	{#if loading}
 		<p class="muted">Loading...</p>
@@ -434,7 +431,7 @@
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }
 	.page-header { margin-bottom: var(--space-xl); }
 	h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-xs); }
-	.subtitle { font-size: 0.88rem; color: var(--color-text-secondary); }
+	.subtitle { font-size: 0.88rem; color: var(--color-text-secondary); margin-bottom: var(--space-lg); }
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); }
 	.device-list { display: flex; flex-direction: column; gap: 0.5rem; }
 	.device {

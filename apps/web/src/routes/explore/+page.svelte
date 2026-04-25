@@ -14,11 +14,6 @@
 	<a href="/routes" class="back-link">
 		<span class="material-symbols">arrow_back</span> My routes
 	</a>
-	<header class="page-header">
-		<h1>Explore Routes</h1>
-		<p class="subtitle">Discover routes shared by the community</p>
-	</header>
-
 	<RouteExplorer />
 </div>
 

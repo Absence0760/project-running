@@ -141,6 +141,10 @@ This is a pre-launch codebase with no shipped users. Backwards-compatibility shi
 
 When you genuinely need a migration (e.g. on-disk data format changing), write the migration, not a permanent dual-read path.
 
+## Web page padding
+
+Every top-level web page wraps its content in a `.page` div with `padding: var(--space-xl) var(--space-2xl)` (2rem vertical, 3rem horizontal) and is **left-aligned** — do not add `margin: 0 auto`. The constant `var(--space-2xl)` left gutter is the gap between the sidebar and the content; centering with `margin: 0 auto` makes that gap balloon on wide screens whenever the page sets a small `max-width`, and makes navigating between pages feel like the content is jumping around. Set `max-width` per-page (lists go wide, forms stay narrow), keep the horizontal padding fixed, and don't centre. Public layouts without the sidebar (`/`, `/login`, `/share/...`, `/clubs/join/[token]`, `/live/...`) are exempt because they don't share the chrome and centring is the right call there.
+
 ## Commit and PR conventions
 
 - Branch: `dev` is the working branch. `main` is the PR target. See [decisions.md § 6](decisions.md).
