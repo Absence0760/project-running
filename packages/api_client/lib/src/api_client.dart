@@ -351,6 +351,7 @@ class ApiClient {
         'lng': w.lng,
         'ele': w.elevationMetres,
         'ts': w.timestamp?.toUtc().toIso8601String(),
+        if (w.bpm != null) 'bpm': w.bpm,
       };
 
   static Waypoint _waypointFromJson(Map<String, dynamic> m) => Waypoint(
@@ -358,6 +359,7 @@ class ApiClient {
         lng: (m['lng'] as num).toDouble(),
         elevationMetres: (m['ele'] as num?)?.toDouble(),
         timestamp: m['ts'] != null ? DateTime.tryParse(m['ts'] as String) : null,
+        bpm: (m['bpm'] as num?)?.toInt(),
       );
 
   /// Saves a [Route] to the backend.

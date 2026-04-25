@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../hr_zones.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -607,6 +608,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             ..._buildBestEfforts(theme, unit),
           ],
 
+          // HR zone breakdown — only when the track carries per-point bpm
+          // (Strava streams, FIT/TCX imports, future watch recorders).
+          ..._buildHrZoneBreakdown(theme),
+
           // Splits — only when there's a track to compute them from.
           if (run.track.length >= 2) ...[
             Padding(
@@ -859,6 +864,139 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (h > 0) return '$prefix${h}h ${m}m';
     if (m > 0) return '$prefix${m}m ${s}s';
     return '$prefix${s}s';
+  }
+
+  List<Widget> _buildHrZoneBreakdown(ThemeData theme) {
+    final stats = bpmStatsOf(run.track);
+    if (stats == null) return const [];
+    final buckets = hrZoneBreakdown(run.track);
+    if (buckets.isEmpty) return const [];
+
+    const colors = [
+      Color(0xFF90CAF9), // Z1 Recovery
+      Color(0xFF4CAF50), // Z2 Easy
+      Color(0xFFFFC107), // Z3 Aerobic
+      Color(0xFFFF9800), // Z4 Threshold
+      Color(0xFFF44336), // Z5 Max
+    ];
+
+    Widget bar() {
+      final total =
+          buckets.fold<int>(0, (sum, b) => sum + (b.pct < 0 ? 0 : b.pct));
+      if (total <= 0) return const SizedBox.shrink();
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          height: 14,
+          child: Row(
+            children: [
+              for (final b in buckets)
+                Expanded(
+                  flex: (b.pct < 0 ? 0 : b.pct).clamp(0, 100),
+                  child: Container(color: colors[b.index]),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: Text('Heart rate zones', style: theme.textTheme.titleMedium),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        child: Row(
+          children: [
+            _StatSmall(
+              icon: Icons.favorite,
+              label: 'Avg',
+              value: '${stats.avg} bpm',
+            ),
+            const SizedBox(width: 16),
+            _StatSmall(
+              icon: Icons.south,
+              label: 'Min',
+              value: '${stats.min}',
+            ),
+            const SizedBox(width: 16),
+            _StatSmall(
+              icon: Icons.north,
+              label: 'Max',
+              value: '${stats.max}',
+            ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: bar(),
+      ),
+      const SizedBox(height: 12),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: [
+            for (final b in buckets)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: colors[b.index],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Zone ${b.index + 1} · ${b.label}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                    if (b.seconds != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          _formatZoneSeconds(b.seconds!),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                      ),
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        '${b.pct}%',
+                        textAlign: TextAlign.right,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      const Divider(),
+    ];
+  }
+
+  static String _formatZoneSeconds(int s) {
+    final h = s ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    final sec = s % 60;
+    if (h > 0) return '${h}h ${m}m';
+    if (m > 0) return '${m}m ${sec}s';
+    return '${sec}s';
   }
 
   List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {
