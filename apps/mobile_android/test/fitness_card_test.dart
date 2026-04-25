@@ -90,8 +90,12 @@ void main() {
       expect(find.text('Fatigue (ATL)'), findsOneWidget);
       expect(find.text('Form (TSB)'), findsOneWidget);
 
-      // Two qualifying runs → "Runs" stat shows 2.
-      expect(find.text('2'), findsOneWidget);
+      // Two qualifying runs → the "Runs" FitnessStat shows 2.
+      final runsStatFinder = find.ancestor(
+          of: find.text('Runs'), matching: find.byType(FitnessStat));
+      expect(
+          find.descendant(of: runsStatFinder, matching: find.text('2')),
+          findsOneWidget);
 
       // Recovery-advice line is present (text content varies with TSB,
       // so just check the icon and that some text sits beside it).
@@ -119,8 +123,13 @@ void main() {
       await _pump(tester, runs: runs, now: now);
       // Card is up.
       expect(find.text('Fitness'), findsOneWidget);
-      // 2 qualifying runs.
-      expect(find.text('2'), findsOneWidget);
+      // 2 qualifying runs — scope to the Runs FitnessStat to avoid matching
+      // CTL/ATL/TSB values that might also round to "2".
+      final runsStatFinder = find.ancestor(
+          of: find.text('Runs'), matching: find.byType(FitnessStat));
+      expect(
+          find.descendant(of: runsStatFinder, matching: find.text('2')),
+          findsOneWidget);
       // VDOT and VO2max must render as em-dash when currentVdot is null.
       // CTL/ATL/TSB are also "—" here, so we check for at least 2 (not exactly).
       expect(find.text('—'), findsAtLeastNWidgets(2));

@@ -60,9 +60,7 @@ void main() {
           currentVdot([_r(distance: 100, durationS: 60)]), isNull); // too short
     });
 
-    test('ignores manually-entered runs (no source signal)', () {
-      // Even though a 15-min 5k looks great, manual entries don't qualify.
-      // (`RunSource.race` and `parkrun` aren't in the qualifying set either.)
+    test('excludes parkrun and race sources from VDOT qualifying set', () {
       final r = _r(
         distance: 5000,
         durationS: 900,
