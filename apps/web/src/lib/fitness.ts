@@ -149,6 +149,9 @@ export function trainingLoad(
 	// what moves the averages down during rest.
 	const byDay = new Map<string, number>();
 	for (const r of qualifyingRuns(runs)) {
+		// UTC-keyed intentionally: started_at is UTC; the EWMA loop uses UTC day
+		// boundaries too. This is the one place where UTC bucketing is correct —
+		// matches fitness.dart's _dayKey(r.startedAt.toUtc()).
 		const key = new Date(r.started_at).toISOString().slice(0, 10);
 		const tss = runTss(r.distance_m, r.duration_s, thresholdPaceSecPerKm);
 		byDay.set(key, (byDay.get(key) ?? 0) + tss);
