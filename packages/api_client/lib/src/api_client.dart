@@ -31,6 +31,20 @@ class ApiClient {
     return response.user!.id;
   }
 
+  /// Register a new account with email/password. Returns the user ID.
+  ///
+  /// Throws if the address is already registered or the password is too weak.
+  Future<String> signUp({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+    );
+    return response.user!.id;
+  }
+
   /// Exchange a Google ID token (obtained by the host app via the native
   /// Android `google_sign_in` flow) for a Supabase session. Returns the
   /// user ID.
