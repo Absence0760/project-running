@@ -39,6 +39,7 @@ src/
     strava-zip.ts   # Strava bulk-export ZIP importer (parses CSV + per-activity GPX/TCX)
     garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
     garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
+    push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
   routes/
     +layout.svelte  # App shell with sidebar nav (auth guard)
     dashboard/      # Weekly mileage, PBs, calendar heatmap

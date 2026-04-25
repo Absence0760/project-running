@@ -14,6 +14,13 @@
 		type RestoreProgress,
 		type RestoreResult,
 	} from '$lib/backup';
+	import {
+		isPushSupported,
+		pushPermission,
+		subscribeToPush,
+		unsubscribeFromPush,
+		getCurrentSubscription,
+	} from '$lib/push';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -96,7 +103,45 @@
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
 		}
 		await loadIdentities();
+		await refreshPushState();
 	});
+
+	// --- Web push notifications ---
+
+	let pushSubscribed = $state(false);
+	let pushBusy = $state(false);
+	let pushPermissionState = $state<NotificationPermission | 'unsupported'>('default');
+	const pushSupported = isPushSupported();
+
+	async function refreshPushState() {
+		pushPermissionState = pushPermission();
+		if (!pushSupported) return;
+		pushSubscribed = !!(await getCurrentSubscription());
+	}
+
+	async function handleEnablePush() {
+		pushBusy = true;
+		try {
+			await subscribeToPush();
+			await refreshPushState();
+			showToast('Notifications enabled on this device.', 'success');
+		} catch (e) {
+			showToast(`Could not enable notifications: ${(e as Error).message}`, 'error');
+		} finally {
+			pushBusy = false;
+		}
+	}
+
+	async function handleDisablePush() {
+		pushBusy = true;
+		try {
+			await unsubscribeFromPush();
+			await refreshPushState();
+			showToast('Notifications disabled on this device.', 'success');
+		} finally {
+			pushBusy = false;
+		}
+	}
 
 	async function handleSave() {
 		if (!auth.user) return;
@@ -504,6 +549,41 @@
 		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword}>
 			{passwordSaving ? 'Saving...' : 'Save Password'}
 		</button>
+	</section>
+
+	<!-- Notifications -->
+	<section class="card">
+		<h2>Notifications</h2>
+		{#if !pushSupported}
+			<p class="section-desc">
+				This browser doesn't support web push, or this build was deployed without
+				a <code>PUBLIC_VAPID_PUBLIC_KEY</code>. Notifications are off.
+			</p>
+		{:else if pushPermissionState === 'denied'}
+			<p class="section-desc">
+				Notifications are blocked at the browser level. Re-enable them in your
+				browser's site settings, then come back and toggle on.
+			</p>
+		{:else}
+			<p class="section-desc">
+				Get a system notification when a club event you're attending is starting,
+				when a race goes live, or when an admin posts an update. Per-device — each
+				browser / phone toggles independently.
+			</p>
+			<div class="btn-row">
+				{#if pushSubscribed}
+					<button class="btn btn-outline" onclick={handleDisablePush} disabled={pushBusy}>
+						<span class="material-symbols">notifications_off</span>
+						{pushBusy ? 'Updating...' : 'Disable notifications'}
+					</button>
+				{:else}
+					<button class="btn btn-primary" onclick={handleEnablePush} disabled={pushBusy}>
+						<span class="material-symbols">notifications_active</span>
+						{pushBusy ? 'Enabling...' : 'Enable notifications'}
+					</button>
+				{/if}
+			</div>
+		{/if}
 	</section>
 
 	<!-- Backup & Restore -->

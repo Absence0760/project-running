@@ -198,7 +198,7 @@ See [docs/clubs.md](clubs.md). No features.md section yet — update this row-bl
 | Join-request approval flow | ✗ | ✗ | ✓ | N/A | N/A | Web-only admin surface. |
 | Upcoming-event card on home (within 48h) | ✓ | ✗ | ✓ | N/A | N/A | Web: `fetchNextRsvpedEvent(48)` on dashboard mount; card renders above stats when a matching RSVP exists, links to the event detail page. |
 | Realtime subscriptions (posts / RSVPs / members) | ✓ | ✗ | ✓ | N/A | N/A | |
-| Push notifications (event reminders, admin updates) | ✗ | ✗ | ✗ | ✗ | ✗ | Phase 4b, blocked on FCM / APNs credentials. |
+| Push notifications (event reminders, admin updates) | ✗ | ✗ | Partial | ✗ | ✗ | **Web subscribe path shipped.** Service worker at `apps/web/static/sw.js` (handles `push` + `notificationclick`); `lib/push.ts` registers the SW, requests permission, calls `pushManager.subscribe`, persists the subscription onto `user_device_settings.prefs.push_subscription` keyed by the per-browser device id. UI on `/settings/account` → "Notifications" card with Enable / Disable toggle and a clear "blocked in browser" / "build not configured" fallback. Gated on `PUBLIC_VAPID_PUBLIC_KEY` being set at build time — when absent the UI renders an honest "not configured" hint instead of a broken button. **Server-side delivery (Edge Function that signs and POSTs payloads via Web Push) is the remaining gap** — needs the matching `VAPID_PRIVATE_KEY` env. Native FCM / APNs paths still TBD on mobile / watch. |
 
 ## Training plans and workouts
 

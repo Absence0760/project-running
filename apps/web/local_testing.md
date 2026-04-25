@@ -177,6 +177,29 @@ Easiest for cross-network testing: web `.env.local` and the mobile app both poin
 2. Click **Sync now** → activities populate. Filter `/runs` by Source: Strava to verify.
 3. Disconnect → row removed from `integrations`; subsequent sync attempts return "not connected".
 
+### Web push notifications
+
+The subscribe path works locally as soon as you set a VAPID public key in `.env.local`; actually delivering pushes needs an Edge Function with the matching private key (follow-up).
+
+**Generate a keypair**
+```bash
+npx web-push generate-vapid-keys
+# → Public Key:  BPx... (64-byte URL-safe base64)
+# → Private Key: AbC... (32-byte URL-safe base64)
+```
+
+Drop the public half into `apps/web/.env.local` as `PUBLIC_VAPID_PUBLIC_KEY=...`. The private half is for the (future) Edge Function — keep it out of the browser bundle.
+
+**Test path**
+1. `pnpm dev` → `/settings/account` → scroll to **Notifications**.
+2. With no key set: card shows "not configured" copy. Set `PUBLIC_VAPID_PUBLIC_KEY` and restart dev — the **Enable notifications** button appears.
+3. Click **Enable** → browser prompts for permission → grant → toast "Notifications enabled on this device.".
+4. Verify in Supabase: `select prefs from user_device_settings where user_id = '...';` — the row for this browser's device id should now have a `push_subscription` key with `endpoint` + `keys.p256dh` + `keys.auth`.
+5. Click **Disable** → subscription drops; the row's `push_subscription` is removed.
+6. Browser-deny path: in your browser site settings, block notifications → reload `/settings/account` → card switches to "blocked at the browser level" copy with no Enable button.
+
+Sending a real push from the server is out of scope here. To verify the SW end-to-end, hand-craft a push via your browser's devtools (Application → Service Workers → Push), with a JSON body like `{"title":"Test","body":"Hello","url":"/dashboard"}` — the system notification should fire and clicking it focuses (or opens) `/dashboard`.
+
 ### Garmin bulk import
 
 Garmin Connect's live OAuth API is gated on Garmin's developer-program approval, so the web ships a **bulk FIT importer** as the user-side path instead.
