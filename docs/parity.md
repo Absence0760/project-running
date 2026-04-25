@@ -306,7 +306,7 @@ Written to `user_device_settings.prefs`; a dedicated per-device editor is not wi
 | [`voice_feedback_enabled`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Web editor on `/settings/preferences` writes to the universal bag — mobile/watch recorders pick it up via the existing settings overlay. Mobile's "Spoken split announcements" toggle dual-writes the device bag (overlay-on-signin + push-on-change in `SettingsSyncService`). |
 | [`voice_feedback_interval_km`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Web editor on `/settings/preferences`. Mobile's "Split interval" control dual-writes; unit conversion metres ↔ km happens in `SettingsSyncService`. |
 | [`haptic_feedback_enabled`](settings.md#keys) | N/A | N/A | N/A | N/A | Partial | Apple Watch ships haptic pace alerts but the on/off toggle isn't surfaced yet. Wear OS has no haptics ([decisions.md § 15](decisions.md)). |
-| [`keep_screen_on`](settings.md#keys) | ✓ | ✗ | N/A | N/A | N/A | Android wakelock during a run is unconditional; the toggle UI is still TODO. |
+| [`keep_screen_on`](settings.md#keys) | ✓ | ✗ | N/A | N/A | N/A | Android: SwitchListTile in `settings_screen.dart` writes `Preferences.keepScreenOn` (default true) and `SettingsSyncService.pushKeepScreenOn` mirrors it to the device bag. `run_screen.dart` only calls `WakelockPlus.enable()` when the pref is true. |
 
 ### Device management
 

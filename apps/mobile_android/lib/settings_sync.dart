@@ -132,6 +132,20 @@ class SettingsSyncService extends ChangeNotifier {
         preferences.setSplitIntervalMetres(metres);
       }
     }
+    final keep = prefs[SettingsKeys.keepScreenOn];
+    if (keep is bool && keep != preferences.keepScreenOn) {
+      preferences.setKeepScreenOn(keep);
+    }
+  }
+
+  /// Push the user's keep-screen-on toggle to the device bag.
+  Future<void> pushKeepScreenOn() async {
+    final s = _settings;
+    if (s == null) return;
+    await s.updateDevice(<String, dynamic>{
+      SettingsKeys.keepScreenOn: preferences.keepScreenOn,
+    });
+    notifyListeners();
   }
 
   static String _platformTag() {

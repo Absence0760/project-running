@@ -932,6 +932,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await widget.settingsSync?.pushAudioCues();
             },
           ),
+          SwitchListTile(
+            title: const Text('Keep screen on'),
+            subtitle: const Text('Hold a wakelock during a run'),
+            value: prefs.keepScreenOn,
+            onChanged: (v) async {
+              await prefs.setKeepScreenOn(v);
+              await widget.settingsSync?.pushKeepScreenOn();
+            },
+          ),
           ListTile(
             title: const Text('Split interval'),
             subtitle: Text(

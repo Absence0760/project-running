@@ -367,8 +367,11 @@ class _RunScreenState extends State<RunScreen> {
     // toward the run until _begin sets a baseline.
     _subscribeToPedometer();
 
-    // Keep the screen awake from the start of the countdown onward.
-    WakelockPlus.enable();
+    // Keep the screen awake from the start of the countdown onward,
+    // unless the user has turned the wakelock off in Settings.
+    if (widget.preferences.keepScreenOn) {
+      WakelockPlus.enable();
+    }
 
     // Open the GPS stream now so the first fix is already in hand when the
     // run starts. Positions received during this phase drive the blue dot
