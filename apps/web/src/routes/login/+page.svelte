@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
 
@@ -10,9 +11,14 @@
 	let password = $state('');
 	let isSignUp = $state(false);
 
+	function safeReturnTo(): string {
+		const raw = $page.url.searchParams.get('return_to');
+		return raw && raw.startsWith('/') ? raw : '/dashboard';
+	}
+
 	$effect(() => {
 		if (browser && !auth.loading && auth.loggedIn) {
-			goto('/dashboard', { replaceState: true });
+			goto(safeReturnTo(), { replaceState: true });
 		}
 	});
 
@@ -53,7 +59,7 @@
 			}
 			// Wait for onAuthStateChange to set loggedIn, then navigate
 			await auth.refreshSession();
-			goto('/dashboard');
+			goto(safeReturnTo());
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Authentication failed';
 			loading = false;
