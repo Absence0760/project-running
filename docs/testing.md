@@ -43,7 +43,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **at least 161 tests across 12 documented files** — 107 Dart unit tests in mobile_android (8 test files), 17 in mobile_ios (1 test file — ported from mobile_android when the Phase 1 iOS catchup landed), 14 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No widget tests, no integration tests, no golden tests yet. The mobile_android count drifted above 107 before this section was last refreshed — `find apps packages -name '*_test.dart'` is the ground truth.
+Total: **at least 350 tests across 20+ documented files** — ~188 Dart tests in mobile_android (19 test files, including 14 widget tests), 17 in mobile_ios, 37 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the exact current count.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -99,7 +99,7 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 
 **Not covered (require mocking `GeolocatorPlatform.instance`):** typed errors thrown from `prepare()`, the `_gpsRetryTimer` retry loop, position-stream `onError` cleanup, `stop`/`dispose` cancelling the retry timer.
 
-### `apps/mobile_android/test/local_run_store_test.dart` — 16 tests
+### `apps/mobile_android/test/local_run_store_test.dart` — 17 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
 
@@ -453,7 +453,7 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 ## What's *not* covered (honest)
 
-- **Widget tests.** `RunScreen`, `LiveRunMap`, `CollapsiblePanel`, the finished-run view, the stats panels, hold-to-stop gesture — all rendered UI is uncovered. `apps/mobile_android/test/widget_test.dart` used to be a `flutter create` stub; it's been deleted. Widget tests using `WidgetTester.pumpWidget` + `find.byType` would be the right level.
+- **Widget tests (most screens).** `RunScreen`, `LiveRunMap`, `CollapsiblePanel`, and the majority of screens have no widget tests. `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, and `WorkoutReviewSection` do have widget tests (14 `testWidgets` calls). Expanding coverage with `WidgetTester.pumpWidget` + `find.byType` is the next highest-value investment.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
 - **`RunRecorder._calculatePace`, `_routeRemaining`, `_offRouteDistance`.** The pace calculation and route helpers have no direct tests. Their logic is exercised via `_emitSnapshot` but only through the tests that assert on `distanceMetres` and `track`. Dedicated tests would be a good follow-up.
 - **`ApiClient`, `SyncService`, `LocalRouteStore`.** Nothing on the sync path, the routes store, or the Supabase client has tests. Most of these would want a fake HTTP client or a tempDir override.
