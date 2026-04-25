@@ -7,6 +7,7 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
+import '../settings_sync.dart';
 import '../widgets/goal_editor_sheet.dart';
 import 'period_summary_screen.dart';
 
@@ -15,12 +16,14 @@ class DashboardScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
+  final SettingsSyncService? settingsSync;
 
   const DashboardScreen({
     super.key,
     required this.runStore,
     required this.routeStore,
     required this.preferences,
+    this.settingsSync,
   });
 
   @override
@@ -61,11 +64,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _newGoal() => showGoalEditorSheet(
         context,
         preferences: widget.preferences,
+        settingsSync: widget.settingsSync,
       );
 
   Future<void> _editGoal(RunGoal goal) => showGoalEditorSheet(
         context,
         preferences: widget.preferences,
+        settingsSync: widget.settingsSync,
         existing: goal,
       );
 

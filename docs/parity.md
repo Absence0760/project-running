@@ -290,7 +290,7 @@ Written to `user_settings.prefs` and propagate across devices.
 | [`privacy_default`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped; no per-run visibility selector is wired on mobile yet, so the value is set-and-roam only. |
 | [`strava_auto_share`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Toggle shipped on all three; enforcement lands when Strava OAuth sync ships. |
 | [`coach_personality`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Only consumed by the web coach; mobile edits it for cross-device roaming. |
-| [`weekly_mileage_goal_m`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Settings editor writes straight to the bag. The Android dashboard's multi-goal UI still uses a separate local `RunGoal` list — reconciling them is a follow-up. |
+| [`weekly_mileage_goal_m`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Settings editor and the dashboard goal editor both write the bag value and the local `RunGoal` list in tandem. On sign-in, `SettingsSyncService._applyUniversal` seeds a weekly-distance `RunGoal` from the bag when one isn't already present locally; `pushWeeklyDistanceGoal` mirrors local edits back to the bag. Multi-target / monthly / pace goals stay client-only — the bag scalar can't represent them. |
 | [`week_start_day`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |
 | [`map_style`](settings.md#keys) (UD) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped on all three; mobile's map tile layer doesn't yet swap based on this value. |
 | [`units_pace_format`](settings.md#keys) (UD) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped; mobile still derives pace format from `preferred_unit` at render time. |

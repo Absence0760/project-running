@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import 'goals.dart';
 import 'preferences.dart';
 
 /// Bridge between local [Preferences] (SharedPreferences) and the
@@ -118,6 +119,41 @@ class SettingsSyncService extends ChangeNotifier {
     if (dat is String && dat.isNotEmpty && dat != preferences.defaultActivityType) {
       preferences.setDefaultActivityType(dat);
     }
+    // Seed a weekly distance RunGoal from the universal bag value when
+    // the local list doesn't already have one. We never *replace* an
+    // existing local goal — the dashboard's editor is the richer
+    // surface (multi-target, monthly, etc.) and wins on edit. Pushing
+    // the *other* direction (local → bag) is handled in
+    // [pushWeeklyDistanceGoal].
+    final raw = prefs[SettingsKeys.weeklyMileageGoalMetres];
+    if (raw is num && raw > 0) {
+      final hasWeeklyDistance = preferences.goals.any((g) =>
+          g.period == GoalPeriod.week && g.distanceMetres != null);
+      if (!hasWeeklyDistance) {
+        preferences.upsertGoal(RunGoal(
+          id: newGoalId(),
+          period: GoalPeriod.week,
+          distanceMetres: raw.toDouble(),
+        ));
+      }
+    }
+  }
+
+  /// Push the user's *single* weekly-distance goal back to the universal
+  /// bag, or clear the bag when it's removed. Multi-target / monthly /
+  /// pace goals stay client-only — the bag scalar can't represent them.
+  Future<void> pushWeeklyDistanceGoal() async {
+    final s = _settings;
+    if (s == null) return;
+    final weekly = preferences.goals.firstWhere(
+      (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
+      orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
+    );
+    await s.updateUniversal(<String, dynamic>{
+      SettingsKeys.weeklyMileageGoalMetres:
+          weekly.distanceMetres == null ? null : weekly.distanceMetres!.round(),
+    });
+    notifyListeners();
   }
 
   void _applyDevice(Map<String, dynamic> prefs) {

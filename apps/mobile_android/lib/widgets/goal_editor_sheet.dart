@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../goals.dart';
 import '../preferences.dart';
+import '../settings_sync.dart';
 
 /// Open the goal editor as a modal bottom sheet. Pass an existing goal to
 /// edit it in-place; omit for a new goal.
 Future<void> showGoalEditorSheet(
   BuildContext context, {
   required Preferences preferences,
+  SettingsSyncService? settingsSync,
   RunGoal? existing,
 }) {
   return showModalBottomSheet<void>(
@@ -16,6 +18,7 @@ Future<void> showGoalEditorSheet(
     showDragHandle: true,
     builder: (ctx) => _GoalEditorSheet(
       preferences: preferences,
+      settingsSync: settingsSync,
       existing: existing,
     ),
   );
@@ -23,9 +26,11 @@ Future<void> showGoalEditorSheet(
 
 class _GoalEditorSheet extends StatefulWidget {
   final Preferences preferences;
+  final SettingsSyncService? settingsSync;
   final RunGoal? existing;
   const _GoalEditorSheet({
     required this.preferences,
+    required this.settingsSync,
     this.existing,
   });
 
@@ -352,6 +357,9 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
       runCount: count,
     );
     await widget.preferences.upsertGoal(goal);
+    // Mirror the *single* weekly distance goal into the universal bag
+    // so it roams to web/iOS. Other shapes stay client-only.
+    await widget.settingsSync?.pushWeeklyDistanceGoal();
     if (mounted) Navigator.pop(context);
   }
 
@@ -359,6 +367,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     final id = widget.existing?.id;
     if (id == null) return;
     await widget.preferences.removeGoal(id);
+    await widget.settingsSync?.pushWeeklyDistanceGoal();
     if (mounted) Navigator.pop(context);
   }
 

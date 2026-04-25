@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../backup.dart';
 import '../ble_heart_rate.dart';
+import '../goals.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
@@ -714,12 +715,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (picked == null) return;
     if (picked == -1.0) {
       await _putUniversal(SettingsKeys.weeklyMileageGoalMetres, null);
+      // Also clear the local weekly distance goal so the dashboard
+      // doesn't keep showing one after the user removed it here.
+      final existing = widget.preferences.goals.firstWhere(
+        (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
+        orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
+      );
+      if (existing.id.isNotEmpty) {
+        await widget.preferences.removeGoal(existing.id);
+      }
     } else {
       final metres = useMiles ? picked * 1609.344 : picked * 1000;
       await _putUniversal(
         SettingsKeys.weeklyMileageGoalMetres,
         metres.round(),
       );
+      // Mirror into the local list so the dashboard's Goals row picks
+      // it up immediately.
+      final existing = widget.preferences.goals.firstWhere(
+        (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
+        orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
+      );
+      await widget.preferences.upsertGoal(RunGoal(
+        id: existing.id.isEmpty ? newGoalId() : existing.id,
+        period: GoalPeriod.week,
+        distanceMetres: metres,
+        title: existing.title,
+        timeSeconds: existing.timeSeconds,
+        avgPaceSecPerKm: existing.avgPaceSecPerKm,
+        runCount: existing.runCount,
+      ));
     }
   }
 
