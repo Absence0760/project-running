@@ -203,10 +203,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       appBar: AppBar(
         title: Text(route.name),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
-            tooltip: 'Share as GPX',
-            onPressed: () => _shareAsGpx(context),
+            tooltip: 'Share',
+            onSelected: (fmt) => _shareAs(context, fmt),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'gpx', child: Text('Share as GPX')),
+              PopupMenuItem(value: 'kml', child: Text('Share as KML')),
+            ],
           ),
           if (isOwner)
             IconButton(
@@ -410,24 +414,31 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     );
   }
 
-  Future<void> _shareAsGpx(BuildContext context) async {
+  Future<void> _shareAs(BuildContext context, String format) async {
     final route = widget.route;
     try {
       final tmp = await getTemporaryDirectory();
       final safe = route.name
               .replaceAll(RegExp(r'[^a-zA-Z0-9-_ ]'), '')
               .replaceAll(RegExp(r'\s+'), '_');
-      final filename = (safe.isEmpty ? 'route' : safe);
-      final file = File('${tmp.path}/$filename.gpx');
-      await file.writeAsString(_routeToGpx(route));
+      final base = safe.isEmpty ? 'route' : safe;
+      final isKml = format == 'kml';
+      final file = File('${tmp.path}/$base.${isKml ? 'kml' : 'gpx'}');
+      await file.writeAsString(
+          isKml ? _routeToKml(route) : _routeToGpx(route));
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/gpx+xml')],
+        [
+          XFile(file.path,
+              mimeType: isKml
+                  ? 'application/vnd.google-earth.kml+xml'
+                  : 'application/gpx+xml')
+        ],
         text: route.name,
       );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share GPX: $e')),
+          SnackBar(content: Text('Could not share ${format.toUpperCase()}: $e')),
         );
       }
     }
@@ -489,6 +500,40 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         return 'ROAD';
     }
   }
+}
+
+String _routeToKml(cm.Route route) {
+  String esc(String s) => s
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+
+  final coords = StringBuffer();
+  for (final w in route.waypoints) {
+    coords.writeln('          ${w.lng},${w.lat},${w.elevationMetres ?? 0}');
+  }
+
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
+      '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+      '  <Document>\n'
+      '    <name>${esc(route.name)}</name>\n'
+      '    <Placemark>\n'
+      '      <name>${esc(route.name)}</name>\n'
+      '      <Style>\n'
+      '        <LineStyle>\n'
+      '          <color>ffff0000</color>\n'
+      '          <width>3</width>\n'
+      '        </LineStyle>\n'
+      '      </Style>\n'
+      '      <LineString>\n'
+      '        <tessellate>1</tessellate>\n'
+      '        <coordinates>\n${coords.toString().trimRight()}\n'
+      '        </coordinates>\n'
+      '      </LineString>\n'
+      '    </Placemark>\n'
+      '  </Document>\n'
+      '</kml>\n';
 }
 
 String _routeToGpx(cm.Route route) {

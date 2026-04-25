@@ -75,7 +75,7 @@ See [features § Full-screen route builder](features.md#full-screen-route-builde
 | Public / private toggle per route | ✓ | ✗ | ✓ | N/A | N/A | Bidirectional on both: Android's globe icon on `route_detail_screen.dart`; web's owner-only `Public` / `Private` button on `/routes/[id]` (added in parallel with the explicit Share button; `setRoutePublic(id, bool)` in `data.ts` with optimistic UI + rollback). |
 | Shareable route link | ✓ | ✗ | ✓ | N/A | N/A | Web makes the route public and copies the link in one action. |
 | Export route as GPX | ✓ | ✗ | ✓ | N/A | N/A | Android: share button on `route_detail_screen.dart` writes the route's waypoints to a temp `.gpx` and hands it to the system share sheet. |
-| Export route as KML | ✗ | ✗ | ✓ | N/A | N/A | |
+| Export route as KML | ✓ | ✗ | ✓ | N/A | N/A | Android: share popup on `route_detail_screen` offers GPX or KML; KML emits a single `<Placemark>` `<LineString>` with `<coordinates>` lng,lat,ele. |
 
 ### Discovery
 
