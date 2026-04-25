@@ -209,8 +209,8 @@ class RaceController extends ChangeNotifier {
         if (elapsedS != null) 'elapsed_s': elapsedS,
         if (bpm != null) 'bpm': bpm,
       });
-    } catch (_) {
-      // Pings are best-effort; dropping one is fine.
+    } catch (e) {
+      debugPrint('[RaceController.pushPing] $e');
     }
   }
 
@@ -233,8 +233,8 @@ class RaceController extends ChangeNotifier {
         runId: runId,
         finisherStatus: 'finished',
       );
-    } catch (_) {
-      // Leaderboard write is best-effort; the run itself is already saved.
+    } catch (e) {
+      debugPrint('[RaceController.submitResult] $e');
     }
     detachRecorder();
   }
