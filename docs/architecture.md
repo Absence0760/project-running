@@ -202,15 +202,16 @@ src/routes/
 ├── plans/                       # Training plans list + create + detail
 ├── explore/                     # Public route discovery (nearby, search)
 ├── live/                        # Live spectator tracking
-├── api/coach/+server.ts         # Claude coach endpoint (server-side)
+├── coach/+page.svelte           # Standalone AI coach with plan switcher + runs-limit chip
+├── api/coach/+server.ts         # Coach endpoint — Claude (default) or OpenAI-compatible (COACH_PROVIDER=openai)
 ├── share/                       # Public run/route share pages (no auth)
 └── settings/
     ├── +layout.svelte           # Tabbed settings layout
-    ├── account/+page.svelte     # Profile, display name, data export
-    ├── preferences/+page.svelte # Units, activity defaults, coach tone
+    ├── account/+page.svelte     # Profile, sign-in methods (link Google/Apple), data export
+    ├── preferences/+page.svelte # Units, map style, activity defaults, coach tone, HR zones
     ├── integrations/+page.svelte # Connect Strava, Garmin, parkrun
     ├── devices/+page.svelte     # Per-device settings
-    └── upgrade/+page.svelte     # Funding transparency + donate
+    └── upgrade/+page.svelte     # Pro tier ($9.99 / mo) + one-off donate
 ```
 
 **Route builder (web-specific):**

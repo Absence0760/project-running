@@ -429,7 +429,11 @@ Price: **$9.99 / month**. Managed via RevenueCat (abstracts App Store + Play Sto
 
 **Spec:**
 
-Claude-powered chat embedded in the web app via `CoachChat.svelte`. The server endpoint at `/api/coach/+server.ts` sends the user's active training plan, recent runs, and profile/preferences as cached context, then streams the conversation. Two prompt-cache breakpoints (system prompt + context dump) keep repeat turns cheap.
+Chat surface delivered two ways: as a top-level `/coach` page (with a plan switcher when the user has more than one plan and a configurable run-window selector) and embedded inline anywhere it's contextually useful (today: a deep-link card on `/plans/[id]`). The reusable component is `CoachChat.svelte`. The server endpoint at `/api/coach/+server.ts` sends the user's active or selected training plan, the last N runs (user-chosen, default 20, capped at 100), and profile/preferences as cached context, then returns the assistant turn. Two prompt-cache breakpoints (system prompt + context dump) keep repeat turns cheap.
+
+**Provider switch:** `COACH_PROVIDER` selects the backend. Default `anthropic` uses Claude with prompt caching (production). Setting `COACH_PROVIDER=openai` routes to any OpenAI-compatible `/v1/chat/completions` endpoint (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`). The default base URL `http://localhost:11434/v1` matches a local Ollama install, so contributors can iterate on prompt + UI changes without burning tokens. The wire format from the endpoint is identical regardless of provider.
+
+**Grounding strip:** Above the chat, a "Grounded in:" row shows what `buildContext()` actually loaded — plan name + week count, run count, HR-zones-loaded indicator, weekly-mileage goal — so the user can see exactly what the model has in front of it before asking. The runs-count chip is a `<select>` (10 / 20 / 50 / 100) that updates the limit on the next message.
 
 **Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
 

@@ -227,10 +227,13 @@ See [features § AI Coach](features.md#ai-coach).
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Chat UI | ✗ | ✗ | ✓ | N/A | N/A | Web-only by design — runners use the coach from a big screen with their plan open. |
+| Chat UI | ✗ | ✗ | ✓ | N/A | N/A | Web-only by design — runners use the coach from a big screen with their plan open. Surface: top-level `/coach` page (sidebar nav) plus a deep-link card on the dashboard and `/plans/[id]`. |
+| Plan switcher (multi-plan users) | ✗ | ✗ | ✓ | N/A | N/A | `/coach` exposes a `<select>` listing every plan; choice is round-tripped via `?plan=<id>` in the URL. |
+| Configurable runs window (10 / 20 / 50 / 100) | ✗ | ✗ | ✓ | N/A | N/A | Chip selector in the "Grounded in:" strip; sent as `recent_runs_limit` and clamped to `[1, 100]` server-side. |
+| Grounded-in context strip | ✗ | ✗ | ✓ | N/A | N/A | Shows the plan, run count, HR-zones-loaded indicator, and weekly goal that `buildContext()` actually loaded. |
 | Personality tones (supportive / drill / analytical) | ✗ | ✗ | ✓ | N/A | N/A | |
 | Daily usage cap (10 / day) | ✗ | ✗ | ✓ | N/A | N/A | |
-| Runner context in prompt (plan + last 20 runs) | ✗ | ✗ | ✓ | N/A | N/A | |
+| OpenAI-compatible provider switch (local Ollama, etc.) | N/A | N/A | ✓ | N/A | N/A | Dev-only convenience: `COACH_PROVIDER=openai` + `OPENAI_BASE_URL` plumbing in `/api/coach/+server.ts` for testing without Anthropic tokens. Production stays on Claude with prompt caching. |
 
 ## Spectating and public sharing
 

@@ -1,45 +1,20 @@
 # Web app — authentication
 
-How authentication works in the SvelteKit web app, how to test it locally, and how to wire it up to Supabase for production.
+How sign-in works in the SvelteKit web app: providers, the auth store, identity linking, and how to test it locally.
 
 ---
 
 ## Overview
 
-The web app uses a **client-side auth store** built with Svelte 5 runes. The store manages login state, user data, and token persistence via `localStorage`. Route protection is handled in the root layout with `$effect` redirects — the same pattern used in `project-account-payables-dev`.
+The web app uses **Supabase Auth** end-to-end. There is no demo / mock login — sign-in always goes through Supabase, whether you're on `localhost:7777` against a local Supabase stack or on the deployed site against a hosted Supabase project.
 
-For local testing, a **demo login** bypasses OAuth and creates a mock session. In production, login goes through **Supabase Auth** with Google and Apple OAuth providers.
+Supported sign-in methods:
 
----
+- **Email + password** (sign-up via `/login`'s "Sign up" toggle, sign-in via the same form)
+- **Google OAuth** (`signInWithOAuth({ provider: 'google' })`)
+- **Apple OAuth** (`signInWithOAuth({ provider: 'apple' })`)
 
-## Architecture
-
-```
-User visits /dashboard (protected)
-  → +layout.svelte $effect fires
-  → auth.loggedIn is false
-  → goto('/login')
-
-User clicks "Demo Login" (or Google/Apple in production)
-  → auth.demoLogin(email) / auth.signInWithGoogle()
-  → Token stored in localStorage
-  → auth.loggedIn becomes true
-  → goto('/dashboard')
-  → +layout.svelte renders sidebar + main content
-  → $effect fetches user profile if missing
-```
-
----
-
-## Key files
-
-| File | Purpose |
-|---|---|
-| `src/lib/stores/auth.svelte.ts` | Auth state store (login, logout, user data, reactive getters) |
-| `src/routes/+layout.svelte` | Route protection via `$effect`, sidebar with user info |
-| `src/routes/login/+page.svelte` | Login page (OAuth buttons + demo login) |
-| `src/lib/supabase.ts` | Browser-side Supabase client (for production) |
-| `src/lib/supabase-server.ts` | Server-side Supabase client (for production) |
+Any one user can have **multiple identities linked**. A user who signed up with email can attach Google and Apple from `/settings/account` so the same account is reachable from any of those methods.
 
 ---
 
@@ -47,22 +22,21 @@ User clicks "Demo Login" (or Google/Apple in production)
 
 **Location:** `src/lib/stores/auth.svelte.ts`
 
-The store is a Svelte 5 runes reactive object. Import it anywhere:
+A Svelte 5 runes module that wraps Supabase's `supabase.auth.*` and exposes a reactive `user` / `loggedIn` / `loading` triple. Import it anywhere:
 
 ```typescript
 import { auth } from '$lib/stores/auth.svelte';
 ```
 
-### Reactive getters
+### Reactive properties
 
 | Property | Type | Description |
 |---|---|---|
-| `auth.user` | `User \| null` | Current user profile (null if not loaded) |
-| `auth.loggedIn` | `boolean` | Whether a session exists (token in localStorage) |
-| `auth.loading` | `boolean` | True during login/fetch operations |
-| `auth.isPremium` | `boolean` | Whether the user has a premium subscription |
+| `auth.user` | `User \| null` | Current user profile (null while loading or signed out) |
+| `auth.loggedIn` | `boolean` | Whether a Supabase session exists |
+| `auth.loading` | `boolean` | True during the initial `getSession()` round-trip |
 
-### User shape
+### `User` shape
 
 ```typescript
 interface User {
@@ -72,19 +46,24 @@ interface User {
   avatar_url: string | null;
   parkrun_number: string | null;
   preferred_unit: 'km' | 'mi';
-  subscription_tier: 'free' | 'premium';
+  subscription_tier: 'free' | 'pro' | 'lifetime';
 }
 ```
+
+The shape is hydrated from `user_profiles` on every sign-in. If the row doesn't exist yet (first-ever sign-in), the store upserts a default row with `preferred_unit: 'km'` and `subscription_tier: 'free'`.
 
 ### Methods
 
 | Method | Description |
 |---|---|
-| `auth.signInWithGoogle()` | Start Google OAuth flow via Supabase (production) |
-| `auth.signInWithApple()` | Start Apple OAuth flow via Supabase (production) |
-| `auth.demoLogin(email)` | Local testing login — creates a mock session with no backend |
-| `auth.fetchUser()` | Load user profile from Supabase (or mock data in demo mode) |
-| `auth.logout()` | Clear token, reset state, redirect to `/login` |
+| `auth.signInWithGoogle()` | Kicks off Google OAuth via Supabase; redirects to the provider |
+| `auth.signInWithApple()` | Kicks off Apple OAuth via Supabase; redirects to the provider |
+| `auth.refreshSession()` | Re-reads the Supabase session (useful after OAuth return) |
+| `auth.logout()` | `supabase.auth.signOut()` + clears local state |
+
+Email/password sign-in is wired directly in `/login/+page.svelte` via `supabase.auth.signInWithPassword(...)` and `supabase.auth.signUp(...)` — it doesn't go through the store.
+
+The store also installs `supabase.auth.onAuthStateChange(...)` on first import so any future sign-in (an OAuth round-trip, an identity link, a token refresh) re-hydrates `auth.user` automatically.
 
 ---
 
@@ -92,39 +71,49 @@ interface User {
 
 **Location:** `src/routes/+layout.svelte`
 
-The root layout uses two `$effect` blocks for auth:
+A single `$effect` redirects unauthenticated visitors to `/login` for any non-public route:
 
 ```typescript
-// Redirect to /login if not authenticated on protected routes
 $effect(() => {
-  if (browser && !auth.loggedIn && !publicPaths.includes($page.url.pathname)) {
+  if (browser && !auth.loading && !auth.loggedIn && !isPublic($page.url.pathname)) {
     goto('/login');
-  }
-});
-
-// Fetch user data if logged in but user object is missing
-$effect(() => {
-  if (browser && auth.loggedIn && !auth.user) {
-    auth.fetchUser();
   }
 });
 ```
 
-### Public vs protected routes
+Public routes (no auth, no sidebar):
 
-| Route | Access |
-|---|---|
-| `/` | Public — landing page |
-| `/login` | Public — login page |
-| `/dashboard` | Protected — requires auth |
-| `/runs` | Protected — requires auth |
-| `/runs/[id]` | Protected — requires auth |
-| `/routes` | Protected — requires auth |
-| `/routes/new` | Protected — requires auth |
-| `/routes/[id]` | Protected — requires auth |
-| `/settings/*` | Protected — requires auth |
+- `/` — landing page
+- `/login` and `/auth/callback`
+- `/share/run/[id]/`, `/share/route/[id]/`
+- `/live/...` — public spectator pages
+- `/clubs/join/[token]/` — public invite-link landing
 
-Public routes render without the sidebar. Protected routes render inside the app shell (sidebar + main content area).
+Everything else renders inside the authenticated app shell (sidebar + main content).
+
+---
+
+## Identity linking
+
+The "Sign-in Methods" card on `/settings/account` lists every identity attached to the current user (one per provider) and lets the user link a missing one or unlink an existing one.
+
+### Wire format
+
+- **Read**: `supabase.auth.getUserIdentities()` → `{ identities: [{ provider, identity_data, created_at, ... }] }`
+- **Link**: `supabase.auth.linkIdentity({ provider, options: { redirectTo: '/auth/callback' } })` — kicks off an OAuth round-trip identical to fresh sign-in. On return, the new identity is attached to the existing `user_id`.
+- **Unlink**: `supabase.auth.unlinkIdentity(identity)`. Supabase blocks unlinking the last remaining identity; the UI also disables the button client-side with a "you need at least one" tooltip.
+
+### Supabase prerequisites
+
+Identity linking is **opt-in** in Supabase. If `linkIdentity()` returns `manual_linking_disabled`, flip on **Auth → Settings → Allow manual linking** in the dashboard, or set `enable_manual_linking = true` under `[auth]` in `apps/backend/supabase/config.toml` for local. Without this flag the link buttons surface the error inline; nothing else breaks.
+
+### UI
+
+`apps/web/src/routes/settings/account/+page.svelte`:
+
+- Brand-true SVG icons for Google (4-colour G) and Apple (white-on-black wordmark), reused from `/login`
+- Provider rows show provider label + email from `identity_data` + linked-on date
+- Per-provider unlink button, disabled when only one identity remains
 
 ---
 
@@ -132,171 +121,81 @@ Public routes render without the sidebar. Protected routes render inside the app
 
 **Location:** `src/routes/login/+page.svelte`
 
-Three login methods:
+Three sign-in methods, all hitting Supabase Auth:
 
-1. **Continue with Google** — calls `auth.signInWithGoogle()` (Supabase OAuth)
-2. **Continue with Apple** — calls `auth.signInWithApple()` (Supabase OAuth)
-3. **Demo Login** — calls `auth.demoLogin(email)` for local testing without a backend
+1. **Continue with Google** — `auth.signInWithGoogle()`
+2. **Continue with Apple** — `auth.signInWithApple()`
+3. **Email + password** — toggles between sign-in and sign-up; both call `supabase.auth.*` directly
 
-On success, all three redirect to `/dashboard`.
-
-The demo login section is intended for development only and should be removed or hidden behind an environment flag before production deployment.
+OAuth flows redirect to `/auth/callback`, which calls `auth.refreshSession()` and routes to `/dashboard`.
 
 ---
 
 ## Session persistence
 
-Sessions are stored in `localStorage` under the key `auth_token`.
+Sessions are managed by `@supabase/supabase-js` itself:
 
-- On login, the token is written to `localStorage`
-- On page load, the store checks for an existing token and sets `auth.loggedIn = true`
-- On logout, the token is removed from `localStorage`
-- If the backend returns 401 (token expired/revoked), the token is cleared and the user is redirected to `/login`
+- The session token is stored in `localStorage` under the Supabase-managed key (`sb-<project-ref>-auth-token`)
+- On reload, the store calls `supabase.auth.getSession()` and hydrates from any saved token
+- Token refresh happens automatically; `onAuthStateChange` fires when the user object changes
+- On logout, `supabase.auth.signOut()` clears the storage key and broadcasts SIGNED_OUT to all tabs
+
+There is **no app-level `auth_token` key**. The app trusts the SDK to manage session storage.
 
 ---
 
 ## Local testing
 
-No backend or Supabase instance is needed for local testing.
-
-### Steps
+Sign-in always uses Supabase, even locally — there is no demo mode. The seeded user `runner@test.com` / `testtest` is the standard baseline.
 
 ```bash
 cd apps/web
 pnpm install
-pnpm dev
-# Opens at http://localhost:7777
+pnpm dev   # → http://localhost:7777
 ```
 
-1. Visit `http://localhost:7777` — you'll see the landing page
-2. Click **Open Dashboard** or any nav link — you'll be redirected to `/login`
-3. In the **Local testing** section, enter any email and click **Demo Login**
-4. You're now authenticated with mock data — sidebar shows your name, all pages are accessible
-5. Click **Sign Out** in the sidebar footer to log out
+### Email + password (no provider config needed)
 
-### Demo login behaviour
+1. Visit `/login` → enter `runner@test.com` / `testtest` → click **Sign In**
+2. The seed user already has runs, routes, and an active plan, so the dashboard is populated immediately
 
-- Creates a mock session with a fake token
-- Loads a hardcoded user profile (name: "Jared Howard", unit: km, tier: free)
-- All pages display mock run/route data — no backend calls are made
-- Token persists across page refreshes (stored in localStorage)
+### OAuth providers
+
+Local OAuth requires the provider's client ID + secret to be set in `apps/backend/supabase/config.toml` (`[auth.external.google]` / `[auth.external.apple]`). The provider's allowed redirect URIs need to include both `http://localhost:7777/auth/callback` and Supabase's own callback (`http://localhost:54321/auth/v1/callback`).
+
+For step-by-step OAuth setup + identity-link test paths, see [`apps/web/local_testing.md` § Testing external integrations](../apps/web/local_testing.md#testing-external-integrations).
 
 ---
 
-## Production setup (Supabase Auth)
+## Production setup
 
-When the Supabase backend is running, replace the mock implementations in `auth.svelte.ts`:
-
-### 1. Wire up OAuth methods
-
-```typescript
-import { supabase } from '$lib/supabase';
-
-async function signInWithGoogle() {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: `${window.location.origin}/dashboard` },
-  });
-  if (error) throw error;
-}
-
-async function signInWithApple() {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'apple',
-    options: { redirectTo: `${window.location.origin}/dashboard` },
-  });
-  if (error) throw error;
-}
-```
-
-### 2. Wire up user profile fetch
-
-```typescript
-async function fetchUser() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return;
-
-  const { data } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', session.user.id)
-    .single();
-
-  user = data;
-}
-```
-
-### 3. Wire up logout
-
-```typescript
-async function logout() {
-  await supabase.auth.signOut();
-  user = null;
-  loggedIn = false;
-}
-```
-
-### 4. Listen to auth state changes
-
-Add a Supabase auth listener in the store to handle token refresh and session expiry:
-
-```typescript
-if (browser) {
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-      loggedIn = true;
-      fetchUser();
-    }
-    if (event === 'SIGNED_OUT') {
-      user = null;
-      loggedIn = false;
-    }
-  });
-}
-```
-
-### 5. Environment variables
-
-Set these in `.env.local`:
+For the deployed web app, the same code points at a hosted Supabase project. Set in the deploy environment:
 
 ```bash
-PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-PUBLIC_SUPABASE_ANON_KEY=eyJ...
+PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 ```
 
-### 6. Remove demo login
+Supabase Auth dashboard:
 
-Remove or gate the `demoLogin` method and the demo section in the login page behind a `DEV` environment check before deploying to production.
+- Enable Google and Apple providers under **Authentication → Providers**
+- Add the production origin (e.g. `https://run-app.example.com/auth/callback`) to **Authentication → URL Configuration → Redirect URLs**
+- Enable **Allow manual linking** under **Authentication → Settings** so `linkIdentity()` works
+- Mirror the same redirect URI in each external provider's app config
 
----
-
-## Sidebar user display
-
-When authenticated, the sidebar footer shows:
-
-- **Avatar** — first letter of the user's display name in a coloured circle
-- **Name** — `auth.user.display_name` (falls back to email)
-- **Email** — `auth.user.email`
-- **Sign Out** button — calls `auth.logout()` and redirects to `/login`
+Email confirmations and rate limits are configured in the same dashboard.
 
 ---
 
-## Adding role-based access
+## Pro-tier checks
 
-The current implementation doesn't have roles (all authenticated users see the same UI). To add role-based visibility later, follow the same pattern as `project-account-payables-dev`:
+`subscription_tier` is read from `user_profiles` and exposed as `auth.user?.subscription_tier`. Two helpers wrap the gating:
 
-```typescript
-// In auth.svelte.ts — add role helpers
-function hasRole(role: string): boolean {
-  return user?.roles?.includes(role) ?? false;
-}
+- Server side: the `is_user_pro(uid)` SQL RPC, used by `/api/coach/+server.ts` to bypass the 10/day cap.
+- Client side: `apps/web/src/lib/features.ts` reads the tier and exposes `isLocked(featureName)`. `<ProGate feature="..." />` renders an upsell when locked.
 
-// In components — conditionally render
-{#if auth.hasRole('premium')}
-  <PremiumFeature />
-{/if}
-```
+For local development, set `BYPASS_PAYWALL=true` in `apps/web/.env.local` to skip every tier check server-side without flipping `subscription_tier` in the database.
 
 ---
 
-*Last updated: April 2026*
+*Last updated: April 2026 — rewritten against the current auth store; demo-login mode is gone, identity linking documented.*
