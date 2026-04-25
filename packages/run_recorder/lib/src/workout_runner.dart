@@ -338,6 +338,7 @@ class WorkoutStepResult {
       'actual_distance_m': actualDistanceMetres,
       'target_pace_sec_per_km': step.targetPaceSecPerKm,
       'actual_pace_sec_per_km': actualPaceSecPerKm,
+      'tolerance_sec_per_km': step.toleranceSecPerKm,
       'duration_s': durationSeconds,
       'status': switch (status) {
         WorkoutStepStatus.completed => 'completed',

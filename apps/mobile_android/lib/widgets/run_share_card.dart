@@ -172,7 +172,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
                         PopupMenuItem(value: 'fit', child: Text('FIT')),
                       ],
                       child: OutlinedButton.icon(
-                        onPressed: null,
+                        onPressed: _capturing ? null : () {},
                         icon: const Icon(Icons.route_outlined),
                         label: const Text('Export'),
                       ),

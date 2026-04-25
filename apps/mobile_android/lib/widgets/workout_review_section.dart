@@ -163,6 +163,7 @@ class WorkoutStepReview {
   final double actualDistanceM;
   final int targetPaceSecPerKm;
   final int? actualPaceSecPerKm;
+  final int toleranceSecPerKm;
   final String status;
 
   const WorkoutStepReview({
@@ -172,6 +173,7 @@ class WorkoutStepReview {
     required this.actualDistanceM,
     required this.targetPaceSecPerKm,
     required this.actualPaceSecPerKm,
+    this.toleranceSecPerKm = 10,
     required this.status,
   });
 
@@ -206,6 +208,8 @@ class WorkoutStepReview {
       targetPaceSecPerKm:
           (raw['target_pace_sec_per_km'] as num?)?.toInt() ?? 0,
       actualPaceSecPerKm: (raw['actual_pace_sec_per_km'] as num?)?.toInt(),
+      toleranceSecPerKm:
+          (raw['tolerance_sec_per_km'] as num?)?.toInt() ?? 10,
       status: raw['status']?.toString() ?? 'completed',
     );
   }
@@ -239,7 +243,7 @@ PaceDelta paceDeltaOf(WorkoutStepReview s) {
   final diff = s.actualPaceSecPerKm! - s.targetPaceSecPerKm;
   if (diff.abs() < 1) return const PaceDelta('on', PaceDeltaTone.on);
   final sign = diff > 0 ? '+' : '−';
-  final tol = 10; // matches recorder default
+  final tol = s.toleranceSecPerKm;
   final mag = diff.abs();
   final tone = mag <= tol
       ? PaceDeltaTone.on

@@ -489,7 +489,7 @@ class _PulsingDot extends StatelessWidget {
                 height: 48 * (0.5 + animation.value),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF818CF8).withOpacity(animation.value),
+                  color: const Color(0xFF818CF8).withValues(alpha: animation.value),
                 ),
               ),
               // Inner dot
@@ -502,7 +502,7 @@ class _PulsingDot extends StatelessWidget {
                   border: Border.all(color: Colors.white, width: 2.5),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF818CF8).withOpacity(0.4),
+                      color: const Color(0xFF818CF8).withValues(alpha: 0.4),
                       blurRadius: 8,
                       spreadRadius: 2,
                     ),
