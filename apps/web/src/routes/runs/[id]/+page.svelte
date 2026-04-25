@@ -34,6 +34,7 @@
 	let editTitle = $state('');
 	let editNotes = $state('');
 	let showDeleteConfirm = $state(false);
+	let bodyWeightKg = $state<number | null>(null);
 
 	onMount(async () => {
 		run = await fetchRunById(pageData.id);
@@ -64,6 +65,8 @@
 						zoneCutoffs = [z1, z2, z3, z4, z5];
 					}
 				}
+				const bw = effective<number>(settings, 'body_weight_kg');
+				if (typeof bw === 'number' && bw > 0) bodyWeightKg = bw;
 			}
 		} catch (_) {
 			/* noop */
@@ -72,7 +75,7 @@
 
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
 	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
-	let estimatedCalories = $derived(run ? Math.round(70 * 1.0 * run.distance_m / 1000) : 0);
+	let estimatedCalories = $derived(run && bodyWeightKg ? Math.round(bodyWeightKg * run.distance_m / 1000) : 0);
 
 	/// Structured-workout review. The recorder writes three keys on
 	/// `runs.metadata` after a planned workout: `plan_workout_id`,
