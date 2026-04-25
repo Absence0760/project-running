@@ -65,6 +65,28 @@
 
 	let showLogoutModal = $state(false);
 
+	/// Sidebar collapsed state. Persisted in localStorage so the user's
+	/// preference survives reloads. Initial value is read on first mount —
+	/// before that the app renders expanded (matches SSR / GitHub Pages).
+	let sidebarCollapsed = $state(false);
+
+	onMount(() => {
+		try {
+			sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === '1';
+		} catch (_) {
+			/* localStorage may be unavailable — leave default */
+		}
+	});
+
+	function toggleSidebar() {
+		sidebarCollapsed = !sidebarCollapsed;
+		try {
+			localStorage.setItem('sidebar_collapsed', sidebarCollapsed ? '1' : '0');
+		} catch (_) {
+			/* silent */
+		}
+	}
+
 	async function handleLogout() {
 		showLogoutModal = false;
 		await auth.logout();
@@ -83,12 +105,24 @@
 	</div>
 {:else if auth.loggedIn}
 	<!-- Authenticated app shell -->
-	<div class="app-shell">
-		<nav class="sidebar">
-			<a href="/dashboard" class="logo">
-				<span class="logo-icon">&#9654;</span>
-				<span class="logo-text">Run</span>
-			</a>
+	<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>
+		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
+			<div class="sidebar-head">
+				<a href="/dashboard" class="logo" aria-label="Run">
+					<span class="logo-icon">&#9654;</span>
+					<span class="logo-text">Run</span>
+				</a>
+				<button
+					class="collapse-toggle"
+					type="button"
+					aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					aria-expanded={!sidebarCollapsed}
+					title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					onclick={toggleSidebar}
+				>
+					<span class="material-symbols">{sidebarCollapsed ? 'menu' : 'menu_open'}</span>
+				</button>
+			</div>
 
 			<ul class="nav-list">
 				{#each navItems as item}
@@ -98,6 +132,7 @@
 							class="nav-link"
 							class:active={isActive(item.href, $page.url.pathname)}
 							style="--accent: {item.accent};"
+							title={sidebarCollapsed ? item.label : undefined}
 						>
 							<span class="nav-icon-wrap">
 								<span class="nav-icon material-symbols">{item.icon}</span>
@@ -110,7 +145,11 @@
 
 			<div class="sidebar-footer">
 				{#if auth.user}
-					<button class="profile-btn" onclick={() => (showLogoutModal = true)}>
+					<button
+						class="profile-btn"
+						onclick={() => (showLogoutModal = true)}
+						title={sidebarCollapsed ? auth.user.display_name ?? auth.user.email : undefined}
+					>
 						<div class="user-avatar">
 							{auth.user.display_name?.[0]?.toUpperCase() ?? '?'}
 						</div>
@@ -166,6 +205,42 @@
 		left: 0;
 		bottom: 0;
 		z-index: 10;
+		transition: width var(--transition-base);
+	}
+
+	.sidebar.collapsed {
+		width: var(--sidebar-collapsed-width, 4.5rem);
+	}
+
+	.sidebar-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-lg);
+	}
+
+	.collapse-toggle {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border: none;
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--sidebar-text-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition:
+			background var(--transition-fast),
+			color var(--transition-fast);
+	}
+	.collapse-toggle:hover {
+		background: var(--sidebar-hover-bg);
+		color: var(--sidebar-text);
+	}
+	.collapse-toggle .material-symbols {
+		font-size: 1.25rem;
 	}
 
 	.logo {
@@ -173,7 +248,6 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		margin-bottom: var(--space-lg);
 		font-weight: 700;
 		font-size: 1.25rem;
 		color: var(--sidebar-logo);
@@ -456,6 +530,38 @@
 		flex: 1;
 		margin-left: var(--sidebar-width);
 		min-height: 100vh;
+		transition: margin-left var(--transition-base);
+	}
+
+	.app-shell.sidebar-collapsed .main-content {
+		margin-left: var(--sidebar-collapsed-width, 4.5rem);
+	}
+
+	/* Hide labels and trim spacing when collapsed. Icons keep their
+	   layout so the rail stays visually consistent. */
+	.sidebar.collapsed .nav-label,
+	.sidebar.collapsed .user-details {
+		opacity: 0;
+		visibility: hidden;
+		width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+	.sidebar.collapsed .nav-link,
+	.sidebar.collapsed .profile-btn {
+		justify-content: center;
+		gap: 0;
+		padding-left: 0;
+		padding-right: 0;
+	}
+	/* When collapsed, the logo would crowd the menu button on a 4.5rem
+	   rail — hide it and let the menu icon stand alone (clicking it
+	   re-expands the sidebar). */
+	.sidebar.collapsed .logo {
+		display: none;
+	}
+	.sidebar.collapsed .sidebar-head {
+		justify-content: center;
 	}
 
 	.loading-screen {

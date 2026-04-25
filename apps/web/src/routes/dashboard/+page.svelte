@@ -23,6 +23,7 @@
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
 	import { WORKOUT_KIND_LABEL } from '$lib/training';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
+	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import { loadSettings, effective } from '$lib/settings';
 	import { fmtKm, fmtPace, setUnit } from '$lib/units.svelte';
@@ -85,6 +86,11 @@
 	/// /plans/[id] with a `?edit=` query.
 	let editingWorkout = $state<PlanWorkout | null>(null);
 
+	/// Period-summary modal state. The stat cards (This Week / This Month)
+	/// open the same `<PeriodSummary>` component that the standalone
+	/// /dashboard/period/... page uses, so deep-linking still works.
+	let periodModal = $state<{ type: 'week' | 'month'; date: Date } | null>(null);
+
 	function openNewGoal() {
 		editingGoal = {
 			id: newGoalId(),
@@ -127,15 +133,6 @@
 		showGoalEditor = false;
 		editingGoal = null;
 	}
-
-	/// ISO date (YYYY-MM-DD) of the current week's Monday, for deep-
-	/// linking the This-Week stat card into `/dashboard/period/...`.
-	let weekStartIso = $derived.by(() => {
-		const d = new Date();
-		d.setHours(0, 0, 0, 0);
-		d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-		return d.toISOString().slice(0, 10);
-	});
 
 	const sources: { value: RunSource | 'all'; label: string }[] = [
 		{ value: 'all', label: 'All' },
@@ -452,11 +449,15 @@
 
 		<!-- Stat cards -->
 		<div class="stat-grid">
-			<a href="/dashboard/period/week/{weekStartIso}" class="stat-card">
+			<button
+				type="button"
+				class="stat-card stat-card-button"
+				onclick={() => (periodModal = { type: 'week', date: new Date() })}
+			>
 				<span class="stat-label">This Week</span>
 				<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
 				<span class="stat-sub">{thisWeekRuns.length} run{thisWeekRuns.length !== 1 ? 's' : ''}</span>
-			</a>
+			</button>
 			<div class="stat-card">
 				<span class="stat-label">Total Runs</span>
 				<span class="stat-value">{totalRuns}</span>
@@ -585,6 +586,39 @@
 			planOverview = await fetchActivePlanOverview();
 		}}
 	/>
+{/if}
+
+{#if periodModal}
+	<div
+		class="modal-backdrop"
+		onclick={() => (periodModal = null)}
+		role="presentation"
+	></div>
+	<div
+		class="modal modal-wide"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Period summary"
+	>
+		<header class="modal-header">
+			<h2>Period summary</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (periodModal = null)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body">
+			<PeriodSummary
+				runs={filteredRuns}
+				initialType={periodModal.type}
+				initialDate={periodModal.date}
+			/>
+		</div>
+	</div>
 {/if}
 
 {#if showGoalEditor && editingGoal}
@@ -1301,6 +1335,16 @@
 	.stat-card:hover {
 		box-shadow: var(--shadow-md);
 		border-color: transparent;
+	}
+
+	.stat-card-button {
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		color: inherit;
+	}
+	.stat-card-button:hover {
+		transform: translateY(-1px);
 	}
 
 	.stat-label {

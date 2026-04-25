@@ -23,7 +23,8 @@ src/
   lib/
     components/     # RunMap, ElevationProfile, ImportRoute, RouteBuilder, CoachChat, ConfirmDialog, ToastContainer, ProGate,
                     # WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer, CalendarHeatmap, LicenseList,
-                    # ClubEditor, EventEditor, PlanEditor, RunEditor (modal-hosted creation forms)
+                    # ClubEditor, EventEditor, PlanEditor, RunEditor (modal-hosted creation forms),
+                    # PeriodSummary (week/month stats + run list — used by dashboard modal AND /dashboard/period/...)
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types
@@ -41,8 +42,9 @@ src/
     garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
     push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
   routes/
-    +layout.svelte  # App shell with sidebar nav (auth guard)
-    dashboard/      # Weekly mileage, PBs, calendar heatmap
+    +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
+    dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
+    dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
     runs/           # Run history with source + activity type filters
     runs/[id]/      # Run detail with map, elevation, splits
     routes/         # User's saved routes
