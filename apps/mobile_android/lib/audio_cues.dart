@@ -123,7 +123,7 @@ class AudioCues {
     final paceS = step.targetPaceSecPerKm % 60;
     final paceTail = paceS == 0
         ? '$paceM minutes per kilometre'
-        : '$paceM $paceS per kilometre';
+        : '$paceM minutes $paceS seconds per kilometre';
     final dist = _spokenDistance(step.targetDistanceMetres);
     final intro = switch (step.kind) {
       WorkoutStepKind.warmup => 'Warmup',

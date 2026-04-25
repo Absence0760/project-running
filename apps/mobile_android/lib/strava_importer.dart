@@ -49,7 +49,9 @@ class StravaImporter {
     final dateIdx = header.indexOf('activity date');
     final nameIdx = header.indexOf('activity name');
     final typeIdx = header.indexOf('activity type');
-    final distanceIdx = header.indexOf('distance');
+    final distanceIdx = header.indexOf('distance (km)') != -1
+        ? header.indexOf('distance (km)')
+        : header.indexOf('distance');
     final elapsedIdx = header.indexOf('elapsed time');
     final filenameIdx = header.indexOf('filename');
 

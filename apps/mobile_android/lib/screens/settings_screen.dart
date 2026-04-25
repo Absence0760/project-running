@@ -1074,14 +1074,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Auto-pause'),
-            subtitle: const Text(
-              'Stops the clock when you stop moving. Moving time is also '
-              'recomputed from the GPS trace at save time.',
-            ),
+            subtitle: const Text('Not available on this device.'),
             value: _bagValue<bool>(SettingsKeys.autoPauseEnabled) ?? true,
-            onChanged: _bagReady
-                ? (v) => _putUniversal(SettingsKeys.autoPauseEnabled, v)
-                : null,
+            onChanged: null,
           ),
           ListTile(
             title: const Text('Auto-pause threshold'),

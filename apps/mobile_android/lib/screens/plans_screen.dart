@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../training.dart';
 import '../training_service.dart';
@@ -12,7 +12,8 @@ import 'plan_new_screen.dart';
 
 class PlansScreen extends StatefulWidget {
   final TrainingService training;
-  const PlansScreen({super.key, required this.training});
+  final ApiClient? apiClient;
+  const PlansScreen({super.key, required this.training, this.apiClient});
 
   @override
   State<PlansScreen> createState() => _PlansScreenState();
@@ -74,7 +75,7 @@ class _PlansScreenState extends State<PlansScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final signedIn = Supabase.instance.client.auth.currentUser != null;
+    final signedIn = widget.apiClient?.userId != null;
     // Samsung devices with the 3-button nav bar report a bottom viewPadding
     // the Scaffold does NOT automatically pad FABs for (that auto-pad only
     // applies when a bottomNavigationBar is present). Apply it manually.

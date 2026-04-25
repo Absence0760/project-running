@@ -1601,6 +1601,7 @@ class _RunScreenState extends State<RunScreen> {
                                   MaterialPageRoute<void>(
                                     builder: (_) => PlansScreen(
                                       training: widget.training,
+                                      apiClient: widget.apiClient,
                                     ),
                                   ),
                                 );
