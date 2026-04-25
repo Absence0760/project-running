@@ -218,8 +218,8 @@ See [docs/training.md](training.md) and [docs/workout_execution.md](workout_exec
 | Adherence % + weekly summary | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | VDOT / Riegel pace derivation | ✓ | ✗ | ✓ | ✗ | ✗ | Derivation engine shared via `core_models`. |
 | Adaptive plan generator (phase-banded) | ✗ | ✗ | ✓ | ✗ | ✗ | Shipped on web at `/plans/new` — `lib/training.ts` holds the generator (VDOT + Riegel derivations, phase-banded workout templates) and the wizard persists via `training_plans` + `plan_weeks` + `plan_workouts`. Mobile consumes the generated plan read-side (Android plan detail screen) but cannot yet kick off generation. 🔸 gap vs web-canonical — mobile "new plan" flow to follow. |
-| VO2 max estimate | ✗ | ✗ | ✓ | ✗ | ✗ | Shipped on web: `lib/fitness.ts` computes VDOT/VO2 max from the user's best recent qualifying run; the dashboard card renders the latest snapshot plus a sparkline trend from `fitness_snapshots`. 🔸 gap vs web-canonical — mobile dashboard card to follow. |
-| Recovery advisor (ATL / CTL / TSB) | ✗ | ✗ | ✓ | ✗ | ✗ | Shipped on web: `lib/fitness.ts` exposes EWMA-based ATL (7-day) / CTL (42-day) / TSB; dashboard renders the numbers plus a rule-based recovery advice string. 🔸 gap vs web-canonical — mobile dashboard card to follow. |
+| VO2 max estimate | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `lib/fitness.ts` computes VDOT/VO2 max from the user's best recent qualifying run. Android: `lib/fitness.dart` is a 1:1 port (Daniels' "%VO2max at race pace" curve, same qualifying filter, same 90-day window) and the dashboard renders VDOT + VO₂ max alongside the qualifying-run count. Web also draws a sparkline trend from `fitness_snapshots` — Android shows the latest scalar only. |
+| Recovery advisor (ATL / CTL / TSB) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `lib/fitness.ts` exposes EWMA-based ATL (7-day) / CTL (42-day) / TSB plus `recoveryAdvice`. Android: `lib/fitness.dart` is the matching Dart port (same EWMAs, same TSB thresholds, same advice strings); the dashboard's Fitness card renders all three numbers plus the rule-based advice line below the VO₂-max row. |
 
 ## AI Coach
 

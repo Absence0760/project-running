@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../fitness.dart';
 import '../goals.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
@@ -244,6 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 24),
                 ],
+                ..._buildFitnessSection(theme, runs, now),
                 Text('All Time', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Card(
@@ -318,6 +320,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static bool _isRunActivity(Run r) {
     final raw = r.metadata?['activity_type'] as String?;
     return raw == null || raw == 'run';
+  }
+
+  List<Widget> _buildFitnessSection(
+      ThemeData theme, List<Run> runs, DateTime now) {
+    final snapshot = computeSnapshot(runs, now: now);
+    final tsb = snapshot.trainingStressBal;
+    final ctl = snapshot.chronicLoad;
+    final advice = recoveryAdvice(tsb, ctl);
+
+    // Hide the section entirely until the user has at least one
+    // qualifying run — otherwise it's all "—" and noise.
+    if (snapshot.qualifyingRunCount == 0) return const [];
+
+    String fmt(double? v, {int digits = 1}) =>
+        v == null ? '—' : v.toStringAsFixed(digits);
+
+    return [
+      Text('Fitness', style: theme.textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _SummaryStat(label: 'VO₂ max', value: fmt(snapshot.vo2Max)),
+                  _SummaryStat(label: 'VDOT', value: fmt(snapshot.vdot)),
+                  _SummaryStat(
+                    label: 'Runs',
+                    value: '${snapshot.qualifyingRunCount}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _SummaryStat(
+                    label: 'Fitness (CTL)',
+                    value: fmt(snapshot.chronicLoad, digits: 0),
+                  ),
+                  _SummaryStat(
+                    label: 'Fatigue (ATL)',
+                    value: fmt(snapshot.acuteLoad, digits: 0),
+                  ),
+                  _SummaryStat(
+                    label: 'Form (TSB)',
+                    value: fmt(snapshot.trainingStressBal, digits: 0),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.health_and_safety,
+                      size: 18,
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        advice,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+    ];
   }
 
 
