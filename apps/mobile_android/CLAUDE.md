@@ -34,6 +34,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 **Screens** (`lib/screens/`):
 - `onboarding_screen.dart` — first-launch permission ask
 - `sign_in_screen.dart` — email/password + Google sign-in
+- `sign_up_screen.dart` — email/password registration + Google sign-in, linked from sign-in
 - `home_screen.dart` — the dashboard + nav tabs host
 - `run_screen.dart` — the primary recording screen (countdown, live stats, route overlay, finish summary); hosts the recorder state machine and all the hardening described in [../../docs/run_recording.md](../../docs/run_recording.md)
 - `dashboard_screen.dart` — weekly mileage, PBs, goal progress
