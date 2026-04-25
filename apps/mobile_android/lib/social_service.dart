@@ -531,7 +531,9 @@ class SocialService extends ChangeNotifier {
             .update({'event_id': eventId})
             .eq('id', runId)
             .eq('user_id', uid);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[SocialService.submitEventResult backlink] $e');
+      }
     }
     notifyListeners();
   }
@@ -552,7 +554,8 @@ class SocialService extends ChangeNotifier {
           .maybeSingle();
       if (row == null) return null;
       return RaceSessionRow.fromJson(row);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[SocialService.fetchRaceSession] $e');
       return null;
     }
   }
