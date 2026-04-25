@@ -132,6 +132,18 @@ void main() {
         reason: '_onPrefsChange must bail out while recording — see '
             'the runStore-notify rebuild storm fix.',
       );
+      expect(
+        body,
+        contains('_ScreenState.countdown'),
+        reason: '_onPrefsChange must bail during countdown — '
+            'same rebuild storm applies while waiting to start.',
+      );
+      expect(
+        body,
+        contains('_ScreenState.paused'),
+        reason: '_onPrefsChange must bail while paused — '
+            'runStore.notifyListeners fires every 10s regardless.',
+      );
     });
   });
 

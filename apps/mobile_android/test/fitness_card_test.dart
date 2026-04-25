@@ -100,9 +100,9 @@ void main() {
 
     testWidgets('uses an em-dash placeholder when VDOT cannot be computed',
         (tester) async {
-      // A single qualifying-distance run that's outside the 90-day VDOT
-      // recency window — qualifyingRunCount > 0 (so the card renders),
-      // but currentVdot returns null → "—".
+      // Two qualifying-distance runs both outside the 90-day VDOT recency
+      // window — qualifyingRunCount > 0 (so the card renders), but
+      // currentVdot returns null because no run is recent enough → "—".
       final now = DateTime.utc(2026, 5, 1);
       final runs = [
         _r(
@@ -113,7 +113,7 @@ void main() {
         _r(
           distance: 5000,
           durationS: 1500,
-          startedAt: now.subtract(const Duration(days: 5)),
+          startedAt: now.subtract(const Duration(days: 95)),
         ),
       ];
       await _pump(tester, runs: runs, now: now);
@@ -121,6 +121,12 @@ void main() {
       expect(find.text('Fitness'), findsOneWidget);
       // 2 qualifying runs.
       expect(find.text('2'), findsOneWidget);
+      // VDOT and VO2max must render as em-dash when currentVdot is null.
+      // CTL/ATL/TSB are also "—" here, so we check for at least 2 (not exactly).
+      expect(find.text('—'), findsAtLeastNWidgets(2));
+      // Specifically the VDOT and VO2max labels must both be present.
+      expect(find.text('VO₂ max'), findsOneWidget);
+      expect(find.text('VDOT'), findsOneWidget);
     });
   });
 
