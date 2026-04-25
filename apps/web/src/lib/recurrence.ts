@@ -138,6 +138,6 @@ function addMonths(d: Date, n: number): Date {
 function startOfWeek(d: Date): Date {
 	const c = new Date(d);
 	c.setHours(0, 0, 0, 0);
-	c.setDate(c.getDate() - c.getDay());
+	c.setDate(c.getDate() - ((c.getDay() + 6) % 7)); // Monday anchor, matches recurrence.dart
 	return c;
 }
