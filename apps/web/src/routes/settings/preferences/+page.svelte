@@ -39,6 +39,15 @@
 		applyTheme(next);
 	}
 
+	// When the user picks a distance unit, snap the pace format to the
+	// matching min-per-unit choice. Skip if they've explicitly chosen a
+	// speed format (kph/mph) — that's a deliberate non-pace selection.
+	function pickDistanceUnit(next: 'km' | 'mi') {
+		preferredUnit = next;
+		if (paceFormat === 'kph' || paceFormat === 'mph') return;
+		paceFormat = next === 'mi' ? 'min_per_mi' : 'min_per_km';
+	}
+
 	// HR zones
 	let z1 = $state('');
 	let z2 = $state('');
@@ -140,8 +149,8 @@
 				<label>
 					<span class="label-text">Distance Unit</span>
 					<div class="toggle-row">
-						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => (preferredUnit = 'km')}>Kilometres</button>
-						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => (preferredUnit = 'mi')}>Miles</button>
+						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => pickDistanceUnit('km')}>Kilometres</button>
+						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => pickDistanceUnit('mi')}>Miles</button>
 					</div>
 				</label>
 				<label>

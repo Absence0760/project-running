@@ -133,13 +133,6 @@
 	.app-shell {
 		display: flex;
 		min-height: 100vh;
-
-		--sidebar-text: #F7F3EC;
-		--sidebar-text-muted: #B5ADC3;
-		--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
-		--sidebar-active-bg: rgba(58, 46, 92, 0.55);
-		--sidebar-active-text: #F7F3EC;
-		--sidebar-border: rgba(247, 243, 236, 0.08);
 	}
 
 	.sidebar {
@@ -163,7 +156,7 @@
 		margin-bottom: var(--space-lg);
 		font-weight: 700;
 		font-size: 1.25rem;
-		color: #ffffff;
+		color: var(--sidebar-logo);
 	}
 
 	.logo-icon {

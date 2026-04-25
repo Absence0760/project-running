@@ -4,6 +4,7 @@
 	import { fetchPlan } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import CoachChat from '$lib/components/CoachChat.svelte';
+	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import {
 		fmtPace,
 		fmtKm,
@@ -168,6 +169,16 @@
 				</a>
 			</section>
 		{/if}
+
+		<section class="calendar-section">
+			<h2 class="section-title">Calendar</h2>
+			<PlanCalendar
+				startDate={plan.start_date}
+				endDate={plan.end_date}
+				{workouts}
+				planId={plan.id}
+			/>
+		</section>
 
 		<section class="weeks">
 			{#each weeks as w (w.id)}
@@ -475,6 +486,9 @@
 	}
 	.coach-section {
 		margin-top: var(--space-xl);
+	}
+	.calendar-section {
+		margin: var(--space-md) 0;
 	}
 	.section-title {
 		font-size: 0.85rem;

@@ -26,6 +26,12 @@
 		custom: 'Custom'
 	};
 
+	const statusIcon: Record<string, string> = {
+		active: 'play_circle',
+		completed: 'check_circle',
+		abandoned: 'cancel'
+	};
+
 	function goalTime(p: TrainingPlan): string {
 		if (!p.goal_time_seconds) return 'Finish';
 		const h = Math.floor(p.goal_time_seconds / 3600);
@@ -96,7 +102,10 @@
 				<a class="card" href="/plans/{p.id}">
 					<div class="card-head">
 						<h3>{p.name}</h3>
-						<span class="badge status-{p.status}">{p.status}</span>
+						<span class="badge status-{p.status}">
+						<span class="material-symbols">{statusIcon[p.status] ?? 'help'}</span>
+						{p.status}
+					</span>
 					</div>
 					<div class="meta">
 						<span>
@@ -195,14 +204,23 @@
 	}
 	.btn-ghost {
 		background: transparent;
-		border: none;
+		border: 1px solid var(--color-border);
 		color: var(--color-text-secondary);
 		font-weight: 600;
 		cursor: pointer;
-		font-size: 0.85rem;
+		font-size: 0.8rem;
+		padding: 0.35rem 0.8rem;
+		border-radius: var(--radius-md);
+		transition:
+			background var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
+	.btn-ghost:hover,
 	.btn-ghost.danger:hover {
-		color: var(--color-danger);
+		background: var(--color-primary-light);
+		border-color: var(--color-primary);
+		color: var(--color-primary);
 	}
 	.grid {
 		display: grid;
@@ -236,23 +254,29 @@
 		font-weight: 700;
 	}
 	.badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		font-size: 0.7rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		padding: 0.15rem 0.5rem;
+		padding: 0.2rem 0.55rem;
 		border-radius: var(--radius-sm);
+	}
+	.badge .material-symbols {
+		font-size: 0.95rem;
 	}
 	.status-active {
 		background: var(--color-primary-light);
 		color: var(--color-primary);
 	}
 	.status-completed {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-secondary);
+		background: var(--color-success-light);
+		color: var(--color-success);
 	}
 	.status-abandoned {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-tertiary);
+		background: var(--color-danger-light);
+		color: var(--color-danger);
 	}
 	.meta {
 		display: flex;

@@ -48,7 +48,7 @@ Plan + event creation flows intentionally stay on mobile (unlike clubs, where we
 |---|---|
 | `/plans` | Lists the user's plans, highlights the active one, supports abandon/delete. |
 | `/plans/new` | Wizard: goal race + goal time + recent 5K + days/week. Live pace + week-outline preview before save. |
-| `/plans/[id]` | Plan detail. Progress ring, today's workout card, full week grid with per-workout tiles. |
+| `/plans/[id]` | Plan detail. Progress ring, today's workout card, month-by-month calendar (`PlanCalendar.svelte`) projecting workouts onto real dates with completion shading, plus the full week grid below for sequential reading. |
 | `/plans/[id]/workouts/[wid]` | Workout detail: target distance / pace / tolerance, structured intervals laid out step-by-step, tailored "how to run it" advice per kind. |
 | `/dashboard` | Hosts the "Today's workout" card (or a promo card if no active plan). |
 

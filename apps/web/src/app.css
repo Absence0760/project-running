@@ -10,6 +10,8 @@
 	--color-danger: #D8594C;
 	--color-danger-light: rgba(216, 89, 76, 0.08);
 	--color-warning: #E6A96B;
+	--color-success: #4A9F5A;
+	--color-success-light: rgba(74, 159, 90, 0.10);
 
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #B9A7E8;
@@ -27,7 +29,16 @@
 	/* Gradients */
 	--gradient-primary: linear-gradient(135deg, #3A2E5C 0%, #6B4C8A 50%, #F2A07B 100%);
 	--gradient-surface: linear-gradient(135deg, rgba(58, 46, 92, 0.04) 0%, rgba(242, 160, 123, 0.04) 100%);
-	--gradient-sidebar: linear-gradient(180deg, #120D22 0%, #241B3D 100%);
+	--gradient-sidebar: linear-gradient(180deg, #FFFFFF 0%, #F1ECE0 100%);
+
+	/* Sidebar palette — overridden in dark mode below. */
+	--sidebar-text: #1B1628;
+	--sidebar-text-muted: #5C556B;
+	--sidebar-hover-bg: rgba(27, 22, 40, 0.06);
+	--sidebar-active-bg: var(--color-primary-light);
+	--sidebar-active-text: var(--color-primary);
+	--sidebar-border: var(--color-border);
+	--sidebar-logo: #1B1628;
 
 	/* Spacing */
 	--space-xs: 0.25rem;
@@ -75,6 +86,8 @@
 		--color-danger: #E07468;
 		--color-danger-light: rgba(224, 116, 104, 0.14);
 		--color-warning: #E6A96B;
+		--color-success: #6BC07A;
+		--color-success-light: rgba(107, 192, 122, 0.16);
 
 		--color-accent-orange: #F2A07B;
 		--color-accent-pink: #B9A7E8;
@@ -93,6 +106,14 @@
 		--gradient-surface: linear-gradient(135deg, rgba(242, 160, 123, 0.06) 0%, rgba(185, 167, 232, 0.06) 100%);
 		--gradient-sidebar: linear-gradient(180deg, #0C0818 0%, #1B1232 100%);
 
+		--sidebar-text: #F7F3EC;
+		--sidebar-text-muted: #B5ADC3;
+		--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
+		--sidebar-active-bg: rgba(58, 46, 92, 0.55);
+		--sidebar-active-text: #F7F3EC;
+		--sidebar-border: rgba(247, 243, 236, 0.08);
+		--sidebar-logo: #FFFFFF;
+
 		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
 		--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
 		--shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
@@ -110,6 +131,8 @@
 	--color-danger: #E07468;
 	--color-danger-light: rgba(224, 116, 104, 0.14);
 	--color-warning: #E6A96B;
+	--color-success: #6BC07A;
+	--color-success-light: rgba(107, 192, 122, 0.16);
 
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #B9A7E8;
@@ -127,6 +150,14 @@
 	--gradient-primary: linear-gradient(135deg, #F2A07B 0%, #B9A7E8 50%, #6B4C8A 100%);
 	--gradient-surface: linear-gradient(135deg, rgba(242, 160, 123, 0.06) 0%, rgba(185, 167, 232, 0.06) 100%);
 	--gradient-sidebar: linear-gradient(180deg, #0C0818 0%, #1B1232 100%);
+
+	--sidebar-text: #F7F3EC;
+	--sidebar-text-muted: #B5ADC3;
+	--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
+	--sidebar-active-bg: rgba(58, 46, 92, 0.55);
+	--sidebar-active-text: #F7F3EC;
+	--sidebar-border: rgba(247, 243, 236, 0.08);
+	--sidebar-logo: #FFFFFF;
 
 	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
 	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);

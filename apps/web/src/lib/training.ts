@@ -570,15 +570,22 @@ export function addDays(d: Date, n: number): Date {
 
 // ─────────────────────── Formatters ───────────────────────
 
+import { getUnit } from './units.svelte';
+
+const METRES_PER_MILE = 1609.344;
+
 export function fmtPace(secPerKm: number | null | undefined): string {
 	if (!secPerKm) return '—';
-	const m = Math.floor(secPerKm / 60);
-	const s = Math.round(secPerKm % 60);
-	return `${m}:${String(s).padStart(2, '0')}/km`;
+	const u = getUnit();
+	const sec = u === 'mi' ? secPerKm * (METRES_PER_MILE / 1000) : secPerKm;
+	const m = Math.floor(sec / 60);
+	const s = Math.round(sec % 60);
+	return `${m}:${String(s).padStart(2, '0')}/${u}`;
 }
 
 export function fmtKm(metres: number | null | undefined, digits = 1): string {
 	if (metres == null) return '—';
+	if (getUnit() === 'mi') return `${(metres / METRES_PER_MILE).toFixed(digits)} mi`;
 	return `${(metres / 1000).toFixed(digits)} km`;
 }
 
