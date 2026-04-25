@@ -298,7 +298,9 @@ export async function saveRunAsRoute(
 	// bit. Swallow any RLS or FK miss silently.
 	try {
 		await supabase.from('runs').update({ route_id: data.id }).eq('id', runId);
-	} catch (_) {}
+	} catch (e) {
+		console.warn('saveRunAsRoute: back-link update failed', e);
+	}
 
 	return { id: data.id };
 }
