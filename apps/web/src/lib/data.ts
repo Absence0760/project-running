@@ -313,6 +313,7 @@ export async function createManualRun(input: {
 	distanceM: number;
 	activityType?: 'run' | 'walk' | 'hike' | 'cycle';
 	notes?: string | null;
+	routeId?: string | null;
 }): Promise<{ id: string }> {
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
@@ -333,6 +334,7 @@ export async function createManualRun(input: {
 			distance_m: input.distanceM,
 			source: 'app',
 			metadata,
+			route_id: input.routeId ?? null,
 		})
 		.select('id')
 		.single();
@@ -558,13 +560,44 @@ export async function updateRouteTags(routeId: string, tags: string[]): Promise<
 }
 
 export async function fetchRoutes(): Promise<Route[]> {
-	const { data, error } = await supabase
+	const result = await fetchRoutesWithError();
+	return result.routes;
+}
+
+/// Same as `fetchRoutes` but returns the error message alongside the
+/// rows. Callers that want to surface a failure to the user (rather
+/// than silently rendering an empty state — which is indistinguishable
+/// from "user has no routes") use this variant.
+export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: string | null }> {
+	// Read the session via `getSession()` — synchronous-ish from local
+	// storage, doesn't round-trip to /auth/v1/user, and works the
+	// instant the supabase-js client has initialised. Falls back to
+	// just running the query and letting RLS decide if no session is
+	// found, since the user might be in the brief hydration window.
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+
+	let queryBuilder = supabase
 		.from('routes')
 		.select('*')
 		.order('created_at', { ascending: false });
+	// Only constrain to the signed-in user when we actually have an id.
+	// Without one, RLS still scopes the SELECT (owned + public rows).
+	if (userId) {
+		queryBuilder = queryBuilder.eq('user_id', userId);
+	}
 
-	if (error || !data) return [];
-	return data;
+	const { data, error } = await queryBuilder;
+
+	if (error) {
+		console.error('fetchRoutes failed', error);
+		return { routes: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
+	}
+	const rows = data ?? [];
+	if (rows.length === 0 && !userId) {
+		return { routes: [], error: 'Not signed in — sign in to see your saved routes.' };
+	}
+	return { routes: rows, error: null };
 }
 
 export async function fetchRouteById(id: string): Promise<Route | null> {

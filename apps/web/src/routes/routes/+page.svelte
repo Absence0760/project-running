@@ -1,37 +1,40 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { fetchRoutes } from '$lib/data';
+	import { fetchRoutesWithError } from '$lib/data';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import TrackPreview from '$lib/components/TrackPreview.svelte';
 	import type { Route } from '$lib/types';
 
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
+	let fetchError = $state<string | null>(null);
 	let showImport = $state(false);
 
-	onMount(async () => {
-		routes = await fetchRoutes();
+	async function load() {
+		loading = true;
+		fetchError = null;
+		const result = await fetchRoutesWithError();
+		routes = result.routes;
+		fetchError = result.error;
 		loading = false;
-	});
+	}
+
+	onMount(load);
 </script>
 
 {#if showImport}
-	<ImportRoute
-		onclose={() => (showImport = false)}
-		onimport={async () => {
-			// Refetch after a multi-route import — the modal closes
-			// itself but the list on this page won't refresh on its own
-			// (we're already at /routes, so `goto` is a no-op).
-			routes = await fetchRoutes();
-		}}
-	/>
+	<ImportRoute onclose={() => (showImport = false)} onimport={load} />
 {/if}
 
 <div class="page">
 	<header class="page-header">
 		<h1>Routes</h1>
 		<div class="header-actions">
+			<a href="/explore" class="btn btn-outline">
+				<span class="material-symbols">explore</span>
+				Explore community
+			</a>
 			<button class="btn btn-outline" onclick={() => (showImport = true)}>
 				<span class="material-symbols">upload_file</span>
 				Import
@@ -45,6 +48,15 @@
 
 	{#if loading}
 		<p class="loading">&nbsp;</p>
+	{:else if fetchError}
+		<div class="error-banner">
+			<span class="material-symbols">error</span>
+			<div>
+				<strong>Couldn't load your routes.</strong>
+				<span class="error-detail">{fetchError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>Retry</button>
+		</div>
 	{:else if routes.length === 0}
 		<div class="empty">
 			<span class="material-symbols empty-icon">route</span>
@@ -53,7 +65,7 @@
 		</div>
 	{:else}
 		<div class="route-grid">
-			{#each routes as route}
+			{#each routes as route (route.id)}
 				<a href="/routes/{route.id}" class="route-card">
 					<div class="route-map-placeholder">
 						{#if route.waypoints && route.waypoints.length > 1}
@@ -91,6 +103,8 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: var(--space-xl);
+		gap: var(--space-md);
+		flex-wrap: wrap;
 	}
 
 	h1 {
@@ -108,6 +122,8 @@
 		font-size: 0.875rem;
 		transition: all var(--transition-fast);
 		border: none;
+		cursor: pointer;
+		text-decoration: none;
 	}
 
 	.btn-primary {
@@ -133,12 +149,39 @@
 	.header-actions {
 		display: flex;
 		gap: var(--space-sm);
+		flex-wrap: wrap;
 	}
 
 	.loading {
 		text-align: center;
 		color: var(--color-text-tertiary);
 		padding: var(--space-2xl);
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		margin-bottom: var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 
 	.empty {
@@ -166,6 +209,8 @@
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		transition: all var(--transition-fast);
+		text-decoration: none;
+		color: inherit;
 	}
 
 	.route-card:hover {

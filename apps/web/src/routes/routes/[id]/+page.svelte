@@ -163,15 +163,28 @@
 	}
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+
+	// Send the back link wherever the user came from. Defaults to /routes
+	// (the owner's list); switches to /explore when arriving from the
+	// community discovery page so the trip back is one click, not two.
+	let backHref = $state('/routes');
+	let backLabel = $state('Routes');
+	onMount(() => {
+		const ref = typeof document !== 'undefined' ? document.referrer : '';
+		if (ref && new URL(ref, window.location.origin).pathname.startsWith('/explore')) {
+			backHref = '/explore';
+			backLabel = 'Explore';
+		}
+	});
 </script>
 
 {#if loading}
 	<div class="page"><p class="loading">&nbsp;</p></div>
 {:else if route}
 	<div class="page">
-		<a href="/routes" class="back-link">
+		<a href={backHref} class="back-link">
 			<span class="material-symbols">arrow_back</span>
-			Routes
+			{backLabel}
 		</a>
 
 		<header class="detail-header">

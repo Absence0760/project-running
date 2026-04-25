@@ -390,7 +390,7 @@
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
-		max-width: 56rem;
+		max-width: 96rem;
 	}
 
 	.page-header {
@@ -437,8 +437,8 @@
 	}
 
 	.run-list {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
 		gap: var(--space-md);
 	}
 
@@ -450,6 +450,8 @@
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
 		transition: all var(--transition-fast);
+		text-decoration: none;
+		color: inherit;
 	}
 
 	.run-card:hover {
@@ -622,6 +624,7 @@
 		cursor: pointer;
 		font: inherit;
 		color: inherit;
+		grid-column: 1 / -1;
 	}
 	.run-card.select-mode.selected {
 		border-color: var(--color-primary);

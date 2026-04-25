@@ -296,6 +296,17 @@
 		width: 100%;
 	}
 
+	/* Radios + checkboxes inherit the generic `input` styling above,
+	   which includes width: 100% and padding — wrong for native widgets.
+	   Reset them here. */
+	input[type='radio'],
+	input[type='checkbox'] {
+		width: auto;
+		padding: 0;
+		background: transparent;
+		border: none;
+	}
+
 	input:focus,
 	textarea:focus,
 	select:focus {

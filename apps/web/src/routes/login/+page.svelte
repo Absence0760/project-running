@@ -313,7 +313,19 @@
 		border-radius: var(--radius-md);
 		font-size: 0.9rem;
 		font-family: inherit;
-		background: var(--color-bg);
+		/* `input` doesn't inherit color from the parent in most user-agent
+		   stylesheets — set both background and text colour explicitly so
+		   the field is legible against the white login card in light mode
+		   and the dark card in dark mode. */
+		background: white;
+		color: #0F172A;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		input {
+			background: #1E293B;
+			color: #F1F5F9;
+		}
 	}
 
 	input:focus {

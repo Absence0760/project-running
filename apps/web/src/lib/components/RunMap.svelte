@@ -3,11 +3,57 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { getUnit } from '$lib/units.svelte';
 	import type { TrackPoint } from '$lib/types';
 
 	let { track = [], animatable = false }: { track: TrackPoint[]; animatable?: boolean } = $props();
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+	const METRES_PER_MILE = 1609.344;
+
+	function haversine(a: [number, number], b: [number, number]): number {
+		const R = 6371000;
+		const toRad = (d: number) => (d * Math.PI) / 180;
+		const dLat = toRad(b[1] - a[1]);
+		const dLng = toRad(b[0] - a[0]);
+		const sinLat = Math.sin(dLat / 2);
+		const sinLng = Math.sin(dLng / 2);
+		const h = sinLat * sinLat + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * sinLng * sinLng;
+		return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+	}
+
+	/// Walk the polyline and emit a GeoJSON FeatureCollection of point
+	/// markers — one at every kilometre (or mile, depending on the user
+	/// preference). Each feature's `label` property carries the digit
+	/// rendered in the marker pin (1, 2, 3, …). Markers near the start
+	/// and end are skipped since the green / red caps cover those.
+	function computeDistanceMarkers(coords: [number, number][]): GeoJSON.FeatureCollection<GeoJSON.Point, { label: string }> {
+		const features: GeoJSON.Feature<GeoJSON.Point, { label: string }>[] = [];
+		if (coords.length < 2) return { type: 'FeatureCollection', features };
+		const unit = getUnit();
+		const stepM = unit === 'mi' ? METRES_PER_MILE : 1000;
+
+		let cumulative = 0;
+		let nextMarker = stepM;
+		for (let i = 1; i < coords.length; i++) {
+			const segmentM = haversine(coords[i - 1], coords[i]);
+			while (cumulative + segmentM >= nextMarker && segmentM > 0) {
+				const t = (nextMarker - cumulative) / segmentM;
+				const lng = coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t;
+				const lat = coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t;
+				const idx = Math.round(nextMarker / stepM);
+				features.push({
+					type: 'Feature',
+					geometry: { type: 'Point', coordinates: [lng, lat] },
+					properties: { label: String(idx) },
+				});
+				nextMarker += stepM;
+			}
+			cumulative += segmentM;
+		}
+		return { type: 'FeatureCollection', features };
+	}
 
 	let mapContainer: HTMLDivElement;
 	let map: maplibregl.Map;
@@ -118,20 +164,66 @@
 				layout: { 'line-join': 'round', 'line-cap': 'round' }
 			});
 
+			// Direction arrows along the line. Larger + more frequent than
+			// the previous spacing so overlapping out-and-backs are easy
+			// to disambiguate; the white halo (`text-halo-*`) keeps them
+			// readable when the polyline doubles back on itself.
 			map.addLayer({
 				id: 'trace-arrows',
 				type: 'symbol',
 				source: 'trace',
 				layout: {
 					'symbol-placement': 'line',
-					'symbol-spacing': 100,
+					'symbol-spacing': 60,
 					'text-field': '▶',
-					'text-size': 10,
+					'text-size': 14,
 					'text-rotation-alignment': 'map',
-					'text-keep-upright': false
+					'text-keep-upright': false,
+					'text-allow-overlap': true,
 				},
-				paint: { 'text-color': '#1d4ed8' }
+				paint: {
+					'text-color': prefersDark ? '#FFFFFF' : '#1d4ed8',
+					'text-halo-color': prefersDark ? '#1d4ed8' : '#FFFFFF',
+					'text-halo-width': 1.5,
+				},
 			});
+
+			// Distance markers at every 1 km / 1 mi (matches user pref).
+			// Drops a numbered pin where the cumulative haversine distance
+			// crosses each unit boundary; lets the user eyeball pace and
+			// orient when the route is long enough to cover ground.
+			const markers = computeDistanceMarkers(coords);
+			if (markers.features.length > 0) {
+				map.addSource('distance-markers', {
+					type: 'geojson',
+					data: markers,
+				});
+				map.addLayer({
+					id: 'distance-marker-bg',
+					type: 'circle',
+					source: 'distance-markers',
+					paint: {
+						'circle-radius': 11,
+						'circle-color': prefersDark ? '#1E293B' : '#FFFFFF',
+						'circle-stroke-color': prefersDark ? '#818CF8' : '#4F46E5',
+						'circle-stroke-width': 2,
+					},
+				});
+				map.addLayer({
+					id: 'distance-marker-text',
+					type: 'symbol',
+					source: 'distance-markers',
+					layout: {
+						'text-field': ['get', 'label'],
+						'text-size': 11,
+						'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+						'text-allow-overlap': true,
+					},
+					paint: {
+						'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
+					},
+				});
+			}
 
 			// Animated trace layer (hidden until animation starts)
 			if (animatable) {

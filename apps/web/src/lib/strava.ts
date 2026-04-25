@@ -8,8 +8,14 @@
 /// days of activities in the same call. A subsequent "Sync now" click
 /// posts `{ action: 'sync' }` to the same function.
 
-import { PUBLIC_STRAVA_CLIENT_ID } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { supabase } from './supabase';
+
+// Read via `$env/dynamic/public` rather than `static/public` so a build
+// without `PUBLIC_STRAVA_CLIENT_ID` set falls back gracefully to "not
+// configured" instead of crashing the page with a 500. The static
+// import would have failed the entire SvelteKit build.
+const PUBLIC_STRAVA_CLIENT_ID = env.PUBLIC_STRAVA_CLIENT_ID ?? '';
 
 export interface StravaSyncResult {
 	imported: number;

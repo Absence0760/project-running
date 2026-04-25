@@ -1,7 +1,12 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { createManualRun } from '$lib/data';
+	import { createManualRun, fetchRoutes } from '$lib/data';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { getUnit } from '$lib/units.svelte';
+	import type { Route } from '$lib/types';
+
+	const METRES_PER_MILE = 1609.344;
 
 	// Default to "now" in the user's local timezone so the date-time
 	// input shows something useful. The input's value is a local
@@ -13,13 +18,34 @@
 		return new Date(d.getTime() - off).toISOString().slice(0, 16);
 	}
 
+	let unit = $state<'km' | 'mi'>('km');
 	let startedAt = $state(nowLocalIso());
 	let durationMin = $state(30);
 	let durationSec = $state(0);
-	let distanceKm = $state(5);
+	// Distance is held in the user's preferred unit (km or mi) so the
+	// number in the input matches the label; converted to metres on
+	// submit.
+	let distance = $state(5);
 	let activityType = $state<'run' | 'walk' | 'hike' | 'cycle'>('run');
 	let notes = $state('');
+	let routeId = $state(''); // '' === no route — opt-in only.
+	let routes = $state<Route[]>([]);
 	let submitting = $state(false);
+
+	let distanceLabel = $derived(`Distance (${unit})`);
+
+	onMount(async () => {
+		// Sync the displayed unit with the user's preference. Done in
+		// onMount so SSR / prerender doesn't read browser-only state.
+		unit = getUnit();
+		// Pull the user's saved routes for the optional picker. Empty on
+		// failure — the picker just shows "No route" which is the default.
+		try {
+			routes = await fetchRoutes();
+		} catch (_) {
+			routes = [];
+		}
+	});
 
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
@@ -27,7 +53,8 @@
 		const totalSec =
 			Math.max(0, Math.floor(durationMin)) * 60 +
 			Math.max(0, Math.floor(durationSec));
-		const distanceM = Math.max(0, distanceKm * 1000);
+		const perUnitMetres = unit === 'mi' ? METRES_PER_MILE : 1000;
+		const distanceM = Math.max(0, distance * perUnitMetres);
 		if (totalSec <= 0 || distanceM <= 0) {
 			showToast('Distance and duration are both required.', 'error');
 			return;
@@ -41,6 +68,7 @@
 				distanceM,
 				activityType,
 				notes: notes.trim() || null,
+				routeId: routeId || null,
 			});
 			showToast('Run added.', 'success');
 			goto(`/runs/${id}`);
@@ -90,12 +118,12 @@
 
 		<div class="row">
 			<label class="field">
-				<span class="field-label">Distance (km)</span>
+				<span class="field-label">{distanceLabel}</span>
 				<input
 					type="number"
 					min="0"
 					step="0.01"
-					bind:value={distanceKm}
+					bind:value={distance}
 					required
 					class="input"
 				/>
@@ -123,6 +151,20 @@
 				/>
 			</label>
 		</div>
+
+		<label class="field">
+			<span class="field-label">Route (optional)</span>
+			<select bind:value={routeId} class="input">
+				<option value="">— No route —</option>
+				{#each routes as r (r.id)}
+					<option value={r.id}>{r.name}</option>
+				{/each}
+			</select>
+			<span class="field-hint">
+				Link this run to one of your saved routes — or leave blank to log
+				it without a route.
+			</span>
+		</label>
 
 		<label class="field">
 			<span class="field-label">Notes (optional)</span>
@@ -181,6 +223,10 @@
 		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+	}
+	.field-hint {
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
 	}
 	.input {
 		padding: 0.55rem 0.7rem;

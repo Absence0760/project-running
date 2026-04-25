@@ -22,7 +22,7 @@
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
-		{ href: '/explore', label: 'Explore', icon: 'explore', accent: '#7FB3C2' },
+		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];
 
 	const publicPaths = ['/', '/login', '/auth/callback'];
@@ -121,10 +121,6 @@
 				</div>
 			</div>
 			<div class="popover-divider"></div>
-			<a href="/settings/account" class="popover-item" onclick={() => (showLogoutModal = false)}>
-				<span class="material-symbols">settings</span>
-				Settings
-			</a>
 			<button class="popover-item popover-danger" onclick={handleLogout}>
 				<span class="material-symbols">logout</span>
 				Sign out

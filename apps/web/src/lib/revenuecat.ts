@@ -17,8 +17,14 @@
 ///      `revenuecat-webhook` Edge Function flips `subscription_tier`
 ///      server-side in the same round trip.
 
-import { PUBLIC_REVENUECAT_WEB_API_KEY } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { Purchases, type CustomerInfo, type Package } from '@revenuecat/purchases-js';
+
+// Read via `$env/dynamic/public` rather than `static/public` so an
+// unconfigured build (no `PUBLIC_REVENUECAT_WEB_API_KEY`) returns an
+// empty string and the wrapper reports `configured = false`, instead
+// of failing the SvelteKit build with a 500.
+const PUBLIC_REVENUECAT_WEB_API_KEY = env.PUBLIC_REVENUECAT_WEB_API_KEY ?? '';
 
 let instance: Purchases | null = null;
 let configuredUserId: string | null = null;

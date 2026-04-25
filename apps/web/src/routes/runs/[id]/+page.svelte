@@ -345,6 +345,9 @@
 	</main>
 
 	<aside class="stats-panel">
+		<a href="/runs" class="back-link top-back">
+			<span class="material-symbols">arrow_back</span> All runs
+		</a>
 		<header class="detail-header">
 			<div>
 				<h1>{runTitle || formatDate(run.started_at)}</h1>
@@ -354,17 +357,14 @@
 				{#if runNotes}
 					<p class="run-notes">{runNotes}</p>
 				{/if}
-				<div class="detail-meta">
-					<a href="/runs" class="back-link">
-						<span class="material-symbols">arrow_back</span> All runs
-					</a>
-					{#if activity}
+				{#if activity}
+					<div class="detail-meta">
 						<span class="activity-badge">
 							<span class="material-symbols">{activity.icon}</span>
 							{activity.label}
 						</span>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 			<div class="header-actions">
 				<span class="source-badge" style="background: {sourceColor(run.source)}"
@@ -648,10 +648,20 @@
 		gap: var(--space-xs);
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
+		text-decoration: none;
 	}
 
 	.back-link:hover {
 		color: var(--color-primary);
+	}
+
+	.top-back {
+		font-size: 0.85rem;
+		font-weight: 500;
+		margin-bottom: var(--space-sm);
+	}
+	.top-back .material-symbols {
+		font-size: 1.1rem;
 	}
 
 	.activity-badge {
