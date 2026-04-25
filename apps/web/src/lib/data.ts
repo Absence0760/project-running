@@ -135,7 +135,9 @@ export async function deleteRun(id: string): Promise<void> {
 	if (run?.track_url) {
 		try {
 			await supabase.storage.from('runs').remove([run.track_url]);
-		} catch (_) {}
+		} catch (e) {
+			console.warn('deleteRun: track storage removal failed (orphaned file)', run.track_url, e);
+		}
 	}
 	const { error } = await supabase.from('runs').delete().eq('id', id);
 	if (error) throw error;
