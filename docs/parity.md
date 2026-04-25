@@ -282,7 +282,7 @@ Written to `user_settings.prefs` and propagate across devices.
 | Key | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | [`preferred_unit`](settings.md#keys) (km / mi) | ✓ | ✓ | ✓ | N/A | N/A | Android dual-writes the legacy `profiles.preferred_unit` column through `SettingsSyncService`. Watches inherit from the paired phone. |
-| [`default_activity_type`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped on all three clients. Neither mobile run screen's activity picker consumes the bag value yet. |
+| [`default_activity_type`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | Editor shipped on all three clients. Android: `Preferences.defaultActivityType` mirrors the universal bag (overlay on sign-in via `SettingsSyncService._applyUniversal`, dual-write on settings change). `run_screen` reads it in `initState` so the activity picker opens on the user's preferred activity. iOS still picks via the run screen's local toggle, not the bag. |
 | [`hr_zones`](settings.md#keys) (5-band editor) | ✓ | ✓ | ✓ | ✗ | ✗ | |
 | [`resting_hr_bpm`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |
 | [`max_hr_bpm`](settings.md#keys) | ✓ | ✓ | ✓ | ✗ | ✗ | |

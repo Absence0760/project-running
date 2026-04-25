@@ -496,6 +496,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.defaultActivityType, picked);
+      await widget.preferences.setDefaultActivityType(picked);
     }
   }
 

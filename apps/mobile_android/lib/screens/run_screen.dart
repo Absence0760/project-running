@@ -164,7 +164,9 @@ class _RunScreenState extends State<RunScreen> {
   // Laps
   int _lapCount = 0;
 
-  // Activity type
+  // Activity type — defaults to ActivityType.run so it's safe to read
+  // before initState; initState overrides from the user's
+  // `default_activity_type` setting (mirrored into Preferences).
   ActivityType _activityType = ActivityType.run;
 
   // Pace alerts
@@ -220,6 +222,8 @@ class _RunScreenState extends State<RunScreen> {
     widget.runStore.addListener(_onPrefsChange);
     widget.social.addListener(_onSocialChange);
     widget.training.addListener(_onTrainingChange);
+    _activityType =
+        ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
     _refreshUpcomingEvent();
     _refreshPlanOverview();

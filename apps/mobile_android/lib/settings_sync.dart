@@ -114,6 +114,10 @@ class SettingsSyncService extends ChangeNotifier {
         preferences.setUseMiles(useMiles);
       }
     }
+    final dat = prefs[SettingsKeys.defaultActivityType];
+    if (dat is String && dat.isNotEmpty && dat != preferences.defaultActivityType) {
+      preferences.setDefaultActivityType(dat);
+    }
   }
 
   void _applyDevice(Map<String, dynamic> prefs) {
