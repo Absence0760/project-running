@@ -103,6 +103,13 @@ test('resolveTrainingPaces: fall-back produces a valid pace set', () => {
 	assert.ok(p.easy > 0 && p.interval > 0);
 });
 
+test('resolveTrainingPaces: marathon-only goal time yields valid pace set', () => {
+	const p = resolveTrainingPaces({ goalDistanceM: 42195, goalTimeSec: 4 * 3600 });
+	// 4h marathon = 341 s/km goal pace. Easy should be ~416, tempo ~330.
+	assert.ok(p.easy > 350 && p.easy < 500, `easy out of range: ${p.easy}`);
+	assert.ok(p.tempo < p.marathon, 'tempo must be faster than marathon');
+});
+
 // ─────────────────────── Phases ───────────────────────
 
 test('phaseFor: a 16-week plan is ~30/40/20/10 base/build/peak/taper', () => {
