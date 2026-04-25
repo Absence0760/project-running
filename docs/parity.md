@@ -244,7 +244,7 @@ See [features § Deep run analysis (web)](features.md#deep-run-analysis-web) and
 | Public run share page (`/share/run/{id}`) | ✗ | ✗ | ✓ | N/A | N/A | Link generation is web-only; the page renders anywhere. |
 | Public route share page (`/share/route/{id}`) | ✗ | ✗ | ✓ | N/A | N/A | |
 | Live spectator page (`/live/{run_id}`) | ✗ | ✗ | ✓ | N/A | N/A | Shipped on web: `live_run_pings` table (migration `20260509_001`) streams GPS samples via Supabase Realtime; `/live/{run_id}` subscribes, hydrates any backlog on join, and renders the trace + stats in real time. Falls back to a "demo" animation after 5 s of silence so the page is still useful for previews. Mobile recorder writes are a follow-up — the contract is: insert one `{run_id, user_id, lat, lng, elapsed_s, distance_m, bpm?, ele?}` row per sample, delete on finish. |
-| Runner shares a live-tracking link before start | ✗ | ✗ | ✗ | ✗ | ✗ | Not started. *Physical exception for the trigger* (it's during recording, which is mobile-led) but the shareable landing page lives on web. |
+| Runner shares a live-tracking link before start | ✗ | ✗ | N/A | ✗ | ✗ | **Web is the landing page, not the trigger.** The "share my live link before I start" affordance lives on the recorder you're about to start (phone or watch) — web has no record button. The spectator page at `/live/{run_id}` is shipped (real-time MapLibre map, ping subscriptions); whichever client starts the run is responsible for surfacing the share-link. Trigger work is tracked in the per-platform rows above. |
 
 ## Paywall and funding
 
