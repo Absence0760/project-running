@@ -175,7 +175,7 @@ class _ImportScreenState extends State<ImportScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFC4C02).withOpacity(0.15),
+                          color: const Color(0xFFFC4C02).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.directions_run,
@@ -240,7 +240,7 @@ class _ImportScreenState extends State<ImportScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.15),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.favorite,

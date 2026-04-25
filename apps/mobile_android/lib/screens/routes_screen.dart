@@ -63,6 +63,11 @@ class _RoutesScreenState extends State<RoutesScreen> {
       }
     } catch (e) {
       debugPrint('Fetch routes failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not sync routes — working offline')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _syncing = false);
     }

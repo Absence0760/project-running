@@ -1171,6 +1171,7 @@ class _RunScreenState extends State<RunScreen> {
 
     // If this run was hosting a live race, submit the finisher time so
     // the leaderboard updates without the user having to remember to.
+    if (!mounted) return;
     await widget.raceController?.submitResult(
       runId: run.id,
       durationS: run.duration.inSeconds,

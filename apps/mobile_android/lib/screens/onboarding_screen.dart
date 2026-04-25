@@ -57,6 +57,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await Permission.location.request();
       await Permission.locationAlways.request();
       await widget.preferences.setOnboarded(true);
+      if (!mounted) return;
       widget.onDone();
     }
   }

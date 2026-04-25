@@ -164,7 +164,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
         _hasMore = results.length >= _pageSize;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e, s) {
+      debugPrint('ExploreRoutesScreen._loadMore failed: $e\n$s');
       if (mounted) {
         setState(() {
           _loading = false;
