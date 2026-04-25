@@ -6,14 +6,13 @@
 	import CoachChat from '$lib/components/CoachChat.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import {
-		fmtPace,
-		fmtKm,
 		fmtHms,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
 		parseISO,
 		todayISO
 	} from '$lib/training';
+	import { fmtKm, fmtPace } from '$lib/units.svelte';
 	import type { TrainingPlan, PlanWeek, PlanWorkout } from '$lib/types';
 
 	let id = $derived($page.params.id as string);

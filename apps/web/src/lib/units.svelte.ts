@@ -71,3 +71,23 @@ export function distanceInPreferred(metres: number): { value: number; unit: 'km'
 	if (unit.value === 'mi') return { value: metres / METRES_PER_MILE, unit: 'mi' };
 	return { value: metres / 1000, unit: 'km' };
 }
+
+/// Compact distance — `XX.X km` / `XX.X mi`. Used by training plan
+/// surfaces (week grid, calendar, today card) where we want a fixed
+/// digit count rather than the more flexible `formatDistance`.
+export function fmtKm(metres: number | null | undefined, digits = 1): string {
+	if (metres == null) return '—';
+	if (unit.value === 'mi') return `${(metres / METRES_PER_MILE).toFixed(digits)} mi`;
+	return `${(metres / 1000).toFixed(digits)} km`;
+}
+
+/// Plan-surface pace formatter. Input is always seconds-per-km (the
+/// canonical unit stored on `plan_workouts`); we convert to /mi when
+/// the user prefers miles.
+export function fmtPace(secPerKm: number | null | undefined): string {
+	if (!secPerKm) return '—';
+	const sec = unit.value === 'mi' ? secPerKm * (METRES_PER_MILE / 1000) : secPerKm;
+	const m = Math.floor(sec / 60);
+	const s = Math.round(sec % 60);
+	return `${m}:${String(s).padStart(2, '0')}/${unit.value}`;
+}

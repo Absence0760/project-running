@@ -401,6 +401,20 @@ The spectator page at `/live/{run_id}` streams a runner's in-progress GPS trace 
 
 ---
 
+## 26. Web formatters split: pure-TS modules can't import `*.svelte.ts`
+
+**Decided:** April 2026 · captured after the `fmtKm` / `fmtPace` move.
+
+`apps/web/src/lib/training.ts` is unit-tested under `tsx --test` (see [testing.md](testing.md)). The runtime is plain Node — Svelte's runes (`$state`, `$derived`, `$effect`) are compile-time syntax provided by the Vite plugin, so importing any `*.svelte.ts` module from a tested file blows up at module-load with `ReferenceError: $state is not defined`. We hit this when the unit-aware `fmtKm` / `fmtPace` formatters were first added to `training.ts` and re-imported `getUnit()` from `units.svelte.ts`.
+
+**Decision:** unit-aware formatters live in `units.svelte.ts` (alongside the reactive `unit` signal); pure-TS modules don't import them. Svelte components that need them write a second import line. The two clusters never cross.
+
+**Trade-off:** an extra import line in every Svelte component that wants `fmtKm` instead of one tidy "everything from `$lib/training`". Worth it — keeps the pure logic file testable without pulling in vitest + the Svelte plugin just to test two formatters.
+
+**Don't re-litigate unless:** we adopt vitest with `@sveltejs/vite-plugin-svelte` (which natively transforms runes for tests), at which point the constraint disappears and a single export point is fine again.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

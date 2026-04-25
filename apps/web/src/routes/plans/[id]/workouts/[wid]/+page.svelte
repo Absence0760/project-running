@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { fetchWorkout, markWorkoutCompleted } from '$lib/data';
-	import { fmtPace, fmtKm, fmtHms, WORKOUT_KIND_LABEL } from '$lib/training';
+	import { fmtHms, WORKOUT_KIND_LABEL } from '$lib/training';
+	import { fmtKm, fmtPace } from '$lib/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import type { WorkoutStructure } from '$lib/training';

@@ -21,9 +21,9 @@
 		type FitnessSnapshotRow,
 	} from '$lib/data';
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
-	import { fmtPace, fmtKm, WORKOUT_KIND_LABEL } from '$lib/training';
+	import { WORKOUT_KIND_LABEL } from '$lib/training';
 	import { loadSettings, effective } from '$lib/settings';
-	import { setUnit } from '$lib/units.svelte';
+	import { fmtKm, fmtPace, setUnit } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		loadGoals,

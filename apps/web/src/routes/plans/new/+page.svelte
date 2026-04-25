@@ -5,12 +5,11 @@
 		GOAL_DISTANCES_M,
 		defaultPlanWeeks,
 		generatePlan,
-		fmtPace,
-		fmtKm,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL
 	} from '$lib/training';
 	import type { GoalEvent } from '$lib/training';
+	import { fmtKm, fmtPace } from '$lib/units.svelte';
 
 	let name = $state('');
 	let goalEvent = $state<GoalEvent>('distance_half');

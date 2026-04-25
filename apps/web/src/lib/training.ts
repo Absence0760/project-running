@@ -569,25 +569,11 @@ export function addDays(d: Date, n: number): Date {
 }
 
 // ─────────────────────── Formatters ───────────────────────
-
-import { getUnit } from './units.svelte';
-
-const METRES_PER_MILE = 1609.344;
-
-export function fmtPace(secPerKm: number | null | undefined): string {
-	if (!secPerKm) return '—';
-	const u = getUnit();
-	const sec = u === 'mi' ? secPerKm * (METRES_PER_MILE / 1000) : secPerKm;
-	const m = Math.floor(sec / 60);
-	const s = Math.round(sec % 60);
-	return `${m}:${String(s).padStart(2, '0')}/${u}`;
-}
-
-export function fmtKm(metres: number | null | undefined, digits = 1): string {
-	if (metres == null) return '—';
-	if (getUnit() === 'mi') return `${(metres / METRES_PER_MILE).toFixed(digits)} mi`;
-	return `${(metres / 1000).toFixed(digits)} km`;
-}
+//
+// `fmtKm` / `fmtPace` (unit-aware, used by every plan surface) live in
+// `./units.svelte` so that this file stays pure TS — `training.test.ts`
+// runs under `tsx --test` which can't resolve Svelte runes. Import
+// them from `$lib/units.svelte` at the call site.
 
 export function fmtHms(sec: number | null | undefined): string {
 	if (!sec) return '—';

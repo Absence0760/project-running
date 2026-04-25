@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
-	import { fmtPace } from '$lib/training';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { TrainingPlan } from '$lib/types';
 

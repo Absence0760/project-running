@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { updatePlanWorkout } from '$lib/data';
 	import {
-		fmtPace,
-		fmtKm,
 		WORKOUT_KIND_LABEL,
 		type WorkoutKind
 	} from '$lib/training';
+	import { fmtKm, fmtPace } from '$lib/units.svelte';
 	import type { PlanWorkout } from '$lib/types';
 
 	interface Props {
