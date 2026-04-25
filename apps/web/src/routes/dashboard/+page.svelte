@@ -186,7 +186,8 @@
 
 	const now = new Date();
 	const weekStart = new Date(now);
-	weekStart.setDate(now.getDate() - now.getDay());
+	const dowMon = (now.getDay() + 6) % 7; // 0 = Mon, matching runs/+page.svelte and Android
+	weekStart.setDate(now.getDate() - dowMon);
 	weekStart.setHours(0, 0, 0, 0);
 
 	let filteredRuns = $derived(
