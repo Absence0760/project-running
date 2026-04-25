@@ -75,19 +75,24 @@ export function newGoalId(): string {
 		: `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function periodStart(period: GoalPeriod, now: Date): Date {
+export function periodStart(
+	period: GoalPeriod,
+	now: Date,
+	weekStartDay: 'monday' | 'sunday' = 'monday',
+): Date {
 	const d = new Date(now);
 	d.setHours(0, 0, 0, 0);
 	if (period === 'week') {
-		d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+		const offset = weekStartDay === 'sunday' ? d.getDay() : (d.getDay() + 6) % 7;
+		d.setDate(d.getDate() - offset);
 	} else {
 		d.setDate(1);
 	}
 	return d;
 }
 
-export function periodEnd(period: GoalPeriod, now: Date): Date {
-	const start = periodStart(period, now);
+export function periodEnd(period: GoalPeriod, now: Date, weekStartDay: 'monday' | 'sunday' = 'monday'): Date {
+	const start = periodStart(period, now, weekStartDay);
 	const end = new Date(start);
 	if (period === 'week') {
 		end.setDate(end.getDate() + 7);
@@ -124,9 +129,10 @@ export function evaluateGoal(
 	goal: RunGoal,
 	runs: Run[],
 	now: Date,
+	weekStartDay: 'monday' | 'sunday' = 'monday',
 ): GoalProgress {
-	const start = periodStart(goal.period, now).getTime();
-	const end = periodEnd(goal.period, now).getTime();
+	const start = periodStart(goal.period, now, weekStartDay).getTime();
+	const end = periodEnd(goal.period, now, weekStartDay).getTime();
 	const inPeriod = runs.filter((r) => {
 		const t = new Date(r.started_at).getTime();
 		return t >= start && t < end;

@@ -51,6 +51,7 @@
 	/// in which case the progress card hides itself.
 	let weeklyGoalMetres = $state<number | null>(null);
 	let preferredUnit = $state<'km' | 'mi'>('km');
+	let weekStartDay = $state<'monday' | 'sunday'>('monday');
 	let upcomingEvent = $state<Awaited<ReturnType<typeof fetchNextRsvpedEvent>>>(null);
 	let fitnessHistory = $state<FitnessSnapshotRow[]>([]);
 	let liveSnap = $derived(computeSnapshot(runs));
@@ -174,6 +175,8 @@
 					preferredUnit = unit;
 					setUnit(unit);
 				}
+				const wsd = effective<string>(settings, 'week_start_day');
+				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
 			}
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
@@ -414,7 +417,7 @@
 			{:else}
 				<div class="goal-grid">
 					{#each goals as g (g.id)}
-						{@const p = evaluateGoal(g, runs, new Date())}
+						{@const p = evaluateGoal(g, runs, new Date(), weekStartDay)}
 						<button class="goal-card" type="button" onclick={() => openEditGoal(g)}>
 							<header class="goal-card-top">
 								<span class="goal-period">{periodLabel(g.period)}</span>
