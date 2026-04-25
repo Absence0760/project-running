@@ -147,10 +147,15 @@
 		if (!auth.user) return;
 		saving = true;
 		saved = false;
-		await supabase.from('user_profiles').update({
+		const { error: profileError } = await supabase.from('user_profiles').update({
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
 		}).eq('id', auth.user.id);
+		if (profileError) {
+			showToast(`Save failed: ${profileError.message}`, 'error');
+			saving = false;
+			return;
+		}
 
 		// Persist DOB + HR into user_settings.prefs.
 		const prefs: Record<string, unknown> = {};
@@ -164,11 +169,16 @@
 				.eq('user_id', auth.user.id)
 				.maybeSingle();
 			const merged = { ...((data?.prefs as Record<string, unknown>) ?? {}), ...prefs };
-			await supabase.from('user_settings').upsert({
+			const { error: settingsError } = await supabase.from('user_settings').upsert({
 				user_id: auth.user.id,
 				prefs: merged,
 				updated_at: new Date().toISOString(),
 			});
+			if (settingsError) {
+				showToast(`Save failed: ${settingsError.message}`, 'error');
+				saving = false;
+				return;
+			}
 		}
 		saved = true;
 		saving = false;
