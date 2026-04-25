@@ -166,7 +166,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Background periodic sync (WorkManager etc.) | ✓ | ✗ | N/A | ✗ | ✗ | |
 | Conflict resolution (newer-wins) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Backup all runs as JSON | ✓ | ✗ | ✓ | N/A | N/A | Two surfaces on web. (1) **Full backup ZIP** on `/settings/account` (`createBackup()` in `lib/backup.ts`) — same `run-app-backup` v1 wire format as Android, contains `runs.json` + `routes.json` + `profile.json` + `manifest.json` + per-run gzipped tracks; round-trip restores via the same UI. (2) **Single-file `runs-{ts}.json` quick export** in the same Data Export card as the existing CSV — identical row shape to the `runs.json` inside the ZIP (so scripts consume them interchangeably), no tracks, `user_id` stripped. |
-| Download all data as CSV (GDPR) | ✗ | ✗ | ✓ | N/A | N/A | |
+| Download all data as CSV (GDPR) | ✓ | ✗ | ✓ | N/A | N/A | Android: "Export runs as CSV" tile in Settings → Account writes the same `date,distance_m,duration_s,pace_s_per_km,source` shape as the web's GDPR export and hands the file to the system share sheet. |
 
 ## Integrations
 

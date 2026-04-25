@@ -203,6 +203,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result != null) await prefs.setTargetPaceSecPerKm(result);
   }
 
+  Future<void> _exportRunsCsv() async {
+    final store = widget.runStore;
+    final messenger = ScaffoldMessenger.of(context);
+    final runs = store?.runs ?? const [];
+    if (runs.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No runs to export.')),
+      );
+      return;
+    }
+    try {
+      final buf = StringBuffer('date,distance_m,duration_s,pace_s_per_km,source\n');
+      for (final r in runs) {
+        final pace = r.distanceMetres > 0
+            ? (r.duration.inSeconds / (r.distanceMetres / 1000)).round()
+            : 0;
+        buf.writeln(
+          '${r.startedAt.toUtc().toIso8601String()},'
+          '${r.distanceMetres.round()},'
+          '${r.duration.inSeconds},'
+          '$pace,'
+          '${r.source.name}',
+        );
+      }
+      final tmp = await getTemporaryDirectory();
+      final ts = DateTime.now()
+          .toIso8601String()
+          .replaceAll(RegExp(r'[:.]'), '-');
+      final file = File('${tmp.path}/runs-$ts.csv');
+      await file.writeAsString(buf.toString());
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        text: 'Run app — runs export',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('CSV export failed: $e')),
+      );
+    }
+  }
+
   Future<void> _exportBackup() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
@@ -1181,6 +1222,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _exportBackup,
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined),
+              title: const Text('Export runs as CSV'),
+              subtitle: const Text(
+                'date, distance, duration, pace, source — one row per run. '
+                'Same shape as the web GDPR export.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _exportRunsCsv,
             ),
             ListTile(
               leading: const Icon(Icons.unarchive_outlined),
