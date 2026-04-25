@@ -138,8 +138,8 @@ class RaceController extends ChangeNotifier {
         if (next.isRunning) break;
       }
       _setActive(next);
-    } catch (_) {
-      // Silent — controller is advisory, shouldn't surface errors to the user.
+    } catch (e) {
+      debugPrint('[RaceController._refresh] $e');
     }
   }
 
