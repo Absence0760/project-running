@@ -76,6 +76,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `widgets/goal_editor_sheet.dart` — modal bottom sheet for creating/editing/deleting a `RunGoal` (type + period + target)
 - `widgets/upcoming_event_card.dart` — Run tab idle-state card shown when the user has a `going` RSVP within 48h
 - `widgets/todays_workout_card.dart` — Run tab idle-state priority card when an active plan has a workout scheduled today
+- `widgets/plan_calendar.dart` — Dart port of `apps/web/src/lib/components/PlanCalendar.svelte`. Month-by-month grid with prev/next chevrons, Monday-first DOW row, kind-coloured cells, completed-tick. Renders on `plan_detail_screen` between the today card and the week cards.
 - `social_service.dart` — `ChangeNotifier` wrapping all Supabase calls for clubs / events / posts
 - `training_service.dart` — `ChangeNotifier` wrapping Supabase calls for training plans + workouts
 - `ble_heart_rate.dart` — BLE chest-strap GATT client for live BPM stream (tested); wires into the run screen via `BleHeartRate.stream`
@@ -110,6 +111,7 @@ Test files in `test/`:
 - `pace_segments_test.dart` — 15 tests: pace-bucket clamping, activity-specific scaling, age-band partitioning, coalescing, vertex-sharing continuity, timestamp-less fallback — backs the NRC-style pace heatmap in `widgets/pace_segments.dart`
 - `hr_zones_test.dart` — 8 tests: time-weighted vs sample-count fallback, the 30 s pause cap, custom cutoffs, malformed-input rejection, `bpmStatsOf` aggregation
 - `fitness_test.dart` — 17 tests: VDOT range checks (5k, marathon), `currentVdot` 90-day window + qualifying-source filter, `runTss` Coggan reference, EWMA training-load smoke, `recoveryAdvice` thresholds, `computeSnapshot` end-to-end
+- `plan_calendar_test.dart` — 3 widget tests: month rendering with kind labels, chevron navigation, completed-tick presence
 - `metadata_registry_test.dart` — 2 tests: (1) every `runs.metadata` key referenced in Dart source is registered in [docs/metadata.md](../../docs/metadata.md) — catches cross-client drift like `metadata.activityType` vs `metadata.activity_type` at CI time; (2) a soft "dead-key" info log surfacing registered keys that no Dart reader touches (may be web/watch/EF-only). Fails on unknown-key writes; purely informational on the reverse direction.
 - `architecture_guards_test.dart` — 18 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
 - plus `run_recorder`'s own tests in `packages/run_recorder/test/` (17 behavioural + 7 guards)

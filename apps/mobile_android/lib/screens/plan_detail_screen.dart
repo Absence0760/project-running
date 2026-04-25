@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../widgets/error_state.dart';
+import '../widgets/plan_calendar.dart';
 import 'workout_detail_screen.dart';
 
 class PlanDetailScreen extends StatefulWidget {
@@ -121,6 +122,24 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               const SizedBox(height: 12),
               _todayCard(theme, p, todayWorkout),
             ],
+            const SizedBox(height: 16),
+            PlanCalendar(
+              startDate: p.startDate,
+              endDate: p.endDate,
+              workouts: _byWeek.values.expand((x) => x).toList(),
+              onSelect: (wo) async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => WorkoutDetailScreen(
+                      training: widget.training,
+                      planId: p.id,
+                      workoutId: wo.id,
+                    ),
+                  ),
+                );
+                _load();
+              },
+            ),
             const SizedBox(height: 16),
             for (final w in _weeks)
               _weekCard(theme, p, w, currentWeek),

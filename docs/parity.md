@@ -209,7 +209,7 @@ See [docs/training.md](training.md) and [docs/workout_execution.md](workout_exec
 | Plans list | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Create plan (goal race, date, target time) | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Plan detail with weekly grid | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Plan detail with month-by-month calendar | ✗ | ✗ | ✓ | ✗ | ✗ | Web `/plans/[id]` renders `PlanCalendar.svelte` above the weekly grid — projects every workout onto its real date, shades completed days, color-codes by kind. 🔸 gap vs web-canonical. |
+| Plan detail with month-by-month calendar | ✓ | ✗ | ✓ | ✗ | ✗ | Web `/plans/[id]` renders `PlanCalendar.svelte` above the weekly grid — projects every workout onto its real date, shades completed days, color-codes by kind. Android: `lib/widgets/plan_calendar.dart` is a Dart port (Monday-first grid, prev/next month chevrons, kind-coloured left border, target-distance row, completed tick), wired into `plan_detail_screen.dart` between the today card and the weekly cards. |
 | Edit per-day workouts | Partial | ✗ | ✓ | ✗ | ✗ | Android plan editor is still basic. |
 | Workout detail screen | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | "Today's workout" card on home / dashboard | ✓ | ✗ | ✓ | ✗ | ✗ | |
