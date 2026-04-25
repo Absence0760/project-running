@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fetchPlan } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
@@ -30,7 +31,18 @@
 		loading = false;
 	}
 
-	onMount(load);
+	onMount(async () => {
+		await load();
+		// Deep-link from the dashboard's "Today's workout" card lands on
+		// /plans/[id]?edit=<wid> — open the editor for that workout
+		// directly, then strip the query so a refresh doesn't relaunch.
+		const editId = $page.url.searchParams.get('edit');
+		if (editId) {
+			const target = workouts.find((w) => w.id === editId);
+			if (target) editing = target;
+			goto(`/plans/${id}`, { replaceState: true, noScroll: true });
+		}
+	});
 
 	let workoutsByWeek = $derived.by(() => {
 		const m = new Map<string, PlanWorkout[]>();
@@ -143,7 +155,11 @@
 		{#if todayWorkout}
 			<section class="today">
 				<span class="label">TODAY</span>
-				<a class="today-link" href="/plans/{plan.id}/workouts/{todayWorkout.id}">
+				<button
+					class="today-link"
+					type="button"
+					onclick={() => (editing = todayWorkout)}
+				>
 					<h2>
 						{WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind}
 					</h2>
@@ -164,7 +180,7 @@
 					{#if todayWorkout.notes}
 						<p class="today-notes">{todayWorkout.notes}</p>
 					{/if}
-				</a>
+				</button>
 			</section>
 		{/if}
 
@@ -175,6 +191,7 @@
 				endDate={plan.end_date}
 				{workouts}
 				planId={plan.id}
+				onSelect={(wo) => (editing = wo)}
 			/>
 		</section>
 
@@ -204,7 +221,12 @@
 								class:rest={wo.kind === 'rest'}
 								style="--kind-color: {kindColor[wo.kind] ?? 'var(--color-text-secondary)'}"
 							>
-								<a class="day-link" href="/plans/{plan.id}/workouts/{wo.id}">
+								<button
+									class="day-link"
+									type="button"
+									aria-label="View / edit workout"
+									onclick={() => (editing = wo)}
+								>
 									<span class="dow">{dayOfWeek(wo.scheduled_date)}</span>
 									<span class="kind">
 										{WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ??
@@ -216,13 +238,6 @@
 									{#if wo.completed_run_id}
 										<span class="material-symbols check">check_circle</span>
 									{/if}
-								</a>
-								<button
-									class="edit"
-									aria-label="Edit workout"
-									onclick={() => (editing = wo)}
-								>
-									<span class="material-symbols">edit</span>
 								</button>
 							</div>
 						{/each}
@@ -335,6 +350,13 @@
 	.today-link {
 		color: inherit;
 		display: block;
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
 	}
 	.today-link h2 {
 		font-size: 1.25rem;
@@ -434,6 +456,13 @@
 		flex-direction: column;
 		gap: 0.15rem;
 		color: inherit;
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
 	}
 	.edit {
 		position: absolute;

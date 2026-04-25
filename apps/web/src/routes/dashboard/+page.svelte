@@ -224,7 +224,7 @@
 			<a
 				class="today-card"
 				class:done={!!t.completed_run_id}
-				href="/plans/{planOverview.plan.id}/workouts/{t.id}"
+				href="/plans/{planOverview.plan.id}?edit={t.id}"
 			>
 				<div class="today-left">
 					<span class="today-label">TODAY'S WORKOUT</span>

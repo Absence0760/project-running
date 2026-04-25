@@ -8,8 +8,13 @@
 		endDate: string;
 		workouts: PlanWorkout[];
 		planId: string;
+		/// Called when the user clicks a workout cell. Hosts pass an
+		/// inline-editor opener (sets `editing = wo` on the plan page).
+		/// When omitted, falls back to navigating to the workout
+		/// detail route — keeps the component standalone-friendly.
+		onSelect?: (workout: PlanWorkout) => void;
 	};
-	let { startDate, endDate, workouts, planId }: Props = $props();
+	let { startDate, endDate, workouts, planId, onSelect }: Props = $props();
 
 	const KIND_COLOR: Record<string, string> = {
 		easy: 'var(--color-text-secondary)',
@@ -151,8 +156,11 @@
 		{#each grid as c (c.iso)}
 			{@const wo = workoutByDate.get(c.iso)}
 			{#if wo && c.inPlan}
-				<a
-					href="/plans/{planId}/workouts/{wo.id}"
+				<svelte:element
+					this={onSelect ? 'button' : 'a'}
+					type={onSelect ? 'button' : undefined}
+					href={onSelect ? undefined : `/plans/${planId}/workouts/${wo.id}`}
+					onclick={onSelect ? () => onSelect(wo) : undefined}
 					class="cell has-workout"
 					class:out-month={!c.inMonth}
 					class:today={c.iso === today}
@@ -167,9 +175,9 @@
 						<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>
 					{/if}
 					{#if wo.completed_run_id}
-						<span class="material-symbols check">check_circle</span>
+						<span class="material-symbols check">check</span>
 					{/if}
-				</a>
+				</svelte:element>
 			{:else}
 				<div
 					class="cell"
