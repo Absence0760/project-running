@@ -45,7 +45,7 @@ See [features § Cloud sync and auth](features.md#cloud-sync-and-auth).
 | Apple OAuth | ✓ | Partial | ✓ | ✗ | ✗ | iOS: behind `_kAppleSignInEnabled = false` pending Services ID setup. |
 | Auth callback / deep-link handler | ✓ | ✓ | ✓ | N/A | N/A | Watches never handle the OAuth redirect directly. |
 | Onboarding flow (first launch permissions) | ✓ | Partial | N/A | N/A | N/A | Web has no location permission pre-gate; the browser prompts per-feature. |
-| Offline-only mode (no auth required) | ✓ | ✗ | ✗ | N/A | N/A | Web requires auth because all views read from Supabase. Mobile keeps runs local first and syncs opportunistically. |
+| Offline-only mode (no auth required) | ✓ | ✗ | N/A | N/A | N/A | Architectural exception for web: the web app is cloud-first by design — every view reads from Supabase, sign-in is the entry point, there is no local-first run database in the browser. Mobile keeps runs local first and syncs opportunistically; the watches inherit auth from their phone. |
 
 ## Route management
 
@@ -337,14 +337,14 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | MapLibre (MapTiler) base tiles | ✓ | ✓ | ✓ | ✗ | ✗ | Watches render pre-downloaded tiles only. |
-| Offline tile cache (HTTP replay) | ✓ | ✗ | ✗ | ✗ | ✗ | Browsers rely on HTTP cache headers; iOS not wired. |
-| Self-hosted Protomaps tiles | ✗ | ✗ | ✗ | ✗ | ✗ | Deferred — see roadmap § Future — Protomaps. |
+| Offline tile cache (HTTP replay) | ✓ | ✗ | N/A | ✗ | ✗ | Architectural exception for web: browsers handle tile caching natively via HTTP cache headers + (optionally) the service worker, not via a custom HTTP-replay layer. The web's existing `static/sw.js` could grow a tile-cache strategy if needed; tracked separately if so, not as a parity gap with the mobile recorder's bespoke cache. |
+| Self-hosted Protomaps tiles | N/A | N/A | N/A | N/A | N/A | Infrastructure decision, not a per-client feature — the basemap source is set deploy-side and every client picks it up uniformly. Tracked under [roadmap § Future — Protomaps](roadmap.md), not the per-platform matrix. |
 
 ## Map matching (post-run clean-up)
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Server-side HMM map matching | ✗ | ✗ | ✗ | N/A | N/A | Deferred — see roadmap § Future — Map matching. Runs server-side, so all clients would benefit equally when shipped. |
+| Server-side HMM map matching | N/A | N/A | N/A | N/A | N/A | Server-side feature — runs in an Edge Function (or future Go service), every client picks up the snapped trace uniformly. Tracked under [roadmap § Future — Map matching](roadmap.md), not the per-platform matrix. |
 
 ---
 
