@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../social_service.dart';
+import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import 'club_detail_screen.dart';
 

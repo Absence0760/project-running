@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Hard cap on `await`s that hit Supabase / an Edge Function. When the
-/// backend is unreachable, supabase-dart's HTTP calls don't resolve on
-/// their own for minutes — the timeout converts that into a visible
-/// error state the user can retry.
-const kBackendLoadTimeout = Duration(seconds: 15);
-
 /// Shared empty-but-errored state for any list/detail screen whose
 /// primary data fetch hit a backend failure or timeout. Keeps copy and
 /// layout consistent across tabs so users learn one recovery affordance.

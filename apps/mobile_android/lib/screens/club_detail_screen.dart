@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../social_service.dart';
+import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import 'event_detail_screen.dart';
 

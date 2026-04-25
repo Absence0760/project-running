@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../training.dart';
 import '../training_service.dart';
+import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/plan_calendar.dart';
 import '../widgets/workout_edit_sheet.dart';

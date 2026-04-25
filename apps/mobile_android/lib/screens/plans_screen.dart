@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../training.dart';
 import '../training_service.dart';
+import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import 'plan_detail_screen.dart';
 import 'plan_new_screen.dart';

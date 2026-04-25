@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../recurrence.dart';
 import '../social_service.dart';
+import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 
 class EventDetailScreen extends StatefulWidget {
