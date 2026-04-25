@@ -100,22 +100,31 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
   }
 
   Future<void> _shareFile(String format) async {
-    final tmp = await getTemporaryDirectory();
-    final run = widget.run;
-    final title = widget.title;
-    File file;
-    switch (format) {
-      case 'tcx':
-        file = File('${tmp.path}/run-${run.id}.tcx');
-        await file.writeAsString(_runToTcx(run, title));
-      case 'fit':
-        file = File('${tmp.path}/run-${run.id}.fit');
-        await file.writeAsBytes(_runToFitBytes(run));
-      default:
-        file = File('${tmp.path}/run-${run.id}.gpx');
-        await file.writeAsString(_runToGpx(run, title));
+    try {
+      final tmp = await getTemporaryDirectory();
+      final run = widget.run;
+      final title = widget.title;
+      File file;
+      switch (format) {
+        case 'tcx':
+          file = File('${tmp.path}/run-${run.id}.tcx');
+          await file.writeAsString(_runToTcx(run, title));
+        case 'fit':
+          file = File('${tmp.path}/run-${run.id}.fit');
+          await file.writeAsBytes(_runToFitBytes(run));
+        default:
+          file = File('${tmp.path}/run-${run.id}.gpx');
+          await file.writeAsString(_runToGpx(run, title));
+      }
+      await Share.shareXFiles([XFile(file.path)], text: _caption);
+    } catch (e) {
+      debugPrint('Failed to export run file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not export file')),
+        );
+      }
     }
-    await Share.shareXFiles([XFile(file.path)], text: _caption);
   }
 
   @override

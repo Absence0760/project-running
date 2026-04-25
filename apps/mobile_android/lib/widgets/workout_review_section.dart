@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../training.dart' show fmtPace;
+
 /// Post-run review surface for a structured workout. Reads the
 /// `workout_step_results` + `workout_adherence` keys on `runs.metadata`
 /// (registered in `docs/metadata.md`) and renders the planned-vs-actual
@@ -135,7 +137,7 @@ class WorkoutReviewSection extends StatelessWidget {
               flex: 2, align: TextAlign.right),
           cell('${(s.actualDistanceM / 1000).toStringAsFixed(2)} km',
               flex: 2, align: TextAlign.right),
-          cell(formatPace(s.actualPaceSecPerKm),
+          cell(fmtPace(s.actualPaceSecPerKm),
               flex: 2, align: TextAlign.right),
           Expanded(
             flex: 2,
@@ -245,12 +247,6 @@ PaceDelta paceDeltaOf(WorkoutStepReview s) {
   return PaceDelta('$sign${mag}s', tone);
 }
 
-String formatPace(int? secPerKm) {
-  if (secPerKm == null || secPerKm <= 0) return '—';
-  final m = secPerKm ~/ 60;
-  final s = secPerKm % 60;
-  return '$m:${s.toString().padLeft(2, '0')}/km';
-}
 
 class AdherencePill extends StatelessWidget {
   final String adherence;

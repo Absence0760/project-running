@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
 
+import '../training.dart' show fmtPace;
+
 /// Top-of-map overlay that surfaces the current [WorkoutRunner] step
 /// while the run screen is recording. Mirrors the spec in
 /// [docs/workout_execution.md](../../../../docs/workout_execution.md).
@@ -114,7 +116,7 @@ class _Band extends StatelessWidget {
               Expanded(
                 child: Text(
                   '${step.label} · ${_fmtDistance(step.targetDistanceMetres)} '
-                  '@ ${_fmtPace(step.targetPaceSecPerKm)}',
+                  '@ ${fmtPace(step.targetPaceSecPerKm)}',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -215,11 +217,6 @@ class _Band extends StatelessWidget {
     return '${metres.round()} m';
   }
 
-  static String _fmtPace(int secPerKm) {
-    final m = secPerKm ~/ 60;
-    final s = secPerKm % 60;
-    return '$m:${s.toString().padLeft(2, '0')}/km';
-  }
 }
 
 class _PacePip extends StatelessWidget {

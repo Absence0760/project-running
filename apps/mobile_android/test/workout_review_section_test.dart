@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_android/training.dart' show fmtPace;
 import 'package:mobile_android/widgets/workout_review_section.dart';
 
 Map<String, dynamic> _step({
@@ -176,10 +177,10 @@ void main() {
       expect(paceDeltaOf(s).tone, PaceDeltaTone.off);
     });
 
-    test('formatPace produces m:ss/km, em-dash for invalid', () {
-      expect(formatPace(0), '—');
-      expect(formatPace(null), '—');
-      expect(formatPace(245), '4:05/km');
+    test('fmtPace produces m:ss/km, em-dash for invalid', () {
+      expect(fmtPace(0), '—');
+      expect(fmtPace(null), '—');
+      expect(fmtPace(245), '4:05/km');
     });
   });
 }

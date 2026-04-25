@@ -456,6 +456,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             bottom: widget.bottomPadding + 12,
             child: FloatingActionButton.small(
               heroTag: 'recenter',
+              tooltip: 'Re-centre on my location',
               onPressed: () {
                 setState(() => _userPanned = false);
                 _moveCamera(currentLatLng, zoom: _mapController.camera.zoom);

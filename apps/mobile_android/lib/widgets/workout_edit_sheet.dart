@@ -57,7 +57,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
     _paceCtl = TextEditingController(
       text: w.targetPaceSecPerKm == null
           ? ''
-          : _fmtPaceMmSs(w.targetPaceSecPerKm!),
+          : _paceToEditText(w.targetPaceSecPerKm!),
     );
     _notesCtl = TextEditingController(text: w.notes ?? '');
   }
@@ -198,7 +198,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
     }
   }
 
-  static String _fmtPaceMmSs(int secPerKm) {
+  static String _paceToEditText(int secPerKm) {
     final m = secPerKm ~/ 60;
     final s = secPerKm % 60;
     return '$m:${s.toString().padLeft(2, '0')}';

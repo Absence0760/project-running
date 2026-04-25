@@ -58,19 +58,23 @@ class _CollapsiblePanelState extends State<CollapsiblePanel> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _toggle,
-                onVerticalDragEnd: _onVerticalDragEnd,
-                child: SizedBox(
-                  height: 28,
-                  child: Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: theme.dividerColor,
-                        borderRadius: BorderRadius.circular(2),
+              Semantics(
+                label: _expanded ? 'Collapse stats panel' : 'Expand stats panel',
+                button: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggle,
+                  onVerticalDragEnd: _onVerticalDragEnd,
+                  child: SizedBox(
+                    height: 28,
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.dividerColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
                   ),
