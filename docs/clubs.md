@@ -71,7 +71,7 @@ Organisers can turn an event instance into a live, server-coordinated race: ever
 **Surfaces**:
 
 - Web event page: admin race-control panel (Arm → GO → End), `auto_approve` checkbox before arming. Attendees see a "Race armed" / "Race LIVE" banner with live elapsed. Approval buttons on pending rows for admins.
-- `/live/event/{id}/{instance_start}`: public-ish spectator page. Live-ranked list of runners on course (distance, pace, elapsed) driven by `race_pings`, plus the finisher leaderboard below.
+- `/live/event/{id}/{instance_start}`: public-ish spectator page. Live MapLibre map with each runner as a colour-coded dot + recent trail (latest 30 ping samples), Realtime-subscribed to `race_pings`. Below the map: live-ranked list of runners on course (distance, pace, elapsed) driven by the same data, plus the finisher leaderboard.
 - Mobile Android: `lib/race_controller.dart` handles the **participant** side — polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop. **Organiser Arm / Fire Go / End** controls now also live on Android (`SocialService.armRace / startRace / endRace` + the race-control card on `event_detail_screen.dart`, gated on `ClubView.isRaceDirector`), with live state updates via the existing `subscribeToEvent` realtime channel extended to `race_sessions`.
 - Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows. No organiser controls on Wear by design — typing admin actions on a wrist is a bad UX; use web or Android phone instead.
 

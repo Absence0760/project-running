@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
+	import maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { mapStyleUrl, getMapStyle } from '$lib/map-style.svelte';
 	import { supabase } from '$lib/supabase';
 	import {
-		fetchLatestRacePings,
+		fetchRecentRacePings,
 		fetchRaceSession,
 		fetchEventById,
 		fetchEventResults,
@@ -22,7 +26,7 @@
 
 	let event = $state<EventWithMeta | null>(null);
 	let race = $state<RaceSessionRow | null>(null);
-	let pings = $state<RacePingRow[]>([]);
+	let recentPings = $state<RacePingRow[]>([]);
 	let results = $state<EventResultWithUser[]>([]);
 	let profiles = $state<Map<string, { display_name: string | null }>>(new Map());
 	let nowTick = $state(Date.now());
@@ -30,16 +34,58 @@
 
 	let channel: RealtimeChannel | null = null;
 
+	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+	// Latest ping per user (the leaderboard view), sorted by distance desc.
+	let pings = $derived.by(() => {
+		const byUser = new Map<string, RacePingRow>();
+		for (const p of recentPings) {
+			if (!byUser.has(p.user_id)) byUser.set(p.user_id, p);
+		}
+		return [...byUser.values()].sort((a, b) => (b.distance_m ?? 0) - (a.distance_m ?? 0));
+	});
+
+	// Per-user trail (chronological, oldest -> newest). Capped to keep
+	// long races bounded; 30 samples ≈ 5 minutes at 10 s cadence.
+	const TRAIL_CAP = 30;
+	let trailsByUser = $derived.by(() => {
+		const byUser = new Map<string, RacePingRow[]>();
+		// recentPings is newest-first; reverse to chronological so the
+		// LineString runs in time order.
+		for (let i = recentPings.length - 1; i >= 0; i--) {
+			const p = recentPings[i];
+			const arr = byUser.get(p.user_id) ?? [];
+			arr.push(p);
+			byUser.set(p.user_id, arr);
+		}
+		for (const [u, arr] of byUser) {
+			if (arr.length > TRAIL_CAP) byUser.set(u, arr.slice(arr.length - TRAIL_CAP));
+		}
+		return byUser;
+	});
+
+	// Stable hue per user_id so each runner keeps the same colour across
+	// re-renders. Uses the golden-angle trick to spread hues nicely.
+	function hueFor(userId: string): number {
+		let h = 0;
+		for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) | 0;
+		return ((h % 360) + 360) % 360;
+	}
+
+	function colorFor(userId: string): string {
+		return `hsl(${hueFor(userId)}, 70%, 50%)`;
+	}
+
 	async function load() {
 		const [e, rs, ps, rr] = await Promise.all([
 			fetchEventById(eventId),
 			fetchRaceSession(eventId, instance),
-			fetchLatestRacePings(eventId, instance),
+			fetchRecentRacePings(eventId, instance),
 			fetchEventResults(eventId, instance)
 		]);
 		event = e;
 		race = rs;
-		pings = ps;
+		recentPings = ps;
 		results = rr;
 		// Collect display names for every user_id referenced by pings + results.
 		const ids = new Set<string>();
@@ -69,7 +115,7 @@
 					filter: `event_id=eq.${eventId}`
 				},
 				async () => {
-					pings = await fetchLatestRacePings(eventId, instance);
+					recentPings = await fetchRecentRacePings(eventId, instance);
 				}
 			)
 			.on(
@@ -106,6 +152,7 @@
 
 	onDestroy(() => {
 		if (channel) supabase.removeChannel(channel);
+		map?.remove();
 	});
 
 	let tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -160,6 +207,167 @@
 	function nameFor(userId: string): string {
 		return profiles.get(userId)?.display_name ?? 'Runner';
 	}
+
+	// --- Map ---
+
+	let mapContainer: HTMLDivElement;
+	let map: maplibregl.Map | null = null;
+	let mapReady = $state(false);
+	let didFitBounds = false;
+
+	function buildPositionsGeoJSON(): GeoJSON.FeatureCollection<GeoJSON.Point, { user_id: string; color: string; label: string }> {
+		const features: GeoJSON.Feature<GeoJSON.Point, { user_id: string; color: string; label: string }>[] = [];
+		pings.forEach((p, i) => {
+			features.push({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+				properties: {
+					user_id: p.user_id,
+					color: colorFor(p.user_id),
+					label: String(i + 1)
+				}
+			});
+		});
+		return { type: 'FeatureCollection', features };
+	}
+
+	function buildTrailsGeoJSON(): GeoJSON.FeatureCollection<GeoJSON.LineString, { user_id: string; color: string }> {
+		const features: GeoJSON.Feature<GeoJSON.LineString, { user_id: string; color: string }>[] = [];
+		for (const [userId, trail] of trailsByUser) {
+			if (trail.length < 2) continue;
+			features.push({
+				type: 'Feature',
+				geometry: {
+					type: 'LineString',
+					coordinates: trail.map((p) => [p.lng, p.lat])
+				},
+				properties: { user_id: userId, color: colorFor(userId) }
+			});
+		}
+		return { type: 'FeatureCollection', features };
+	}
+
+	function addOverlays() {
+		if (!map) return;
+		map.addSource('runner-trails', { type: 'geojson', data: buildTrailsGeoJSON() });
+		map.addSource('runner-positions', { type: 'geojson', data: buildPositionsGeoJSON() });
+
+		map.addLayer({
+			id: 'runner-trails-line',
+			type: 'line',
+			source: 'runner-trails',
+			paint: {
+				'line-color': ['get', 'color'],
+				'line-width': 3,
+				'line-opacity': 0.7
+			},
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+
+		map.addLayer({
+			id: 'runner-position-halo',
+			type: 'circle',
+			source: 'runner-positions',
+			paint: {
+				'circle-radius': 13,
+				'circle-color': ['get', 'color'],
+				'circle-opacity': 0.25
+			}
+		});
+
+		map.addLayer({
+			id: 'runner-position-dot',
+			type: 'circle',
+			source: 'runner-positions',
+			paint: {
+				'circle-radius': 7,
+				'circle-color': ['get', 'color'],
+				'circle-stroke-color': prefersDark ? '#0f172a' : '#ffffff',
+				'circle-stroke-width': 2
+			}
+		});
+
+		map.addLayer({
+			id: 'runner-position-label',
+			type: 'symbol',
+			source: 'runner-positions',
+			layout: {
+				'text-field': ['get', 'label'],
+				'text-size': 11,
+				'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+				'text-allow-overlap': true,
+				'text-offset': [0, -1.2]
+			},
+			paint: {
+				'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
+				'text-halo-color': prefersDark ? '#0f172a' : '#ffffff',
+				'text-halo-width': 1.5
+			}
+		});
+	}
+
+	function refreshMapData() {
+		if (!map || !mapReady) return;
+		const trails = map.getSource('runner-trails') as maplibregl.GeoJSONSource | undefined;
+		const positions = map.getSource('runner-positions') as maplibregl.GeoJSONSource | undefined;
+		trails?.setData(buildTrailsGeoJSON());
+		positions?.setData(buildPositionsGeoJSON());
+
+		// Fit bounds once the first batch of positions arrives. After that
+		// we leave the user in control of pan/zoom.
+		if (!didFitBounds && pings.length > 0) {
+			const lngs = pings.map((p) => p.lng);
+			const lats = pings.map((p) => p.lat);
+			const bounds: maplibregl.LngLatBoundsLike = [
+				[Math.min(...lngs), Math.min(...lats)],
+				[Math.max(...lngs), Math.max(...lats)]
+			];
+			map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 0 });
+			didFitBounds = true;
+		}
+	}
+
+	$effect(() => {
+		// Initialise the map lazily once we have at least one ping. Until
+		// then, the empty-state card is shown instead of a blank map.
+		if (!mapContainer || map || pings.length === 0) return;
+		const first = pings[0];
+		map = new maplibregl.Map({
+			container: mapContainer,
+			style: mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark),
+			center: [first.lng, first.lat],
+			zoom: 13
+		});
+		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+		map.on('load', () => {
+			mapReady = true;
+			addOverlays();
+			refreshMapData();
+		});
+	});
+
+	// Re-push GeoJSON whenever pings arrive.
+	$effect(() => {
+		// Touch reactive deps so this re-runs.
+		void pings;
+		void trailsByUser;
+		refreshMapData();
+	});
+
+	// Reactive map-style swap (re-attach overlays after style.load).
+	let currentStyle: ReturnType<typeof getMapStyle> = getMapStyle();
+	$effect(() => {
+		const next = getMapStyle();
+		if (!map || next === currentStyle) return;
+		currentStyle = next;
+		mapReady = false;
+		map.setStyle(mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark));
+		map.once('style.load', () => {
+			mapReady = true;
+			addOverlays();
+			refreshMapData();
+		});
+	});
 </script>
 
 <svelte:head>
@@ -185,6 +393,12 @@
 	{#if loading}
 		<p class="muted">Loading…</p>
 	{:else}
+		{#if pings.length > 0}
+			<section class="card map-card">
+				<div bind:this={mapContainer} class="race-map"></div>
+			</section>
+		{/if}
+
 		<section class="card">
 			<h2>Runners on course ({pings.length})</h2>
 			{#if pings.length === 0}
@@ -194,6 +408,7 @@
 					{#each pings as p, i (p.user_id)}
 						<li class="runner">
 							<span class="pos">{i + 1}</span>
+							<span class="swatch" style="background: {colorFor(p.user_id)}"></span>
 							<span class="name">{nameFor(p.user_id)}</span>
 							<span class="dist">{((p.distance_m ?? 0) / 1000).toFixed(2)} km</span>
 							<span class="pace">{formatPace(paceSecPerKm(p))}</span>
@@ -211,6 +426,7 @@
 					{#each results as r (r.user_id)}
 						<li class="runner" class:pending={!r.organiser_approved}>
 							<span class="pos">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
+							<span class="swatch" style="background: {colorFor(r.user_id)}"></span>
 							<span class="name">{nameFor(r.user_id)}</span>
 							{#if r.finisher_status !== 'finished'}
 								<span class="dnf">{r.finisher_status.toUpperCase()}</span>
@@ -231,7 +447,7 @@
 
 <style>
 	.page {
-		max-width: 48rem;
+		max-width: 60rem;
 		margin: 0 auto;
 		padding: 1.5rem;
 	}
@@ -253,6 +469,14 @@
 		border-radius: 0.6rem;
 		padding: 1rem;
 		margin-bottom: 1.2rem;
+	}
+	.map-card {
+		padding: 0;
+		overflow: hidden;
+	}
+	.race-map {
+		width: 100%;
+		height: 24rem;
 	}
 	.status-row {
 		display: flex;
@@ -286,9 +510,9 @@
 	}
 	.runner {
 		display: grid;
-		grid-template-columns: 2rem 1fr auto auto auto auto;
+		grid-template-columns: 2rem 0.8rem 1fr auto auto auto auto;
 		align-items: center;
-		gap: 0.8rem;
+		gap: 0.6rem;
 		padding: 0.5rem 0.7rem;
 		background: var(--color-bg);
 		border-radius: 0.4rem;
@@ -299,6 +523,12 @@
 		font-weight: 700;
 		color: var(--color-primary);
 		font-variant-numeric: tabular-nums;
+	}
+	.swatch {
+		width: 0.7rem;
+		height: 0.7rem;
+		border-radius: 50%;
+		border: 1px solid var(--color-border);
 	}
 	.name {
 		font-weight: 600;

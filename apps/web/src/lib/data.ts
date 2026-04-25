@@ -1543,25 +1543,32 @@ export interface RacePingRow {
 	bpm: number | null;
 }
 
-/// Latest ping per runner for the spectator map. One row per user, at ==
-/// their most recent sample. Sorted by distance descending so the lead
-/// runner is first.
-export async function fetchLatestRacePings(
+/// Recent pings for a race instance, newest first. The spectator page
+/// derives both the leaderboard (latest per user) and per-user trails
+/// from this single fetch. Capped at `limit` rows; the index on
+/// (event_id, instance_start, at desc) makes this cheap.
+export async function fetchRecentRacePings(
 	eventId: string,
-	instanceStart: string
+	instanceStart: string,
+	limit = 1000
 ): Promise<RacePingRow[]> {
-	// Pull recent pings and collapse to the latest-per-user client-side.
-	// The index is (event_id, instance_start, at desc) so this is cheap;
-	// a `distinct on` RPC would be the next optimisation if this gets
-	// hot.
 	const { data } = await supabase
 		.from('race_pings')
 		.select('*')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
 		.order('at', { ascending: false })
-		.limit(500);
-	const pings = (data as RacePingRow[]) ?? [];
+		.limit(limit);
+	return (data as RacePingRow[]) ?? [];
+}
+
+/// Latest ping per runner, sorted by distance descending so the lead
+/// runner is first. Convenience wrapper over `fetchRecentRacePings`.
+export async function fetchLatestRacePings(
+	eventId: string,
+	instanceStart: string
+): Promise<RacePingRow[]> {
+	const pings = await fetchRecentRacePings(eventId, instanceStart, 500);
 	const byUser = new Map<string, RacePingRow>();
 	for (const p of pings) {
 		if (!byUser.has(p.user_id)) byUser.set(p.user_id, p);
