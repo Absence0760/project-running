@@ -2,21 +2,20 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'sign_up_screen.dart';
 
-/// Email/password sign-in screen.
+/// Email/password account-creation screen.
 ///
-/// Returns `true` from `Navigator.pop` if sign-in succeeded so the caller
-/// can refresh state.
-class SignInScreen extends StatefulWidget {
+/// Returns `true` from `Navigator.pop` if registration succeeded so the
+/// caller can refresh state — same contract as `SignInScreen`.
+class SignUpScreen extends StatefulWidget {
   final ApiClient apiClient;
-  const SignInScreen({super.key, required this.apiClient});
+  const SignUpScreen({super.key, required this.apiClient});
 
   @override
-  State<SignInScreen> createState() => _SignInScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _SignInScreenState extends State<SignInScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
@@ -29,31 +28,25 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
-  Future<void> _signIn() async {
+  Future<void> _signUp() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      await widget.apiClient.signIn(
+      await widget.apiClient.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
+      debugPrint('SignUpScreen._signUp failed: $e');
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  /// Google Sign-In via the native Android flow. Requires:
-  /// - `GOOGLE_WEB_CLIENT_ID` in `.env.local` — the Web client ID from the
-  ///   same Google Cloud Console project configured in Supabase's Google
-  ///   auth provider.
-  /// - Android OAuth 2.0 client configured with the app's SHA-1
-  ///   fingerprint.
-  /// See apps/mobile_android/local_testing.md for the full setup walkthrough.
   Future<void> _signInWithGoogle() async {
     setState(() {
       _loading = true;
@@ -71,7 +64,6 @@ class _SignInScreenState extends State<SignInScreen> {
       final googleSignIn = GoogleSignIn(serverClientId: webClientId);
       final account = await googleSignIn.signIn();
       if (account == null) {
-        // User cancelled — not an error.
         if (mounted) setState(() => _loading = false);
         return;
       }
@@ -87,6 +79,7 @@ class _SignInScreenState extends State<SignInScreen> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
+      debugPrint('SignUpScreen._signInWithGoogle failed: $e');
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -97,11 +90,7 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign In')),
-      // Scaffold already inherits resizeToAvoidBottomInset: true, so the
-      // body gets shrunk by the keyboard — the Column inside has to be
-      // scrollable to absorb the remaining content, otherwise Flutter's
-      // debug overlay shows "BOTTOM OVERFLOWED BY N PIXELS".
+      appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -113,13 +102,13 @@ class _SignInScreenState extends State<SignInScreen> {
                   size: 64, color: theme.colorScheme.primary),
               const SizedBox(height: 16),
               Text(
-                'Sync runs across devices',
+                'Start tracking your runs',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in to back up runs and view them on the web app.',
+                'Create an account to back up runs and view them on the web app.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.outline,
@@ -153,7 +142,7 @@ class _SignInScreenState extends State<SignInScreen> {
               ],
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: _loading ? null : _signIn,
+                onPressed: _loading ? null : _signUp,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -163,7 +152,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Sign In'),
+                    : const Text('Create Account'),
               ),
               const SizedBox(height: 12),
               Row(
@@ -188,25 +177,12 @@ class _SignInScreenState extends State<SignInScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 icon: const Icon(Icons.login, size: 18),
-                label: const Text('Sign in with Google'),
+                label: const Text('Continue with Google'),
               ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Continue offline'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  final signedUp = await Navigator.push<bool>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          SignUpScreen(apiClient: widget.apiClient),
-                    ),
-                  );
-                  if (mounted && signedUp == true) Navigator.pop(context, true);
-                },
-                child: const Text("Don't have an account? Create one"),
+                child: const Text('Already have an account? Sign in'),
               ),
             ],
           ),
@@ -215,4 +191,3 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 }
-
