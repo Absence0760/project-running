@@ -50,7 +50,17 @@ interface CoachRequest {
 }
 
 const DEFAULT_RUNS_LIMIT = 20;
-const MAX_RUNS_LIMIT = 100;
+
+/// Tier-aware processing budgets — the concrete shape "Priority
+/// processing for Pro users" takes on the web. Free users get a
+/// reasonable default; Pro users get a higher response token budget
+/// (richer, longer answers), a much larger context cap (more historical
+/// runs in view per turn), and no daily message ceiling.
+const TIER_LIMITS = {
+	free: { dailyLimit: 10, maxTokens: 768, maxRunsLimit: 30 },
+	pro:  { dailyLimit: Number.POSITIVE_INFINITY, maxTokens: 2048, maxRunsLimit: 200 },
+} as const;
+type Tier = keyof typeof TIER_LIMITS;
 
 export const POST: RequestHandler = async ({ request }) => {
 	if (COACH_PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
@@ -94,11 +104,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		global: { headers: { Authorization: `Bearer ${body.access_token}` } }
 	});
 
-	// Daily usage limit for free users. Pro subscribers are unlimited.
-	// BYPASS_PAYWALL skips the check in dev so you don't burn through the
-	// quota while iterating on prompts.
-	const DAILY_LIMIT = 10;
+	// Resolve the caller's tier first — every downstream limit (daily
+	// message cap, response token budget, context window) is derived
+	// from it. BYPASS_PAYWALL fast-paths the whole check in dev so you
+	// don't burn through quota while iterating on prompts.
 	const bypassLimit = env.BYPASS_PAYWALL === 'true';
+	let tier: Tier = 'free';
+	let usedToday = 0;
 	if (!bypassLimit) {
 		const { data: { user: authUser } } = await supabase.auth.getUser();
 		if (!authUser) {
@@ -110,27 +122,45 @@ export const POST: RequestHandler = async ({ request }) => {
 		const { data: isPro } = await supabase.rpc('is_user_pro', {
 			p_user_id: authUser.id,
 		});
-		if (isPro !== true) {
+		tier = isPro === true ? 'pro' : 'free';
+
+		// Free-tier daily-cap enforcement. Pro skips the increment so
+		// usage isn't tracked (and we don't pay an RPC) for unlimited.
+		if (tier === 'free') {
 			const { data: newCount } = await supabase.rpc('increment_coach_usage', {
 				p_user_id: authUser.id,
 			});
-			if (typeof newCount === 'number' && newCount > DAILY_LIMIT) {
+			usedToday = typeof newCount === 'number' ? newCount : 0;
+			if (usedToday > TIER_LIMITS.free.dailyLimit) {
 				return new Response(
 					JSON.stringify({
 						error: 'daily_limit',
-						message: `You've used all ${DAILY_LIMIT} coach messages for today. Upgrade to Pro for unlimited chats, or come back tomorrow!`,
-						used: newCount,
-						limit: DAILY_LIMIT,
+						message: `You've used all ${TIER_LIMITS.free.dailyLimit} coach messages for today. Upgrade to Pro for unlimited chats, or come back tomorrow!`,
+						used: usedToday,
+						limit: TIER_LIMITS.free.dailyLimit,
+						tier,
 					}),
-					{ status: 429, headers: { 'content-type': 'application/json' } }
+					{
+						status: 429,
+						headers: {
+							'content-type': 'application/json',
+							...rateLimitHeaders(tier, usedToday),
+						},
+					}
 				);
 			}
 		}
+	} else {
+		// Bypass mode reports as `pro` so the UI surfaces the unlimited
+		// shape the dev would see in prod when paying for Pro.
+		tier = 'pro';
 	}
+
+	const limits = TIER_LIMITS[tier];
 
 	const requestedLimit = Number(body.recent_runs_limit ?? DEFAULT_RUNS_LIMIT);
 	const runsLimit = Number.isFinite(requestedLimit)
-		? Math.min(MAX_RUNS_LIMIT, Math.max(1, Math.trunc(requestedLimit)))
+		? Math.min(limits.maxRunsLimit, Math.max(1, Math.trunc(requestedLimit)))
 		: DEFAULT_RUNS_LIMIT;
 
 	const context = await buildContext(supabase, body.plan_id ?? null, runsLimit);
@@ -156,26 +186,53 @@ export const POST: RequestHandler = async ({ request }) => {
 		'CONTEXT (runner profile, active plan, recent runs):\n' +
 		JSON.stringify(context.data, null, 2);
 
+	const headers = {
+		'content-type': 'application/json',
+		...rateLimitHeaders(tier, usedToday),
+	};
+
 	try {
 		if (COACH_PROVIDER === 'openai') {
-			return await callOpenAI(systemText, contextPayload, body.messages);
+			return await callOpenAI(systemText, contextPayload, body.messages, tier, limits, headers);
 		}
-		return await callAnthropic(systemText, contextPayload, body.messages);
+		return await callAnthropic(systemText, contextPayload, body.messages, tier, limits, headers);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'coach call failed';
 		return new Response(JSON.stringify({ error: msg }), {
 			status: 502,
-			headers: { 'content-type': 'application/json' }
+			headers,
 		});
 	}
 };
+
+/// Standard `X-RateLimit-*` headers + a `X-Coach-Tier` echo so a
+/// client can see exactly which budget bucket the request landed in.
+/// `Infinity` collapses to the literal string "unlimited" in the
+/// remaining + limit fields so HTTP-clean ASCII flows over the wire.
+function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, string> {
+	const limits = TIER_LIMITS[tier];
+	const limitStr = Number.isFinite(limits.dailyLimit) ? String(limits.dailyLimit) : 'unlimited';
+	const remainingStr = Number.isFinite(limits.dailyLimit)
+		? String(Math.max(0, limits.dailyLimit - usedToday))
+		: 'unlimited';
+	return {
+		'X-Coach-Tier': tier,
+		'X-RateLimit-Limit': limitStr,
+		'X-RateLimit-Remaining': remainingStr,
+		'X-RateLimit-MaxTokens': String(limits.maxTokens),
+		'X-RateLimit-MaxRuns': String(limits.maxRunsLimit),
+	};
+}
 
 // ─────────────────────── Provider: Anthropic ───────────────────────
 
 async function callAnthropic(
 	systemText: string,
 	contextPayload: string,
-	messages: { role: 'user' | 'assistant'; content: string }[]
+	messages: { role: 'user' | 'assistant'; content: string }[],
+	tier: Tier,
+	limits: typeof TIER_LIMITS[Tier],
+	headers: Record<string, string>,
 ): Promise<Response> {
 	const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -212,7 +269,7 @@ async function callAnthropic(
 
 	const res = await anthropic.messages.create({
 		model: 'claude-sonnet-4-5',
-		max_tokens: 1024,
+		max_tokens: limits.maxTokens,
 		system: systemBlocks,
 		messages: convo
 	});
@@ -223,6 +280,12 @@ async function callAnthropic(
 	return new Response(
 		JSON.stringify({
 			reply: text,
+			tier,
+			limits: {
+				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
+				max_tokens: limits.maxTokens,
+				max_runs_limit: limits.maxRunsLimit,
+			},
 			cache: {
 				cache_creation_input_tokens: res.usage.cache_creation_input_tokens ?? 0,
 				cache_read_input_tokens: res.usage.cache_read_input_tokens ?? 0,
@@ -230,7 +293,7 @@ async function callAnthropic(
 				output_tokens: res.usage.output_tokens
 			}
 		}),
-		{ headers: { 'content-type': 'application/json' } }
+		{ headers }
 	);
 }
 
@@ -244,7 +307,10 @@ async function callAnthropic(
 async function callOpenAI(
 	systemText: string,
 	contextPayload: string,
-	messages: { role: 'user' | 'assistant'; content: string }[]
+	messages: { role: 'user' | 'assistant'; content: string }[],
+	tier: Tier,
+	limits: typeof TIER_LIMITS[Tier],
+	headers: Record<string, string>,
 ): Promise<Response> {
 	const convo = [
 		{ role: 'system', content: systemText },
@@ -262,7 +328,7 @@ async function callOpenAI(
 		body: JSON.stringify({
 			model: OPENAI_MODEL,
 			messages: convo,
-			max_tokens: 1024,
+			max_tokens: limits.maxTokens,
 			stream: false
 		})
 	});
@@ -280,6 +346,12 @@ async function callOpenAI(
 	return new Response(
 		JSON.stringify({
 			reply: text,
+			tier,
+			limits: {
+				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
+				max_tokens: limits.maxTokens,
+				max_runs_limit: limits.maxRunsLimit,
+			},
 			cache: {
 				cache_creation_input_tokens: 0,
 				cache_read_input_tokens: 0,
@@ -287,7 +359,7 @@ async function callOpenAI(
 				output_tokens: json.usage?.completion_tokens ?? 0
 			}
 		}),
-		{ headers: { 'content-type': 'application/json' } }
+		{ headers }
 	);
 }
 

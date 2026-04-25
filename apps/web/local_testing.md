@@ -135,6 +135,13 @@ The coach endpoint at `/api/coach/+server.ts` supports two providers, picked by 
 3. `pnpm dev` (restart so Vite picks up env changes), open `/coach`, send a message. Responses are slower and lower-quality; that's expected for a 7–8B local model.
 4. Switch back to Anthropic by setting `COACH_PROVIDER=anthropic` and restarting — no other changes needed.
 
+**Tier-aware budget (priority processing)**
+1. As a free user (default seed), open `/coach` → footer shows a small "Free" badge and "10 of 10 messages remaining today".
+2. Send a message → DevTools → Network tab → response headers should include `X-Coach-Tier: free`, `X-RateLimit-Limit: 10`, `X-RateLimit-Remaining: 9`, `X-RateLimit-MaxTokens: 768`, `X-RateLimit-MaxRuns: 30`.
+3. Flip `subscription_tier` to `pro` in Studio (`update user_profiles set subscription_tier = 'pro' where id = '...';`) and reload `/coach`. Footer changes to "Pro · Unlimited messages · priority context window".
+4. Send a message → response headers now read `X-Coach-Tier: pro`, `X-RateLimit-Limit: unlimited`, `X-RateLimit-MaxTokens: 2048`, `X-RateLimit-MaxRuns: 200`. Pro answers visibly run longer when the question warrants it.
+5. With `BYPASS_PAYWALL=true`, the server reports `tier: 'pro'` regardless of the user's actual subscription so you can dev against the unlimited shape without paying RevenueCat.
+
 **Common failures**
 - *503 with "Coach is not configured"* → `ANTHROPIC_API_KEY` missing while `COACH_PROVIDER=anthropic`.
 - *502 "coach upstream 4xx"* on Ollama path → model name mismatch (try `ollama list`) or Ollama not running.

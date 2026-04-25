@@ -35,10 +35,19 @@
 		out: number;
 	} | null>(null);
 
-	const DAILY_LIMIT = 10;
+	// Tier + daily limit are echoed back in the response (`tier`,
+	// `limits.daily_limit`); we hold optimistic defaults until the
+	// first round-trip confirms them. `null` daily_limit means
+	// unlimited (Pro / bypass).
+	const DEFAULT_DAILY_LIMIT = 10;
+	let tier = $state<'free' | 'pro' | null>(null);
+	let dailyLimit = $state<number | null>(DEFAULT_DAILY_LIMIT);
 	let usedToday = $state(0);
-	let limitReached = $derived(usedToday >= DAILY_LIMIT);
-	let remaining = $derived(Math.max(0, DAILY_LIMIT - usedToday));
+	let isUnlimited = $derived(dailyLimit === null);
+	let limitReached = $derived(!isUnlimited && usedToday >= (dailyLimit ?? 0));
+	let remaining = $derived(
+		isUnlimited ? Infinity : Math.max(0, (dailyLimit ?? 0) - usedToday),
+	);
 
 	// Mirrors what `/api/coach/+server.ts buildContext()` actually pulls.
 	// Probed client-side so the user can see the grounding *before* asking
@@ -58,10 +67,21 @@
 		const { data: { session } } = await supabase.auth.getSession();
 		if (!session) return;
 		cachedUserId = session.user.id;
-		const { data } = await supabase.rpc('get_coach_usage', {
-			p_user_id: session.user.id,
-		});
-		if (typeof data === 'number') usedToday = data;
+		// Fetch usage + tier in parallel so the footer shows the right
+		// shape (free / pro, daily-cap or unlimited) before the user
+		// even sends the first message.
+		const [{ data: usage }, { data: isPro }] = await Promise.all([
+			supabase.rpc('get_coach_usage', { p_user_id: session.user.id }),
+			supabase.rpc('is_user_pro', { p_user_id: session.user.id }),
+		]);
+		if (typeof usage === 'number') usedToday = usage;
+		if (isPro === true) {
+			tier = 'pro';
+			dailyLimit = null;
+		} else {
+			tier = 'free';
+			dailyLimit = DEFAULT_DAILY_LIMIT;
+		}
 
 		await loadContextSummary(session.user.id);
 	});
@@ -188,8 +208,12 @@
 						'Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.';
 				} else if (res.status === 429) {
 					const body = await res.json().catch(() => ({}));
-					usedToday = body.used ?? DAILY_LIMIT;
-					error = body.message ?? `Daily limit reached (${DAILY_LIMIT} messages). Come back tomorrow!`;
+					usedToday = body.used ?? (dailyLimit ?? DEFAULT_DAILY_LIMIT);
+					if (typeof body.tier === 'string') tier = body.tier as 'free' | 'pro';
+					if (typeof body.limit === 'number') dailyLimit = body.limit;
+					error =
+						body.message ??
+						`Daily limit reached (${dailyLimit ?? DEFAULT_DAILY_LIMIT} messages). Come back tomorrow!`;
 				} else {
 					const body = await res.json().catch(() => ({}));
 					error = body.error ?? `Coach error (${res.status})`;
@@ -199,6 +223,13 @@
 			usedToday++;
 			const body = await res.json();
 			messages = [...messages, { role: 'assistant', content: body.reply }];
+			// Server is the source of truth for tier + limits. Adopt
+			// what it returns so the footer matches actual budget after
+			// every round-trip (e.g. mid-session tier upgrade).
+			if (typeof body.tier === 'string') tier = body.tier as 'free' | 'pro';
+			if (body.limits) {
+				dailyLimit = body.limits.daily_limit ?? null;
+			}
 			lastCache = {
 				read: body.cache?.cache_read_input_tokens ?? 0,
 				create: body.cache?.cache_creation_input_tokens ?? 0,
@@ -326,7 +357,7 @@
 	{#if limitReached}
 		<div class="limit-bar">
 			<span class="material-symbols">schedule</span>
-			You've used all {DAILY_LIMIT} messages for today. Come back tomorrow!
+			You've used all {dailyLimit ?? DEFAULT_DAILY_LIMIT} messages for today. Come back tomorrow!
 		</div>
 	{:else}
 		<form
@@ -349,7 +380,15 @@
 		</form>
 	{/if}
 	<div class="usage-bar">
-		<span class="usage-count">{remaining} of {DAILY_LIMIT} messages remaining today</span>
+		<span class="usage-count">
+			{#if isUnlimited}
+				<span class="tier-badge tier-pro">Pro</span>
+				Unlimited messages · priority context window
+			{:else}
+				{#if tier === 'free'}<span class="tier-badge tier-free">Free</span>{/if}
+				{remaining} of {dailyLimit ?? DEFAULT_DAILY_LIMIT} messages remaining today
+			{/if}
+		</span>
 		{#if lastCache && (lastCache.read > 0 || lastCache.create > 0)}
 			<span class="cache-note">
 				Cache: read {lastCache.read} · wrote {lastCache.create} · in {lastCache.in} · out {lastCache.out}
@@ -529,6 +568,25 @@
 	}
 	.usage-count {
 		font-weight: 500;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.tier-badge {
+		font-size: 0.65rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 0.1rem 0.4rem;
+		border-radius: 9999px;
+	}
+	.tier-pro {
+		background: rgba(79, 70, 229, 0.12);
+		color: var(--color-primary);
+	}
+	.tier-free {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
 	}
 	.cache-note {
 		font-size: 0.72rem;

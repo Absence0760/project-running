@@ -8,10 +8,15 @@ paywall. What the Pro tier changes is behaviour *inside* two features:
 
 - **AI Coach.** Free users get 10 messages / day (cost-control for the
   Claude API bill). Pro users get no cap.
-- **Priority processing.** Pro requests are routed ahead of free at
-  rate-limit / queue boundaries. Today this is a marketing claim with
-  enforcement limited to the coach-cap bypass; concrete enforcement
-  (Edge Function priority, client throttle hints) lands over time.
+- **Priority processing.** Pro users get a wider processing budget on
+  every coach request: a 2048 max-token response (vs 768 for free) for
+  longer / more thorough answers, and up to 200 runs of context per
+  turn (vs 30 for free). Coupled with the unlimited daily cap above,
+  these are concrete tier-aware budgets enforced server-side on
+  `/api/coach/+server.ts` and surfaced in `X-Coach-Tier` /
+  `X-RateLimit-*` response headers. Backend Edge Functions don't
+  currently branch on tier; that's the next planned widening when
+  individual functions get hot.
 
 `/settings/upgrade` shows a two-card layout: a Pro plan card
 ($9.99 / month, feature bullets, "Get Pro" CTA) and a one-off Donate
@@ -41,7 +46,7 @@ for both `pro` and `lifetime`.
 | Perk | Feature key | Enforcement point |
 |---|---|---|
 | Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_user_pro(uid)` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
-| Priority processing | `priority_processing` | Marketing claim today. Planned enforcement: tier-aware rate limiting on Edge Functions + Go service once it lands. The registry entry is documentation; no client code currently branches on it. |
+| Priority processing | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_user_pro(uid)` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 200-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 
 These perks are **behaviour changes**, not gated screens, so they do
 not call through `isLocked()`. `isLocked()` remains the correct hook
