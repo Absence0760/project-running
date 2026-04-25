@@ -154,7 +154,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 | Personal records table (5k / 10k / HM / FM) | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Multi-goal dashboard (distance / time / pace / count) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: dashboard Goals section with inline editor; `lib/goals.ts` ports the Android `RunGoal` model end-to-end — distance / time / **avg pace** / run count, week or month period. Pace targets are distance-weighted, exclude `metadata.activity_type === 'cycle'`, and use the lower-is-better progress fraction (`target / current`, clamped to 1.0) so a sub-target avg fills the bar. Editor accepts `mm:ss/km` or `mm:ss/mi` per the user's display unit; canonical storage is seconds-per-km. Stored in localStorage. Scalar `weekly_mileage_goal_m` from the settings bag still drives the separate "Weekly goal" progress card above. |
 | Week / month / year mileage toggle | ✓ | ✗ | ✓ | ✗ | ✗ | |
-| Browsable period summary (prev / next + share) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: `/dashboard/period/[type]/[date]` — prev/next arrows shift by week or month, type toggle switches period, share button uses Web Share API with clipboard fallback. Linked from the This-Week stat card on the dashboard. |
+| Browsable period summary (prev / next + share) | ✓ | ✗ | ✓ | ✗ | ✗ | Web: clicking the This-Week stat card on the dashboard opens a `PeriodSummary` modal; prev/next arrows shift by week or month, type toggle switches period, share button uses Web Share API with clipboard fallback. The same component also backs the standalone `/dashboard/period/[type]/[date]` route for deep links. |
 
 ## Sync and backup
 

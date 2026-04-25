@@ -26,7 +26,8 @@ import {
 	phaseFor,
 	generatePlan,
 	defaultPlanWeeks,
-	GOAL_DISTANCES_M
+	GOAL_DISTANCES_M,
+	formatISO
 } from './training';
 
 // ─────────────────────── VDOT ───────────────────────
@@ -250,4 +251,27 @@ test('generatePlan: every generated workout has a kind (regression for the null-
 			}
 		}
 	}
+});
+
+// Regression: period-summary prev/next was using `toISOString().slice(0,10)`,
+// which rolls the date back a day in any positive-offset zone before
+// midnight local. `formatISO` builds yyyy-mm-dd from local components so the
+// week-shift always lands on the same wall-clock day.
+test('formatISO: returns local-tz components, not UTC', () => {
+	// 2025-12-15 at 00:30 local — in any UTC+1..+12 zone, toISOString() would
+	// return 2025-12-14. formatISO must stay on the 15th.
+	const d = new Date(2025, 11, 15, 0, 30, 0, 0);
+	assert.equal(formatISO(d), '2025-12-15');
+});
+
+test('formatISO: zero-pads single-digit month and day', () => {
+	const d = new Date(2026, 0, 5, 12, 0, 0, 0);
+	assert.equal(formatISO(d), '2026-01-05');
+});
+
+test('formatISO: shiftPeriod by 7 days lands on the same weekday', () => {
+	const start = new Date(2025, 11, 15, 0, 0, 0, 0); // Mon
+	const next = new Date(start);
+	next.setDate(next.getDate() + 7);
+	assert.equal(formatISO(next), '2025-12-22');
 });
