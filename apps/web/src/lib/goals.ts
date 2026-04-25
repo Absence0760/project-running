@@ -47,6 +47,33 @@ export interface GoalProgress {
 
 const STORAGE_KEY = 'run_app.goals_v1';
 
+// Serialize to the Android-compatible snake_case wire format so goals
+// survive a round-trip through backup/restore and the future settings-bag
+// promotion. Aligns with goals.dart's toJson() keys.
+function goalToWire(g: RunGoal): Record<string, unknown> {
+	const w: Record<string, unknown> = { id: g.id, period: g.period };
+	if (g.title != null) w.title = g.title;
+	if (g.distanceMetres != null) w.distance_m = g.distanceMetres;
+	if (g.timeSeconds != null) w.time_s = g.timeSeconds;
+	if (g.paceSecPerKm != null) w.pace_s_per_km = g.paceSecPerKm;
+	if (g.runCount != null) w.run_count = g.runCount;
+	return w;
+}
+
+// Accept both the legacy camelCase keys (written by earlier web versions)
+// and the canonical snake_case keys (Android + current web).
+function goalFromWire(raw: Record<string, unknown>): RunGoal {
+	return {
+		id: raw.id as string,
+		period: (raw.period as GoalPeriod) ?? 'week',
+		title: (raw.title as string | undefined),
+		distanceMetres: (raw.distance_m ?? raw.distanceMetres) as number | undefined,
+		timeSeconds: (raw.time_s ?? raw.timeSeconds) as number | undefined,
+		paceSecPerKm: (raw.pace_s_per_km ?? raw.paceSecPerKm) as number | undefined,
+		runCount: (raw.run_count ?? raw.runCount) as number | undefined,
+	};
+}
+
 export function loadGoals(): RunGoal[] {
 	if (typeof localStorage === 'undefined') return [];
 	try {
@@ -54,7 +81,9 @@ export function loadGoals(): RunGoal[] {
 		if (!raw) return [];
 		const list = JSON.parse(raw);
 		if (!Array.isArray(list)) return [];
-		return list.filter((g) => g && typeof g === 'object' && typeof g.id === 'string');
+		return list
+			.filter((g) => g && typeof g === 'object' && typeof g.id === 'string')
+			.map((g) => goalFromWire(g as Record<string, unknown>));
 	} catch {
 		return [];
 	}
@@ -63,7 +92,7 @@ export function loadGoals(): RunGoal[] {
 export function saveGoals(goals: RunGoal[]): void {
 	if (typeof localStorage === 'undefined') return;
 	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(goals));
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(goals.map(goalToWire)));
 	} catch {
 		/* quota — noop */
 	}
