@@ -24,6 +24,7 @@
 	} from '$lib/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import EventEditor from '$lib/components/EventEditor.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -40,6 +41,15 @@
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
 	let tab = $state<'feed' | 'events' | 'members'>('feed');
+	let showEventModal = $state(false);
+
+	async function handleEventCreated(event: { id: string }) {
+		showEventModal = false;
+		// Refresh the events lists so the new one shows up immediately;
+		// admins typically stay on the club page after creating.
+		await load();
+		showToast('Event created.');
+	}
 
 	let draftPost = $state('');
 	let postingBusy = $state(false);
@@ -362,10 +372,10 @@
 					</button>
 				{/if}
 				{#if isAdmin}
-					<a class="btn-primary" href="/clubs/{club.slug}/events/new">
+					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 						<span class="material-symbols">add</span>
 						New event
-					</a>
+					</button>
 				{/if}
 			</div>
 		</div>
@@ -415,7 +425,7 @@
 								<strong>{p.display_name ?? 'Member'}</strong>
 								<span class="when">Requested {fmtRelative(p.joined_at ?? new Date().toISOString())}</span>
 							</div>
-							<button class="btn-primary small" onclick={() => approve(p.user_id)}>Approve</button>
+							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)}>Approve</button>
 							<button class="btn-ghost" onclick={() => reject(p.user_id)}>Reject</button>
 						</div>
 					{/each}
@@ -543,7 +553,7 @@
 												bind:value={replyDrafts[post.id]}
 											/>
 											<button
-												class="btn-primary small"
+												class="btn-primary btn-sm"
 												type="submit"
 												disabled={!replyDrafts[post.id]?.trim()}
 											>
@@ -606,10 +616,10 @@
 				<div class="empty">
 					<p>No upcoming events.</p>
 					{#if isAdmin}
-						<a href="/clubs/{club.slug}/events/new" class="btn-primary">
+						<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 							<span class="material-symbols">add</span>
 							Create the first one
-						</a>
+						</button>
 					{/if}
 				</div>
 			{/if}
@@ -717,11 +727,40 @@
 	oncancel={() => showDeleteClubConfirm = false}
 	danger
 />
+
+{#if showEventModal && club}
+	<div
+		class="modal-backdrop"
+		role="presentation"
+		onclick={() => (showEventModal = false)}
+	></div>
+	<div class="modal" role="dialog" aria-modal="true" aria-label="New event">
+		<header class="modal-header">
+			<h2>New event</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (showEventModal = false)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body">
+			<EventEditor
+				clubId={club.id}
+				clubName={club.name}
+				oncreated={handleEventCreated}
+				oncancel={() => (showEventModal = false)}
+			/>
+		</div>
+	</div>
+{/if}
 {/if}
 
 <style>
 	.page {
-		max-width: 56rem;
+		max-width: 72rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
 
@@ -812,46 +851,10 @@
 		align-items: stretch;
 	}
 
-	.btn-primary,
-	.btn-secondary {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.35rem;
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.9rem;
-		cursor: pointer;
-		text-decoration: none;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: var(--color-bg);
-		border: none;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-	}
-
 	.btn-secondary.danger {
 		color: var(--color-danger);
 		border-color: var(--color-danger-light);
 	}
-
 	.btn-secondary.danger:hover {
 		background: var(--color-danger-light);
 	}
@@ -947,11 +950,6 @@
 
 	.btn-ghost:hover {
 		background: var(--color-bg-tertiary);
-	}
-
-	.btn-primary.small {
-		padding: 0.35rem 0.7rem;
-		font-size: 0.85rem;
 	}
 
 	.pending-list {
@@ -1324,5 +1322,60 @@
 
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 200;
+	}
+	.modal {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: min(38rem, calc(100vw - 2rem));
+		max-height: calc(100vh - 4rem);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		z-index: 201;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-md) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.modal-header h2 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+	.modal-close {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.3rem;
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast);
+	}
+	.modal-close:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+	}
+	.modal-body {
+		padding: var(--space-lg);
+		overflow-y: auto;
 	}
 </style>

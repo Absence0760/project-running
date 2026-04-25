@@ -185,16 +185,4 @@
 		color: var(--color-text-secondary);
 	}
 
-	.btn-primary {
-		display: inline-block;
-		padding: var(--space-sm) var(--space-xl);
-		background: var(--color-primary);
-		color: white;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
 </style>

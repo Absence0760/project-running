@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
 	let plans = $state<TrainingPlan[]>([]);
@@ -67,15 +69,24 @@
 		confirmTarget = null;
 		confirmAction = null;
 	}
+
+	let showPlanModal = $state(false);
+
+	function handlePlanCreated(plan: { id: string }) {
+		showPlanModal = false;
+		// Plan creation is heavyweight — drop straight into the new plan
+		// detail page so the user can review weeks, edit workouts, etc.
+		goto(`/plans/${plan.id}`);
+	}
 </script>
 
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<a href="/plans/new" class="btn-primary">
+			<button class="btn-primary" type="button" onclick={() => (showPlanModal = true)}>
 				<span class="material-symbols">add</span>
 				New plan
-			</a>
+			</button>
 		</div>
 		<p class="sub">
 			Goal-race plans, 8–16 weeks, with easy / long / tempo / interval /
@@ -90,10 +101,10 @@
 		<div class="empty">
 			<h2>No plans yet.</h2>
 			<p>Pick a goal race and we'll schedule the weeks for you.</p>
-			<a href="/plans/new" class="btn-primary">
+			<button class="btn-primary" type="button" onclick={() => (showPlanModal = true)}>
 				<span class="material-symbols">add</span>
 				Create your first plan
-			</a>
+			</button>
 		</div>
 	{:else}
 		<div class="grid">
@@ -165,9 +176,29 @@
 	danger
 />
 
+{#if showPlanModal}
+	<div class="modal-backdrop" role="presentation" onclick={() => (showPlanModal = false)}></div>
+	<div class="modal modal-wide" role="dialog" aria-modal="true" aria-label="New plan">
+		<header class="modal-header">
+			<h2>New plan</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (showPlanModal = false)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body">
+			<PlanEditor oncreated={handlePlanCreated} oncancel={() => (showPlanModal = false)} />
+		</div>
+	</div>
+{/if}
+
 <style>
 	.page {
-		max-width: 64rem;
+		max-width: 72rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
 	.page-header {
@@ -186,20 +217,6 @@
 		color: var(--color-text-secondary);
 		margin-top: 0.3rem;
 		max-width: 44rem;
-	}
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.9rem;
-	}
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
 	}
 	.btn-ghost {
 		background: transparent;
@@ -321,5 +338,65 @@
 	}
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 200;
+	}
+	.modal {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: min(38rem, calc(100vw - 2rem));
+		max-height: calc(100vh - 4rem);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		z-index: 201;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	/* Plan editor needs the form + live preview side-by-side, so the
+	   plan modal is wider than the default 38rem run/event modal. */
+	.modal-wide {
+		width: min(64rem, calc(100vw - 2rem));
+	}
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-md) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.modal-header h2 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+	.modal-close {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.3rem;
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast);
+	}
+	.modal-close:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+	}
+	.modal-body {
+		padding: var(--space-lg);
+		overflow-y: auto;
 	}
 </style>

@@ -419,16 +419,16 @@
 			clients this value will override the universal setting for this device only.
 		</p>
 		<div class="dialog-actions">
-			<button type="button" class="btn-secondary" onclick={() => (addingForDevice = null)}>
+			<button type="button" class="btn btn-outline btn-sm" onclick={() => (addingForDevice = null)}>
 				Cancel
 			</button>
-			<button type="button" class="btn-primary" onclick={commitAddOverride}>Save</button>
+			<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>Save</button>
 		</div>
 	</div>
 {/if}
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }
+	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
 	.page-header { margin-bottom: var(--space-xl); }
 	h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-xs); }
 	.subtitle { font-size: 0.88rem; color: var(--color-text-secondary); margin-bottom: var(--space-lg); }
@@ -631,20 +631,5 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: 0.4rem;
-	}
-	.btn-primary,
-	.btn-secondary {
-		padding: 0.5rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: 0.88rem;
-		font-weight: 600;
-		cursor: pointer;
-		border: 1px solid transparent;
-	}
-	.btn-primary { background: var(--color-primary); color: white; }
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text-secondary);
-		border-color: var(--color-border);
 	}
 </style>

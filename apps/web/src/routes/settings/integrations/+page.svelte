@@ -271,7 +271,7 @@
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
-		max-width: 44rem;
+		max-width: 64rem;
 	}
 
 	.page-header {
@@ -344,19 +344,6 @@
 		font-size: 0.75rem;
 		color: var(--color-secondary);
 		margin-top: var(--space-xs);
-	}
-
-	.btn {
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-size: 0.8rem;
-		font-weight: 600;
-		flex-shrink: 0;
-		transition: all var(--transition-fast);
-	}
-
-	.btn:disabled {
-		opacity: 0.5;
 	}
 
 	.btn-connect {

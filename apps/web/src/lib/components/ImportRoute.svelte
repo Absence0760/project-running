@@ -438,29 +438,6 @@
 		gap: var(--space-sm);
 	}
 
-	.btn {
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: all var(--transition-fast);
-	}
-
-	.btn:disabled {
-		opacity: 0.5;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-		border: none;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		background: var(--color-primary-hover);
-	}
-
 	.btn-ghost {
 		background: none;
 		border: none;

@@ -111,40 +111,6 @@
 		font-weight: 700;
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.875rem;
-		transition: all var(--transition-fast);
-		border: none;
-		cursor: pointer;
-		text-decoration: none;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-outline {
-		background: transparent;
-		border: 1.5px solid var(--color-border);
-		color: var(--color-text);
-	}
-
-	.btn-outline:hover {
-		border-color: var(--color-primary);
-		color: var(--color-primary);
-	}
-
 	.header-actions {
 		display: flex;
 		gap: var(--space-sm);

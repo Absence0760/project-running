@@ -6,6 +6,7 @@
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { initTheme } from '$lib/theme';
+	import { setMapStyle, type MapStyle } from '$lib/map-style.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 
 	// Apply the persisted theme on first client mount. Users with a
@@ -16,11 +17,30 @@
 		initTheme();
 	});
 
+	// Hydrate the map-style signal once the user is known so the
+	// preview on /runs/[id] matches the user's saved preference without
+	// needing the preferences page to be visited first this session.
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!browser || !uid) return;
+		(async () => {
+			try {
+				const { loadSettings, effective } = await import('$lib/settings');
+				const settings = await loadSettings(uid);
+				const ms = effective<MapStyle>(settings, 'map_style');
+				setMapStyle(ms);
+			} catch (_) {
+				/* silent — falls back to default */
+			}
+		})();
+	});
+
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
+		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
 		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];

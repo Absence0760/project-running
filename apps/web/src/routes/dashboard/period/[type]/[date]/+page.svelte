@@ -229,7 +229,7 @@
 </div>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 56rem; }
+	.page { padding: var(--space-xl) var(--space-2xl); max-width: 72rem; }
 	.nav-row {
 		display: flex;
 		align-items: center;

@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { browseClubs, fetchMyClubs } from '$lib/data';
+	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
-	let tab = $state<'browse' | 'mine'>('browse');
+	let tab = $state<'browse' | 'mine'>('mine');
 	let loading = $state(true);
 	let search = $state('');
 	let browseResults = $state<ClubWithMeta[]>([]);
@@ -38,15 +40,22 @@
 		if (searchTimer) clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadBrowse, 250);
 	}
+
+	let showClubModal = $state(false);
+
+	function handleClubCreated(club: { slug: string }) {
+		showClubModal = false;
+		goto(`/clubs/${club.slug}`);
+	}
 </script>
 
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<a href="/clubs/new" class="btn-primary">
+			<button class="btn btn-primary" type="button" onclick={() => (showClubModal = true)}>
 				<span class="material-symbols">add</span>
 				Create club
-			</a>
+			</button>
 		</div>
 		<div class="tabs">
 			<button class="tab" class:active={tab === 'browse'} onclick={() => (tab = 'browse')}>
@@ -75,7 +84,7 @@
 		<div class="empty">
 			{#if tab === 'mine'}
 				<p>You haven't joined a club yet.</p>
-				<button class="btn-secondary" onclick={() => (tab = 'browse')}>Find one to join</button>
+				<button class="btn btn-secondary" onclick={() => (tab = 'browse')}>Find one to join</button>
 			{:else}
 				<p>No clubs match that search.</p>
 			{/if}
@@ -119,6 +128,26 @@
 	{/if}
 </div>
 
+{#if showClubModal}
+	<div class="modal-backdrop" role="presentation" onclick={() => (showClubModal = false)}></div>
+	<div class="modal" role="dialog" aria-modal="true" aria-label="Create a club">
+		<header class="modal-header">
+			<h2>Create a club</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (showClubModal = false)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body">
+			<ClubEditor oncreated={handleClubCreated} oncancel={() => (showClubModal = false)} />
+		</div>
+	</div>
+{/if}
+
 <script module lang="ts">
 	function hashHue(id: string): number {
 		let h = 0;
@@ -129,7 +158,7 @@
 
 <style>
 	.page {
-		max-width: 64rem;
+		max-width: 72rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
 
@@ -147,32 +176,6 @@
 	h1 {
 		font-size: 1.75rem;
 		font-weight: 700;
-	}
-
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.9rem;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-secondary {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text);
-		padding: 0.5rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: 1px solid var(--color-border);
-		cursor: pointer;
 	}
 
 	.tabs {
@@ -354,5 +357,60 @@
 
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 200;
+	}
+	.modal {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: min(38rem, calc(100vw - 2rem));
+		max-height: calc(100vh - 4rem);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		z-index: 201;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-md) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.modal-header h2 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+	.modal-close {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.3rem;
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast);
+	}
+	.modal-close:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+	}
+	.modal-body {
+		padding: var(--space-lg);
+		overflow-y: auto;
 	}
 </style>

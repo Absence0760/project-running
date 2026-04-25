@@ -10,6 +10,7 @@
 	} from '$lib/settings';
 	import { applyTheme, loadTheme, type Theme } from '$lib/theme';
 	import { setUnit } from '$lib/units.svelte';
+	import { setMapStyle } from '$lib/map-style.svelte';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -68,6 +69,7 @@
 			defaultActivity = effective(settings, 'default_activity_type', 'run') ?? 'run';
 			weekStartDay = effective(settings, 'week_start_day', 'monday') ?? 'monday';
 			mapStyle = effective(settings, 'map_style', 'streets') ?? 'streets';
+			setMapStyle(mapStyle);
 			privacyDefault = effective(settings, 'privacy_default', 'followers') ?? 'followers';
 			autoPauseEnabled = effective(settings, 'auto_pause_enabled', true) ?? true;
 			autoPauseSpeed = (effective<number>(settings, 'auto_pause_speed_mps', 0.8) ?? 0.8).toString();
@@ -131,6 +133,7 @@
 		// Propagate to the app-wide unit signal so every view re-renders
 		// with the new label without a full reload.
 		setUnit(preferredUnit);
+		setMapStyle(mapStyle);
 		saving = false; saved = true;
 		setTimeout(() => (saved = false), 2000);
 	}
@@ -239,19 +242,19 @@
 			<h2>Heart Rate Zones</h2>
 			<p class="section-desc">Upper bound in bpm for each zone. Leave blank if you don't know.</p>
 			<div class="form-grid zones">
-				<label><span class="label-text">Z1 (recovery)</span><input type="number" bind:value={z1} placeholder="e.g. 130" /></label>
-				<label><span class="label-text">Z2 (easy)</span><input type="number" bind:value={z2} placeholder="e.g. 145" /></label>
-				<label><span class="label-text">Z3 (tempo)</span><input type="number" bind:value={z3} placeholder="e.g. 160" /></label>
-				<label><span class="label-text">Z4 (threshold)</span><input type="number" bind:value={z4} placeholder="e.g. 175" /></label>
-				<label><span class="label-text">Z5 (max)</span><input type="number" bind:value={z5} placeholder="e.g. 195" /></label>
+				<label><span class="label-text">Z1 (recovery)</span><input type="number" bind:value={z1} placeholder="130" /></label>
+				<label><span class="label-text">Z2 (easy)</span><input type="number" bind:value={z2} placeholder="145" /></label>
+				<label><span class="label-text">Z3 (tempo)</span><input type="number" bind:value={z3} placeholder="160" /></label>
+				<label><span class="label-text">Z4 (threshold)</span><input type="number" bind:value={z4} placeholder="175" /></label>
+				<label><span class="label-text">Z5 (max)</span><input type="number" bind:value={z5} placeholder="195" /></label>
 			</div>
 		</section>
 
 		<!-- Privacy & Sharing -->
 		<section class="card">
 			<h2>Privacy & Sharing</h2>
-			<div class="form-grid">
-				<label>
+			<div class="form-stack">
+				<label class="field">
 					<span class="label-text">Default Visibility for New Runs</span>
 					<select bind:value={privacyDefault}>
 						<option value="public">Public</option>
@@ -259,7 +262,7 @@
 						<option value="private">Private</option>
 					</select>
 				</label>
-				<label class="checkbox-label">
+				<label class="checkbox-row">
 					<input type="checkbox" bind:checked={stravaAutoShare} />
 					<span>Auto-push runs to Strava</span>
 				</label>
@@ -288,16 +291,20 @@
 </div>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }
+	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
 	.page-header { margin-bottom: var(--space-xl); }
 	h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-xs); }
 	.subtitle { font-size: 0.88rem; color: var(--color-text-secondary); margin-bottom: var(--space-lg); }
 	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }
 	.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-lg); }
-	.form-grid.zones { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+	.form-grid.zones { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+	.form-stack { display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-lg); }
+	.field { display: flex; flex-direction: column; }
+	.checkbox-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
 	.label-text { display: block; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
 	input, select { width: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--color-bg); }
+	input[type="checkbox"] { width: auto; padding: 0; flex-shrink: 0; }
 	input:focus, select:focus { outline: none; border-color: var(--color-primary); }
 	.toggle-row { display: flex; gap: var(--space-sm); }
 	.toggle-btn { flex: 1; padding: var(--space-sm) var(--space-md); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); font-size: 0.85rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
@@ -305,9 +312,6 @@
 	.toggle-btn.active { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); }
 	.checkbox-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; padding-top: 1.2rem; }
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
-	.btn { display: inline-flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-md); font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-	.btn-primary { background: var(--color-primary); color: white; border: none; }
-	.btn-primary:hover { background: var(--color-primary-hover); }
 	.btn-save { width: auto; }
 	.muted { color: var(--color-text-tertiary); }
 </style>

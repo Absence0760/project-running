@@ -289,6 +289,24 @@
 			</a>
 		{/if}
 
+		<a class="coach-promo" href="/coach">
+			<div class="coach-icon">
+				<span class="material-symbols">sports</span>
+			</div>
+			<div class="coach-body">
+				<span class="today-label">ASK THE COACH</span>
+				<strong>Should I run today? How's my pace?</strong>
+				<span class="coach-sub">
+					{#if planOverview}
+						Grounded in your plan and recent runs.
+					{:else}
+						Grounded in your recent runs.
+					{/if}
+				</span>
+			</div>
+			<span class="material-symbols coach-arrow">chevron_right</span>
+		</a>
+
 		<!-- Weekly goal progress — hides when the user hasn't set one.
 		     Configure via Settings → Preferences (writes the same
 		     `weekly_mileage_goal_m` value Android's dashboard reads). -->
@@ -938,6 +956,54 @@
 		color: var(--color-text-tertiary);
 	}
 
+	.coach-promo {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.9rem 1.25rem;
+		margin-bottom: var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-decoration: none;
+		color: inherit;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+	.coach-promo:hover {
+		border-color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+	}
+	.coach-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--color-accent-cyan) 18%, transparent);
+		color: var(--color-primary);
+		flex-shrink: 0;
+	}
+	.coach-icon .material-symbols { font-size: 1.4rem; }
+	.coach-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+	.coach-body strong {
+		font-size: 1rem;
+		font-weight: 600;
+	}
+	.coach-sub {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.coach-arrow {
+		color: var(--color-text-tertiary);
+	}
+
 	.fitness-card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -1149,26 +1215,7 @@
 		justify-content: flex-end;
 		gap: 0.4rem;
 	}
-	.btn-primary,
-	.btn-secondary,
 	.btn-danger {
-		padding: 0.5rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: 0.88rem;
-		font-weight: 600;
-		cursor: pointer;
-		border: 1px solid transparent;
-	}
-	.btn-primary { background: var(--color-primary); color: white; }
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text-secondary);
-		border-color: var(--color-border);
-	}
-	.btn-danger {
-		background: transparent;
-		color: var(--color-danger);
-		border-color: var(--color-danger);
 		margin-right: auto;
 	}
 

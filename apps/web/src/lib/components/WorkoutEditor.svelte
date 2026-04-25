@@ -252,27 +252,6 @@
 		gap: 0.5rem;
 		margin-top: var(--space-sm);
 	}
-	.btn-primary {
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: none;
-		cursor: pointer;
-	}
-	.btn-primary:disabled {
-		opacity: 0.6;
-	}
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: 1px solid var(--color-border);
-		cursor: pointer;
-	}
 	.error {
 		color: var(--color-danger);
 		background: var(--color-danger-light);

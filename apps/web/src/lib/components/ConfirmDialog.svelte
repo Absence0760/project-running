@@ -71,15 +71,6 @@
 		justify-content: flex-end;
 		gap: 0.5rem;
 	}
-	.btn {
-		padding: 0.45rem 1rem;
-		border-radius: var(--radius-md);
-		font-size: 0.85rem;
-		font-weight: 600;
-		cursor: pointer;
-		border: none;
-		transition: background var(--transition-fast);
-	}
 	.cancel {
 		background: var(--color-bg-tertiary);
 		color: var(--color-text);

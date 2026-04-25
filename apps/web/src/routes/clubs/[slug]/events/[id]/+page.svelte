@@ -792,7 +792,7 @@
 
 <style>
 	.page {
-		max-width: 56rem;
+		max-width: 72rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
 
@@ -945,32 +945,8 @@
 		min-width: 10rem;
 	}
 
-	.btn-primary {
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.6rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: none;
-		cursor: pointer;
-	}
-
 	.btn-primary.filled {
 		background: var(--color-primary-hover);
-	}
-
-	.btn-primary:disabled {
-		opacity: 0.6;
-	}
-
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: 1px solid var(--color-border);
-		cursor: pointer;
 	}
 
 	.btn-secondary.active {
@@ -1284,16 +1260,6 @@
 		font-size: 1.4rem;
 		padding: 0.6rem 2rem;
 		letter-spacing: 0.1em;
-	}
-	.btn-danger {
-		padding: 0.35rem 0.75rem;
-		font-size: 0.85rem;
-		border-radius: var(--radius-md);
-		background: var(--color-danger);
-		color: white;
-		border: none;
-		font-weight: 600;
-		cursor: pointer;
 	}
 	.auto-approve {
 		display: flex;

@@ -1,15 +1,22 @@
-// Claude-powered coach endpoint.
+// Coach endpoint.
 //
 // Role: "second opinion" on the runner's plan + recent runs. Does NOT
 // generate plans or prescribe training — see docs/decisions.md #12.
 // Answers "should I run tomorrow?", "am I on pace for my goal?", "my last
 // three long runs were slow, what's going on?" — grounded in real data.
 //
-// Prompt-caching layout:
+// Two providers are supported, picked by `COACH_PROVIDER`:
+//   - `anthropic` (default): Claude via @anthropic-ai/sdk, with prompt
+//     caching on the system prompt + first user message. Used in prod.
+//   - `openai`: OpenAI-compatible /v1/chat/completions endpoint. Set
+//     `OPENAI_BASE_URL` to point at Ollama (`http://localhost:11434/v1`)
+//     or any other compatible server. No prompt caching — the request is
+//     re-tokenised every turn. Intended for local development.
+//
+// Anthropic prompt-caching layout:
 //   system → the coach-persona prompt                       (cache)
 //   first user message → plan + recent runs context dump    (cache)
 //   subsequent user messages → the live chat                (no cache)
-//
 // Two cache breakpoints are enough: anything the user types changes between
 // turns, but the static context reshapes only when the plan changes or a
 // new run lands. A 20-turn conversation hits the cache 18× with this setup.
@@ -26,20 +33,39 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 // it runs as a serverless function.
 export const prerender = false;
 
+const COACH_PROVIDER = (env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
 const ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
+const OPENAI_BASE_URL = env.OPENAI_BASE_URL ?? 'http://localhost:11434/v1';
+const OPENAI_API_KEY = env.OPENAI_API_KEY ?? 'ollama';
+const OPENAI_MODEL = env.OPENAI_MODEL ?? 'llama3.2';
 
 interface CoachRequest {
 	messages: { role: 'user' | 'assistant'; content: string }[];
 	plan_id?: string;
+	/// How many recent runs to include in the context dump. Clamped to
+	/// [1, 100] server-side so a runaway client can't blow up the prompt.
+	/// Defaults to 20 if absent — matches the original behaviour.
+	recent_runs_limit?: number;
 	access_token: string; // user's Supabase JWT — used to scope the data pull
 }
 
+const DEFAULT_RUNS_LIMIT = 20;
+const MAX_RUNS_LIMIT = 100;
+
 export const POST: RequestHandler = async ({ request }) => {
-	if (!ANTHROPIC_API_KEY) {
+	if (COACH_PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
 		return new Response(
 			JSON.stringify({
 				error:
-					'Coach is not configured — set ANTHROPIC_API_KEY in the web app env.'
+					'Coach is not configured — set ANTHROPIC_API_KEY in the web app env, or set COACH_PROVIDER=openai for a local Ollama-compatible backend.'
+			}),
+			{ status: 503, headers: { 'content-type': 'application/json' } }
+		);
+	}
+	if (COACH_PROVIDER !== 'anthropic' && COACH_PROVIDER !== 'openai') {
+		return new Response(
+			JSON.stringify({
+				error: `Unknown COACH_PROVIDER='${COACH_PROVIDER}'. Use 'anthropic' or 'openai'.`
 			}),
 			{ status: 503, headers: { 'content-type': 'application/json' } }
 		);
@@ -102,15 +128,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
-	const context = await buildContext(supabase, body.plan_id ?? null);
+	const requestedLimit = Number(body.recent_runs_limit ?? DEFAULT_RUNS_LIMIT);
+	const runsLimit = Number.isFinite(requestedLimit)
+		? Math.min(MAX_RUNS_LIMIT, Math.max(1, Math.trunc(requestedLimit)))
+		: DEFAULT_RUNS_LIMIT;
+
+	const context = await buildContext(supabase, body.plan_id ?? null, runsLimit);
 	if (context.error) {
 		return new Response(JSON.stringify({ error: context.error }), {
 			status: 401,
 			headers: { 'content-type': 'application/json' }
 		});
 	}
-
-	const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 	const personality = (context.data as Record<string, unknown>)?.runner_context as Record<string, unknown> | undefined;
 	const coachStyle = personality?.coach_personality as string | undefined;
@@ -122,21 +151,44 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 	// 'supportive' is the default tone in COACH_SYSTEM_PROMPT — no addendum needed.
 
-	const systemBlocks = [
-		{
-			type: 'text' as const,
-			text: COACH_SYSTEM_PROMPT + personalityAddendum,
-			cache_control: { type: 'ephemeral' as const }
-		}
-	];
-
-	// First user message sent on every request carries the grounded context.
-	// Marked cache_control so repeat turns with the same plan/runs hit a
-	// cached prefix; only the chat tail re-tokenises.
+	const systemText = COACH_SYSTEM_PROMPT + personalityAddendum;
 	const contextPayload =
 		'CONTEXT (runner profile, active plan, recent runs):\n' +
 		JSON.stringify(context.data, null, 2);
 
+	try {
+		if (COACH_PROVIDER === 'openai') {
+			return await callOpenAI(systemText, contextPayload, body.messages);
+		}
+		return await callAnthropic(systemText, contextPayload, body.messages);
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'coach call failed';
+		return new Response(JSON.stringify({ error: msg }), {
+			status: 502,
+			headers: { 'content-type': 'application/json' }
+		});
+	}
+};
+
+// ─────────────────────── Provider: Anthropic ───────────────────────
+
+async function callAnthropic(
+	systemText: string,
+	contextPayload: string,
+	messages: { role: 'user' | 'assistant'; content: string }[]
+): Promise<Response> {
+	const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+	const systemBlocks = [
+		{
+			type: 'text' as const,
+			text: systemText,
+			cache_control: { type: 'ephemeral' as const }
+		}
+	];
+
+	// First user message carries the grounded context; cache_control on it
+	// gives a stable prefix that subsequent turns hit.
 	const convo = [
 		{
 			role: 'user' as const,
@@ -150,47 +202,94 @@ export const POST: RequestHandler = async ({ request }) => {
 		},
 		{
 			role: 'assistant' as const,
-			content:
-				'Got it — I have your plan and recent runs in view. Ask away.'
+			content: 'Got it — I have your plan and recent runs in view. Ask away.'
 		},
-		...body.messages.map((m) => ({
+		...messages.map((m) => ({
 			role: m.role,
 			content: [{ type: 'text' as const, text: m.content }]
 		}))
 	];
 
-	try {
-		const res = await anthropic.messages.create({
-			model: 'claude-sonnet-4-5',
+	const res = await anthropic.messages.create({
+		model: 'claude-sonnet-4-5',
+		max_tokens: 1024,
+		system: systemBlocks,
+		messages: convo
+	});
+	const text = res.content
+		.filter((b) => b.type === 'text')
+		.map((b) => (b as { type: 'text'; text: string }).text)
+		.join('\n');
+	return new Response(
+		JSON.stringify({
+			reply: text,
+			cache: {
+				cache_creation_input_tokens: res.usage.cache_creation_input_tokens ?? 0,
+				cache_read_input_tokens: res.usage.cache_read_input_tokens ?? 0,
+				input_tokens: res.usage.input_tokens,
+				output_tokens: res.usage.output_tokens
+			}
+		}),
+		{ headers: { 'content-type': 'application/json' } }
+	);
+}
+
+// ─────────────────────── Provider: OpenAI-compatible ───────────────────────
+//
+// Targets any server that implements `POST /v1/chat/completions` with the
+// OpenAI request/response shape — Ollama, llama.cpp's server, vLLM, LM
+// Studio, OpenAI itself. No prompt caching: the same context is sent every
+// turn, which is fine for local dev.
+
+async function callOpenAI(
+	systemText: string,
+	contextPayload: string,
+	messages: { role: 'user' | 'assistant'; content: string }[]
+): Promise<Response> {
+	const convo = [
+		{ role: 'system', content: systemText },
+		{ role: 'user', content: contextPayload },
+		{ role: 'assistant', content: 'Got it — I have your plan and recent runs in view. Ask away.' },
+		...messages.map((m) => ({ role: m.role, content: m.content }))
+	];
+
+	const res = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json',
+			authorization: `Bearer ${OPENAI_API_KEY}`
+		},
+		body: JSON.stringify({
+			model: OPENAI_MODEL,
+			messages: convo,
 			max_tokens: 1024,
-			system: systemBlocks,
-			messages: convo
-		});
-		const text = res.content
-			.filter((b) => b.type === 'text')
-			.map((b) => (b as { type: 'text'; text: string }).text)
-			.join('\n');
-		return new Response(
-			JSON.stringify({
-				reply: text,
-				cache: {
-					cache_creation_input_tokens:
-						res.usage.cache_creation_input_tokens ?? 0,
-					cache_read_input_tokens: res.usage.cache_read_input_tokens ?? 0,
-					input_tokens: res.usage.input_tokens,
-					output_tokens: res.usage.output_tokens
-				}
-			}),
-			{ headers: { 'content-type': 'application/json' } }
-		);
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : 'coach call failed';
-		return new Response(JSON.stringify({ error: msg }), {
-			status: 502,
-			headers: { 'content-type': 'application/json' }
-		});
+			stream: false
+		})
+	});
+
+	if (!res.ok) {
+		const errText = await res.text().catch(() => '');
+		throw new Error(`coach upstream ${res.status}: ${errText.slice(0, 400)}`);
 	}
-};
+
+	const json = (await res.json()) as {
+		choices?: { message?: { content?: string } }[];
+		usage?: { prompt_tokens?: number; completion_tokens?: number };
+	};
+	const text = json.choices?.[0]?.message?.content ?? '';
+	return new Response(
+		JSON.stringify({
+			reply: text,
+			cache: {
+				cache_creation_input_tokens: 0,
+				cache_read_input_tokens: 0,
+				input_tokens: json.usage?.prompt_tokens ?? 0,
+				output_tokens: json.usage?.completion_tokens ?? 0
+			}
+		}),
+		{ headers: { 'content-type': 'application/json' } }
+	);
+}
 
 // ─────────────────────── System prompt ───────────────────────
 
@@ -226,7 +325,8 @@ interface CoachContext {
 
 async function buildContext(
 	supabase: SupabaseClient,
-	planId: string | null
+	planId: string | null,
+	runsLimit: number
 ): Promise<CoachContext> {
 	const { data: { user }, error: uErr } = await supabase.auth.getUser();
 	if (uErr || !user) return { error: 'not authenticated' };
@@ -265,7 +365,7 @@ async function buildContext(
 		.from('runs')
 		.select('id, started_at, distance_m, duration_s, metadata, route_id')
 		.order('started_at', { ascending: false })
-		.limit(20);
+		.limit(runsLimit);
 
 	const { data: profile } = await supabase
 		.from('user_profiles')

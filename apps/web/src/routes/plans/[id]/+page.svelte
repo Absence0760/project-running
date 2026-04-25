@@ -3,7 +3,6 @@
 	import { page } from '$app/stores';
 	import { fetchPlan } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
-	import CoachChat from '$lib/components/CoachChat.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import {
 		fmtHms,
@@ -232,10 +231,14 @@
 			{/each}
 		</section>
 
-		<section class="coach-section">
-			<h2 class="section-title">Coach</h2>
-			<CoachChat planId={plan.id} />
-		</section>
+		<a class="coach-link" href="/coach?plan={plan.id}">
+			<span class="material-symbols">sports</span>
+			<div class="coach-link-body">
+				<strong>Ask the coach about this plan</strong>
+				<span>Should I run today? Am I on track? Why this week's long run?</span>
+			</div>
+			<span class="material-symbols arrow">chevron_right</span>
+		</a>
 	</div>
 {/if}
 
@@ -252,7 +255,7 @@
 
 <style>
 	.page {
-		max-width: 60rem;
+		max-width: 72rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
 	.back {
@@ -483,8 +486,40 @@
 		color: var(--color-primary);
 		font-size: 1rem;
 	}
-	.coach-section {
+	.coach-link {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
 		margin-top: var(--space-xl);
+		padding: 0.9rem 1.25rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		color: inherit;
+		text-decoration: none;
+		transition: border-color 0.15s ease, background 0.15s ease;
+	}
+	.coach-link:hover {
+		border-color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+	}
+	.coach-link > .material-symbols {
+		color: var(--color-primary);
+		font-size: 1.5rem;
+	}
+	.coach-link-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+	.coach-link-body span {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.coach-link .arrow {
+		color: var(--color-text-tertiary);
 	}
 	.calendar-section {
 		margin: var(--space-md) 0;

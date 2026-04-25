@@ -9,6 +9,8 @@
 		sourceColor,
 	} from '$lib/mock-data';
 	import { fetchRuns, deleteRuns } from '$lib/data';
+	import RunEditor from '$lib/components/RunEditor.svelte';
+	import { goto } from '$app/navigation';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
@@ -178,6 +180,15 @@
 		runs = await fetchRuns();
 		loading = false;
 	});
+
+	let showRunModal = $state(false);
+
+	async function handleRunCreated(run: { id: string }) {
+		showRunModal = false;
+		// Navigate straight to the new run so the user lands on the
+		// detail page they'd otherwise have hit via the standalone form.
+		goto(`/runs/${run.id}`);
+	}
 </script>
 
 <div class="page">
@@ -197,7 +208,7 @@
 						onclick={() => (selecting = true)}
 						type="button">Select</button
 					>
-					<a href="/runs/new" class="add-btn">+ Add run</a>
+					<button class="add-btn" type="button" onclick={() => (showRunModal = true)}>+ Add run</button>
 				{/if}
 			</div>
 		</div>
@@ -275,86 +286,61 @@
 	{:else}
 		<div class="run-list">
 			{#each filteredRuns as run}
-				{#if selecting}
-					<button
-						class="run-card select-mode"
-						class:selected={selected.has(run.id)}
-						onclick={() => toggleSelect(run.id)}
-						type="button"
-					>
+				{@const isSelected = selected.has(run.id)}
+				<svelte:element
+					this={selecting ? 'button' : 'a'}
+					class="run-card"
+					class:selecting
+					class:selected={selecting && isSelected}
+					href={selecting ? undefined : `/runs/${run.id}`}
+					type={selecting ? 'button' : undefined}
+					onclick={selecting ? () => toggleSelect(run.id) : undefined}
+				>
+					{#if selecting}
 						<span
 							class="select-box"
-							class:checked={selected.has(run.id)}
+							class:checked={isSelected}
 							aria-hidden="true"
 						>
-							{selected.has(run.id) ? '✓' : ''}
+							{isSelected ? '✓' : ''}
 						</span>
-						<div class="run-details">
-							<div class="run-top">
-								<span class="run-date">{formatDate(run.started_at)}</span>
-								<span
-									class="source-badge"
-									style="background: {sourceColor(run.source)}"
-									>{sourceLabel(run.source)}</span
-								>
+					{/if}
+					{#if run.track_url}
+						<div class="run-map-placeholder">
+							<RunTrackPreview trackUrl={run.track_url} />
+						</div>
+					{/if}
+					<div class="run-details">
+						<div class="run-top">
+							<span class="run-date">{formatDate(run.started_at)}</span>
+							<span class="source-badge" style="background: {sourceColor(run.source)}"
+								>{sourceLabel(run.source)}</span
+							>
+						</div>
+						<div class="run-stats">
+							<div class="run-stat">
+								<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
+								<span class="run-stat-label">Distance</span>
 							</div>
-							<div class="run-stats">
-								<div class="run-stat">
-									<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
-									<span class="run-stat-label">Distance</span>
-								</div>
-								<div class="run-stat">
-									<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
-									<span class="run-stat-label">Time</span>
-								</div>
-								<div class="run-stat">
-									<span class="run-stat-value"
-										>{formatPace(run.duration_s, run.distance_m)}</span
-									>
-									<span class="run-stat-label">Pace</span>
-								</div>
+							<div class="run-stat">
+								<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
+								<span class="run-stat-label">Time</span>
+							</div>
+							<div class="run-stat">
+								<span class="run-stat-value"
+									>{formatPace(run.duration_s, run.distance_m)}</span
+								>
+								<span class="run-stat-label">Pace</span>
 							</div>
 						</div>
-					</button>
-				{:else}
-					<a href="/runs/{run.id}" class="run-card">
-						{#if run.track_url}
-							<div class="run-map-placeholder">
-								<RunTrackPreview trackUrl={run.track_url} />
+						{#if run.metadata?.event}
+							<div class="run-event">
+								{run.metadata.event}
+								{#if run.metadata.position} &middot; Position {run.metadata.position}{/if}
 							</div>
 						{/if}
-						<div class="run-details">
-							<div class="run-top">
-								<span class="run-date">{formatDate(run.started_at)}</span>
-								<span class="source-badge" style="background: {sourceColor(run.source)}"
-									>{sourceLabel(run.source)}</span
-								>
-							</div>
-							<div class="run-stats">
-								<div class="run-stat">
-									<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
-									<span class="run-stat-label">Distance</span>
-								</div>
-								<div class="run-stat">
-									<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
-									<span class="run-stat-label">Time</span>
-								</div>
-								<div class="run-stat">
-									<span class="run-stat-value"
-										>{formatPace(run.duration_s, run.distance_m)}</span
-									>
-									<span class="run-stat-label">Pace</span>
-								</div>
-							</div>
-							{#if run.metadata?.event}
-								<div class="run-event">
-									{run.metadata.event}
-									{#if run.metadata.position} &middot; Position {run.metadata.position}{/if}
-								</div>
-							{/if}
-						</div>
-					</a>
-				{/if}
+					</div>
+				</svelte:element>
 			{/each}
 		</div>
 
@@ -387,6 +373,26 @@
 		{/if}
 	{/if}
 </div>
+
+{#if showRunModal}
+	<div class="modal-backdrop" role="presentation" onclick={() => (showRunModal = false)}></div>
+	<div class="modal" role="dialog" aria-modal="true" aria-label="Add a run">
+		<header class="modal-header">
+			<h2>Add a run</h2>
+			<button
+				class="modal-close"
+				type="button"
+				aria-label="Close"
+				onclick={() => (showRunModal = false)}
+			>
+				<span class="material-symbols">close</span>
+			</button>
+		</header>
+		<div class="modal-body">
+			<RunEditor oncreated={handleRunCreated} oncancel={() => (showRunModal = false)} />
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page {
@@ -606,48 +612,69 @@
 		padding: 0.4rem 0.3rem;
 	}
 	.add-btn {
-		padding: 0.4rem 0.9rem;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-lg);
 		background: var(--color-primary);
 		color: white;
 		border-radius: var(--radius-md);
-		font-size: 0.85rem;
+		font-size: 0.875rem;
 		font-weight: 600;
 		text-decoration: none;
+		border: none;
+		cursor: pointer;
+		transition: all var(--transition-fast);
 	}
-	.add-btn:hover { filter: brightness(1.08); }
-	.run-card.select-mode {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 1rem;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+	.add-btn:hover { background: var(--color-primary-hover); }
+	/* Select mode renders as <button> instead of <a>, but the visual
+	   layout is identical to the link version — same map preview, same
+	   stats grid. The checkbox is positioned over the top-left corner
+	   so the card itself doesn't have to reflow. */
+	.run-card.selecting {
+		position: relative;
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
 		color: inherit;
-		grid-column: 1 / -1;
+		padding: 0;
+		width: 100%;
 	}
-	.run-card.select-mode.selected {
+	/* The link version is naturally `position: relative` via the grid
+	   item it sits in; the button version needs it for the absolute
+	   `.select-box` overlay to anchor correctly. */
+	.run-card.selecting .run-map-placeholder { pointer-events: none; }
+	/* Cards without a map preview have their date row at the top of the
+	   card, where the absolute-positioned checkbox sits. Push it right
+	   so the box doesn't sit over the date text. The padding is harmless
+	   when a map is present (the date row is below the map). */
+	.run-card.selecting .run-top { padding-left: 2rem; }
+	.run-card.selecting.selected {
 		border-color: var(--color-primary);
-		background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+		box-shadow: 0 0 0 2px var(--color-primary-light);
 	}
 	.select-box {
+		position: absolute;
+		top: 0.6rem;
+		left: 0.6rem;
+		z-index: 2;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 22px;
-		height: 22px;
+		width: 24px;
+		height: 24px;
+		background: var(--color-surface);
 		border: 1.5px solid var(--color-border);
 		border-radius: 6px;
-		flex-shrink: 0;
-		color: white;
-		font-size: 0.9rem;
+		color: var(--color-bg);
+		font-size: 0.95rem;
+		font-weight: 700;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 	}
 	.select-box.checked {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
+		color: #FFFFFF;
 	}
 	.bulk-bar {
 		position: sticky;
@@ -675,4 +702,59 @@
 		cursor: pointer;
 	}
 	.bulk-delete:disabled { opacity: 0.55; cursor: not-allowed; }
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 200;
+	}
+	.modal {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: min(36rem, calc(100vw - 2rem));
+		max-height: calc(100vh - 4rem);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		z-index: 201;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-md) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.modal-header h2 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+	.modal-close {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.3rem;
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast);
+	}
+	.modal-close:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+	}
+	.modal-body {
+		padding: var(--space-lg);
+		overflow-y: auto;
+	}
 </style>

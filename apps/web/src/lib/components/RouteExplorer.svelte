@@ -403,34 +403,6 @@
 		outline: none;
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.85rem;
-		transition: all var(--transition-fast);
-		cursor: pointer;
-	}
-
-	.btn-outline {
-		background: transparent;
-		border: 1.5px solid var(--color-border);
-		color: var(--color-text);
-	}
-
-	.btn-outline:hover {
-		border-color: var(--color-primary);
-		color: var(--color-primary);
-	}
-
-	.btn-outline:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
 	.empty {
 		display: flex;
 		flex-direction: column;

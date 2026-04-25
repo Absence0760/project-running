@@ -4,6 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
 	import { getUnit } from '$lib/units.svelte';
+	import { getMapStyle, mapStyleUrl } from '$lib/map-style.svelte';
 	import type { TrackPoint } from '$lib/types';
 
 	let { track = [], animatable = false }: { track: TrackPoint[]; animatable?: boolean } = $props();
@@ -111,14 +112,126 @@
 		animationMarker?.remove();
 	}
 
-	onMount(() => {
-		const coords: [number, number][] = track.map((p) => [p.lng, p.lat]);
+	let startMarker: maplibregl.Marker | undefined;
+	let endMarker: maplibregl.Marker | undefined;
 
-		let bounds: maplibregl.LngLatBoundsLike | undefined;
-		if (coords.length > 0) {
-			const lngs = coords.map((c) => c[0]);
-			const lats = coords.map((c) => c[1]);
-			bounds = [
+	// Re-add every custom source/layer/marker the component owns. Called
+	// after the initial style load and again whenever the user picks a
+	// new map style (setStyle wipes user layers but leaves DOM markers).
+	function addOverlays(coords: [number, number][], bounds: maplibregl.LngLatBoundsLike | undefined, fit: boolean) {
+		if (coords.length < 2) return;
+		if (fit && bounds) map.fitBounds(bounds, { padding: 50 });
+
+		map.addSource('trace', {
+			type: 'geojson',
+			data: {
+				type: 'Feature', properties: {},
+				geometry: { type: 'LineString', coordinates: coords }
+			}
+		});
+
+		map.addLayer({
+			id: 'trace-casing',
+			type: 'line',
+			source: 'trace',
+			paint: { 'line-color': '#1d4ed8', 'line-width': 7, 'line-opacity': 0.25 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+
+		map.addLayer({
+			id: 'trace-line',
+			type: 'line',
+			source: 'trace',
+			paint: { 'line-color': prefersDark ? '#818CF8' : '#4F46E5', 'line-width': 3.5 },
+			layout: { 'line-join': 'round', 'line-cap': 'round' }
+		});
+
+		map.addLayer({
+			id: 'trace-arrows',
+			type: 'symbol',
+			source: 'trace',
+			layout: {
+				'symbol-placement': 'line',
+				'symbol-spacing': 60,
+				'text-field': '▶',
+				'text-size': 14,
+				'text-rotation-alignment': 'map',
+				'text-keep-upright': false,
+				'text-allow-overlap': true,
+			},
+			paint: {
+				'text-color': prefersDark ? '#FFFFFF' : '#1d4ed8',
+				'text-halo-color': prefersDark ? '#1d4ed8' : '#FFFFFF',
+				'text-halo-width': 1.5,
+			},
+		});
+
+		const markers = computeDistanceMarkers(coords);
+		if (markers.features.length > 0) {
+			map.addSource('distance-markers', {
+				type: 'geojson',
+				data: markers,
+			});
+			map.addLayer({
+				id: 'distance-marker-bg',
+				type: 'circle',
+				source: 'distance-markers',
+				paint: {
+					'circle-radius': 11,
+					'circle-color': prefersDark ? '#1E293B' : '#FFFFFF',
+					'circle-stroke-color': prefersDark ? '#818CF8' : '#4F46E5',
+					'circle-stroke-width': 2,
+				},
+			});
+			map.addLayer({
+				id: 'distance-marker-text',
+				type: 'symbol',
+				source: 'distance-markers',
+				layout: {
+					'text-field': ['get', 'label'],
+					'text-size': 11,
+					'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+					'text-allow-overlap': true,
+				},
+				paint: {
+					'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
+				},
+			});
+		}
+
+		if (animatable) {
+			map.addSource('animated-trace', {
+				type: 'geojson',
+				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
+			});
+
+			map.addLayer({
+				id: 'animated-trace-line',
+				type: 'line',
+				source: 'animated-trace',
+				paint: { 'line-color': '#f59e0b', 'line-width': 4 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' }
+			});
+		}
+
+		if (!startMarker) {
+			startMarker = new maplibregl.Marker({ color: '#22c55e' }).setLngLat(coords[0]).addTo(map);
+		}
+		if (!endMarker) {
+			endMarker = new maplibregl.Marker({ color: '#ef4444' }).setLngLat(coords[coords.length - 1]).addTo(map);
+		}
+	}
+
+	let trackCoords: [number, number][] = [];
+	let trackBounds: maplibregl.LngLatBoundsLike | undefined;
+
+	onMount(() => {
+		trackCoords = track.map((p) => [p.lng, p.lat]);
+
+		if (trackCoords.length > 0) {
+			const lngs = trackCoords.map((c) => c[0]);
+			const lats = trackCoords.map((c) => c[1]);
+			trackBounds = [
 				[Math.min(...lngs), Math.min(...lats)],
 				[Math.max(...lngs), Math.max(...lats)]
 			];
@@ -126,129 +239,26 @@
 
 		map = new maplibregl.Map({
 			container: mapContainer,
-			style: `https://api.maptiler.com/maps/${prefersDark ? 'streets-v2-dark' : 'streets-v2'}/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-			center: coords.length > 0 ? coords[Math.floor(coords.length / 2)] : [0, 20],
+			style: mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark),
+			center: trackCoords.length > 0 ? trackCoords[Math.floor(trackCoords.length / 2)] : [0, 20],
 			zoom: 13
 		});
 
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-		map.on('load', () => {
-			if (coords.length < 2) return;
+		map.on('load', () => addOverlays(trackCoords, trackBounds, true));
+	});
 
-			if (bounds) {
-				map.fitBounds(bounds, { padding: 50 });
-			}
-
-			map.addSource('trace', {
-				type: 'geojson',
-				data: {
-					type: 'Feature', properties: {},
-					geometry: { type: 'LineString', coordinates: coords }
-				}
-			});
-
-			map.addLayer({
-				id: 'trace-casing',
-				type: 'line',
-				source: 'trace',
-				paint: { 'line-color': '#1d4ed8', 'line-width': 7, 'line-opacity': 0.25 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-
-			map.addLayer({
-				id: 'trace-line',
-				type: 'line',
-				source: 'trace',
-				paint: { 'line-color': prefersDark ? '#818CF8' : '#4F46E5', 'line-width': 3.5 },
-				layout: { 'line-join': 'round', 'line-cap': 'round' }
-			});
-
-			// Direction arrows along the line. Larger + more frequent than
-			// the previous spacing so overlapping out-and-backs are easy
-			// to disambiguate; the white halo (`text-halo-*`) keeps them
-			// readable when the polyline doubles back on itself.
-			map.addLayer({
-				id: 'trace-arrows',
-				type: 'symbol',
-				source: 'trace',
-				layout: {
-					'symbol-placement': 'line',
-					'symbol-spacing': 60,
-					'text-field': '▶',
-					'text-size': 14,
-					'text-rotation-alignment': 'map',
-					'text-keep-upright': false,
-					'text-allow-overlap': true,
-				},
-				paint: {
-					'text-color': prefersDark ? '#FFFFFF' : '#1d4ed8',
-					'text-halo-color': prefersDark ? '#1d4ed8' : '#FFFFFF',
-					'text-halo-width': 1.5,
-				},
-			});
-
-			// Distance markers at every 1 km / 1 mi (matches user pref).
-			// Drops a numbered pin where the cumulative haversine distance
-			// crosses each unit boundary; lets the user eyeball pace and
-			// orient when the route is long enough to cover ground.
-			const markers = computeDistanceMarkers(coords);
-			if (markers.features.length > 0) {
-				map.addSource('distance-markers', {
-					type: 'geojson',
-					data: markers,
-				});
-				map.addLayer({
-					id: 'distance-marker-bg',
-					type: 'circle',
-					source: 'distance-markers',
-					paint: {
-						'circle-radius': 11,
-						'circle-color': prefersDark ? '#1E293B' : '#FFFFFF',
-						'circle-stroke-color': prefersDark ? '#818CF8' : '#4F46E5',
-						'circle-stroke-width': 2,
-					},
-				});
-				map.addLayer({
-					id: 'distance-marker-text',
-					type: 'symbol',
-					source: 'distance-markers',
-					layout: {
-						'text-field': ['get', 'label'],
-						'text-size': 11,
-						'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-						'text-allow-overlap': true,
-					},
-					paint: {
-						'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
-					},
-				});
-			}
-
-			// Animated trace layer (hidden until animation starts)
-			if (animatable) {
-				map.addSource('animated-trace', {
-					type: 'geojson',
-					data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
-				});
-
-				map.addLayer({
-					id: 'animated-trace-line',
-					type: 'line',
-					source: 'animated-trace',
-					paint: { 'line-color': '#f59e0b', 'line-width': 4 },
-					layout: { 'line-join': 'round', 'line-cap': 'round' }
-				});
-			}
-
-			new maplibregl.Marker({ color: '#22c55e' })
-				.setLngLat(coords[0])
-				.addTo(map);
-
-			new maplibregl.Marker({ color: '#ef4444' })
-				.setLngLat(coords[coords.length - 1])
-				.addTo(map);
-		});
+	// Reactive map-style swap. The first run after `map` is created is
+	// a no-op (the style URL already matches); subsequent runs swap the
+	// basemap and re-attach the trace + markers once the new style loads.
+	let currentStyle: ReturnType<typeof getMapStyle> = getMapStyle();
+	$effect(() => {
+		const next = getMapStyle();
+		if (!map || next === currentStyle) return;
+		currentStyle = next;
+		map.setStyle(mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark));
+		map.once('style.load', () => addOverlays(trackCoords, trackBounds, false));
 	});
 
 	onDestroy(() => {

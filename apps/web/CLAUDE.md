@@ -46,7 +46,8 @@ src/
     plans/new/      # New-plan wizard with live preview
     plans/[id]/     # Plan detail: progress ring, today card, week grid
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
-    api/coach/+server.ts         # Claude coach — prompt-cached over plan + recent runs. Needs a server adapter + ANTHROPIC_API_KEY
+    coach/          # Standalone Coach chat — auto-resolves the active plan, tolerates plan-less users
+    api/coach/+server.ts         # Coach endpoint. Default provider: Claude (ANTHROPIC_API_KEY). Set COACH_PROVIDER=openai + OPENAI_BASE_URL for local Ollama.
     explore/        # Public route discovery (search, distance/surface filters)
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
