@@ -73,7 +73,7 @@ Migration: `apps/backend/supabase/migrations/20260419_001_training_plans.sql`. T
 
 - `training_plans` — one per user-plan; `vdot`, `goal_distance_m`, `goal_time_seconds`, `status`, `current_5k_seconds`. Partial unique index enforces **one active plan per user**; `createTrainingPlan` auto-completes the previous active plan on insert.
 - `plan_weeks` — 8–16 rows per plan; `phase`, `target_volume_m`, `notes`, `week_index`.
-- `plan_workouts` — ~4–6 rows per week; `kind`, target distance / duration / pace / tolerance, free-form `structure jsonb` for intervals, `completed_run_id` set by the auto-matcher.
+- `plan_workouts` — ~4–6 rows per week; `kind`, target distance / duration / pace / tolerance, free-form `structure jsonb` for intervals. Completion is encoded by **two** fields: `completed_run_id` (set by the auto-matcher when a tracked run lands) and `manually_completed` (boolean, set by the calendar editor's "Mark as done" when the user ran without recording). Read sites should treat the workout as done if either is truthy — the shared helper is `isWorkoutCompleted(wo)` in `apps/web/src/lib/training.ts`.
 
 ### `plan_workouts.structure` shape
 
@@ -94,9 +94,12 @@ Migration: `apps/backend/supabase/migrations/20260419_001_training_plans.sql`. T
 
 Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will grow the schema (lap markers, HR targets, rep numbering cues) and a migration per revision is overkill for a v1 shape that's still settling.
 
-## Auto-match on run save
+## Marking a workout as done
 
-`autoMatchRunToPlanWorkout(runId, runIsoDate, runDistanceM)` links a run to the same-day plan workout whose target distance is within ±25% of the recorded distance. Wrong matches are manually clearable via the "Unlink" control on the workout-detail page. Not called automatically by `ApiClient.saveRun` yet — the wiring is on the roadmap once we've validated the matching logic in the wild.
+Two paths land in the same UI state (the green check on the calendar, the progress-ring counter ticking up):
+
+1. **Auto-match from a tracked run.** `autoMatchRunToPlanWorkout(runId, runIsoDate, runDistanceM)` links a run to the same-day plan workout whose target distance is within ±25% of the recorded distance. Wrong matches are manually clearable via the "Unlink" control on the workout-detail page. Not called automatically by `ApiClient.saveRun` yet — the wiring is on the roadmap once we've validated the matching logic in the wild.
+2. **Manual mark from the calendar editor.** The "Mark as done" button in `WorkoutEditor.svelte` calls `markWorkoutCompleted(id, null, { manual: true })`, which sets `manually_completed = true` and stamps `completed_at`. The same button toggles back to "Mark not done" — clearing both flags — when the workout is already completed via the manual path. If a workout already has a linked run, the button is disabled with a tooltip pointing the user at the workout-detail page's Unlink flow so the run/workout link is severed deliberately.
 
 ## Deferred
 
