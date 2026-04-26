@@ -126,7 +126,7 @@ Test files in `test/`:
 - `architecture_guards_test.dart` — 20 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
 - plus `run_recorder`'s own tests in `packages/run_recorder/test/` — 17 behavioural + 7 guards + 13 `workout_runner_test.dart` (step expansion, auto-advance, halfway / last-50m progress, skip / abandon, pace-adherence wayBehind, results JSON shape)
 
-See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for `FitnessCard`, `WorkoutExecutionBand`, `WorkoutReviewSection`, and `PlanCalendar` (14 `testWidgets` calls total); all other screens and widgets are uncovered.
+See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for all screens and widgets except `RunScreen` and `LiveRunMap` (109 `testWidgets` calls across 22 files); see `test/` for the full list.
 
 ## Running it locally
 

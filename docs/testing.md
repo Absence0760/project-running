@@ -43,7 +43,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **at least 350 tests across 20+ documented files** — ~188 Dart tests in mobile_android (19 test files, including 14 widget tests), 17 in mobile_ios, 37 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the exact current count.
+Total: **at least 374 tests across 40+ documented files** — 296 Dart tests in mobile_android (37 test files, 109 `testWidgets` calls across 22 widget-test files), 17 in mobile_ios, 38 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the exact current count.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -453,7 +453,7 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 ## What's *not* covered (honest)
 
-- **Widget tests (most screens).** `RunScreen`, `LiveRunMap`, `CollapsiblePanel`, and the majority of screens have no widget tests. `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, and `WorkoutReviewSection` do have widget tests (14 `testWidgets` calls). Expanding coverage with `WidgetTester.pumpWidget` + `find.byType` is the next highest-value investment.
+- **Widget tests (key remaining gaps).** `RunScreen` and `LiveRunMap` have no widget tests; those require platform-channel mocks (geolocator, pedometer) to exercise the recording path. All other screens and the majority of widgets now have widget tests (109 `testWidgets` calls across 22 files). The original four — `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, `WorkoutReviewSection` — have been joined by `HomeScreen`, `DashboardScreen`, `ImportScreen`, and many more.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
 - **`RunRecorder._calculatePace`, `_routeRemaining`, `_offRouteDistance`.** The pace calculation and route helpers have no direct tests. Their logic is exercised via `_emitSnapshot` but only through the tests that assert on `distanceMetres` and `track`. Dedicated tests would be a good follow-up.
 - **`ApiClient`, `SyncService`, `LocalRouteStore`.** Nothing on the sync path, the routes store, or the Supabase client has tests. Most of these would want a fake HTTP client or a tempDir override.
