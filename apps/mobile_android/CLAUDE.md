@@ -69,7 +69,6 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `goals.dart` — `RunGoal` model + pure `evaluateGoal` for dashboard goal cards (tested)
 - `route_simplify.dart` — Ramer–Douglas–Peucker track simplifier used when saving a run as a route (tested)
 - `health_connect_importer.dart` / `strava_importer.dart` — bulk importers
-- `mock_data.dart` — fallback data when Supabase returns nothing (dev only)
 - `widgets/live_run_map.dart` — live map with route overlay, off-route banner, NRC-style pace heatmap (when `activity` is non-null, falls through to the legacy single gradient polyline otherwise)
 - `widgets/pace_segments.dart` — pure helpers `buildPaceSegments` / `paceBucketForSpeed` / `ageBandFor`. Pace-coloured, age-faded segment builder for the live track. No Flutter state — unit-tested in `test/pace_segments_test.dart`
 - `widgets/collapsible_panel.dart` — the run screen's expandable stats panel
