@@ -109,9 +109,9 @@
 	<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>
 		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
 			<div class="sidebar-head">
-				<a href="/dashboard" class="logo" aria-label="Run">
+				<a href="/dashboard" class="logo" aria-label="Run Onward">
 					<span class="logo-icon">&#9654;</span>
-					<span class="logo-text">Run</span>
+					<span class="logo-text">Run Onward</span>
 				</a>
 				<button
 					class="collapse-toggle"

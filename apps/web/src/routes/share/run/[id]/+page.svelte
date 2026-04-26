@@ -36,7 +36,7 @@
 <div class="share-page">
 	<header class="share-header">
 		<a href="/" class="share-logo">
-			<span class="logo-icon">&#9654;</span> Run
+			<span class="logo-icon">&#9654;</span> Run Onward
 		</a>
 	</header>
 
