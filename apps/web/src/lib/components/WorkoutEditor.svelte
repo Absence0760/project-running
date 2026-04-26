@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { updatePlanWorkout } from '$lib/data';
+	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/data';
 	import {
+		isWorkoutCompleted,
 		WORKOUT_KIND_LABEL,
 		type WorkoutKind
 	} from '$lib/training';
@@ -60,9 +61,39 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	// Workouts can be completed two ways: (1) auto-matched from a tracked
+	// run via /runs (sets completed_run_id), or (2) the user taps
+	// "Mark as done" here when they ran without recording — sets the
+	// manually_completed flag instead. The two are mutually compatible:
+	// linking a real run later overrides the manual flag without losing
+	// the timestamp.
+	const wasCompleted = isWorkoutCompleted(workout);
+	const hasLinkedRun = workout.completed_run_id != null;
+
 	const kindOptions: WorkoutKind[] = [
 		'easy', 'long', 'recovery', 'tempo', 'interval', 'marathon_pace', 'race', 'rest'
 	];
+
+	async function toggleCompleted() {
+		busy = true;
+		error = null;
+		try {
+			if (wasCompleted) {
+				// Both paths clear via runId=null. The unlink confirm flow on
+				// the workout-detail page handles linked-run unlinking with
+				// a dialog; here we keep it one-tap because the user is in
+				// an editor context.
+				await markWorkoutCompleted(workout.id, null);
+			} else {
+				await markWorkoutCompleted(workout.id, null, { manual: true });
+			}
+			onSaved();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Update failed';
+		} finally {
+			busy = false;
+		}
+	}
 
 	async function save() {
 		busy = true;
@@ -183,6 +214,18 @@
 
 		<div class="actions">
 			<button class="btn btn-secondary" onclick={onClose} disabled={busy}>Cancel</button>
+			<button
+				class="btn btn-outline"
+				onclick={toggleCompleted}
+				disabled={busy || hasLinkedRun}
+				title={hasLinkedRun
+					? 'A run is linked — unlink it from the workout detail page first.'
+					: wasCompleted
+						? 'Clear the manual completion flag.'
+						: 'Mark this workout as done without a tracked run.'}
+			>
+				{wasCompleted ? 'Mark not done' : 'Mark as done'}
+			</button>
 			<button class="btn btn-primary" onclick={save} disabled={busy}>
 				{busy ? 'Saving…' : 'Save'}
 			</button>
