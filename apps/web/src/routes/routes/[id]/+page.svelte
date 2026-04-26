@@ -7,6 +7,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import SplitPane from '$lib/components/SplitPane.svelte';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -200,17 +201,24 @@
 		{backLabel}
 	</a>
 	<div class="route-detail-body">
-		<main class="map-panel">
-			{#if route.waypoints.length > 0}
-				<RunMap track={route.waypoints} />
-			{:else}
-				<div class="map-placeholder">
-					<span class="material-symbols">map</span>
-					<p>No waypoint data available</p>
-				</div>
+	<SplitPane storageKey="route-detail-split" min={300} initialFraction={0.6}>
+		{#snippet left()}
+			{#if route}
+			<main class="map-panel">
+				{#if route.waypoints.length > 0}
+					<RunMap track={route.waypoints} />
+				{:else}
+					<div class="map-placeholder">
+						<span class="material-symbols">map</span>
+						<p>No waypoint data available</p>
+					</div>
+				{/if}
+			</main>
 			{/if}
-		</main>
+		{/snippet}
 
+		{#snippet right()}
+		{#if route}
 		<aside class="stats-panel">
 			<header class="detail-header">
 				<div>
@@ -354,6 +362,9 @@
 				{/if}
 			</section>
 		</aside>
+		{/if}
+		{/snippet}
+	</SplitPane>
 	</div>
 </div>
 {/if}
@@ -384,14 +395,15 @@
 	}
 
 	.map-panel {
-		flex: 3;
+		flex: 1;
+		min-height: 0;
 		background: var(--color-bg-tertiary);
 		min-width: 0;
 	}
 
 	.stats-panel {
-		flex: 2;
-		border-left: 1px solid var(--color-border);
+		flex: 1;
+		min-height: 0;
 		padding: var(--space-xl);
 		overflow-y: auto;
 		background: var(--color-surface);
