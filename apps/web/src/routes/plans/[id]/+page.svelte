@@ -6,6 +6,7 @@
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import {
 		fmtHms,
+		isWorkoutCompleted,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
 		parseISO,
@@ -58,7 +59,7 @@
 		return Math.min(weeks.length - 1, Math.floor(dayIndex / 7));
 	});
 
-	let completed = $derived(workouts.filter((w) => w.completed_run_id).length);
+	let completed = $derived(workouts.filter(isWorkoutCompleted).length);
 	let totalActive = $derived(workouts.filter((w) => w.kind !== 'rest').length);
 	let pct = $derived(totalActive === 0 ? 0 : Math.round((completed / totalActive) * 100));
 
@@ -158,7 +159,7 @@
 						{#if todayWorkout.target_pace_sec_per_km}
 							<span>@ {fmtPace(todayWorkout.target_pace_sec_per_km)}</span>
 						{/if}
-						{#if todayWorkout.completed_run_id}
+						{#if isWorkoutCompleted(todayWorkout)}
 							<span class="done-chip">
 								<span class="material-symbols">check_circle</span>
 								Completed
@@ -205,7 +206,7 @@
 							<div
 								class="day"
 								class:today={wo.scheduled_date === today}
-								class:completed={!!wo.completed_run_id}
+								class:completed={isWorkoutCompleted(wo)}
 								class:rest={wo.kind === 'rest'}
 								style="--kind-color: {kindColor[wo.kind] ?? 'var(--color-text-secondary)'}"
 							>
@@ -223,7 +224,7 @@
 									{#if wo.target_distance_m != null && wo.kind !== 'rest'}
 										<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>
 									{/if}
-									{#if wo.completed_run_id}
+									{#if isWorkoutCompleted(wo)}
 										<span class="material-symbols check">check_circle</span>
 									{/if}
 								</button>

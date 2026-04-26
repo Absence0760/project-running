@@ -1771,7 +1771,9 @@ export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | nu
 	const { todayISO } = await import('./training');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
-	const completed = workouts.filter((w) => w.completed_run_id).length;
+	const completed = workouts.filter(
+		(w) => w.manually_completed === true || w.completed_run_id != null
+	).length;
 	const total = workouts.filter((w) => w.kind !== 'rest').length;
 	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
 	return {
@@ -1925,13 +1927,17 @@ export async function deletePlan(id: string): Promise<void> {
 
 export async function markWorkoutCompleted(
 	workoutId: string,
-	runId: string | null
+	runId: string | null,
+	options: { manual?: boolean } = {}
 ): Promise<void> {
+	const manual = options.manual === true;
+	const isCompleting = runId != null || manual;
 	const { error } = await supabase
 		.from('plan_workouts')
 		.update({
 			completed_run_id: runId,
-			completed_at: runId ? new Date().toISOString() : null
+			manually_completed: manual,
+			completed_at: isCompleting ? new Date().toISOString() : null
 		})
 		.eq('id', workoutId);
 	if (error) throw error;

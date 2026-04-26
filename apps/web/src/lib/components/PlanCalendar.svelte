@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PlanWorkout } from '$lib/types';
-	import { WORKOUT_KIND_LABEL, parseISO, todayISO } from '$lib/training';
+	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO } from '$lib/training';
 	import { fmtKm } from '$lib/units.svelte';
 
 	type Props = {
@@ -164,7 +164,7 @@
 					class="cell has-workout"
 					class:out-month={!c.inMonth}
 					class:today={c.iso === today}
-					class:done={!!wo.completed_run_id}
+					class:done={isWorkoutCompleted(wo)}
 					style="--kind: {KIND_COLOR[wo.kind] ?? 'var(--color-text-secondary)'}"
 				>
 					<span class="day-num">{c.day}</span>
@@ -174,7 +174,7 @@
 					{#if wo.target_distance_m != null && wo.kind !== 'rest'}
 						<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>
 					{/if}
-					{#if wo.completed_run_id}
+					{#if isWorkoutCompleted(wo)}
 						<span class="material-symbols check">check</span>
 					{/if}
 				</svelte:element>

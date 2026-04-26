@@ -538,6 +538,16 @@ function marathonPaceWorkout(
 	};
 }
 
+/// A workout is "done" if a tracked run has been auto-matched to it
+/// (`completed_run_id`) or the user manually marked it from the editor
+/// (`manually_completed`). Both fields can be set together once a real
+/// run lands; either alone is enough to count as done.
+export function isWorkoutCompleted(
+	wo: { manually_completed?: boolean | null; completed_run_id?: string | null }
+): boolean {
+	return wo.manually_completed === true || wo.completed_run_id != null;
+}
+
 // ─────────────────────── Date helpers ───────────────────────
 // Pure ISO date helpers (YYYY-MM-DD). Intentionally UTC-free — the caller
 // feeds the runner's local date; all internal math is in day counts.

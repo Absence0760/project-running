@@ -231,7 +231,7 @@
 			{@const t = planOverview.todayWorkout}
 			<button
 				class="today-card"
-				class:done={!!t.completed_run_id}
+				class:done={t.manually_completed === true || t.completed_run_id != null}
 				type="button"
 				onclick={() => (editingWorkout = t)}
 			>
@@ -250,7 +250,7 @@
 					</div>
 				</div>
 				<div class="today-right">
-					{#if t.completed_run_id}
+					{#if t.manually_completed === true || t.completed_run_id != null}
 						<span class="material-symbols done-icon">check_circle</span>
 					{:else}
 						<span class="material-symbols">chevron_right</span>
