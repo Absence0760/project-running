@@ -27,7 +27,8 @@ import {
 	generatePlan,
 	defaultPlanWeeks,
 	GOAL_DISTANCES_M,
-	formatISO
+	formatISO,
+	isWorkoutCompleted
 } from './training';
 
 // ─────────────────────── VDOT ───────────────────────
@@ -282,3 +283,29 @@ test('formatISO: shiftPeriod by 7 days lands on the same weekday', () => {
 	next.setDate(next.getDate() + 7);
 	assert.equal(formatISO(next), '2025-12-22');
 });
+
+// ─────────────────────── isWorkoutCompleted ───────────────────────
+
+test("isWorkoutCompleted: false when neither flag set", () => {
+	assert.equal(isWorkoutCompleted({}), false);
+	assert.equal(
+		isWorkoutCompleted({ manually_completed: false, completed_run_id: null }),
+		false
+	);
+});
+
+test("isWorkoutCompleted: true when run is linked", () => {
+	assert.equal(isWorkoutCompleted({ completed_run_id: "run-123" }), true);
+});
+
+test("isWorkoutCompleted: true when manually marked", () => {
+	assert.equal(isWorkoutCompleted({ manually_completed: true }), true);
+});
+
+test("isWorkoutCompleted: true when both set", () => {
+	assert.equal(
+		isWorkoutCompleted({ manually_completed: true, completed_run_id: "run-1" }),
+		true
+	);
+});
+
