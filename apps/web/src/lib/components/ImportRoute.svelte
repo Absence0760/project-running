@@ -193,7 +193,7 @@
 			<div class="preview">
 				<p class="multi-intro">
 					Found <strong>{parsed.length}</strong> routes in this file. Pick which
-					ones to import — each becomes its own route in Better Runner.
+					ones to import — each becomes its own route in Run Onward.
 				</p>
 				<ul class="multi-list">
 					{#each parsed as route, i (i)}

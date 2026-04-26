@@ -392,14 +392,11 @@ One-line summary: five confirmed bugs including two silent data-loss paths (`sav
 
 ---
 
-### L4. `gpx.ts:toGpx` hardcodes `creator="BetterRunner"` — inconsistent with app identity
+### L4. `gpx.ts:toGpx` hardcodes `creator="BetterRunner"` — inconsistent with app identity [RESOLVED]
 
 - **File(s)**: `apps/web/src/lib/gpx.ts:19`, `apps/web/src/lib/gpx.ts:58`
 - **Category**: inconsistency
-- **Problem**: Both `toGpx` and `toRunGpx` emit `creator="BetterRunner"`. The app is called "RunApp" / "run-app" throughout the rest of the codebase (`run_app.theme`, `run_app.device_id`, `run_app.goals_v1`, `BACKUP_FORMAT = 'run-app-backup'`). This is a cosmetic inconsistency but will appear in every GPX file users export.
-- **Proposed change**: Change both occurrences to `creator="RunApp"` (or whatever the canonical product name is).
-- **Risk if applied**: None.
-- **Verification**: Export a run as GPX, open in a text editor, confirm the creator attribute.
+- **Status**: Resolved as part of the "Run Onward" rebrand — both occurrences now emit `creator="RunOnward"`, matching the user-visible product name.
 
 ---
 

@@ -36,7 +36,7 @@ self.addEventListener('push', (event) => {
 		}
 	}
 
-	const title = payload.title || 'Better Runner';
+	const title = payload.title || 'Run Onward';
 	const options = {
 		body: payload.body ?? '',
 		icon: payload.icon || '/favicon.png',

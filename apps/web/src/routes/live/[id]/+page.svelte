@@ -179,9 +179,9 @@
 </script>
 
 <svelte:head>
-	<title>Live Run — Better Runner</title>
+	<title>Live Run — Run Onward</title>
 	<meta name="description" content="Watch a runner's progress in real time" />
-	<meta property="og:title" content="Live Run — Better Runner" />
+	<meta property="og:title" content="Live Run — Run Onward" />
 	<meta property="og:description" content="Watch a runner's progress in real time" />
 	<meta property="og:type" content="website" />
 </svelte:head>

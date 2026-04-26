@@ -21,7 +21,7 @@
 
 	let track = $derived(run?.track ?? []);
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
-	let pageTitle = $derived(run ? `${formatDistance(run.distance_m)} Run — Better Runner` : 'Run — Better Runner');
+	let pageTitle = $derived(run ? `${formatDistance(run.distance_m)} Run — Run Onward` : 'Run — Run Onward');
 	let pageDesc = $derived(run ? `${formatDistance(run.distance_m)} in ${formatDuration(run.duration_s)} — ${formatPace(run.duration_s, run.distance_m)}` : '');
 </script>
 

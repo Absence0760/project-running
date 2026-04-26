@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-	<title>Explore Routes — Better Runner</title>
+	<title>Explore Routes — Run Onward</title>
 	<meta
 		name="description"
 		content="Discover running routes shared by the community. Search by name, distance, and surface type."

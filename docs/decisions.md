@@ -415,6 +415,20 @@ The spectator page at `/live/{run_id}` streams a runner's in-progress GPS trace 
 
 ---
 
+## 27. Product renamed from "Better Runner" to "Run Onward"; bundle IDs stay
+
+**Decided:** April 2026.
+
+The user-visible product name is now **Run Onward** (URL: `runonward.com`). All display strings — Android `android:label`, iOS `CFBundleDisplayName` / `CFBundleName`, watchOS health-permission usage strings, web `<title>` + meta + share-card chrome, GPX `creator=` attribute — were updated. Internal identifiers were deliberately *not* changed: the Android `applicationId` / Kotlin package directory remain `com.betterrunner.app`, the WorkManager task name remains `com.betterrunner.backgroundSync`, and `BACKUP_FORMAT` remains `'run-app-backup'`.
+
+**Why:** "Better Runner" was running-only branding for a multi-modal app (run + walk + hike + cycle). "Run Onward" reframes the verb as forward movement rather than jogging, and `runonward.com` was the rare clean `.com` left in the running-adjacent namespace (most short slang `.com`s are squatted on Afternic).
+
+**Trade-off:** keeping the bundle ID tied to the old name means the Play Store / App Store internal identity, on-device install identity, signing key association, and existing-user upgrade path are all preserved — at the cost of some lasting "betterrunner" strings inside the codebase that are jarring to read but never user-visible. Changing the bundle ID would create a new app listing with no upgrade path and break deep links / signing. Twitter→X did the same (kept `com.atebits.Tweetie2` long after the rebrand). Similarly, the WorkManager task name and backup format are stable identifiers — changing them would orphan scheduled tasks on existing devices and break restore of old backups respectively.
+
+**Don't re-litigate unless:** we're prepared to accept a clean-break new app listing (new Play Store / App Store entries, deep-link migration, user re-install, signing-key reassociation). At that point we'd also revisit the WorkManager and backup-format identifiers in the same migration.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

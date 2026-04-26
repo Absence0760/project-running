@@ -23,7 +23,7 @@
                      android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application
-        android:label="Better Runner"
+        android:label="Run Onward"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

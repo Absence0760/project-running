@@ -852,7 +852,7 @@
 	aria-hidden="true"
 >
 	<div class="share-card-inner">
-		<div class="share-card-eyebrow">Better Runner</div>
+		<div class="share-card-eyebrow">Run Onward</div>
 		<div class="share-card-stats">
 			<div class="share-stat">
 				<div class="share-stat-label">Distance</div>

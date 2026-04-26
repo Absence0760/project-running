@@ -131,7 +131,7 @@
 		</ul>
 		{#if isPro}
 			<p class="pro-note">
-				Thanks for supporting Better Runner. Manage your subscription from
+				Thanks for supporting Run Onward. Manage your subscription from
 				the App Store, Play Store, or billing portal where you started it.
 			</p>
 			<button class="btn-secondary" onclick={handleManageSubscription}>
