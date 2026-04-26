@@ -791,6 +791,7 @@ class PlanWorkoutRow {
   static const String colCompletedAt = 'completed_at';
   static const String colPaceZone = 'pace_zone';
   static const String colTargetPaceEndSecPerKm = 'target_pace_end_sec_per_km';
+  static const String colManuallyCompleted = 'manually_completed';
 
   final String id;
   final String weekId;
@@ -806,6 +807,7 @@ class PlanWorkoutRow {
   final DateTime? completedAt;
   final String? paceZone;
   final int? targetPaceEndSecPerKm;
+  final bool manuallyCompleted;
 
   const PlanWorkoutRow({
     required this.id,
@@ -822,6 +824,7 @@ class PlanWorkoutRow {
     this.completedAt,
     this.paceZone,
     this.targetPaceEndSecPerKm,
+    this.manuallyCompleted = false,
   });
 
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
@@ -839,6 +842,7 @@ class PlanWorkoutRow {
     completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
     paceZone: json['pace_zone'] as String?,
     targetPaceEndSecPerKm: (json['target_pace_end_sec_per_km'] as num?)?.toInt(),
+    manuallyCompleted: (json['manually_completed'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -856,6 +860,7 @@ class PlanWorkoutRow {
     colCompletedAt: completedAt?.toIso8601String(),
     colPaceZone: paceZone,
     colTargetPaceEndSecPerKm: targetPaceEndSecPerKm,
+    colManuallyCompleted: manuallyCompleted,
   };
 }
 

@@ -624,6 +624,7 @@ export type Database = {
           completed_run_id: string | null
           id: string
           kind: Database["public"]["Enums"]["workout_kind"]
+          manually_completed: boolean
           notes: string | null
           pace_zone: string | null
           scheduled_date: string
@@ -640,6 +641,7 @@ export type Database = {
           completed_run_id?: string | null
           id?: string
           kind: Database["public"]["Enums"]["workout_kind"]
+          manually_completed?: boolean
           notes?: string | null
           pace_zone?: string | null
           scheduled_date: string
@@ -656,6 +658,7 @@ export type Database = {
           completed_run_id?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["workout_kind"]
+          manually_completed?: boolean
           notes?: string | null
           pace_zone?: string | null
           scheduled_date?: string
