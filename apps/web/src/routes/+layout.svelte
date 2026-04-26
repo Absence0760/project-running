@@ -112,16 +112,6 @@
 				<a href="/dashboard" class="logo" aria-label="Run Onward">
 					<span class="logo-text">Run Onward</span>
 				</a>
-				<button
-					class="collapse-toggle"
-					type="button"
-					aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-					aria-expanded={!sidebarCollapsed}
-					title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-					onclick={toggleSidebar}
-				>
-					<span class="material-symbols">{sidebarCollapsed ? 'menu' : 'menu_open'}</span>
-				</button>
 			</div>
 
 			<ul class="nav-list">
@@ -159,6 +149,16 @@
 						</div>
 					</button>
 				{/if}
+				<button
+					class="collapse-toggle"
+					type="button"
+					aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					aria-expanded={!sidebarCollapsed}
+					title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					onclick={toggleSidebar}
+				>
+					<span class="material-symbols">{sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
+				</button>
 			</div>
 		</nav>
 
@@ -369,7 +369,8 @@
 		border-top: 1px solid var(--sidebar-border);
 		padding-top: var(--space-md);
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
+		align-items: center;
 		gap: var(--space-sm);
 	}
 
@@ -378,7 +379,8 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		border: none;
 		background: none;
 		border-radius: var(--radius-md);
@@ -546,14 +548,14 @@
 		padding-left: 0;
 		padding-right: 0;
 	}
-	/* When collapsed, the logo would crowd the menu button on a 4.5rem
-	   rail — hide it and let the menu icon stand alone (clicking it
-	   re-expands the sidebar). */
+	/* When collapsed, the logo would crowd a 4.5rem rail — hide it.
+	   The collapse-toggle in the footer is the user's way back. */
 	.sidebar.collapsed .logo {
 		display: none;
 	}
-	.sidebar.collapsed .sidebar-head {
-		justify-content: center;
+	/* Stack profile + toggle vertically on the narrow rail. */
+	.sidebar.collapsed .sidebar-footer {
+		flex-direction: column;
 	}
 
 	.loading-screen {
