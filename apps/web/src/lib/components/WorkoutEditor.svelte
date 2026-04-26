@@ -4,7 +4,7 @@
 		WORKOUT_KIND_LABEL,
 		type WorkoutKind
 	} from '$lib/training';
-	import { fmtKm, fmtPace } from '$lib/units.svelte';
+	import { getUnit } from '$lib/units.svelte';
 	import type { PlanWorkout } from '$lib/types';
 
 	interface Props {
@@ -14,26 +14,44 @@
 	}
 	let { workout, onClose, onSaved }: Props = $props();
 
+	// All inputs are rendered + stored in the user's preferred unit so
+	// the form matches the rest of the app. Conversion to the canonical
+	// metric storage shape (metres + sec/km) happens at save time only.
+	const METRES_PER_MILE = 1609.344;
+	const unit = getUnit();
+	const distanceDivisor = unit === 'mi' ? METRES_PER_MILE : 1000;
+	const paceFactor = unit === 'mi' ? METRES_PER_MILE / 1000 : 1;
+
+	function paceFromCanonical(sec: number): number {
+		return sec * paceFactor;
+	}
+
 	// Local form state. Initialised from the workout row and only pushed to
 	// the server when the user hits Save, so cancelling restores cleanly.
 	let kind = $state<WorkoutKind>(workout.kind as WorkoutKind);
-	let distanceKm = $state<number | null>(
-		workout.target_distance_m != null ? +(workout.target_distance_m / 1000).toFixed(2) : null
+	let distance = $state<number | null>(
+		workout.target_distance_m != null
+			? +(workout.target_distance_m / distanceDivisor).toFixed(2)
+			: null
 	);
 	let paceMin = $state<number | null>(
-		workout.target_pace_sec_per_km != null ? Math.floor(workout.target_pace_sec_per_km / 60) : null
+		workout.target_pace_sec_per_km != null
+			? Math.floor(paceFromCanonical(workout.target_pace_sec_per_km) / 60)
+			: null
 	);
 	let paceSec = $state<number | null>(
-		workout.target_pace_sec_per_km != null ? workout.target_pace_sec_per_km % 60 : null
+		workout.target_pace_sec_per_km != null
+			? Math.round(paceFromCanonical(workout.target_pace_sec_per_km) % 60)
+			: null
 	);
 	let paceEndMin = $state<number | null>(
 		workout.target_pace_end_sec_per_km != null
-			? Math.floor(workout.target_pace_end_sec_per_km / 60)
+			? Math.floor(paceFromCanonical(workout.target_pace_end_sec_per_km) / 60)
 			: null
 	);
 	let paceEndSec = $state<number | null>(
 		workout.target_pace_end_sec_per_km != null
-			? workout.target_pace_end_sec_per_km % 60
+			? Math.round(paceFromCanonical(workout.target_pace_end_sec_per_km) % 60)
 			: null
 	);
 	let toleranceSec = $state<number | null>(workout.target_pace_tolerance_sec);
@@ -50,16 +68,24 @@
 		busy = true;
 		error = null;
 		try {
-			const paceStart =
+			const paceStartUnit =
 				paceMin != null ? paceMin * 60 + (paceSec ?? 0) : null;
-			const paceEnd =
+			const paceEndUnit =
 				paceEndMin != null ? paceEndMin * 60 + (paceEndSec ?? 0) : null;
+			const paceStart =
+				paceStartUnit != null ? paceStartUnit / paceFactor : null;
+			const paceEnd =
+				paceEndUnit != null ? paceEndUnit / paceFactor : null;
 			const isRest = kind === 'rest';
 			const unstructuredKinds = ['easy', 'long', 'recovery', 'rest'] as const;
 			const isUnstructured = (unstructuredKinds as readonly string[]).includes(kind);
 			await updatePlanWorkout(workout.id, {
 				kind,
-				target_distance_m: isRest ? null : distanceKm != null ? distanceKm * 1000 : null,
+				target_distance_m: isRest
+					? null
+					: distance != null
+						? distance * distanceDivisor
+						: null,
 				target_pace_sec_per_km: isRest ? null : paceStart,
 				target_pace_end_sec_per_km: isRest ? null : paceEnd,
 				target_pace_tolerance_sec: isRest ? null : toleranceSec,
@@ -103,12 +129,12 @@
 
 		{#if kind !== 'rest'}
 			<label>
-				<span>Distance <span class="hint">km</span></span>
-				<input type="number" min="0" step="0.1" bind:value={distanceKm} />
+				<span>Distance <span class="hint">{unit}</span></span>
+				<input type="number" min="0" step="0.1" bind:value={distance} />
 			</label>
 
 			<fieldset>
-				<legend>Target pace <span class="hint">per km</span></legend>
+				<legend>Target pace <span class="hint">per {unit}</span></legend>
 				<div class="pace-row">
 					<input type="number" min="0" max="59" bind:value={paceMin} placeholder="min" />
 					<span>:</span>
