@@ -218,7 +218,7 @@
 		<div class="route-grid">
 			{#each routes as route}
 				<div class="route-card">
-					<a href="/share/route/{route.id}" class="route-link">
+					<a href="/routes/{route.id}?from=explore" class="route-link">
 						<div class="route-map-placeholder">
 							<span class="material-symbols">{route.surface === 'trail' ? 'terrain' : route.surface === 'mixed' ? 'alt_route' : 'route'}</span>
 							{#if route.featured}

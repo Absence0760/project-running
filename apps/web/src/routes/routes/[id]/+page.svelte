@@ -167,11 +167,18 @@
 	// Send the back link wherever the user came from. Defaults to /routes
 	// (the owner's list); switches to /explore when arriving from the
 	// community discovery page so the trip back is one click, not two.
+	// Prefer the explicit ?from=explore query param (set by RouteExplorer)
+	// because document.referrer is unreliable across browsers and gets
+	// stripped by some Referrer-Policy configurations.
 	let backHref = $state('/routes');
 	let backLabel = $state('Routes');
 	onMount(() => {
+		const fromParam = new URLSearchParams(window.location.search).get('from');
 		const ref = typeof document !== 'undefined' ? document.referrer : '';
-		if (ref && new URL(ref, window.location.origin).pathname.startsWith('/explore')) {
+		const fromExplore =
+			fromParam === 'explore' ||
+			(ref && new URL(ref, window.location.origin).pathname.startsWith('/explore'));
+		if (fromExplore) {
 			backHref = '/explore';
 			backLabel = 'Explore';
 		}
