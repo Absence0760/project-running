@@ -297,10 +297,16 @@ class TrainingService extends ChangeNotifier {
     }
   }
 
-  Future<void> markCompleted(String workoutId, String? runId) async {
+  Future<void> markCompleted(
+    String workoutId,
+    String? runId, {
+    bool manual = false,
+  }) async {
+    final isCompleting = runId != null || manual;
     await _c.from('plan_workouts').update({
       'completed_run_id': runId,
-      'completed_at': runId == null ? null : DateTime.now().toIso8601String(),
+      'manually_completed': manual,
+      'completed_at': isCompleting ? DateTime.now().toIso8601String() : null,
     }).eq('id', workoutId);
     notifyListeners();
   }
