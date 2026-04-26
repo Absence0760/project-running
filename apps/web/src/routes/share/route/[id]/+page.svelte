@@ -19,6 +19,9 @@
 	});
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+	let hasElevationData = $derived(
+		elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations)
+	);
 	let pageTitle = $derived(route ? `${route.name} — Better Runner` : 'Route — Better Runner');
 	let pageDesc = $derived(route ? `${(route.distance_m / 1000).toFixed(1)} km ${route.surface} route${route.elevation_m ? ` with ${route.elevation_m} m elevation` : ''}` : '');
 </script>
@@ -63,10 +66,12 @@
 					<RunMap track={route.waypoints} />
 				</div>
 
-				<section class="card">
-					<h2>Elevation Profile</h2>
-					<ElevationProfile {elevations} totalDistance={route.distance_m} />
-				</section>
+				{#if hasElevationData}
+					<section class="card">
+						<h2>Elevation Profile</h2>
+						<ElevationProfile {elevations} totalDistance={route.distance_m} />
+					</section>
+				{/if}
 			{/if}
 
 			<div class="cta">

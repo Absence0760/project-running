@@ -163,6 +163,12 @@
 	}
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+	// Hide the elevation profile when waypoints have no real elevation
+	// data (community routes imported without per-waypoint ele still
+	// have a stored total gain in route.elevation_m). Without this guard
+	// the chart renders as a flat line at zero, which looks broken next
+	// to the non-zero "X m elevation gain" label.
+	let hasElevationData = $derived(elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations));
 
 	// Send the back link wherever the user came from. Defaults to /routes
 	// (the owner's list); switches to /explore when arriving from the
@@ -279,7 +285,7 @@
 				</div>
 			{/if}
 
-			{#if route.waypoints.length > 0}
+			{#if hasElevationData}
 				<section class="section">
 					<h2>Elevation Profile</h2>
 					<ElevationProfile {elevations} totalDistance={route.distance_m} />
