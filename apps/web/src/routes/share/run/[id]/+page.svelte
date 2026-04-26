@@ -75,7 +75,7 @@
 
 			<div class="cta">
 				<p>Track your own runs</p>
-				<a href="/login" class="btn btn-primary">Sign up free</a>
+				<a href="/login?signup=1" class="btn btn-primary">Sign up for Free</a>
 			</div>
 		</div>
 	{/if}

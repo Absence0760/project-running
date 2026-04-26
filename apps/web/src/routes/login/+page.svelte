@@ -9,7 +9,7 @@
 	let loading = $state(false);
 	let email = $state('');
 	let password = $state('');
-	let isSignUp = $state(false);
+	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
 
 	function safeReturnTo(): string {
 		const raw = $page.url.searchParams.get('return_to');
