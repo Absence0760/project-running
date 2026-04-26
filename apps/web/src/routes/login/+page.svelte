@@ -70,7 +70,7 @@
 <div class="login-page">
 	<div class="login-card">
 		<a href="/" class="logo">
-			<span class="logo-icon">&#9654;</span> Run Onward
+			Run Onward
 		</a>
 
 		<h1>{isSignUp ? 'Create an account' : 'Sign in to your account'}</h1>

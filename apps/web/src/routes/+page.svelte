@@ -52,7 +52,7 @@
 {:else}
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
-		<span class="logo-icon">&#9654;</span> Run Onward
+		Run Onward
 	</a>
 	<div class="nav-links">
 		<a href="#apps" class="nav-link">Apps</a>

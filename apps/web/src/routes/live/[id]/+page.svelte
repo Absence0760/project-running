@@ -190,7 +190,7 @@
 <div class="live-page">
 	<header class="live-header">
 		<div class="live-logo">
-			<span class="logo-icon">&#9654;</span> Run Onward
+			Run Onward
 		</div>
 		<div class="live-badge" class:active={status === 'live'} class:demo={status === 'demo'}>
 			{#if status === 'connecting'}

@@ -110,7 +110,6 @@
 		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
 			<div class="sidebar-head">
 				<a href="/dashboard" class="logo" aria-label="Run Onward">
-					<span class="logo-icon">&#9654;</span>
 					<span class="logo-text">Run Onward</span>
 				</a>
 				<button
@@ -252,14 +251,6 @@
 		font-weight: 700;
 		font-size: 1.25rem;
 		color: var(--sidebar-logo);
-	}
-
-	.logo-icon {
-		font-size: 1rem;
-		background: var(--gradient-primary);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
 	}
 
 	.nav-list {
