@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import SplitPane from '$lib/components/SplitPane.svelte';
 	import {
 		formatDuration,
 		formatPace,
@@ -497,6 +498,9 @@
 		<span class="material-symbols">arrow_back</span> All runs
 	</a>
 	<div class="run-detail-body">
+	<SplitPane storageKey="run-detail-split" min={300} initialFraction={0.6}>
+		{#snippet left()}
+		{#if run}
 	<main class="map-panel">
 		<RunMap
 			track={baseTrack}
@@ -560,7 +564,11 @@
 			</aside>
 		{/if}
 	</main>
+		{/if}
+		{/snippet}
 
+		{#snippet right()}
+		{#if run}
 	<aside class="stats-panel">
 		<header class="detail-header">
 			<div>
@@ -826,6 +834,9 @@
 			{/if}
 		</section>
 	</aside>
+		{/if}
+		{/snippet}
+	</SplitPane>
 	</div>
 </div>
 
@@ -908,7 +919,8 @@
 	}
 
 	.map-panel {
-		flex: 3;
+		flex: 1;
+		min-height: 0;
 		background: var(--color-bg-tertiary);
 		position: relative;
 	}
@@ -988,8 +1000,8 @@
 	}
 
 	.stats-panel {
-		flex: 2;
-		border-left: 1px solid var(--color-border);
+		flex: 1;
+		min-height: 0;
 		padding: var(--space-xl);
 		overflow-y: auto;
 		background: var(--color-surface);
