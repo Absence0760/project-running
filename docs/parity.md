@@ -202,6 +202,18 @@ See [docs/clubs.md](clubs.md). No features.md section yet — update this row-bl
 | Realtime subscriptions (posts / RSVPs / members) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Push notifications (event reminders, admin updates) | ✗ | ✗ | Partial | ✗ | ✗ | **Web subscribe path shipped.** Service worker at `apps/web/static/sw.js` (handles `push` + `notificationclick`); `lib/push.ts` registers the SW, requests permission, calls `pushManager.subscribe`, persists the subscription onto `user_device_settings.prefs.push_subscription` keyed by the per-browser device id. UI on `/settings/account` → "Notifications" card with Enable / Disable toggle and a clear "blocked in browser" / "build not configured" fallback. Gated on `PUBLIC_VAPID_PUBLIC_KEY` being set at build time — when absent the UI renders an honest "not configured" hint instead of a broken button. **Server-side delivery (Edge Function that signs and POSTs payloads via Web Push) is the remaining gap** — needs the matching `VAPID_PRIVATE_KEY` env. Native FCM / APNs paths still TBD on mobile / watch. |
 
+## Social — following + activity feed
+
+Strava-style follow graph; layered on top of (but independent of) the clubs/events social model. See [`docs/decisions.md § 31`](decisions.md) once written, and roadmap § Competitor-parity backlog.
+
+| Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
+|---|---|---|---|---|---|---|
+| Follow / unfollow another user | ✗ | ✗ | ✓ | N/A | N/A | `user_follows` join table; Follow button on `/u/[id]`. |
+| Public user profile page | ✗ | ✗ | ✓ | N/A | N/A | `/u/[id]` shows display_name, avatar, recent public runs, follower/following counts. |
+| Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; cursor-paginated on `runs.started_at`. |
+| Kudos / comments on runs | ✗ | ✗ | ✗ | ✗ | ✗ | Backlog. |
+| Privacy zones (clip start/end of public tracks) | ✗ | ✗ | ✗ | ✗ | ✗ | Backlog. |
+
 ## Training plans and workouts
 
 See [docs/training.md](training.md) and [docs/workout_execution.md](workout_execution.md). No features.md section yet.

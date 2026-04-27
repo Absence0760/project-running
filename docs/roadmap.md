@@ -448,6 +448,18 @@ The foundation under both the generator and any hand-built plan: a data model fo
 - [ ] Rest/easy/hard session recommendation
 - [ ] Days until next recommended hard session
 
+### Competitor-parity backlog (unphased)
+
+Surfaces that other running apps ship as table stakes and we don't. Each one is "the canonical answer is well-known, copy it." Order is rough leverage-per-effort, not strict dependency. See `docs/decisions.md § 30` for the precedent (club-owned routes) and individual decision entries for the specs as they're written.
+
+- [ ] **Following graph + activity feed** — `user_follows (follower_id, followee_id, followed_at)` join table; `/feed` route showing recent public runs from people you follow; public-by-default user profile pages at `/u/[id]` showing display_name, avatar, recent public runs, follow button. Strava's core engagement loop. Spec: `decisions.md § 31`.
+- [ ] **Kudos + comments on runs** — `run_kudos (user_id, run_id)` join + `run_comments (id, run_id, author_id, body, created_at, parent_comment_id)`. RLS shape mirrors `route_reviews`. Bookmarks are to the activity feed what kudos are to the run detail page — pair with Following.
+- [ ] **Privacy zones** — `user_settings.prefs.privacy_zones: [{lat, lng, radius_m}]`. Track polylines are clipped to start/end outside the zone before render and before `start_point` is set on routes. Strava + Garmin pattern. Small lift, high trust.
+- [ ] **Training load curves (Fitness / Fatigue / Form)** — TrainingPeaks CTL/ATL/TSB chart on the dashboard. `fitness_snapshots` columns already exist; missing piece is the recompute job + chart UI + an explanation surface so users can read it. Spec: deferred until following ships.
+- [ ] **Plan templates (coach-managed plans)** — `training_plans.parent_template_id` (nullable self-FK). One canonical plan can back many user-instance copies; coach edits the template, instances inherit (or fork). Same dedup pattern as `routes.club_id` from § 30. Optional `training_plans.club_id` so a club can host a plan its members adopt.
+- [ ] **Photos on runs** — `run_photos (id, run_id, storage_path, caption, position_idx)` + a thumbnail upload path through the existing `runs` Storage bucket. Strava attach-photo flow. Lower urgency than the social loop above.
+- [ ] **Segments + leaderboards** — auto-detected sub-stretches with cross-user leaderboards. Real engineering: snap-detection on upload, `segments` + `segment_efforts` tables, geometry indexing, leaderboard queries with paywall consideration. Probably a Phase 4 item; scope before starting.
+
 ### Elevation and pace analysis (post-run)
 
 - [x] Elevation profile with chart
