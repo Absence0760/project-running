@@ -29,7 +29,18 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let scrollEl: HTMLDivElement | null = $state(null);
-	let showClearConfirm = $state(false);
+	let showArchiveConfirm = $state(false);
+	let showHistory = $state(false);
+	// When non-null, the user is viewing an archived thread (read-only) —
+	// `messages` holds that archive's contents and the composer is hidden.
+	let viewingArchiveAt = $state<string | null>(null);
+
+	interface ArchiveSummary {
+		archived_at: string;
+		first_user_message: string | null;
+		message_count: number;
+	}
+	let archives = $state<ArchiveSummary[]>([]);
 
 	// localStorage key used by the previous (per-device) persistence. Kept
 	// only so we can migrate any pre-existing thread into Supabase the
@@ -38,15 +49,24 @@
 		return `coach_chat:${userId}:${plan ?? 'no_plan'}`;
 	}
 
+	function planFilter<T>(q: T): T {
+		// Supabase query builder mutates in place + returns itself, so this
+		// is safe and lets the same chain be reused across active /
+		// archived / per-archive queries that all need the (user, plan)
+		// scoping with plan_id IS NULL handled correctly.
+		const builder = q as unknown as { eq: (k: string, v: string) => T; is: (k: string, v: null) => T };
+		return planId ? builder.eq('plan_id', planId) : builder.is('plan_id', null);
+	}
+
 	async function loadThread(userId: string) {
-		const query = supabase
-			.from('coach_messages')
-			.select('role, content')
-			.eq('user_id', userId)
-			.order('created_at', { ascending: true });
-		const { data, error: err } = planId
-			? await query.eq('plan_id', planId)
-			: await query.is('plan_id', null);
+		const { data, error: err } = await planFilter(
+			supabase
+				.from('coach_messages')
+				.select('role, content')
+				.eq('user_id', userId)
+				.is('archived_at', null)
+				.order('created_at', { ascending: true }),
+		);
 		if (err) {
 			console.error('[coach] load thread failed', err);
 			return;
@@ -92,15 +112,114 @@
 		}
 	}
 
-	async function clearThread() {
-		showClearConfirm = false;
+	// Archives currently active rows under a single archived_at timestamp,
+	// so they group as one historical thread, then resets the live view
+	// to a blank slate. This is what the "Start new conversation" button
+	// does — the previous Clear button DELETE'd, losing the thread.
+	async function archiveCurrentThread() {
+		showArchiveConfirm = false;
 		if (!cachedUserId) return;
+		const ts = new Date().toISOString();
+		const { error: err } = await planFilter(
+			supabase
+				.from('coach_messages')
+				.update({ archived_at: ts })
+				.eq('user_id', cachedUserId)
+				.is('archived_at', null),
+		);
+		if (err) {
+			console.error('[coach] archive failed', err);
+			error = 'Could not start a new conversation — please try again.';
+			return;
+		}
 		messages = [];
-		const query = supabase.from('coach_messages').delete().eq('user_id', cachedUserId);
-		const { error: err } = planId
-			? await query.eq('plan_id', planId)
-			: await query.is('plan_id', null);
-		if (err) console.error('[coach] clear thread failed', err);
+		await loadArchives();
+	}
+
+	async function loadArchives() {
+		if (!cachedUserId) return;
+		// One row per (archived_at, role, content). We pull all archived
+		// rows then group client-side for `first_user_message` + count —
+		// counts are fine on a per-user scale (a heavy user has a few
+		// hundred rows max). A SQL function would be tidier but adds a
+		// migration; revisit if it ever gets slow.
+		const { data, error: err } = await planFilter(
+			supabase
+				.from('coach_messages')
+				.select('archived_at, role, content, created_at')
+				.eq('user_id', cachedUserId)
+				.not('archived_at', 'is', null)
+				.order('created_at', { ascending: true }),
+		);
+		if (err) {
+			console.error('[coach] load archives failed', err);
+			return;
+		}
+		const groups = new Map<string, { count: number; firstUser: string | null }>();
+		for (const row of (data ?? []) as { archived_at: string; role: 'user' | 'assistant'; content: string }[]) {
+			const g = groups.get(row.archived_at) ?? { count: 0, firstUser: null };
+			g.count += 1;
+			if (g.firstUser == null && row.role === 'user') g.firstUser = row.content;
+			groups.set(row.archived_at, g);
+		}
+		archives = [...groups.entries()]
+			.map(([archived_at, g]) => ({ archived_at, first_user_message: g.firstUser, message_count: g.count }))
+			.sort((a, b) => b.archived_at.localeCompare(a.archived_at));
+	}
+
+	async function viewArchive(archivedAt: string) {
+		if (!cachedUserId) return;
+		const { data, error: err } = await planFilter(
+			supabase
+				.from('coach_messages')
+				.select('role, content')
+				.eq('user_id', cachedUserId)
+				.eq('archived_at', archivedAt)
+				.order('created_at', { ascending: true }),
+		);
+		if (err) {
+			console.error('[coach] view archive failed', err);
+			return;
+		}
+		messages = (data ?? []) as Msg[];
+		viewingArchiveAt = archivedAt;
+		showHistory = false;
+		await scrollToBottom();
+	}
+
+	async function backToActive() {
+		viewingArchiveAt = null;
+		messages = [];
+		if (cachedUserId) await loadThread(cachedUserId);
+		await scrollToBottom();
+	}
+
+	async function deleteArchive(archivedAt: string) {
+		if (!cachedUserId) return;
+		const { error: err } = await planFilter(
+			supabase
+				.from('coach_messages')
+				.delete()
+				.eq('user_id', cachedUserId)
+				.eq('archived_at', archivedAt),
+		);
+		if (err) {
+			console.error('[coach] delete archive failed', err);
+			return;
+		}
+		archives = archives.filter((a) => a.archived_at !== archivedAt);
+		if (viewingArchiveAt === archivedAt) await backToActive();
+	}
+
+	function formatArchiveDate(iso: string): string {
+		const d = new Date(iso);
+		return d.toLocaleString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+		});
 	}
 	let lastCache = $state<{
 		read: number;
@@ -144,6 +263,7 @@
 		// Pull the persisted thread for this (user × plan) from Supabase.
 		// Server is the source of truth — no localStorage save effect.
 		await loadThread(session.user.id);
+		await loadArchives();
 		// Fetch usage + tier in parallel so the footer shows the right
 		// shape (free / pro, daily-cap or unlimited) before the user
 		// even sends the first message.
@@ -341,18 +461,79 @@
 	<header>
 		<div class="header-row">
 			<h3>Coach</h3>
-			{#if messages.length > 0}
-				<button
-					type="button"
-					class="clear-btn"
-					title="Wipe this conversation. Threads are saved per plan, synced across your devices."
-					onclick={() => (showClearConfirm = true)}
-				>
-					<span class="material-symbols">delete_sweep</span>
-					Clear chat
-				</button>
-			{/if}
+			<div class="header-actions">
+				{#if archives.length > 0}
+					<button
+						type="button"
+						class="header-btn"
+						title="Past conversations for this {hasPlan ? 'plan' : 'no-plan'} thread"
+						aria-expanded={showHistory}
+						onclick={() => (showHistory = !showHistory)}
+					>
+						<span class="material-symbols">history</span>
+						History
+						<span class="badge">{archives.length}</span>
+					</button>
+				{/if}
+				{#if messages.length > 0 && viewingArchiveAt == null}
+					<button
+						type="button"
+						class="header-btn"
+						title="Archive this conversation and start a fresh one. The current thread stays in History."
+						onclick={() => (showArchiveConfirm = true)}
+					>
+						<span class="material-symbols">edit_square</span>
+						Start new
+					</button>
+				{/if}
+			</div>
 		</div>
+
+		{#if showHistory}
+			<div class="history-panel" role="region" aria-label="Past conversations">
+				{#if archives.length === 0}
+					<p class="muted">No past conversations yet.</p>
+				{:else}
+					{#each archives as a (a.archived_at)}
+						<div class="archive-row" class:current={a.archived_at === viewingArchiveAt}>
+							<button
+								type="button"
+								class="archive-link"
+								onclick={() => viewArchive(a.archived_at)}
+							>
+								<span class="archive-date">{formatArchiveDate(a.archived_at)}</span>
+								<span class="archive-preview">
+									{a.first_user_message ?? '(no user messages)'}
+								</span>
+								<span class="archive-meta">{a.message_count} message{a.message_count === 1 ? '' : 's'}</span>
+							</button>
+							<button
+								type="button"
+								class="archive-delete"
+								title="Delete this conversation forever"
+								aria-label="Delete archive from {formatArchiveDate(a.archived_at)}"
+								onclick={() => deleteArchive(a.archived_at)}
+							>
+								<span class="material-symbols">close</span>
+							</button>
+						</div>
+					{/each}
+				{/if}
+			</div>
+		{/if}
+
+		{#if viewingArchiveAt}
+			<div class="archive-banner">
+				<span class="material-symbols">history</span>
+				<span>
+					Viewing archive · {formatArchiveDate(viewingArchiveAt)} · read-only
+				</span>
+				<button type="button" class="header-btn" onclick={backToActive}>
+					<span class="material-symbols">arrow_back</span>
+					Back to active
+				</button>
+			</div>
+		{/if}
 		<p class="sub">
 			{#if hasPlan}
 				Second opinion on your plan and runs. Not a replacement for a human
@@ -447,7 +628,10 @@
 		<p class="error">{error}</p>
 	{/if}
 
-	{#if limitReached}
+	{#if viewingArchiveAt}
+		<!-- Composer suppressed in archive view; the banner above offers
+		     "Back to active" to return to the live thread. -->
+	{:else if limitReached}
 		<div class="limit-bar">
 			<span class="material-symbols">schedule</span>
 			You've used all {dailyLimit ?? DEFAULT_DAILY_LIMIT} messages for today. Come back tomorrow!
@@ -495,13 +679,12 @@
 	</div>
 
 	<ConfirmDialog
-		open={showClearConfirm}
-		title="Clear this conversation?"
-		message="This wipes the saved messages for {hasPlan ? 'this plan' : 'no-plan'} mode across all your devices. Other plans' threads stay put. Can't be undone."
-		confirmLabel="Clear"
-		danger
-		onconfirm={clearThread}
-		oncancel={() => (showClearConfirm = false)}
+		open={showArchiveConfirm}
+		title="Start a new conversation?"
+		message="Your current chat will be moved to History so you can view it later. The composer resets to a fresh thread."
+		confirmLabel="Start new"
+		onconfirm={archiveCurrentThread}
+		oncancel={() => (showArchiveConfirm = false)}
 	/>
 </div>
 {/if}
@@ -539,7 +722,11 @@
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
 	}
-	.clear-btn {
+	.header-actions {
+		display: inline-flex;
+		gap: 0.3rem;
+	}
+	.header-btn {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
@@ -553,13 +740,126 @@
 		cursor: pointer;
 		transition: all var(--transition-fast);
 	}
-	.clear-btn:hover {
-		color: var(--color-danger);
-		border-color: var(--color-danger);
+	.header-btn:hover {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
 	}
-	.clear-btn .material-symbols {
+	.header-btn .material-symbols {
 		font-size: 0.95rem;
 		line-height: 1;
+	}
+	.header-btn .badge {
+		display: inline-block;
+		min-width: 1.2rem;
+		padding: 0 0.35rem;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+		border-radius: 9999px;
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-align: center;
+		line-height: 1.4;
+	}
+	.history-panel {
+		margin-top: 0.6rem;
+		padding: 0.5rem;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		max-height: 14rem;
+		overflow-y: auto;
+	}
+	.history-panel .muted {
+		color: var(--color-text-tertiary);
+		margin: 0;
+		padding: 0.35rem 0.5rem;
+		font-size: 0.85rem;
+	}
+	.archive-row {
+		display: flex;
+		align-items: stretch;
+		gap: 0.3rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.archive-row.current {
+		border-color: var(--color-primary);
+	}
+	.archive-link {
+		flex: 1;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.15rem;
+		padding: 0.45rem 0.6rem;
+		background: transparent;
+		border: none;
+		text-align: left;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.archive-link:hover {
+		background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+	}
+	.archive-date {
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		font-weight: 600;
+	}
+	.archive-preview {
+		font-size: 0.88rem;
+		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+	.archive-meta {
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+	}
+	.archive-delete {
+		background: transparent;
+		border: none;
+		color: var(--color-text-tertiary);
+		padding: 0 0.5rem;
+		cursor: pointer;
+		border-radius: var(--radius-md);
+	}
+	.archive-delete:hover {
+		color: var(--color-danger);
+		background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+	}
+	.archive-delete .material-symbols {
+		font-size: 1rem;
+		line-height: 1;
+	}
+	.archive-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.8rem;
+		margin: 0 var(--space-sm);
+		background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
+		border-radius: var(--radius-md);
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+	.archive-banner > span:nth-child(2) {
+		flex: 1;
+	}
+	.archive-banner .material-symbols {
+		font-size: 1rem;
+		color: var(--color-primary);
 	}
 	.save-icon {
 		font-size: 0.85rem;
