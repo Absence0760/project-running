@@ -29,52 +29,78 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let scrollEl: HTMLDivElement | null = $state(null);
-	/// `true` once we've finished loading the persisted thread for the
-	/// current user × plan. Gates the save effect so the initial empty
-	/// `messages` doesn't overwrite valid storage before the load lands.
-	let storeReady = $state(false);
 	let showClearConfirm = $state(false);
-	let lastSavedAt = $state<string | null>(null);
 
-	function storageKey(userId: string, plan: string | null): string {
+	// localStorage key used by the previous (per-device) persistence. Kept
+	// only so we can migrate any pre-existing thread into Supabase the
+	// first time a user lands on this build.
+	function legacyStorageKey(userId: string, plan: string | null): string {
 		return `coach_chat:${userId}:${plan ?? 'no_plan'}`;
 	}
 
-	function loadStoredThread(userId: string) {
+	async function loadThread(userId: string) {
+		const query = supabase
+			.from('coach_messages')
+			.select('role, content')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: true });
+		const { data, error: err } = planId
+			? await query.eq('plan_id', planId)
+			: await query.is('plan_id', null);
+		if (err) {
+			console.error('[coach] load thread failed', err);
+			return;
+		}
+		const rows = (data ?? []) as Msg[];
+		if (rows.length > 0) {
+			messages = rows;
+			return;
+		}
+		// DB is empty for this (user × plan). If the previous build had a
+		// localStorage thread, migrate it once and never look at
+		// localStorage again. Insert as a single batch — RLS gates on
+		// user_id so this can only ever land rows in the caller's own
+		// account.
 		try {
-			const raw = localStorage.getItem(storageKey(userId, planId));
+			const raw = localStorage.getItem(legacyStorageKey(userId, planId));
 			if (!raw) return;
-			const parsed = JSON.parse(raw) as {
-				v?: number;
-				messages?: Msg[];
-				updatedAt?: string;
-			};
-			if (
-				parsed &&
-				Array.isArray(parsed.messages) &&
-				parsed.messages.every(
-					(m) =>
-						m &&
-						(m.role === 'user' || m.role === 'assistant') &&
-						typeof m.content === 'string',
-				)
-			) {
-				messages = parsed.messages;
-				lastSavedAt = parsed.updatedAt ?? null;
+			const parsed = JSON.parse(raw) as { messages?: Msg[] };
+			const legacy = (parsed?.messages ?? []).filter(
+				(m) =>
+					m &&
+					(m.role === 'user' || m.role === 'assistant') &&
+					typeof m.content === 'string',
+			);
+			if (legacy.length === 0) {
+				localStorage.removeItem(legacyStorageKey(userId, planId));
+				return;
+			}
+			const { error: insertErr } = await supabase.from('coach_messages').insert(
+				legacy.map((m) => ({
+					user_id: userId,
+					plan_id: planId,
+					role: m.role,
+					content: m.content,
+				})),
+			);
+			if (!insertErr) {
+				messages = legacy;
+				localStorage.removeItem(legacyStorageKey(userId, planId));
 			}
 		} catch (_) {
-			/* localStorage unavailable / quota / parse error — start fresh */
+			/* localStorage unavailable / parse error — nothing to migrate */
 		}
 	}
 
-	function clearStoredThread() {
-		messages = [];
-		lastSavedAt = null;
+	async function clearThread() {
 		showClearConfirm = false;
 		if (!cachedUserId) return;
-		try {
-			localStorage.removeItem(storageKey(cachedUserId, planId));
-		} catch (_) {}
+		messages = [];
+		const query = supabase.from('coach_messages').delete().eq('user_id', cachedUserId);
+		const { error: err } = planId
+			? await query.eq('plan_id', planId)
+			: await query.is('plan_id', null);
+		if (err) console.error('[coach] clear thread failed', err);
 	}
 	let lastCache = $state<{
 		read: number;
@@ -115,11 +141,9 @@
 		const { data: { session } } = await supabase.auth.getSession();
 		if (!session) return;
 		cachedUserId = session.user.id;
-		// Restore the persisted thread for this (user × plan) before we
-		// mark `storeReady`, so the save effect below doesn't blow away
-		// valid storage by writing the empty initial array.
-		loadStoredThread(session.user.id);
-		storeReady = true;
+		// Pull the persisted thread for this (user × plan) from Supabase.
+		// Server is the source of truth — no localStorage save effect.
+		await loadThread(session.user.id);
 		// Fetch usage + tier in parallel so the footer shows the right
 		// shape (free / pro, daily-cap or unlimited) before the user
 		// even sends the first message.
@@ -138,28 +162,6 @@
 
 		await loadContextSummary(session.user.id);
 		await scrollToBottom();
-	});
-
-	// Persist the thread to localStorage on every change once the
-	// initial load has completed. Per (user × plan) so the no-plan
-	// thread and each plan's thread stay separate.
-	$effect(() => {
-		if (!storeReady || !cachedUserId) return;
-		const _ = messages;
-		try {
-			const payload = {
-				v: 1,
-				messages,
-				updatedAt: new Date().toISOString(),
-			};
-			localStorage.setItem(
-				storageKey(cachedUserId, planId),
-				JSON.stringify(payload),
-			);
-			lastSavedAt = payload.updatedAt;
-		} catch (_) {
-			/* quota or unavailable — ignore */
-		}
 	});
 
 	// Re-probe the runs chip when the user changes the limit so the
@@ -343,7 +345,7 @@
 				<button
 					type="button"
 					class="clear-btn"
-					title="Wipe this conversation. Saved per plan to this device only."
+					title="Wipe this conversation. Threads are saved per plan, synced across your devices."
 					onclick={() => (showClearConfirm = true)}
 				>
 					<span class="material-symbols">delete_sweep</span>
@@ -485,9 +487,9 @@
 				Cache: read {lastCache.read} · wrote {lastCache.create} · in {lastCache.in} · out {lastCache.out}
 			</span>
 		{:else if messages.length > 0}
-			<span class="cache-note" title="Saved to this device only. Switching plans (or browsers / devices) shows a different thread.">
-				<span class="material-symbols save-icon">save</span>
-				Saved on this device
+			<span class="cache-note" title="Saved to your account and synced across devices. Per plan — switching plans shows a different thread.">
+				<span class="material-symbols save-icon">cloud_done</span>
+				Synced
 			</span>
 		{/if}
 	</div>
@@ -495,10 +497,10 @@
 	<ConfirmDialog
 		open={showClearConfirm}
 		title="Clear this conversation?"
-		message="This wipes the saved messages for {hasPlan ? 'this plan' : 'no-plan'} mode on this device. Other plans' threads stay put. Can't be undone."
+		message="This wipes the saved messages for {hasPlan ? 'this plan' : 'no-plan'} mode across all your devices. Other plans' threads stay put. Can't be undone."
 		confirmLabel="Clear"
 		danger
-		onconfirm={clearStoredThread}
+		onconfirm={clearThread}
 		oncancel={() => (showClearConfirm = false)}
 	/>
 </div>
