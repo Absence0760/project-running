@@ -84,6 +84,7 @@ const _tables = <String>{
   'device_tokens',
   'fitness_snapshots',
   'personal_records',
+  'coach_messages',
 };
 
 class _Column {

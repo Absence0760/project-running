@@ -263,6 +263,29 @@ create table user_coach_usage (
 
 ---
 
+### `coach_messages`
+
+Per-account chat history for the AI Coach. One row per message authored by either the runner (`role = 'user'`) or the LLM (`role = 'assistant'`), scoped to a `(user_id, plan_id)` thread. `plan_id` is nullable so the "no active plan" thread is distinguishable from per-plan threads. Replaces an earlier localStorage-only persistence that didn't survive a sign-in on a different device.
+
+```sql
+create table coach_messages (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  plan_id     uuid references training_plans(id) on delete set null,
+  role        text not null check (role in ('user', 'assistant')),
+  content     text not null,
+  created_at  timestamptz not null default now()
+);
+```
+
+Index `coach_messages_user_plan_created_idx` on `(user_id, plan_id, created_at)` matches the hot read path — the chronological thread for a `(user, plan)` pair — so the WHERE + ORDER BY don't need a separate sort step.
+
+`plan_id` uses `on delete set null` (not cascade) so deleting a plan leaves the conversation intact under "no plan" — runners don't lose chat history when they archive a finished plan.
+
+RLS: standard owner-only. `select`, `insert`, `delete` gated on `auth.uid() = user_id`. **No `update` policy** — messages are immutable once written. "Clear chat" deletes the rows rather than editing them.
+
+---
+
 ### `monthly_funding`
 
 Monthly funding tracker for the donate page's progress bar. One row per month, keyed by the first of the month (e.g. `'2026-05-01'`). Updated by the project owner when donations land. Publicly readable — the whole point is transparency.

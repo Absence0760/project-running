@@ -179,6 +179,52 @@ class ClubRow {
   };
 }
 
+/// Row shape for the `coach_messages` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class CoachMessageRow {
+  static const String table = 'coach_messages';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colPlanId = 'plan_id';
+  static const String colRole = 'role';
+  static const String colContent = 'content';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final String? planId;
+  final String role;
+  final String content;
+  final DateTime createdAt;
+
+  const CoachMessageRow({
+    required this.id,
+    required this.userId,
+    this.planId,
+    required this.role,
+    required this.content,
+    required this.createdAt,
+  });
+
+  factory CoachMessageRow.fromJson(Map<String, dynamic> json) => CoachMessageRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    planId: json['plan_id'] as String?,
+    role: json['role'] as String,
+    content: json['content'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colPlanId: planId,
+    colRole: role,
+    colContent: content,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `device_tokens` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class DeviceTokenRow {
@@ -824,7 +870,7 @@ class PlanWorkoutRow {
     this.completedAt,
     this.paceZone,
     this.targetPaceEndSecPerKm,
-    this.manuallyCompleted = false,
+    required this.manuallyCompleted,
   });
 
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
@@ -842,7 +888,7 @@ class PlanWorkoutRow {
     completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
     paceZone: json['pace_zone'] as String?,
     targetPaceEndSecPerKm: (json['target_pace_end_sec_per_km'] as num?)?.toInt(),
-    manuallyCompleted: (json['manually_completed'] as bool?) ?? false,
+    manuallyCompleted: json['manually_completed'] as bool,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
