@@ -364,13 +364,14 @@
 	}
 	.weeks li {
 		display: grid;
-		grid-template-columns: 2rem auto 1fr auto;
+		grid-template-columns: 2rem minmax(0, 1fr) auto auto;
 		gap: 0.5rem;
 		align-items: center;
 		font-size: 0.85rem;
-		padding: 0.3rem 0.5rem;
+		padding: 0.3rem 0.55rem;
 		background: var(--color-surface);
 		border-radius: var(--radius-md);
+		min-width: 0;
 	}
 	.weeks li.more {
 		display: block;
@@ -383,15 +384,21 @@
 	}
 	.week-phase {
 		color: var(--color-text-secondary);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.week-km {
 		color: var(--color-text);
 		text-align: right;
 		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
 	}
 	.week-workouts {
 		color: var(--color-text-tertiary);
 		font-size: 0.78rem;
+		white-space: nowrap;
 	}
 	.muted {
 		color: var(--color-text-tertiary);
