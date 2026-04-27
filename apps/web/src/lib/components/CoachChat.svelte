@@ -4,6 +4,7 @@
 	import { isLocked } from '$lib/features';
 	import { fmtKm } from '$lib/units.svelte';
 	import ProGate from '$lib/components/ProGate.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	interface Props {
 		planId: string | null;
@@ -28,6 +29,53 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let scrollEl: HTMLDivElement | null = $state(null);
+	/// `true` once we've finished loading the persisted thread for the
+	/// current user × plan. Gates the save effect so the initial empty
+	/// `messages` doesn't overwrite valid storage before the load lands.
+	let storeReady = $state(false);
+	let showClearConfirm = $state(false);
+	let lastSavedAt = $state<string | null>(null);
+
+	function storageKey(userId: string, plan: string | null): string {
+		return `coach_chat:${userId}:${plan ?? 'no_plan'}`;
+	}
+
+	function loadStoredThread(userId: string) {
+		try {
+			const raw = localStorage.getItem(storageKey(userId, planId));
+			if (!raw) return;
+			const parsed = JSON.parse(raw) as {
+				v?: number;
+				messages?: Msg[];
+				updatedAt?: string;
+			};
+			if (
+				parsed &&
+				Array.isArray(parsed.messages) &&
+				parsed.messages.every(
+					(m) =>
+						m &&
+						(m.role === 'user' || m.role === 'assistant') &&
+						typeof m.content === 'string',
+				)
+			) {
+				messages = parsed.messages;
+				lastSavedAt = parsed.updatedAt ?? null;
+			}
+		} catch (_) {
+			/* localStorage unavailable / quota / parse error — start fresh */
+		}
+	}
+
+	function clearStoredThread() {
+		messages = [];
+		lastSavedAt = null;
+		showClearConfirm = false;
+		if (!cachedUserId) return;
+		try {
+			localStorage.removeItem(storageKey(cachedUserId, planId));
+		} catch (_) {}
+	}
 	let lastCache = $state<{
 		read: number;
 		create: number;
@@ -67,6 +115,11 @@
 		const { data: { session } } = await supabase.auth.getSession();
 		if (!session) return;
 		cachedUserId = session.user.id;
+		// Restore the persisted thread for this (user × plan) before we
+		// mark `storeReady`, so the save effect below doesn't blow away
+		// valid storage by writing the empty initial array.
+		loadStoredThread(session.user.id);
+		storeReady = true;
 		// Fetch usage + tier in parallel so the footer shows the right
 		// shape (free / pro, daily-cap or unlimited) before the user
 		// even sends the first message.
@@ -84,6 +137,29 @@
 		}
 
 		await loadContextSummary(session.user.id);
+		await scrollToBottom();
+	});
+
+	// Persist the thread to localStorage on every change once the
+	// initial load has completed. Per (user × plan) so the no-plan
+	// thread and each plan's thread stay separate.
+	$effect(() => {
+		if (!storeReady || !cachedUserId) return;
+		const _ = messages;
+		try {
+			const payload = {
+				v: 1,
+				messages,
+				updatedAt: new Date().toISOString(),
+			};
+			localStorage.setItem(
+				storageKey(cachedUserId, planId),
+				JSON.stringify(payload),
+			);
+			lastSavedAt = payload.updatedAt;
+		} catch (_) {
+			/* quota or unavailable — ignore */
+		}
 	});
 
 	// Re-probe the runs chip when the user changes the limit so the
@@ -261,7 +337,20 @@
 {:else}
 <div class="chat">
 	<header>
-		<h3>Coach</h3>
+		<div class="header-row">
+			<h3>Coach</h3>
+			{#if messages.length > 0}
+				<button
+					type="button"
+					class="clear-btn"
+					title="Wipe this conversation. Saved per plan to this device only."
+					onclick={() => (showClearConfirm = true)}
+				>
+					<span class="material-symbols">delete_sweep</span>
+					Clear chat
+				</button>
+			{/if}
+		</div>
 		<p class="sub">
 			{#if hasPlan}
 				Second opinion on your plan and runs. Not a replacement for a human
@@ -395,8 +484,23 @@
 			<span class="cache-note">
 				Cache: read {lastCache.read} · wrote {lastCache.create} · in {lastCache.in} · out {lastCache.out}
 			</span>
+		{:else if messages.length > 0}
+			<span class="cache-note" title="Saved to this device only. Switching plans (or browsers / devices) shows a different thread.">
+				<span class="material-symbols save-icon">save</span>
+				Saved on this device
+			</span>
 		{/if}
 	</div>
+
+	<ConfirmDialog
+		open={showClearConfirm}
+		title="Clear this conversation?"
+		message="This wipes the saved messages for {hasPlan ? 'this plan' : 'no-plan'} mode on this device. Other plans' threads stay put. Can't be undone."
+		confirmLabel="Clear"
+		danger
+		onconfirm={clearStoredThread}
+		oncancel={() => (showClearConfirm = false)}
+	/>
 </div>
 {/if}
 
@@ -418,13 +522,48 @@
 		padding: var(--space-md);
 		border-bottom: 1px solid var(--color-border);
 	}
+	.header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-sm);
+		margin-bottom: 0.2rem;
+	}
 	header h3 {
 		font-size: 1.05rem;
-		margin-bottom: 0.2rem;
+		margin: 0;
 	}
 	header .sub {
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
+	}
+	.clear-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+		font-weight: 500;
+		padding: 0.25rem 0.55rem;
+		border-radius: 9999px;
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+	.clear-btn:hover {
+		color: var(--color-danger);
+		border-color: var(--color-danger);
+	}
+	.clear-btn .material-symbols {
+		font-size: 0.95rem;
+		line-height: 1;
+	}
+	.save-icon {
+		font-size: 0.85rem;
+		line-height: 1;
+		vertical-align: -2px;
+		margin-right: 0.15rem;
 	}
 	.context-strip {
 		display: flex;
