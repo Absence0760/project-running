@@ -32,12 +32,24 @@ import { nextInstanceAfter } from './recurrence';
 
 // --- Runs ---
 
-export async function fetchRuns(): Promise<Run[]> {
-	const { data, error } = await supabase
+export interface FetchRunsOptions {
+	/** Cap the number of rows returned. Pair with `offset` for paging. */
+	limit?: number;
+	/** Skip this many rows before the page (for paged loads). */
+	offset?: number;
+}
+
+export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
+	let q = supabase
 		.from('runs')
 		.select('*')
 		.order('started_at', { ascending: false });
-
+	if (opts?.limit != null) {
+		const from = opts.offset ?? 0;
+		const to = from + opts.limit - 1;
+		q = q.range(from, to);
+	}
+	const { data, error } = await q;
 	if (error || !data) return [];
 	return data.map((r: any) => ({ ...r, track: null }));
 }

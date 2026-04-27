@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import {
 		formatDuration,
 		formatPace,
@@ -19,14 +18,22 @@
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
 	let sourceFilter = $state<RunSource | 'all'>('all');
-	let activityFilter = $state<string>('all');
+	let activityFilter = $state<string>('run');
 	type SortKey = 'newest' | 'oldest' | 'longest' | 'fastest';
 	let sortKey = $state<SortKey>('newest');
 	type DateRange = 'today' | 'week' | 'month' | 'year' | 'all' | 'custom';
-	// Default to "all" on web so history is fully visible on first
-	// open. (Android defaults to "week" because its list is the main
-	// surface; web has a richer dashboard above.)
-	let dateRange = $state<DateRange>('all');
+	// Default scope = today's runs only. "All time" is opt-in and
+	// streams in pages of PAGE_SIZE so a heavy account doesn't
+	// pull thousands of rows on first paint.
+	let dateRange = $state<DateRange>('today');
+
+	const PAGE_SIZE = 50;
+	let loadingMore = $state(false);
+	let hasMore = $state(false);
+	/// Tracks the last fetch mode so we only refetch on `paginated` ↔
+	/// `full` transitions, not on every filter twiddle.
+	let lastFetchMode = $state<'paginated' | 'full' | ''>('');
+	let fetchMode = $derived<'paginated' | 'full'>(dateRange === 'all' ? 'paginated' : 'full');
 	/// ISO yyyy-mm-dd bounds for the custom-range picker. Empty string
 	/// means unbounded on that side.
 	let customFrom = $state('');
@@ -176,9 +183,32 @@
 		{ value: 'hike', label: 'Hike', icon: 'terrain' },
 	];
 
-	onMount(async () => {
-		runs = await fetchRuns();
+	async function loadInitial() {
+		loading = true;
+		if (fetchMode === 'paginated') {
+			runs = await fetchRuns({ limit: PAGE_SIZE, offset: 0 });
+			hasMore = runs.length === PAGE_SIZE;
+		} else {
+			runs = await fetchRuns();
+			hasMore = false;
+		}
 		loading = false;
+	}
+
+	async function loadMore() {
+		if (loadingMore || !hasMore) return;
+		loadingMore = true;
+		const more = await fetchRuns({ limit: PAGE_SIZE, offset: runs.length });
+		runs = [...runs, ...more];
+		hasMore = more.length === PAGE_SIZE;
+		loadingMore = false;
+	}
+
+	$effect(() => {
+		if (fetchMode !== lastFetchMode) {
+			lastFetchMode = fetchMode;
+			loadInitial();
+		}
 	});
 
 	let showRunModal = $state(false);
@@ -368,6 +398,19 @@
 			oncancel={() => (showBulkConfirm = false)}
 		/>
 
+		{#if hasMore && fetchMode === 'paginated'}
+			<div class="load-more-row">
+				<button
+					type="button"
+					class="btn btn-outline"
+					disabled={loadingMore}
+					onclick={loadMore}
+				>
+					{loadingMore ? 'Loading…' : `Load ${PAGE_SIZE} more`}
+				</button>
+			</div>
+		{/if}
+
 		{#if filteredRuns.length === 0}
 			<div class="empty">No runs found for this filter.</div>
 		{/if}
@@ -544,6 +587,12 @@
 		text-align: center;
 		padding: var(--space-2xl);
 		color: var(--color-text-tertiary);
+	}
+
+	.load-more-row {
+		display: flex;
+		justify-content: center;
+		padding: var(--space-md) 0 var(--space-xl);
 	}
 
 	.material-symbols {
