@@ -258,8 +258,8 @@ create table user_coach_usage (
 
 **RPCs:**
 
-- `increment_coach_usage(p_user_id uuid) → integer` — upserts today's row and returns the new count. `security definer` so the coach endpoint can call it in one round trip.
-- `get_coach_usage(p_user_id uuid) → integer` — read-only; returns today's count without incrementing. Used by `CoachChat.svelte` to show "N of M remaining" before the user types.
+- `increment_coach_usage(p_user_id uuid) → integer` — upserts today's row and returns the new count. `security definer` so the coach endpoint can call it in one round trip. Guarded: `auth.uid() != p_user_id` raises `not authorized`, so a malicious caller can't exhaust another user's quota.
+- `get_coach_usage(p_user_id uuid) → integer` — read-only; returns today's count without incrementing. Used by `CoachChat.svelte` to show "N of M remaining" before the user types. Same `auth.uid()` guard as `increment_coach_usage`.
 
 ---
 
@@ -274,12 +274,15 @@ create table coach_messages (
   plan_id      uuid references training_plans(id) on delete set null,
   role         text not null check (role in ('user', 'assistant')),
   content      text not null,
+  reaction     text check (reaction in ('up', 'down')),
   archived_at  timestamptz,
   created_at   timestamptz not null default now()
 );
 ```
 
 **Active vs archived:** `archived_at` is null for messages in the live thread; "Start new conversation" updates every active row in a `(user, plan)` to the same `now()` timestamp, grouping them as one historical conversation. All rows sharing an `archived_at` value within a `(user, plan)` form one archive — the History panel queries `select distinct archived_at where archived_at is not null`, lists each, and lets the user view (read-only) or delete an archive. Per-archive delete is `delete where archived_at = $T` (RLS-scoped).
+
+**Reactions:** `reaction` is set by the runner via inline thumbs-up / thumbs-down on assistant bubbles. Per-message, owner-only — there's no multi-user voting model, just a personal save-this / not-useful signal.
 
 Index `coach_messages_user_plan_archive_created_idx` on `(user_id, plan_id, archived_at, created_at)` covers the three hot read shapes without a sort step:
 1. Active thread: `where user_id = X and plan_id = Y and archived_at is null order by created_at`
@@ -288,7 +291,9 @@ Index `coach_messages_user_plan_archive_created_idx` on `(user_id, plan_id, arch
 
 `plan_id` uses `on delete set null` (not cascade) so deleting a plan leaves the conversation intact under "no plan" — runners don't lose chat history when they archive a finished plan.
 
-RLS: standard owner-only. `select`, `insert`, `update`, `delete` gated on `auth.uid() = user_id`. The `update` policy was added with archiving — content + role are still effectively immutable in practice (the client only ever sets `archived_at`), but RLS doesn't enforce that finer distinction.
+RLS + GRANTs: standard owner-only on every command. `select`, `insert`, `delete` gated on `auth.uid() = user_id`. UPDATE is also gated by an owner-only policy, but the `authenticated` role only has column-level UPDATE on `(archived_at, reaction)` — `content`, `role`, `plan_id`, `created_at` are immutable to clients, enforced at the GRANT layer (PostgREST rejects mutations that touch other columns). This preserves the audit trail of who-said-what without trusting the client to behave.
+
+Realtime: published on `supabase_realtime` so a client that reloads mid-stream picks the assistant reply up via subscription when the in-flight server request finishes.
 
 ---
 
@@ -402,6 +407,10 @@ Triggers: `runs_personal_records_insert / update / delete` call
 `refresh_personal_records_for_user(uid)`, a `security definer` helper
 that deletes + re-inserts the caller's four rows (full rebuild per
 user on any run change — simpler to reason about than incremental).
+The helper is guarded: `auth.uid() is not null and auth.uid() !=
+p_user_id` raises `not authorized`, so a logged-in attacker can't call
+the RPC with a victim's id. Service-role / seed inserts run with
+`auth.uid() = null` and skip the guard — the trigger path is unchanged.
 Backfill runs once in the migration via a `do $$ for uid in … $$` loop.
 Second index `personal_records_distance_time` on `(distance,
 best_time_s asc)` prepared for a future leaderboard view. RLS today

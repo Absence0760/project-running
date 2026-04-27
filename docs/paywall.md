@@ -38,15 +38,18 @@ dropped); reviving transparent funding later is a one-page revert.
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
 constraint enforces the three valid values. The `is_pro()` SQL helper
-(and its `p_user_id uuid` variant `is_user_pro(uid)`) returns `true`
-for both `pro` and `lifetime`.
+takes no arguments and gates internally on `auth.uid()`; it returns
+`true` for both `pro` and `lifetime`. (An earlier `is_user_pro(uuid)`
+variant was dropped in `20260516_001_drop_is_user_pro.sql` — it took a
+user-id parameter and let any authenticated caller probe another user's
+tier.)
 
 ## Pro perks and where they're enforced
 
 | Perk | Feature key | Enforcement point |
 |---|---|---|
-| Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_user_pro(uid)` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
-| Priority processing | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_user_pro(uid)` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 200-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
+| Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_pro()` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
+| Priority processing | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 200-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 
 These perks are **behaviour changes**, not gated screens, so they do
 not call through `isLocked()`. `isLocked()` remains the correct hook
@@ -60,7 +63,7 @@ store's cached `user_profiles.subscription_tier` and returns true for
 `pro` / `lifetime`. Use it for conditional UI flourishes (a "Pro"
 badge, a "Pro — unlimited" label next to the coach input). Never use
 it as the sole check for anything expensive: always mirror the check
-server-side with the `is_user_pro(uid)` RPC.
+server-side with the `is_pro()` RPC.
 
 ## Adding a new gated feature
 
@@ -92,7 +95,7 @@ server-side with the `is_user_pro(uid)` RPC.
    ```
    Or in an Edge Function:
    ```ts
-   const { data } = await supabase.rpc('is_user_pro', { p_user_id: userId });
+   const { data } = await supabase.rpc('is_pro');
    if (!data) return new Response('Pro required', { status: 403 });
    ```
 

@@ -233,6 +233,12 @@ See [features § AI Coach](features.md#ai-coach).
 | Grounded-in context strip | ✗ | ✗ | ✓ | N/A | N/A | Shows the plan, run count, HR-zones-loaded indicator, and weekly goal that `buildContext()` actually loaded. |
 | Personality tones (supportive / drill / analytical) | ✗ | ✗ | ✓ | N/A | N/A | |
 | Daily usage cap (10 / day) | ✗ | ✗ | ✓ | N/A | N/A | |
+| Cross-device chat history | ✗ | ✗ | ✓ | N/A | N/A | `coach_messages` table, RLS owner-only, scoped per (user × plan). One-time client migration from the prior localStorage shape on first read. |
+| Streaming responses (SSE) | ✗ | ✗ | ✓ | N/A | N/A | Tokens render as they arrive; bouncing-dot indicator until the first token. Persists across reload mid-stream via Realtime subscription on `coach_messages`. |
+| Markdown rendering + run-link autoformatting | ✗ | ✗ | ✓ | N/A | N/A | `marked` + `DOMPurify`. System prompt instructs Claude to format references to specific runs as `[Apr 25 long run](/runs/<id>)`. |
+| Conversation history sidebar | ✗ | ✗ | ✓ | N/A | N/A | "Start new" archives the current thread (flips `archived_at` rather than deleting). Auto-titled by first user message. Per-archive view (read-only) and delete. Sidebar collapsible; collapsed by default. |
+| Inline bubble actions | ✗ | ✗ | ✓ | N/A | N/A | Hover-revealed: copy (both roles), regenerate (assistant), edit-and-resend (user — inline textarea), thumbs-up / thumbs-down (assistant). Reactions persist via column-level UPDATE on `coach_messages.reaction`. |
+| Multi-line composer (Enter sends, Shift+Enter newline) | ✗ | ✗ | ✓ | N/A | N/A | Auto-growing textarea up to ~10 lines before internal scroll; resets to single row after send. |
 | OpenAI-compatible provider switch (local Ollama, etc.) | N/A | N/A | ✓ | N/A | N/A | Dev-only convenience: `COACH_PROVIDER=openai` + `OPENAI_BASE_URL` plumbing in `/api/coach/+server.ts` for testing without Anthropic tokens. Production stays on Claude with prompt caching. |
 
 ## Spectating and public sharing
@@ -252,9 +258,9 @@ See [docs/paywall.md](paywall.md), [features § Pro tier](features.md#pro-tier),
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Pro tier ($9.99 / mo) — server enforcement | N/A | N/A | ✓ | N/A | N/A | `is_user_pro(uid)` RPC + `subscription_tier` column are shared; all clients read `user_profiles` the same way. Server rule lives on the web because the coach endpoint is web-owned. |
+| Pro tier ($9.99 / mo) — server enforcement | N/A | N/A | ✓ | N/A | N/A | `is_pro()` RPC + `subscription_tier` column are shared; all clients read `user_profiles` the same way. Server rule lives on the web because the coach endpoint is web-owned. |
 | Pro "Get Pro" checkout UI | ✗ | ✗ | ✓ | N/A | N/A | Shipped on web: `/settings/upgrade` "Get Pro" button now calls the RevenueCat web SDK when `PUBLIC_REVENUECAT_WEB_API_KEY` is set; unconfigured builds fall back to the placeholder toast. Mobile purchase flow still pending. |
-| Unlimited AI Coach for Pro users | N/A | N/A | ✓ | N/A | N/A | `/api/coach/+server.ts` skips the 10/day cap when `is_user_pro(uid)` is true. Coach chat is web-only today. |
+| Unlimited AI Coach for Pro users | N/A | N/A | ✓ | N/A | N/A | `/api/coach/+server.ts` skips the 10/day cap when `is_pro()` returns true. Coach chat is web-only today. |
 | Priority processing for Pro users | N/A | N/A | ✓ | N/A | N/A | Concrete tier-aware budget on `/api/coach/+server.ts`: **free** = 10 messages/day · 768 max-tokens per response · up to 30 runs of context; **pro** = unlimited messages · 2048 max-tokens (richer / longer answers) · up to 200 runs of context. Every coach response carries `X-Coach-Tier`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-MaxTokens`, `X-RateLimit-MaxRuns` headers and echoes `tier` + `limits` in the JSON body. The chat footer reads it back: free users see "N of 10 messages remaining today" with a Free badge; Pro users see "Unlimited messages · priority context window" with a Pro badge. `BYPASS_PAYWALL=true` reports as `pro` so dev sees the unlimited shape. Mobile / watch / iOS clients hit the same endpoint, so they pick up the same budget — `N/A` on those columns reflects "no separate per-client surface to wire". |
 | One-off Donate button | ✗ | ✗ | ✓ | N/A | N/A | Web `/settings/upgrade` has a single Donate button linking to an external provider. Mobile has no in-app donation flow. |
 | Paywall feature gate (registry-driven) | ✓ | ✓ | ✓ | N/A | N/A | `isLocked()` still returns `false` for every key — no feature is hidden behind Pro today. Infra kept so a future Pro-only feature can flip one return. |

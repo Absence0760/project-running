@@ -388,7 +388,7 @@ Price: **$9.99 / month**. Managed via RevenueCat (abstracts App Store + Play Sto
 - Standard processing priority.
 
 **Pro:**
-- **Unlimited AI Coach** — no 10 / day cap. Server skips the rate-limit block when `is_user_pro(uid)` returns true.
+- **Unlimited AI Coach** — no 10 / day cap. Server skips the rate-limit block when `is_pro()` returns true.
 - **Priority processing** — Pro requests routed ahead of the free queue when the service is under heavy load. Today this is a marketing claim implemented via the coach-cap bypass; tier-aware rate-limiting on other endpoints lands over time.
 
 **Donations:** a one-off "Donate" button on `/settings/upgrade` links to an external payment provider (GitHub Sponsors placeholder today). Donations are kept alongside the subscription because a chunk of users will want to chip in without committing to a recurring charge.
@@ -437,7 +437,13 @@ Chat surface delivered two ways: as a top-level `/coach` page (with a plan switc
 
 **Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
 
-**Usage limits:** Free users get 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. Pro users (`is_user_pro(uid)` → `true`) bypass the cap entirely. The UI shows "N of M remaining" for free users; Pro users see "Unlimited". `BYPASS_PAYWALL=true` skips the limit in dev.
+**Usage limits:** Free users get 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. Pro users (`is_pro()` → `true`) bypass the cap entirely. The UI shows "N of M remaining" for free users; Pro users see "Unlimited". `BYPASS_PAYWALL=true` skips the limit in dev.
+
+**Conversation history (cross-device):** Messages persist to `coach_messages` (RLS owner-only, scoped per `user × plan`). "Start new" archives the current thread by setting `archived_at = now()` rather than deleting; the sidebar lists each archive titled by its first user message and lets the runner view (read-only) or delete an archive. Pre-existing localStorage threads migrate once on first read and the legacy key is removed.
+
+**Streaming + markdown:** The endpoint emits Server-Sent Events; the client renders tokens as they arrive into the assistant bubble. A bouncing-dot indicator runs while waiting for the first token and persists across reload mid-stream via a Realtime subscription on `coach_messages`. Replies render through `marked` + `DOMPurify` so lists, **bold**, code, and links work. The system prompt instructs Claude to format references to specific runs as markdown links pointing to `/runs/<id>`, constrained to runs actually in the context.
+
+**Inline bubble actions:** Hover a message to reveal copy (both roles), regenerate (assistant), edit-and-resend (user — inline textarea), and thumbs-up / thumbs-down (assistant). Reactions persist via column-level UPDATE on `coach_messages.reaction`; `content` and `role` are immutable to clients (column-level GRANT enforcement). Regenerate / edit pass `mode` + `anchor_message_id` to the server, which truncates the active thread from the anchor onward and re-runs without duplicating user messages.
 
 **What the coach does:**
 - Critique adherence (hitting planned sessions, mileage, pace targets)

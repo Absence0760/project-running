@@ -429,6 +429,50 @@ The user-visible product name is now **Run Onward** (URL: `runonward.com`). All 
 
 ---
 
+## 28. Coach chat persists server-side; archive-not-delete; SSE streaming
+
+**Decided:** April 2026 · captured after the coach-chat v2 work.
+
+The Claude coach surface gained four shape changes that, together, look like ChatGPT/Grok:
+
+- **Cross-device persistence.** Threads live in `coach_messages` (RLS owner-only, scoped per `user × plan`) instead of localStorage. Pre-existing localStorage threads migrate once on first read.
+- **Archive, don't delete.** "Start new conversation" sets `archived_at = now()` on every active row in the (user, plan); rows sharing one timestamp form an archive. The sidebar lists archives auto-titled by their first user message; runners can view (read-only) or delete an archive. Per-archive delete is RLS-scoped.
+- **Server-Sent Events streaming.** The endpoint emits events of `meta` (user_message_id + tier + limits), N × `token` (text deltas), and `done` (assistant_message_id + cache + usage). Pre-stream errors (auth, rate-limit) still come back as JSON so the client picks the path off `content-type`. Reload-mid-stream is handled by a Realtime subscription on `coach_messages`: the in-flight server request still completes and writes the assistant row; the realtime listener picks it up and the typing indicator (which the client shows whenever the last message is a user message without an assistant follow-up) clears.
+- **Inline bubble actions.** Copy / regenerate / edit-and-resend / thumbs are all anchored on `coach_messages.id`. The server accepts `mode` (`send` / `regenerate` / `edit`) + `anchor_message_id`; regenerate / edit truncate the active thread from the anchor onward and re-run without inserting a duplicate user message.
+
+**Why each:**
+- Persistence: previous localStorage shape didn't survive a different browser. Switching to `coach_messages` was straightforward once we accepted RLS as the isolation primitive.
+- Archive vs delete: runners told us they wanted to keep useful conversations. The simplest model that doesn't require a new `coach_threads` table is `archived_at` as a grouping timestamp. We can normalise to a real threads table later if titles, renames, or thread-level metadata appear.
+- SSE: streaming makes a 5–15 s response feel instant. Buffer-then-respond is the correct shape only if you don't have the bandwidth for incremental rendering — we already have it via `marked` + `DOMPurify`.
+- Inline actions: the right product is "every Grok / ChatGPT affordance" rather than picking the cheapest subset. The server-side truncate-and-rerun pattern means the data model never accumulates duplicates.
+
+**Trade-off:** `coach_messages` uses an `archived_at` grouping convention rather than a real threads table. Renames, multi-thread-per-plan, or thread-level metadata are not expressible without schema work. Acceptable today — the cost of a real threads table is a migration that backfills `thread_id` onto existing messages, which we'll do if and when product needs it.
+
+**Don't re-litigate unless:** runners ask for renamed threads, or a model-evaluation feature wants to query at the thread level.
+
+---
+
+## 29. Security patterns from the data-isolation audit
+
+**Decided:** April 2026 · captured after the post-coach data-isolation audit (`/tmp/data-isolation-audit/`).
+
+A fan-out audit across DB, server endpoints, and client surfaced a recurring class of bug — `security definer` functions that take a `p_user_id uuid` argument with no caller-identity guard, callable by any authenticated user. We close it with three patterns going forward:
+
+- **Guard or drop.** `security definer` functions that take a user-id argument either (a) raise `not authorized` when `auth.uid() is not null and auth.uid() != p_user_id`, or (b) get dropped in favour of a no-arg variant that gates internally on `auth.uid()`. Convention: callers passing only their own id should always use the no-arg variant; functions that *need* a different `user_id` (e.g. trigger paths) keep the guard. Concrete actions: `is_user_pro(uuid)` dropped (`is_pro()` is the no-arg variant); `refresh_personal_records_for_user(uuid)` guarded.
+- **Defence-in-depth filters on the client.** Personal-data list queries from the browser always include an explicit `.eq('user_id', auth.user.id)` predicate, even when RLS would scope the query anyway. The audit found two `runs` queries that relied solely on RLS — `fetchPersonalRecords` and `fetchRuns`/`fetchRunById`. The cost of the explicit filter is one line; it's a hedge against a future RLS regression silently widening visibility.
+- **Column-level GRANTs for write immutability.** When some columns of a table should be read-only to clients (e.g. `coach_messages.content` after insert), enforce it at the GRANT layer, not via a `WITH CHECK` self-subquery. Concrete: `coach_messages` UPDATE was reduced to `(archived_at, reaction)` only — PostgREST honours per-column UPDATE grants and rejects mutations that touch other columns at the gateway.
+
+Two third-party-imposed patterns also fell out of the audit:
+
+- **Strava webhook secret in the URL query string.** Strava doesn't HMAC-sign POST payloads — their security model is "the callback URL is secret." That's not enough on its own (a leak of the function URL is unrotatable), so the configured callback URL embeds `?secret=<STRAVA_WEBHOOK_SECRET>`. Strava preserves URL query strings on both GET and POST, so the secret guards both. Constant-time string compare to avoid timing side-channels. (RevenueCat's HMAC pattern is the right thing where the third party offers it; Strava simply doesn't.)
+- **Auth before parse.** Edge functions check `Authorization` and `auth.getUser(token)` before `req.json()`. A malformed-JSON probe from an unauthenticated caller would otherwise produce a 500 distinguishable from a 401, and any future code added between the parse and the auth check would run unauth'd.
+
+**Trade-off:** the explicit-filter rule means redundant predicates that RLS already enforces. The column-level GRANT means PostgREST will return `permission denied` rather than the silent ignore that some `with check` shapes give. Both are deliberate: a noisy failure is better than a silent leak.
+
+**Don't re-litigate unless:** Postgres adds first-class column-level RLS (then column-level GRANTs become redundant), or Strava ships a payload-signing scheme (then the URL secret can rotate to header-based HMAC).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
