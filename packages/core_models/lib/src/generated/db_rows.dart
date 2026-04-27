@@ -189,6 +189,7 @@ class CoachMessageRow {
   static const String colRole = 'role';
   static const String colContent = 'content';
   static const String colCreatedAt = 'created_at';
+  static const String colArchivedAt = 'archived_at';
 
   final String id;
   final String userId;
@@ -196,6 +197,7 @@ class CoachMessageRow {
   final String role;
   final String content;
   final DateTime createdAt;
+  final DateTime? archivedAt;
 
   const CoachMessageRow({
     required this.id,
@@ -204,6 +206,7 @@ class CoachMessageRow {
     required this.role,
     required this.content,
     required this.createdAt,
+    this.archivedAt,
   });
 
   factory CoachMessageRow.fromJson(Map<String, dynamic> json) => CoachMessageRow(
@@ -213,6 +216,7 @@ class CoachMessageRow {
     role: json['role'] as String,
     content: json['content'] as String,
     createdAt: DateTime.parse(json['created_at'] as String),
+    archivedAt: json['archived_at'] == null ? null : DateTime.parse(json['archived_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -222,6 +226,7 @@ class CoachMessageRow {
     colRole: role,
     colContent: content,
     colCreatedAt: createdAt.toIso8601String(),
+    colArchivedAt: archivedAt?.toIso8601String(),
   };
 }
 

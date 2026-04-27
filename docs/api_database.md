@@ -269,20 +269,26 @@ Per-account chat history for the AI Coach. One row per message authored by eithe
 
 ```sql
 create table coach_messages (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
-  plan_id     uuid references training_plans(id) on delete set null,
-  role        text not null check (role in ('user', 'assistant')),
-  content     text not null,
-  created_at  timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  plan_id      uuid references training_plans(id) on delete set null,
+  role         text not null check (role in ('user', 'assistant')),
+  content      text not null,
+  archived_at  timestamptz,
+  created_at   timestamptz not null default now()
 );
 ```
 
-Index `coach_messages_user_plan_created_idx` on `(user_id, plan_id, created_at)` matches the hot read path — the chronological thread for a `(user, plan)` pair — so the WHERE + ORDER BY don't need a separate sort step.
+**Active vs archived:** `archived_at` is null for messages in the live thread; "Start new conversation" updates every active row in a `(user, plan)` to the same `now()` timestamp, grouping them as one historical conversation. All rows sharing an `archived_at` value within a `(user, plan)` form one archive — the History panel queries `select distinct archived_at where archived_at is not null`, lists each, and lets the user view (read-only) or delete an archive. Per-archive delete is `delete where archived_at = $T` (RLS-scoped).
+
+Index `coach_messages_user_plan_archive_created_idx` on `(user_id, plan_id, archived_at, created_at)` covers the three hot read shapes without a sort step:
+1. Active thread: `where user_id = X and plan_id = Y and archived_at is null order by created_at`
+2. Per-archive thread: `where user_id = X and plan_id = Y and archived_at = $T order by created_at`
+3. Archive list: `select distinct archived_at where user_id = X and plan_id = Y and archived_at is not null`
 
 `plan_id` uses `on delete set null` (not cascade) so deleting a plan leaves the conversation intact under "no plan" — runners don't lose chat history when they archive a finished plan.
 
-RLS: standard owner-only. `select`, `insert`, `delete` gated on `auth.uid() = user_id`. **No `update` policy** — messages are immutable once written. "Clear chat" deletes the rows rather than editing them.
+RLS: standard owner-only. `select`, `insert`, `update`, `delete` gated on `auth.uid() = user_id`. The `update` policy was added with archiving — content + role are still effectively immutable in practice (the client only ever sets `archived_at`), but RLS doesn't enforce that finer distinction.
 
 ---
 
