@@ -2319,3 +2319,122 @@ export async function fetchPublicRunsByUser(userId: string, limit = 20): Promise
 		.limit(limit);
 	return (data ?? []) as Run[];
 }
+
+// ─────────────────────── Kudos + comments on runs (decisions §32) ───────────────────────
+
+export interface RunKudosSummary {
+	count: number;
+	viewer_has_kudos: boolean;
+}
+
+export interface RunCommentWithAuthor {
+	id: string;
+	run_id: string;
+	author_id: string;
+	parent_comment_id: string | null;
+	body: string;
+	created_at: string;
+	updated_at: string;
+	author: PublicProfile;
+}
+
+/// Returns kudos count for a run + whether the current viewer has
+/// given kudos. Two parallel queries — count is server-side, viewer
+/// flag is one indexed lookup.
+export async function fetchKudosForRun(runId: string): Promise<RunKudosSummary> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const viewerId = sessionData.session?.user?.id;
+
+	const [countRes, viewerRes] = await Promise.all([
+		supabase
+			.from('run_kudos')
+			.select('*', { count: 'exact', head: true })
+			.eq('run_id', runId),
+		viewerId
+			? supabase
+					.from('run_kudos')
+					.select('user_id')
+					.eq('run_id', runId)
+					.eq('user_id', viewerId)
+					.maybeSingle()
+			: Promise.resolve({ data: null }),
+	]);
+
+	return {
+		count: countRes.count ?? 0,
+		viewer_has_kudos: viewerRes.data != null,
+	};
+}
+
+export async function giveKudos(runId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase
+		.from('run_kudos')
+		.insert({ user_id: userId, run_id: runId });
+	// Treat duplicate as no-op.
+	if (error && error.code !== '23505') throw error;
+}
+
+export async function rescindKudos(runId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase
+		.from('run_kudos')
+		.delete()
+		.eq('run_id', runId)
+		.eq('user_id', userId);
+	if (error) throw error;
+}
+
+/// Comments on a run, sorted oldest-first. Author profiles are joined
+/// in a second round trip so PostgREST doesn't need an embedded select.
+export async function fetchRunComments(runId: string): Promise<RunCommentWithAuthor[]> {
+	const { data: rows, error } = await supabase
+		.from('run_comments')
+		.select('*')
+		.eq('run_id', runId)
+		.order('created_at', { ascending: true });
+	if (error) {
+		console.error('fetchRunComments failed', error);
+		return [];
+	}
+	if (!rows || rows.length === 0) return [];
+
+	const authorIds = Array.from(new Set(rows.map((r) => r.author_id)));
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', authorIds);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+
+	return rows.map((r) => ({
+		...r,
+		author: byId.get(r.author_id) ?? { id: r.author_id, display_name: null, avatar_url: null },
+	}));
+}
+
+export async function postRunComment(input: {
+	run_id: string;
+	body: string;
+	parent_comment_id?: string | null;
+}): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase.from('run_comments').insert({
+		run_id: input.run_id,
+		author_id: userId,
+		body: input.body,
+		parent_comment_id: input.parent_comment_id ?? null,
+	});
+	if (error) throw error;
+}
+
+export async function deleteRunComment(commentId: string): Promise<void> {
+	const { error } = await supabase.from('run_comments').delete().eq('id', commentId);
+	if (error) throw error;
+}
