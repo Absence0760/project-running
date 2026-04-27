@@ -43,6 +43,8 @@ src/
     push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
+    feed/           # Activity feed — recent public runs from people you follow (decisions §31). Cursor-paginated on (started_at, id).
+    u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs, Follow toggle. Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31).
     dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
     runs/           # Run history with source + activity type filters

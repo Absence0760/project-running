@@ -191,6 +191,10 @@ src/routes/
 │   └── +page.svelte            # Google + Apple sign-in
 ├── dashboard/
 │   └── +page.svelte            # Weekly mileage, heatmap, records
+├── feed/
+│   └── +page.svelte            # Activity feed — public runs from people you follow
+├── u/[id]/
+│   └── +page.svelte            # Public user profile (display_name, avatar, follower/following counts, recent public runs, follow button)
 ├── routes/
 │   ├── +page.svelte            # Tabbed: My routes (saved) + Explore (community discovery)
 │   ├── new/+page.svelte        # Full-screen MapLibre route builder

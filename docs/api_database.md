@@ -179,20 +179,36 @@ create index route_reviews_route on route_reviews (route_id, created_at desc);
 
 ### `user_profiles`
 
-Supplementary user data not stored in `auth.users`.
+Supplementary user data not stored in `auth.users`. As of `20260521_001_user_follows.sql` profiles are world-readable to authenticated users (the new `"profiles are readable by anyone authenticated"` policy is additive to the existing self-only `"users own their profile"`). This is required for follow / feed / club-member rendering and was a latent bug fix — pre-migration, all cross-user enrichment queries silently returned empty rows. See `docs/decisions.md § 31` for the trade-off.
 
 ```sql
 create table user_profiles (
   id                uuid primary key references auth.users,
   display_name      text,
   avatar_url        text,
-  parkrun_number    text,                   -- e.g. 'A123456'
+  parkrun_number    text,                   -- e.g. 'A123456' (world-readable)
   preferred_unit    text default 'km',      -- 'km' | 'mi'
-  subscription_tier text default 'free',    -- 'free' | 'premium'
+  subscription_tier text default 'free',    -- 'free' | 'premium' (world-readable)
   subscription_at   timestamptz,
   created_at        timestamptz default now()
 );
 ```
+
+### `user_follows`
+
+Asymmetric follow graph. One row per `(follower, followee)` pair; CHECK blocks self-follow; cascading deletes on both sides. RLS: anyone authenticated can SELECT (graph is public); only the follower can INSERT or DELETE their own row. See `decisions.md § 31`.
+
+```sql
+create table user_follows (
+  follower_id  uuid references auth.users(id) on delete cascade not null,
+  followee_id  uuid references auth.users(id) on delete cascade not null,
+  followed_at  timestamptz not null default now(),
+  primary key (follower_id, followee_id),
+  constraint user_follows_no_self_follow check (follower_id <> followee_id)
+);
+```
+
+Indexes: `(follower_id, followed_at desc)` for "people I follow," `(followee_id, followed_at desc)` for "my followers." The activity feed query (`fetchFollowingFeed`) resolves the followee set first, then queries `runs` filtered by `user_id IN (...)` and `is_public = true`.
 
 ### `clubs` / `club_members` / `events` / `event_attendees` / `club_posts`
 
