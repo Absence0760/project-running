@@ -107,19 +107,19 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// Resolve the caller's tier first — every downstream limit (daily
 	// message cap, response token budget, context window) is derived
-	// from it. BYPASS_PAYWALL fast-paths the whole check in dev so you
+	// from it. BYPASS_PAYWALL fast-paths the paywall check in dev so you
 	// don't burn through quota while iterating on prompts.
 	const bypassLimit = env.BYPASS_PAYWALL === 'true';
 	let tier: Tier = 'free';
 	let usedToday = 0;
+	const { data: { user: authUser } } = await supabase.auth.getUser();
+	if (!authUser) {
+		return new Response(JSON.stringify({ error: 'not authenticated' }), {
+			status: 401,
+			headers: { 'content-type': 'application/json' }
+		});
+	}
 	if (!bypassLimit) {
-		const { data: { user: authUser } } = await supabase.auth.getUser();
-		if (!authUser) {
-			return new Response(JSON.stringify({ error: 'not authenticated' }), {
-				status: 401,
-				headers: { 'content-type': 'application/json' }
-			});
-		}
 		const { data: isPro } = await supabase.rpc('is_user_pro', {
 			p_user_id: authUser.id,
 		});
@@ -192,11 +192,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		...rateLimitHeaders(tier, usedToday),
 	};
 
+	let result: { reply: string; usage: ReturnType<typeof emptyUsage> };
 	try {
-		if (COACH_PROVIDER === 'openai') {
-			return await callOpenAI(systemText, contextPayload, body.messages, tier, limits, headers);
-		}
-		return await callAnthropic(systemText, contextPayload, body.messages, tier, limits, headers);
+		result =
+			COACH_PROVIDER === 'openai'
+				? await callOpenAI(systemText, contextPayload, body.messages, limits)
+				: await callAnthropic(systemText, contextPayload, body.messages, limits);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'coach call failed';
 		return new Response(JSON.stringify({ error: msg }), {
@@ -204,7 +205,57 @@ export const POST: RequestHandler = async ({ request }) => {
 			headers,
 		});
 	}
+
+	// Persist this turn's exchange. The earlier messages in `body.messages`
+	// are already in the table from prior turns — only the latest user
+	// prompt and the assistant reply are new. Wrapped in try/catch so a
+	// persistence hiccup never breaks the chat: the user still gets their
+	// reply on the wire, the row just doesn't land.
+	const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
+	if (lastUser && result.reply) {
+		try {
+			await supabase.from('coach_messages').insert([
+				{
+					user_id: authUser.id,
+					plan_id: body.plan_id ?? null,
+					role: 'user',
+					content: lastUser.content,
+				},
+				{
+					user_id: authUser.id,
+					plan_id: body.plan_id ?? null,
+					role: 'assistant',
+					content: result.reply,
+				},
+			]);
+		} catch (e) {
+			console.error('[coach] persist failed', e);
+		}
+	}
+
+	return new Response(
+		JSON.stringify({
+			reply: result.reply,
+			tier,
+			limits: {
+				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
+				max_tokens: limits.maxTokens,
+				max_runs_limit: limits.maxRunsLimit,
+			},
+			cache: result.usage,
+		}),
+		{ headers },
+	);
 };
+
+function emptyUsage() {
+	return {
+		cache_creation_input_tokens: 0,
+		cache_read_input_tokens: 0,
+		input_tokens: 0,
+		output_tokens: 0,
+	};
+}
 
 /// Standard `X-RateLimit-*` headers + a `X-Coach-Tier` echo so a
 /// client can see exactly which budget bucket the request landed in.
@@ -231,10 +282,8 @@ async function callAnthropic(
 	systemText: string,
 	contextPayload: string,
 	messages: { role: 'user' | 'assistant'; content: string }[],
-	tier: Tier,
 	limits: typeof TIER_LIMITS[Tier],
-	headers: Record<string, string>,
-): Promise<Response> {
+): Promise<{ reply: string; usage: ReturnType<typeof emptyUsage> }> {
 	const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 	const systemBlocks = [
@@ -278,24 +327,15 @@ async function callAnthropic(
 		.filter((b) => b.type === 'text')
 		.map((b) => (b as { type: 'text'; text: string }).text)
 		.join('\n');
-	return new Response(
-		JSON.stringify({
-			reply: text,
-			tier,
-			limits: {
-				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
-				max_tokens: limits.maxTokens,
-				max_runs_limit: limits.maxRunsLimit,
-			},
-			cache: {
-				cache_creation_input_tokens: res.usage.cache_creation_input_tokens ?? 0,
-				cache_read_input_tokens: res.usage.cache_read_input_tokens ?? 0,
-				input_tokens: res.usage.input_tokens,
-				output_tokens: res.usage.output_tokens
-			}
-		}),
-		{ headers }
-	);
+	return {
+		reply: text,
+		usage: {
+			cache_creation_input_tokens: res.usage.cache_creation_input_tokens ?? 0,
+			cache_read_input_tokens: res.usage.cache_read_input_tokens ?? 0,
+			input_tokens: res.usage.input_tokens,
+			output_tokens: res.usage.output_tokens,
+		},
+	};
 }
 
 // ─────────────────────── Provider: OpenAI-compatible ───────────────────────
@@ -309,10 +349,8 @@ async function callOpenAI(
 	systemText: string,
 	contextPayload: string,
 	messages: { role: 'user' | 'assistant'; content: string }[],
-	tier: Tier,
 	limits: typeof TIER_LIMITS[Tier],
-	headers: Record<string, string>,
-): Promise<Response> {
+): Promise<{ reply: string; usage: ReturnType<typeof emptyUsage> }> {
 	const convo = [
 		{ role: 'system', content: systemText },
 		{ role: 'user', content: contextPayload },
@@ -344,24 +382,15 @@ async function callOpenAI(
 		usage?: { prompt_tokens?: number; completion_tokens?: number };
 	};
 	const text = json.choices?.[0]?.message?.content ?? '';
-	return new Response(
-		JSON.stringify({
-			reply: text,
-			tier,
-			limits: {
-				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
-				max_tokens: limits.maxTokens,
-				max_runs_limit: limits.maxRunsLimit,
-			},
-			cache: {
-				cache_creation_input_tokens: 0,
-				cache_read_input_tokens: 0,
-				input_tokens: json.usage?.prompt_tokens ?? 0,
-				output_tokens: json.usage?.completion_tokens ?? 0
-			}
-		}),
-		{ headers }
-	);
+	return {
+		reply: text,
+		usage: {
+			cache_creation_input_tokens: 0,
+			cache_read_input_tokens: 0,
+			input_tokens: json.usage?.prompt_tokens ?? 0,
+			output_tokens: json.usage?.completion_tokens ?? 0,
+		},
+	};
 }
 
 // ─────────────────────── System prompt ───────────────────────
