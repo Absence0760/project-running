@@ -1118,6 +1118,7 @@ class RouteRow {
   static const String colFeatured = 'featured';
   static const String colFeaturedAt = 'featured_at';
   static const String colRunCount = 'run_count';
+  static const String colClubId = 'club_id';
 
   final String id;
   final String userId;
@@ -1135,6 +1136,7 @@ class RouteRow {
   final bool featured;
   final DateTime? featuredAt;
   final int runCount;
+  final String? clubId;
 
   const RouteRow({
     required this.id,
@@ -1153,6 +1155,7 @@ class RouteRow {
     required this.featured,
     this.featuredAt,
     required this.runCount,
+    this.clubId,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -1172,6 +1175,7 @@ class RouteRow {
     featured: json['featured'] as bool,
     featuredAt: json['featured_at'] == null ? null : DateTime.parse(json['featured_at'] as String),
     runCount: (json['run_count'] as num).toInt(),
+    clubId: json['club_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1191,6 +1195,7 @@ class RouteRow {
     colFeatured: featured,
     colFeaturedAt: featuredAt?.toIso8601String(),
     colRunCount: runCount,
+    colClubId: clubId,
   };
 }
 
@@ -1277,6 +1282,37 @@ class RunRow {
     colTrackUrl: trackUrl,
     colIsPublic: isPublic,
     colEventId: eventId,
+  };
+}
+
+/// Row shape for the `saved_routes` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class SavedRouteRow {
+  static const String table = 'saved_routes';
+  static const String colUserId = 'user_id';
+  static const String colRouteId = 'route_id';
+  static const String colSavedAt = 'saved_at';
+
+  final String userId;
+  final String routeId;
+  final DateTime savedAt;
+
+  const SavedRouteRow({
+    required this.userId,
+    required this.routeId,
+    required this.savedAt,
+  });
+
+  factory SavedRouteRow.fromJson(Map<String, dynamic> json) => SavedRouteRow(
+    userId: json['user_id'] as String,
+    routeId: json['route_id'] as String,
+    savedAt: DateTime.parse(json['saved_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colRouteId: routeId,
+    colSavedAt: savedAt.toIso8601String(),
   };
 }
 

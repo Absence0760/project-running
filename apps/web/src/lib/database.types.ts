@@ -859,6 +859,7 @@ export type Database = {
       }
       routes: {
         Row: {
+          club_id: string | null
           created_at: string | null
           distance_m: number
           elevation_m: number | null
@@ -877,6 +878,7 @@ export type Database = {
           waypoints: Json
         }
         Insert: {
+          club_id?: string | null
           created_at?: string | null
           distance_m: number
           elevation_m?: number | null
@@ -895,6 +897,7 @@ export type Database = {
           waypoints: Json
         }
         Update: {
+          club_id?: string | null
           created_at?: string | null
           distance_m?: number
           elevation_m?: number | null
@@ -912,7 +915,15 @@ export type Database = {
           user_id?: string
           waypoints?: Json
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "routes_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       runs: {
         Row: {
@@ -973,6 +984,32 @@ export type Database = {
           },
           {
             foreignKeyName: "runs_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_routes: {
+        Row: {
+          route_id: string
+          saved_at: string
+          user_id: string
+        }
+        Insert: {
+          route_id: string
+          saved_at?: string
+          user_id: string
+        }
+        Update: {
+          route_id?: string
+          saved_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_routes_route_id_fkey"
             columns: ["route_id"]
             isOneToOne: false
             referencedRelation: "routes"
@@ -1223,6 +1260,7 @@ export type Database = {
           radius_m?: number
         }
         Returns: {
+          club_id: string | null
           created_at: string | null
           distance_m: number
           elevation_m: number | null
@@ -1283,6 +1321,7 @@ export type Database = {
           p_tags?: string[]
         }
         Returns: {
+          club_id: string | null
           created_at: string | null
           distance_m: number
           elevation_m: number | null
