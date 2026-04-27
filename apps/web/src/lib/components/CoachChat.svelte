@@ -644,6 +644,8 @@
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
 		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 		align-self: flex-start;
 	}
 	.bubble.user {
