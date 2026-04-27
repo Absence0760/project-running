@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { formatDistance } from '$lib/mock-data';
 	import { fetchRoutesWithError } from '$lib/data';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
+	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import TrackPreview from '$lib/components/TrackPreview.svelte';
 	import type { Route } from '$lib/types';
 
+	let tab = $state<'mine' | 'explore'>('mine');
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
 	let fetchError = $state<string | null>(null);
@@ -20,7 +24,20 @@
 		loading = false;
 	}
 
-	onMount(load);
+	function setTab(next: 'mine' | 'explore') {
+		tab = next;
+		goto(next === 'explore' ? '/routes?tab=explore' : '/routes', {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true,
+		});
+	}
+
+	onMount(() => {
+		const initial = $page.url.searchParams.get('tab');
+		if (initial === 'explore') tab = 'explore';
+		load();
+	});
 </script>
 
 {#if showImport}
@@ -30,64 +47,74 @@
 <div class="page">
 	<header class="page-header">
 		<div class="header-actions">
-			<a href="/explore" class="btn btn-outline">
-				<span class="material-symbols">explore</span>
-				Explore community
-			</a>
-			<button class="btn btn-outline" onclick={() => (showImport = true)}>
-				<span class="material-symbols">upload_file</span>
-				Import
+			{#if tab === 'mine'}
+				<button class="btn btn-outline" onclick={() => (showImport = true)}>
+					<span class="material-symbols">upload_file</span>
+					Import
+				</button>
+				<a href="/routes/new" class="btn btn-primary">
+					<span class="material-symbols">add</span>
+					New Route
+				</a>
+			{/if}
+		</div>
+		<div class="tabs">
+			<button class="tab" class:active={tab === 'mine'} onclick={() => setTab('mine')}>
+				My routes
 			</button>
-			<a href="/routes/new" class="btn btn-primary">
-				<span class="material-symbols">add</span>
-				New Route
-			</a>
+			<button class="tab" class:active={tab === 'explore'} onclick={() => setTab('explore')}>
+				Explore routes
+			</button>
 		</div>
 	</header>
 
-	{#if loading}
-		<p class="loading">&nbsp;</p>
-	{:else if fetchError}
-		<div class="error-banner">
-			<span class="material-symbols">error</span>
-			<div>
-				<strong>Couldn't load your routes.</strong>
-				<span class="error-detail">{fetchError}</span>
+	{#if tab === 'mine'}
+		{#if loading}
+			<p class="loading">&nbsp;</p>
+		{:else if fetchError}
+			<div class="error-banner">
+				<span class="material-symbols">error</span>
+				<div>
+					<strong>Couldn't load your routes.</strong>
+					<span class="error-detail">{fetchError}</span>
+				</div>
+				<button class="btn btn-outline" onclick={load}>Retry</button>
 			</div>
-			<button class="btn btn-outline" onclick={load}>Retry</button>
-		</div>
-	{:else if routes.length === 0}
-		<div class="empty">
-			<span class="material-symbols empty-icon">route</span>
-			<p>No routes yet. Create your first route!</p>
-			<a href="/routes/new" class="btn btn-primary">New Route</a>
-		</div>
-	{:else}
-		<div class="route-grid">
-			{#each routes as route (route.id)}
-				<a href="/routes/{route.id}" class="route-card">
-					<div class="route-map-placeholder">
-						{#if route.waypoints && route.waypoints.length > 1}
-							<TrackPreview points={route.waypoints} />
-						{:else}
-							<span class="material-symbols">route</span>
-						{/if}
-					</div>
-					<div class="route-info">
-						<h3>{route.name}</h3>
-						<div class="route-meta">
-							<span>{formatDistance(route.distance_m)}</span>
-							{#if route.elevation_m}
-								<span class="meta-sep">&middot;</span>
-								<span>{route.elevation_m} m elev</span>
+		{:else if routes.length === 0}
+			<div class="empty">
+				<span class="material-symbols empty-icon">route</span>
+				<p>No routes yet. Create your first route!</p>
+				<a href="/routes/new" class="btn btn-primary">New Route</a>
+			</div>
+		{:else}
+			<div class="route-grid">
+				{#each routes as route (route.id)}
+					<a href="/routes/{route.id}" class="route-card">
+						<div class="route-map-placeholder">
+							{#if route.waypoints && route.waypoints.length > 1}
+								<TrackPreview points={route.waypoints} />
+							{:else}
+								<span class="material-symbols">route</span>
 							{/if}
-							<span class="meta-sep">&middot;</span>
-							<span class="surface-tag">{route.surface}</span>
 						</div>
-					</div>
-				</a>
-			{/each}
-		</div>
+						<div class="route-info">
+							<h3>{route.name}</h3>
+							<div class="route-meta">
+								<span>{formatDistance(route.distance_m)}</span>
+								{#if route.elevation_m}
+									<span class="meta-sep">&middot;</span>
+									<span>{route.elevation_m} m elev</span>
+								{/if}
+								<span class="meta-sep">&middot;</span>
+								<span class="surface-tag">{route.surface}</span>
+							</div>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
+	{:else}
+		<RouteExplorer />
 	{/if}
 </div>
 
@@ -97,12 +124,7 @@
 	}
 
 	.page-header {
-		display: flex;
-		justify-content: flex-end;
-		align-items: center;
 		margin-bottom: var(--space-xl);
-		gap: var(--space-md);
-		flex-wrap: wrap;
 	}
 
 	h1 {
@@ -112,8 +134,34 @@
 
 	.header-actions {
 		display: flex;
+		justify-content: flex-end;
 		gap: var(--space-sm);
 		flex-wrap: wrap;
+		min-height: 2.5rem;
+		margin-bottom: var(--space-md);
+	}
+
+	.tabs {
+		display: flex;
+		gap: 0.5rem;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.tab {
+		background: none;
+		border: none;
+		padding: 0.6rem 0.2rem;
+		margin-right: 1rem;
+		font-size: 0.95rem;
+		color: var(--color-text-secondary);
+		border-bottom: 2px solid transparent;
+		cursor: pointer;
+		font-weight: 500;
+	}
+
+	.tab.active {
+		color: var(--color-primary);
+		border-bottom-color: var(--color-primary);
 	}
 
 	.loading {
