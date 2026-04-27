@@ -497,6 +497,33 @@ We solve it with two schema additions, deliberately small:
 
 ---
 
+## 31. Following graph is its own social layer; profiles are public-by-default
+
+**Decided:** April 2026 · captured before the migration that adds `user_follows` and the `/feed` + `/u/[id]` surfaces.
+
+The clubs/events social layer (decisions §0–§28) is a *group* abstraction — useful for race directors and weekly-meetup organisers, but the wrong shape for the runner who just wants to see what their three running friends did this week. That's the surface every consumer running app (Strava, Nike Run Club, Garmin Connect) builds first. We add it as a parallel social layer rather than reusing club_members because the audience model is different: club membership is bidirectional and gated; following is asymmetric and instant.
+
+We ship three things together:
+
+- **`user_follows (follower_id, followee_id, followed_at)`** — composite-PK join table, self-follow blocked by CHECK, on-delete cascade for both sides. RLS: anyone can INSERT where `follower_id = auth.uid()`; anyone can SELECT (the follow graph is public — visible on profile pages); only the follower can DELETE their own row. Deliberately no row hiding by either side: if you don't want to be followed, the right answer is a future "private profile" flag, not a hidden graph.
+- **Public user profile pages at `/u/[id]`** — render `display_name`, `avatar_url`, follower / following counts, recent public runs, and a Follow button. The identifier is `auth.users.id` (UUID) for v1; URL-safe handles (`/u/jared`) get added later as a `user_profiles.handle` column once we decide on a reservation/uniqueness/normalisation scheme. Until then, the URL is uglier but the schema is forward-compatible.
+- **`/feed` route** — recent public runs from people the caller follows. Cursor-paginated on `(runs.started_at desc, id desc)` to stay stable as new runs arrive. Pull-based (no realtime) — the engagement value of "instant" on a feed is low and adding `runs` to the realtime publication has a fan-out cost we don't need yet.
+
+**Public-profile read access requires a schema-level shift.** Today `user_profiles` has one RLS policy: `auth.uid() = id`. That's been silently breaking cross-user enrichment (`enrichPosts`, `fetchClubMembers`, etc. — they query `user_profiles` for other users' display_name and get empty rows back). The follow feature *requires* cross-user reads, so we add a public-read policy and accept that `subscription_tier` and `parkrun_number` become world-readable to authenticated users. `subscription_tier` is already effectively public via the "Pro" badge any UI would show; `parkrun_number` is a public ID people share themselves. If a future user objects, the right fix is a column-level GRANT REVOKE pattern (decision §29's "column-level GRANTs for write immutability" applied to reads) — not row-level RLS.
+
+**Why these and not alternatives:**
+
+- *Follower approval (Twitter "private account")* — meaningful UX cost (request flow, pending state, privacy UI) for a problem we don't have yet. Default to open and add private profiles later as a single-row toggle.
+- *Mutual-follow / friendship model* — collapses two relationships into one and forces both parties' consent. Wrong for "I want to see this elite runner's training" — Strava's asymmetric follow is correct here.
+- *Reuse `club_members` for follows* — a club is a *thing*; following another runner is not. Overloading the table forces awkward synthetic clubs ("Jared's followers") and ties the feed query to club-permission RLS.
+- *Server-side push on new runs from followed users* — engagement-positive but blocked on `VAPID_PRIVATE_KEY` (parity.md notes the gap). Out of scope for the v1 ship.
+
+**Trade-offs:** (1) UUID URLs are uglier than handles; we accept that for v1 because handle reservation is a non-trivial design choice (case sensitivity, reserved words, length, change history). (2) The feed is purely pull-based — a runner who opens it twenty seconds after a friend uploads gets nothing until they refresh; we accept that because realtime on `runs` would fan out widely and we have no engagement signal that justifies the cost. (3) `user_profiles` is now world-readable to authenticated users; that's a small privacy widening accepted in exchange for fixing the existing enrichment bug.
+
+**Don't re-litigate unless:** users start asking for handles (then add `user_profiles.handle` with a normalisation function), private profiles become a real ask (single-column toggle plus an RLS predicate on the public-read policy), or someone needs the feed instant (then enable realtime on `runs` with a `is_public` filter). Each of those is a forward-additive change — none requires undoing what we ship now.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
