@@ -609,17 +609,17 @@
 		tick().then(autoGrowComposer);
 	}
 
-	// Sidebar can be hidden on narrow viewports — toggle persists through
-	// the session but isn't saved across reloads (it's a layout pref, not
-	// a content pref).
-	let sidebarOpen = $state(true);
+	// Sidebar collapses by default — most conversations are single-thread
+	// and the chat surface is the priority. Toggle persists through the
+	// session via state, not localStorage (per-session is enough).
+	let sidebarOpen = $state(false);
 </script>
 
 {#if locked}
 	<ProGate feature="ai_coach" />
 {:else}
 <div class="shell">
-	<aside class="sidebar" class:collapsed={!sidebarOpen}>
+	<aside class="sidebar" class:collapsed={!sidebarOpen} aria-hidden={!sidebarOpen}>
 		<div class="sidebar-header">
 			<button
 				type="button"
@@ -630,15 +630,6 @@
 			>
 				<span class="material-symbols">add</span>
 				New chat
-			</button>
-			<button
-				type="button"
-				class="icon-btn"
-				onclick={() => (sidebarOpen = false)}
-				title="Hide sidebar"
-				aria-label="Hide sidebar"
-			>
-				<span class="material-symbols">chevron_left</span>
 			</button>
 		</div>
 
@@ -677,22 +668,23 @@
 		</nav>
 	</aside>
 
-	{#if !sidebarOpen}
-		<button
-			type="button"
-			class="sidebar-show"
-			onclick={() => (sidebarOpen = true)}
-			title="Show conversations"
-			aria-label="Show conversations"
-		>
-			<span class="material-symbols">chevron_right</span>
-		</button>
-	{/if}
-
 	<div class="chat">
 		<header>
 			<div class="header-row">
 				<h3>
+					<button
+						type="button"
+						class="sidebar-toggle"
+						onclick={() => (sidebarOpen = !sidebarOpen)}
+						title={sidebarOpen ? 'Hide conversations' : 'Show conversations'}
+						aria-label={sidebarOpen ? 'Hide conversations' : 'Show conversations'}
+						aria-expanded={sidebarOpen}
+					>
+						<span class="material-symbols">{sidebarOpen ? 'menu_open' : 'menu'}</span>
+						{#if archives.length > 0 && !sidebarOpen}
+							<span class="sidebar-toggle-count">{archives.length + 1}</span>
+						{/if}
+					</button>
 					Coach
 					<span class="sub">
 						· Second opinion on your {hasPlan ? 'plan and runs' : 'recent runs'}. Not medical advice.
@@ -1014,20 +1006,30 @@
 	}
 	.thread-delete:hover { color: var(--color-danger); }
 	.thread-delete .material-symbols { font-size: 1rem; line-height: 1; }
-	.sidebar-show {
-		align-self: flex-start;
-		margin-top: var(--space-sm);
-		margin-left: -1px;
-		background: var(--color-surface);
+	.sidebar-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		background: transparent;
 		border: 1px solid var(--color-border);
-		border-left: none;
-		border-radius: 0 var(--radius-md) var(--radius-md) 0;
-		padding: 0.4rem 0.2rem;
+		border-radius: var(--radius-md);
+		padding: 0.2rem 0.4rem;
 		cursor: pointer;
 		color: var(--color-text-secondary);
+		font: inherit;
 	}
-	.sidebar-show:hover { color: var(--color-primary); border-color: var(--color-primary); }
-	.sidebar-show .material-symbols { font-size: 1rem; line-height: 1; }
+	.sidebar-toggle:hover { color: var(--color-primary); border-color: var(--color-primary); }
+	.sidebar-toggle .material-symbols { font-size: 1.1rem; line-height: 1; }
+	.sidebar-toggle-count {
+		min-width: 1.2rem;
+		padding: 0 0.3rem;
+		background: var(--color-bg-tertiary);
+		border-radius: 9999px;
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-align: center;
+		line-height: 1.4;
+	}
 	.chat {
 		flex: 1;
 		display: flex;
@@ -1085,17 +1087,6 @@
 	}
 	.header-btn.primary-btn:hover { background: var(--color-primary-dark, var(--color-primary)); filter: brightness(0.95); }
 	.header-btn .material-symbols { font-size: 0.95rem; line-height: 1; }
-	.icon-btn {
-		background: transparent;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.25rem;
-		cursor: pointer;
-		color: var(--color-text-secondary);
-		display: inline-flex;
-	}
-	.icon-btn:hover { color: var(--color-primary); border-color: var(--color-primary); }
-	.icon-btn .material-symbols { font-size: 1rem; line-height: 1; }
 
 	.context-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 	.chip {
