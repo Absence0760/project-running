@@ -185,7 +185,13 @@
 
 	.route-map-placeholder {
 		height: 8rem;
-		background: var(--color-bg-tertiary);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-tertiary)),
+			var(--color-bg-tertiary) 60%,
+			color-mix(in srgb, var(--color-accent-cyan, var(--color-primary)) 5%, var(--color-bg-tertiary))
+		);
+		border-bottom: 1px solid var(--color-border);
 		display: flex;
 		align-items: center;
 		justify-content: center;
