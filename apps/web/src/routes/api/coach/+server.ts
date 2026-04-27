@@ -117,9 +117,17 @@ export const POST: RequestHandler = async ({ request }) => {
 	// per-request server-side client — even though the JWT is set in
 	// `global.headers.Authorization` for data calls, the auth client
 	// doesn't read it. Passing `accessToken` hits `/auth/v1/user` directly.
-	const { data: { user: authUser } } = await supabase.auth.getUser(accessToken);
+	const userRes = await supabase.auth.getUser(accessToken);
+	const authUser = userRes.data.user;
 	if (!authUser) {
-		return new Response(JSON.stringify({ error: 'not authenticated' }), {
+		console.error('[coach] auth failed', {
+			tokenPrefix: accessToken.slice(0, 20) + '...',
+			tokenLen: accessToken.length,
+			supabaseUrl: PUBLIC_SUPABASE_URL,
+			error: userRes.error?.message ?? 'no user returned',
+			status: userRes.error?.status,
+		});
+		return new Response(JSON.stringify({ error: 'not authenticated', detail: userRes.error?.message ?? null }), {
 			status: 401,
 			headers: { 'content-type': 'application/json' }
 		});
