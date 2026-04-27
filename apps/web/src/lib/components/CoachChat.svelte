@@ -692,65 +692,53 @@
 	<div class="chat">
 		<header>
 			<div class="header-row">
-				<h3>Coach</h3>
-			</div>
-			<p class="sub">
-				{#if hasPlan}
-					Second opinion on your plan and runs. Not a replacement for a human
-					coach — doesn't generate plans or give medical advice.
-				{:else}
-					Second opinion on your recent runs. Not a replacement for a human
-					coach — doesn't generate plans or give medical advice.
-				{/if}
-			</p>
-			{#if contextSummary}
-				{@const c = contextSummary}
-				<div class="context-strip" title="What the coach has loaded for this conversation">
-					<span class="context-label">Grounded in:</span>
-					{#if c.planName}
-						<span class="chip">
-							<span class="material-symbols">calendar_month</span>
-							{c.planName}{#if c.planWeeks}<span class="chip-meta"> · {c.planWeeks} wk</span>{/if}
-						</span>
-					{:else}
-						<span class="chip chip-muted">
-							<span class="material-symbols">calendar_month</span>
-							No active plan
-						</span>
-					{/if}
-					<label class="chip chip-select" title="How many recent runs to feed the coach">
-						<span class="material-symbols">directions_run</span>
-						{#if c.runCount === 0}
-							<span>No runs yet</span>
+				<h3>
+					Coach
+					<span class="sub">
+						· Second opinion on your {hasPlan ? 'plan and runs' : 'recent runs'}. Not medical advice.
+					</span>
+				</h3>
+				{#if contextSummary}
+					{@const c = contextSummary}
+					<div class="context-strip" title="What the coach has loaded for this conversation">
+						{#if c.planName}
+							<span class="chip">
+								<span class="material-symbols">calendar_month</span>
+								{c.planName}{#if c.planWeeks}<span class="chip-meta"> · {c.planWeeks}w</span>{/if}
+							</span>
 						{:else}
-							<span>Last</span>
-							<select class="chip-select-input" bind:value={runsLimit} aria-label="Recent runs to include">
-								{#each RUN_LIMIT_OPTIONS as n}
-									<option value={n}>{n}</option>
-								{/each}
-							</select>
-							<span>runs</span>
+							<span class="chip chip-muted">
+								<span class="material-symbols">calendar_month</span>
+								No plan
+							</span>
 						{/if}
-					</label>
-					{#if c.hrZonesLoaded}
-						<span class="chip">
-							<span class="material-symbols">monitor_heart</span>
-							HR zones
-						</span>
-					{:else}
-						<span class="chip chip-muted">
-							<span class="material-symbols">monitor_heart</span>
-							HR zones not set
-						</span>
-					{/if}
-					{#if c.weeklyGoalMetres}
-						<span class="chip">
-							<span class="material-symbols">flag</span>
-							Goal {fmtKm(c.weeklyGoalMetres)}/wk
-						</span>
-					{/if}
-				</div>
-			{/if}
+						<label class="chip chip-select" title="How many recent runs to feed the coach">
+							<span class="material-symbols">directions_run</span>
+							{#if c.runCount === 0}
+								<span>No runs</span>
+							{:else}
+								<span>Last</span>
+								<select class="chip-select-input" bind:value={runsLimit} aria-label="Recent runs to include">
+									{#each RUN_LIMIT_OPTIONS as n}
+										<option value={n}>{n}</option>
+									{/each}
+								</select>
+							{/if}
+						</label>
+						{#if c.hrZonesLoaded}
+							<span class="chip" title="HR zones loaded from your settings">
+								<span class="material-symbols">monitor_heart</span>
+							</span>
+						{/if}
+						{#if c.weeklyGoalMetres}
+							<span class="chip" title="Weekly mileage goal">
+								<span class="material-symbols">flag</span>
+								{fmtKm(c.weeklyGoalMetres)}
+							</span>
+						{/if}
+					</div>
+				{/if}
+			</div>
 		</header>
 
 		{#if viewingArchiveAt}
@@ -934,6 +922,9 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
+		/* Default height for embedded hosts that don't set a height. The
+		   /coach route overrides this with `height: 100%` via :global so
+		   the chat fills the viewport. */
 		height: 36rem;
 		min-height: 0;
 	}
@@ -1045,7 +1036,7 @@
 		min-height: 0;
 	}
 	header {
-		padding: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
 		border-bottom: 1px solid var(--color-border);
 	}
 	.header-row {
@@ -1053,15 +1044,19 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-sm);
-		margin-bottom: 0.2rem;
 	}
 	header h3 {
-		font-size: 1.05rem;
+		font-size: 0.95rem;
+		font-weight: 600;
 		margin: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
 	header .sub {
-		color: var(--color-text-secondary);
-		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+		font-size: 0.78rem;
+		font-weight: 400;
 	}
 	.header-btn {
 		display: inline-flex;
@@ -1102,18 +1097,14 @@
 	.icon-btn:hover { color: var(--color-primary); border-color: var(--color-primary); }
 	.icon-btn .material-symbols { font-size: 1rem; line-height: 1; }
 
-	.context-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; }
-	.context-label {
-		font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
-		color: var(--color-text-tertiary); margin-right: 0.1rem;
-	}
+	.context-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 	.chip {
-		display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem;
+		display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem;
 		background: var(--color-primary-light); color: var(--color-primary); border-radius: 999px;
-		font-size: 0.78rem; font-weight: 500; line-height: 1.2;
+		font-size: 0.72rem; font-weight: 500; line-height: 1.3;
 	}
 	.chip-muted { background: var(--color-bg-tertiary); color: var(--color-text-tertiary); }
-	.chip .material-symbols { font-size: 0.95rem; line-height: 1; }
+	.chip .material-symbols { font-size: 0.85rem; line-height: 1; }
 	.chip-meta { color: inherit; opacity: 0.75; font-weight: 400; }
 	.chip-select { cursor: pointer; padding-right: 0.4rem; }
 	.chip-select-input {
@@ -1126,7 +1117,12 @@
 		display: flex; flex-direction: column; gap: 0.6rem;
 	}
 	.bubble {
-		max-width: 85%; padding: 0.55rem 0.8rem;
+		/* Cap at a comfortable reading measure rather than a percentage —
+		   on a wide viewport, 85% becomes a wall-of-text line. ~64ch
+		   keeps prose readable while still letting the chat fill the
+		   horizontal space with whitespace on the right. */
+		max-width: min(85%, 64ch);
+		padding: 0.55rem 0.8rem;
 		background: var(--color-bg-secondary); border-radius: var(--radius-md);
 		white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
 		align-self: flex-start; position: relative;

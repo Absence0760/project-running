@@ -65,37 +65,24 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<div class="title-row">
-			<h1>Coach</h1>
-			{#if plans.length > 1}
-				<label class="plan-picker">
-					<span class="visually-hidden">Plan</span>
-					<select
-						value={planId ?? ''}
-						onchange={(e) => pickPlan((e.currentTarget as HTMLSelectElement).value)}
-					>
-						<option value="">No plan (recent runs only)</option>
-						{#each plans as p}
-							<option value={p.id}>
-								{p.name}{p.status === 'active' ? ' · active' : p.status === 'completed' ? ' · done' : ''}
-							</option>
-						{/each}
-					</select>
-				</label>
-			{/if}
-		</div>
-		<p class="subtitle">
-			{#if loaded && !planId}
-				No plan selected — answers will lean on your recent runs.
-				<a href="/plans/new">Create a plan</a> for sharper guidance.
-			{:else if activePlan}
-				Talking about <strong>{activePlan.name}</strong>.
-			{:else}
-				Ask about today's workout, pace, or how recent runs compare to plan.
-			{/if}
-		</p>
-	</header>
+	{#if plans.length > 1}
+		<header class="page-header">
+			<label class="plan-picker">
+				<span class="visually-hidden">Plan</span>
+				<select
+					value={planId ?? ''}
+					onchange={(e) => pickPlan((e.currentTarget as HTMLSelectElement).value)}
+				>
+					<option value="">No plan (recent runs only)</option>
+					{#each plans as p}
+						<option value={p.id}>
+							{p.name}{p.status === 'active' ? ' · active' : p.status === 'completed' ? ' · done' : ''}
+						</option>
+					{/each}
+				</select>
+			</label>
+		</header>
+	{/if}
 
 	<div class="chat-host">
 		{#if loaded}
@@ -110,15 +97,16 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
-		max-width: 72rem;
+		padding: var(--space-md) var(--space-lg);
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
 	}
 	.page-header {
-		margin-bottom: var(--space-lg);
+		margin-bottom: var(--space-sm);
 		flex-shrink: 0;
+		display: flex;
+		justify-content: flex-end;
 	}
 	.chat-host {
 		flex: 1;
@@ -126,28 +114,10 @@
 		display: flex;
 		flex-direction: column;
 	}
-	.chat-host > :global(.chat) {
+	/* The CoachChat wrapper renamed from `.chat` to `.shell` when the
+	   sidebar landed; the global selector mirrors that. */
+	.chat-host > :global(.shell) {
 		height: 100%;
-	}
-	.title-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-md);
-		justify-content: space-between;
-		margin-bottom: var(--space-xs);
-	}
-	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-	}
-	.subtitle {
-		font-size: 0.88rem;
-		color: var(--color-text-secondary);
-		line-height: 1.5;
-	}
-	.subtitle a {
-		color: var(--color-primary);
-		font-weight: 600;
 	}
 	.plan-picker select {
 		background: var(--color-bg);
