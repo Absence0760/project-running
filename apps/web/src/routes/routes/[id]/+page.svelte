@@ -172,9 +172,9 @@
 	let hasElevationData = $derived(elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations));
 
 	// Send the back link wherever the user came from. Defaults to /routes
-	// (the owner's list); switches to /explore when arriving from the
-	// community discovery page so the trip back is one click, not two.
-	// Prefer the explicit ?from=explore query param (set by RouteExplorer)
+	// (the owner's list); switches to the Explore tab when arriving from
+	// community discovery so the trip back is one click, not two. Prefer
+	// the explicit ?from=explore query param (set by RouteExplorer)
 	// because document.referrer is unreliable across browsers and gets
 	// stripped by some Referrer-Policy configurations.
 	let backHref = $state('/routes');
@@ -184,9 +184,10 @@
 		const ref = typeof document !== 'undefined' ? document.referrer : '';
 		const fromExplore =
 			fromParam === 'explore' ||
-			(ref && new URL(ref, window.location.origin).pathname.startsWith('/explore'));
+			(ref && new URL(ref, window.location.origin).pathname.startsWith('/explore')) ||
+			(ref && new URL(ref, window.location.origin).search.includes('tab=explore'));
 		if (fromExplore) {
-			backHref = '/explore';
+			backHref = '/routes?tab=explore';
 			backLabel = 'Explore';
 		}
 	});
