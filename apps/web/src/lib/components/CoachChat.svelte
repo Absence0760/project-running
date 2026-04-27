@@ -646,9 +646,8 @@
 		>
 			<input
 				type="text"
-				placeholder="Ask about today, pace, adherence…"
+				placeholder={busy ? 'Type your next question while the coach replies…' : 'Ask about today, pace, adherence…'}
 				bind:value={draft}
-				disabled={busy}
 				maxlength="600"
 			/>
 			<button type="submit" class="btn-primary" disabled={busy || !draft.trim()}>
