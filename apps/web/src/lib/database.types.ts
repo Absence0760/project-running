@@ -173,6 +173,7 @@ export type Database = {
           created_at: string
           id: string
           plan_id: string | null
+          reaction: string | null
           role: string
           user_id: string
         }
@@ -182,6 +183,7 @@ export type Database = {
           created_at?: string
           id?: string
           plan_id?: string | null
+          reaction?: string | null
           role: string
           user_id: string
         }
@@ -191,6 +193,7 @@ export type Database = {
           created_at?: string
           id?: string
           plan_id?: string | null
+          reaction?: string | null
           role?: string
           user_id?: string
         }
