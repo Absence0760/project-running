@@ -707,42 +707,38 @@ export async function fetchWeeklyMileage() {
 }
 
 export async function fetchPersonalRecords() {
-	const { data: runs } = await supabase
-		.from('runs')
-		.select('started_at, duration_s, distance_m')
-		.order('started_at', { ascending: false });
+	// Read the trigger-maintained `personal_records` cache rather than
+	// recomputing from `runs`. The cache is already user-scoped by RLS,
+	// but we add an explicit `auth.user.id` filter as defence in depth
+	// — every other personal-data query in this file does the same, and
+	// silently relying on RLS for the canonical read path is fragile if
+	// a future policy edit slips. See migration 20260508_001.
+	const userId = auth.user?.id;
+	if (!userId) return [];
 
-	if (!runs || runs.length === 0) return [];
+	const { data } = await supabase
+		.from('personal_records')
+		.select('distance, best_time_s, achieved_at')
+		.eq('user_id', userId);
 
-	const distances = [
-		{ label: '5k', target: 5000, tolerance: 200 },
-		{ label: '10k', target: 10000, tolerance: 500 },
-		{ label: 'Half Marathon', target: 21097, tolerance: 500 },
-		{ label: 'Marathon', target: 42195, tolerance: 1000 },
-	];
+	if (!data || data.length === 0) return [];
 
-	const records: { distance: string; time_s: number; date: string }[] = [];
+	const labels: Record<string, string> = {
+		'5k': '5k',
+		'10k': '10k',
+		half_marathon: 'Half Marathon',
+		marathon: 'Marathon',
+	};
+	const order: Record<string, number> = { '5k': 0, '10k': 1, half_marathon: 2, marathon: 3 };
 
-	for (const d of distances) {
-		const qualifying = runs.filter(
-			(r) =>
-				r.distance_m >= d.target - d.tolerance &&
-				r.distance_m <= d.target + d.tolerance &&
-				(['app', 'watch', 'strava', 'garmin', 'healthkit', 'healthconnect'] as const).includes(
-					r.source as 'app' | 'watch' | 'strava' | 'garmin' | 'healthkit' | 'healthconnect'
-				)
-		);
-		if (qualifying.length > 0) {
-			const best = qualifying.reduce((a, b) => (a.duration_s < b.duration_s ? a : b));
-			records.push({
-				distance: d.label,
-				time_s: best.duration_s,
-				date: best.started_at.slice(0, 10),
-			});
-		}
-	}
-
-	return records;
+	return data
+		.slice()
+		.sort((a, b) => (order[a.distance] ?? 99) - (order[b.distance] ?? 99))
+		.map((r) => ({
+			distance: labels[r.distance] ?? r.distance,
+			time_s: r.best_time_s,
+			date: r.achieved_at.slice(0, 10),
+		}));
 }
 
 // --- Integrations ---
