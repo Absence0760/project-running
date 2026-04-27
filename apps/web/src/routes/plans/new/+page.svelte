@@ -22,7 +22,6 @@
 
 <style>
 	.page {
-		max-width: 72rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
 	.back {
