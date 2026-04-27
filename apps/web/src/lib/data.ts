@@ -733,6 +733,7 @@ export async function saveRoute(route: {
 	elevation_m: number | null;
 	surface: 'road' | 'trail' | 'mixed';
 	is_public: boolean;
+	club_id?: string | null;
 }): Promise<Route> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
@@ -747,6 +748,7 @@ export async function saveRoute(route: {
 			elevation_m: route.elevation_m,
 			surface: route.surface,
 			is_public: route.is_public,
+			club_id: route.club_id ?? null,
 		})
 		.select()
 		.single();

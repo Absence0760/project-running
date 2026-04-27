@@ -12,6 +12,9 @@
 		fetchClubPosts,
 		fetchPostReplies,
 		fetchPendingRequests,
+		fetchClubRoutes,
+		fetchRoutes,
+		setRouteClubId,
 		approveMember,
 		rejectMember,
 		setMemberRole,
@@ -22,6 +25,9 @@
 		deleteClubPost,
 		deleteClub
 	} from '$lib/data';
+	import { formatDistance } from '$lib/mock-data';
+	import TrackPreview from '$lib/components/TrackPreview.svelte';
+	import type { Route } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
@@ -41,8 +47,12 @@
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
-	let tab = $state<'feed' | 'events' | 'members'>('feed');
+	let tab = $state<'feed' | 'events' | 'routes' | 'members'>('feed');
 	let showEventModal = $state(false);
+	let clubRoutes = $state<Route[]>([]);
+	let transferableRoutes = $state<Route[]>([]);
+	let showTransferModal = $state(false);
+	let transferRouteId = $state('');
 
 	async function handleEventCreated(event: { id: string }) {
 		showEventModal = false;
@@ -77,21 +87,53 @@
 			loading = false;
 			return;
 		}
-		const [up, pa, po, me, pe] = await Promise.all([
+		const [up, pa, po, me, pe, rt] = await Promise.all([
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
 			fetchClubMembers(club.id),
 			club.viewer_role === 'owner' || club.viewer_role === 'admin'
 				? fetchPendingRequests(club.id)
-				: Promise.resolve([])
+				: Promise.resolve([]),
+			fetchClubRoutes(club.id)
 		]);
 		upcoming = up;
 		past = pa;
 		posts = po;
 		members = me;
 		pending = pe;
+		clubRoutes = rt;
 		loading = false;
+	}
+
+	async function openTransferModal() {
+		const mine = await fetchRoutes();
+		// Only routes that don't already belong to a club are transferable.
+		transferableRoutes = mine.filter((r) => r.club_id == null);
+		transferRouteId = '';
+		showTransferModal = true;
+	}
+
+	async function confirmTransfer() {
+		if (!transferRouteId || !club) return;
+		try {
+			await setRouteClubId(transferRouteId, club.id);
+			showTransferModal = false;
+			showToast('Route transferred to club.');
+			await load();
+		} catch (e) {
+			showToast(`Failed to transfer route: ${e}`, 'error');
+		}
+	}
+
+	async function removeRouteFromClub(routeId: string) {
+		try {
+			await setRouteClubId(routeId, null);
+			showToast('Route returned to your personal library.');
+			await load();
+		} catch (e) {
+			showToast(`Failed to remove route from club: ${e}`, 'error');
+		}
 	}
 
 	let channel: RealtimeChannel | null = null;
@@ -439,6 +481,9 @@
 			<button class="tab" class:active={tab === 'events'} onclick={() => (tab = 'events')}>
 				Events{upcoming.length ? ` (${upcoming.length})` : ''}
 			</button>
+			<button class="tab" class:active={tab === 'routes'} onclick={() => (tab = 'routes')}>
+				Routes{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
+			</button>
 			<button class="tab" class:active={tab === 'members'} onclick={() => (tab = 'members')}>
 				Members
 			</button>
@@ -649,6 +694,69 @@
 					{/each}
 				</div>
 			{/if}
+		{:else if tab === 'routes'}
+			{#if isAdmin}
+				<div class="routes-actions">
+					<a href="/routes/new?club={club.id}" class="btn btn-primary">
+						<span class="material-symbols">add</span>
+						New route
+					</a>
+					<button class="btn btn-outline" type="button" onclick={openTransferModal}>
+						<span class="material-symbols">arrow_outward</span>
+						Transfer from My routes
+					</button>
+				</div>
+			{/if}
+			{#if clubRoutes.length === 0}
+				<div class="empty">
+					<p>No club routes yet.</p>
+					{#if isAdmin}
+						<p class="muted">Build the official course or transfer one of your personal routes.</p>
+					{/if}
+				</div>
+			{:else}
+				<div class="club-route-grid">
+					{#each clubRoutes as route (route.id)}
+						<div class="club-route-card">
+							<a href="/routes/{route.id}" class="club-route-link">
+								<div class="club-route-preview">
+									{#if route.waypoints && route.waypoints.length > 1}
+										<TrackPreview points={route.waypoints} />
+									{:else}
+										<span class="material-symbols">route</span>
+									{/if}
+								</div>
+								<div class="club-route-info">
+									<h3>{route.name}</h3>
+									<div class="club-route-meta">
+										<span>{formatDistance(route.distance_m)}</span>
+										{#if route.elevation_m}
+											<span class="meta-sep">·</span>
+											<span>{route.elevation_m} m elev</span>
+										{/if}
+										<span class="meta-sep">·</span>
+										<span class="surface-tag">{route.surface}</span>
+										{#if route.is_public}
+											<span class="meta-sep">·</span>
+											<span class="public-tag">Public</span>
+										{/if}
+									</div>
+								</div>
+							</a>
+							{#if isAdmin}
+								<button
+									class="route-remove"
+									type="button"
+									title="Remove from club (returns to uploader's library)"
+									onclick={() => removeRouteFromClub(route.id)}
+								>
+									<span class="material-symbols">link_off</span>
+								</button>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
 		{:else if tab === 'members'}
 			<div class="member-list">
 				{#each members as m (m.user_id)}
@@ -742,6 +850,43 @@
 			oncancel={() => (showEventModal = false)}
 		/>
 	{/if}
+</Modal>
+
+<Modal
+	open={showTransferModal}
+	title="Transfer route to club"
+	onclose={() => (showTransferModal = false)}
+>
+	<form
+		class="transfer-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			confirmTransfer();
+		}}
+	>
+		{#if transferableRoutes.length === 0}
+			<p class="muted">You don't have any personal routes that aren't already in a club.</p>
+		{:else}
+			<label>
+				<span>Pick a route</span>
+				<select bind:value={transferRouteId} required>
+					<option value="">— select —</option>
+					{#each transferableRoutes as r (r.id)}
+						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+					{/each}
+				</select>
+			</label>
+			<p class="hint muted">
+				The route's uploader stays the same; ownership and editing rights move to the club's admins.
+			</p>
+		{/if}
+		<div class="transfer-actions">
+			<button type="button" class="btn btn-outline" onclick={() => (showTransferModal = false)}>
+				Cancel
+			</button>
+			<button type="submit" class="btn btn-primary" disabled={!transferRouteId}>Transfer</button>
+		</div>
+	</form>
 </Modal>
 {/if}
 
@@ -1308,6 +1453,128 @@
 
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.routes-actions {
+		display: flex;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+		flex-wrap: wrap;
+	}
+
+	.club-route-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		gap: var(--space-md);
+	}
+
+	.club-route-card {
+		position: relative;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		transition: all var(--transition-fast);
+	}
+
+	.club-route-card:hover {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+	}
+
+	.club-route-link {
+		display: block;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.club-route-preview {
+		height: 8rem;
+		background: var(--color-bg-tertiary);
+		border-bottom: 1px solid var(--color-border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.club-route-preview .material-symbols {
+		font-size: 2rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.club-route-info {
+		padding: var(--space-md) var(--space-lg);
+	}
+
+	.club-route-info h3 {
+		font-size: 1rem;
+		font-weight: 600;
+		margin-bottom: var(--space-xs);
+	}
+
+	.club-route-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs);
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+
+	.public-tag {
+		color: var(--color-primary);
+	}
+
+	.surface-tag {
+		text-transform: capitalize;
+	}
+
+	.route-remove {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		background: rgba(0, 0, 0, 0.45);
+		border: none;
+		border-radius: 50%;
+		color: white;
+		cursor: pointer;
+	}
+	.route-remove:hover {
+		background: var(--color-danger, #ef4444);
+	}
+
+	.transfer-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+
+	.transfer-form label {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.transfer-form select {
+		padding: var(--space-sm) var(--space-md);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.9rem;
+	}
+
+	.transfer-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-sm);
+	}
+
+	.hint {
+		font-size: 0.85rem;
 	}
 
 	/* .modal-* classes live in app.css. */

@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
 	import { saveRoute } from '$lib/data';
+
+	// `?club=<uuid>` makes the new route club-owned. The club home page's
+	// Routes tab links here with this param so route creation lands the
+	// row directly under the club rather than the user.
+	let clubId = $derived($page.url.searchParams.get('club'));
 
 	let routeName = $state('');
 	let mode = $state<'road' | 'trail'>('road');
@@ -182,6 +188,7 @@
 				elevation_m: elevation > 0 ? elevation : null,
 				surface: mode === 'trail' ? 'trail' : 'road',
 				is_public: false,
+				club_id: clubId,
 			});
 
 			goto(`/routes/${saved.id}`);
