@@ -1419,6 +1419,9 @@ class TrainingPlanRow {
   static const String colUpdatedAt = 'updated_at';
   static const String colSource = 'source';
   static const String colRules = 'rules';
+  static const String colIsTemplate = 'is_template';
+  static const String colParentTemplateId = 'parent_template_id';
+  static const String colClubId = 'club_id';
 
   final String id;
   final String userId;
@@ -1437,6 +1440,9 @@ class TrainingPlanRow {
   final DateTime? updatedAt;
   final String source;
   final dynamic rules;
+  final bool isTemplate;
+  final String? parentTemplateId;
+  final String? clubId;
 
   const TrainingPlanRow({
     required this.id,
@@ -1456,6 +1462,9 @@ class TrainingPlanRow {
     this.updatedAt,
     required this.source,
     this.rules,
+    this.isTemplate = false,
+    this.parentTemplateId,
+    this.clubId,
   });
 
   factory TrainingPlanRow.fromJson(Map<String, dynamic> json) => TrainingPlanRow(
@@ -1476,6 +1485,9 @@ class TrainingPlanRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     source: json['source'] as String,
     rules: json['rules'],
+    isTemplate: json['is_template'] as bool? ?? false,
+    parentTemplateId: json['parent_template_id'] as String?,
+    clubId: json['club_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1496,6 +1508,9 @@ class TrainingPlanRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colSource: source,
     colRules: rules,
+    colIsTemplate: isTemplate,
+    colParentTemplateId: parentTemplateId,
+    colClubId: clubId,
   };
 }
 

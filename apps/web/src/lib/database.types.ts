@@ -1090,6 +1090,7 @@ export type Database = {
       }
       training_plans: {
         Row: {
+          club_id: string | null
           created_at: string | null
           current_5k_seconds: number | null
           days_per_week: number
@@ -1098,8 +1099,10 @@ export type Database = {
           goal_event: Database["public"]["Enums"]["goal_event"]
           goal_time_seconds: number | null
           id: string
+          is_template: boolean
           name: string
           notes: string | null
+          parent_template_id: string | null
           rules: Json | null
           source: string
           start_date: string
@@ -1109,6 +1112,7 @@ export type Database = {
           vdot: number | null
         }
         Insert: {
+          club_id?: string | null
           created_at?: string | null
           current_5k_seconds?: number | null
           days_per_week?: number
@@ -1117,8 +1121,10 @@ export type Database = {
           goal_event: Database["public"]["Enums"]["goal_event"]
           goal_time_seconds?: number | null
           id?: string
+          is_template?: boolean
           name: string
           notes?: string | null
+          parent_template_id?: string | null
           rules?: Json | null
           source?: string
           start_date: string
@@ -1128,6 +1134,7 @@ export type Database = {
           vdot?: number | null
         }
         Update: {
+          club_id?: string | null
           created_at?: string | null
           current_5k_seconds?: number | null
           days_per_week?: number
@@ -1136,8 +1143,10 @@ export type Database = {
           goal_event?: Database["public"]["Enums"]["goal_event"]
           goal_time_seconds?: number | null
           id?: string
+          is_template?: boolean
           name?: string
           notes?: string | null
+          parent_template_id?: string | null
           rules?: Json | null
           source?: string
           start_date?: string
@@ -1146,7 +1155,22 @@ export type Database = {
           user_id?: string
           vdot?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "training_plans_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_plans_parent_template_id_fkey"
+            columns: ["parent_template_id"]
+            isOneToOne: false
+            referencedRelation: "training_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_coach_usage: {
         Row: {
@@ -1313,6 +1337,10 @@ export type Database = {
       clip_track_for_user: {
         Args: { points: Json; target_user_id: string }
         Returns: Json
+      }
+      clone_plan_template: {
+        Args: { new_start_date: string; template_id: string }
+        Returns: string
       }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
