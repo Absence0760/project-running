@@ -1281,6 +1281,57 @@ class RunKudosRow {
   };
 }
 
+/// Row shape for the `run_photos` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RunPhotoRow {
+  static const String table = 'run_photos';
+  static const String colId = 'id';
+  static const String colRunId = 'run_id';
+  static const String colOwnerId = 'owner_id';
+  static const String colStoragePath = 'storage_path';
+  static const String colCaption = 'caption';
+  static const String colPositionIdx = 'position_idx';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String runId;
+  final String ownerId;
+  final String storagePath;
+  final String? caption;
+  final int positionIdx;
+  final DateTime createdAt;
+
+  const RunPhotoRow({
+    required this.id,
+    required this.runId,
+    required this.ownerId,
+    required this.storagePath,
+    this.caption,
+    required this.positionIdx,
+    required this.createdAt,
+  });
+
+  factory RunPhotoRow.fromJson(Map<String, dynamic> json) => RunPhotoRow(
+    id: json['id'] as String,
+    runId: json['run_id'] as String,
+    ownerId: json['owner_id'] as String,
+    storagePath: json['storage_path'] as String,
+    caption: json['caption'] as String?,
+    positionIdx: (json['position_idx'] as num).toInt(),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRunId: runId,
+    colOwnerId: ownerId,
+    colStoragePath: storagePath,
+    colCaption: caption,
+    colPositionIdx: positionIdx,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `runs` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RunRow {

@@ -996,6 +996,44 @@ export type Database = {
           },
         ]
       }
+      run_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          owner_id: string
+          position_idx: number
+          run_id: string
+          storage_path: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          owner_id: string
+          position_idx?: number
+          run_id: string
+          storage_path: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string
+          position_idx?: number
+          run_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_photos_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       runs: {
         Row: {
           created_at: string | null
