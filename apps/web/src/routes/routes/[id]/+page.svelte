@@ -172,6 +172,34 @@
 	// to the non-zero "X m elevation gain" label.
 	let hasElevationData = $derived(elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations));
 
+	/// Per-waypoint elevation rollup. Walks once: total gain (sum of
+	/// positive deltas), total loss (sum of negative deltas), and the
+	/// min / max altitude. Used by the elevation summary tile above
+	/// the chart.
+	let elevationStats = $derived.by(() => {
+		const eles = elevations;
+		if (eles.length < 2 || !hasElevationData) {
+			return { gain: 0, loss: 0, min: 0, max: 0 };
+		}
+		let gain = 0;
+		let loss = 0;
+		let min = eles[0];
+		let max = eles[0];
+		for (let i = 1; i < eles.length; i++) {
+			const d = eles[i] - eles[i - 1];
+			if (d > 0) gain += d;
+			else loss += -d;
+			if (eles[i] < min) min = eles[i];
+			if (eles[i] > max) max = eles[i];
+		}
+		return {
+			gain: Math.round(gain),
+			loss: Math.round(loss),
+			min: Math.round(min),
+			max: Math.round(max),
+		};
+	});
+
 	// Send the back link wherever the user came from. Defaults to /routes
 	// (the owner's list); switches to the Explore tab when arriving from
 	// community discovery so the trip back is one click, not two. Prefer
@@ -208,7 +236,7 @@
 			{#if route}
 			<main class="map-panel">
 				{#if route.waypoints.length > 0}
-					<RunMap track={route.waypoints} />
+					<RunMap track={route.waypoints} totalDistanceM={route.distance_m} />
 				{:else}
 					<div class="map-placeholder">
 						<span class="material-symbols">map</span>
@@ -295,10 +323,52 @@
 				</div>
 			{/if}
 
-			{#if hasElevationData}
+			<!-- Elevation summary — always rendered when the route stores
+			     a non-zero gain. Per-waypoint min/max/loss are derived
+			     from the elevations array; routes without per-point
+			     elevation data fall back to the stored gain only. -->
+			{#if route.elevation_m != null && route.elevation_m > 0}
 				<section class="section">
-					<h2>Elevation Profile</h2>
-					<ElevationProfile {elevations} totalDistance={route.distance_m} />
+					<h2>Elevation</h2>
+					<div class="elev-grid">
+						<div class="elev-tile">
+							<span class="elev-label">
+								<span class="material-symbols">trending_up</span>
+								Gain
+							</span>
+							<span class="elev-value">
+								{(hasElevationData ? elevationStats.gain : route.elevation_m)} m
+							</span>
+						</div>
+						{#if hasElevationData}
+							<div class="elev-tile">
+								<span class="elev-label">
+									<span class="material-symbols">trending_down</span>
+									Loss
+								</span>
+								<span class="elev-value">{elevationStats.loss} m</span>
+							</div>
+							<div class="elev-tile">
+								<span class="elev-label">
+									<span class="material-symbols">terrain</span>
+									Max
+								</span>
+								<span class="elev-value">{elevationStats.max} m</span>
+							</div>
+							<div class="elev-tile">
+								<span class="elev-label">
+									<span class="material-symbols">vertical_align_bottom</span>
+									Min
+								</span>
+								<span class="elev-value">{elevationStats.min} m</span>
+							</div>
+						{/if}
+					</div>
+					{#if hasElevationData}
+						<div class="elev-chart">
+							<ElevationProfile {elevations} totalDistance={route.distance_m} />
+						</div>
+					{/if}
 				</section>
 			{/if}
 
@@ -655,5 +725,43 @@
 		border-radius: 9999px;
 		font-size: 0.78rem;
 		background: transparent;
+	}
+
+	.elev-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+	}
+	.elev-tile {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.6rem 0.8rem;
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+	.elev-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.elev-label .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 0.95rem;
+	}
+	.elev-value {
+		font-size: 1.05rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text);
+	}
+	.elev-chart {
+		margin-top: var(--space-sm);
 	}
 </style>

@@ -29,8 +29,16 @@
 		track: TrackPoint[];
 		animatable?: boolean;
 		onSegmentSelect?: (seg: SelectedSegment | null) => void;
+		/// When provided AND the polyline distance is shorter than the
+		/// authoritative route distance, scale the marker positions so
+		/// the count matches reality. Routes saved with sparse user
+		/// clicks (legacy + seed data) draw a polyline that under-
+		/// represents the real route length; without scaling, a 6.34mi
+		/// route can render with only one mile-marker because the
+		/// straight-line polyline is just 1.5mi long.
+		totalDistanceM?: number;
 	}
-	let { track = [], animatable = false, onSegmentSelect }: Props = $props();
+	let { track = [], animatable = false, onSegmentSelect, totalDistanceM }: Props = $props();
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -58,21 +66,46 @@
 		const unit = getUnit();
 		const stepM = unit === 'mi' ? METRES_PER_MILE : 1000;
 
+		// Total polyline length — used both as the iteration bound and
+		// as the denominator for the legacy-sparse-waypoints rescale
+		// path below.
+		let polylineTotal = 0;
+		for (let i = 1; i < coords.length; i++) {
+			polylineTotal += haversine(coords[i - 1], coords[i]);
+		}
+
+		// When the authoritative route distance is meaningfully greater
+		// than what the polyline measures (sparse user clicks / seed
+		// data), scale every marker's *along-the-polyline* position by
+		// `polyline / real`. The marker count then reflects the real
+		// distance even though the rendered geometry is a coarse
+		// approximation.
+		const realTotal = totalDistanceM && totalDistanceM > polylineTotal * 1.1
+			? totalDistanceM
+			: polylineTotal;
+		const scale = polylineTotal > 0 ? polylineTotal / realTotal : 1;
+
 		let cumulative = 0;
-		let nextMarker = stepM;
+		let nextMarker = stepM * scale;
+		const maxAlongPolyline = polylineTotal;
 		for (let i = 1; i < coords.length; i++) {
 			const segmentM = haversine(coords[i - 1], coords[i]);
-			while (cumulative + segmentM >= nextMarker && segmentM > 0) {
+			while (
+				cumulative + segmentM >= nextMarker &&
+				segmentM > 0 &&
+				nextMarker <= maxAlongPolyline + 0.5
+			) {
 				const t = (nextMarker - cumulative) / segmentM;
 				const lng = coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t;
 				const lat = coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t;
-				const idx = Math.round(nextMarker / stepM);
+				const realPos = nextMarker / scale;
+				const idx = Math.round(realPos / stepM);
 				features.push({
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [lng, lat] },
 					properties: { label: String(idx) },
 				});
-				nextMarker += stepM;
+				nextMarker += stepM * scale;
 			}
 			cumulative += segmentM;
 		}
