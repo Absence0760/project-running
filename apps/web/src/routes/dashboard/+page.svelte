@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import CalendarHeatmap from '$lib/components/CalendarHeatmap.svelte';
 	import {
 		formatDuration,
@@ -89,6 +90,29 @@
 	let goals = $state<RunGoal[]>([]);
 	let showGoalEditor = $state(false);
 	let editingGoal = $state<RunGoal | null>(null);
+
+	/// The legacy `weekly_mileage_goal_m` setting (shared with Android
+	/// via Settings → Preferences) is folded into the same Goals
+	/// section so the dashboard only has ONE goal surface. We surface
+	/// it as a read-only synthetic goal — clicking it routes to
+	/// /settings/preferences instead of opening the multi-metric
+	/// editor — and skip rendering it if the user already has a
+	/// week-period distance goal of their own.
+	const SYNTHETIC_WEEKLY_GOAL_ID = '__weekly_mileage_pref__';
+	let displayGoals = $derived.by<RunGoal[]>(() => {
+		const userHasWeeklyDistance = goals.some(
+			(g) => g.period === 'week' && (g.distanceMetres ?? 0) > 0,
+		);
+		if (!weeklyGoalMetres || weeklyGoalMetres <= 0 || userHasWeeklyDistance) {
+			return goals;
+		}
+		const synthetic: RunGoal = {
+			id: SYNTHETIC_WEEKLY_GOAL_ID,
+			period: 'week',
+			distanceMetres: weeklyGoalMetres,
+		};
+		return [synthetic, ...goals];
+	});
 
 	/// Today's-workout modal — opened by clicking the today card. Hosted
 	/// on the dashboard directly so we don't need to round-trip through
@@ -319,47 +343,55 @@
 			</a>
 		{/if}
 
-		<a class="coach-promo" href="/coach">
-			<div class="coach-icon">
-				<span class="material-symbols">sports</span>
-			</div>
-			<div class="coach-body">
-				<span class="today-label">ASK THE COACH</span>
-				<strong>Should I run today? How's my pace?</strong>
-				<span class="coach-sub">
-					{#if planOverview}
-						Grounded in your plan and recent runs.
-					{:else}
-						Grounded in your recent runs.
-					{/if}
-				</span>
-			</div>
-			<span class="material-symbols coach-arrow">chevron_right</span>
-		</a>
+		<!-- Source filter — applies to every metric below the today
+		     card / upcoming event. Sits up here so the user understands
+		     which slice of their data drives the analytics that follow. -->
+		<div class="filter-row">
+			{#each sources as src}
+				<button
+					class="filter-btn"
+					class:active={sourceFilter === src.value}
+					onclick={() => (sourceFilter = src.value)}
+				>
+					{src.label}
+				</button>
+			{/each}
+		</div>
 
-		<!-- Weekly goal progress — hides when the user hasn't set one.
-		     Configure via Settings → Preferences (writes the same
-		     `weekly_mileage_goal_m` value Android's dashboard reads). -->
-		{#if weeklyGoalMetres != null && weeklyGoalMetres > 0}
-			{@const pct = Math.min(100, Math.round((thisWeekDistance / weeklyGoalMetres) * 100))}
-			<div class="goal-card">
-				<header class="goal-header">
-					<div>
-						<span class="goal-title">Weekly goal</span>
-						<span class="goal-sub">
-							{formatDistance(thisWeekDistance)} of {formatDistance(weeklyGoalMetres)}
-						</span>
-					</div>
-					<span class="goal-pct">{pct}%</span>
-				</header>
-				<div class="goal-bar">
-					<div class="goal-fill" style="width: {pct}%"></div>
-				</div>
-				<p class="goal-edit-hint">
-					<a href="/settings/preferences">Edit goal</a>
-				</p>
+		<!-- Stat cards -->
+		<div class="stat-grid">
+			<button
+				type="button"
+				class="stat-card stat-card-button"
+				onclick={() => (periodModal = { type: 'week', date: new Date() })}
+			>
+				<span class="stat-label">This Week</span>
+				<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
+				<span class="stat-sub">{thisWeekRuns.length} run{thisWeekRuns.length !== 1 ? 's' : ''}</span>
+			</button>
+			<div class="stat-card">
+				<span class="stat-label">Total Runs</span>
+				<span class="stat-value">{totalRuns}</span>
+				<span class="stat-sub">all sources</span>
 			</div>
-		{/if}
+			<div class="stat-card">
+				<span class="stat-label">Longest Run</span>
+				<span class="stat-value">{formatDistance(longestRun)}</span>
+				<span class="stat-sub">all time</span>
+			</div>
+			<div class="stat-card">
+				<span class="stat-label">This Week Pace</span>
+				<span class="stat-value">
+					{thisWeekRuns.length > 0
+						? formatPace(
+								thisWeekRuns.reduce((s, r) => s + r.duration_s, 0),
+								thisWeekDistance,
+							)
+						: '--'}
+				</span>
+				<span class="stat-sub">average</span>
+			</div>
+		</div>
 
 		<!-- Fitness snapshot — VO2 max + training-load (ATL / CTL / TSB)
 		     + a rule-based recovery advice line. Computed client-side
@@ -427,105 +459,6 @@
 				<TrainingLoadChart points={trainingLoadSeries} hasHr={trainingLoadHasHr} />
 			</section>
 		{/if}
-
-		<!-- Multi-metric goals — local-only. Shows a card per goal with
-		     a progress row per target. Empty by default; header button
-		     opens the editor. -->
-		<section class="goals-section">
-			<header class="goals-header">
-				<h2>Goals</h2>
-				<button type="button" class="link-btn" onclick={openNewGoal}>
-					+ Add goal
-				</button>
-			</header>
-			{#if goals.length === 0}
-				<p class="goals-empty">
-					No goals yet. Set a weekly or monthly target for distance, time,
-					avg pace, or number of runs.
-				</p>
-			{:else}
-				<div class="goal-grid">
-					{#each goals as g (g.id)}
-						{@const p = evaluateGoal(g, runs, new Date(), weekStartDay)}
-						<button class="goal-card" type="button" onclick={() => openEditGoal(g)}>
-							<header class="goal-card-top">
-								<span class="goal-period">{periodLabel(g.period)}</span>
-								<span class="goal-overall">
-									{Math.round(p.overallPercent * 100)}%
-								</span>
-							</header>
-							<ul class="goal-targets">
-								{#each p.targets as t}
-									<li>
-										<div class="goal-target-top">
-											<span>{t.label}</span>
-											<span class="goal-target-value">
-												{t.currentLabel} / {t.targetLabel}
-											</span>
-										</div>
-										<div class="goal-target-bar">
-											<div
-												class="goal-target-fill"
-												class:complete={t.complete}
-												style="width: {Math.round(t.percent * 100)}%"
-											></div>
-										</div>
-									</li>
-								{/each}
-							</ul>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</section>
-
-		<!-- Stat cards -->
-		<div class="stat-grid">
-			<button
-				type="button"
-				class="stat-card stat-card-button"
-				onclick={() => (periodModal = { type: 'week', date: new Date() })}
-			>
-				<span class="stat-label">This Week</span>
-				<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
-				<span class="stat-sub">{thisWeekRuns.length} run{thisWeekRuns.length !== 1 ? 's' : ''}</span>
-			</button>
-			<div class="stat-card">
-				<span class="stat-label">Total Runs</span>
-				<span class="stat-value">{totalRuns}</span>
-				<span class="stat-sub">all sources</span>
-			</div>
-			<div class="stat-card">
-				<span class="stat-label">Longest Run</span>
-				<span class="stat-value">{formatDistance(longestRun)}</span>
-				<span class="stat-sub">all time</span>
-			</div>
-			<div class="stat-card">
-				<span class="stat-label">This Week Pace</span>
-				<span class="stat-value">
-					{thisWeekRuns.length > 0
-						? formatPace(
-								thisWeekRuns.reduce((s, r) => s + r.duration_s, 0),
-								thisWeekDistance,
-							)
-						: '--'}
-				</span>
-				<span class="stat-sub">average</span>
-			</div>
-		</div>
-
-		<!-- Source filter -->
-		<div class="filter-row">
-			{#each sources as src}
-				<button
-					class="filter-btn"
-					class:active={sourceFilter === src.value}
-					onclick={() => (sourceFilter = src.value)}
-				>
-					{src.label}
-				</button>
-			{/each}
-		</div>
 
 		<!-- Mileage chart -->
 		<section class="card">
@@ -604,6 +537,87 @@
 				</div>
 			</section>
 		</div>
+
+		<!-- Multi-metric goals — local-only. Shows a card per goal with
+		     a progress row per target. Empty by default; header button
+		     opens the editor. The legacy `weekly_mileage_goal_m` setting
+		     (still shared with Android via Settings → Preferences) is
+		     surfaced as a synthetic weekly distance goal so it shows up
+		     here without needing a separate card. -->
+		<section class="goals-section">
+			<header class="goals-header">
+				<h2>Goals</h2>
+				<button type="button" class="link-btn" onclick={openNewGoal}>
+					+ Add goal
+				</button>
+			</header>
+			{#if displayGoals.length === 0}
+				<p class="goals-empty">
+					No goals yet. Set a weekly or monthly target for distance, time,
+					avg pace, or number of runs.
+				</p>
+			{:else}
+				<div class="goal-grid">
+					{#each displayGoals as g (g.id)}
+						{@const p = evaluateGoal(g, runs, new Date(), weekStartDay)}
+						{@const isSynthetic = g.id === SYNTHETIC_WEEKLY_GOAL_ID}
+						<button
+							class="goal-card"
+							type="button"
+							onclick={() =>
+								isSynthetic ? goto('/settings/preferences') : openEditGoal(g)}
+						>
+							<header class="goal-card-top">
+								<span class="goal-period">{periodLabel(g.period)}</span>
+								<span class="goal-overall">
+									{Math.round(p.overallPercent * 100)}%
+								</span>
+							</header>
+							<ul class="goal-targets">
+								{#each p.targets as t}
+									<li>
+										<div class="goal-target-top">
+											<span>{t.label}</span>
+											<span class="goal-target-value">
+												{t.currentLabel} / {t.targetLabel}
+											</span>
+										</div>
+										<div class="goal-target-bar">
+											<div
+												class="goal-target-fill"
+												class:complete={t.complete}
+												style="width: {Math.round(t.percent * 100)}%"
+											></div>
+										</div>
+									</li>
+								{/each}
+							</ul>
+							{#if isSynthetic}
+								<p class="goal-card-footer">From Settings · Edit there</p>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
+		<a class="coach-promo" href="/coach">
+			<div class="coach-icon">
+				<span class="material-symbols">sports</span>
+			</div>
+			<div class="coach-body">
+				<span class="today-label">ASK THE COACH</span>
+				<strong>Should I run today? How's my pace?</strong>
+				<span class="coach-sub">
+					{#if planOverview}
+						Grounded in your plan and recent runs.
+					{:else}
+						Grounded in your recent runs.
+					{/if}
+				</span>
+			</div>
+			<span class="material-symbols coach-arrow">chevron_right</span>
+		</a>
 	{/if}
 </div>
 
@@ -961,61 +975,6 @@
 		margin-bottom: var(--space-xl);
 	}
 
-	.goal-card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-primary);
-		border-radius: var(--radius-lg);
-		padding: 1rem 1.25rem;
-		margin-bottom: var(--space-lg);
-	}
-	.goal-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		margin-bottom: 0.6rem;
-	}
-	.goal-title {
-		display: block;
-		font-size: 0.8rem;
-		font-weight: 700;
-		color: var(--color-text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-	.goal-sub {
-		display: block;
-		font-size: 1rem;
-		font-weight: 600;
-		margin-top: 0.2rem;
-	}
-	.goal-pct {
-		font-size: 1.4rem;
-		font-weight: 800;
-		color: var(--color-primary);
-	}
-	.goal-bar {
-		height: 0.55rem;
-		background: var(--color-bg-tertiary);
-		border-radius: 9999px;
-		overflow: hidden;
-	}
-	.goal-fill {
-		height: 100%;
-		background: var(--color-primary);
-		border-radius: 9999px;
-		transition: width 0.4s ease;
-	}
-	.goal-edit-hint {
-		margin: 0.5rem 0 0;
-		font-size: 0.78rem;
-		text-align: right;
-	}
-	.goal-edit-hint a {
-		color: var(--color-text-tertiary);
-		text-decoration: none;
-	}
-	.goal-edit-hint a:hover { text-decoration: underline; }
-
 	.event-card {
 		display: flex;
 		align-items: center;
@@ -1255,6 +1214,11 @@
 	}
 	.goal-target-fill.complete {
 		background: #2e7d32;
+	}
+	.goal-card-footer {
+		margin: 0.6rem 0 0;
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
 	}
 
 	/* Goal editor reuses the canonical .modal-* classes from app.css.

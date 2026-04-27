@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		formatDuration,
 		formatPace,
@@ -39,6 +40,44 @@
 	/// means unbounded on that side.
 	let customFrom = $state('');
 	let customTo = $state('');
+
+	/// Filters persist across navigation via localStorage so the user
+	/// doesn't have to rebuild their view every time. Hydration happens
+	/// once in onMount; after that an effect mirrors any change back
+	/// to localStorage. The `filtersHydrated` flag gates the writer so
+	/// the SSR/initial defaults don't clobber a saved blob.
+	const FILTERS_KEY = 'runs_filters_v1';
+	let filtersHydrated = $state(false);
+
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(FILTERS_KEY);
+			if (raw) {
+				const saved = JSON.parse(raw);
+				if (saved.sourceFilter) sourceFilter = saved.sourceFilter;
+				if (saved.activityFilter) activityFilter = saved.activityFilter;
+				if (saved.dateRange) dateRange = saved.dateRange;
+				if (typeof saved.customFrom === 'string') customFrom = saved.customFrom;
+				if (typeof saved.customTo === 'string') customTo = saved.customTo;
+				if (saved.sortKey) sortKey = saved.sortKey;
+			}
+		} catch (_) {
+			/* localStorage may be unavailable / blob may be corrupt — leave defaults */
+		}
+		filtersHydrated = true;
+	});
+
+	$effect(() => {
+		if (!filtersHydrated) return;
+		try {
+			localStorage.setItem(
+				FILTERS_KEY,
+				JSON.stringify({ sourceFilter, activityFilter, dateRange, customFrom, customTo, sortKey }),
+			);
+		} catch (_) {
+			/* silent */
+		}
+	});
 
 	/// Lower-bound / upper-bound cutoffs in local time for the selected
 	/// range. `null` on either side means "no cutoff on this side".
