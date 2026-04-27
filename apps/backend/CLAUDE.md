@@ -131,7 +131,7 @@ Five functions live under `supabase/functions/`. Two are wired up and shippable;
 | `parkrun-import` | **Working** (scraper) | Client POST with `{ athleteNumber }` | User JWT → `supabase.auth.getUser()` | `PARKRUN_USER_AGENT` |
 | `refresh-tokens` | **Working** | Scheduled (pg_cron) every hour | Service role (`SUPABASE_SERVICE_ROLE_KEY`) | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
 | `strava-import` | **Working** — OAuth exchange + 90-day backfill + `sync` action for already-connected users; GPS streams uploaded to the `runs` Storage bucket and deduped against existing Strava activity IDs | Client POST with `{ action: 'connect', code, scope }` (after the OAuth redirect) or `{ action: 'sync', lookbackDays? }` | User JWT | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
-| `strava-webhook` | **Partial** — verification works, activity sync is a TODO | GET verification from Strava + POST activity events | Service role (webhook is public) | `STRAVA_VERIFY_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `strava-webhook` | **Partial** — verification works, activity sync is a TODO | GET verification from Strava + POST activity events | Shared `?secret=` in the callback URL guards both methods (Strava doesn't sign POSTs); GET also checks `hub.verify_token`. Service role for DB writes. | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `export-data` | **Stub** — every step is a TODO | Client POST with `{ format }` | User JWT | — |
 | `revenuecat-webhook` | **Working** | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC signature verification (`REVENUECAT_WEBHOOK_SECRET`) | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 
@@ -223,7 +223,8 @@ Variables currently used:
 
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — injected by the runtime; you do not set these in `.env.local` for local dev.
 - `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` — Strava OAuth credentials.
-- `STRAVA_VERIFY_TOKEN` — shared secret for the webhook GET handshake.
+- `STRAVA_VERIFY_TOKEN` — shared secret for the webhook GET handshake (sent by Strava in `hub.verify_token`).
+- `STRAVA_WEBHOOK_SECRET` — shared secret embedded in the callback URL's query string (`?secret=...`). Strava preserves URL query strings on both GET and POST, so this is the only auth available on POST events (Strava doesn't sign payloads). Required: function fails closed without it.
 - `PARKRUN_USER_AGENT` — identifies us to parkrun's server. Be polite.
 
 ## CLI gotchas I've hit
