@@ -24,6 +24,7 @@
 	import { WORKOUT_KIND_LABEL } from '$lib/training';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import { loadSettings, effective } from '$lib/settings';
 	import { fmtKm, fmtPace, setUnit } from '$lib/units.svelte';
@@ -592,38 +593,20 @@
 	/>
 {/if}
 
-{#if periodModal}
-	<div
-		class="modal-backdrop"
-		onclick={() => (periodModal = null)}
-		role="presentation"
-	></div>
-	<div
-		class="modal modal-wide"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Period summary"
-	>
-		<header class="modal-header">
-			<h2>Period summary</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (periodModal = null)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body">
-			<PeriodSummary
-				runs={filteredRuns}
-				initialType={periodModal.type}
-				initialDate={periodModal.date}
-			/>
-		</div>
-	</div>
-{/if}
+<Modal
+	open={periodModal != null}
+	title="Period summary"
+	wide
+	onclose={() => (periodModal = null)}
+>
+	{#if periodModal}
+		<PeriodSummary
+			runs={filteredRuns}
+			initialType={periodModal.type}
+			initialDate={periodModal.date}
+		/>
+	{/if}
+</Modal>
 
 {#if showGoalEditor && editingGoal}
 	{@const eg = editingGoal}
