@@ -2130,3 +2130,192 @@ export async function updatePlanMeta(
 	const { error } = await supabase.from('training_plans').update(patch).eq('id', id);
 	if (error) throw error;
 }
+
+// ─────────────────────── Following + activity feed (decisions §31) ───────────────────────
+
+export interface PublicProfile {
+	id: string;
+	display_name: string | null;
+	avatar_url: string | null;
+}
+
+export interface ProfileSummary extends PublicProfile {
+	follower_count: number;
+	following_count: number;
+	viewer_follows: boolean;
+}
+
+/// Public-by-default user profile lookup. Returns null when the user
+/// doesn't exist or RLS hides the row (shouldn't happen now that
+/// user_profiles has a public-read policy, but a defensive null is
+/// cheap insurance).
+export async function fetchPublicProfile(userId: string): Promise<ProfileSummary | null> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const viewerId = sessionData.session?.user?.id;
+
+	const [profileRes, followerRes, followingRes, viewerRes] = await Promise.all([
+		supabase
+			.from('user_profiles')
+			.select('id, display_name, avatar_url')
+			.eq('id', userId)
+			.maybeSingle(),
+		supabase
+			.from('user_follows')
+			.select('*', { count: 'exact', head: true })
+			.eq('followee_id', userId),
+		supabase
+			.from('user_follows')
+			.select('*', { count: 'exact', head: true })
+			.eq('follower_id', userId),
+		viewerId && viewerId !== userId
+			? supabase
+					.from('user_follows')
+					.select('follower_id')
+					.eq('follower_id', viewerId)
+					.eq('followee_id', userId)
+					.maybeSingle()
+			: Promise.resolve({ data: null }),
+	]);
+
+	if (!profileRes.data) return null;
+
+	return {
+		id: profileRes.data.id,
+		display_name: profileRes.data.display_name,
+		avatar_url: profileRes.data.avatar_url,
+		follower_count: followerRes.count ?? 0,
+		following_count: followingRes.count ?? 0,
+		viewer_follows: viewerRes.data != null,
+	};
+}
+
+export async function followUser(targetUserId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	if (userId === targetUserId) throw new Error("Can't follow yourself");
+	const { error } = await supabase
+		.from('user_follows')
+		.insert({ follower_id: userId, followee_id: targetUserId });
+	// Treat duplicate (already following) as a no-op.
+	if (error && error.code !== '23505') throw error;
+}
+
+export async function unfollowUser(targetUserId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase
+		.from('user_follows')
+		.delete()
+		.eq('follower_id', userId)
+		.eq('followee_id', targetUserId);
+	if (error) throw error;
+}
+
+/// People who follow `userId`, paginated client-side after fetch.
+export async function fetchFollowers(userId: string, limit = 50): Promise<PublicProfile[]> {
+	const { data: edges } = await supabase
+		.from('user_follows')
+		.select('follower_id, followed_at')
+		.eq('followee_id', userId)
+		.order('followed_at', { ascending: false })
+		.limit(limit);
+	const ids = (edges ?? []).map((e) => e.follower_id as string);
+	if (ids.length === 0) return [];
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', ids);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+	// Preserve the followed_at ordering.
+	return ids.map((id) => byId.get(id)).filter((p): p is PublicProfile => p != null);
+}
+
+/// People `userId` follows, ordered by most-recently followed.
+export async function fetchFollowing(userId: string, limit = 50): Promise<PublicProfile[]> {
+	const { data: edges } = await supabase
+		.from('user_follows')
+		.select('followee_id, followed_at')
+		.eq('follower_id', userId)
+		.order('followed_at', { ascending: false })
+		.limit(limit);
+	const ids = (edges ?? []).map((e) => e.followee_id as string);
+	if (ids.length === 0) return [];
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', ids);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+	return ids.map((id) => byId.get(id)).filter((p): p is PublicProfile => p != null);
+}
+
+export interface FeedEntry extends Run {
+	author: PublicProfile;
+}
+
+/// Activity feed: recent public runs from people the caller follows.
+/// Cursor is the started_at + id of the last entry on the previous page;
+/// pass null for the first page.
+export async function fetchFollowingFeed(opts?: {
+	limit?: number;
+	cursor?: { started_at: string; id: string } | null;
+}): Promise<FeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) return [];
+
+	// Resolve the followed set once; the runs query will filter on it.
+	const { data: edges } = await supabase
+		.from('user_follows')
+		.select('followee_id')
+		.eq('follower_id', userId);
+	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
+	if (followeeIds.length === 0) return [];
+
+	let q = supabase
+		.from('runs')
+		.select('*')
+		.in('user_id', followeeIds)
+		.eq('is_public', true)
+		.order('started_at', { ascending: false })
+		.order('id', { ascending: false })
+		.limit(limit);
+	if (opts?.cursor) {
+		// Stable cursor pagination on (started_at, id) — strictly less than
+		// the cursor row to skip what we've already seen.
+		q = q.or(
+			`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
+		);
+	}
+	const { data: runs } = await q;
+	if (!runs || runs.length === 0) return [];
+
+	const authorIds = Array.from(new Set(runs.map((r) => r.user_id)));
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', authorIds);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+
+	return runs.map((r) => ({
+		...(r as Run),
+		author: byId.get(r.user_id) ?? { id: r.user_id, display_name: null, avatar_url: null },
+	}));
+}
+
+/// Recent public runs from a single user — used by the profile page.
+export async function fetchPublicRunsByUser(userId: string, limit = 20): Promise<Run[]> {
+	const { data } = await supabase
+		.from('runs')
+		.select('*')
+		.eq('user_id', userId)
+		.eq('is_public', true)
+		.order('started_at', { ascending: false })
+		.limit(limit);
+	return (data ?? []) as Run[];
+}
