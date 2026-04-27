@@ -161,22 +161,28 @@
 	<div class="stats">
 		<div class="stat-card">
 			<span class="stat-label">Distance</span>
-			<span class="stat-value">{formatDistance(stats.distance)}</span>
+			<span class="stat-value">
+				{stats.count > 0 ? formatDistance(stats.distance) : '—'}
+			</span>
 		</div>
 		<div class="stat-card">
 			<span class="stat-label">Time</span>
-			<span class="stat-value">{formatDuration(stats.duration)}</span>
+			<span class="stat-value">
+				{stats.count > 0 ? formatDuration(stats.duration) : '—'}
+			</span>
 		</div>
 		<div class="stat-card">
 			<span class="stat-label">Runs</span>
 			<span class="stat-value">{stats.count}</span>
 		</div>
-		{#if stats.count > 0}
-			<div class="stat-card">
-				<span class="stat-label">Longest</span>
-				<span class="stat-value">{formatDistance(stats.longest)}</span>
-			</div>
-		{/if}
+		<div class="stat-card">
+			<span class="stat-label">Avg pace</span>
+			<span class="stat-value">
+				{stats.count > 0 && stats.distance > 0
+					? formatPace(stats.duration, stats.distance)
+					: '—'}
+			</span>
+		</div>
 	</div>
 
 	<div class="actions">
@@ -187,9 +193,12 @@
 	</div>
 
 	<section class="card">
-		<h3>Runs in this {type}</h3>
+		<h3>Runs this {type}</h3>
 		{#if periodRuns.length === 0}
-			<p class="muted">No runs yet.</p>
+			<p class="muted">
+				No runs logged for this {type}. Use Previous / Next above to
+				browse other {type}s, or close this and record a new run.
+			</p>
 		{:else}
 			<div class="run-list">
 				{#each periodRuns as run}
@@ -262,11 +271,11 @@
 	}
 	.stats {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 	@media (max-width: 40rem) {
-		.stats { grid-template-columns: repeat(2, 1fr); }
+		.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 	.stat-card {
 		background: var(--color-surface);
@@ -275,18 +284,38 @@
 		padding: 1rem 1.25rem;
 		display: flex;
 		flex-direction: column;
+		position: relative;
+		overflow: hidden;
 	}
+	.stat-card::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 3px;
+	}
+	.stat-card:nth-child(1)::before { background: linear-gradient(90deg, #4F46E5, #7C3AED); }
+	.stat-card:nth-child(2)::before { background: linear-gradient(90deg, #10B981, #06B6D4); }
+	.stat-card:nth-child(3)::before { background: linear-gradient(90deg, #F97316, #F59E0B); }
+	.stat-card:nth-child(4)::before { background: linear-gradient(90deg, #EC4899, #EF4444); }
 	.stat-label {
-		font-size: 0.75rem;
+		font-size: 0.72rem;
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.06em;
 	}
 	.stat-value {
-		font-size: 1.5rem;
+		font-size: 1.4rem;
 		font-weight: 800;
-		margin-top: 0.3rem;
+		margin-top: 0.35rem;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.2;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.actions {
 		display: flex;
