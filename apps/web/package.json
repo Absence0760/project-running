@@ -34,6 +34,7 @@
 		"fit-file-parser": "^2.3.3",
 		"isomorphic-dompurify": "^2.35.0",
 		"jszip": "^3.10.1",
-		"maplibre-gl": "^5.22.0"
+		"maplibre-gl": "^5.22.0",
+		"marked": "^18.0.2"
 	}
 }
