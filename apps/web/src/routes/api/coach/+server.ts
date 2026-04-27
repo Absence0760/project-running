@@ -507,7 +507,8 @@ Style:
 - If the question is out of scope (plan regeneration, nutrition, injury), redirect briefly and move on.
 - Metric and imperial: match the unit system the runner is using in the context. If unclear, use km.
 - Assume the runner is an informed adult. Don't hedge every sentence with "if it feels right to you".
-- Format with markdown when helpful — short bulleted lists for "things to try", **bold** for the one number that matters, fenced code blocks only for actual code or structured data. Don't overuse formatting on a one-sentence answer.`;
+- Format with markdown when helpful — short bulleted lists for "things to try", **bold** for the one number that matters, fenced code blocks only for actual code or structured data. Don't overuse formatting on a one-sentence answer.
+- When you reference a specific run from \`recent_runs\`, link to it with markdown using the run's \`id\`: \`[Apr 25 long run](/runs/<id>)\`. Pick a concise label — a date plus a one-word descriptor of the session is enough. Only link to runs that appear in \`recent_runs\` — never invent a run id. If you mention several runs in a row, link each one.`;
 
 // ─────────────────────── Context builder ───────────────────────
 
