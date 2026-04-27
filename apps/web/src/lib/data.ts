@@ -2554,3 +2554,129 @@ export async function deleteRunComment(commentId: string): Promise<void> {
 	const { error } = await supabase.from('run_comments').delete().eq('id', commentId);
 	if (error) throw error;
 }
+
+// --- Run photos (decisions §36) ---
+
+export interface RunPhoto {
+	id: string;
+	run_id: string;
+	owner_id: string;
+	storage_path: string;
+	caption: string | null;
+	position_idx: number;
+	created_at: string;
+	url: string;
+}
+
+const PHOTO_MIME_TO_EXT: Record<string, string> = {
+	'image/jpeg': 'jpg',
+	'image/png': 'png',
+	'image/webp': 'webp',
+	'image/heic': 'heic',
+	'image/heif': 'heif',
+};
+
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+export async function fetchRunPhotos(runId: string): Promise<RunPhoto[]> {
+	const { data, error } = await supabase
+		.from('run_photos')
+		.select('*')
+		.eq('run_id', runId)
+		.order('position_idx', { ascending: true })
+		.order('created_at', { ascending: true });
+	if (error) {
+		console.error('fetchRunPhotos failed', error);
+		return [];
+	}
+	return (data ?? []).map((r) => ({
+		...r,
+		url: supabase.storage.from('run-photos').getPublicUrl(r.storage_path).data.publicUrl,
+	}));
+}
+
+export async function addRunPhoto(input: {
+	run_id: string;
+	file: File;
+	caption?: string | null;
+}): Promise<RunPhoto> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const ext = PHOTO_MIME_TO_EXT[input.file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
+	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
+
+	const photoId = crypto.randomUUID();
+	const storagePath = `${userId}/${photoId}.${ext}`;
+
+	const { error: upErr } = await supabase.storage
+		.from('run-photos')
+		.upload(storagePath, input.file, {
+			contentType: input.file.type,
+			upsert: false,
+		});
+	if (upErr) throw upErr;
+
+	const { data: posData } = await supabase
+		.from('run_photos')
+		.select('position_idx')
+		.eq('run_id', input.run_id)
+		.order('position_idx', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	const nextIdx = (posData?.position_idx ?? -1) + 1;
+
+	const { data, error } = await supabase
+		.from('run_photos')
+		.insert({
+			id: photoId,
+			run_id: input.run_id,
+			owner_id: userId,
+			storage_path: storagePath,
+			caption: input.caption?.trim() || null,
+			position_idx: nextIdx,
+		})
+		.select('*')
+		.single();
+	if (error || !data) {
+		// Best-effort cleanup of the uploaded blob if metadata insert fails.
+		await supabase.storage.from('run-photos').remove([storagePath]);
+		throw error ?? new Error('Insert failed');
+	}
+	return {
+		...data,
+		url: supabase.storage.from('run-photos').getPublicUrl(storagePath).data.publicUrl,
+	};
+}
+
+export async function deleteRunPhoto(photoId: string): Promise<void> {
+	const { data: row, error: fetchErr } = await supabase
+		.from('run_photos')
+		.select('storage_path')
+		.eq('id', photoId)
+		.maybeSingle();
+	if (fetchErr) throw fetchErr;
+
+	const { error } = await supabase.from('run_photos').delete().eq('id', photoId);
+	if (error) throw error;
+
+	if (row?.storage_path) {
+		// Best-effort — RLS allows the photo owner to remove their own bytes.
+		// If the run owner (not photo owner) deleted the row, the bytes
+		// will be orphaned in Storage but invisible to the UI.
+		await supabase.storage.from('run-photos').remove([row.storage_path]);
+	}
+}
+
+export async function updateRunPhotoCaption(
+	photoId: string,
+	caption: string | null,
+): Promise<void> {
+	const trimmed = caption?.trim() || null;
+	const { error } = await supabase
+		.from('run_photos')
+		.update({ caption: trimmed })
+		.eq('id', photoId);
+	if (error) throw error;
+}
