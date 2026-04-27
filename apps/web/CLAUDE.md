@@ -24,7 +24,8 @@ src/
     components/     # RunMap, ElevationProfile, ImportRoute, RouteBuilder, CoachChat, ConfirmDialog, ToastContainer, ProGate,
                     # WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer, CalendarHeatmap, LicenseList,
                     # ClubEditor, EventEditor, PlanEditor, RunEditor (modal-hosted creation forms),
-                    # PeriodSummary (week/month stats + run list — used by dashboard modal AND /dashboard/period/...)
+                    # PeriodSummary (week/month stats + run list — used by dashboard modal AND /dashboard/period/...),
+                    # RunSocial (kudos + comments on a run — mounted on /share/run/[id], /runs/[id]; feed uses fetchEngagementSummaries chips instead).
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types

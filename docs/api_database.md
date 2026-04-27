@@ -177,6 +177,33 @@ create index route_reviews_route on route_reviews (route_id, created_at desc);
 
 ---
 
+### `run_kudos` / `run_comments`
+
+Engagement on runs (decisions §32). Visibility tracks the parent run's RLS via an EXISTS subquery, so engagement on a private run is invisible to anyone but the owner.
+
+```sql
+create table run_kudos (
+  user_id   uuid references auth.users(id) on delete cascade not null,
+  run_id    uuid references runs(id) on delete cascade not null,
+  given_at  timestamptz not null default now(),
+  primary key (user_id, run_id)
+);
+
+create table run_comments (
+  id                 uuid primary key default gen_random_uuid(),
+  run_id             uuid references runs(id) on delete cascade not null,
+  author_id          uuid references auth.users(id) on delete cascade not null,
+  parent_comment_id  uuid references run_comments(id) on delete cascade,
+  body               text not null check (length(body) between 1 and 2000),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+```
+
+Threading is one level deep, enforced by the INSERT policy: `parent_comment_id is null OR (the parent's parent_comment_id is null)`. Run owner can DELETE any comment on their run for moderation; otherwise authors edit / delete their own. The `run_comments_set_updated_at` BEFORE-UPDATE trigger keeps `updated_at` honest so consumers can tell edited comments apart.
+
+---
+
 ### `user_profiles`
 
 Supplementary user data not stored in `auth.users`. As of `20260521_001_user_follows.sql` profiles are world-readable to authenticated users (the new `"profiles are readable by anyone authenticated"` policy is additive to the existing self-only `"users own their profile"`). This is required for follow / feed / club-member rendering and was a latent bug fix — pre-migration, all cross-user enrichment queries silently returned empty rows. See `docs/decisions.md § 31` for the trade-off.

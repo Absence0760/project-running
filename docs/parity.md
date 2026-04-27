@@ -210,8 +210,9 @@ Strava-style follow graph; layered on top of (but independent of) the clubs/even
 |---|---|---|---|---|---|---|
 | Follow / unfollow another user | ✗ | ✗ | ✓ | N/A | N/A | `user_follows` join table; Follow button on `/u/[id]`. |
 | Public user profile page | ✗ | ✗ | ✓ | N/A | N/A | `/u/[id]` shows display_name, avatar, recent public runs, follower/following counts. |
-| Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; cursor-paginated on `runs.started_at`. |
-| Kudos / comments on runs | ✗ | ✗ | ✗ | ✗ | ✗ | Backlog. |
+| Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; cursor-paginated on `runs.started_at`. Each card shows kudos + comment counts. |
+| Kudos on runs | ✗ | ✗ | ✓ | N/A | N/A | `run_kudos` composite-PK join; one-tap toggle. RLS inherits from runs (`decisions.md § 32`). |
+| Comments on runs (one-level threading) | ✗ | ✗ | ✓ | N/A | N/A | `run_comments` with `parent_comment_id`; author + run-owner can delete; INSERT policy enforces shallow nesting. |
 | Privacy zones (clip start/end of public tracks) | ✗ | ✗ | ✗ | ✗ | ✗ | Backlog. |
 
 ## Training plans and workouts
