@@ -52,7 +52,7 @@ src/
     routes/[id]/    # Route detail
     clubs/          # Social layer — browse + My clubs
     clubs/new/      # Create a club (visibility + join policy)
-    clubs/[slug]/   # Club home: feed (threaded) / events / members, pending-requests + invite-link panels for admins
+    clubs/[slug]/   # Club home: feed (threaded) / events / routes / members tabs, pending-requests + invite-link panels for admins. Routes tab lists routes where club_id = this club; admins can create new (links to /routes/new?club=<id>) or transfer one of their personal routes in.
     clubs/[slug]/events/new/      # Admin: create event (one-off OR weekly/biweekly/monthly recurrence)
     clubs/[slug]/events/[id]/     # Event detail + per-instance RSVP + per-event updates
     clubs/join/[token]/           # Public invite-link landing (redeems via join_club_by_token RPC)

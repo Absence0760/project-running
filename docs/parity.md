@@ -86,6 +86,8 @@ See [features § Community route library](features.md#community-route-library).
 | Explore public routes (search + filters) | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Popular / near-me feed (PostGIS) | ✓ | ✗ | ✓ | ✗ | ✗ | Uses `nearby_routes` RPC. |
 | Route ratings and comments | ✓ | ✗ | ✓ | ✗ | ✗ | Shared `route_reviews` table; one review per user per route. |
+| Club-owned routes | ✗ | ✗ | ✓ | ✗ | ✗ | `routes.club_id` + Routes tab on `/clubs/[slug]`. Admins create / transfer / remove. See `docs/clubs.md § Club-owned routes`. |
+| Bookmark public routes (saved_routes ref) | ✗ | ✗ | ✓ | ✗ | ✗ | Replaces the old "save = clone the row" flow. `decisions.md § 30`. |
 
 ## Run recording
 

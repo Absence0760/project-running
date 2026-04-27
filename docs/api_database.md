@@ -88,7 +88,8 @@ Planned routes — imported from GPX/KML or built in the route builder.
 ```sql
 create table routes (
   id              uuid primary key default gen_random_uuid(),
-  user_id         uuid references auth.users not null,
+  user_id         uuid references auth.users not null,  -- uploader (audit trail)
+  club_id         uuid references clubs(id) on delete cascade,  -- nullable; set = club-owned
   name            text not null,
   waypoints       jsonb not null,           -- [{lat, lng, ele}, ...]
   distance_m      numeric(10, 2) not null,
@@ -102,9 +103,32 @@ create table routes (
 
 create index routes_user_id on routes (user_id, created_at desc);
 create index routes_public on routes (is_public, created_at desc) where is_public = true;
+create index routes_club_id on routes (club_id, created_at desc) where club_id is not null;
 ```
 
 **`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
+
+**`club_id`** makes a route club-owned: any club admin can edit it, any member can read it regardless of `is_public`. Two RLS policies layer on top of the existing user-owned + public-readable policies — `"club members read club routes"` (SELECT where `club_id is not null and is_club_member(club_id)`) and `"club admins write club routes"` (ALL where `club_id is not null and is_club_admin(club_id)`). See `docs/decisions.md § 30` and `docs/clubs.md § Club-owned routes`.
+
+---
+
+### `saved_routes`
+
+Bookmarks. RouteExplorer's bookmark icon inserts a reference here rather than cloning the row, so the canonical route accumulates `run_count` instead of fragmenting across duplicates.
+
+```sql
+create table saved_routes (
+  user_id  uuid references auth.users(id) on delete cascade not null,
+  route_id uuid references routes(id) on delete cascade not null,
+  saved_at timestamptz not null default now(),
+  primary key (user_id, route_id)
+);
+
+create index saved_routes_user_id on saved_routes (user_id, saved_at desc);
+create index saved_routes_route_id on saved_routes (route_id);
+```
+
+RLS: `"users manage their own saves"` (`for all using auth.uid() = user_id`). The underlying route is gated independently by routes RLS, so a saved row whose route is later deprived of a public flag will simply stop being readable.
 
 ---
 
