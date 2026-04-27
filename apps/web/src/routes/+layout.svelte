@@ -37,6 +37,7 @@
 
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
+		{ href: '/feed', label: 'Feed', icon: 'rss_feed', accent: '#E89C5A' },
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
