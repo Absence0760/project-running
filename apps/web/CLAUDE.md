@@ -47,7 +47,7 @@ src/
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
     runs/           # Run history with source + activity type filters
     runs/[id]/      # Run detail with map, elevation, splits
-    routes/         # User's saved routes
+    routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab.
     routes/new/     # Route builder (MapLibre + OSRM)
     routes/[id]/    # Route detail
     clubs/          # Social layer — browse + My clubs
@@ -62,7 +62,7 @@ src/
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
     coach/          # Standalone Coach chat — plan switcher (?plan=<id>), configurable runs window (10/20/50/100), grounded-in context strip
     api/coach/+server.ts         # Coach endpoint. Default provider: Claude (ANTHROPIC_API_KEY). Set COACH_PROVIDER=openai + OPENAI_BASE_URL for local Ollama.
-    explore/        # Public route discovery (search, distance/surface filters)
+    explore/        # Thin redirect to /routes?tab=explore (kept so old links / Android deep links still resolve)
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)

@@ -192,7 +192,7 @@ src/routes/
 ├── dashboard/
 │   └── +page.svelte            # Weekly mileage, heatmap, records
 ├── routes/
-│   ├── +page.svelte            # Route library list
+│   ├── +page.svelte            # Tabbed: My routes (saved) + Explore (community discovery)
 │   ├── new/+page.svelte        # Full-screen MapLibre route builder
 │   └── [id]/+page.svelte       # Route detail (public or private)
 ├── runs/
@@ -200,7 +200,7 @@ src/routes/
 │   └── [id]/+page.svelte       # Run detail — map + full analysis
 ├── clubs/                       # Social layer — browse + create + detail
 ├── plans/                       # Training plans list + create + detail
-├── explore/                     # Public route discovery (nearby, search)
+├── explore/                     # Redirect to /routes?tab=explore (kept for old links)
 ├── live/                        # Live spectator tracking
 ├── coach/+page.svelte           # Standalone AI coach with plan switcher + runs-limit chip
 ├── api/coach/+server.ts         # Coach endpoint — Claude (default) or OpenAI-compatible (COACH_PROVIDER=openai)
