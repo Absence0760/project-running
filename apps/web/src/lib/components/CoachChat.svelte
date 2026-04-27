@@ -29,6 +29,7 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let scrollEl: HTMLDivElement | null = $state(null);
+	let composerEl: HTMLTextAreaElement | null = $state(null);
 	let showArchiveConfirm = $state(false);
 	let showHistory = $state(false);
 	// When non-null, the user is viewing an archived thread (read-only) —
@@ -449,8 +450,41 @@
 		if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
 	}
 
+	const COMPOSER_MAX_PX = 160;
+
+	function autoGrowComposer() {
+		if (!composerEl) return;
+		// Reset to auto so scrollHeight reflects the *content* size, not
+		// the current laid-out height; then clamp to a max so a runaway
+		// paste doesn't push the chat off-screen.
+		composerEl.style.height = 'auto';
+		composerEl.style.height = `${Math.min(composerEl.scrollHeight, COMPOSER_MAX_PX)}px`;
+	}
+
+	function onComposerKeydown(e: KeyboardEvent) {
+		// Enter sends. Shift+Enter inserts a newline (textarea default).
+		// `isComposing` guards IME composition so e.g. Japanese candidate
+		// selection doesn't trigger a send when the user hits Enter to
+		// commit a glyph.
+		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+			e.preventDefault();
+			send();
+		}
+	}
+
+	// Reset the composer height when `draft` is cleared (after send) so
+	// the input snaps back from a multi-line height to a single row.
+	$effect(() => {
+		if (draft === '') {
+			tick().then(() => {
+				if (composerEl) composerEl.style.height = '';
+			});
+		}
+	});
+
 	function use(s: string) {
 		draft = s;
+		tick().then(autoGrowComposer);
 	}
 </script>
 
@@ -644,12 +678,15 @@
 				send();
 			}}
 		>
-			<input
-				type="text"
-				placeholder={busy ? 'Type your next question while the coach replies…' : 'Ask about today, pace, adherence…'}
+			<textarea
+				bind:this={composerEl}
+				placeholder={busy ? 'Type your next question while the coach replies…' : 'Ask about today, pace, adherence… (Shift+Enter for newline)'}
 				bind:value={draft}
+				oninput={autoGrowComposer}
+				onkeydown={onComposerKeydown}
+				rows="1"
 				maxlength="600"
-			/>
+			></textarea>
 			<button type="submit" class="btn-primary" disabled={busy || !draft.trim()}>
 				{busy ? '…' : 'Send'}
 			</button>
@@ -985,7 +1022,10 @@
 		padding: var(--space-sm);
 		border-top: 1px solid var(--color-border);
 	}
-	.composer input {
+	.composer {
+		align-items: flex-end;
+	}
+	.composer textarea {
 		flex: 1;
 		background: var(--color-bg-secondary);
 		border: 1px solid var(--color-border);
@@ -993,6 +1033,11 @@
 		padding: 0.5rem 0.75rem;
 		color: inherit;
 		font: inherit;
+		line-height: 1.4;
+		resize: none;
+		min-height: 2.4rem;
+		max-height: 10rem;
+		overflow-y: auto;
 	}
 	.error {
 		color: var(--color-danger);
