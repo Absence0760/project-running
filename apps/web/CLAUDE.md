@@ -43,6 +43,7 @@ src/
     garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
     push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
     privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
+    training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
     feed/           # Activity feed — recent public runs from people you follow (decisions §31). Cursor-paginated on (started_at, id).
