@@ -124,7 +124,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	let tier: Tier = 'free';
 	let usedToday = 0;
 	if (!bypassLimit) {
-		const { data: isPro } = await supabase.rpc('is_user_pro', { p_user_id: authUser.id });
+		const { data: isPro } = await supabase.rpc('is_pro');
 		tier = isPro === true ? 'pro' : 'free';
 		if (tier === 'free') {
 			const { data: newCount } = await supabase.rpc('increment_coach_usage', { p_user_id: authUser.id });

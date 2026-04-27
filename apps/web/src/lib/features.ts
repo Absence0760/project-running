@@ -55,7 +55,7 @@ export function isLocked(_feature: string): boolean {
 /// Whether the signed-in user is on a paying tier. Reads from the auth
 /// store's cached profile — callers do not need to await anything.
 /// Returns `false` when signed out or when the profile hasn't loaded
-/// yet. Server-side code should use the `is_user_pro(uid)` RPC instead.
+/// yet. Server-side code should use the no-arg `is_pro()` RPC instead.
 export function isPro(): boolean {
 	return auth.isPro;
 }

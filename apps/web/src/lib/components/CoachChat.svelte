@@ -257,7 +257,7 @@
 		await loadArchives();
 		const [{ data: usage }, { data: isPro }] = await Promise.all([
 			supabase.rpc('get_coach_usage', { p_user_id: session.user.id }),
-			supabase.rpc('is_user_pro', { p_user_id: session.user.id }),
+			supabase.rpc('is_pro'),
 		]);
 		if (typeof usage === 'number') usedToday = usage;
 		if (isPro === true) {
