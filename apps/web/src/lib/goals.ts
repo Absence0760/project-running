@@ -45,7 +45,15 @@ export interface GoalProgress {
 	runCount: number;
 }
 
-const STORAGE_KEY = 'run_app.goals_v1';
+// localStorage is browser-scoped, not user-scoped. With a single
+// fixed key, signing out and signing in as a different user on the
+// same browser shows the previous user's goals. We key by user id
+// to keep them separate. The pre-scoping key is migrated once per
+// user (see loadGoals).
+const LEGACY_STORAGE_KEY = 'run_app.goals_v1';
+function storageKey(userId: string): string {
+	return `${LEGACY_STORAGE_KEY}:${userId}`;
+}
 
 // Serialize to the Android-compatible snake_case wire format so goals
 // survive a round-trip through backup/restore and the future settings-bag
@@ -74,25 +82,44 @@ function goalFromWire(raw: Record<string, unknown>): RunGoal {
 	};
 }
 
-export function loadGoals(): RunGoal[] {
-	if (typeof localStorage === 'undefined') return [];
+function readGoalsFromKey(key: string): RunGoal[] | null {
+	const raw = localStorage.getItem(key);
+	if (!raw) return null;
+	const list = JSON.parse(raw);
+	if (!Array.isArray(list)) return null;
+	return list
+		.filter((g) => g && typeof g === 'object' && typeof g.id === 'string')
+		.map((g) => goalFromWire(g as Record<string, unknown>));
+}
+
+export function loadGoals(userId: string | null | undefined): RunGoal[] {
+	if (!userId || typeof localStorage === 'undefined') return [];
 	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return [];
-		const list = JSON.parse(raw);
-		if (!Array.isArray(list)) return [];
-		return list
-			.filter((g) => g && typeof g === 'object' && typeof g.id === 'string')
-			.map((g) => goalFromWire(g as Record<string, unknown>));
+		const scoped = readGoalsFromKey(storageKey(userId));
+		if (scoped !== null) return scoped;
+		// First load with the new key. If there's still a value at the
+		// pre-scoping key, take ownership of it for the current user
+		// (the most likely case is a single-user device where the legacy
+		// data is theirs anyway). On a shared device the first user to
+		// sign in inherits any leftover goals; subsequent users start
+		// clean — a one-time blip but no longer a recurring cross-user
+		// leak.
+		const legacy = readGoalsFromKey(LEGACY_STORAGE_KEY);
+		if (legacy !== null) {
+			saveGoals(userId, legacy);
+			localStorage.removeItem(LEGACY_STORAGE_KEY);
+			return legacy;
+		}
+		return [];
 	} catch {
 		return [];
 	}
 }
 
-export function saveGoals(goals: RunGoal[]): void {
-	if (typeof localStorage === 'undefined') return;
+export function saveGoals(userId: string | null | undefined, goals: RunGoal[]): void {
+	if (!userId || typeof localStorage === 'undefined') return;
 	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(goals.map(goalToWire)));
+		localStorage.setItem(storageKey(userId), JSON.stringify(goals.map(goalToWire)));
 	} catch {
 		/* quota — noop */
 	}

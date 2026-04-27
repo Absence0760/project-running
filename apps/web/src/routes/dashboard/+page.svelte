@@ -124,14 +124,14 @@
 			if (idx >= 0) goals = goals.map((x, i) => (i === idx ? g : x));
 			else goals = [...goals, g];
 		}
-		saveGoals(goals);
+		saveGoals(auth.user?.id, goals);
 		showGoalEditor = false;
 		editingGoal = null;
 	}
 
 	function deleteGoal(id: string) {
 		goals = goals.filter((g) => g.id !== id);
-		saveGoals(goals);
+		saveGoals(auth.user?.id, goals);
 		showGoalEditor = false;
 		editingGoal = null;
 	}
@@ -145,7 +145,14 @@
 	];
 
 	onMount(async () => {
-		goals = loadGoals();
+		// Wait for the auth store to hydrate before reading user-scoped
+		// goals out of localStorage — otherwise auth.user.id is null on
+		// first paint and `loadGoals` returns []. The /coach route uses
+		// the same pattern.
+		for (let i = 0; i < 20 && auth.loading; i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
+		goals = loadGoals(auth.user?.id);
 		[runs, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
 			fetchRuns(),
 			fetchWeeklyMileage(),
