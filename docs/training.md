@@ -105,7 +105,7 @@ Two paths land in the same UI state (the green check on the calendar, the progre
 
 - **Live execution loop** in the run screen (interval state machine, live rep count, cooldown-on-completion) — Phase 2 of this feature. **Specced in [workout_execution.md](workout_execution.md)**, not yet built. `plan_workouts.structure` already stores everything the runner needs; the remaining work is the `WorkoutRunner` state machine (in `packages/run_recorder`), the execution-band widget, and run-screen wiring. Rough sizing ~4 dev-days. Read the spec before picking this up.
 - **Plan generator v2** with adaptive weekly rescheduling driven by adherence.
-- **Plan library / sharing** — publish a plan, clone into your own account. Deferred until the clubs/social layer is the natural home for it.
+- ~~**Plan library / sharing** — publish a plan, clone into your own account. Deferred until the clubs/social layer is the natural home for it.~~ **Shipped** as **club-owned plan templates** (decisions §35) in `20260524_001_plan_templates.sql`. `training_plans.is_template + parent_template_id + club_id`; `clone_plan_template(template_id, start_date)` RPC. UI on `/clubs/[slug]` Templates tab, `/plans/new` template picker, `/plans/[id]` Publish-as-template flow. Clone-not-subscribe — template edits don't propagate to existing instances.
 - **Structured-interval execution on the Android run screen** — specced in [workout_execution.md](workout_execution.md), no code yet; `plan_workouts.structure` is the handoff.
 - **Paste-a-template import** — markdown table → weeks/workouts.
 - **Export as markdown / JSON** — round-trips through the paste path above.
