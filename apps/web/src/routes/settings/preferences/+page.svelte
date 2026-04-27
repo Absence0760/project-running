@@ -11,6 +11,9 @@
 	import { applyTheme, loadTheme, type Theme } from '$lib/theme';
 	import { setUnit } from '$lib/units.svelte';
 	import { setMapStyle } from '$lib/map-style.svelte';
+	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/privacy';
+	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -58,6 +61,10 @@
 	let z4 = $state('');
 	let z5 = $state('');
 
+	// Privacy zones — geofences clipped from public track renders.
+	let privacyZones = $state<PrivacyZone[]>([]);
+	let showZonePicker = $state(false);
+
 	onMount(async () => {
 		// Theme is local-only so it's available even before the bag loads.
 		theme = loadTheme();
@@ -91,11 +98,28 @@
 				z4 = zones.z4?.toString() ?? '';
 				z5 = zones.z5?.toString() ?? '';
 			}
+
+			privacyZones = effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
 		} catch (e) {
 			console.warn('Settings load failed', e);
 		}
 		loading = false;
 	});
+
+	async function persistZones(next: PrivacyZone[]) {
+		if (!auth.user) return;
+		await updateUniversal(auth.user.id, { [PRIVACY_ZONES_KEY]: next });
+		privacyZones = next;
+	}
+
+	async function addZone(zone: PrivacyZone) {
+		showZonePicker = false;
+		await persistZones([...privacyZones, zone]);
+	}
+
+	async function removeZone(idx: number) {
+		await persistZones(privacyZones.filter((_, i) => i !== idx));
+	}
 
 	async function handleSave() {
 		if (!auth.user) return;
@@ -293,6 +317,43 @@
 			</div>
 		</section>
 
+		<!-- Privacy zones — clipped from the start and end of public tracks. -->
+		<section class="card">
+			<h2>Privacy zones</h2>
+			<p class="section-hint">
+				Hide a radius around home, work, or anywhere else from public run + route shares. The
+				start and end of any track that falls inside a zone is clipped before the public sees
+				it. Owner views always show the full track.
+			</p>
+
+			{#if privacyZones.length === 0}
+				<p class="muted">No privacy zones yet.</p>
+			{:else}
+				<ul class="zone-list">
+					{#each privacyZones as zone, idx (idx)}
+						<li class="zone-row">
+							<div>
+								<div class="zone-coords">
+									{zone.lat.toFixed(5)}, {zone.lng.toFixed(5)}
+								</div>
+								<div class="zone-radius">{zone.radius_m} m radius</div>
+							</div>
+							<button class="btn btn-outline btn-sm" type="button" onclick={() => removeZone(idx)}>
+								Remove
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			<div>
+				<button class="btn btn-primary" type="button" onclick={() => (showZonePicker = true)}>
+					<span class="material-symbols">add</span>
+					Add a zone
+				</button>
+			</div>
+		</section>
+
 		<!-- AI Coach -->
 		<section class="card">
 			<h2>AI Coach</h2>
@@ -313,6 +374,15 @@
 		</button>
 	{/if}
 </div>
+
+<Modal
+	open={showZonePicker}
+	title="Add a privacy zone"
+	onclose={() => (showZonePicker = false)}
+	wide
+>
+	<PrivacyZonePicker oncreated={addZone} oncancel={() => (showZonePicker = false)} />
+</Modal>
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
@@ -338,4 +408,9 @@
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
 	.btn-save { width: auto; }
 	.muted { color: var(--color-text-tertiary); }
+	.section-hint { color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0 0 var(--space-md) 0; }
+	.zone-list { list-style: none; padding: 0; margin: 0 0 var(--space-md) 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+	.zone-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); background: var(--color-bg-tertiary); border-radius: var(--radius-md); }
+	.zone-coords { font-variant-numeric: tabular-nums; font-weight: 600; }
+	.zone-radius { font-size: 0.85rem; color: var(--color-text-secondary); }
 </style>
