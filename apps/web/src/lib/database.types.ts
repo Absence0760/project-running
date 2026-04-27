@@ -1125,6 +1125,24 @@ export type Database = {
         }
         Relationships: []
       }
+      user_follows: {
+        Row: {
+          followed_at: string
+          followee_id: string
+          follower_id: string
+        }
+        Insert: {
+          followed_at?: string
+          followee_id: string
+          follower_id: string
+        }
+        Update: {
+          followed_at?: string
+          followee_id?: string
+          follower_id?: string
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           avatar_url: string | null

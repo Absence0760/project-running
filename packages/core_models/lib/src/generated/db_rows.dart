@@ -1417,6 +1417,37 @@ class TrainingPlanRow {
   };
 }
 
+/// Row shape for the `user_follows` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class UserFollowRow {
+  static const String table = 'user_follows';
+  static const String colFollowerId = 'follower_id';
+  static const String colFolloweeId = 'followee_id';
+  static const String colFollowedAt = 'followed_at';
+
+  final String followerId;
+  final String followeeId;
+  final DateTime followedAt;
+
+  const UserFollowRow({
+    required this.followerId,
+    required this.followeeId,
+    required this.followedAt,
+  });
+
+  factory UserFollowRow.fromJson(Map<String, dynamic> json) => UserFollowRow(
+    followerId: json['follower_id'] as String,
+    followeeId: json['followee_id'] as String,
+    followedAt: DateTime.parse(json['followed_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colFollowerId: followerId,
+    colFolloweeId: followeeId,
+    colFollowedAt: followedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `user_coach_usage` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class UserCoachUsageRow {
