@@ -606,6 +606,44 @@ There's a residual attack: a determined caller can pass a dense synthetic point 
 
 ---
 
+## 34. Training-load curves: client-side compute, server-side persistence, opportunistic stress score
+
+**Decided:** April 2026 · captured before the dashboard widget lands.
+
+TrainingPeaks invented the Fitness / Fatigue / Form trio (CTL / ATL / TSB) on top of a per-workout training stress score. The math is well-known and Strava Premium copies it. We have `fitness_snapshots` already (migration `20260507_001`), but no UI and no server-side recompute job. Shipping the widget today doesn't require either piece — we compute on the client from `runs`, render a chart, and *opportunistically* persist a snapshot so the trend builds up at the right pace even when the recompute job lands later.
+
+**Stress score:** the canonical inputs are HR (Banister TRIMP) and power (Coggan TSS); runners without a power meter and often without HR straps need a fallback. We use a three-tier ladder:
+
+1. **Banister TRIMP** when `runs.metadata.avg_bpm` is set *and* the user has `resting_hr_bpm` + `max_hr_bpm` in `user_settings.prefs`. Standard formula with the male-default 1.92 weighting; close enough for v1.
+2. **GAP-adjusted distance proxy** when there's no HR. `stress = distance_km × 10` — calibrated so an easy 5k ≈ 50 (one ATL/CTL "unit"). Tempo/threshold runs would score higher under TRIMP, but in the absence of HR we'd be guessing intensity from pace alone, which over-rewards short fast sessions and under-rewards long easy ones in opposite directions. The flat distance proxy is honest about the missing input.
+3. **Skip** when neither distance nor duration is set — synthesis-only rows (`activity_type: 'manual'` with `0` distance) shouldn't move the curves.
+
+**EWMA shape:** alpha = `1 − exp(−1/halflife_days)`, halflife = 7 days for ATL, 42 days for CTL, TSB = CTL − ATL. We compute *daily* aggregated stress (sum of stresses on each calendar day in the user's local tz) and run the EWMA over 90 days of history. Days with no run still tick — the EWMA naturally decays without an entry. Calendar-day aggregation is the right unit because the chart renders at daily resolution; running the EWMA on raw runs would just double-apply same-day workouts.
+
+**Why client-compute and not the recompute job:**
+
+- *Server-side recompute on every run insert* is the right architecture but blocked on the Edge Function infra we don't have wired (the same blocker as the push notification path in parity.md). The migration `20260507_001` already provisions the table; the job is forward-compatible.
+- *Pre-aggregating daily stress in a table* is a useful optimisation when N gets large, but at 1 run/day for 90 days the client computation is ~90 EWMA steps — under a millisecond. Premature.
+- *Reading the existing snapshots and only computing the gap* is tempting but means a fresh user with no snapshots gets nothing; computing from runs always works.
+
+**Opportunistic persistence:** on each dashboard load we call `insertFitnessSnapshot` with today's computed numbers. The existing guard ("only persist when qualifying_run_count ≥ 3") prevents noise spam. Once the recompute job ships, it can keep writing to the same table on the same shape; the client-write becomes a "fallback if the server hasn't run today yet."
+
+**Why these and not alternatives:**
+
+- *Power-based TSS only* — irrelevant; runners almost never have power meters.
+- *Pure pace-based intensity factor* — too noisy in practice (a 5k race is ~95% IF, but a hill rep on a steep grade can score higher than threshold pace would imply). HR-based or distance-based is more honest.
+- *Show the three numbers without the chart* — kills the value. The shape of the curve over a build / taper cycle is the whole insight. Numbers without trend are noise.
+
+**Trade-offs:**
+
+1. **Without HR data, the score is distance-only.** A 10k race scores the same as a 10k easy run. Users with HR straps get a more accurate picture; users without get a "training volume" curve which is still useful for spotting overreach. We label the chart with a hint when no TRIMP-eligible runs exist in the window.
+2. **Client-side recompute means the chart can disagree with persisted snapshots.** When the algorithm changes (e.g. swap Banister for Edwards), today's chart won't match yesterday's stored snapshot. We accept that — `fitness_snapshots.source = 'client'` is already a known-honest column.
+3. **No back-fill of historical days.** We only insert a snapshot for *today* on dashboard load. Reconstructing the curve at any past date requires re-running the math from `runs`, which is what the chart does anyway.
+
+**Don't re-litigate unless:** the recompute job lands (then the client should defer to the server's snapshots when fresh), users start needing the curve on mobile (port `training_load.ts` to Dart), or someone in the cohort gets a power meter (add a `metadata.power_avg_w` branch ahead of HR in the stress ladder).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
