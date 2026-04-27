@@ -473,6 +473,30 @@ Two third-party-imposed patterns also fell out of the audit:
 
 ---
 
+## 30. Routes can be club-owned; "save to library" is a reference, not a copy
+
+**Decided:** April 2026 · captured before the migration that adds `routes.club_id` and the `saved_routes` join table.
+
+The original `routes` model has a single `user_id` owner column and a boolean `is_public` discoverability flag. That works for a runner uploading their Sunday loop, but breaks for the "club hosts a recurring race" scenario: when a race director uploads the official course, only they can attach it to events, the next admin can't edit it, and any user who taps the bookmark icon on Explore creates a duplicate row of the same course. Strava has the same gap — their long-running [Saving Routes to a Club](https://communityhub.strava.com/t5/strava-features-chat/saving-routes-to-a-club/m-p/1342) thread asks for exactly this and they haven't shipped it.
+
+We solve it with two schema additions, deliberately small:
+
+- **`routes.club_id` (nullable FK to `clubs`).** When set, the route is *club-owned*: any club admin can edit it, any club member can read it (regardless of `is_public`), and it survives the original uploader leaving the role. When null, behaviour is unchanged. `user_id` stays non-null and now means *uploader* — an audit trail, not authority. Two new RLS policies layer on top of the existing user-owned and public-readable policies: club members can SELECT, club admins can write.
+- **`saved_routes` (user_id, route_id) join table.** "Save to library" inserts a reference, not a clone. `/routes` "My routes" tab UNIONs personal `routes` with `saved_routes`. The bookmarked canonical row gains `run_count`, the org keeps a single source of truth, and the explore listing stops accumulating parallel copies of the same course.
+
+**Why this shape and not alternatives:**
+
+- *Many-to-many `route_clubs`* — flexible but premature. The mental model is "this club's official course," singular. If real demand for cross-club routes appears, add a join table later; the single `club_id` migration is forward-compatible.
+- *A `verified` / `is_official` flag* — separate concern. The existing `featured` flag already covers admin curation, and we don't want a second axis until users actually argue about which copy is canonical.
+- *Geometric dedup of duplicates* — fuzzy edges, research-grade problem (start/end tolerance, path similarity, parkrun-style multi-lap loops). Out of scope. The reference-not-clone pattern eats the most common duplicate source for free.
+- *Drop `user_id` when `club_id` is set* — kept for audit. Knowing who originally uploaded the course matters for moderation and for crediting community contributions.
+
+**Trade-off:** A single `club_id` means a course used by three different clubs is either three rows or one row + two `saved_routes` references. We accept that in exchange for a much simpler permission model. Also: `saved_routes` doesn't dedup *legitimately separate* uploads of the same course (two different runners both upload the Richmond marathon course) — only the bookmark path. Editorial `featured` curation is the answer there until volume forces a smarter dedup.
+
+**Don't re-litigate unless:** runners report regularly attaching the wrong copy to events because three near-identical rows show in Explore (then geometric dedup or an `official_for_club_id` verified flag becomes worth the engineering cost), or clubs federate (a route belonging to multiple parent clubs becomes a real product concept).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

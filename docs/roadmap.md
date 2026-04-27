@@ -325,6 +325,8 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Explore Routes screen — search public routes by name (full-text), filter by distance range and surface type, save to library, paginated results (Android)
 - [x] "Popular near me" discovery feed — PostGIS `ST_DWithin` queries via `nearby_routes` RPC, `start_point geography(Point)` column with auto-populate trigger, "Near Me" tab on Android explore screen (geolocator) and web explore page (browser Geolocation API)
 - [x] Route ratings and comments — `route_reviews` table (1-5 stars + optional comment, one per user per route), reviews section on route detail screen, avg rating in stats row, submit/edit review dialog
+- [ ] **Club-owned routes** — `routes.club_id` (nullable FK) so a club can own a course independent of the original uploader; club admins edit, club members read regardless of `is_public`. EventEditor route picker shows "My routes" + "This club's routes" optgroups. New Routes tab on `/clubs/[slug]` lists club-owned routes with admin transfer/create. See decisions.md § 30.
+- [ ] **Save-to-library is a reference, not a clone** — `saved_routes (user_id, route_id)` join table replaces RouteExplorer's INSERT-a-private-copy behaviour. `/routes` "My routes" UNIONs personal routes with saved ones. Bookmarks accumulate `run_count` on the canonical row instead of fragmenting it across duplicates. See decisions.md § 30.
 - [ ] Share to social (image card with map + stats)
 - [ ] SEO-indexed public route pages
 
