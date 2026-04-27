@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import RunSocial from '$lib/components/RunSocial.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import {
 		formatDuration,
@@ -701,6 +702,14 @@
 		<section class="section">
 			<h2>Elevation Profile</h2>
 			<ElevationProfile {elevations} totalDistance={run.distance_m} />
+		</section>
+
+		<!-- Kudos + comments — visible whether the run is private or public,
+		     but the runs RLS keeps engagement on private runs invisible to
+		     anyone but the owner. -->
+		<section class="section">
+			<h2>Activity</h2>
+			<RunSocial runId={run.id} runOwnerId={run.user_id} />
 		</section>
 
 		<!-- Structured workout review — only shown when the recorder

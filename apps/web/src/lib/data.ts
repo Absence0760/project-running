@@ -2338,6 +2338,46 @@ export interface RunCommentWithAuthor {
 	author: PublicProfile;
 }
 
+/// Batch kudos + comment counts for a list of runs — used on the
+/// feed where mounting a full RunSocial per card would be wasteful.
+/// Returns a map keyed by run id.
+export async function fetchEngagementSummaries(
+	runIds: string[]
+): Promise<Map<string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }>> {
+	const out = new Map<string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }>();
+	if (runIds.length === 0) return out;
+
+	const { data: sessionData } = await supabase.auth.getSession();
+	const viewerId = sessionData.session?.user?.id;
+
+	const [kudosRows, viewerKudos, commentRows] = await Promise.all([
+		supabase.from('run_kudos').select('run_id').in('run_id', runIds),
+		viewerId
+			? supabase
+					.from('run_kudos')
+					.select('run_id')
+					.eq('user_id', viewerId)
+					.in('run_id', runIds)
+			: Promise.resolve({ data: [] as { run_id: string }[] }),
+		supabase.from('run_comments').select('run_id').in('run_id', runIds),
+	]);
+
+	for (const id of runIds) out.set(id, { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 });
+	for (const row of kudosRows.data ?? []) {
+		const e = out.get(row.run_id as string);
+		if (e) e.kudos_count++;
+	}
+	for (const row of (viewerKudos.data ?? []) as { run_id: string }[]) {
+		const e = out.get(row.run_id);
+		if (e) e.viewer_has_kudos = true;
+	}
+	for (const row of commentRows.data ?? []) {
+		const e = out.get(row.run_id as string);
+		if (e) e.comment_count++;
+	}
+	return out;
+}
+
 /// Returns kudos count for a run + whether the current viewer has
 /// given kudos. Two parallel queries — count is server-side, viewer
 /// flag is one indexed lookup.

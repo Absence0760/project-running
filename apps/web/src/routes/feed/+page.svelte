@@ -1,18 +1,30 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchFollowingFeed, type FeedEntry } from '$lib/data';
+	import {
+		fetchFollowingFeed,
+		fetchEngagementSummaries,
+		giveKudos,
+		rescindKudos,
+		type FeedEntry,
+	} from '$lib/data';
 	import { formatDuration } from '$lib/mock-data';
 	import { formatDistance, formatPace } from '$lib/units.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	let entries = $state<FeedEntry[]>([]);
+	let engagement = $state<
+		Map<string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }>
+	>(new Map());
 	let loading = $state(true);
 	let loadingMore = $state(false);
 	let exhausted = $state(false);
+	let kudosBusy = $state<Set<string>>(new Set());
 
 	async function loadInitial() {
 		loading = true;
 		entries = await fetchFollowingFeed({ limit: 20 });
 		exhausted = entries.length < 20;
+		engagement = await fetchEngagementSummaries(entries.map((e) => e.id));
 		loading = false;
 	}
 
@@ -26,10 +38,47 @@
 		});
 		entries = [...entries, ...more];
 		exhausted = more.length < 20;
+		const moreEngagement = await fetchEngagementSummaries(more.map((e) => e.id));
+		const merged = new Map(engagement);
+		for (const [k, v] of moreEngagement) merged.set(k, v);
+		engagement = merged;
 		loadingMore = false;
 	}
 
 	onMount(loadInitial);
+
+	async function toggleKudos(runId: string) {
+		if (kudosBusy.has(runId)) return;
+		const current = engagement.get(runId) ?? {
+			kudos_count: 0,
+			viewer_has_kudos: false,
+			comment_count: 0,
+		};
+		kudosBusy = new Set([...kudosBusy, runId]);
+		try {
+			if (current.viewer_has_kudos) {
+				await rescindKudos(runId);
+				engagement = new Map(engagement).set(runId, {
+					...current,
+					kudos_count: Math.max(current.kudos_count - 1, 0),
+					viewer_has_kudos: false,
+				});
+			} else {
+				await giveKudos(runId);
+				engagement = new Map(engagement).set(runId, {
+					...current,
+					kudos_count: current.kudos_count + 1,
+					viewer_has_kudos: true,
+				});
+			}
+		} catch (e) {
+			showToast(`Could not update kudos: ${e}`, 'error');
+		} finally {
+			const next = new Set(kudosBusy);
+			next.delete(runId);
+			kudosBusy = next;
+		}
+	}
 
 	function fmtRelative(iso: string): string {
 		const ms = Date.now() - new Date(iso).getTime();
@@ -73,6 +122,7 @@
 	{:else}
 		<div class="feed">
 			{#each entries as entry (entry.id)}
+				{@const eng = engagement.get(entry.id) ?? { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 }}
 				<article class="entry">
 					<header class="entry-head">
 						<a href="/u/{entry.author.id}" class="author">
@@ -103,6 +153,24 @@
 							</div>
 						</div>
 					</a>
+					<footer class="entry-foot">
+						<button
+							class="kudos-pill"
+							class:given={eng.viewer_has_kudos}
+							type="button"
+							disabled={kudosBusy.has(entry.id)}
+							onclick={() => toggleKudos(entry.id)}
+						>
+							<span class="material-symbols">
+								{eng.viewer_has_kudos ? 'favorite' : 'favorite_border'}
+							</span>
+							<span>{eng.kudos_count}</span>
+						</button>
+						<a class="comment-pill" href="/share/run/{entry.id}#comments">
+							<span class="material-symbols">chat_bubble_outline</span>
+							<span>{eng.comment_count}</span>
+						</a>
+					</footer>
 				</article>
 			{/each}
 		</div>
@@ -216,6 +284,55 @@
 		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+	}
+
+	.entry-foot {
+		display: flex;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-lg);
+		border-top: 1px solid var(--color-border);
+	}
+
+	.kudos-pill,
+	.comment-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.3rem 0.7rem;
+		border: 1px solid var(--color-border);
+		border-radius: 9999px;
+		background: var(--color-surface);
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+		text-decoration: none;
+		transition:
+			color var(--transition-fast),
+			border-color var(--transition-fast),
+			background var(--transition-fast);
+	}
+
+	.kudos-pill .material-symbols,
+	.comment-pill .material-symbols {
+		font-size: 1rem;
+	}
+
+	.kudos-pill:disabled {
+		cursor: not-allowed;
+	}
+
+	.kudos-pill:not(:disabled):hover,
+	.comment-pill:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.kudos-pill.given {
+		background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+		border-color: var(--color-primary);
+		color: var(--color-primary);
 	}
 
 	.empty {

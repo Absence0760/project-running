@@ -4,6 +4,8 @@
 	import { fetchPublicRun } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import RunSocial from '$lib/components/RunSocial.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 	import type { Run } from '$lib/types';
 
 	let { data } = $props();
@@ -73,10 +75,16 @@
 				</section>
 			{/if}
 
-			<div class="cta">
-				<p>Track your own runs</p>
-				<a href="/login?signup=1" class="btn btn-primary">Sign up for Free</a>
-			</div>
+			{#if auth.loggedIn}
+				<section class="card">
+					<RunSocial runId={run.id} runOwnerId={run.user_id} />
+				</section>
+			{:else}
+				<div class="cta">
+					<p>Track your own runs and join the conversation</p>
+					<a href="/login?signup=1" class="btn btn-primary">Sign up for Free</a>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
