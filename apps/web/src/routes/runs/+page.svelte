@@ -9,6 +9,7 @@
 	} from '$lib/mock-data';
 	import { fetchRuns, deleteRuns } from '$lib/data';
 	import RunEditor from '$lib/components/RunEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { goto } from '$app/navigation';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -417,25 +418,13 @@
 	{/if}
 </div>
 
-{#if showRunModal}
-	<div class="modal-backdrop" role="presentation" onclick={() => (showRunModal = false)}></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-label="Add a run">
-		<header class="modal-header">
-			<h2>Add a run</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (showRunModal = false)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body">
-			<RunEditor oncreated={handleRunCreated} oncancel={() => (showRunModal = false)} />
-		</div>
-	</div>
-{/if}
+<Modal
+	open={showRunModal}
+	title="Add a run"
+	onclose={() => (showRunModal = false)}
+>
+	<RunEditor oncreated={handleRunCreated} oncancel={() => (showRunModal = false)} />
+</Modal>
 
 <style>
 	.page {

@@ -7,6 +7,7 @@
 	} from '$lib/training';
 	import { getUnit } from '$lib/units.svelte';
 	import type { PlanWorkout } from '$lib/types';
+	import Modal from './Modal.svelte';
 
 	interface Props {
 		workout: PlanWorkout;
@@ -133,22 +134,11 @@
 	}
 </script>
 
-<div class="modal-backdrop" role="presentation" onclick={onClose}></div>
-<div
-	class="modal"
-	role="dialog"
-	aria-modal="true"
-	aria-label="Edit workout"
-	onclick={(e) => e.stopPropagation()}
+<Modal
+	open={true}
+	title="Edit workout · {workout.scheduled_date}"
+	onclose={onClose}
 >
-	<header class="modal-header">
-		<h2>Edit workout · <span class="date">{workout.scheduled_date}</span></h2>
-		<button class="modal-close" onclick={onClose} aria-label="Close">
-			<span class="material-symbols">close</span>
-		</button>
-	</header>
-
-	<div class="modal-body">
 		<label>
 			<span>Kind</span>
 			<select bind:value={kind}>
@@ -230,8 +220,7 @@
 				{busy ? 'Saving…' : 'Save'}
 			</button>
 		</div>
-	</div>
-</div>
+</Modal>
 
 <style>
 	/* Canonical .modal-backdrop / .modal / .modal-header / .modal-close /

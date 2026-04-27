@@ -25,6 +25,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -728,34 +729,20 @@
 	danger
 />
 
-{#if showEventModal && club}
-	<div
-		class="modal-backdrop"
-		role="presentation"
-		onclick={() => (showEventModal = false)}
-	></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-label="New event">
-		<header class="modal-header">
-			<h2>New event</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (showEventModal = false)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body">
-			<EventEditor
-				clubId={club.id}
-				clubName={club.name}
-				oncreated={handleEventCreated}
-				oncancel={() => (showEventModal = false)}
-			/>
-		</div>
-	</div>
-{/if}
+<Modal
+	open={showEventModal && club != null}
+	title="New event"
+	onclose={() => (showEventModal = false)}
+>
+	{#if club}
+		<EventEditor
+			clubId={club.id}
+			clubName={club.name}
+			oncreated={handleEventCreated}
+			oncancel={() => (showEventModal = false)}
+		/>
+	{/if}
+</Modal>
 {/if}
 
 <style>

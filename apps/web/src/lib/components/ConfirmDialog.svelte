@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Modal from './Modal.svelte';
+
 	interface Props {
 		open: boolean;
 		title: string;
@@ -22,34 +24,23 @@
 	}: Props = $props();
 </script>
 
-{#if open}
-	<div class="modal-backdrop" onclick={oncancel} role="presentation"></div>
-	<div class="modal modal-narrow" role="alertdialog" aria-modal="true" aria-label={title}>
-		<header class="modal-header">
-			<h2>{title}</h2>
-			<button class="modal-close" type="button" aria-label="Close" onclick={oncancel}>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body confirm-body">
-			<p>{message}</p>
-			<div class="actions">
-				<button type="button" class="btn btn-secondary" onclick={oncancel}>
-					{cancelLabel}
-				</button>
-				<button
-					type="button"
-					class="btn"
-					class:btn-primary={!danger}
-					class:btn-danger={danger}
-					onclick={onconfirm}
-				>
-					{confirmLabel}
-				</button>
-			</div>
-		</div>
+<Modal {open} {title} narrow onclose={oncancel} bodyClass="confirm-body">
+	<p>{message}</p>
+	<div class="actions">
+		<button type="button" class="btn btn-secondary" onclick={oncancel}>
+			{cancelLabel}
+		</button>
+		<button
+			type="button"
+			class="btn"
+			class:btn-primary={!danger}
+			class:btn-danger={danger}
+			onclick={onconfirm}
+		>
+			{confirmLabel}
+		</button>
 	</div>
-{/if}
+</Modal>
 
 <style>
 	/* Canonical .modal-* classes live in app.css. */

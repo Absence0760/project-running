@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { browseClubs, fetchMyClubs } from '$lib/data';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
 	let tab = $state<'browse' | 'mine'>('mine');
@@ -128,25 +129,13 @@
 	{/if}
 </div>
 
-{#if showClubModal}
-	<div class="modal-backdrop" role="presentation" onclick={() => (showClubModal = false)}></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-label="Create a club">
-		<header class="modal-header">
-			<h2>Create a club</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (showClubModal = false)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body">
-			<ClubEditor oncreated={handleClubCreated} oncancel={() => (showClubModal = false)} />
-		</div>
-	</div>
-{/if}
+<Modal
+	open={showClubModal}
+	title="Create a club"
+	onclose={() => (showClubModal = false)}
+>
+	<ClubEditor oncreated={handleClubCreated} oncancel={() => (showClubModal = false)} />
+</Modal>
 
 <script module lang="ts">
 	function hashHue(id: string): number {

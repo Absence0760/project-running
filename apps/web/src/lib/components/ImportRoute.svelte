@@ -3,6 +3,7 @@
 	import { saveRoute } from '$lib/data';
 	import { formatDistance } from '$lib/mock-data';
 	import { goto } from '$app/navigation';
+	import Modal from './Modal.svelte';
 
 	let {
 		onclose = () => {},
@@ -112,24 +113,11 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onclose} role="presentation"></div>
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	class="modal"
-	role="dialog"
-	aria-modal="true"
-	aria-label="Import Route"
-	onclick={(e) => e.stopPropagation()}
->
-	<header class="modal-header">
-		<h2>Import Route</h2>
-		<button class="modal-close" onclick={onclose} aria-label="Close">
-			<span class="material-symbols">close</span>
-		</button>
-	</header>
+<Modal open={true} title="Import Route" {onclose}>
+	{@render importBody()}
+</Modal>
 
-	<div class="modal-body">
+{#snippet importBody()}
 		{#if error}
 			<div class="error">{error}</div>
 		{/if}
@@ -224,8 +212,7 @@
 				</div>
 			</div>
 		{/if}
-	</div>
-</div>
+{/snippet}
 
 <style>
 	/* .modal-backdrop / .modal / .modal-header / .modal-close /

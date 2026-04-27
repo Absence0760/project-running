@@ -4,6 +4,7 @@
 	import { supabase } from '$lib/supabase';
 	import { getDeviceId } from '$lib/settings';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 
 	interface DeviceRow {
 		device_id: string;
@@ -372,22 +373,15 @@
 	oncancel={() => (confirmingRemove = null)}
 />
 
-{#if addingForDevice}
-	{@const ed = currentEditor()}
-	<div class="modal-backdrop" onclick={() => (addingForDevice = null)} role="presentation"></div>
-	<div class="modal modal-narrow" role="dialog" aria-modal="true" aria-label="Add device override">
-		<header class="modal-header">
-			<h2>Add override</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (addingForDevice = null)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body add-dialog-body">
+<Modal
+	open={addingForDevice != null}
+	title="Add override"
+	narrow
+	onclose={() => (addingForDevice = null)}
+	bodyClass="add-dialog-body"
+>
+	{#if addingForDevice}
+		{@const ed = currentEditor()}
 			<label class="field">
 				<span class="field-label">Key</span>
 				<select bind:value={addKey} class="input">
@@ -435,9 +429,8 @@
 				</button>
 				<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>Save</button>
 			</div>
-		</div>
-	</div>
-{/if}
+	{/if}
+</Modal>
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }

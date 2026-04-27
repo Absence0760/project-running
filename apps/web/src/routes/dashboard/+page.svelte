@@ -608,22 +608,14 @@
 	{/if}
 </Modal>
 
-{#if showGoalEditor && editingGoal}
-	{@const eg = editingGoal}
-	<div class="modal-backdrop" onclick={() => (showGoalEditor = false)} role="presentation"></div>
-	<div class="modal" role="dialog" aria-modal="true" aria-label="Edit goal">
-		<header class="modal-header">
-			<h2>Edit goal</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (showGoalEditor = false)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body goal-editor-body">
+<Modal
+	open={showGoalEditor && editingGoal != null}
+	title="Edit goal"
+	onclose={() => (showGoalEditor = false)}
+	bodyClass="goal-editor-body"
+>
+	{#if editingGoal}
+		{@const eg = editingGoal}
 		<label class="field">
 			<span class="field-label">Period</span>
 			<div class="toggle-row">
@@ -748,9 +740,8 @@
 				Save
 			</button>
 		</div>
-		</div>
-	</div>
-{/if}
+	{/if}
+</Modal>
 
 <style>
 	.page {

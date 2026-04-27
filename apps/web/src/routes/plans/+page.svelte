@@ -5,6 +5,7 @@
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
 	let plans = $state<TrainingPlan[]>([]);
@@ -186,25 +187,14 @@
 	danger
 />
 
-{#if showPlanModal}
-	<div class="modal-backdrop" role="presentation" onclick={() => (showPlanModal = false)}></div>
-	<div class="modal modal-wide" role="dialog" aria-modal="true" aria-label="New plan">
-		<header class="modal-header">
-			<h2>New plan</h2>
-			<button
-				class="modal-close"
-				type="button"
-				aria-label="Close"
-				onclick={() => (showPlanModal = false)}
-			>
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-		<div class="modal-body">
-			<PlanEditor oncreated={handlePlanCreated} oncancel={() => (showPlanModal = false)} />
-		</div>
-	</div>
-{/if}
+<Modal
+	open={showPlanModal}
+	title="New plan"
+	wide
+	onclose={() => (showPlanModal = false)}
+>
+	<PlanEditor oncreated={handlePlanCreated} oncancel={() => (showPlanModal = false)} />
+</Modal>
 
 <style>
 	.page {
