@@ -1126,6 +1126,92 @@ export type Database = {
           },
         ]
       }
+      segment_efforts: {
+        Row: {
+          created_at: string
+          id: string
+          run_id: string
+          segment_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          run_id: string
+          segment_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          run_id?: string
+          segment_id?: string
+          started_at?: string
+          time_seconds?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "segment_efforts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "segment_efforts_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      segments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_distance_m: number
+          id: string
+          length_m: number | null
+          name: string
+          route_id: string
+          start_distance_m: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_distance_m: number
+          id?: string
+          length_m?: number | null
+          name: string
+          route_id: string
+          start_distance_m: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_distance_m?: number
+          id?: string
+          length_m?: number | null
+          name?: string
+          route_id?: string
+          start_distance_m?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "segments_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_plans: {
         Row: {
           club_id: string | null

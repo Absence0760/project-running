@@ -1449,6 +1449,113 @@ class SavedRouteRow {
   };
 }
 
+/// Row shape for the `segment_efforts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class SegmentEffortRow {
+  static const String table = 'segment_efforts';
+  static const String colId = 'id';
+  static const String colSegmentId = 'segment_id';
+  static const String colRunId = 'run_id';
+  static const String colUserId = 'user_id';
+  static const String colTimeSeconds = 'time_seconds';
+  static const String colStartedAt = 'started_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String segmentId;
+  final String runId;
+  final String userId;
+  final double timeSeconds;
+  final DateTime startedAt;
+  final DateTime createdAt;
+
+  const SegmentEffortRow({
+    required this.id,
+    required this.segmentId,
+    required this.runId,
+    required this.userId,
+    required this.timeSeconds,
+    required this.startedAt,
+    required this.createdAt,
+  });
+
+  factory SegmentEffortRow.fromJson(Map<String, dynamic> json) => SegmentEffortRow(
+    id: json['id'] as String,
+    segmentId: json['segment_id'] as String,
+    runId: json['run_id'] as String,
+    userId: json['user_id'] as String,
+    timeSeconds: (json['time_seconds'] as num).toDouble(),
+    startedAt: DateTime.parse(json['started_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colSegmentId: segmentId,
+    colRunId: runId,
+    colUserId: userId,
+    colTimeSeconds: timeSeconds,
+    colStartedAt: startedAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `segments` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class SegmentRow {
+  static const String table = 'segments';
+  static const String colId = 'id';
+  static const String colRouteId = 'route_id';
+  static const String colName = 'name';
+  static const String colStartDistanceM = 'start_distance_m';
+  static const String colEndDistanceM = 'end_distance_m';
+  static const String colLengthM = 'length_m';
+  static const String colCreatedBy = 'created_by';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String routeId;
+  final String name;
+  final double startDistanceM;
+  final double endDistanceM;
+  final double? lengthM;
+  final String? createdBy;
+  final DateTime createdAt;
+
+  const SegmentRow({
+    required this.id,
+    required this.routeId,
+    required this.name,
+    required this.startDistanceM,
+    required this.endDistanceM,
+    this.lengthM,
+    this.createdBy,
+    required this.createdAt,
+  });
+
+  factory SegmentRow.fromJson(Map<String, dynamic> json) => SegmentRow(
+    id: json['id'] as String,
+    routeId: json['route_id'] as String,
+    name: json['name'] as String,
+    startDistanceM: (json['start_distance_m'] as num).toDouble(),
+    endDistanceM: (json['end_distance_m'] as num).toDouble(),
+    lengthM: (json['length_m'] as num?)?.toDouble(),
+    createdBy: json['created_by'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRouteId: routeId,
+    colName: name,
+    colStartDistanceM: startDistanceM,
+    colEndDistanceM: endDistanceM,
+    colLengthM: lengthM,
+    colCreatedBy: createdBy,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `training_plans` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class TrainingPlanRow {
