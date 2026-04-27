@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchRoutes, createEvent } from '$lib/data';
+	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/data';
 	import { WEEKDAY_CHOICES } from '$lib/recurrence';
 	import type { Route, RecurrenceFreq, Weekday } from '$lib/types';
 
@@ -15,6 +15,7 @@
 	let { clubId, clubName, oncreated, oncancel }: Props = $props();
 
 	let myRoutes = $state<Route[]>([]);
+	let clubRoutes = $state<Route[]>([]);
 
 	let title = $state('');
 	let description = $state('');
@@ -46,12 +47,19 @@
 	}
 
 	onMount(async () => {
-		myRoutes = await fetchRoutes();
+		const [mine, clubs] = await Promise.all([fetchRoutes(), fetchClubRoutes(clubId)]);
+		// fetchRoutes() already includes the user's bookmarked routes (via
+		// saved_routes union). Drop anything that's also in this club's
+		// list so the picker shows each route once.
+		const clubIds = new Set(clubs.map((r) => r.id));
+		myRoutes = mine.filter((r) => !clubIds.has(r.id));
+		clubRoutes = clubs;
 	});
 
 	$effect(() => {
 		if (routeId) {
-			const r = myRoutes.find((x) => x.id === routeId);
+			const r =
+				myRoutes.find((x) => x.id === routeId) ?? clubRoutes.find((x) => x.id === routeId);
 			if (r) distanceKm = +(r.distance_m / 1000).toFixed(2);
 		}
 	});
@@ -132,9 +140,20 @@
 		<span>Route <span class="optional">optional</span></span>
 		<select bind:value={routeId}>
 			<option value="">— no route —</option>
-			{#each myRoutes as r}
-				<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
-			{/each}
+			{#if clubRoutes.length > 0}
+				<optgroup label="{clubName} routes">
+					{#each clubRoutes as r}
+						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+					{/each}
+				</optgroup>
+			{/if}
+			{#if myRoutes.length > 0}
+				<optgroup label="My routes">
+					{#each myRoutes as r}
+						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+					{/each}
+				</optgroup>
+			{/if}
 		</select>
 	</label>
 
