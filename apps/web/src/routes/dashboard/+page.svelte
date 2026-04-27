@@ -21,6 +21,8 @@
 		type FitnessSnapshotRow,
 	} from '$lib/data';
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
+	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training_load';
+	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import { WORKOUT_KIND_LABEL } from '$lib/training';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
@@ -56,6 +58,11 @@
 	let upcomingEvent = $state<Awaited<ReturnType<typeof fetchNextRsvpedEvent>>>(null);
 	let fitnessHistory = $state<FitnessSnapshotRow[]>([]);
 	let liveSnap = $derived(computeSnapshot(runs));
+
+	// HR prefs feed both the TRIMP-eligible flag and the stress score.
+	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
+	let trainingLoadSeries = $derived(computeTrainingLoadSeries(runs, trimpPrefs, 90));
+	let trainingLoadHasHr = $derived(hasTrimpSignal(runs, trimpPrefs));
 
 	/// Normalised VO2 max sparkline points for the trend chart. Kept
 	/// in the script (not as `{@const}` under `<svg>`, which Svelte 5
@@ -185,6 +192,10 @@
 				}
 				const wsd = effective<string>(settings, 'week_start_day');
 				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
+				trimpPrefs = {
+					resting_hr_bpm: effective<number>(settings, 'resting_hr_bpm') ?? null,
+					max_hr_bpm: effective<number>(settings, 'max_hr_bpm') ?? null,
+				};
 			}
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
@@ -405,6 +416,15 @@
 						<path d={trendPath} stroke="currentColor" stroke-width="1.5" fill="none" />
 					</svg>
 				{/if}
+			</section>
+		{/if}
+
+		<!-- Training-load curves over the last 90 days (decisions §34).
+		     Uses TRIMP when avg_bpm + HR prefs are available, distance
+		     fallback otherwise. Hides when there's nothing to plot. -->
+		{#if runs.length > 0}
+			<section class="fitness-card">
+				<TrainingLoadChart points={trainingLoadSeries} hasHr={trainingLoadHasHr} />
 			</section>
 		{/if}
 
