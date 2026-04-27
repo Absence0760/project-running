@@ -54,6 +54,24 @@ INSERT INTO user_profiles (id, display_name, parkrun_number, preferred_unit, sub
 VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km', 'free')
 ON CONFLICT (id) DO NOTHING;
 
+-- 2a. User settings — runner_context for the AI Coach. Without these the
+-- coach has nothing to ground HR / age / weekly-goal answers in. Keys
+-- match `docs/settings.md` § Universal prefs registry.
+INSERT INTO user_settings (user_id, prefs) VALUES (
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  jsonb_build_object(
+    'date_of_birth', '1992-09-12',
+    'resting_hr_bpm', 48,
+    'max_hr_bpm', 192,
+    'hr_zones', jsonb_build_object('z1', 134, 'z2', 154, 'z3', 173, 'z4', 183, 'z5', 192),
+    'weekly_mileage_goal_m', 50000,
+    'coach_personality', 'supportive',
+    'auto_pause_enabled', true,
+    'preferred_unit', 'km',
+    'week_start_day', 'monday'
+  )
+) ON CONFLICT (user_id) DO UPDATE SET prefs = EXCLUDED.prefs;
+
 -- 3. Routes
 INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Richmond Park Loop',
@@ -72,23 +90,81 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
   '[{"lat":-37.8180,"lng":144.9550},{"lat":-37.8100,"lng":144.9700}]',
   6400, 35, 'road', false);
 
--- 4. Runs (spanning ~3 weeks of realistic training)
+-- 4. Runs (spanning ~6 weeks of realistic training, anchored on 2026-04-26
+-- as "today"). Metadata carries activity_type + HR + perceived effort so
+-- the coach has signal to talk about effort drift, zone splits, and easy /
+-- hard days. The most recent week (Apr 19-25) is the live picture the
+-- coach grounds "should I run today?" answers in.
 INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata) VALUES
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-05T07:30:00Z', 1620, 5120, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-03T06:45:00Z', 2940, 10030, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-01T18:00:00Z', 1505, 5000, 'parkrun',
-  '{"event":"Richmond","position":42,"age_grade":"54.23%"}'),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-30T07:00:00Z', 3780, 12500, 'strava', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-28T17:30:00Z', 1680, 5200, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-26T06:30:00Z', 5460, 21100, 'strava', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-25T07:15:00Z', 1500, 5000, 'parkrun',
-  '{"event":"Bushy Park","position":38,"age_grade":"55.10%"}'),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-23T06:00:00Z', 2700, 8800, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-21T07:00:00Z', 1860, 6100, 'healthkit', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-19T18:15:00Z', 2400, 7600, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-17T06:45:00Z', 3300, 10100, 'strava', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-15T07:30:00Z', 1560, 5000, 'parkrun',
-  '{"event":"Richmond","position":45,"age_grade":"53.80%"}');
+-- Last week — the picture the coach uses to answer "today / tomorrow"
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-25T07:00:00Z', 5640, 21100, 'app',
+  '{"activity_type":"run","avg_bpm":162,"max_bpm":178,"perceived_effort":7,"notes":"Long run — Centennial loops. Felt strong through 18 km, last 3 km in zone 4."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-23T17:30:00Z', 2880, 10000, 'app',
+  '{"activity_type":"run","avg_bpm":174,"max_bpm":188,"perceived_effort":8,"notes":"Tempo: 6 km @ 4:35 sandwich between 2 km easy. Hit splits on the nose."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-22T06:45:00Z', 2640, 8000, 'app',
+  '{"activity_type":"run","avg_bpm":146,"max_bpm":158,"perceived_effort":4,"notes":"Easy. Legs heavy from Tuesday."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-21T17:30:00Z', 3000, 12000, 'app',
+  '{"activity_type":"run","avg_bpm":171,"max_bpm":189,"perceived_effort":8,"notes":"5×1000 @ 4:00 with 400 jog. Last rep dropped to 4:08."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-19T07:00:00Z', 4920, 17000, 'app',
+  '{"activity_type":"run","avg_bpm":154,"max_bpm":168,"perceived_effort":5,"notes":"Long run — Centennial out & back. Comfortable."}'),
+-- Two weeks ago
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-18T07:30:00Z', 1620, 5120, 'app',
+  '{"activity_type":"run","avg_bpm":150,"max_bpm":162,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-16T18:00:00Z', 2940, 10030, 'app',
+  '{"activity_type":"run","avg_bpm":172,"max_bpm":186,"perceived_effort":7,"notes":"Threshold — tempo block hit pace target."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-15T07:30:00Z', 2640, 8000, 'app',
+  '{"activity_type":"run","avg_bpm":148,"max_bpm":160,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-14T17:30:00Z', 3060, 12000, 'app',
+  '{"activity_type":"run","avg_bpm":174,"max_bpm":190,"perceived_effort":9,"notes":"VO2 intervals — 5×1000. Strong session."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-12T07:00:00Z', 4980, 17000, 'app',
+  '{"activity_type":"run","avg_bpm":152,"max_bpm":165,"perceived_effort":5}'),
+-- A parkrun PB (5K @ 21:00 = 1260s) — drives the personal_records cache
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-11T08:00:00Z', 1260, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Centennial","position":12,"age_grade":"61.42%","avg_bpm":182,"max_bpm":194,"perceived_effort":10,"notes":"5K PB! Even splits 4:14 / 4:12 / 4:10 / 4:12 / 4:12."}'),
+-- Three weeks back
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-05T07:30:00Z', 1620, 5120, 'app',
+  '{"activity_type":"run","avg_bpm":151,"max_bpm":163,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-03T06:45:00Z', 2940, 10030, 'app',
+  '{"activity_type":"run","avg_bpm":166,"max_bpm":178,"perceived_effort":6}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-01T18:00:00Z', 1320, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Richmond","position":18,"age_grade":"58.64%","avg_bpm":180,"max_bpm":192,"perceived_effort":10}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-30T07:00:00Z', 3780, 12500, 'strava',
+  '{"activity_type":"run","avg_bpm":156,"max_bpm":169,"perceived_effort":5}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-28T17:30:00Z', 1680, 5200, 'app',
+  '{"activity_type":"run","avg_bpm":150,"max_bpm":162,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-26T06:30:00Z', 5460, 21100, 'strava',
+  '{"activity_type":"run","avg_bpm":160,"max_bpm":174,"perceived_effort":6,"notes":"Long run — felt fine, pace drifted late."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-25T07:15:00Z', 1380, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Bushy Park","position":22,"age_grade":"57.08%","avg_bpm":181,"max_bpm":193,"perceived_effort":10}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-23T06:00:00Z', 2700, 8800, 'app',
+  '{"activity_type":"run","avg_bpm":148,"max_bpm":160,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-21T07:00:00Z', 1860, 6100, 'healthkit',
+  '{"activity_type":"run","avg_bpm":152,"max_bpm":166,"perceived_effort":5}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-19T18:15:00Z', 2400, 7600, 'app',
+  '{"activity_type":"run","avg_bpm":158,"max_bpm":172,"perceived_effort":5}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-17T06:45:00Z', 3300, 10100, 'strava',
+  '{"activity_type":"run","avg_bpm":162,"max_bpm":175,"perceived_effort":6}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-15T07:30:00Z', 1410, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Richmond","position":24,"age_grade":"56.14%","avg_bpm":179,"max_bpm":190,"perceived_effort":10}'),
+-- A 10K PB (40:00 = 2400s) — race source is excluded from the PB
+-- cache, so this seeds the "all-runs" view but not personal_records.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-08T08:30:00Z', 2400, 10000, 'race',
+  '{"activity_type":"run","event":"Sydney 10K","avg_bpm":180,"max_bpm":192,"perceived_effort":10,"notes":"10K PB. Even pace, last 2 km hurt."}'),
+-- 5K time trial (21:00 = 1260s) under `app` source so the personal_records
+-- cache picks it up — the parkrun 5K at 4/11 is excluded by the cache's
+-- source filter but is the actual all-time best the user references.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-04T07:00:00Z', 1260, 5000, 'app',
+  '{"activity_type":"run","avg_bpm":182,"max_bpm":195,"perceived_effort":10,"notes":"5K solo time trial. 4:14 / 4:12 / 4:10 / 4:12 / 4:12 — 21:00 flat."}'),
+-- A 10K tempo at 41:00 (2460s) so the cache 10K PB is competitive
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-22T07:00:00Z', 2460, 10000, 'app',
+  '{"activity_type":"run","avg_bpm":175,"max_bpm":188,"perceived_effort":9,"notes":"10K time-trial effort. Strong."}'),
+-- A walk + a hike to exercise the activity_type mix. Distances kept
+-- outside the 5K / 10K / half PB buckets so they don't pollute the
+-- personal_records cache (the trigger groups by distance, not type).
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-20T16:00:00Z', 3600, 4200, 'app',
+  '{"activity_type":"walk","avg_bpm":110,"perceived_effort":2,"notes":"Recovery walk."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-13T09:00:00Z', 9000, 11500, 'app',
+  '{"activity_type":"hike","avg_bpm":128,"perceived_effort":4,"notes":"Bondi → Coogee coastal."}');
 
 -- 5. Integrations
 INSERT INTO integrations (user_id, provider, last_sync_at) VALUES
