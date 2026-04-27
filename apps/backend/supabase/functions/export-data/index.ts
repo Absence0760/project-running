@@ -2,7 +2,10 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 serve(async (req: Request) => {
-  const { format } = await req.json();
+  // Authenticate before parsing the body. Otherwise a malformed-JSON
+  // request from an unauthenticated caller produces a 500 (or unhandled
+  // Deno exception) distinguishable from a 401, and any future code
+  // added between the parse and the auth check would run unauth'd.
   const authHeader = req.headers.get('Authorization')!;
 
   const supabase = createClient(
@@ -13,6 +16,8 @@ serve(async (req: Request) => {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+
+  const { format } = await req.json();
 
   // TODO: Fetch all user runs
   // TODO: Convert to GPX or CSV based on format
