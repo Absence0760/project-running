@@ -73,21 +73,26 @@ INSERT INTO user_settings (user_id, prefs) VALUES (
 ) ON CONFLICT (user_id) DO UPDATE SET prefs = EXCLUDED.prefs;
 
 -- 3. Routes
+-- Waypoints include `ele` (metres above sea level) so the route detail
+-- page's elevation grid + interactive chart light up. Density is also
+-- bumped above the original 2-4 sparse corner clicks so the rendered
+-- polyline approximates the saved `distance_m` and the elevation
+-- profile has enough samples to read like a real run.
 INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Richmond Park Loop',
-  '[{"lat":-37.8136,"lng":144.9631},{"lat":-37.8100,"lng":144.9700},{"lat":-37.8050,"lng":144.9650},{"lat":-37.8136,"lng":144.9631}]',
+  '[{"lat":-37.8136,"lng":144.9631,"ele":30},{"lat":-37.8128,"lng":144.9650,"ele":40},{"lat":-37.8120,"lng":144.9670,"ele":55},{"lat":-37.8112,"lng":144.9690,"ele":70},{"lat":-37.8104,"lng":144.9700,"ele":85},{"lat":-37.8096,"lng":144.9690,"ele":100},{"lat":-37.8088,"lng":144.9680,"ele":115},{"lat":-37.8080,"lng":144.9670,"ele":105},{"lat":-37.8072,"lng":144.9660,"ele":95},{"lat":-37.8060,"lng":144.9650,"ele":85},{"lat":-37.8056,"lng":144.9640,"ele":75},{"lat":-37.8064,"lng":144.9630,"ele":65},{"lat":-37.8076,"lng":144.9625,"ele":55},{"lat":-37.8088,"lng":144.9620,"ele":48},{"lat":-37.8100,"lng":144.9618,"ele":42},{"lat":-37.8112,"lng":144.9620,"ele":38},{"lat":-37.8120,"lng":144.9624,"ele":34},{"lat":-37.8128,"lng":144.9628,"ele":31},{"lat":-37.8136,"lng":144.9631,"ele":30}]',
   10200, 85, 'trail', true),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Thames Path 5K',
-  '[{"lat":-37.8200,"lng":144.9500},{"lat":-37.8180,"lng":144.9600}]',
+  '[{"lat":-37.8200,"lng":144.9500,"ele":18},{"lat":-37.8195,"lng":144.9510,"ele":19},{"lat":-37.8192,"lng":144.9525,"ele":21},{"lat":-37.8189,"lng":144.9540,"ele":22},{"lat":-37.8187,"lng":144.9555,"ele":24},{"lat":-37.8185,"lng":144.9568,"ele":26},{"lat":-37.8183,"lng":144.9580,"ele":28},{"lat":-37.8182,"lng":144.9588,"ele":30},{"lat":-37.8181,"lng":144.9594,"ele":30},{"lat":-37.8181,"lng":144.9598,"ele":28},{"lat":-37.8180,"lng":144.9600,"ele":26}]',
   5000, 12, 'road', false),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Battersea Park Out & Back',
-  '[{"lat":-37.8150,"lng":144.9550},{"lat":-37.8100,"lng":144.9700},{"lat":-37.8150,"lng":144.9550}]',
+  '[{"lat":-37.8150,"lng":144.9550,"ele":5},{"lat":-37.8140,"lng":144.9580,"ele":7},{"lat":-37.8132,"lng":144.9610,"ele":11},{"lat":-37.8120,"lng":144.9645,"ele":16},{"lat":-37.8108,"lng":144.9675,"ele":20},{"lat":-37.8100,"lng":144.9700,"ele":25},{"lat":-37.8108,"lng":144.9675,"ele":23},{"lat":-37.8120,"lng":144.9645,"ele":19},{"lat":-37.8132,"lng":144.9610,"ele":15},{"lat":-37.8140,"lng":144.9580,"ele":12},{"lat":-37.8146,"lng":144.9565,"ele":9},{"lat":-37.8150,"lng":144.9550,"ele":5}]',
   7800, 20, 'road', true),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Sunday Long Run',
-  '[{"lat":-37.8136,"lng":144.9631},{"lat":-37.7900,"lng":144.9800},{"lat":-37.8000,"lng":145.0000},{"lat":-37.8136,"lng":144.9631}]',
+  '[{"lat":-37.8136,"lng":144.9631,"ele":50},{"lat":-37.8100,"lng":144.9670,"ele":62},{"lat":-37.8060,"lng":144.9710,"ele":78},{"lat":-37.8020,"lng":144.9750,"ele":98},{"lat":-37.7980,"lng":144.9780,"ele":118},{"lat":-37.7920,"lng":144.9800,"ele":135},{"lat":-37.7900,"lng":144.9800,"ele":120},{"lat":-37.7920,"lng":144.9850,"ele":105},{"lat":-37.7950,"lng":144.9900,"ele":95},{"lat":-37.7980,"lng":144.9940,"ele":105},{"lat":-37.8000,"lng":145.0000,"ele":120},{"lat":-37.8030,"lng":144.9980,"ele":140},{"lat":-37.8050,"lng":144.9950,"ele":160},{"lat":-37.8060,"lng":144.9920,"ele":180},{"lat":-37.8075,"lng":144.9890,"ele":160},{"lat":-37.8090,"lng":144.9850,"ele":135},{"lat":-37.8100,"lng":144.9810,"ele":110},{"lat":-37.8110,"lng":144.9770,"ele":92},{"lat":-37.8118,"lng":144.9730,"ele":78},{"lat":-37.8124,"lng":144.9690,"ele":68},{"lat":-37.8128,"lng":144.9665,"ele":60},{"lat":-37.8132,"lng":144.9650,"ele":55},{"lat":-37.8134,"lng":144.9640,"ele":52},{"lat":-37.8136,"lng":144.9631,"ele":50}]',
   21100, 140, 'mixed', false),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Commute Run',
-  '[{"lat":-37.8180,"lng":144.9550},{"lat":-37.8100,"lng":144.9700}]',
+  '[{"lat":-37.8180,"lng":144.9550,"ele":10},{"lat":-37.8170,"lng":144.9575,"ele":14},{"lat":-37.8160,"lng":144.9600,"ele":20},{"lat":-37.8150,"lng":144.9620,"ele":27},{"lat":-37.8140,"lng":144.9640,"ele":35},{"lat":-37.8130,"lng":144.9655,"ele":40},{"lat":-37.8125,"lng":144.9665,"ele":38},{"lat":-37.8118,"lng":144.9675,"ele":42},{"lat":-37.8112,"lng":144.9685,"ele":45},{"lat":-37.8108,"lng":144.9692,"ele":42},{"lat":-37.8105,"lng":144.9697,"ele":40},{"lat":-37.8100,"lng":144.9700,"ele":38}]',
   6400, 35, 'road', false);
 
 -- 4. Runs (spanning ~6 weeks of realistic training, anchored on 2026-04-26
