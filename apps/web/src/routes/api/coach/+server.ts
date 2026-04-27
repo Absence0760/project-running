@@ -112,7 +112,12 @@ export const POST: RequestHandler = async ({ request }) => {
 	const bypassLimit = env.BYPASS_PAYWALL === 'true';
 	let tier: Tier = 'free';
 	let usedToday = 0;
-	const { data: { user: authUser } } = await supabase.auth.getUser();
+	// Pass the JWT explicitly. supabase-js's `getUser()` with no arg falls
+	// back to the persisted browser session, which doesn't exist in this
+	// per-request server-side client — even though the JWT is set in
+	// `global.headers.Authorization` for data calls, the auth client
+	// doesn't read it. Passing `accessToken` hits `/auth/v1/user` directly.
+	const { data: { user: authUser } } = await supabase.auth.getUser(accessToken);
 	if (!authUser) {
 		return new Response(JSON.stringify({ error: 'not authenticated' }), {
 			status: 401,
@@ -164,13 +169,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		? Math.min(limits.maxRunsLimit, Math.max(1, Math.trunc(requestedLimit)))
 		: DEFAULT_RUNS_LIMIT;
 
-	const context = await buildContext(supabase, body.plan_id ?? null, runsLimit);
-	if (context.error) {
-		return new Response(JSON.stringify({ error: context.error }), {
-			status: 401,
-			headers: { 'content-type': 'application/json' }
-		});
-	}
+	const context = await buildContext(supabase, authUser.id, body.plan_id ?? null, runsLimit);
 
 	const personality = (context.data as Record<string, unknown>)?.runner_context as Record<string, unknown> | undefined;
 	const coachStyle = personality?.coach_personality as string | undefined;
@@ -422,17 +421,14 @@ Style:
 
 interface CoachContext {
 	data?: unknown;
-	error?: string;
 }
 
 async function buildContext(
 	supabase: SupabaseClient,
+	userId: string,
 	planId: string | null,
 	runsLimit: number
 ): Promise<CoachContext> {
-	const { data: { user }, error: uErr } = await supabase.auth.getUser();
-	if (uErr || !user) return { error: 'not authenticated' };
-
 	// Pull the active (or specified) plan + its weeks + its workouts, plus
 	// the last ~20 runs. RLS scopes all of these to the current user.
 	const { data: plan } = planId
@@ -472,13 +468,13 @@ async function buildContext(
 	const { data: profile } = await supabase
 		.from('user_profiles')
 		.select('display_name, preferred_unit, subscription_tier')
-		.eq('id', user.id)
+		.eq('id', userId)
 		.maybeSingle();
 
 	const { data: userSettings } = await supabase
 		.from('user_settings')
 		.select('prefs')
-		.eq('user_id', user.id)
+		.eq('user_id', userId)
 		.maybeSingle();
 	const prefs = (userSettings?.prefs ?? {}) as Record<string, unknown>;
 
