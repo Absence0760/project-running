@@ -213,7 +213,7 @@ Strava-style follow graph; layered on top of (but independent of) the clubs/even
 | Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; cursor-paginated on `runs.started_at`. Each card shows kudos + comment counts. |
 | Kudos on runs | ✗ | ✗ | ✓ | N/A | N/A | `run_kudos` composite-PK join; one-tap toggle. RLS inherits from runs (`decisions.md § 32`). |
 | Comments on runs (one-level threading) | ✗ | ✗ | ✓ | N/A | N/A | `run_comments` with `parent_comment_id`; author + run-owner can delete; INSERT policy enforces shallow nesting. |
-| Privacy zones (clip start/end of public tracks) | ✗ | ✗ | ✗ | ✗ | ✗ | Backlog. |
+| Privacy zones (clip start/end of public tracks) | ✗ | ✗ | ✓ | ✗ | ✗ | `user_settings.prefs.privacy_zones` + `clip_track_for_user` SECURITY DEFINER RPC. Settings UI on `/settings/preferences` with MapLibre map picker. v1 known gap: `routes.start_point` (nearby search) still uses unclipped first waypoint — see `decisions.md § 33`. |
 
 ## Training plans and workouts
 
