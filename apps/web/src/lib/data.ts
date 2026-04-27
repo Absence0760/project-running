@@ -598,6 +598,11 @@ export async function fetchRoutes(): Promise<Route[]> {
 /// rows. Callers that want to surface a failure to the user (rather
 /// than silently rendering an empty state — which is indistinguishable
 /// from "user has no routes") use this variant.
+///
+/// "My routes" is the union of routes the user uploaded (`user_id = me`)
+/// and routes they've bookmarked (`saved_routes.user_id = me`). Each is
+/// fetched in parallel and merged with a Set on `id` so a user who saves
+/// their own route doesn't see it twice.
 export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: string | null }> {
 	// Read the session via `getSession()` — synchronous-ish from local
 	// storage, doesn't round-trip to /auth/v1/user, and works the
@@ -607,27 +612,96 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	const { data: sessionData } = await supabase.auth.getSession();
 	const userId = sessionData.session?.user?.id;
 
-	let queryBuilder = supabase
-		.from('routes')
-		.select('*')
-		.order('created_at', { ascending: false });
-	// Only constrain to the signed-in user when we actually have an id.
-	// Without one, RLS still scopes the SELECT (owned + public rows).
-	if (userId) {
-		queryBuilder = queryBuilder.eq('user_id', userId);
-	}
-
-	const { data, error } = await queryBuilder;
-
-	if (error) {
-		console.error('fetchRoutes failed', error);
-		return { routes: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
-	}
-	const rows = data ?? [];
-	if (rows.length === 0 && !userId) {
+	if (!userId) {
 		return { routes: [], error: 'Not signed in — sign in to see your saved routes.' };
 	}
-	return { routes: rows, error: null };
+
+	const [ownedRes, savedRes] = await Promise.all([
+		supabase
+			.from('routes')
+			.select('*')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false }),
+		supabase
+			.from('saved_routes')
+			.select('saved_at, route:routes(*)')
+			.eq('user_id', userId)
+			.order('saved_at', { ascending: false }),
+	]);
+
+	if (ownedRes.error) {
+		console.error('fetchRoutes (owned) failed', ownedRes.error);
+		return {
+			routes: [],
+			error: `${ownedRes.error.message}${ownedRes.error.code ? ` (${ownedRes.error.code})` : ''}`,
+		};
+	}
+
+	const owned = (ownedRes.data ?? []) as Route[];
+	const saved = ((savedRes.data ?? []) as unknown as { route: Route | null }[])
+		.map(r => r.route)
+		.filter((r): r is Route => r != null);
+
+	const seen = new Set<string>();
+	const merged: Route[] = [];
+	for (const r of [...owned, ...saved]) {
+		if (seen.has(r.id)) continue;
+		seen.add(r.id);
+		merged.push(r);
+	}
+	return { routes: merged, error: null };
+}
+
+/// Routes owned by a club (`routes.club_id = clubId`). Read-gated by
+/// RLS to club members; admin-write-gated for transfers/edits. Used by
+/// the club home Routes tab and by EventEditor's route picker.
+export async function fetchClubRoutes(clubId: string): Promise<Route[]> {
+	const { data, error } = await supabase
+		.from('routes')
+		.select('*')
+		.eq('club_id', clubId)
+		.order('created_at', { ascending: false });
+	if (error) {
+		console.error('fetchClubRoutes failed', error);
+		return [];
+	}
+	return data ?? [];
+}
+
+/// Bookmark a public route. Inserts a `saved_routes` reference rather
+/// than cloning the row — see decisions.md § 30.
+export async function bookmarkRoute(routeId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase
+		.from('saved_routes')
+		.insert({ user_id: userId, route_id: routeId });
+	// Treat duplicate (already saved) as a no-op.
+	if (error && error.code !== '23505') throw error;
+}
+
+export async function unbookmarkRoute(routeId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase
+		.from('saved_routes')
+		.delete()
+		.eq('user_id', userId)
+		.eq('route_id', routeId);
+	if (error) throw error;
+}
+
+/// Transfer a personal route into club ownership (admins only) — or
+/// back out (`clubId = null`). Server-side RLS enforces that only
+/// admins of the target club may set `club_id`.
+export async function setRouteClubId(routeId: string, clubId: string | null): Promise<void> {
+	const { error } = await supabase
+		.from('routes')
+		.update({ club_id: clubId, updated_at: new Date().toISOString() })
+		.eq('id', routeId);
+	if (error) throw error;
 }
 
 export async function fetchRouteById(id: string): Promise<Route | null> {
