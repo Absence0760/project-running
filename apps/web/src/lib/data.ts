@@ -1964,9 +1964,26 @@ export async function autoMatchRunToPlanWorkout(
 ): Promise<string | null> {
 	const userId = auth.user?.id;
 	if (!userId) return null;
+	// Pre-fetch the user's plan + week ids and constrain the workout
+	// query with `in('week_id', ...)`. RLS on `plan_workouts` already
+	// chains through `plan_weeks → training_plans.user_id`, but an
+	// explicit scope is defence in depth — without it, a future RLS
+	// edit that breaks the chain would silently allow this function
+	// to match a run to another user's workout. See audit
+	// `/tmp/data-isolation-audit/client-realtime.md` H2.
+	const { data: plans } = await supabase
+		.from('training_plans')
+		.select('id, plan_weeks(id)')
+		.eq('user_id', userId);
+	const weekIds = (plans ?? []).flatMap((p) =>
+		((p as { plan_weeks: { id: string }[] }).plan_weeks ?? []).map((w) => w.id),
+	);
+	if (weekIds.length === 0) return null;
+
 	const { data: candidates } = await supabase
 		.from('plan_workouts')
 		.select('id, target_distance_m, completed_run_id, week_id')
+		.in('week_id', weekIds)
 		.eq('scheduled_date', runIsoDate)
 		.is('completed_run_id', null);
 	if (!candidates || candidates.length === 0) return null;
