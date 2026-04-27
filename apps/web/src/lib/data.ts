@@ -1802,11 +1802,66 @@ export async function deleteClubPost(id: string): Promise<void> {
 // --- Training plans ---
 
 export async function fetchMyPlans(): Promise<TrainingPlan[]> {
+	// Templates live in the same table; filter them out of the
+	// user-facing plan list (decisions §35).
 	const { data } = await supabase
 		.from('training_plans')
 		.select('*')
+		.eq('is_template', false)
 		.order('created_at', { ascending: false });
 	return ((data ?? []) as TrainingPlan[]) ?? [];
+}
+
+/// Plan templates owned by `clubId`. Visible to club members; admins
+/// can write. See decisions §35.
+export async function fetchClubTemplates(clubId: string): Promise<TrainingPlan[]> {
+	const { data, error } = await supabase
+		.from('training_plans')
+		.select('*')
+		.eq('is_template', true)
+		.eq('club_id', clubId)
+		.order('created_at', { ascending: false });
+	if (error) {
+		console.error('fetchClubTemplates failed', error);
+		return [];
+	}
+	return (data ?? []) as TrainingPlan[];
+}
+
+/// Clone a template into a user-owned active plan, anchored at
+/// new_start_date. Returns the new plan's id; caller should navigate
+/// to /plans/{id}. The RPC enforces authorisation server-side.
+export async function clonePlanTemplate(
+	templateId: string,
+	newStartDate: string
+): Promise<string> {
+	const { data, error } = await supabase.rpc('clone_plan_template', {
+		template_id: templateId,
+		new_start_date: newStartDate,
+	});
+	if (error) throw error;
+	return data as string;
+}
+
+/// Toggle is_template on an existing plan (admin / coach action). When
+/// flipping a club-owned plan to a template the caller must already
+/// be a club admin via RLS.
+export async function setPlanIsTemplate(
+	planId: string,
+	isTemplate: boolean,
+	clubId: string | null = null
+): Promise<void> {
+	const patch: Record<string, unknown> = {
+		is_template: isTemplate,
+		updated_at: new Date().toISOString(),
+	};
+	// If we're flagging it as a template, drop active status so it
+	// doesn't claim the per-user "one active plan" slot — the
+	// training_plans_template_status CHECK forbids active+template.
+	if (isTemplate) patch.status = 'completed';
+	if (clubId !== null) patch.club_id = clubId;
+	const { error } = await supabase.from('training_plans').update(patch).eq('id', planId);
+	if (error) throw error;
 }
 
 export async function fetchPlan(id: string): Promise<{
