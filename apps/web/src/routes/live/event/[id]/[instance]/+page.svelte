@@ -112,7 +112,11 @@
 					event: '*',
 					schema: 'public',
 					table: 'race_pings',
-					filter: `event_id=eq.${eventId}`
+					// Also filter by instance_start so pings from a different
+					// instance of the same recurring event don't trigger a
+					// refetch on this page. fetchRecentRacePings already scopes
+					// the data correctly — this filter just trims wire traffic.
+					filter: `event_id=eq.${eventId}&instance_start=eq.${instance}`
 				},
 				async () => {
 					recentPings = await fetchRecentRacePings(eventId, instance);
@@ -124,7 +128,7 @@
 					event: '*',
 					schema: 'public',
 					table: 'race_sessions',
-					filter: `event_id=eq.${eventId}`
+					filter: `event_id=eq.${eventId}&instance_start=eq.${instance}`
 				},
 				async () => {
 					race = await fetchRaceSession(eventId, instance);
