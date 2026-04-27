@@ -48,6 +48,7 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `units_pace_format` | `'min_per_km' \| 'min_per_mi' \| 'kph' \| 'mph'` | UD | `min_per_km` | Display format for pace. Independent of `preferred_unit` so users can keep km distances but pace in mph if they want — but the web preferences page will auto-snap `min_per_km` ↔ `min_per_mi` when the user flips `preferred_unit` so they don't have to update both. Speed formats (`kph`/`mph`) are treated as deliberate choices and are left alone. |
 | `weekly_mileage_goal_m` | `int` | U | — | Target weekly distance in metres. Displayed on the dashboard progress bar. |
 | `week_start_day` | `'monday' \| 'sunday'` | U | `monday` | First day of the week for mileage + plan rollups. |
+| `privacy_zones` | `{ lat: number, lng: number, radius_m: number }[]` | U | `[]` | Geofences clipped from the start and end of any track rendered on a public surface (`/share/run/[id]`, `/share/route/[id]`). The list itself is private to the owner via `user_settings` RLS; the clipped output is what the public sees. See `decisions.md § 33` for the algorithm and known v1 gaps. |
 
 ## Client responsibilities
 
