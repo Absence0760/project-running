@@ -690,6 +690,68 @@ The dependent tables (`plan_weeks`, `plan_workouts`) had `user_id = auth.uid()` 
 
 ---
 
+## 36. Photos on runs: own table + Storage bucket; visibility tracks the parent run
+
+**Decided:** April 2026 · captured before the photos migration.
+
+A run is more than the GPX — Strava's "attach a photo" is core to how runners tell the story of a workout. We add it as a separate `run_photos` table (id, run_id, owner_id, storage_path, caption, position_idx) plus a dedicated `run-photos` Storage bucket. RLS layers the same way as kudos and comments (§32): visibility tracks the parent run via an EXISTS subquery on `runs`.
+
+**Two-table shape (DB metadata + Storage bytes):** the `run_photos` row stores everything queryable (caption, ordering, ownership) and a `storage_path` pointer; the bytes live at `run-photos/{user_id}/{photo_id}.{ext}` in Storage. This separation matches `runs.track_url` + the gzipped JSON in the `runs` bucket. We deliberately don't put bytes in the DB and we don't store URLs (which would expire on signed-URL rotation) — clients call `getPublicUrl` or `createSignedUrl` against the path at render time.
+
+**Bucket policy:** the `run-photos` bucket is public-read so the share page works for anonymous visitors. Writes are gated by Storage RLS to `auth.uid()::text = (storage.foldername(name))[1]` — the same per-user-folder pattern the existing `runs` bucket uses. There's no "is this run actually public" check at the bucket layer because the photo URL contains the photo UUID; non-enumerability is the same security primitive that already protects the `runs` Storage bucket.
+
+**Why these and not alternatives:**
+
+- *Embed the photo path in `runs.metadata`* — fine for one photo, terrible for many. We'd lose ordering, captions, per-photo author (a future "anyone in the club can attach a photo to a public race run" feature), and the ability to delete a photo without rewriting the runs row.
+- *Photos in `runs.metadata` + thumbnails in Storage* — partial-information shape; same problem.
+- *Use the existing `runs` Storage bucket* — has the right per-user-folder RLS but its objects are private (signed URL only). Photos want fast public render, which means a separate bucket configured public-read.
+- *Polymorphic `media (parent_table, parent_id, storage_path)`* — premature; we don't have other media surfaces yet. Promote the moment we add club_photos, route_photos, etc.
+
+**Trade-offs:**
+
+1. **No automatic thumbnail generation.** Clients render the original. We size the upload to 4 MB max and document that as the price of skipping a thumbnail pipeline. Storage egress is the only meaningful cost; on a public bucket through Supabase's CDN it's negligible at our scale.
+2. **No EXIF stripping.** Phones may embed GPS coordinates in EXIF that survive upload. We document this in the upload UI ("photos may include location data — strip in your camera app first if a privacy zone matters") and accept the gap. v2 fix: a server-side Edge Function that re-encodes on upload.
+3. **`owner_id` always equals `runs.user_id`** in v1. The schema separates them so a future "anyone in the club can attach a photo to a club event's race run" feature is forward-compatible without a migration.
+
+**Don't re-litigate unless:** photo bandwidth becomes the dominant Storage cost (then add server-side thumbnail generation), users ask for video clips (different bucket, different MIME policy, probably a separate `run_videos` table), or someone reports an EXIF leak (then ship the EXIF-strip Edge Function).
+
+---
+
+## 37. Segments v1 are slices of a saved route, not arbitrary geometry
+
+**Decided:** April 2026 · captured before the segments migration. A deliberate radical scope cut from the Strava-class shape.
+
+The full Strava model is hard: an arbitrary polyline anywhere on Earth becomes a segment, and every uploaded run gets matched against every nearby segment via a server-side geometric scan (Hidden Markov path matching, or Hausdorff distance, or both). That's months of work and a real R&D problem. Most of the *user value* shows up the first time you can race your own past time on a defined stretch of road — so we ship that with a much smaller mechanism, and keep the door open for arbitrary-geometry segments as v2.
+
+**v1 scope:** a segment is a named slice of a *saved route* — `(route_id, start_distance_m, end_distance_m)`. An effort is auto-created when a `runs` row is inserted with the matching `route_id`. The effort time is extracted by walking the run's track once: cumulative distance is computed point-to-point, and the timestamps at the start_distance_m and end_distance_m crossings are recorded. Leaderboard is `select * from segment_efforts where segment_id = X order by time_seconds asc`.
+
+**Schema:**
+
+- `segments (id, route_id, name, start_distance_m, end_distance_m, length_m, is_public, created_by, created_at)` — `length_m = end - start` is denormalised but cheap and saves the leaderboard query a subtraction.
+- `segment_efforts (id, segment_id, run_id, user_id, time_seconds, started_at)` with `unique (segment_id, run_id)` so a re-import doesn't double-count.
+
+**RLS:** segments inherit visibility from the parent route (EXISTS-on-routes — same shape as kudos, comments, club routes). Efforts inherit from the segment + the underlying run, joined: `select 1 from segments s join runs r on r.id = segment_efforts.run_id where s.id = segment_efforts.segment_id`. Public route → segment is public-readable; private route → only the owner sees it.
+
+**Auto-effort generation:** an `AFTER INSERT` trigger on `runs` calls a SECURITY DEFINER function `compute_segment_efforts_for_run(run_id)` which (a) finds segments matching the new run's `route_id`, (b) downloads the track from Storage *server-side via pg_net* — except we don't have pg_net wired and downloading from Postgres is gross — so instead, the trigger does nothing. The client computes efforts after a successful run upload and INSERTs them via the regular RLS-gated path. **Auto-effort generation is client-side in v1**, called from `saveRun` after the row + track are persisted. Document the gap: "if a user inserts runs via SQL bypass or a third party syncs a run, efforts won't auto-create until the user opens the run detail page once, which triggers a compute."
+
+**What's deliberately not in v1:**
+
+- *Arbitrary-geometry segments* (segment polyline, not tied to a route). Postpones the matching problem.
+- *KOM / QOM / leaderboard tiering* (sex / age-group buckets). Single linear leaderboard.
+- *Real-time effort during a run* — execution requires the recorder to know about segments mid-run. Out of scope.
+- *Star / favourite a segment* — additive whenever it's worth shipping.
+- *Premium gating.* Strava puts segment leaderboards behind Strava Pro; we don't gate v1 because we don't have the volume yet.
+
+**Trade-offs:**
+
+1. **Two runs of the "same" course on different `routes` rows don't share a leaderboard.** That's the dual of the `saved_routes` reference pattern from §30 — the leaderboard is per-route, and route-deduplication is a separate problem. If two clubs each upload "the Richmond Marathon course" as their own route, each gets its own segment leaderboard. The bookmark mechanism mitigates this for casual users (most will save-not-clone the canonical row); for race-org runs the canonical-route concept from §30 already points the right way.
+2. **Effort time is only as accurate as track sampling.** A run with 1Hz GPS gives sub-second segment resolution; a 10s sampling rate makes a 30s segment nearly unmeasurable. We document this and skip auto-effort if `length_m / median_sample_distance_m < 5`.
+3. **Client-computed efforts mean a stale browser tab can't refresh someone else's leaderboard live.** Acceptable — pull-based leaderboard refresh on tab focus is fine.
+
+**Don't re-litigate unless:** users start asking for arbitrary-track segments (then this gets the "real" geometric matching engineering investment), KOM-style age/sex leaderboards become a real ask (segment_efforts already has `user_id` and a profile lookup; just split the query), or volume on a popular segment makes the linear leaderboard slow (paginate).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
