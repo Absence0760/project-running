@@ -202,6 +202,56 @@ create table run_comments (
 
 Threading is one level deep, enforced by the INSERT policy: `parent_comment_id is null OR (the parent's parent_comment_id is null)`. Run owner can DELETE any comment on their run for moderation; otherwise authors edit / delete their own. The `run_comments_set_updated_at` BEFORE-UPDATE trigger keeps `updated_at` honest so consumers can tell edited comments apart.
 
+### `run_photos`
+
+Photos attached to a run (decisions §36). Metadata in Postgres, bytes in the public-read `run-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}`. Visibility tracks the parent run via EXISTS — same shape as `run_kudos` / `run_comments`.
+
+```sql
+create table run_photos (
+  id            uuid primary key default gen_random_uuid(),
+  run_id        uuid references runs(id) on delete cascade not null,
+  owner_id      uuid references auth.users(id) on delete cascade not null,
+  storage_path  text not null,            -- {owner_id}/{photo_id}.{ext}
+  caption       text check (caption is null or length(caption) <= 280),
+  position_idx  smallint not null default 0,
+  created_at    timestamptz not null default now()
+);
+```
+
+In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies allow public-read on the bucket and per-user-folder INSERT/DELETE. Known gaps: no server-side thumbnail generation and no EXIF stripping.
+
+### `segments` / `segment_efforts`
+
+Segments + leaderboards (decisions §37). v1 segments are slices of a *saved route* — `(route_id, start_distance_m, end_distance_m)` — not arbitrary geometry. Visibility on both tables tracks the parent route via EXISTS.
+
+```sql
+create table segments (
+  id                uuid primary key default gen_random_uuid(),
+  route_id          uuid references routes(id) on delete cascade not null,
+  name              text not null check (length(name) between 1 and 120),
+  start_distance_m  numeric not null check (start_distance_m >= 0),
+  end_distance_m    numeric not null,
+  length_m          numeric generated always as (end_distance_m - start_distance_m) stored,
+  created_by        uuid references auth.users(id) on delete set null,
+  created_at        timestamptz not null default now(),
+  check (end_distance_m > start_distance_m),
+  check (end_distance_m - start_distance_m >= 100)
+);
+
+create table segment_efforts (
+  id            uuid primary key default gen_random_uuid(),
+  segment_id    uuid references segments(id) on delete cascade not null,
+  run_id        uuid references runs(id) on delete cascade not null,
+  user_id       uuid references auth.users(id) on delete cascade not null,
+  time_seconds  numeric not null check (time_seconds > 0),
+  started_at    timestamptz not null,
+  created_at    timestamptz not null default now(),
+  unique (segment_id, run_id)
+);
+```
+
+Anyone who can read the parent route can create a segment (Strava-style community contribution); `created_by` is enforced as `auth.uid()`. Effort visibility = segment AND run readability so private runs don't surface on a public segment's leaderboard. **Auto-effort generation is client-side**: there's no trigger because `pg_net` isn't wired and downloading from Postgres is gross. The browser walks the run track via `lib/segments.ts#computeEffortFromTrack` (haversine cumulative distance + timestamp interpolation) on the run-detail page, then INSERTs new efforts via the regular RLS-gated path. The unique constraint makes this idempotent.
+
 ---
 
 ### `user_profiles`
@@ -875,6 +925,7 @@ Used for GPX file storage and data exports.
 |---|---|---|
 | `runs` | Private (RLS) | Gzipped GPS tracks (`{user_id}/{run_id}.json.gz`). Public read via RLS when `runs.is_public = true`. |
 | `routes` | Private (RLS) | Uploaded GPX/KML files |
+| `run-photos` | Public read | Photos attached to runs (`{owner_id}/{photo_id}.{ext}`). Per-user-folder INSERT/DELETE policies. See `decisions.md § 36`. |
 | `exports` | Private (signed URLs) | User data export files |
 | `avatars` | Public | User profile photos |
 

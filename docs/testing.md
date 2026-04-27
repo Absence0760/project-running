@@ -242,6 +242,21 @@ TypeScript unit tests for the training plan engine, written against Node's `node
 **`GOAL_DISTANCES_M` (1 test):**
 - Half marathon constant is within 1m of 21.0975km
 
+### `apps/web/src/lib/segments.test.ts` — 8 tests
+
+TypeScript unit tests for the pure segment-effort compute (`lib/segments.ts`, decisions §37). Run with `npx tsx --test src/lib/segments.test.ts` from `apps/web`. Covers `computeEffortFromTrack`:
+
+- Computes elapsed time over a clean segment (5 m/s straight-line track, 500m segment ≈ 100s).
+- Returns null when the run is shorter than the segment end.
+- Returns null on tracks shorter than two points.
+- Returns null on zero or negative-length segment windows.
+- Rejects sparse sampling (median step > segment / 5 — the §37 trade-off-2 guard).
+- Returns null when adjacent track points lack timestamps in the bracket.
+- Interpolates start and end timestamps mid-segment.
+- Handles tracks where segment endpoints align with sample crossings.
+
+The synthetic `straightTrack` helper builds a meridian-aligned sequence of `(lat, lng, ts)` so haversine cumulative distance matches `(i * stepM)` to within ~0.5m.
+
 **Test-runner constraint:** `tsx --test` runs raw TypeScript through the Node loader and does not understand Svelte runes. That means `*.svelte.ts` modules (`units.svelte.ts`, `stores/auth.svelte.ts`, `stores/toast.svelte.ts`) cannot be imported — the `$state(...)` call at module load fails with `ReferenceError: $state is not defined`. Keep test-targeted modules (`training.ts`, `fitness.ts`, etc.) free of imports from `.svelte.ts` files. The unit-aware formatters `fmtKm` / `fmtPace` live in `units.svelte.ts` for that reason; UI code imports them from `$lib/units.svelte` directly. Adding vitest with the Svelte plugin would lift this restriction — not done yet.
 
 ---

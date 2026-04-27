@@ -216,6 +216,8 @@ Strava-style follow graph; layered on top of (but independent of) the clubs/even
 | Privacy zones (clip start/end of public tracks) | ✗ | ✗ | ✓ | ✗ | ✗ | `user_settings.prefs.privacy_zones` + `clip_track_for_user` SECURITY DEFINER RPC. Settings UI on `/settings/preferences` with MapLibre map picker. v1 known gap: `routes.start_point` (nearby search) still uses unclipped first waypoint — see `decisions.md § 33`. |
 | Plan templates (club-owned, clone-on-adopt) | ✗ | ✗ | ✓ | N/A | N/A | `training_plans.is_template + parent_template_id + club_id` + `clone_plan_template` RPC. Templates tab on `/clubs/[slug]`; "Start from a template" picker on `/plans/new`; Publish-as-template control on `/plans/[id]`. See `decisions.md § 35`. |
 | Training-load curves (Fitness / Fatigue / Form) | ✗ | ✗ | ✓ | N/A | N/A | `lib/training_load.ts` (TRIMP when HR available, distance fallback) + `TrainingLoadChart` mounted on `/dashboard`. Server-side recompute job still pending. See `decisions.md § 34`. |
+| Photos on runs | ✗ | ✗ | ✓ | N/A | N/A | `run_photos` table + public-read `run-photos` Storage bucket. RunPhotos.svelte gallery on `/runs/[id]` (owner: upload + caption + delete) and `/share/run/[id]` (read-only). RLS inherits from runs via EXISTS. See `decisions.md § 36`. |
+| Segments + leaderboards (route-anchored, v1) | ✗ | ✗ | ✓ | N/A | N/A | `segments (route_id, name, start_distance_m, end_distance_m, …)` + `segment_efforts` with `unique(segment_id, run_id)`. SegmentsPanel on `/routes/[id]`; RunSegmentEfforts on `/runs/[id]`. Auto-effort generation is client-side: `lib/segments.ts#computeEffortFromTrack` walks the run track on the run-detail page. Arbitrary-geometry segments deferred to v2. See `decisions.md § 37`. |
 
 ## Training plans and workouts
 

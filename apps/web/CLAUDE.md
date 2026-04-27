@@ -25,7 +25,9 @@ src/
                     # WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer, CalendarHeatmap, LicenseList,
                     # ClubEditor, EventEditor, PlanEditor, RunEditor (modal-hosted creation forms),
                     # PeriodSummary (week/month stats + run list — used by dashboard modal AND /dashboard/period/...),
-                    # RunSocial (kudos + comments on a run — mounted on /share/run/[id], /runs/[id]; feed uses fetchEngagementSummaries chips instead).
+                    # RunSocial (kudos + comments on a run — mounted on /share/run/[id], /runs/[id]; feed uses fetchEngagementSummaries chips instead),
+                    # RunPhotos (gallery for run_photos — mounted on /runs/[id] and /share/run/[id]; owner gates upload + delete; decisions §36),
+                    # SegmentsPanel + RunSegmentEfforts (segment leaderboards on /routes/[id] + per-run effort chips on /runs/[id]; decisions §37).
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types
@@ -44,6 +46,7 @@ src/
     push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
     privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
     training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.
+    segments.ts     # Pure compute for segment efforts — haversine cumulative distance + timestamp interpolation. 8 unit tests. Used by RunSegmentEfforts on /runs/[id] for client-side auto-effort generation. Decisions §37.
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
     feed/           # Activity feed — recent public runs from people you follow (decisions §31). Cursor-paginated on (started_at, id).
