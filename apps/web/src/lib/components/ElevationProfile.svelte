@@ -6,45 +6,52 @@
 
 	// Render at the container's measured width. `bind:clientWidth` uses a
 	// ResizeObserver under the hood so the chart re-flows on window
-	// resize, sidebar toggles, etc. The previous fixed `viewBox="0 0
-	// 300 80"` was getting letterboxed inside wider cards because the
-	// default `preserveAspectRatio` keeps the chart at its 3.75:1 ratio.
+	// resize, sidebar toggles, etc.
 	let containerWidth = $state(0);
-	const height = 160;
-	const padding = { top: 12, right: 12, bottom: 22, left: 38 };
+	let svgEl: SVGSVGElement | undefined = $state();
+	const height = 180;
+	const padding = { top: 18, right: 12, bottom: 22, left: 38 };
 
 	let plotWidth = $derived(Math.max(containerWidth - padding.left - padding.right, 0));
 	let plotHeight = $derived(height - padding.top - padding.bottom);
 
 	let minEle = $derived(elevations.length > 0 ? Math.min(...elevations) : 0);
 	let maxEle = $derived(elevations.length > 0 ? Math.max(...elevations) : 100);
-	let eleRange = $derived(Math.max(maxEle - minEle, 10));
+	let eleRange = $derived(Math.max(maxEle - minEle, 1));
+
+	/// Total elevation gain — sum of positive deltas across the
+	/// elevations array. Surfaced in the tooltip so users get the same
+	/// roll-up they see on the route detail page tile.
+	let totalGain = $derived.by(() => {
+		let g = 0;
+		for (let i = 1; i < elevations.length; i++) {
+			const d = elevations[i] - elevations[i - 1];
+			if (d > 0) g += d;
+		}
+		return Math.round(g);
+	});
+
+	function xFor(i: number): number {
+		if (elevations.length < 2) return padding.left;
+		return padding.left + (i / (elevations.length - 1)) * plotWidth;
+	}
+
+	function yFor(ele: number): number {
+		return padding.top + plotHeight - ((ele - minEle) / eleRange) * plotHeight;
+	}
 
 	let pathD = $derived.by(() => {
 		if (elevations.length < 2 || plotWidth === 0) return '';
-		const step = plotWidth / (elevations.length - 1);
-		return elevations
-			.map((ele, i) => {
-				const x = padding.left + i * step;
-				const y = padding.top + plotHeight - ((ele - minEle) / eleRange) * plotHeight;
-				return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-			})
-			.join(' ');
+		return elevations.map((ele, i) => `${i === 0 ? 'M' : 'L'}${xFor(i).toFixed(2)},${yFor(ele).toFixed(2)}`).join(' ');
 	});
 
 	let areaD = $derived.by(() => {
 		if (elevations.length < 2 || plotWidth === 0) return '';
-		const step = plotWidth / (elevations.length - 1);
 		const bottom = padding.top + plotHeight;
 		const points = elevations
-			.map((ele, i) => {
-				const x = padding.left + i * step;
-				const y = padding.top + plotHeight - ((ele - minEle) / eleRange) * plotHeight;
-				return `${x.toFixed(2)},${y.toFixed(2)}`;
-			})
+			.map((ele, i) => `${xFor(i).toFixed(2)},${yFor(ele).toFixed(2)}`)
 			.join(' L');
-		const lastX = padding.left + (elevations.length - 1) * step;
-		return `M${padding.left},${bottom} L${points} L${lastX.toFixed(2)},${bottom} Z`;
+		return `M${padding.left},${bottom} L${points} L${xFor(elevations.length - 1).toFixed(2)},${bottom} Z`;
 	});
 
 	let yLabels = $derived.by(() => {
@@ -57,15 +64,134 @@
 		}
 		return labels;
 	});
+
+	// Crosshair state. `touchFraction` is null when the user isn't
+	// pointing at the chart; otherwise it's a 0..1 along the plot width.
+	// Mirrors the Android `_ElevationChart` shape exactly.
+	let touchFraction = $state<number | null>(null);
+	let isDragging = $state(false);
+
+	let crosshair = $derived.by(() => {
+		if (touchFraction == null || elevations.length < 2 || plotWidth === 0) return null;
+		const f = Math.max(0, Math.min(1, touchFraction));
+		const idx = Math.round(f * (elevations.length - 1));
+		const ele = elevations[idx];
+		const x = padding.left + f * plotWidth;
+		const y = yFor(ele);
+		const distAtPoint = totalDistance * f;
+		return { idx, ele, x, y, distAtPoint };
+	});
+
+	function handlePointerMove(e: PointerEvent) {
+		if (!isDragging || !svgEl || plotWidth === 0) return;
+		const rect = svgEl.getBoundingClientRect();
+		const xPx = e.clientX - rect.left;
+		const f = (xPx - padding.left) / plotWidth;
+		touchFraction = Math.max(0, Math.min(1, f));
+	}
+
+	function handlePointerDown(e: PointerEvent) {
+		if (!svgEl || plotWidth === 0) return;
+		isDragging = true;
+		svgEl.setPointerCapture(e.pointerId);
+		const rect = svgEl.getBoundingClientRect();
+		const xPx = e.clientX - rect.left;
+		const f = (xPx - padding.left) / plotWidth;
+		touchFraction = Math.max(0, Math.min(1, f));
+	}
+
+	function handlePointerUp(e: PointerEvent) {
+		if (!svgEl) return;
+		isDragging = false;
+		try {
+			svgEl.releasePointerCapture(e.pointerId);
+		} catch (_) {
+			/* already released */
+		}
+		// Leave the crosshair in place after release on touch (so the
+		// user can read the values); pointer-leave will clear it on
+		// mouse devices via the leave handler below.
+	}
+
+	function handlePointerLeave() {
+		if (isDragging) return;
+		touchFraction = null;
+	}
+
+	function handleMouseHover(e: MouseEvent) {
+		if (isDragging || !svgEl || plotWidth === 0) return;
+		const rect = svgEl.getBoundingClientRect();
+		const xPx = e.clientX - rect.left;
+		if (xPx < padding.left || xPx > padding.left + plotWidth) {
+			touchFraction = null;
+			return;
+		}
+		const f = (xPx - padding.left) / plotWidth;
+		touchFraction = Math.max(0, Math.min(1, f));
+	}
 </script>
 
 <div class="elevation-wrap" bind:clientWidth={containerWidth}>
-	{#if containerWidth > 0}
-		<svg viewBox="0 0 {containerWidth} {height}" class="elevation-svg" preserveAspectRatio="none">
-			{#if elevations.length >= 2}
-				<path d={areaD} class="area" />
-				<path d={pathD} class="line" />
+	<!-- Tooltip rail above the chart. Reserves vertical space at all
+	     times so the chart doesn't shift when a value lights up. -->
+	<div class="tooltip-rail" class:visible={crosshair != null}>
+		{#if crosshair}
+			<span class="tt-cell">
+				<span class="tt-label">Distance</span>
+				<span class="tt-value">{formatDistance(crosshair.distAtPoint)}</span>
+			</span>
+			<span class="tt-cell">
+				<span class="tt-label">Elevation</span>
+				<span class="tt-value">{Math.round(crosshair.ele)} m</span>
+			</span>
+			<span class="tt-cell">
+				<span class="tt-label">Gain so far</span>
+				<span class="tt-value">
+					{(() => {
+						let g = 0;
+						for (let i = 1; i <= crosshair.idx; i++) {
+							const d = elevations[i] - elevations[i - 1];
+							if (d > 0) g += d;
+						}
+						return Math.round(g);
+					})()} m
+				</span>
+			</span>
+		{:else if elevations.length >= 2}
+			<span class="tt-hint">Tap or drag to inspect</span>
+			<span class="tt-cell tt-cell-right">
+				<span class="tt-label">Total gain</span>
+				<span class="tt-value">{totalGain} m</span>
+			</span>
+		{/if}
+	</div>
 
+	{#if containerWidth > 0}
+		<svg
+			bind:this={svgEl}
+			viewBox="0 0 {containerWidth} {height}"
+			class="elevation-svg"
+			preserveAspectRatio="none"
+			role="img"
+			aria-label="Elevation profile"
+			onpointerdown={handlePointerDown}
+			onpointermove={(e) => {
+				handlePointerMove(e);
+				handleMouseHover(e);
+			}}
+			onpointerup={handlePointerUp}
+			onpointercancel={handlePointerUp}
+			onpointerleave={handlePointerLeave}
+		>
+			<defs>
+				<linearGradient id="elev-fill" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0%" stop-color="var(--color-primary, #3b82f6)" stop-opacity="0.35" />
+					<stop offset="100%" stop-color="var(--color-primary, #3b82f6)" stop-opacity="0.04" />
+				</linearGradient>
+			</defs>
+
+			{#if elevations.length >= 2}
+				<!-- Y-axis grid + labels -->
 				{#each yLabels as label}
 					<line
 						x1={padding.left}
@@ -77,10 +203,43 @@
 					<text x={padding.left - 6} y={label.y + 4} class="y-label">{label.ele}</text>
 				{/each}
 
+				<!-- Filled area + elevation line -->
+				<path d={areaD} class="area" />
+				<path d={pathD} class="line" />
+
+				<!-- Min / max corner pills, mirroring the Android chart's
+				     top-left max + bottom-left min annotations. -->
+				<g class="extreme">
+					<rect x={padding.left + 4} y={padding.top - 12} width="56" height="16" rx="4" class="extreme-pill" />
+					<text x={padding.left + 32} y={padding.top - 0.5} class="extreme-text" text-anchor="middle">
+						▲ {Math.round(maxEle)} m
+					</text>
+				</g>
+				<g class="extreme">
+					<rect x={padding.left + 4} y={padding.top + plotHeight - 4} width="56" height="16" rx="4" class="extreme-pill" />
+					<text x={padding.left + 32} y={padding.top + plotHeight + 7.5} class="extreme-text" text-anchor="middle">
+						▼ {Math.round(minEle)} m
+					</text>
+				</g>
+
+				<!-- X-axis distance ticks -->
 				<text x={padding.left} y={height - 6} class="x-label">0</text>
 				<text x={containerWidth - padding.right} y={height - 6} class="x-label" text-anchor="end">
 					{formatDistance(totalDistance)}
 				</text>
+
+				<!-- Touch crosshair: vertical guide + dot at the elevation
+				     line, mirroring the Android painter. -->
+				{#if crosshair}
+					<line
+						x1={crosshair.x}
+						x2={crosshair.x}
+						y1={padding.top}
+						y2={padding.top + plotHeight}
+						class="crosshair-line"
+					/>
+					<circle cx={crosshair.x} cy={crosshair.y} r="5" class="crosshair-dot" />
+				{/if}
 			{:else}
 				<text x={containerWidth / 2} y={height / 2} text-anchor="middle" class="empty-label">
 					No elevation data
@@ -95,15 +254,56 @@
 		width: 100%;
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
-		min-height: 160px;
+		padding: var(--space-sm) var(--space-md) var(--space-md);
+	}
+	.tooltip-rail {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-md);
+		min-height: 2rem;
+		padding: 0.1rem 0.2rem 0.4rem;
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.tooltip-rail.visible {
+		color: var(--color-text);
+	}
+	.tt-cell {
+		display: inline-flex;
+		flex-direction: column;
+		gap: 0;
+	}
+	.tt-cell-right {
+		margin-left: auto;
+	}
+	.tt-label {
+		font-size: 0.65rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-tertiary);
+		line-height: 1;
+	}
+	.tt-value {
+		font-size: 0.95rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text);
+		margin-top: 0.1rem;
+	}
+	.tt-hint {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
 	}
 	.elevation-svg {
 		display: block;
 		width: 100%;
-		height: 160px;
+		height: 180px;
+		touch-action: none;
+		cursor: crosshair;
 	}
 	.area {
-		fill: var(--color-primary-light, rgba(59, 130, 246, 0.15));
+		fill: url(#elev-fill);
 	}
 	.line {
 		fill: none;
@@ -132,5 +332,32 @@
 	.empty-label {
 		font-size: 13px;
 		fill: var(--color-text-tertiary, #999);
+	}
+	.extreme-pill {
+		fill: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+		stroke: color-mix(in srgb, var(--color-primary) 35%, transparent);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+	}
+	.extreme-text {
+		font-size: 10px;
+		font-weight: 600;
+		fill: var(--color-primary);
+		font-variant-numeric: tabular-nums;
+	}
+	.crosshair-line {
+		stroke: var(--color-text-secondary);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.7;
+		vector-effect: non-scaling-stroke;
+		pointer-events: none;
+	}
+	.crosshair-dot {
+		fill: var(--color-primary);
+		stroke: var(--color-surface);
+		stroke-width: 2;
+		pointer-events: none;
+		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 	}
 </style>
