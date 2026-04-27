@@ -20,9 +20,8 @@ import { auth } from './stores/auth.svelte';
 ///   1. Add an entry to this object with a human-readable label + desc.
 ///   2. Flip `isLocked` so it returns `!isPro()` for the key (or a more
 ///      specific check).
-///   3. Server-side: check `is_user_pro()` via RPC before the expensive
-///      work, returning `{ error: 'pro_required', feature: '<key>' }` on
-///      403.
+///   3. Server-side: check `is_pro()` via RPC before the expensive work,
+///      returning `{ error: 'pro_required', feature: '<key>' }` on 403.
 ///   4. Client-side: wrap the UI entry point with
 ///      `{#if !isLocked('ai_coach')} ... {:else} <ProGate feature="ai_coach" /> {/if}`
 ///   5. Add the feature to `docs/paywall.md`.
