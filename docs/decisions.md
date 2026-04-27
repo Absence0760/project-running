@@ -524,6 +524,44 @@ We ship three things together:
 
 ---
 
+## 32. Kudos + comments on runs; visibility tracks runs' own RLS
+
+**Decided:** April 2026 · captured before the migration that adds `run_kudos` and `run_comments`.
+
+The activity feed shipped in §31 needs an engagement loop. Strava's pattern — kudos (one-tap heart), then comments (free-form text with one level of threading) — is the canonical answer; copying it directly is the right call. We resist two adjacent product temptations:
+
+- *Rich reactions (👏 / 🔥 / ⚡)* — Slack-style multi-emoji reactions look fun but every additional emoji dilutes the signal. Strava ships only kudos because "did you appreciate this run, yes/no" is the only question that scales. Multi-emoji is also a strict superset of kudos and can be added later by widening the `run_kudos` table with a `reaction text` column; we don't pre-build for it.
+- *Multi-level threading* — replies-to-replies-to-replies is a moderation nightmare and the one-level cap (Reddit calls this "shallow threading") matches the existing `club_posts` precedent (`parent_post_id` only, no recursion in the data model). UI enforces it by hiding the reply affordance on already-replied comments.
+
+**Schema:**
+
+- **`run_kudos (user_id, run_id, given_at)`** — composite PK so a user can only kudos a run once. ON DELETE CASCADE on both sides. No `id` column; the natural key is the relationship itself.
+- **`run_comments (id, run_id, author_id, parent_comment_id, body, created_at, updated_at)`** — `parent_comment_id` is a self-FK (nullable). One level of nesting is enforced in the policy: `with check (parent_comment_id is null or (select parent_comment_id is null from run_comments where id = parent_comment_id))`. `body` is CHECK-constrained to 1..2000 chars to keep an `<input maxlength>` honest.
+
+**RLS — visibility tracks runs.** The lever-pulling decision is making kudos / comments inherit the parent run's visibility, not setting a new policy from scratch:
+
+```sql
+create policy "kudos readable when run is readable" on run_kudos
+  for select using (exists (select 1 from runs where runs.id = run_kudos.run_id));
+```
+
+The EXISTS subquery is itself subject to runs' RLS (`auth.uid() = user_id` OR `is_public = true`), so kudos on a private run are invisible to anyone but the owner. Same shape for comments. This is the same pattern `club_posts` and `event_attendees` use to inherit clubs / events visibility, so it's not a new technique.
+
+**Moderation rights:** the comment author can edit / delete their own comment; **the run owner can also delete any comment on their own run** (separate DELETE policy with `exists (...) where runs.id = run_comments.run_id and runs.user_id = auth.uid()`). No edit-by-run-owner — that's tampering, not moderation.
+
+**Why these and not alternatives:**
+
+- *Quoted replies* — Strava's "Reply to @user" affordance is rendered client-side from the reply tree; we get it for free from the existing parent_comment_id without storing a quote.
+- *Comment likes* (heart on a comment) — additive surface; defer until people ask.
+- *@mention notifications* — requires the push delivery path that `device_tokens` is staged for but isn't wired (parity.md). We keep `body` plain text for now; @mention parsing can layer on later without a schema change.
+- *Single `run_engagements` polymorphic table covering both kudos and comments* — saves a migration, costs every consumer a `kind` filter forever. Two tables with the same cascade pattern is clearer.
+
+**Trade-off:** A run owner can silently delete inconvenient comments — that's classic Strava behaviour and we accept it as the moderation primitive. If we ever want a public moderation log ("comment hidden by run owner") that's a future schema add.
+
+**Don't re-litigate unless:** people start asking for emoji reactions and we have a usage signal (then widen `run_kudos` with `reaction text default 'kudos'` and enforce uniqueness on `(user_id, run_id, reaction)`), or comment counts on highly-engaged runs become a perf hotspot (then add a denormalised `runs.comment_count` maintained by trigger, mirroring `routes.run_count`).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
