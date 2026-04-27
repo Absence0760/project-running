@@ -40,9 +40,16 @@ export interface FetchRunsOptions {
 }
 
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
+	// Explicit user_id filter as defence in depth — RLS already scopes
+	// runs to the caller, but every other personal-data list in this
+	// file follows the same explicit-scope pattern. See audit
+	// `/tmp/data-isolation-audit/client-realtime.md` M2.
+	const userId = auth.user?.id;
+	if (!userId) return [];
 	let q = supabase
 		.from('runs')
 		.select('*')
+		.eq('user_id', userId)
 		.order('started_at', { ascending: false });
 	if (opts?.limit != null) {
 		const from = opts.offset ?? 0;
@@ -55,10 +62,13 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 }
 
 export async function fetchRunById(id: string): Promise<Run | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
 	const { data } = await supabase
 		.from('runs')
 		.select('*')
 		.eq('id', id)
+		.eq('user_id', userId)
 		.single();
 
 	if (!data) return null;
