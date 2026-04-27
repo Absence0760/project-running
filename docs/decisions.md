@@ -562,6 +562,46 @@ The EXISTS subquery is itself subject to runs' RLS (`auth.uid() = user_id` OR `i
 
 ---
 
+## 33. Privacy zones live in user_settings; clipping is client-side; nearby leak is a known v1 gap
+
+**Decided:** April 2026 · captured before the privacy-zones settings UI lands.
+
+Strava and Garmin both let you blur a radius around home / work. We ship a v1 of the same idea with the smallest possible footprint: zones are stored as a JSON list on `user_settings.prefs.privacy_zones`, clipping is done client-side, and we accept one v2-ish gap (the `routes.start_point` PostGIS column still leaks the unclipped first waypoint into the nearby-routes RPC).
+
+**Storage shape:**
+
+```json
+{ "privacy_zones": [{ "lat": 40.7128, "lng": -74.0060, "radius_m": 250 }] }
+```
+
+A list is the right shape because every realistic user has exactly 0–3 zones (home, work, gym), and `user_settings.prefs` is already a jsonb bag with no schema policing — no migration cost. RLS on `user_settings` already gates the row to the owner, so the zones themselves are *private to the owner*; only the *clipped output* is public.
+
+**Algorithm:** for any list of points and the owner's zones, walk forward from index 0 and drop points whose haversine distance to any zone center is ≤ `radius_m`. Walk backward from the end with the same predicate. Keep the contiguous middle. This means a track that starts at home, runs away, comes back, runs out again, comes back home shows as a single un-broken middle — we deliberately don't slice out interior loops, because (a) the leak Strava is solving is "where you live," not "where you've ever been," and (b) gapping the polyline mid-run looks broken.
+
+**Where clipping happens:**
+
+- *`/share/run/[id]`* — the public share page. Always clipped; the page is publicly addressable and the run owner is the user we're protecting.
+- *`/share/route/[id]`* — same.
+- *`/runs/[id]`* and *`/routes/[id]`* — owner-only views; never clipped.
+- *`/feed`* — entries link to `/share/run/[id]`, so clipping happens there.
+- *`/u/[id]/...`* — the profile page surfaces a list of public runs but each one's detail page handles its own clipping.
+
+**Why client-side:**
+
+- *Server-side clipping at insert / update time* is destructive — the owner can't get their full track back after toggling a zone off. Client clipping at render time is reversible by definition.
+- *A SECURITY DEFINER RPC that returns the clipped track* would centralise the rule but force every consumer through one specific PostgREST shape and defeat the existing `track_url` Storage download path.
+- *Modifying the `routes_set_start_point` trigger to read user_settings* is the right v2 fix for the nearby-routes leak (see below) but it's complex (cross-table RLS + new helper function), and we'd ship one without the other anyway.
+
+**Trade-offs we're explicitly accepting:**
+
+1. **`routes.start_point` leak.** The `routes_set_start_point` trigger populates a PostGIS `geography(Point)` column from the first waypoint, indexed for the `nearby_routes` RPC. A route built from home will surface in proximity searches centered near home — the polyline is clipped, but the dot on the map isn't. v2 fix: trigger reads `user_settings.prefs.privacy_zones` (security-definer indirection) and snaps `start_point` to the first non-zone waypoint, or to `null` if every waypoint is in a zone. We document the gap rather than ship a half-fix.
+2. **Owner-self-share visibility.** When the run owner opens their own `/share/run/[id]` (e.g. testing a share link), they see the clipped version. Strava behaves the same way — the share page is "what your followers see," and being able to verify that is the whole point.
+3. **Elevation profile retains in-zone points.** The profile is per-distance, not per-coordinate, so it leaks no location info; we keep it complete to avoid a confusing "elevation drops off cliff at end" rendering artifact.
+
+**Don't re-litigate unless:** users report routes built from home leaking through nearby search (then ship the trigger update), zones-per-user grows past ~5 in real usage (then promote to a `privacy_zones` table with its own RLS), or a third-party integration (Strava export, etc.) needs the *unclipped* track for sync purposes (then add a "Sync without privacy zones" toggle on the integration settings).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
