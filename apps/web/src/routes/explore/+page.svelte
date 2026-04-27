@@ -1,53 +1,13 @@
 <script lang="ts">
-	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+
+	onMount(() => {
+		goto('/routes?tab=explore', { replaceState: true });
+	});
 </script>
 
 <svelte:head>
-	<title>Explore Routes — Run Onward</title>
-	<meta
-		name="description"
-		content="Discover running routes shared by the community. Search by name, distance, and surface type."
-	/>
+	<title>Redirecting…</title>
+	<meta http-equiv="refresh" content="0;url=/routes?tab=explore" />
 </svelte:head>
-
-<div class="page">
-	<a href="/routes" class="back-link">
-		<span class="material-symbols">arrow_back</span> My routes
-	</a>
-	<RouteExplorer />
-</div>
-
-<style>
-	.page {
-		padding: var(--space-xl) var(--space-2xl);
-	}
-	.back-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-		color: var(--color-text-secondary);
-		font-size: 0.85rem;
-		font-weight: 500;
-		text-decoration: none;
-		margin-bottom: var(--space-md);
-	}
-	.back-link:hover {
-		color: var(--color-primary);
-	}
-	.back-link .material-symbols {
-		font-family: 'Material Symbols Outlined';
-		font-size: 1.1rem;
-	}
-	.page-header {
-		margin-bottom: var(--space-lg);
-	}
-	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		margin-bottom: var(--space-xs);
-	}
-	.subtitle {
-		color: var(--color-text-secondary);
-		font-size: 0.9rem;
-	}
-</style>
