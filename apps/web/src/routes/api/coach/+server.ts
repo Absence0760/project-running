@@ -13,13 +13,23 @@
 //     or any other compatible server. No prompt caching — the request is
 //     re-tokenised every turn. Intended for local development.
 //
-// Anthropic prompt-caching layout:
-//   system → the coach-persona prompt                       (cache)
-//   first user message → plan + recent runs context dump    (cache)
-//   subsequent user messages → the live chat                (no cache)
-// Two cache breakpoints are enough: anything the user types changes between
-// turns, but the static context reshapes only when the plan changes or a
-// new run lands. A 20-turn conversation hits the cache 18× with this setup.
+// Wire format: Server-Sent Events (SSE) for the happy path so the
+// client can render tokens as they arrive. Pre-stream failures (auth,
+// rate-limit, validation) still return regular JSON with the right
+// status code — the client picks the path off `content-type`.
+//
+// SSE protocol (one event per line, blank line terminates):
+//   event: meta   data: { user_message_id, tier, limits }
+//   event: token  data: { text }            (zero or more)
+//   event: done   data: { assistant_message_id, cache, used_today }
+//   event: error  data: { message }         (mid-stream failure)
+//
+// Modes:
+//   - send (default):  insert new user message, run, stream reply
+//   - regenerate:      delete from anchor (assistant id) onward, run with
+//                      existing user message still in place
+//   - edit:            delete from anchor (user id) onward, insert new
+//                      user message with edited content, run
 
 import type { RequestHandler } from './$types';
 import Anthropic from '@anthropic-ai/sdk';
@@ -27,10 +37,6 @@ import { env } from '$env/dynamic/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// Opt out of prerender — this endpoint must run per-request against the
-// user's session. Under `adapter-static` this route simply doesn't exist
-// (the client handles 404 with a helpful message), and under `adapter-vercel`
-// it runs as a serverless function.
 export const prerender = false;
 
 const COACH_PROVIDER = (env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
@@ -39,111 +45,89 @@ const OPENAI_BASE_URL = env.OPENAI_BASE_URL ?? 'http://localhost:11434/v1';
 const OPENAI_API_KEY = env.OPENAI_API_KEY ?? 'ollama';
 const OPENAI_MODEL = env.OPENAI_MODEL ?? 'llama3.2';
 
+type CoachMode = 'send' | 'regenerate' | 'edit';
+
 interface CoachRequest {
 	messages: { role: 'user' | 'assistant'; content: string }[];
 	plan_id?: string;
-	/// How many recent runs to include in the context dump. Clamped to
-	/// [1, 100] server-side so a runaway client can't blow up the prompt.
-	/// Defaults to 20 if absent — matches the original behaviour.
 	recent_runs_limit?: number;
+	mode?: CoachMode;
+	// Anchor for regenerate / edit. The server deletes this message and
+	// every later message in the same (user, plan, archived_at=null)
+	// thread before running.
+	anchor_message_id?: string;
 }
 
 const DEFAULT_RUNS_LIMIT = 20;
 
-/// Tier-aware processing budgets — the concrete shape "Priority
-/// processing for Pro users" takes on the web. Free users get a
-/// reasonable default; Pro users get a higher response token budget
-/// (richer, longer answers), a much larger context cap (more historical
-/// runs in view per turn), and no daily message ceiling.
 const TIER_LIMITS = {
 	free: { dailyLimit: 10, maxTokens: 768, maxRunsLimit: 30 },
 	pro:  { dailyLimit: Number.POSITIVE_INFINITY, maxTokens: 2048, maxRunsLimit: 200 },
 } as const;
 type Tier = keyof typeof TIER_LIMITS;
 
+interface ProviderUsage {
+	cache_creation_input_tokens: number;
+	cache_read_input_tokens: number;
+	input_tokens: number;
+	output_tokens: number;
+}
+
+function emptyUsage(): ProviderUsage {
+	return {
+		cache_creation_input_tokens: 0,
+		cache_read_input_tokens: 0,
+		input_tokens: 0,
+		output_tokens: 0,
+	};
+}
+
+interface ProviderStream {
+	tokens: AsyncIterable<string>;
+	finalUsage: () => Promise<ProviderUsage>;
+}
+
 export const POST: RequestHandler = async ({ request }) => {
 	if (COACH_PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
-		return new Response(
-			JSON.stringify({
-				error:
-					'Coach is not configured — set ANTHROPIC_API_KEY in the web app env, or set COACH_PROVIDER=openai for a local Ollama-compatible backend.'
-			}),
-			{ status: 503, headers: { 'content-type': 'application/json' } }
-		);
+		return jsonError(503, 'Coach is not configured — set ANTHROPIC_API_KEY in the web app env, or set COACH_PROVIDER=openai for a local Ollama-compatible backend.');
 	}
 	if (COACH_PROVIDER !== 'anthropic' && COACH_PROVIDER !== 'openai') {
-		return new Response(
-			JSON.stringify({
-				error: `Unknown COACH_PROVIDER='${COACH_PROVIDER}'. Use 'anthropic' or 'openai'.`
-			}),
-			{ status: 503, headers: { 'content-type': 'application/json' } }
-		);
+		return jsonError(503, `Unknown COACH_PROVIDER='${COACH_PROVIDER}'. Use 'anthropic' or 'openai'.`);
 	}
 
 	const authHeader = request.headers.get('authorization');
 	const accessToken = authHeader?.replace(/^Bearer\s+/i, '');
-	if (!accessToken) {
-		return new Response(JSON.stringify({ error: 'not authenticated' }), {
-			status: 401,
-			headers: { 'content-type': 'application/json' }
-		});
-	}
+	if (!accessToken) return jsonError(401, 'not authenticated');
 
 	let body: CoachRequest;
 	try {
 		body = await request.json();
 	} catch {
-		return new Response(JSON.stringify({ error: 'invalid JSON' }), {
-			status: 400,
-			headers: { 'content-type': 'application/json' }
-		});
+		return jsonError(400, 'invalid JSON');
 	}
 
-	// Scope every data read to the caller's JWT so RLS does its job — the
-	// server never sees another user's runs or plans.
 	const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 		global: { headers: { Authorization: `Bearer ${accessToken}` } }
 	});
 
-	// Resolve the caller's tier first — every downstream limit (daily
-	// message cap, response token budget, context window) is derived
-	// from it. BYPASS_PAYWALL fast-paths the paywall check in dev so you
-	// don't burn through quota while iterating on prompts.
-	const bypassLimit = env.BYPASS_PAYWALL === 'true';
-	let tier: Tier = 'free';
-	let usedToday = 0;
-	// Pass the JWT explicitly. supabase-js's `getUser()` with no arg falls
-	// back to the persisted browser session, which doesn't exist in this
-	// per-request server-side client — even though the JWT is set in
-	// `global.headers.Authorization` for data calls, the auth client
-	// doesn't read it. Passing `accessToken` hits `/auth/v1/user` directly.
 	const userRes = await supabase.auth.getUser(accessToken);
 	const authUser = userRes.data.user;
 	if (!authUser) {
 		console.error('[coach] auth failed', {
 			tokenPrefix: accessToken.slice(0, 20) + '...',
-			tokenLen: accessToken.length,
-			supabaseUrl: PUBLIC_SUPABASE_URL,
 			error: userRes.error?.message ?? 'no user returned',
-			status: userRes.error?.status,
 		});
-		return new Response(JSON.stringify({ error: 'not authenticated', detail: userRes.error?.message ?? null }), {
-			status: 401,
-			headers: { 'content-type': 'application/json' }
-		});
+		return jsonError(401, 'not authenticated', { detail: userRes.error?.message ?? null });
 	}
-	if (!bypassLimit) {
-		const { data: isPro } = await supabase.rpc('is_user_pro', {
-			p_user_id: authUser.id,
-		});
-		tier = isPro === true ? 'pro' : 'free';
 
-		// Free-tier daily-cap enforcement. Pro skips the increment so
-		// usage isn't tracked (and we don't pay an RPC) for unlimited.
+	const bypassLimit = env.BYPASS_PAYWALL === 'true';
+	let tier: Tier = 'free';
+	let usedToday = 0;
+	if (!bypassLimit) {
+		const { data: isPro } = await supabase.rpc('is_user_pro', { p_user_id: authUser.id });
+		tier = isPro === true ? 'pro' : 'free';
 		if (tier === 'free') {
-			const { data: newCount } = await supabase.rpc('increment_coach_usage', {
-				p_user_id: authUser.id,
-			});
+			const { data: newCount } = await supabase.rpc('increment_coach_usage', { p_user_id: authUser.id });
 			usedToday = typeof newCount === 'number' ? newCount : 0;
 			if (usedToday > TIER_LIMITS.free.dailyLimit) {
 				return new Response(
@@ -165,8 +149,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 	} else {
-		// Bypass mode reports as `pro` so the UI surfaces the unlimited
-		// shape the dev would see in prod when paying for Pro.
 		tier = 'pro';
 	}
 
@@ -187,87 +169,154 @@ export const POST: RequestHandler = async ({ request }) => {
 	} else if (coachStyle === 'analytical') {
 		personalityAddendum = '\n\nTone override: be data-driven and precise. Lead with numbers, percentages, and trends. Cite specific paces, distances, and dates. Think sports scientist.';
 	}
-	// 'supportive' is the default tone in COACH_SYSTEM_PROMPT — no addendum needed.
 
 	const systemText = COACH_SYSTEM_PROMPT + personalityAddendum;
 	const contextPayload =
 		'CONTEXT (runner profile, active plan, recent runs):\n' +
 		JSON.stringify(context.data, null, 2);
 
-	const headers = {
-		'content-type': 'application/json',
-		...rateLimitHeaders(tier, usedToday),
-	};
-
-	let result: { reply: string; usage: ReturnType<typeof emptyUsage> };
-	try {
-		result =
-			COACH_PROVIDER === 'openai'
-				? await callOpenAI(systemText, contextPayload, body.messages, limits)
-				: await callAnthropic(systemText, contextPayload, body.messages, limits);
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : 'coach call failed';
-		return new Response(JSON.stringify({ error: msg }), {
-			status: 502,
-			headers,
-		});
+	// Truncate the active thread first if regenerate / edit asked for it.
+	// Anchor + everything after it goes (within the active thread for
+	// this user × plan). RLS scopes the delete to the caller.
+	const mode: CoachMode = body.mode ?? 'send';
+	if ((mode === 'regenerate' || mode === 'edit') && body.anchor_message_id) {
+		const { data: anchor } = await supabase
+			.from('coach_messages')
+			.select('created_at')
+			.eq('id', body.anchor_message_id)
+			.maybeSingle();
+		if (anchor?.created_at) {
+			const delQuery = supabase
+				.from('coach_messages')
+				.delete()
+				.eq('user_id', authUser.id)
+				.is('archived_at', null)
+				.gte('created_at', anchor.created_at);
+			const { error: delErr } = body.plan_id
+				? await delQuery.eq('plan_id', body.plan_id)
+				: await delQuery.is('plan_id', null);
+			if (delErr) console.error('[coach] truncate failed', delErr);
+		}
 	}
 
-	// Persist this turn's exchange. The earlier messages in `body.messages`
-	// are already in the table from prior turns — only the latest user
-	// prompt and the assistant reply are new. Wrapped in try/catch so a
-	// persistence hiccup never breaks the chat: the user still gets their
-	// reply on the wire, the row just doesn't land.
-	const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
-	if (lastUser && result.reply) {
-		try {
-			await supabase.from('coach_messages').insert([
-				{
+	// Insert the new user message (send + edit modes). Regenerate keeps
+	// the existing user message untouched.
+	let userMessageId: string | null = null;
+	if (mode === 'send' || mode === 'edit') {
+		const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
+		if (lastUser) {
+			const { data, error: insertErr } = await supabase
+				.from('coach_messages')
+				.insert({
 					user_id: authUser.id,
 					plan_id: body.plan_id ?? null,
 					role: 'user',
 					content: lastUser.content,
-				},
-				{
-					user_id: authUser.id,
-					plan_id: body.plan_id ?? null,
-					role: 'assistant',
-					content: result.reply,
-				},
-			]);
-		} catch (e) {
-			console.error('[coach] persist failed', e);
+				})
+				.select('id')
+				.single();
+			if (insertErr) console.error('[coach] persist user msg failed', insertErr);
+			else userMessageId = data?.id ?? null;
 		}
 	}
 
-	return new Response(
-		JSON.stringify({
-			reply: result.reply,
-			tier,
-			limits: {
-				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
-				max_tokens: limits.maxTokens,
-				max_runs_limit: limits.maxRunsLimit,
-			},
-			cache: result.usage,
-		}),
-		{ headers },
-	);
+	let providerStream: ProviderStream;
+	try {
+		providerStream =
+			COACH_PROVIDER === 'openai'
+				? streamOpenAI(systemText, contextPayload, body.messages, limits)
+				: streamAnthropic(systemText, contextPayload, body.messages, limits);
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'coach call failed';
+		return jsonError(502, msg);
+	}
+
+	const sseHeaders: Record<string, string> = {
+		'content-type': 'text/event-stream; charset=utf-8',
+		'cache-control': 'no-cache, no-transform',
+		'x-accel-buffering': 'no',
+		...rateLimitHeaders(tier, usedToday),
+	};
+
+	const encoder = new TextEncoder();
+	const stream = new ReadableStream({
+		async start(controller) {
+			const send = (event: string, data: unknown) => {
+				controller.enqueue(
+					encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+				);
+			};
+
+			send('meta', {
+				user_message_id: userMessageId,
+				tier,
+				limits: {
+					daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
+					max_tokens: limits.maxTokens,
+					max_runs_limit: limits.maxRunsLimit,
+				},
+			});
+
+			let accumulated = '';
+			try {
+				for await (const chunk of providerStream.tokens) {
+					if (!chunk) continue;
+					accumulated += chunk;
+					send('token', { text: chunk });
+				}
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : 'stream failed';
+				send('error', { message: msg });
+				controller.close();
+				return;
+			}
+
+			let usage: ProviderUsage = emptyUsage();
+			try {
+				usage = await providerStream.finalUsage();
+			} catch (_) {
+				/* usage is best-effort */
+			}
+
+			let assistantMessageId: string | null = null;
+			if (accumulated) {
+				try {
+					const { data, error: insertErr } = await supabase
+						.from('coach_messages')
+						.insert({
+							user_id: authUser.id,
+							plan_id: body.plan_id ?? null,
+							role: 'assistant',
+							content: accumulated,
+						})
+						.select('id')
+						.single();
+					if (insertErr) console.error('[coach] persist assistant failed', insertErr);
+					else assistantMessageId = data?.id ?? null;
+				} catch (e) {
+					console.error('[coach] persist assistant exception', e);
+				}
+			}
+
+			send('done', {
+				assistant_message_id: assistantMessageId,
+				cache: usage,
+				used_today: usedToday,
+			});
+			controller.close();
+		},
+	});
+
+	return new Response(stream, { headers: sseHeaders });
 };
 
-function emptyUsage() {
-	return {
-		cache_creation_input_tokens: 0,
-		cache_read_input_tokens: 0,
-		input_tokens: 0,
-		output_tokens: 0,
-	};
+function jsonError(status: number, error: string, extra: Record<string, unknown> = {}): Response {
+	return new Response(JSON.stringify({ error, ...extra }), {
+		status,
+		headers: { 'content-type': 'application/json' },
+	});
 }
 
-/// Standard `X-RateLimit-*` headers + a `X-Coach-Tier` echo so a
-/// client can see exactly which budget bucket the request landed in.
-/// `Infinity` collapses to the literal string "unlimited" in the
-/// remaining + limit fields so HTTP-clean ASCII flows over the wire.
 function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, string> {
 	const limits = TIER_LIMITS[tier];
 	const limitStr = Number.isFinite(limits.dailyLimit) ? String(limits.dailyLimit) : 'unlimited';
@@ -283,26 +332,24 @@ function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, string>
 	};
 }
 
-// ─────────────────────── Provider: Anthropic ───────────────────────
+// ─────────────────────── Provider: Anthropic (streaming) ───────────────────────
 
-async function callAnthropic(
+function streamAnthropic(
 	systemText: string,
 	contextPayload: string,
 	messages: { role: 'user' | 'assistant'; content: string }[],
 	limits: typeof TIER_LIMITS[Tier],
-): Promise<{ reply: string; usage: ReturnType<typeof emptyUsage> }> {
+): ProviderStream {
 	const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 	const systemBlocks = [
 		{
 			type: 'text' as const,
 			text: systemText,
-			cache_control: { type: 'ephemeral' as const }
-		}
+			cache_control: { type: 'ephemeral' as const },
+		},
 	];
 
-	// First user message carries the grounded context; cache_control on it
-	// gives a stable prefix that subsequent turns hit.
 	const convo = [
 		{
 			role: 'user' as const,
@@ -310,93 +357,129 @@ async function callAnthropic(
 				{
 					type: 'text' as const,
 					text: contextPayload,
-					cache_control: { type: 'ephemeral' as const }
-				}
-			]
+					cache_control: { type: 'ephemeral' as const },
+				},
+			],
 		},
 		{
 			role: 'assistant' as const,
-			content: 'Got it — I have your plan and recent runs in view. Ask away.'
+			content: 'Got it — I have your plan and recent runs in view. Ask away.',
 		},
 		...messages.map((m) => ({
 			role: m.role,
-			content: [{ type: 'text' as const, text: m.content }]
-		}))
+			content: [{ type: 'text' as const, text: m.content }],
+		})),
 	];
 
-	const res = await anthropic.messages.create({
+	const stream = anthropic.messages.stream({
 		model: 'claude-sonnet-4-5',
 		max_tokens: limits.maxTokens,
 		system: systemBlocks,
-		messages: convo
+		messages: convo,
 	});
-	const text = res.content
-		.filter((b) => b.type === 'text')
-		.map((b) => (b as { type: 'text'; text: string }).text)
-		.join('\n');
+
+	async function* tokens(): AsyncIterable<string> {
+		for await (const event of stream) {
+			if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+				yield event.delta.text;
+			}
+		}
+	}
+
 	return {
-		reply: text,
-		usage: {
-			cache_creation_input_tokens: res.usage.cache_creation_input_tokens ?? 0,
-			cache_read_input_tokens: res.usage.cache_read_input_tokens ?? 0,
-			input_tokens: res.usage.input_tokens,
-			output_tokens: res.usage.output_tokens,
+		tokens: tokens(),
+		finalUsage: async () => {
+			const final = await stream.finalMessage();
+			return {
+				cache_creation_input_tokens: final.usage.cache_creation_input_tokens ?? 0,
+				cache_read_input_tokens: final.usage.cache_read_input_tokens ?? 0,
+				input_tokens: final.usage.input_tokens,
+				output_tokens: final.usage.output_tokens,
+			};
 		},
 	};
 }
 
-// ─────────────────────── Provider: OpenAI-compatible ───────────────────────
-//
-// Targets any server that implements `POST /v1/chat/completions` with the
-// OpenAI request/response shape — Ollama, llama.cpp's server, vLLM, LM
-// Studio, OpenAI itself. No prompt caching: the same context is sent every
-// turn, which is fine for local dev.
+// ─────────────────────── Provider: OpenAI-compatible (streaming) ───────────────────────
 
-async function callOpenAI(
+function streamOpenAI(
 	systemText: string,
 	contextPayload: string,
 	messages: { role: 'user' | 'assistant'; content: string }[],
 	limits: typeof TIER_LIMITS[Tier],
-): Promise<{ reply: string; usage: ReturnType<typeof emptyUsage> }> {
+): ProviderStream {
 	const convo = [
 		{ role: 'system', content: systemText },
 		{ role: 'user', content: contextPayload },
 		{ role: 'assistant', content: 'Got it — I have your plan and recent runs in view. Ask away.' },
-		...messages.map((m) => ({ role: m.role, content: m.content }))
+		...messages.map((m) => ({ role: m.role, content: m.content })),
 	];
 
-	const res = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
-		method: 'POST',
-		headers: {
-			'content-type': 'application/json',
-			authorization: `Bearer ${OPENAI_API_KEY}`
-		},
-		body: JSON.stringify({
-			model: OPENAI_MODEL,
-			messages: convo,
-			max_tokens: limits.maxTokens,
-			stream: false
-		})
+	const usage: ProviderUsage = emptyUsage();
+	const finalUsageDeferred: { resolve: (u: ProviderUsage) => void; reject: (e: Error) => void } = { resolve: () => {}, reject: () => {} };
+	const finalUsagePromise = new Promise<ProviderUsage>((resolve, reject) => {
+		finalUsageDeferred.resolve = resolve;
+		finalUsageDeferred.reject = reject;
 	});
 
-	if (!res.ok) {
-		const errText = await res.text().catch(() => '');
-		throw new Error(`coach upstream ${res.status}: ${errText.slice(0, 400)}`);
+	async function* tokens(): AsyncIterable<string> {
+		const res = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				authorization: `Bearer ${OPENAI_API_KEY}`,
+			},
+			body: JSON.stringify({
+				model: OPENAI_MODEL,
+				messages: convo,
+				max_tokens: limits.maxTokens,
+				stream: true,
+			}),
+		});
+		if (!res.ok || !res.body) {
+			const errText = await res.text().catch(() => '');
+			finalUsageDeferred.resolve(usage);
+			throw new Error(`coach upstream ${res.status}: ${errText.slice(0, 400)}`);
+		}
+		const reader = res.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
+		try {
+			while (true) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				let nl: number;
+				while ((nl = buffer.indexOf('\n')) !== -1) {
+					const line = buffer.slice(0, nl).trim();
+					buffer = buffer.slice(nl + 1);
+					if (!line.startsWith('data:')) continue;
+					const payload = line.slice(5).trim();
+					if (payload === '[DONE]') continue;
+					try {
+						const j = JSON.parse(payload) as {
+							choices?: { delta?: { content?: string } }[];
+							usage?: { prompt_tokens?: number; completion_tokens?: number };
+						};
+						const delta = j.choices?.[0]?.delta?.content;
+						if (delta) yield delta;
+						if (j.usage) {
+							usage.input_tokens = j.usage.prompt_tokens ?? usage.input_tokens;
+							usage.output_tokens = j.usage.completion_tokens ?? usage.output_tokens;
+						}
+					} catch (_) {
+						/* malformed line — skip */
+					}
+				}
+			}
+		} finally {
+			finalUsageDeferred.resolve(usage);
+		}
 	}
 
-	const json = (await res.json()) as {
-		choices?: { message?: { content?: string } }[];
-		usage?: { prompt_tokens?: number; completion_tokens?: number };
-	};
-	const text = json.choices?.[0]?.message?.content ?? '';
 	return {
-		reply: text,
-		usage: {
-			cache_creation_input_tokens: 0,
-			cache_read_input_tokens: 0,
-			input_tokens: json.usage?.prompt_tokens ?? 0,
-			output_tokens: json.usage?.completion_tokens ?? 0,
-		},
+		tokens: tokens(),
+		finalUsage: () => finalUsagePromise,
 	};
 }
 
@@ -423,7 +506,8 @@ Style:
 - Use the runner's actual numbers when you can (planned miles, pace, run dates). Cite them like a coach would.
 - If the question is out of scope (plan regeneration, nutrition, injury), redirect briefly and move on.
 - Metric and imperial: match the unit system the runner is using in the context. If unclear, use km.
-- Assume the runner is an informed adult. Don't hedge every sentence with "if it feels right to you".`;
+- Assume the runner is an informed adult. Don't hedge every sentence with "if it feels right to you".
+- Format with markdown when helpful — short bulleted lists for "things to try", **bold** for the one number that matters, fenced code blocks only for actual code or structured data. Don't overuse formatting on a one-sentence answer.`;
 
 // ─────────────────────── Context builder ───────────────────────
 
@@ -435,10 +519,8 @@ async function buildContext(
 	supabase: SupabaseClient,
 	userId: string,
 	planId: string | null,
-	runsLimit: number
+	runsLimit: number,
 ): Promise<CoachContext> {
-	// Pull the active (or specified) plan + its weeks + its workouts, plus
-	// the last ~20 runs. RLS scopes all of these to the current user.
 	const { data: plan } = planId
 		? await supabase.from('training_plans').select('*').eq('id', planId).maybeSingle()
 		: await supabase
@@ -502,7 +584,7 @@ async function buildContext(
 			plan: plan ?? null,
 			plan_weeks: weeks,
 			plan_workouts: workouts,
-			recent_runs: recentRuns ?? []
-		}
+			recent_runs: recentRuns ?? [],
+		},
 	};
 }
