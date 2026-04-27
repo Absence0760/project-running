@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
 	import { supabase } from '$lib/supabase';
@@ -269,6 +269,7 @@
 		}
 
 		await loadContextSummary(session.user.id);
+		subscribeToThread();
 		await scrollToBottom();
 	});
 
@@ -613,6 +614,70 @@
 	// and the chat surface is the priority. Toggle persists through the
 	// session via state, not localStorage (per-session is enough).
 	let sidebarOpen = $state(false);
+
+	// True when this tab is *itself* mid-request (busy) OR when the
+	// persisted thread ends in a user message with no assistant follow-up.
+	// The second case happens when the runner reloads mid-stream — the
+	// in-flight server request is still running and will write the
+	// assistant row when it completes; until then we show the typing
+	// indicator and let the realtime subscription pick the reply up.
+	let awaitingAssistant = $derived.by(() => {
+		if (busy) return true;
+		if (viewingArchiveAt != null) return false;
+		const last = messages[messages.length - 1];
+		return last?.role === 'user' && last.id != null;
+	});
+
+	// Realtime subscription — fires when a row is inserted into
+	// coach_messages for the active thread (RLS scopes to the caller).
+	// Cleared on unmount so we don't leak channels across navigations.
+	type SupabaseChannel = { unsubscribe: () => Promise<unknown> };
+	let realtimeChannel: SupabaseChannel | null = null;
+
+	function subscribeToThread() {
+		if (!cachedUserId) return;
+		const channel = supabase
+			.channel(`coach_messages:${cachedUserId}:${planId ?? 'no_plan'}`)
+			.on(
+				'postgres_changes',
+				{
+					event: 'INSERT',
+					schema: 'public',
+					table: 'coach_messages',
+					filter: `user_id=eq.${cachedUserId}`,
+				},
+				(payload: { new: Record<string, unknown> }) => {
+					const row = payload.new as {
+						id: string;
+						role: 'user' | 'assistant';
+						content: string;
+						reaction: 'up' | 'down' | null;
+						plan_id: string | null;
+						archived_at: string | null;
+					};
+					// Filter to the active thread for the current plan-scope.
+					if (row.archived_at != null) return;
+					const expectedPlan = planId ?? null;
+					if ((row.plan_id ?? null) !== expectedPlan) return;
+					// Skip rows we already have (the same tab inserted them).
+					if (messages.some((m) => m.id === row.id)) return;
+					messages = [
+						...messages,
+						{ id: row.id, role: row.role, content: row.content, reaction: row.reaction },
+					];
+					scrollToBottom();
+				},
+			)
+			.subscribe();
+		realtimeChannel = channel as unknown as SupabaseChannel;
+	}
+
+	onDestroy(() => {
+		if (realtimeChannel) {
+			realtimeChannel.unsubscribe();
+			realtimeChannel = null;
+		}
+	});
 </script>
 
 {#if locked}
@@ -774,7 +839,7 @@
 							</div>
 						</div>
 					{:else if m.role === 'assistant'}
-						{#if !m.content && busy && i === messages.length - 1}
+						{#if !m.content && awaitingAssistant && i === messages.length - 1}
 							<div class="typing-dots" aria-label="Coach is thinking">
 								<span></span><span></span><span></span>
 							</div>
@@ -785,7 +850,7 @@
 					{:else}
 						<span>{m.content}</span>
 					{/if}
-					{#if !viewingArchiveAt && m.id && !(busy && i === messages.length - 1)}
+					{#if !viewingArchiveAt && m.id && !(awaitingAssistant && i === messages.length - 1)}
 						<div class="bubble-actions">
 							<button
 								type="button"
@@ -843,6 +908,13 @@
 					{/if}
 				</div>
 			{/each}
+			{#if awaitingAssistant && messages[messages.length - 1]?.role === 'user'}
+				<div class="bubble">
+					<div class="typing-dots" aria-label="Coach is thinking">
+						<span></span><span></span><span></span>
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		{#if error}
