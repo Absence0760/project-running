@@ -28,7 +28,14 @@
 	}: Props = $props();
 
 	let type = $state<PeriodType>(initialType);
-	let startDate = $state<Date>(periodStart(initialDate ?? new Date(), initialType));
+	// `anchor` is a stable reference date that survives type toggles —
+	// it's NOT the start of the visible period. `startDate` is derived
+	// from (anchor, type) so toggling Week ↔ Month doesn't drift the
+	// window backwards/forwards (the previous code recomputed
+	// startDate from itself, so the Monday-of-week-containing-the-1st
+	// could land in the previous month).
+	let anchor = $state<Date>(initialDate ?? new Date());
+	let startDate = $derived(periodStart(anchor, type));
 
 	function periodStart(d: Date, t: PeriodType): Date {
 		const out = new Date(d);
@@ -56,17 +63,16 @@
 	}
 
 	function shiftPeriod(dir: -1 | 1) {
-		const next = new Date(startDate);
+		const next = new Date(anchor);
 		if (type === 'week') next.setDate(next.getDate() + 7 * dir);
 		else next.setMonth(next.getMonth() + dir);
-		startDate = periodStart(next, type);
-		onPeriodChange?.(type, startDate);
+		anchor = next;
+		onPeriodChange?.(type, periodStart(next, type));
 	}
 
 	function setType(t: PeriodType) {
 		type = t;
-		startDate = periodStart(startDate, t);
-		onPeriodChange?.(t, startDate);
+		onPeriodChange?.(t, periodStart(anchor, t));
 	}
 
 	function periodLabel(d: Date, t: PeriodType): string {
