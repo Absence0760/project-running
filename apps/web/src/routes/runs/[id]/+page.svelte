@@ -4,6 +4,7 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
+	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import {
 		formatDuration,
@@ -708,6 +709,18 @@
 		<section class="section">
 			<RunPhotos runId={run.id} runOwnerId={run.user_id} />
 		</section>
+
+		{#if run.route_id}
+			<section class="section">
+				<h2>Segments</h2>
+				<RunSegmentEfforts
+					runId={run.id}
+					runOwnerId={run.user_id}
+					routeId={run.route_id}
+					track={run.track ?? []}
+				/>
+			</section>
+		{/if}
 
 		<!-- Kudos + comments — visible whether the run is private or public,
 		     but the runs RLS keeps engagement on private runs invisible to

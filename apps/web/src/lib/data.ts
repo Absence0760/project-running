@@ -2680,3 +2680,209 @@ export async function updateRunPhotoCaption(
 		.eq('id', photoId);
 	if (error) throw error;
 }
+
+// --- Segments + leaderboards (decisions §37) ---
+
+export interface Segment {
+	id: string;
+	route_id: string;
+	name: string;
+	start_distance_m: number;
+	end_distance_m: number;
+	length_m: number | null;
+	created_by: string | null;
+	created_at: string;
+}
+
+export interface SegmentEffort {
+	id: string;
+	segment_id: string;
+	run_id: string;
+	user_id: string;
+	time_seconds: number;
+	started_at: string;
+	created_at: string;
+}
+
+export interface SegmentLeaderboardEntry {
+	effort: SegmentEffort;
+	athlete: PublicProfile;
+	rank: number;
+}
+
+export interface SegmentEffortWithSegment {
+	effort: SegmentEffort;
+	segment: Segment;
+	rank: number;
+}
+
+export async function fetchSegmentsForRoute(routeId: string): Promise<Segment[]> {
+	const { data, error } = await supabase
+		.from('segments')
+		.select('*')
+		.eq('route_id', routeId)
+		.order('start_distance_m', { ascending: true });
+	if (error) {
+		console.error('fetchSegmentsForRoute failed', error);
+		return [];
+	}
+	return (data ?? []) as Segment[];
+}
+
+export async function createSegment(input: {
+	route_id: string;
+	name: string;
+	start_distance_m: number;
+	end_distance_m: number;
+}): Promise<Segment> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { data, error } = await supabase
+		.from('segments')
+		.insert({
+			route_id: input.route_id,
+			name: input.name.trim(),
+			start_distance_m: input.start_distance_m,
+			end_distance_m: input.end_distance_m,
+			created_by: userId,
+		})
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('Insert failed');
+	return data as Segment;
+}
+
+export async function deleteSegment(segmentId: string): Promise<void> {
+	const { error } = await supabase.from('segments').delete().eq('id', segmentId);
+	if (error) throw error;
+}
+
+/**
+ * Leaderboard for a segment — efforts ascending by time, joined to
+ * the author profile so the UI can render avatars + names. Ranks are
+ * 1-based and dense (ties share a rank).
+ */
+export async function fetchSegmentLeaderboard(
+	segmentId: string,
+	limit = 50,
+): Promise<SegmentLeaderboardEntry[]> {
+	const { data: efforts, error } = await supabase
+		.from('segment_efforts')
+		.select('*')
+		.eq('segment_id', segmentId)
+		.order('time_seconds', { ascending: true })
+		.limit(limit);
+	if (error || !efforts || efforts.length === 0) return [];
+
+	const userIds = Array.from(new Set(efforts.map((e) => e.user_id)));
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', userIds);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+
+	const out: SegmentLeaderboardEntry[] = [];
+	let lastTime = -1;
+	let lastRank = 0;
+	for (let i = 0; i < efforts.length; i++) {
+		const e = efforts[i] as SegmentEffort;
+		const rank = e.time_seconds === lastTime ? lastRank : i + 1;
+		lastTime = e.time_seconds;
+		lastRank = rank;
+		out.push({
+			effort: e,
+			athlete: byId.get(e.user_id) ?? { id: e.user_id, display_name: null, avatar_url: null },
+			rank,
+		});
+	}
+	return out;
+}
+
+/**
+ * All segment efforts attached to a single run, joined to the parent
+ * segment so the run-detail page can render "Climb of doom — 4:21,
+ * #3 of 17". Rank is computed via a count query against the
+ * leaderboard.
+ */
+export async function fetchEffortsForRun(runId: string): Promise<SegmentEffortWithSegment[]> {
+	const { data: efforts, error } = await supabase
+		.from('segment_efforts')
+		.select('*')
+		.eq('run_id', runId);
+	if (error || !efforts || efforts.length === 0) return [];
+
+	const segmentIds = Array.from(new Set(efforts.map((e) => e.segment_id)));
+	const { data: segments } = await supabase
+		.from('segments')
+		.select('*')
+		.in('id', segmentIds);
+	const bySeg = new Map<string, Segment>();
+	for (const s of segments ?? []) bySeg.set(s.id, s as Segment);
+
+	// Rank query — one count per segment+effort. Cheap because the
+	// segment_efforts(segment_id, time_seconds) index covers it.
+	const out: SegmentEffortWithSegment[] = [];
+	for (const e of efforts as SegmentEffort[]) {
+		const segment = bySeg.get(e.segment_id);
+		if (!segment) continue;
+		const { count } = await supabase
+			.from('segment_efforts')
+			.select('*', { count: 'exact', head: true })
+			.eq('segment_id', e.segment_id)
+			.lt('time_seconds', e.time_seconds);
+		out.push({
+			effort: e,
+			segment,
+			rank: (count ?? 0) + 1,
+		});
+	}
+	return out;
+}
+
+/**
+ * Client-side auto-effort generation for a run (decisions §37).
+ *
+ * Called from the run detail page on mount. Walks each route segment
+ * over the run's track and inserts any new efforts. Existing efforts
+ * are protected by the unique(segment_id, run_id) index — a duplicate
+ * insert returns 23505 and we treat it as a no-op.
+ *
+ * Returns the count of new efforts written.
+ */
+export async function computeSegmentEffortsForRun(input: {
+	run_id: string;
+	user_id: string;
+	route_id: string;
+	track: { lat: number; lng: number; ts?: string }[];
+}): Promise<number> {
+	if (!input.track || input.track.length < 2) return 0;
+	const userId = auth.user?.id;
+	if (!userId || userId !== input.user_id) return 0;
+
+	const segments = await fetchSegmentsForRoute(input.route_id);
+	if (segments.length === 0) return 0;
+
+	const { computeEffortFromTrack } = await import('./segments');
+
+	let written = 0;
+	for (const seg of segments) {
+		const eff = computeEffortFromTrack(input.track as any, {
+			start_distance_m: Number(seg.start_distance_m),
+			end_distance_m: Number(seg.end_distance_m),
+		});
+		if (!eff) continue;
+		const { error } = await supabase.from('segment_efforts').insert({
+			segment_id: seg.id,
+			run_id: input.run_id,
+			user_id: userId,
+			time_seconds: eff.time_seconds,
+			started_at: eff.started_at,
+		});
+		if (!error) written++;
+		else if (error.code !== '23505') {
+			console.warn('segment effort insert failed', seg.id, error);
+		}
+	}
+	return written;
+}

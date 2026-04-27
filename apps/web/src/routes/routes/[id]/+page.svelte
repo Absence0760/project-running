@@ -8,6 +8,7 @@
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
+	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -300,6 +301,14 @@
 					<ElevationProfile {elevations} totalDistance={route.distance_m} />
 				</section>
 			{/if}
+
+			<section class="section">
+				<SegmentsPanel
+					routeId={route.id}
+					routeDistanceM={route.distance_m}
+					canCreate={auth.loggedIn}
+				/>
+			</section>
 
 			<!-- Reviews -->
 			<section class="section">
