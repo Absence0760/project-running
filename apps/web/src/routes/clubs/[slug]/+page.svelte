@@ -541,13 +541,15 @@
 					{#each posts as post (post.id)}
 						<article class="post">
 							<div class="post-author">
-								<div class="avatar-sm" style="--seed: {hashHue(post.author_id)}">
-									{initial(post.author_display_name)}
-								</div>
-								<div>
-									<strong>{post.author_display_name ?? 'Member'}</strong>
-									<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
-								</div>
+								<a href="/u/{post.author_id}" class="author-link">
+									<div class="avatar-sm" style="--seed: {hashHue(post.author_id)}">
+										{initial(post.author_display_name)}
+									</div>
+									<div>
+										<strong>{post.author_display_name ?? 'Member'}</strong>
+										<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
+									</div>
+								</a>
 								{#if isAdmin}
 									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label="Delete post">
 										<span class="material-symbols">close</span>
@@ -574,12 +576,14 @@
 									<div class="replies">
 										{#each expandedThreads[post.id] ?? [] as reply (reply.id)}
 											<div class="reply">
-												<div class="avatar-sm" style="--seed: {hashHue(reply.author_id)}">
-													{initial(reply.author_display_name)}
-												</div>
+												<a href="/u/{reply.author_id}" class="reply-author-link">
+													<div class="avatar-sm" style="--seed: {hashHue(reply.author_id)}">
+														{initial(reply.author_display_name)}
+													</div>
+												</a>
 												<div class="reply-body">
 													<div class="reply-head">
-														<strong>{reply.author_display_name ?? 'Member'}</strong>
+														<a href="/u/{reply.author_id}" class="author-link"><strong>{reply.author_display_name ?? 'Member'}</strong></a>
 														<span class="when">{fmtRelative(reply.created_at ?? new Date().toISOString())}</span>
 													</div>
 													<p>{reply.body}</p>
@@ -761,11 +765,13 @@
 			<div class="member-list">
 				{#each members as m (m.user_id)}
 					<div class="member">
-						<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}">
-							{initial(m.display_name)}
-						</div>
-						<div class="member-info">
+						<a href="/u/{m.user_id}" class="member-link">
+							<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}">
+								{initial(m.display_name)}
+							</div>
 							<strong>{m.display_name ?? 'Member'}</strong>
+						</a>
+						<div class="member-info">
 							{#if isAdmin && m.role !== 'owner' && m.user_id !== club?.owner_id}
 								<select
 									class="role-select"
@@ -1394,6 +1400,33 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
+	}
+
+	.member-link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex: 1;
+		min-width: 0;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.member-link:hover strong,
+	.author-link:hover strong {
+		color: var(--color-primary);
+	}
+
+	.author-link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.reply-author-link {
+		text-decoration: none;
 	}
 
 	.member-info {
