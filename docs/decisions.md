@@ -644,6 +644,52 @@ TrainingPeaks invented the Fitness / Fatigue / Form trio (CTL / ATL / TSB) on to
 
 ---
 
+## 35. Plan templates: same shape as club-owned routes; clone-on-adopt, not subscribe
+
+**Decided:** April 2026 · captured before the templates migration.
+
+A plan today is owned by exactly one user. A coach managing 50 athletes ends up either editing 50 copies by hand or living in their head. The right shape is a *template* — a canonical plan that backs many user instances. We use the same pattern decisions §30 (club-owned routes) ships, transposed onto `training_plans`.
+
+**Schema:**
+
+- `training_plans.is_template boolean default false` — flips a row from "instance owned by `user_id`" to "template authored by `user_id`."
+- `training_plans.parent_template_id uuid references training_plans on delete set null` — populated on instances that were cloned from a template. ON DELETE SET NULL because we don't want to delete a runner's executed plan history just because their coach tidied up the template.
+- `training_plans.club_id uuid references clubs on delete cascade` — when set, the template is club-owned (any club admin can edit, any member can read and clone).
+
+**RLS additions** layer onto the existing self-only policies:
+
+- *Club members read club templates*: `for select using (is_template = true and club_id is not null and is_club_member(club_id))`.
+- *Club admins write club templates*: `for all using (is_template = true and club_id is not null and is_club_admin(club_id))`.
+
+The dependent tables (`plan_weeks`, `plan_workouts`) had `user_id = auth.uid()` in their EXISTS subqueries; we relax those to plain `exists (select 1 from training_plans p where p.id = ...)` so the parent's RLS evaluates correctly. A subquery against another table respects that table's RLS, so a user who can SELECT the parent template can transitively SELECT its weeks and workouts.
+
+**Adopt = clone, not subscribe.** A `clone_plan_template(template_id uuid, start_date date) returns uuid` SECURITY DEFINER RPC duplicates the template's `training_plans` + `plan_weeks` + `plan_workouts` into a new instance owned by the caller, anchored to a chosen `start_date`. We pick clone-not-subscribe deliberately:
+
+- *Subscribe* (athletes share the same row, see edits live) tangles authorship: the coach edits Tuesday's workout, every athlete's history mutates, schedules already past get re-written.
+- *Clone* freezes a copy at adoption time. The coach can keep evolving the template; existing instances are unaffected. New athletes who clone *now* get the latest version. Same model GitHub forks use, and the same model `saved_routes` uses (one canonical row, many references).
+
+**Where templates surface:**
+
+- `/clubs/[slug]` gains a Templates section under the existing Routes tab pattern. Admins create / edit / delete templates here.
+- `/plans/new` gets a "Start from a template" picker showing the user's club templates (and eventually public ones — out of scope for v1). Selecting a template + a start_date calls the clone RPC, then redirects to `/plans/[id]` of the new instance.
+- The `instance.parent_template_id` link is exposed on the plan-detail page as a small chip ("Cloned from Aliens Marathon Build" linking back to the source) — context for the runner, with no live coupling.
+
+**Why these and not alternatives:**
+
+- *Subscribe model with live edits* — wrong shape. See above.
+- *Templates as a separate `plan_templates` table* — duplicates the entire plan_weeks / plan_workouts shape. Same maintenance burden as the routes problem we already solved with a single `is_template` flag on the existing table.
+- *Public template library (no club required)* — additive and shippable later; the column shape (`is_template + is_public`) is forward-compatible. Not in v1.
+
+**Trade-offs:**
+
+1. **No live updates from template to instance.** A coach who fixes a typo in week 5 has to ask runners to "re-clone" or fix it in their copies. Acceptable: the alternative is debugging "the schedule changed under me" support tickets.
+2. **A template counts toward the user's plan list** unless we filter on `is_template = false` everywhere. We do — every existing fetcher and the `/plans` page get an `is_template = false` filter. Templates are reachable only through their owning club's surface.
+3. **`training_plans_one_active` partial unique index** is on `where status = 'active'`. Templates don't get `status = 'active'` (they're inert authoring rows), so the index naturally excludes them. We add a CHECK to be explicit: `is_template = false OR status <> 'active'`.
+
+**Don't re-litigate unless:** users ask for live propagation of template edits (then add an opt-in subscribe path that turns on a trigger), public templates become a real ask (add `is_public` and a `/templates` discovery surface), or coaches start needing per-athlete pace overrides on a template (then `parent_template_id` graduates to a "fork-with-overrides" model — a much bigger change).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
