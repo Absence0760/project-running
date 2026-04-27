@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import {
 		fetchPublicProfile,
@@ -85,6 +84,19 @@
 		if (distance_m <= 0 || duration_s <= 0) return '—';
 		return formatPace(duration_s, distance_m);
 	}
+
+	function goBack() {
+		// Profile pages can be reached from many entry points (feed,
+		// kudos givers, club members, follower lists). history.back()
+		// preserves the user's mental flow; the /feed fallback covers
+		// direct navigation / fresh tabs where there's nothing to go
+		// back to.
+		if (typeof history !== 'undefined' && history.length > 1) {
+			history.back();
+		} else {
+			location.href = '/feed';
+		}
+	}
 </script>
 
 <svelte:head>
@@ -92,6 +104,11 @@
 </svelte:head>
 
 <div class="page">
+	<button type="button" class="back-link" onclick={goBack}>
+		<span class="material-symbols">arrow_back</span>
+		Back
+	</button>
+
 	{#if loading}
 		<p class="muted">Loading…</p>
 	{:else if !profile}
@@ -227,6 +244,32 @@
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
+	}
+
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+		margin-bottom: var(--space-md);
+		padding: 0.4rem 0.55rem 0.4rem 0.35rem;
+		background: none;
+		border: none;
+		font-size: 0.9rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		border-radius: var(--radius-md);
+		transition: color var(--transition-fast), background var(--transition-fast);
+	}
+
+	.back-link:hover {
+		color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+	}
+
+	.back-link .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
 	}
 
 	.profile-head {
