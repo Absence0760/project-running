@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { searchPublicRoutes, nearbyPublicRoutes, fetchPopularRouteTags } from '$lib/data';
+	import {
+		searchPublicRoutes,
+		nearbyPublicRoutes,
+		fetchPopularRouteTags,
+		bookmarkRoute,
+		unbookmarkRoute,
+	} from '$lib/data';
 	import type { Route } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -19,6 +25,7 @@
 	let sort = $state<'newest' | 'popular' | 'featured'>('popular');
 	let mode = $state<'search' | 'nearby'>('search');
 	let locationError = $state<string | null>(null);
+	let savedIds = $state<Set<string>>(new Set());
 
 	const PAGE_SIZE = 30;
 
@@ -76,23 +83,32 @@
 		search();
 	}
 
-	async function saveToLibrary(route: Route) {
+	/// Bookmark a public route — inserts a `saved_routes` reference,
+	/// not a private clone (decisions.md § 30). Tap again to unbookmark.
+	async function toggleBookmark(route: Route) {
 		if (!auth.loggedIn) return;
-		const userId = auth.user?.id;
-		if (!userId) return;
-
-		const { error } = await supabase.from('routes').insert({
-			user_id: userId,
-			name: route.name,
-			waypoints: route.waypoints,
-			distance_m: route.distance_m,
-			elevation_m: route.elevation_m,
-			surface: route.surface,
-			is_public: false,
-		});
-		if (!error) {
-			showToast(`Saved "${route.name}" to your library`, 'success');
+		const isSaved = savedIds.has(route.id);
+		try {
+			if (isSaved) {
+				await unbookmarkRoute(route.id);
+				const next = new Set(savedIds);
+				next.delete(route.id);
+				savedIds = next;
+				showToast(`Removed "${route.name}" from your library`);
+			} else {
+				await bookmarkRoute(route.id);
+				savedIds = new Set([...savedIds, route.id]);
+				showToast(`Saved "${route.name}" to your library`, 'success');
+			}
+		} catch (e) {
+			showToast(`Could not update bookmark: ${e}`, 'error');
 		}
+	}
+
+	async function loadSavedIds() {
+		if (!auth.loggedIn) return;
+		const { data } = await supabase.from('saved_routes').select('route_id');
+		savedIds = new Set((data ?? []).map((r) => r.route_id as string));
 	}
 
 	async function searchNearby() {
@@ -133,6 +149,7 @@
 
 	onMount(async () => {
 		popularTags = await fetchPopularRouteTags();
+		loadSavedIds();
 		search();
 	});
 </script>
@@ -261,8 +278,13 @@
 						</div>
 					</a>
 					{#if auth.loggedIn}
-						<button class="save-btn" onclick={() => saveToLibrary(route)} title="Save to your library">
-							<span class="material-symbols">bookmark_add</span>
+						<button
+							class="save-btn"
+							class:saved={savedIds.has(route.id)}
+							onclick={() => toggleBookmark(route)}
+							title={savedIds.has(route.id) ? 'Remove from your library' : 'Save to your library'}
+						>
+							<span class="material-symbols">{savedIds.has(route.id) ? 'bookmark' : 'bookmark_add'}</span>
 						</button>
 					{/if}
 				</div>
@@ -515,6 +537,10 @@
 	.save-btn:hover {
 		color: var(--color-primary);
 		background: rgba(79, 70, 229, 0.1);
+	}
+
+	.save-btn.saved {
+		color: var(--color-primary);
 	}
 
 	.load-more {
