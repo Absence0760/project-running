@@ -1,27 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDuration, formatPace, formatDistance, formatDate, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { fetchPublicRun } from '$lib/data';
+	import { fetchPublicRun, clipTrackForUser } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import type { Run } from '$lib/types';
+	import type { Run, TrackPoint } from '$lib/types';
 
 	let { data } = $props();
 
 	let run = $state<Run | null>(null);
+	let track = $state<TrackPoint[]>([]);
 	let loading = $state(true);
 	let notFound = $state(false);
 
 	onMount(async () => {
 		const r = await fetchPublicRun(data.id);
-		if (r) run = r;
-		else notFound = true;
+		if (r) {
+			run = r;
+			// Clip the rendered track against the owner's privacy zones
+			// (decisions §33). The zones themselves never reach the client
+			// — clip_track_for_user reads them server-side and returns
+			// only the clipped middle. We accept that anonymous viewers
+			// see clipped data via the same RPC as authenticated viewers.
+			const fullTrack = (r.track ?? []) as TrackPoint[];
+			track = (await clipTrackForUser(r.user_id, fullTrack)) as TrackPoint[];
+		} else {
+			notFound = true;
+		}
 		loading = false;
 	});
 
-	let track = $derived(run?.track ?? []);
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
 	let pageTitle = $derived(run ? `${formatDistance(run.distance_m)} Run — Run Onward` : 'Run — Run Onward');
 	let pageDesc = $derived(run ? `${formatDistance(run.distance_m)} in ${formatDuration(run.duration_s)} — ${formatPace(run.duration_s, run.distance_m)}` : '');

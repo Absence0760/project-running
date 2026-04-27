@@ -586,11 +586,15 @@ A list is the right shape because every realistic user has exactly 0–3 zones (
 - *`/feed`* — entries link to `/share/run/[id]`, so clipping happens there.
 - *`/u/[id]/...`* — the profile page surfaces a list of public runs but each one's detail page handles its own clipping.
 
-**Why client-side:**
+**Why a SECURITY DEFINER RPC, not pure-client clipping:**
 
-- *Server-side clipping at insert / update time* is destructive — the owner can't get their full track back after toggling a zone off. Client clipping at render time is reversible by definition.
-- *A SECURITY DEFINER RPC that returns the clipped track* would centralise the rule but force every consumer through one specific PostgREST shape and defeat the existing `track_url` Storage download path.
-- *Modifying the `routes_set_start_point` trigger to read user_settings* is the right v2 fix for the nearby-routes leak (see below) but it's complex (cross-table RLS + new helper function), and we'd ship one without the other anyway.
+The naive shape ("just fetch the owner's `privacy_zones` and clip on the client") leaks the zones — defeating the whole point. Public viewers can't be trusted with the zone polygons. So the actual implementation is a `clip_track_for_user(target_user_id, points jsonb)` SECURITY DEFINER RPC that reads zones internally and returns only the clipped output. Zones never cross the wire to a non-owner.
+
+- *Server-side clipping at insert / update time* is destructive — the owner can't get their full track back after toggling a zone off. RPC at render time is reversible by definition.
+- *Pre-storing two Storage objects per run* (full-fidelity owner-only + pre-clipped public) is the right v3 architecture, but doubles storage and forces the recorder/uploader to know about zones. Future work.
+- *Modifying the `routes_set_start_point` trigger to read user_settings* is the right v2 fix for the nearby-routes leak (see below) — same `security definer` pattern, just different call site.
+
+There's a residual attack: a determined caller can pass a dense synthetic point grid to the RPC and recover zone geometry from the clip output. Mitigations: input length bounded to a reasonable track size; the RPC is auth-required (anonymous shares stay unclipped today, which is a separate v2 follow-up to add anon-callable + rate-limited variant). For a casual-privacy threat model — which is what `privacy_zones` is for, distinct from a stalking threat model — this is acceptable.
 
 **Trade-offs we're explicitly accepting:**
 

@@ -1310,6 +1310,10 @@ export type Database = {
         }
       }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
+      clip_track_for_user: {
+        Args: { points: Json; target_user_id: string }
+        Returns: Json
+      }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
@@ -1388,6 +1392,14 @@ export type Database = {
           route_count: number
           tag: string
         }[]
+      }
+      privacy_distance_m: {
+        Args: { lat1: number; lat2: number; lng1: number; lng2: number }
+        Returns: number
+      }
+      privacy_in_any_zone: {
+        Args: { lat: number; lng: number; zones_json: Json }
+        Returns: boolean
       }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }

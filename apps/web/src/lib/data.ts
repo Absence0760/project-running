@@ -2308,6 +2308,27 @@ export async function fetchFollowingFeed(opts?: {
 	}));
 }
 
+/// Server-side privacy-zone clipping (decisions §33). Pass the run /
+/// route owner's `user_id` and a points array; receive the clipped
+/// middle. Zones never come down the wire — the RPC reads them
+/// internally with security-definer privileges. Returns the input
+/// unchanged when the owner has no zones configured.
+export async function clipTrackForUser(
+	targetUserId: string,
+	points: { lat: number; lng: number; ele?: number; t?: number }[]
+): Promise<{ lat: number; lng: number; ele?: number; t?: number }[]> {
+	if (points.length === 0) return points;
+	const { data, error } = await supabase.rpc('clip_track_for_user', {
+		target_user_id: targetUserId,
+		points,
+	});
+	if (error) {
+		console.warn('clip_track_for_user failed; falling back to unclipped track', error);
+		return points;
+	}
+	return (data ?? points) as typeof points;
+}
+
 /// Recent public runs from a single user — used by the profile page.
 export async function fetchPublicRunsByUser(userId: string, limit = 20): Promise<Run[]> {
 	const { data } = await supabase

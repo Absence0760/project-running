@@ -1,24 +1,31 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { fetchPublicRoute } from '$lib/data';
+	import { fetchPublicRoute, clipTrackForUser } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
-	import type { Route } from '$lib/types';
+	import type { Route, TrackPoint } from '$lib/types';
 
 	let { data } = $props();
 
 	let route = $state<Route | null>(null);
+	let waypoints = $state<TrackPoint[]>([]);
 	let loading = $state(true);
 	let notFound = $state(false);
 
 	onMount(async () => {
-		route = await fetchPublicRoute(data.id);
-		if (!route) notFound = true;
+		const r = await fetchPublicRoute(data.id);
+		if (!r) {
+			notFound = true;
+		} else {
+			route = r;
+			// Clip start + end against the owner's privacy zones (§33).
+			waypoints = (await clipTrackForUser(r.user_id, r.waypoints ?? [])) as TrackPoint[];
+		}
 		loading = false;
 	});
 
-	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+	let elevations = $derived(waypoints.map((w) => w.ele ?? 0));
 	let hasElevationData = $derived(
 		elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations)
 	);
@@ -61,9 +68,9 @@
 				<span class="surface-tag">{route.surface}</span>
 			</div>
 
-			{#if route.waypoints.length > 0}
+			{#if waypoints.length > 0}
 				<div class="map-container">
-					<RunMap track={route.waypoints} />
+					<RunMap track={waypoints} />
 				</div>
 
 				{#if hasElevationData}
