@@ -753,7 +753,6 @@
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
-		max-width: 72rem;
 	}
 
 	.page-header {
