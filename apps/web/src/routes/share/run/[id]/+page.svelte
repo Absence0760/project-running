@@ -5,6 +5,7 @@
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
+	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import type { Run, TrackPoint } from '$lib/types';
 
@@ -84,6 +85,10 @@
 					<ElevationProfile {elevations} totalDistance={run.distance_m} />
 				</section>
 			{/if}
+
+			<section class="card">
+				<RunPhotos runId={run.id} runOwnerId={run.user_id} />
+			</section>
 
 			{#if auth.loggedIn}
 				<section class="card">

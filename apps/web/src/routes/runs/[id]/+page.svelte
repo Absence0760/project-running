@@ -3,6 +3,7 @@
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
+	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import {
 		formatDuration,
@@ -702,6 +703,10 @@
 		<section class="section">
 			<h2>Elevation Profile</h2>
 			<ElevationProfile {elevations} totalDistance={run.distance_m} />
+		</section>
+
+		<section class="section">
+			<RunPhotos runId={run.id} runOwnerId={run.user_id} />
 		</section>
 
 		<!-- Kudos + comments — visible whether the run is private or public,
