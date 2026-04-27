@@ -1199,6 +1199,88 @@ class RouteRow {
   };
 }
 
+/// Row shape for the `run_comments` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RunCommentRow {
+  static const String table = 'run_comments';
+  static const String colId = 'id';
+  static const String colRunId = 'run_id';
+  static const String colAuthorId = 'author_id';
+  static const String colParentCommentId = 'parent_comment_id';
+  static const String colBody = 'body';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String runId;
+  final String authorId;
+  final String? parentCommentId;
+  final String body;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const RunCommentRow({
+    required this.id,
+    required this.runId,
+    required this.authorId,
+    this.parentCommentId,
+    required this.body,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory RunCommentRow.fromJson(Map<String, dynamic> json) => RunCommentRow(
+    id: json['id'] as String,
+    runId: json['run_id'] as String,
+    authorId: json['author_id'] as String,
+    parentCommentId: json['parent_comment_id'] as String?,
+    body: json['body'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRunId: runId,
+    colAuthorId: authorId,
+    colParentCommentId: parentCommentId,
+    colBody: body,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `run_kudos` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RunKudosRow {
+  static const String table = 'run_kudos';
+  static const String colUserId = 'user_id';
+  static const String colRunId = 'run_id';
+  static const String colGivenAt = 'given_at';
+
+  final String userId;
+  final String runId;
+  final DateTime givenAt;
+
+  const RunKudosRow({
+    required this.userId,
+    required this.runId,
+    required this.givenAt,
+  });
+
+  factory RunKudosRow.fromJson(Map<String, dynamic> json) => RunKudosRow(
+    userId: json['user_id'] as String,
+    runId: json['run_id'] as String,
+    givenAt: DateTime.parse(json['given_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colRunId: runId,
+    colGivenAt: givenAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `runs` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RunRow {
