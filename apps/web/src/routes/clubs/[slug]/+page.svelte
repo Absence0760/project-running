@@ -15,6 +15,8 @@
 		fetchClubRoutes,
 		fetchRoutes,
 		setRouteClubId,
+		fetchClubTemplates,
+		setPlanIsTemplate,
 		approveMember,
 		rejectMember,
 		setMemberRole,
@@ -27,7 +29,7 @@
 	} from '$lib/data';
 	import { formatDistance } from '$lib/mock-data';
 	import TrackPreview from '$lib/components/TrackPreview.svelte';
-	import type { Route } from '$lib/types';
+	import type { Route, TrainingPlan } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
@@ -47,12 +49,13 @@
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
-	let tab = $state<'feed' | 'events' | 'routes' | 'members'>('feed');
+	let tab = $state<'feed' | 'events' | 'routes' | 'templates' | 'members'>('feed');
 	let showEventModal = $state(false);
 	let clubRoutes = $state<Route[]>([]);
 	let transferableRoutes = $state<Route[]>([]);
 	let showTransferModal = $state(false);
 	let transferRouteId = $state('');
+	let clubTemplates = $state<TrainingPlan[]>([]);
 
 	async function handleEventCreated(event: { id: string }) {
 		showEventModal = false;
@@ -87,7 +90,7 @@
 			loading = false;
 			return;
 		}
-		const [up, pa, po, me, pe, rt] = await Promise.all([
+		const [up, pa, po, me, pe, rt, tp] = await Promise.all([
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
@@ -95,7 +98,8 @@
 			club.viewer_role === 'owner' || club.viewer_role === 'admin'
 				? fetchPendingRequests(club.id)
 				: Promise.resolve([]),
-			fetchClubRoutes(club.id)
+			fetchClubRoutes(club.id),
+			fetchClubTemplates(club.id)
 		]);
 		upcoming = up;
 		past = pa;
@@ -103,7 +107,18 @@
 		members = me;
 		pending = pe;
 		clubRoutes = rt;
+		clubTemplates = tp;
 		loading = false;
+	}
+
+	async function unmakeTemplate(planId: string) {
+		try {
+			await setPlanIsTemplate(planId, false, null);
+			showToast('Template removed from club.');
+			await load();
+		} catch (e) {
+			showToast(`Failed: ${e}`, 'error');
+		}
 	}
 
 	async function openTransferModal() {
@@ -484,6 +499,9 @@
 			<button class="tab" class:active={tab === 'routes'} onclick={() => (tab = 'routes')}>
 				Routes{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
 			</button>
+			<button class="tab" class:active={tab === 'templates'} onclick={() => (tab = 'templates')}>
+				Templates{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
+			</button>
 			<button class="tab" class:active={tab === 'members'} onclick={() => (tab = 'members')}>
 				Members
 			</button>
@@ -760,6 +778,45 @@
 						</div>
 					{/each}
 				</div>
+			{/if}
+		{:else if tab === 'templates'}
+			<p class="section-hint">
+				Plan templates the club hosts. Members can clone any template into a personal plan with a
+				start date of their choosing — edits won't propagate back to the template.
+			</p>
+			{#if clubTemplates.length === 0}
+				<div class="empty">
+					<p>No plan templates yet.</p>
+					{#if isAdmin}
+						<p class="muted">
+							Create a plan, then on its detail page mark it as a template for this club.
+						</p>
+					{/if}
+				</div>
+			{:else}
+				<ul class="template-list">
+					{#each clubTemplates as t (t.id)}
+						<li class="template-row">
+							<a href="/plans/{t.id}" class="template-link">
+								<strong>{t.name}</strong>
+								<span class="template-meta">
+									{t.goal_event} · {(Number(t.goal_distance_m) / 1000).toFixed(1)} km
+									· {t.days_per_week}/wk
+								</span>
+							</a>
+							{#if isAdmin}
+								<button
+									class="btn btn-outline btn-sm"
+									type="button"
+									onclick={() => unmakeTemplate(t.id)}
+									title="Remove from club templates (the plan stays in the author's library)"
+								>
+									Unpublish
+								</button>
+							{/if}
+						</li>
+					{/each}
+				</ul>
 			{/if}
 		{:else if tab === 'members'}
 			<div class="member-list">
@@ -1608,6 +1665,48 @@
 
 	.hint {
 		font-size: 0.85rem;
+	}
+
+	.section-hint {
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+		line-height: 1.5;
+		margin: 0 0 var(--space-md) 0;
+	}
+
+	.template-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.template-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+
+	.template-link {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		text-decoration: none;
+		color: inherit;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.template-meta {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
 	}
 
 	/* .modal-* classes live in app.css. */

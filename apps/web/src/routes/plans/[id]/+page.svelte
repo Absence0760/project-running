@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fetchPlan } from '$lib/data';
+	import { fetchPlan, fetchMyClubs, setPlanIsTemplate } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fmtHms,
 		isWorkoutCompleted,
@@ -13,7 +15,7 @@
 		todayISO
 	} from '$lib/training';
 	import { fmtKm, fmtPace } from '$lib/units.svelte';
-	import type { TrainingPlan, PlanWeek, PlanWorkout } from '$lib/types';
+	import type { TrainingPlan, PlanWeek, PlanWorkout, ClubWithMeta } from '$lib/types';
 
 	let id = $derived($page.params.id as string);
 	let plan = $state<TrainingPlan | null>(null);
@@ -21,6 +23,9 @@
 	let workouts = $state<PlanWorkout[]>([]);
 	let loading = $state(true);
 	let editing = $state<PlanWorkout | null>(null);
+
+	let adminClubs = $state<ClubWithMeta[]>([]);
+	let publishingTo = $state('');
 
 	async function load() {
 		loading = true;
@@ -31,7 +36,28 @@
 		loading = false;
 	}
 
-	onMount(load);
+	onMount(async () => {
+		await load();
+		// Only owners-of-this-plan see the publish-as-template control,
+		// and only when they have at least one club they admin.
+		if (auth.user?.id && plan?.user_id === auth.user.id) {
+			const clubs = await fetchMyClubs();
+			adminClubs = clubs.filter(
+				(c) => c.viewer_role === 'owner' || c.viewer_role === 'admin'
+			);
+		}
+	});
+
+	async function publishAsTemplate() {
+		if (!plan || !publishingTo) return;
+		try {
+			await setPlanIsTemplate(plan.id, true, publishingTo);
+			showToast('Plan published as a club template.');
+			await load();
+		} catch (e) {
+			showToast(`Failed to publish: ${e}`, 'error');
+		}
+	}
 
 	let workoutsByWeek = $derived.by(() => {
 		const m = new Map<string, PlanWorkout[]>();
@@ -108,6 +134,18 @@
 		<header class="hero">
 			<div>
 				<h1>{plan.name}</h1>
+				{#if plan.parent_template_id}
+					<a class="parent-chip" href="/plans/{plan.parent_template_id}">
+						<span class="material-symbols">link</span>
+						Cloned from a template
+					</a>
+				{/if}
+				{#if plan.is_template && plan.club_id}
+					<span class="template-chip">
+						<span class="material-symbols">groups</span>
+						Club template
+					</span>
+				{/if}
 				<div class="meta">
 					<span>
 						<span class="material-symbols">flag</span>
@@ -140,6 +178,26 @@
 				</div>
 			</div>
 		</header>
+
+		{#if !plan.is_template && adminClubs.length > 0 && plan.user_id === auth.user?.id}
+			<section class="publish-row">
+				<span class="publish-label">Publish as a club template:</span>
+				<select bind:value={publishingTo}>
+					<option value="">— pick a club —</option>
+					{#each adminClubs as c (c.id)}
+						<option value={c.id}>{c.name}</option>
+					{/each}
+				</select>
+				<button
+					class="btn btn-outline"
+					type="button"
+					disabled={!publishingTo}
+					onclick={publishAsTemplate}
+				>
+					Publish
+				</button>
+			</section>
+		{/if}
 
 		{#if todayWorkout}
 			<section class="today">
@@ -299,6 +357,49 @@
 	}
 	.meta .material-symbols {
 		font-size: 1rem;
+	}
+	.parent-chip,
+	.template-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: 0.3rem;
+		padding: 0.2rem 0.6rem;
+		border-radius: 9999px;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+		font-size: 0.78rem;
+		text-decoration: none;
+	}
+	.parent-chip:hover {
+		color: var(--color-primary);
+	}
+	.parent-chip .material-symbols,
+	.template-chip .material-symbols {
+		font-size: 0.95rem;
+	}
+	.publish-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		padding: var(--space-md) var(--space-lg);
+		margin: var(--space-md) 0;
+		background: var(--color-surface);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.publish-label {
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+	}
+	.publish-row select {
+		padding: 0.4rem 0.7rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-size: 0.9rem;
 	}
 	.progress-circle {
 		width: 5rem;
