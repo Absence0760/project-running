@@ -21,9 +21,11 @@ Deployed to GitHub Pages for the static site; Vercel adapter is used when a serv
 ```
 src/
   lib/
-    components/     # RunMap, ElevationProfile, ImportRoute, RouteBuilder, CoachChat, ConfirmDialog, ToastContainer, ProGate,
-                    # WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer, CalendarHeatmap, LicenseList,
-                    # ClubEditor, EventEditor, PlanEditor, RunEditor (modal-hosted creation forms),
+    components/     # Modal + SplitPane (primitives), RunMap, ElevationProfile (Android-style interactive chart), ImportRoute, RouteBuilder, CoachChat,
+                    # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer,
+                    # CalendarHeatmap, LicenseList, ClubEditor, EventEditor, PlanEditor (editable preview), PlanMetaEditor, RunEditor
+                    # (modal-hosted creation forms), PrivacyZonePicker (MapLibre map picker for owner zones, decisions §33),
+                    # TrainingLoadChart (90-day fitness/fatigue/form trio on /dashboard, decisions §34),
                     # PeriodSummary (week/month stats + run list — used by dashboard modal AND /dashboard/period/...),
                     # RunSocial (kudos + comments on a run — mounted on /share/run/[id], /runs/[id]; feed uses fetchEngagementSummaries chips instead),
                     # RunPhotos (gallery for run_photos — mounted on /runs/[id] and /share/run/[id]; owner gates upload + delete; decisions §36),
@@ -66,12 +68,13 @@ src/
     clubs/[slug]/events/[id]/     # Event detail + per-instance RSVP + per-event updates
     clubs/join/[token]/           # Public invite-link landing (redeems via join_club_by_token RPC)
     plans/          # Training plans list
-    plans/new/      # New-plan wizard with live preview
-    plans/[id]/     # Plan detail: progress ring, today card, week grid
+    plans/new/      # New-plan wizard with editable week-by-week preview (click a week to expand the day-by-day editor; edits persist on submit)
+    plans/[id]/     # Plan detail: progress ring, today card, week grid + Edit-plan button (PlanMetaEditor) for owner-only meta edits (name, days/week, goal time, rules)
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
     coach/          # Standalone Coach chat — plan switcher (?plan=<id>), configurable runs window (10/20/50/100), grounded-in context strip
     api/coach/+server.ts         # Coach endpoint. Default provider: Claude (ANTHROPIC_API_KEY). Set COACH_PROVIDER=openai + OPENAI_BASE_URL for local Ollama.
     explore/        # Thin redirect to /routes?tab=explore (kept so old links / Android deep links still resolve)
+    notifications/  # Inbox for kudos / comments / replies / follows (decisions §38). All / Unread tabs, per-row dismiss, bulk Mark all read.
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)

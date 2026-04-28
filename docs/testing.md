@@ -203,7 +203,7 @@ Ported from `apps/mobile_android/test/local_run_store_test.dart` when the iOS Ph
 
 Regression for the `RunSource.watch` enum-map regen. Constructs a `Run` with `source: RunSource.watch`, asserts `toJson()['source'] == 'watch'` and `fromJson({'source': 'watch'}).source == RunSource.watch`. Existed to catch the crash that would otherwise hit `_$RunSourceEnumMap[instance.source]!` on any serialisation of a watch-originated run.
 
-### `apps/web/src/lib/training.test.ts` — 21 tests
+### `apps/web/src/lib/training.test.ts` — 29 tests
 
 TypeScript unit tests for the training plan engine, written against Node's `node:test` API (no test runner dependency). Run with `npx tsx --test src/lib/training.test.ts` from `apps/web`.
 
@@ -221,9 +221,10 @@ TypeScript unit tests for the training plan engine, written against Node's `node
 - Zones ordered slow to fast
 - 4:00/km goal yields easy pace in the 4:30-5:15 band
 
-**`resolveTrainingPaces` (2 tests):**
+**`resolveTrainingPaces` (3 tests):**
 - Recent 5k beats goal time as pace anchor
 - Fall-back without race data produces valid paces
+- Marathon-only goal time yields a valid pace set
 
 **`phaseFor` (2 tests):**
 - 16-week plan splits ~30/40/20/10 base/build/peak/taper
@@ -242,6 +243,17 @@ TypeScript unit tests for the training plan engine, written against Node's `node
 **`GOAL_DISTANCES_M` (1 test):**
 - Half marathon constant is within 1m of 21.0975km
 
+**`formatISO` (3 tests):**
+- Returns local-tz components, not UTC
+- Zero-pads single-digit month and day
+- `shiftPeriod` by 7 days lands on the same weekday
+
+**`isWorkoutCompleted` (4 tests):**
+- False when neither flag set
+- True when a run is linked
+- True when manually marked
+- True when both set
+
 ### `apps/web/src/lib/segments.test.ts` — 8 tests
 
 TypeScript unit tests for the pure segment-effort compute (`lib/segments.ts`, decisions §37). Run with `npx tsx --test src/lib/segments.test.ts` from `apps/web`. Covers `computeEffortFromTrack`:
@@ -256,6 +268,48 @@ TypeScript unit tests for the pure segment-effort compute (`lib/segments.ts`, de
 - Handles tracks where segment endpoints align with sample crossings.
 
 The synthetic `straightTrack` helper builds a meridian-aligned sequence of `(lat, lng, ts)` so haversine cumulative distance matches `(i * stepM)` to within ~0.5m.
+
+### `apps/web/src/lib/privacy.test.ts` — 8 tests
+
+TypeScript unit tests for the pure privacy-zone clipper (`lib/privacy.ts`, decisions §33). Run with `npx tsx --test src/lib/privacy.test.ts` from `apps/web`.
+
+**`isInAnyZone` (3 tests):**
+- Empty zones returns false
+- A point at a zone's centre is inside
+- A far-away point is not
+
+**`clipPointsToZones` (5 tests):**
+- Empty zones returns input unchanged
+- Drops a leading prefix and a trailing suffix that are entirely inside zones
+- Keeps interior in-zone segments (v1 only clips the ends — see source comment)
+- Every point in a zone returns empty
+- Multiple zones — clips against the union
+
+The pure-JS clipper drives owner-side previews; non-owner viewers go through the `clip_track_for_user` SECURITY DEFINER RPC so zones never leave the database.
+
+### `apps/web/src/lib/training_load.test.ts` — 10 tests
+
+TypeScript unit tests for the training-load curves (`lib/training_load.ts`, decisions §34). Run with `npx tsx --test src/lib/training_load.test.ts` from `apps/web`.
+
+**`computeStress` (3 tests):**
+- Distance-fallback path gives ~50 for an easy 5K
+- TRIMP path lights up when avg_bpm + resting + max are all set
+- Zero distance + zero duration gives 0
+
+**`aggregateDailyStress` (1 test):**
+- Sums same-day runs into one daily bucket
+
+**`computeTrainingLoadSeries` (3 tests):**
+- Emits exactly `windowDays` entries
+- TSB rises during a taper (no runs after a heavy build)
+- Series is all-zero when there are no runs
+
+**`hasTrimpSignal` (3 tests):**
+- False when no run has avg_bpm
+- True when at least one run has avg_bpm and prefs are set
+- False when prefs are missing
+
+The TrainingLoadChart component on `/dashboard` renders the three series; `hasTrimpSignal` flips the chart's "TRIMP / distance proxy" subtitle.
 
 **Test-runner constraint:** `tsx --test` runs raw TypeScript through the Node loader and does not understand Svelte runes. That means `*.svelte.ts` modules (`units.svelte.ts`, `stores/auth.svelte.ts`, `stores/toast.svelte.ts`) cannot be imported — the `$state(...)` call at module load fails with `ReferenceError: $state is not defined`. Keep test-targeted modules (`training.ts`, `fitness.ts`, etc.) free of imports from `.svelte.ts` files. The unit-aware formatters `fmtKm` / `fmtPace` live in `units.svelte.ts` for that reason; UI code imports them from `$lib/units.svelte` directly. Adding vitest with the Svelte plugin would lift this restriction — not done yet.
 

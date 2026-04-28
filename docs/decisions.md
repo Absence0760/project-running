@@ -727,7 +727,7 @@ The full Strava model is hard: an arbitrary polyline anywhere on Earth becomes a
 
 **Schema:**
 
-- `segments (id, route_id, name, start_distance_m, end_distance_m, length_m, is_public, created_by, created_at)` — `length_m = end - start` is denormalised but cheap and saves the leaderboard query a subtraction.
+- `segments (id, route_id, name, start_distance_m, end_distance_m, length_m, created_by, created_at)` — `length_m` is a `generated always as (end_distance_m - start_distance_m) stored` column so the leaderboard query saves a subtraction without risking drift. There's no `is_public` flag — visibility is inherited from the parent route via RLS (an EXISTS subquery), so a segment on a public route is public-readable and a segment on a private route stays private.
 - `segment_efforts (id, segment_id, run_id, user_id, time_seconds, started_at)` with `unique (segment_id, run_id)` so a re-import doesn't double-count.
 
 **RLS:** segments inherit visibility from the parent route (EXISTS-on-routes — same shape as kudos, comments, club routes). Efforts inherit from the segment + the underlying run, joined: `select 1 from segments s join runs r on r.id = segment_efforts.run_id where s.id = segment_efforts.segment_id`. Public route → segment is public-readable; private route → only the owner sees it.
