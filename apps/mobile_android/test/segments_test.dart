@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/segments.dart';
+import '../lib/segments.dart';
 
 /// Synthesises a straight-line track at constant pace. Each step adds
 /// roughly `stepM` of distance and `stepS` seconds. Lat advances along

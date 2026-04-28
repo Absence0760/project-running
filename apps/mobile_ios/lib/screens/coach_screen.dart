@@ -12,6 +12,65 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../training_service.dart';
 
+/// Truncate a coach message to a sidebar-thread title. Strips repeated
+/// whitespace so multi-line user prompts collapse to a single line, then
+/// caps at 48 chars with an ellipsis. Pure helper — used by the active
+/// thread row and exposed for unit tests.
+String coachTitleFromMessage(String content) {
+  final trimmed = content.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (trimmed.length <= 48) return trimmed;
+  return '${trimmed.substring(0, 47).trimRight()}…';
+}
+
+/// Render a relative archive label ("Today", "Yesterday", "3 days ago",
+/// or YYYY-MM-DD beyond a week). The optional [now] is for tests; in
+/// production the call site uses `DateTime.now()` implicitly.
+String coachArchiveLabel(DateTime t, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final diff = reference.difference(t);
+  if (diff.inDays <= 0) return 'Today';
+  if (diff.inDays == 1) return 'Yesterday';
+  if (diff.inDays < 7) return '${diff.inDays} days ago';
+  return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+}
+
+/// One parsed Server-Sent-Events block from the `/api/coach` stream.
+/// `event` is the event type (`meta`, `token`, `done`, `error`, or
+/// `message` if no `event:` line was present); `data` is the JSON-decoded
+/// payload from the `data:` line. Returns null if the block had no
+/// `data:` payload or the JSON failed to decode.
+class CoachSseEvent {
+  final String event;
+  final Map<String, dynamic> data;
+  const CoachSseEvent({required this.event, required this.data});
+}
+
+/// Parse a single SSE block from the Coach stream. SSE blocks are
+/// `\n\n`-delimited; the upstream `_readSse` splits on that, this helper
+/// turns one block into a typed event. Pure — no side effects.
+CoachSseEvent? parseCoachSseEvent(String block) {
+  String event = 'message';
+  String dataStr = '';
+  for (final line in block.split('\n')) {
+    if (line.startsWith('event:')) {
+      event = line.substring(6).trim();
+    } else if (line.startsWith('data:')) {
+      dataStr += line.substring(5).trim();
+    }
+  }
+  if (dataStr.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(dataStr);
+    if (decoded is! Map) return null;
+    return CoachSseEvent(
+      event: event,
+      data: Map<String, dynamic>.from(decoded),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 /// AI Coach chat. Mirrors `apps/web/src/lib/components/CoachChat.svelte`
 /// + `/coach/+page.svelte`. One screen file by design — see backlog.
 class CoachScreen extends StatefulWidget {
@@ -432,22 +491,10 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   void _handleSseEvent(String block, int assistantIdx) {
-    String event = 'message';
-    String dataStr = '';
-    for (final line in block.split('\n')) {
-      if (line.startsWith('event:')) {
-        event = line.substring(6).trim();
-      } else if (line.startsWith('data:')) {
-        dataStr += line.substring(5).trim();
-      }
-    }
-    if (dataStr.isEmpty) return;
-    Map<String, dynamic> data;
-    try {
-      data = jsonDecode(dataStr) as Map<String, dynamic>;
-    } catch (_) {
-      return;
-    }
+    final parsed = parseCoachSseEvent(block);
+    if (parsed == null) return;
+    final event = parsed.event;
+    final data = parsed.data;
     if (event == 'meta') {
       final userMessageId = data['user_message_id'] as String?;
       if (userMessageId != null && assistantIdx - 1 >= 0) {
@@ -590,26 +637,13 @@ class _CoachScreenState extends State<CoachScreen> {
     _subscribeRealtime();
   }
 
-  String _archiveLabel(DateTime t) {
-    final now = DateTime.now();
-    final diff = now.difference(t);
-    if (diff.inDays <= 0) return 'Today';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays} days ago';
-    return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
-  }
+  String _archiveLabel(DateTime t) => coachArchiveLabel(t);
 
   String _activeThreadTitle() {
     for (final m in _messages) {
-      if (m.role == 'user') return _titleFromMessage(m.content);
+      if (m.role == 'user') return coachTitleFromMessage(m.content);
     }
     return 'New conversation';
-  }
-
-  String _titleFromMessage(String content) {
-    final trimmed = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (trimmed.length <= 48) return trimmed;
-    return '${trimmed.substring(0, 47).trimRight()}…';
   }
 
   @override

@@ -2,9 +2,9 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/run_stats.dart';
-import 'package:mobile_android/widgets/run_share_card.dart';
+import '../lib/preferences.dart';
+import '../lib/run_stats.dart';
+import '../lib/widgets/run_share_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Run _run({

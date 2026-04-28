@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/route_simplify.dart';
+import '../lib/route_simplify.dart';
 
 void main() {
   // Approximate conversions near the equator:

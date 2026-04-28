@@ -1,7 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/screens/period_summary_screen.dart';
-import 'package:mobile_android/preferences.dart';
+import '../lib/screens/period_summary_screen.dart';
+import '../lib/preferences.dart';
 
 Run _makeRun({
   required DateTime startedAt,

@@ -781,6 +781,27 @@ The social loop (kudos, comments, replies, follows) was discoverable only by vis
 
 ---
 
+## 39. mobile_android and mobile_ios share a byte-for-byte Dart codebase
+
+**Decided:** April 2026 · supersedes the "copy-then-converge per file" guidance from earlier in §24.
+
+`apps/mobile_android/lib/` and `apps/mobile_ios/lib/` are kept identical via `diff -rq`. Same for `apps/mobile_android/test/` and `apps/mobile_ios/test/`. The pubspec deltas are limited to `name` and `description`. Platform-specific behaviour (Apple Sign-In vs Google, dotenv vs `--dart-define`, Apple Watch ingest vs Wear OS data layer, foreground-service notification on Android vs `allowsBackgroundLocationUpdates` on iOS) is dispatched at runtime via `Platform.isAndroid` / `Platform.isIOS` inside the unified files. Modules whose MethodChannel only exists on one platform (`run_notification_bridge`, `wear_auth_bridge`, `WatchIngest`) live in both apps; calls on the platform without a registered channel throw `MissingPluginException`, which the existing try/catch in each module silently swallows.
+
+**Why:** the previous "copy-then-converge per file" rule meant the iOS twin was always weeks behind whichever Android feature shipped most recently. Drift accumulated between the twins because nobody re-ran the copy pass after every commit; by the time iOS got a Mac build, the diff was 30+ files long and the catch-up was its own session. Forcing the trees to be identical at every commit moves the cost from "audit drift later" to "include both apps in the same change now," which is much smaller per change and impossible to forget — the architecture-guard test would catch a divergent file the moment CI runs.
+
+**How to apply it:**
+
+1. **Editing.** Treat `apps/mobile_android/lib/` as the canonical edit surface. Apply the same diff to `apps/mobile_ios/lib/` in the same commit. Don't try to edit them in parallel — pick one, copy.
+2. **Platform branches.** When behaviour genuinely differs between platforms, branch with `Platform.isAndroid` / `Platform.isIOS` inside the unified file. Don't fork the file.
+3. **New deps.** Add to both pubspecs in the same commit. The architecture-guard test pins this; let it fail fast.
+4. **Tests.** Same rule as `lib/`. The test suite runs against both apps; a test that only makes sense on one platform should still build cleanly on the other (skip with `Platform.isAndroid` / `isIOS` if needed).
+
+**Trade-off:** every PR that touches either app touches both. That's worth it because the cost is now paid in linear-time editing (apply the diff to both files) instead of exponential-time drift recovery. The alternative (lift to a shared package under `packages/`) is the long-term answer, but a shared package needs an interface boundary that the per-screen deps don't naturally have yet — converging to a verbatim duplicate first lets the boundary emerge before we bake it in.
+
+**Don't re-litigate unless:** the Mac build keeps catching iOS-specific bugs that mean iOS needs *its own* version of more than two files, at which point the verbatim-twin overhead exceeds the drift-recovery overhead and a shared-package extraction is worth doing properly. The architecture-guard test on `lib/screens/run_screen.dart` is the canary: when it starts diverging meaningfully in behaviour between platforms, that's the signal.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

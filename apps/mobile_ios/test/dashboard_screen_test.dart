@@ -4,10 +4,10 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_android/local_route_store.dart';
-import 'package:mobile_android/local_run_store.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/screens/dashboard_screen.dart';
+import '../lib/local_route_store.dart';
+import '../lib/local_run_store.dart';
+import '../lib/preferences.dart';
+import '../lib/screens/dashboard_screen.dart';
 
 Directory? _runsDir;
 

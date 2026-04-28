@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/local_run_store.dart';
-import 'package:mobile_android/screens/import_screen.dart';
+import '../lib/local_run_store.dart';
+import '../lib/screens/import_screen.dart';
 
 late Directory _runsDir;
 

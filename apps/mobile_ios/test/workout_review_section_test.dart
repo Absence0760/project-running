@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/training.dart' show fmtPace;
-import 'package:mobile_android/widgets/workout_review_section.dart';
+import '../lib/training.dart' show fmtPace;
+import '../lib/widgets/workout_review_section.dart';
 
 Map<String, dynamic> _step({
   required String kind,

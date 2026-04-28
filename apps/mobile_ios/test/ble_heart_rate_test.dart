@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/ble_heart_rate.dart';
+import '../lib/ble_heart_rate.dart';
 
 void main() {
   group('parseBleHeartRateMeasurement', () {

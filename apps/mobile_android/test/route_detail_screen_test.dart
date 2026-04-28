@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_android/local_route_store.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/screens/route_detail_screen.dart';
+import '../lib/local_route_store.dart';
+import '../lib/preferences.dart';
+import '../lib/screens/route_detail_screen.dart';
 
 cm.Route _route({String name = 'River Loop', bool isPublic = false}) =>
     cm.Route(

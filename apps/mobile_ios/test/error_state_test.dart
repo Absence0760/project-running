@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/widgets/error_state.dart';
+import '../lib/widgets/error_state.dart';
 
 Future<void> _pump(
   WidgetTester tester, {

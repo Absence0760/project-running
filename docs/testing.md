@@ -43,7 +43,9 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **at least 400 tests across 40+ documented files** — 322 Dart tests in mobile_android (40 test files, 109 `testWidgets` calls across 22 widget-test files), 17 in mobile_ios, 38 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the exact current count.
+Total: **at least 350 unique Dart mobile tests across 42 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 38 tests in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. Both mobile apps run the same 42 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~700 mobile test runs. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+
+Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -207,9 +209,17 @@ Dart mirror of `apps/web/src/lib/segments.test.ts`. Pure tests for the segment-e
 
 Dart mirror of `apps/web/src/lib/privacy.test.ts`. Pure tests for `lib/privacy.dart`. Covers `isInAnyZone` (empty zones, centre, far point) and `clipPointsToZones` (empty zones returns input, drops leading + trailing in-zone, keeps interior, every-point-in-zone returns empty, multi-zone union).
 
-### `apps/mobile_ios/test/local_run_store_test.dart` — 17 tests
+### `apps/mobile_android/test/run_photos_helpers_test.dart` — 9 tests
 
-Ported from `apps/mobile_android/test/local_run_store_test.dart` when the iOS Phase 1 catchup landed (April 2026, `fa16c73`). Same coverage shape: round-trip save, unsyncedCount, delete + deleteMany, in-progress crash recovery save/load/clear, corrupt-file tolerance, sidecar orphan handling, newest-first ordering.
+Pure-function tests for two top-level helpers in `lib/widgets/run_photos.dart` extracted so the Storage-extension and content-type logic could be exercised without a `WidgetTester`. `extensionForFilename` covers the normal lowercase return, the `jpeg → jpg` and `heif → heic` collapses, the no-extension default, the leading-dot dotfile case, and the multi-dot trailing-extension case. `contentTypeForExtension` covers the explicit `image/png|webp|heic` branches and the `image/jpeg` fallback (jpg + unknown).
+
+### `apps/mobile_android/test/coach_screen_helpers_test.dart` — 19 tests
+
+Pure-function tests for the three top-level helpers in `lib/screens/coach_screen.dart`: `coachTitleFromMessage` (verbatim under 48 chars, whitespace collapse, leading/trailing trim, ellipsis past the cap, exact-48 vs 49 boundary), `coachArchiveLabel` ("Today" same day, "Yesterday" 1 day, "N days ago" 2..6, `YYYY-MM-DD` past a week, zero-padded month and day), and `parseCoachSseEvent` (event + data block parsing for `meta` / `token` / `done`, null when the block has no data line, null on invalid JSON, null on non-Map JSON, default `event: 'message'` when no event line, multi-line `data:` concatenation, `done` block with `cache` usage stats).
+
+### `apps/mobile_ios/test/` — same 42 files, byte-for-byte
+
+After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
 
 ### `packages/core_models/test/run_source_test.dart` — 2 tests
 

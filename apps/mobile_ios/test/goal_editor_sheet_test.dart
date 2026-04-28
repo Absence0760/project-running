@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_android/goals.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/widgets/goal_editor_sheet.dart';
+import '../lib/goals.dart';
+import '../lib/preferences.dart';
+import '../lib/widgets/goal_editor_sheet.dart';
 
 Future<Preferences> _makePrefs() async {
   SharedPreferences.setMockInitialValues({});

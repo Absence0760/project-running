@@ -1,6 +1,6 @@
 # Local testing — iOS app (Flutter)
 
-The iOS app is a Flutter target at `apps/mobile_ios/`.
+The iOS app is a Flutter target at `apps/mobile_ios/`. **Its `lib/` and `test/` are byte-for-byte identical to `apps/mobile_android/`** (see the iOS / android `CLAUDE.md` files and [decisions.md](../../docs/decisions.md)). Editing happens in either copy and gets mirrored; running on iOS just means picking the iOS target. For shared instructions that aren't iOS-specific (test commands, Melos, etc.), prefer [`../mobile_android/local_testing.md`](../mobile_android/local_testing.md).
 
 ---
 
@@ -27,7 +27,7 @@ melos bootstrap
 flutter config --enable-swift-package-manager
 ```
 
-SPM is required because `maplibre_ios` (pulled in by `flutter_map_maplibre`) uses Flutter's native-assets build hook. CocoaPods still handles the plugins that haven't migrated (e.g. `health`), so the project runs in hybrid mode.
+SPM is the modern path for Flutter plugins on iOS; CocoaPods still handles the plugins that haven't migrated (e.g. `health`), so the project runs in hybrid mode. After the April 2026 unification iOS no longer pulls in `flutter_map_maplibre` — both apps use `flutter_map` with raster tiles for parity.
 
 If `apps/mobile_ios/ios/` doesn't exist (the iOS Runner project can be regenerated at any time), create it:
 

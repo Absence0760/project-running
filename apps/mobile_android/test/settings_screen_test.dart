@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_android/ble_heart_rate.dart';
-import 'package:mobile_android/local_run_store.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/screens/settings_screen.dart';
+import '../lib/ble_heart_rate.dart';
+import '../lib/local_run_store.dart';
+import '../lib/preferences.dart';
+import '../lib/screens/settings_screen.dart';
 
 late Directory _runsDir;
 

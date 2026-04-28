@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:core_models/core_models.dart' hide Route;
-import 'package:mobile_android/social_service.dart';
-import 'package:mobile_android/widgets/upcoming_event_card.dart';
+import '../lib/social_service.dart';
+import '../lib/widgets/upcoming_event_card.dart';
 
 EventView _event({
   String title = 'Saturday 5k',

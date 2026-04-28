@@ -1,8 +1,8 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/training_service.dart';
-import 'package:mobile_android/widgets/workout_edit_sheet.dart';
+import '../lib/training_service.dart';
+import '../lib/widgets/workout_edit_sheet.dart';
 
 class _FakeTraining extends TrainingService {
   ({

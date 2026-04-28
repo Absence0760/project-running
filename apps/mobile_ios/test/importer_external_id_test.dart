@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/strava_importer.dart';
+import '../lib/strava_importer.dart';
 
 void main() {
   group('StravaImporter external_id prefix', () {

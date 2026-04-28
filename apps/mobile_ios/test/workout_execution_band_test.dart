@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/widgets/workout_execution_band.dart';
+import '../lib/widgets/workout_execution_band.dart';
 import 'package:run_recorder/run_recorder.dart';
 
 WorkoutStep _step({

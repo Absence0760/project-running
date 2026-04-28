@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/training_load.dart';
+import '../lib/training_load.dart';
 
 Run _run({
   required double distanceM,

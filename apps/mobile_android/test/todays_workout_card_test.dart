@@ -1,8 +1,8 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/training_service.dart';
-import 'package:mobile_android/widgets/todays_workout_card.dart';
+import '../lib/training_service.dart';
+import '../lib/widgets/todays_workout_card.dart';
 
 ActivePlanOverview _overview({
   String kind = 'tempo',

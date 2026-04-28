@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/privacy.dart';
+import '../lib/privacy.dart';
 
 const _home = PrivacyZone(lat: 40.7128, lng: -74.006, radiusM: 200);
 

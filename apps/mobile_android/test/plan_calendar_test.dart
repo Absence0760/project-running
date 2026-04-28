@@ -1,7 +1,7 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/widgets/plan_calendar.dart';
+import '../lib/widgets/plan_calendar.dart';
 
 void main() {
   testWidgets('renders the start month with workout pills', (tester) async {

@@ -1,8 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/widgets/pace_segments.dart';
+import '../lib/preferences.dart';
+import '../lib/widgets/pace_segments.dart';
 
 void main() {
   group('paceBucketForSpeed', () {

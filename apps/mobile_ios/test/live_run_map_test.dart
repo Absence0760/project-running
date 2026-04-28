@@ -2,7 +2,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/widgets/live_run_map.dart';
+import '../lib/widgets/live_run_map.dart';
 
 Waypoint _w(double lat, double lng) => Waypoint(lat: lat, lng: lng);
 

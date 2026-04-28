@@ -22,7 +22,7 @@ See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-plat
 **Columns:**
 
 - **Android** — `apps/mobile_android` (Flutter). Most mature surface.
-- **iOS** — `apps/mobile_ios` (Flutter). Phase 1 structural work only; most screens scaffold-only. See [apps/mobile_ios/CLAUDE.md](../apps/mobile_ios/CLAUDE.md).
+- **iOS** — `apps/mobile_ios` (Flutter). **Dart codebase is byte-identical to mobile_android** (see [decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). Cells stay `✗` until each row is verified on a Mac build / simulator / device — code-equivalent ≠ runtime-equivalent. See [apps/mobile_ios/CLAUDE.md](../apps/mobile_ios/CLAUDE.md).
 - **Web** — `apps/web` (SvelteKit 2 + Svelte 5).
 - **Wear OS** — `apps/watch_wear` (native Kotlin + Compose-for-Wear). Recording-only by design.
 - **Apple Watch** — `apps/watch_ios` (native SwiftUI). Recording-only by design.

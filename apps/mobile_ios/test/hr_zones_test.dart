@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/hr_zones.dart';
+import '../lib/hr_zones.dart';
 
 Waypoint _wp({required int? bpm, DateTime? ts}) =>
     Waypoint(lat: 0, lng: 0, timestamp: ts, bpm: bpm);

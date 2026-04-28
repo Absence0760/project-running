@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/recurrence.dart';
+import '../lib/recurrence.dart';
 
 void main() {
   group('expandInstances — weekly recurrence', () {

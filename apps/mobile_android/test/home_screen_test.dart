@@ -3,15 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_android/audio_cues.dart';
-import 'package:mobile_android/ble_heart_rate.dart';
-import 'package:mobile_android/local_route_store.dart';
-import 'package:mobile_android/local_run_store.dart';
-import 'package:mobile_android/preferences.dart';
-import 'package:mobile_android/race_controller.dart';
-import 'package:mobile_android/social_service.dart';
-import 'package:mobile_android/training_service.dart';
-import 'package:mobile_android/screens/home_screen.dart';
+import '../lib/audio_cues.dart';
+import '../lib/ble_heart_rate.dart';
+import '../lib/local_route_store.dart';
+import '../lib/local_run_store.dart';
+import '../lib/preferences.dart';
+import '../lib/race_controller.dart';
+import '../lib/social_service.dart';
+import '../lib/training_service.dart';
+import '../lib/screens/home_screen.dart';
 
 late Directory _runsDir;
 

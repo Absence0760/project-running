@@ -1,8 +1,8 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/screens/sign_in_screen.dart';
-import 'package:mobile_android/screens/sign_up_screen.dart';
+import '../lib/screens/sign_in_screen.dart';
+import '../lib/screens/sign_up_screen.dart';
 
 class _FakeApiClient extends ApiClient {
   String? capturedEmail;

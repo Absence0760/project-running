@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/widgets/run_share_card.dart' show fitCrc;
+import '../lib/widgets/run_share_card.dart' show fitCrc;
 
 int computeCrc(List<int> bytes, {required int startOffset}) {
   var crc = 0;

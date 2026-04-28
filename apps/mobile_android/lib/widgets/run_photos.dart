@@ -7,6 +7,36 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Map a picked filename to the extension we'll store the upload under.
+/// `jpeg` collapses to `jpg` (Storage path stays consistent regardless of
+/// what the picker reports), `heif` collapses to `heic` (same canonical
+/// container), and anything missing or extension-less defaults to `jpg`.
+String extensionForFilename(String filename) {
+  final n = filename.toLowerCase();
+  final dot = n.lastIndexOf('.');
+  if (dot <= 0) return 'jpg';
+  final raw = n.substring(dot + 1);
+  if (raw == 'jpeg') return 'jpg';
+  if (raw == 'heif') return 'heic';
+  return raw;
+}
+
+/// Storage `Content-Type` to send for a given extension. Keeps the
+/// browser-served preview correct on web run-share pages — the
+/// `run-photos` bucket is public-read, so the type round-trips.
+String contentTypeForExtension(String ext) {
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'heic':
+      return 'image/heic';
+    default:
+      return 'image/jpeg';
+  }
+}
+
 /// Mirrors the web `RunPhotos.svelte` — grid of photos for a run, with
 /// owner-gated upload (image_picker), caption edit, and delete.
 class RunPhotos extends StatefulWidget {
@@ -94,11 +124,11 @@ class _RunPhotosState extends State<RunPhotos> {
     setState(() => _uploading = true);
     try {
       final bytes = await f.readAsBytes();
-      final ext = _extOf(f);
+      final ext = extensionForFilename(f.name);
       final added = await widget.api.addRunPhoto(
         runId: widget.runId,
         bytes: Uint8List.fromList(bytes),
-        contentType: _contentTypeFor(ext),
+        contentType: contentTypeForExtension(ext),
         extension: ext,
         caption: _pendingCaptionCtrl.text.trim().isEmpty
             ? null
@@ -118,29 +148,6 @@ class _RunPhotosState extends State<RunPhotos> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Upload failed: $e')),
       );
-    }
-  }
-
-  String _extOf(XFile f) {
-    final n = f.name.toLowerCase();
-    final dot = n.lastIndexOf('.');
-    if (dot <= 0) return 'jpg';
-    final raw = n.substring(dot + 1);
-    if (raw == 'jpeg') return 'jpg';
-    if (raw == 'heif') return 'heic';
-    return raw;
-  }
-
-  String _contentTypeFor(String ext) {
-    switch (ext) {
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'heic':
-        return 'image/heic';
-      default:
-        return 'image/jpeg';
     }
   }
 

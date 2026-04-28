@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/run_stats.dart';
+import '../lib/run_stats.dart';
 
 void main() {
   group('movingTimeOf', () {

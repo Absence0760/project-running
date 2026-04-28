@@ -3,7 +3,7 @@
 // assignments as the TS engine for the same inputs.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/training.dart';
+import '../lib/training.dart';
 
 void main() {
   group('vdotFromRace', () {

@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_android/goals.dart';
+import '../lib/goals.dart';
 
 void main() {
   // Wednesday noon mid-week — gives both elapsed and remaining period
