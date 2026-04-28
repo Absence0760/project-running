@@ -1431,6 +1431,24 @@ class ApiClient {
         .toList();
   }
 
+  /// Permanently delete every message in a single archived thread.
+  Future<void> deleteCoachArchive({
+    required DateTime archivedAt,
+    String? planId,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    var q = _client
+        .from(CoachMessageRow.table)
+        .delete()
+        .eq(CoachMessageRow.colUserId, viewerId)
+        .eq(CoachMessageRow.colArchivedAt, archivedAt.toIso8601String());
+    q = planId == null
+        ? q.isFilter(CoachMessageRow.colPlanId, null)
+        : q.eq(CoachMessageRow.colPlanId, planId);
+    await q;
+  }
+
   /// RPC for the per-user-per-day usage counter. Free tier capped at
   /// 10/day server-side; `is_pro()` lifts the cap.
   Future<int> getCoachUsage() async {

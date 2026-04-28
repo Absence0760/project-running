@@ -9,9 +9,11 @@ import '../preferences.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../training_load.dart';
+import '../training_service.dart';
 import '../widgets/fitness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/training_load_chart.dart';
+import 'coach_screen.dart';
 import 'feed_screen.dart';
 import 'period_summary_screen.dart';
 import 'profile_screen.dart';
@@ -19,6 +21,7 @@ import 'profile_screen.dart';
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
   final ApiClient? apiClient;
+  final TrainingService? training;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
@@ -27,6 +30,7 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     this.apiClient,
+    this.training,
     required this.runStore,
     required this.routeStore,
     required this.preferences,
@@ -177,6 +181,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('Dashboard'),
         actions: [
           if (api != null) ...[
+            if (widget.training != null)
+              IconButton(
+                tooltip: 'Coach',
+                icon: const Icon(Icons.psychology_outlined),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CoachScreen(
+                      api: api,
+                      training: widget.training!,
+                    ),
+                  ),
+                ),
+              ),
             IconButton(
               tooltip: 'Activity feed',
               icon: const Icon(Icons.dynamic_feed_outlined),

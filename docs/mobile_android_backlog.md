@@ -9,13 +9,13 @@ description: Sequenced plan for closing the gap between web (canonical) and mobi
 
 ## Where we stand
 
-As of 2026-04-28 mobile_android sits at **~86% feature parity with web** — 119 of 142 non-physical-exception rows are `✓` and 8 more are `Partial` (covered with a documented follow-up). 15 features remain `✗` on Android while web has them shipped.
+As of 2026-04-28 mobile_android sits at **~95% feature parity with web** — 131 of 142 non-physical-exception rows are `✓` and 8 more are `Partial` (covered with a documented follow-up). 3 features remain `✗` on Android while web has them shipped.
 
 By section (drawn from parity.md, `web ✓ ∧ android ✗`):
 
 | Section | Hard gaps | Partials | Notes |
 |---|---:|---:|---|
-| AI Coach | 12 | 0 | Whole surface still pending — chat UI, streaming, sidebar, composer, plan switcher, runs window, tones, usage cap, history, markdown, bubble actions, multi-line input. Single screen file (~1500 lines) — its own session. |
+| AI Coach | 0 | 0 | All 12 surface features shipped in `screens/coach_screen.dart` — chat UI, streaming SSE, archives drawer, plan switcher, runs window, context strip, daily-cap banner, markdown rendering, bubble actions (copy / regenerate / edit / thumbs), multi-line composer. Reached from the Coach icon in the Dashboard AppBar. |
 | Route management | 3 | 1 | Click-to-place builder, OSRM snap, elevation-preview-while-drawing — all blocked on a MapLibre-Flutter polyline editor (one cohesive surface, ~1500 lines). Club-owned routes is `Partial` — list + view shipped, admin transfer-from-route-detail still pending. |
 | Integrations | 0 | 1 | Strava connect/sync/disconnect tile shipped (OAuth happens via `url_launcher` hand-off to web `/settings/integrations`; once connected, sync + disconnect are native via Edge Function + RLS). Native in-app OAuth (deep-link callback or webview) is the Partial. parkrun shipped. |
 | Photos / privacy | 0 | 0 | Photos on runs shipped (image_picker). Privacy zones shipped. |
