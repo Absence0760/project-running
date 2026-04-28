@@ -208,8 +208,8 @@ Strava-style follow graph; layered on top of (but independent of) the clubs/even
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Follow / unfollow another user | ✗ | ✗ | ✓ | N/A | N/A | `user_follows` join table; Follow button on `/u/[id]`. |
-| Public user profile page | ✗ | ✗ | ✓ | N/A | N/A | `/u/[id]` shows display_name, avatar, recent public runs, follower/following counts. |
+| Follow / unfollow another user | ✓ | ✗ | ✓ | N/A | N/A | `user_follows` join table; Follow button on `/u/[id]` (web) and the profile screen header (android). |
+| Public user profile page | ✓ | ✗ | ✓ | N/A | N/A | `/u/[id]` (web) and `ProfileScreen` (android) show display_name, avatar, recent public runs, follower/following counts. Reachable from Settings → View profile on android. |
 | Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; server-side time-windowed to the last `FEED_WINDOW_DAYS` (14) days; cursor-paginated on `(runs.started_at desc, id desc)` 20-per-page. Full-width responsive card grid with per-entry track-preview map. Toolbar with activity-segmented control + author searchable combobox + "Last 14 days" hint. Cards open `RunShareView` in a modal — public `/share/run/[id]` URL still works for off-app sharing. Each card shows kudos + comment counts. See `decisions.md § 31`. |
 | Kudos on runs | ✗ | ✗ | ✓ | N/A | N/A | `run_kudos` composite-PK join; one-tap toggle. RLS inherits from runs (`decisions.md § 32`). |
 | Comments on runs (one-level threading) | ✗ | ✗ | ✓ | N/A | N/A | `run_comments` with `parent_comment_id`; author + run-owner can delete; INSERT policy enforces shallow nesting. |
@@ -218,7 +218,7 @@ Strava-style follow graph; layered on top of (but independent of) the clubs/even
 | Training-load curves (Fitness / Fatigue / Form) | ✗ | ✗ | ✓ | N/A | N/A | `lib/training_load.ts` (TRIMP when HR available, distance fallback) + `TrainingLoadChart` mounted on `/dashboard`. Server-side recompute job still pending. See `decisions.md § 34`. |
 | Photos on runs | ✗ | ✗ | ✓ | N/A | N/A | `run_photos` table + public-read `run-photos` Storage bucket. RunPhotos.svelte gallery on `/runs/[id]` (owner: upload + caption + delete) and `/share/run/[id]` (read-only). RLS inherits from runs via EXISTS. See `decisions.md § 36`. |
 | Segments + leaderboards (route-anchored, v1) | ✗ | ✗ | ✓ | N/A | N/A | `segments (route_id, name, start_distance_m, end_distance_m, …)` + `segment_efforts` with `unique(segment_id, run_id)`. SegmentsPanel on `/routes/[id]`; RunSegmentEfforts on `/runs/[id]`. Auto-effort generation is client-side: `lib/segments.ts#computeEffortFromTrack` walks the run track on the run-detail page. Arbitrary-geometry segments deferred to v2. See `decisions.md § 37`. |
-| Notifications inbox (kudos / comments / replies / follows) | ✗ | ✗ | ✓ | N/A | N/A | `notifications` table populated by SECURITY DEFINER triggers on `run_kudos`, `run_comments`, and `user_follows`. Sidebar bell with unread badge + popover; full inbox lives under the Notifications tab on `/u/[me]` (own profile only) with all / unread sub-filters. Refresh on auth-ready and on window focus (no polling). See `decisions.md § 38`. |
+| Notifications inbox (kudos / comments / replies / follows) | ✓ | ✗ | ✓ | N/A | N/A | `notifications` table populated by SECURITY DEFINER triggers on `run_kudos`, `run_comments`, and `user_follows`. Web: sidebar bell with unread badge + popover; full inbox lives under the Notifications tab on `/u/[me]`. Android: same Notifications tab on `ProfileScreen` (own profile only) with All / Unread filter, mark-all-read, per-row dismiss. See `decisions.md § 38`. |
 
 ## Training plans and workouts
 

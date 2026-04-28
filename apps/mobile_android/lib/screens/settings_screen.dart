@@ -16,6 +16,7 @@ import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
 import '../settings_sync.dart';
 import 'import_screen.dart';
+import 'profile_screen.dart';
 import 'sign_in_screen.dart';
 
 /// Account settings, preferences, and integrations.
@@ -945,6 +946,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
           ),
           if (signedIn) ...[
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('View profile'),
+              subtitle:
+                  const Text('Your runs, followers, following, notifications'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final api = widget.apiClient;
+                final uid = api?.userId;
+                if (api == null || uid == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(api: api, userId: uid),
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.lock_outline),
               title: const Text('Change password'),

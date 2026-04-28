@@ -618,6 +618,19 @@ class ApiClient {
         .toList();
   }
 
+  /// Recent public runs from a single user — drives the runs tab on
+  /// `/u/[id]`-equivalent profile screens. Capped at `limit`.
+  Future<List<RunRow>> fetchPublicRunsByUser(String userId, {int limit = 50}) async {
+    final data = await _client
+        .from(RunRow.table)
+        .select()
+        .eq(RunRow.colUserId, userId)
+        .eq(RunRow.colIsPublic, true)
+        .order(RunRow.colStartedAt, ascending: false)
+        .limit(limit);
+    return data.map<RunRow>((r) => RunRow.fromJson(r)).toList();
+  }
+
   /// Public profile lookup by user ID. Returns null when the row
   /// doesn't exist or RLS hides it.
   Future<UserProfileRow?> fetchPublicProfile(String userId) async {
