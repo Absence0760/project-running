@@ -130,3 +130,18 @@ class SegmentLeaderboardEntry {
     required this.rank,
   });
 }
+
+/// One row of a run's segment-effort summary: the effort + the parent
+/// segment + the rank against the segment's leaderboard. Backs the
+/// per-run effort chips on the run-detail page.
+class SegmentEffortWithSegment {
+  final SegmentEffortRow effort;
+  final SegmentRow segment;
+  final int rank;
+
+  const SegmentEffortWithSegment({
+    required this.effort,
+    required this.segment,
+    required this.rank,
+  });
+}

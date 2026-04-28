@@ -1735,6 +1735,44 @@ class ApiClient {
     return out;
   }
 
+  /// Per-run segment efforts joined to their parent segment + a rank
+  /// against the segment's leaderboard. Backs the chips on run-detail.
+  Future<List<SegmentEffortWithSegment>> fetchEffortsForRunWithSegments(
+    String runId,
+  ) async {
+    final efforts = await fetchEffortsForRun(runId);
+    if (efforts.isEmpty) return const [];
+
+    final segIds = efforts.map((e) => e.segmentId).toSet().toList();
+    final segRows = await _client
+        .from(SegmentRow.table)
+        .select()
+        .inFilter(SegmentRow.colId, segIds);
+    final segById = {
+      for (final s in segRows)
+        s['id'] as String: SegmentRow.fromJson(s as Map<String, dynamic>),
+    };
+
+    final out = <SegmentEffortWithSegment>[];
+    for (final eff in efforts) {
+      final seg = segById[eff.segmentId];
+      if (seg == null) continue;
+      // Rank = (count of efforts on this segment with strictly faster
+      // time) + 1. The (segment_id, time_seconds) index covers it.
+      final faster = await _client
+          .from(SegmentEffortRow.table)
+          .count(CountOption.exact)
+          .eq(SegmentEffortRow.colSegmentId, eff.segmentId)
+          .lt(SegmentEffortRow.colTimeSeconds, eff.timeSeconds);
+      out.add(SegmentEffortWithSegment(
+        effort: eff,
+        segment: seg,
+        rank: faster + 1,
+      ));
+    }
+    return out;
+  }
+
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
   //
   // These go through the generated row classes so that column renames surface

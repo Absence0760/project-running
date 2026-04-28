@@ -14,6 +14,7 @@ import '../route_simplify.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_share_card.dart';
 import '../widgets/run_social_section.dart';
 import '../widgets/workout_review_section.dart';
@@ -629,6 +630,22 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               child: Text('Splits', style: theme.textTheme.titleMedium),
             ),
             ..._buildSplits(theme, unit),
+          ],
+
+          // Segment efforts — auto-generated client-side when this run
+          // is linked to a saved route the viewer owns (decisions §37).
+          if (widget.apiClient != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Segments', style: theme.textTheme.titleMedium),
+            ),
+            RunSegmentEfforts(
+              api: widget.apiClient!,
+              runId: run.id,
+              runOwnerId: widget.apiClient!.userId,
+              routeId: run.routeId,
+              track: run.track,
+            ),
           ],
 
           // Local RunDetail only opens runs owned by the viewer, so the
