@@ -78,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _KeepAlive(
         child: DashboardScreen(
           key: const PageStorageKey('dashboard'),
+          apiClient: widget.apiClient,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
           preferences: widget.preferences,

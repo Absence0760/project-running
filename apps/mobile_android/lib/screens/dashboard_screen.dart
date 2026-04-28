@@ -1,3 +1,4 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
@@ -9,10 +10,13 @@ import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../widgets/fitness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
+import 'feed_screen.dart';
 import 'period_summary_screen.dart';
+import 'profile_screen.dart';
 
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
+  final ApiClient? apiClient;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
@@ -20,6 +24,7 @@ class DashboardScreen extends StatefulWidget {
 
   const DashboardScreen({
     super.key,
+    this.apiClient,
     required this.runStore,
     required this.routeStore,
     required this.preferences,
@@ -147,8 +152,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final hasAnyPb = longest != null || bestEfforts.isNotEmpty;
     final weekDurationMin = Duration(seconds: weekDurationSec).inMinutes;
 
+    final api = widget.apiClient;
+    final viewerId = api?.userId;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        actions: [
+          if (api != null) ...[
+            IconButton(
+              tooltip: 'Activity feed',
+              icon: const Icon(Icons.dynamic_feed_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
+              ),
+            ),
+            if (viewerId != null)
+              IconButton(
+                tooltip: 'My profile',
+                icon: const Icon(Icons.person_outline),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(api: api, userId: viewerId),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
       body: runs.isEmpty && goals.isEmpty
           ? _WelcomeEmpty(theme: theme, onAddGoal: _newGoal)
           : ListView(

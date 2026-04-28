@@ -37,7 +37,9 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `sign_up_screen.dart` — email/password registration + Google sign-in, linked from sign-in
 - `home_screen.dart` — the dashboard + nav tabs host
 - `run_screen.dart` — the primary recording screen (countdown, live stats, route overlay, finish summary); hosts the recorder state machine and all the hardening described in [../../docs/run_recording.md](../../docs/run_recording.md)
-- `dashboard_screen.dart` — weekly mileage, PBs, goal progress
+- `dashboard_screen.dart` — weekly mileage, PBs, goal progress; AppBar actions push `feed_screen.dart` (activity feed) and `profile_screen.dart` (own profile)
+- `feed_screen.dart` — activity feed of public runs from people you follow (14-day window, mirrors web `/feed`); activity-segmented filter + author dropdown + infinite-scroll
+- `profile_screen.dart` — public user profile (`/u/[id]` mirror): header, Follow toggle, and tabs for Runs / Followers / Following / Notifications (notifications tab gated to self)
 - `runs_screen.dart` — run list with sorting, FAB opens `add_run_screen`
 - `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
 - `run_detail_screen.dart` — single run map + stats (primary + secondary) + interactive elevation/pace chart + best efforts + pace-bar splits + laps

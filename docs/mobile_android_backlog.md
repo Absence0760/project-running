@@ -82,9 +82,9 @@ After P1 the typed surface exists; this phase adds the cross-screen shapes:
 
 Order chosen so each screen has its dependencies in place from P1+P2:
 
-1. **Profile page** (`u/[id]`-equivalent screen) — needs `fetchPublicProfile`, `fetchFollowers`, `fetchFollowing`, `fetchPublicRunsByUser`, `followUser`/`unfollowUser`. Honour `?tab=runs|followers|following|notifications` (notifications tab gated to self).
-2. **Activity feed** — needs `fetchFollowingFeed`, `fetchEngagementSummaries`, `giveKudos`/`rescindKudos`, `fetchFollowing` (for the author combobox). Card grid + per-entry track preview + 14-day window.
-3. **Notifications inbox tab** — already inside the profile page; needs `fetchNotifications` / mark-read / delete plus the badge store.
+1. **Profile page** (`u/[id]`-equivalent screen) — needs `fetchPublicProfile`, `fetchFollowers`, `fetchFollowing`, `fetchPublicRunsByUser`, `followUser`/`unfollowUser`. Honour `?tab=runs|followers|following|notifications` (notifications tab gated to self). **Shipped** as `screens/profile_screen.dart` with TabController, optimistic Follow toggle, and the Notifications tab nested inside (All / Unread filter, mark-all-read, per-row dismiss).
+2. **Activity feed** — needs `fetchFollowingFeed`, `fetchEngagementSummaries`, `giveKudos`/`rescindKudos`, `fetchFollowing` (for the author combobox). Card grid + per-entry track preview + 14-day window. **Shipped** as `screens/feed_screen.dart`, mounted on the Dashboard AppBar (feed icon). 14-day server cap, activity-segmented + author-dropdown filters, infinite-scroll on (started_at, id), optimistic kudos toggle. Track-preview map and three-state empty handled inline.
+3. **Notifications inbox tab** — already inside the profile page; **shipped** alongside Profile (P3.1).
 4. **Run-detail kudos + comments + photos** — needs P1.A + P1.B. Mount on the existing `run_detail_screen.dart`.
 5. **AI Coach chat screen** — large; needs P1.C complete. Plan switcher + runs window + tones + history sidebar all layer on top of the same chat surface, so build the chat first, then layer.
 6. **Segment surfaces on route + run detail** — needs P1.B.
