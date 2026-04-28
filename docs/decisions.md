@@ -769,7 +769,7 @@ The social loop (kudos, comments, replies, follows) was discoverable only by vis
 
 **v1 scope:** kudos on your runs, comments on your runs, replies to your comments, new followers. Deliberately **not** included: event RSVPs (large fan-out per-event when many people RSVP), club post replies (high noise), realtime push (poll on focus is enough). When realtime + mobile push are needed, layer on top — `notifications` is the durable record, push is a delivery mechanism.
 
-**UI:** sidebar bell with an unread badge, popover showing the last 15, and a `/notifications` standalone page that filters by all / unread. Marking-as-read is optimistic + best-effort — the badge updates immediately and the row write is fire-and-forget.
+**UI:** sidebar bell with an unread badge and a popover showing the last 15. The full inbox is mounted as the Notifications tab on `/u/[id]` (own profile only) with all / unread sub-filters — collapsing it onto the profile page keeps the social surfaces in one place rather than scattering them across sibling top-level routes. Marking-as-read is optimistic + best-effort — the badge updates immediately and the row write is fire-and-forget.
 
 **Trade-offs:**
 

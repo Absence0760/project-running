@@ -15,7 +15,9 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunShareView from '$lib/components/RunShareView.svelte';
+	import NotificationsList from '$lib/components/NotificationsList.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import type { Run } from '$lib/types';
 
 	let userId = $derived($page.params.id as string);
@@ -25,7 +27,7 @@
 	let following = $state<PublicProfile[]>([]);
 	let loading = $state(true);
 	let busy = $state(false);
-	let tab = $state<'runs' | 'followers' | 'following'>('runs');
+	let tab = $state<'runs' | 'followers' | 'following' | 'notifications'>('runs');
 
 	let isSelf = $derived(auth.user?.id === userId);
 	let openRunId = $state<string | null>(null);
@@ -49,11 +51,16 @@
 		if (userId) load();
 	});
 
-	// Deep-link the followers / following tab via `?tab=followers` so
-	// the feed-header chips can link straight into the right panel.
+	// Deep-link the followers / following / notifications tab via
+	// `?tab=…` so the feed-header chips and the bell popover can link
+	// straight into the right panel. The notifications tab is gated to
+	// `isSelf` — even if a deep link asks for it on someone else's
+	// profile, RLS hides their notifications anyway, so collapse the
+	// invalid case to the runs tab.
 	$effect(() => {
 		const t = $page.url.searchParams.get('tab');
 		if (t === 'followers' || t === 'following' || t === 'runs') tab = t;
+		else if (t === 'notifications' && isSelf) tab = 'notifications';
 	});
 
 	async function toggleFollow() {
@@ -176,6 +183,18 @@
 			<button class="tab" class:active={tab === 'following'} onclick={() => (tab = 'following')}>
 				Following
 			</button>
+			{#if isSelf}
+				<button
+					class="tab"
+					class:active={tab === 'notifications'}
+					onclick={() => (tab = 'notifications')}
+				>
+					Notifications
+					{#if notificationStore.unreadCount > 0}
+						<span class="tab-badge">{notificationStore.unreadCount}</span>
+					{/if}
+				</button>
+			{/if}
 		</div>
 
 		{#if tab === 'runs'}
@@ -228,7 +247,7 @@
 					{/each}
 				</div>
 			{/if}
-		{:else}
+		{:else if tab === 'following'}
 			{#if following.length === 0}
 				<div class="empty"><p>Not following anyone yet.</p></div>
 			{:else}
@@ -247,6 +266,8 @@
 					{/each}
 				</div>
 			{/if}
+		{:else if tab === 'notifications' && isSelf}
+			<NotificationsList />
 		{/if}
 	{/if}
 </div>
@@ -383,6 +404,21 @@
 	.tab.active {
 		color: var(--color-primary);
 		border-bottom-color: var(--color-primary);
+	}
+
+	.tab-badge {
+		display: inline-grid;
+		place-items: center;
+		min-width: 1.2rem;
+		height: 1.2rem;
+		margin-left: 0.4rem;
+		padding: 0 0.4rem;
+		background: var(--color-primary);
+		color: white;
+		font-size: 0.7rem;
+		font-weight: 700;
+		border-radius: 9999px;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.run-list {

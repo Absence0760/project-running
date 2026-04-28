@@ -116,31 +116,25 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Notifications — Run Onward</title>
-</svelte:head>
-
-<div class="page">
+<div class="wrap">
 	<header class="head">
-		<h1>Notifications</h1>
+		<div class="filter-tabs">
+			<button class="filter" class:active={filter === 'all'} onclick={() => (filter = 'all')}>
+				All
+			</button>
+			<button class="filter" class:active={filter === 'unread'} onclick={() => (filter = 'unread')}>
+				Unread
+				{#if notificationStore.unreadCount > 0}
+					<span class="filter-count">{notificationStore.unreadCount}</span>
+				{/if}
+			</button>
+		</div>
 		{#if items.some((x) => x.row.read_at == null)}
 			<button class="btn btn-outline btn-sm" type="button" onclick={handleMarkAll}>
 				Mark all read
 			</button>
 		{/if}
 	</header>
-
-	<div class="tabs">
-		<button class="tab" class:active={filter === 'all'} onclick={() => (filter = 'all')}>
-			All
-		</button>
-		<button class="tab" class:active={filter === 'unread'} onclick={() => (filter = 'unread')}>
-			Unread
-			{#if notificationStore.unreadCount > 0}
-				<span class="tab-count">{notificationStore.unreadCount}</span>
-			{/if}
-		</button>
-	</div>
 
 	{#if loading}
 		<p class="muted">Loading…</p>
@@ -157,11 +151,7 @@
 		<ul class="list">
 			{#each visible as item (item.row.id)}
 				<li class="item-wrap" class:unread={item.row.read_at == null}>
-					<button
-						class="item-main"
-						type="button"
-						onclick={() => open(item)}
-					>
+					<button class="item-main" type="button" onclick={() => open(item)}>
 						<span class="avatar-md">
 							{#if item.actor?.avatar_url}
 								<img src={item.actor.avatar_url} alt="" />
@@ -192,50 +182,51 @@
 </div>
 
 <style>
-	.page {
-		padding: var(--space-xl) var(--space-2xl);
+	.wrap {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
 		max-width: 50rem;
 	}
 	.head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: var(--space-md);
+		gap: var(--space-md);
+		flex-wrap: wrap;
 	}
-	h1 {
-		margin: 0;
-		font-size: 1.5rem;
-		font-weight: 700;
+	.filter-tabs {
+		display: inline-flex;
+		gap: 0.25rem;
 	}
-	.tabs {
-		display: flex;
-		gap: 0.4rem;
-		margin-bottom: var(--space-md);
-		border-bottom: 1px solid var(--color-border);
-	}
-	.tab {
+	.filter {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
 		background: none;
-		border: none;
-		padding: 0.55rem 0.7rem;
-		font-size: 0.9rem;
+		border: 1px solid var(--color-border);
+		border-radius: 9999px;
+		padding: 0.3rem 0.85rem;
+		font-size: 0.85rem;
 		font-weight: 500;
 		color: var(--color-text-secondary);
-		border-bottom: 2px solid transparent;
 		cursor: pointer;
 		font-family: inherit;
 	}
-	.tab.active {
+	.filter:hover {
+		border-color: var(--color-primary);
 		color: var(--color-primary);
-		border-bottom-color: var(--color-primary);
 	}
-	.tab-count {
+	.filter.active {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: white;
+	}
+	.filter-count {
 		min-width: 1.2rem;
 		padding: 0 0.4rem;
-		background: var(--color-primary);
-		color: white;
+		background: rgba(255, 255, 255, 0.25);
+		color: inherit;
 		border-radius: 9999px;
 		font-size: 0.7rem;
 		font-weight: 700;

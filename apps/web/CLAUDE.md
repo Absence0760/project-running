@@ -31,7 +31,8 @@ src/
                     # RunShareView (the public run share body — extracted so /share/run/[id] (standalone page) and the /feed modal can both render it without duplicating layout),
                     # RunPhotos (gallery for run_photos — mounted on /runs/[id] and /share/run/[id]; owner gates upload + delete; decisions §36),
                     # SegmentsPanel + RunSegmentEfforts (segment leaderboards on /routes/[id] + per-run effort chips on /runs/[id]; decisions §37),
-                    # NotificationBell (compact bell icon next to the profile button in the sidebar footer — unread badge + popover for kudos/comments/follows; /notifications full-list view; decisions §38).
+                    # NotificationBell (compact bell icon next to the profile button in the sidebar footer — unread badge + popover for kudos/comments/follows; full inbox lives on /u/[me]?tab=notifications; decisions §38).
+                    # NotificationsList (the inbox body — All / Unread tabs, per-row dismiss, bulk Mark-all-read; mounted under the Notifications tab on /u/[id] when isSelf).
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications), notifications.svelte.ts (unread badge for the sidebar bell — decisions §38)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types
@@ -75,7 +76,6 @@ src/
     coach/          # Standalone Coach chat — plan switcher (?plan=<id>), configurable runs window (10/20/50/100), grounded-in context strip
     api/coach/+server.ts         # Coach endpoint. Default provider: Claude (ANTHROPIC_API_KEY). Set COACH_PROVIDER=openai + OPENAI_BASE_URL for local Ollama.
     explore/        # Thin redirect to /routes?tab=explore (kept so old links / Android deep links still resolve)
-    notifications/  # Inbox for kudos / comments / replies / follows (decisions §38). All / Unread tabs, per-row dismiss, bulk Mark all read.
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)

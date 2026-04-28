@@ -8,6 +8,7 @@
 	} from '$lib/data';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 
 	let open = $state(false);
 	let loading = $state(false);
@@ -190,10 +191,16 @@
 						</li>
 					{/each}
 				</ul>
-				<a class="see-all" href="/notifications" onclick={() => (open = false)}>
-					See all
-					<span class="material-symbols">chevron_right</span>
-				</a>
+				{#if auth.user}
+					<a
+						class="see-all"
+						href="/u/{auth.user.id}?tab=notifications"
+						onclick={() => (open = false)}
+					>
+						See all
+						<span class="material-symbols">chevron_right</span>
+					</a>
+				{/if}
 			{/if}
 		</div>
 	{/if}
