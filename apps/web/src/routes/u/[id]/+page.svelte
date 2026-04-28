@@ -49,6 +49,13 @@
 		if (userId) load();
 	});
 
+	// Deep-link the followers / following tab via `?tab=followers` so
+	// the feed-header chips can link straight into the right panel.
+	$effect(() => {
+		const t = $page.url.searchParams.get('tab');
+		if (t === 'followers' || t === 'following' || t === 'runs') tab = t;
+	});
+
 	async function toggleFollow() {
 		if (!profile || !auth.loggedIn || isSelf) return;
 		busy = true;

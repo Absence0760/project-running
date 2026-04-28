@@ -3,11 +3,13 @@
 	import {
 		fetchFollowingFeed,
 		fetchFollowing,
+		fetchPublicProfile,
 		fetchEngagementSummaries,
 		giveKudos,
 		rescindKudos,
 		FEED_WINDOW_DAYS,
 		type FeedEntry,
+		type ProfileSummary,
 	} from '$lib/data';
 	import { formatDuration } from '$lib/mock-data';
 	import { formatDistance, formatPace } from '$lib/units.svelte';
@@ -27,6 +29,7 @@
 	let kudosBusy = $state<Set<string>>(new Set());
 	let followsAnyone = $state(false);
 	let openRunId = $state<string | null>(null);
+	let me = $state<ProfileSummary | null>(null);
 
 	function openRun(id: string) {
 		openRunId = id;
@@ -39,12 +42,14 @@
 	async function loadInitial() {
 		loading = true;
 		const uid = auth.user?.id;
-		const [feed, following] = await Promise.all([
+		const [feed, following, profile] = await Promise.all([
 			fetchFollowingFeed({ limit: 20 }),
 			uid ? fetchFollowing(uid, 1) : Promise.resolve([]),
+			uid ? fetchPublicProfile(uid) : Promise.resolve(null),
 		]);
 		entries = feed;
 		followsAnyone = following.length > 0;
+		me = profile;
 		exhausted = entries.length < 20;
 		engagement = await fetchEngagementSummaries(entries.map((e) => e.id));
 		loading = false;
@@ -77,18 +82,21 @@
 		engagement: Array<[string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }]>;
 		exhausted: boolean;
 		followsAnyone: boolean;
+		me: ProfileSummary | null;
 	}> = {
 		capture: () => ({
 			entries,
 			engagement: Array.from(engagement.entries()),
 			exhausted,
 			followsAnyone,
+			me,
 		}),
 		restore: (s) => {
 			entries = s.entries;
 			engagement = new Map(s.engagement);
 			exhausted = s.exhausted;
 			followsAnyone = s.followsAnyone;
+			me = s.me;
 			loading = false;
 		},
 	};
@@ -153,6 +161,39 @@
 </svelte:head>
 
 <div class="page">
+	{#if me}
+		<header class="me-card">
+			<a href="/u/{me.id}" class="me-avatar" aria-label="Your profile">
+				{#if me.avatar_url}
+					<img src={me.avatar_url} alt="" />
+				{:else}
+					{(me.display_name?.[0] ?? '?').toUpperCase()}
+				{/if}
+			</a>
+			<div class="me-body">
+				<a href="/u/{me.id}" class="me-name">{me.display_name ?? 'You'}</a>
+				<div class="me-stats">
+					<a href="/u/{me.id}?tab=followers" class="stat-link">
+						<strong>{me.follower_count}</strong>
+						<span>follower{me.follower_count === 1 ? '' : 's'}</span>
+					</a>
+					<span class="dot">·</span>
+					<a href="/u/{me.id}?tab=following" class="stat-link">
+						<strong>{me.following_count}</strong>
+						<span>following</span>
+					</a>
+				</div>
+			</div>
+			<div class="me-actions">
+				<a href="/u/{me.id}" class="btn btn-outline btn-sm">View profile</a>
+				<a href="/clubs" class="btn btn-sm me-discover" title="Find runners to follow in clubs">
+					<span class="material-symbols">person_search</span>
+					Discover
+				</a>
+			</div>
+		</header>
+	{/if}
+
 	{#if loading}
 		<p class="muted">Loading…</p>
 	{:else if entries.length === 0}
@@ -250,6 +291,109 @@
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
+	}
+
+	.me-card {
+		max-width: 48rem;
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		margin-bottom: var(--space-md);
+	}
+	.me-avatar {
+		width: 2.75rem;
+		height: 2.75rem;
+		flex-shrink: 0;
+		border-radius: 50%;
+		background: var(--gradient-primary);
+		color: white;
+		display: grid;
+		place-items: center;
+		font-weight: 700;
+		font-size: 1rem;
+		overflow: hidden;
+		text-decoration: none;
+	}
+	.me-avatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.me-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.me-name {
+		font-weight: 600;
+		font-size: 0.95rem;
+		color: var(--color-text);
+		text-decoration: none;
+	}
+	.me-name:hover {
+		color: var(--color-primary);
+	}
+	.me-stats {
+		display: flex;
+		align-items: baseline;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.stat-link {
+		display: inline-flex;
+		gap: 0.25rem;
+		color: inherit;
+		text-decoration: none;
+	}
+	.stat-link strong {
+		color: var(--color-text);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.stat-link:hover strong,
+	.stat-link:hover span {
+		color: var(--color-primary);
+	}
+	.dot {
+		color: var(--color-text-tertiary);
+	}
+	.me-actions {
+		display: inline-flex;
+		gap: var(--space-sm);
+		align-items: center;
+		flex-shrink: 0;
+	}
+	.me-discover {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		background: var(--color-primary);
+		color: white;
+		border: 1px solid var(--color-primary);
+	}
+	.me-discover:hover {
+		background: var(--color-primary-hover);
+		border-color: var(--color-primary-hover);
+	}
+	.me-discover .material-symbols {
+		font-size: 1rem;
+	}
+
+	@media (max-width: 36rem) {
+		.me-card {
+			flex-wrap: wrap;
+		}
+		.me-actions {
+			width: 100%;
+			justify-content: flex-end;
+		}
 	}
 
 	.feed {

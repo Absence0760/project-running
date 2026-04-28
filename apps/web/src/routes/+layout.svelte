@@ -199,6 +199,25 @@
 				</div>
 			</div>
 			<div class="popover-divider"></div>
+			{#if auth.user}
+				<a
+					class="popover-item"
+					href="/u/{auth.user.id}"
+					onclick={() => (showLogoutModal = false)}
+				>
+					<span class="material-symbols">person</span>
+					View profile
+				</a>
+				<a
+					class="popover-item"
+					href="/settings"
+					onclick={() => (showLogoutModal = false)}
+				>
+					<span class="material-symbols">settings</span>
+					Settings
+				</a>
+				<div class="popover-divider"></div>
+			{/if}
 			<button class="popover-item popover-danger" onclick={handleLogout}>
 				<span class="material-symbols">logout</span>
 				Sign out
