@@ -2433,6 +2433,10 @@ export const FEED_WINDOW_DAYS = 14;
 export async function fetchFollowingFeed(opts?: {
 	limit?: number;
 	cursor?: { started_at: string; id: string } | null;
+	/** Restrict to a single followee. Pass `null` / omit for "everyone you follow". */
+	authorId?: string | null;
+	/** Restrict by `metadata->>activity_type`. Pass 'all' / omit for any activity. */
+	activityType?: string | null;
 }): Promise<FeedEntry[]> {
 	const limit = opts?.limit ?? 20;
 	const { data: sessionData } = await supabase.auth.getSession();
@@ -2447,16 +2451,30 @@ export async function fetchFollowingFeed(opts?: {
 	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
 	if (followeeIds.length === 0) return [];
 
+	// Author filter narrows the followee set to a single person; we
+	// validate it's actually someone the viewer follows so the UI
+	// can't enumerate strangers' activity by editing the URL.
+	const wantedAuthor = opts?.authorId ?? null;
+	const filteredAuthors = wantedAuthor
+		? followeeIds.filter((id) => id === wantedAuthor)
+		: followeeIds;
+	if (filteredAuthors.length === 0) return [];
+
 	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 	let q = supabase
 		.from('runs')
 		.select('*')
-		.in('user_id', followeeIds)
+		.in('user_id', filteredAuthors)
 		.eq('is_public', true)
 		.gte('started_at', cutoff)
 		.order('started_at', { ascending: false })
 		.order('id', { ascending: false })
 		.limit(limit);
+	if (opts?.activityType && opts.activityType !== 'all') {
+		// jsonb metadata key — Supabase exposes the `->>` operator via
+		// the column-name string syntax. Matches '{activity_type:run}'.
+		q = q.eq('metadata->>activity_type', opts.activityType);
+	}
 	if (opts?.cursor) {
 		// Stable cursor pagination on (started_at, id) — strictly less than
 		// the cursor row to skip what we've already seen.

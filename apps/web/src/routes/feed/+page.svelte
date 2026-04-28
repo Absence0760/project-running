@@ -3,13 +3,12 @@
 	import {
 		fetchFollowingFeed,
 		fetchFollowing,
-		fetchPublicProfile,
 		fetchEngagementSummaries,
 		giveKudos,
 		rescindKudos,
 		FEED_WINDOW_DAYS,
 		type FeedEntry,
-		type ProfileSummary,
+		type PublicProfile,
 	} from '$lib/data';
 	import { formatDuration } from '$lib/mock-data';
 	import { formatDistance, formatPace } from '$lib/units.svelte';
@@ -28,9 +27,21 @@
 	let loadingMore = $state(false);
 	let exhausted = $state(false);
 	let kudosBusy = $state<Set<string>>(new Set());
-	let followsAnyone = $state(false);
 	let openRunId = $state<string | null>(null);
-	let me = $state<ProfileSummary | null>(null);
+
+	let followees = $state<PublicProfile[]>([]);
+	let authorFilter = $state<string>('all');
+	let activityFilter = $state<string>('all');
+
+	const activities: { value: string; label: string; icon: string }[] = [
+		{ value: 'all', label: 'All', icon: 'apps' },
+		{ value: 'run', label: 'Run', icon: 'directions_run' },
+		{ value: 'walk', label: 'Walk', icon: 'directions_walk' },
+		{ value: 'cycle', label: 'Cycle', icon: 'directions_bike' },
+		{ value: 'hike', label: 'Hike', icon: 'terrain' },
+	];
+
+	let followsAnyone = $derived(followees.length > 0);
 
 	function openRun(id: string) {
 		openRunId = id;
@@ -43,14 +54,16 @@
 	async function loadInitial() {
 		loading = true;
 		const uid = auth.user?.id;
-		const [feed, following, profile] = await Promise.all([
-			fetchFollowingFeed({ limit: 20 }),
-			uid ? fetchFollowing(uid, 1) : Promise.resolve([]),
-			uid ? fetchPublicProfile(uid) : Promise.resolve(null),
+		const [feed, following] = await Promise.all([
+			fetchFollowingFeed({
+				limit: 20,
+				authorId: authorFilter === 'all' ? null : authorFilter,
+				activityType: activityFilter,
+			}),
+			uid ? fetchFollowing(uid, 100) : Promise.resolve([]),
 		]);
 		entries = feed;
-		followsAnyone = following.length > 0;
-		me = profile;
+		followees = following;
 		exhausted = entries.length < 20;
 		engagement = await fetchEngagementSummaries(entries.map((e) => e.id));
 		loading = false;
@@ -63,6 +76,8 @@
 		const more = await fetchFollowingFeed({
 			limit: 20,
 			cursor: { started_at: last.started_at, id: last.id },
+			authorId: authorFilter === 'all' ? null : authorFilter,
+			activityType: activityFilter,
 		});
 		entries = [...entries, ...more];
 		exhausted = more.length < 20;
@@ -78,27 +93,45 @@
 		if (entries.length === 0 && loading) loadInitial();
 	});
 
+	/// Reload from page 1 whenever the user changes a filter. Skips the
+	/// initial firing while still loading so we don't double-fetch.
+	let filtersHydrated = $state(false);
+	$effect(() => {
+		// Track filter changes.
+		const _a = authorFilter;
+		const _t = activityFilter;
+		if (!filtersHydrated) {
+			filtersHydrated = true;
+			return;
+		}
+		loadInitial();
+	});
+
 	export const snapshot: Snapshot<{
 		entries: FeedEntry[];
 		engagement: Array<[string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }]>;
 		exhausted: boolean;
-		followsAnyone: boolean;
-		me: ProfileSummary | null;
+		followees: PublicProfile[];
+		authorFilter: string;
+		activityFilter: string;
 	}> = {
 		capture: () => ({
 			entries,
 			engagement: Array.from(engagement.entries()),
 			exhausted,
-			followsAnyone,
-			me,
+			followees,
+			authorFilter,
+			activityFilter,
 		}),
 		restore: (s) => {
 			entries = s.entries;
 			engagement = new Map(s.engagement);
 			exhausted = s.exhausted;
-			followsAnyone = s.followsAnyone;
-			me = s.me;
+			followees = s.followees;
+			authorFilter = s.authorFilter;
+			activityFilter = s.activityFilter;
 			loading = false;
+			filtersHydrated = true;
 		},
 	};
 
@@ -162,36 +195,33 @@
 </svelte:head>
 
 <div class="page">
-	{#if me}
-		<header class="me-card">
-			<a href="/u/{me.id}" class="me-avatar" aria-label="Your profile">
-				{#if me.avatar_url}
-					<img src={me.avatar_url} alt="" />
-				{:else}
-					{(me.display_name?.[0] ?? '?').toUpperCase()}
-				{/if}
-			</a>
-			<div class="me-body">
-				<a href="/u/{me.id}" class="me-name">{me.display_name ?? 'You'}</a>
-				<div class="me-stats">
-					<a href="/u/{me.id}?tab=followers" class="stat-link">
-						<strong>{me.follower_count}</strong>
-						<span>follower{me.follower_count === 1 ? '' : 's'}</span>
-					</a>
-					<span class="dot">·</span>
-					<a href="/u/{me.id}?tab=following" class="stat-link">
-						<strong>{me.following_count}</strong>
-						<span>following</span>
-					</a>
-				</div>
+	{#if followsAnyone}
+		<header class="toolbar">
+			<div class="activity-group" role="group" aria-label="Activity type">
+				{#each activities as act}
+					<button
+						class="activity-btn"
+						class:active={activityFilter === act.value}
+						onclick={() => (activityFilter = act.value)}
+						title={act.label}
+						aria-label={act.label}
+						aria-pressed={activityFilter === act.value}
+						type="button"
+					>
+						<span class="material-symbols">{act.icon}</span>
+						<span class="activity-label">{act.label}</span>
+					</button>
+				{/each}
 			</div>
-			<div class="me-actions">
-				<a href="/u/{me.id}" class="btn btn-outline btn-sm">View profile</a>
-				<a href="/clubs" class="btn btn-sm me-discover" title="Find runners to follow in clubs">
-					<span class="material-symbols">person_search</span>
-					Discover
-				</a>
-			</div>
+
+			<select bind:value={authorFilter} class="toolbar-select" aria-label="Author">
+				<option value="all">Everyone you follow</option>
+				{#each followees as f}
+					<option value={f.id}>{f.display_name ?? 'Runner'}</option>
+				{/each}
+			</select>
+
+			<span class="window-hint">Last {FEED_WINDOW_DAYS} days</span>
 		</header>
 	{/if}
 
@@ -200,19 +230,32 @@
 	{:else if entries.length === 0}
 		<div class="empty">
 			<span class="material-symbols empty-icon">groups</span>
-			{#if followsAnyone}
-				<h2>No recent activity</h2>
-				<p>
-					Nobody you follow has logged a public run in the last {FEED_WINDOW_DAYS} days. Older runs
-					are still on each runner's profile.
-				</p>
-			{:else}
+			{#if !followsAnyone}
 				<h2>Your feed is empty</h2>
 				<p>
 					Follow other runners to see their public runs here. Visit a club's Members tab or open a
 					public run to find a profile to follow.
 				</p>
 				<a href="/clubs" class="btn btn-primary">Browse clubs</a>
+			{:else if authorFilter !== 'all' || activityFilter !== 'all'}
+				<h2>No matches</h2>
+				<p>Nothing matches the current filters in the last {FEED_WINDOW_DAYS} days.</p>
+				<button
+					class="btn btn-outline"
+					type="button"
+					onclick={() => {
+						authorFilter = 'all';
+						activityFilter = 'all';
+					}}
+				>
+					Clear filters
+				</button>
+			{:else}
+				<h2>No recent activity</h2>
+				<p>
+					Nobody you follow has logged a public run in the last {FEED_WINDOW_DAYS} days. Older runs
+					are still on each runner's profile.
+				</p>
 			{/if}
 		</div>
 	{:else}
@@ -301,105 +344,92 @@
 		padding: var(--space-xl) var(--space-2xl);
 	}
 
-	.me-card {
+	/* Filter toolbar — same shape /runs uses (segmented activity-pill
+	   group + dropdowns) so the two list pages read as siblings. */
+	.toolbar {
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
-		padding: var(--space-md) var(--space-lg);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		flex-wrap: wrap;
 		margin-bottom: var(--space-xl);
 	}
-	.me-avatar {
-		width: 2.75rem;
-		height: 2.75rem;
-		flex-shrink: 0;
-		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: white;
-		display: grid;
-		place-items: center;
-		font-weight: 700;
-		font-size: 1rem;
-		overflow: hidden;
-		text-decoration: none;
+
+	.activity-group {
+		display: inline-flex;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		padding: 2px;
+		gap: 2px;
 	}
-	.me-avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-	.me-body {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-	}
-	.me-name {
-		font-weight: 600;
-		font-size: 0.95rem;
-		color: var(--color-text);
-		text-decoration: none;
-	}
-	.me-name:hover {
-		color: var(--color-primary);
-	}
-	.me-stats {
-		display: flex;
-		align-items: baseline;
-		gap: 0.4rem;
+	.activity-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.35rem 0.7rem;
+		border: none;
+		border-radius: calc(var(--radius-md) - 2px);
+		background: transparent;
+		font: inherit;
 		font-size: 0.85rem;
+		font-weight: 500;
 		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
 	}
-	.stat-link {
-		display: inline-flex;
-		gap: 0.25rem;
-		color: inherit;
-		text-decoration: none;
+	.activity-btn .material-symbols {
+		font-size: 1.05rem;
 	}
-	.stat-link strong {
+	.activity-btn:hover {
+		background: var(--color-bg-tertiary);
 		color: var(--color-text);
-		font-weight: 700;
-		font-variant-numeric: tabular-nums;
 	}
-	.stat-link:hover strong,
-	.stat-link:hover span {
-		color: var(--color-primary);
-	}
-	.dot {
-		color: var(--color-text-tertiary);
-	}
-	.me-actions {
-		display: inline-flex;
-		gap: var(--space-sm);
-		align-items: center;
-		flex-shrink: 0;
-	}
-	.me-discover {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
+	.activity-btn.active {
 		background: var(--color-primary);
 		color: white;
-		border: 1px solid var(--color-primary);
 	}
-	.me-discover:hover {
+	.activity-btn.active:hover {
 		background: var(--color-primary-hover);
-		border-color: var(--color-primary-hover);
-	}
-	.me-discover .material-symbols {
-		font-size: 1rem;
 	}
 
-	@media (max-width: 36rem) {
-		.me-card {
-			flex-wrap: wrap;
+	.toolbar-select {
+		padding: 0.45rem 2rem 0.45rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.85rem;
+		font-weight: 500;
+		appearance: none;
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+		background-repeat: no-repeat;
+		background-position: right 0.6rem center;
+		background-size: 0.75rem;
+		cursor: pointer;
+		transition: border-color var(--transition-fast);
+		max-width: 18rem;
+	}
+	.toolbar-select:hover {
+		border-color: var(--color-primary);
+	}
+	.toolbar-select:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
+	.window-hint {
+		margin-left: auto;
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+		font-weight: 500;
+	}
+
+	@media (max-width: 50rem) {
+		.activity-label {
+			display: none;
 		}
-		.me-actions {
-			width: 100%;
-			justify-content: flex-end;
+		.window-hint {
+			margin-left: 0;
 		}
 	}
 
