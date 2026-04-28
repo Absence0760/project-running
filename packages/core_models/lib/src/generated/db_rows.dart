@@ -737,6 +737,62 @@ class MonthlyFundingRow {
   };
 }
 
+/// Row shape for the `notifications` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class NotificationRow {
+  static const String table = 'notifications';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colActorId = 'actor_id';
+  static const String colKind = 'kind';
+  static const String colRunId = 'run_id';
+  static const String colCommentId = 'comment_id';
+  static const String colReadAt = 'read_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final String? actorId;
+  final String kind;
+  final String? runId;
+  final String? commentId;
+  final DateTime? readAt;
+  final DateTime createdAt;
+
+  const NotificationRow({
+    required this.id,
+    required this.userId,
+    this.actorId,
+    required this.kind,
+    this.runId,
+    this.commentId,
+    this.readAt,
+    required this.createdAt,
+  });
+
+  factory NotificationRow.fromJson(Map<String, dynamic> json) => NotificationRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    actorId: json['actor_id'] as String?,
+    kind: json['kind'] as String,
+    runId: json['run_id'] as String?,
+    commentId: json['comment_id'] as String?,
+    readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colActorId: actorId,
+    colKind: kind,
+    colRunId: runId,
+    colCommentId: commentId,
+    colReadAt: readAt?.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `personal_records` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class PersonalRecordRow {
