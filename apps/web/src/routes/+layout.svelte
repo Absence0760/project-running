@@ -8,6 +8,8 @@
 	import { initTheme } from '$lib/theme';
 	import { setMapStyle, type MapStyle } from '$lib/map-style.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import NotificationBell from '$lib/components/NotificationBell.svelte';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
 
 	// Apply the persisted theme on first client mount. Users with a
 	// saved non-auto preference may see a brief flash on first paint —
@@ -33,6 +35,22 @@
 				/* silent — falls back to default */
 			}
 		})();
+	});
+
+	// Notification bell — refresh unread count on auth-ready and on
+	// window focus. No polling timer; the focus handler covers the
+	// "left tab open, came back later" case while keeping the UI
+	// silent in the background.
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!browser || !uid) {
+			notificationStore.clear();
+			return;
+		}
+		notificationStore.refresh();
+		const onFocus = () => notificationStore.refresh();
+		window.addEventListener('focus', onFocus);
+		return () => window.removeEventListener('focus', onFocus);
 	});
 
 	const navItems = [
@@ -132,6 +150,10 @@
 					</li>
 				{/each}
 			</ul>
+
+			<div class="sidebar-bell">
+				<NotificationBell collapsed={sidebarCollapsed} />
+			</div>
 
 			<div class="sidebar-footer">
 				{#if auth.user}
@@ -363,6 +385,12 @@
 		width: 3px;
 		border-radius: 2px;
 		background: var(--accent);
+	}
+
+	.sidebar-bell {
+		padding: 0.25rem 0;
+		border-top: 1px solid var(--sidebar-border);
+		margin-top: var(--space-sm);
 	}
 
 	.sidebar-footer {
