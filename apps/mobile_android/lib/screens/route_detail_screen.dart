@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/segments_panel.dart';
 
 class RouteDetailScreen extends StatefulWidget {
   final cm.Route route;
@@ -304,6 +305,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               },
               initialTags: _tags,
             ),
+
+            const Divider(),
+
+            // Segments panel — list segments + leaderboards. Owners
+            // can create new ones; cascades drop their efforts.
+            if (widget.apiClient != null)
+              SegmentsPanel(
+                api: widget.apiClient!,
+                routeId: route.id,
+                routeDistanceM: route.distanceMetres,
+                canCreate: _isOwner,
+              ),
 
             const Divider(),
 

@@ -1004,6 +1004,15 @@ class ApiClient {
     return SegmentRow.fromJson(inserted);
   }
 
+  /// Delete a segment. RLS lets the route owner remove segments on
+  /// their own route; cascades drop the segment_efforts rows.
+  Future<void> deleteSegment(String segmentId) async {
+    await _client
+        .from(SegmentRow.table)
+        .delete()
+        .eq(SegmentRow.colId, segmentId);
+  }
+
   /// Leaderboard for a single segment — fastest effort per user
   /// already enforced by `unique(segment_id, run_id)` and the client
   /// further dedupes per user. Capped at `limit` raw rows.
