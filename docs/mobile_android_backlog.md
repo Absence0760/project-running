@@ -9,7 +9,7 @@ description: Sequenced plan for closing the gap between web (canonical) and mobi
 
 ## Where we stand
 
-As of 2026-04-28 mobile_android sits at **~86% feature parity with web** — 119 of 142 non-physical-exception rows are `✓` and 7 more are `Partial` (covered with a documented follow-up). 16 features remain `✗` on Android while web has them shipped.
+As of 2026-04-28 mobile_android sits at **~86% feature parity with web** — 119 of 142 non-physical-exception rows are `✓` and 8 more are `Partial` (covered with a documented follow-up). 15 features remain `✗` on Android while web has them shipped.
 
 By section (drawn from parity.md, `web ✓ ∧ android ✗`):
 
@@ -17,11 +17,11 @@ By section (drawn from parity.md, `web ✓ ∧ android ✗`):
 |---|---:|---:|---|
 | AI Coach | 12 | 0 | Whole surface still pending — chat UI, streaming, sidebar, composer, plan switcher, runs window, tones, usage cap, history, markdown, bubble actions, multi-line input. Single screen file (~1500 lines) — its own session. |
 | Route management | 3 | 1 | Click-to-place builder, OSRM snap, elevation-preview-while-drawing — all blocked on a MapLibre-Flutter polyline editor (one cohesive surface, ~1500 lines). Club-owned routes is `Partial` — list + view shipped, admin transfer-from-route-detail still pending. |
-| Integrations | 1 | 0 | Strava OAuth live sync — needs `url_launcher` plugin. parkrun athlete-number import shipped. |
+| Integrations | 0 | 1 | Strava connect/sync/disconnect tile shipped (OAuth happens via `url_launcher` hand-off to web `/settings/integrations`; once connected, sync + disconnect are native via Edge Function + RLS). Native in-app OAuth (deep-link callback or webview) is the Partial. parkrun shipped. |
 | Photos / privacy | 0 | 0 | Photos on runs shipped (image_picker). Privacy zones shipped. |
 | Plan templates | 0 | 1 | Adopt shipped; publish-to-club from `plan_detail_screen` still pending. |
 | Settings | 0 | 1 | Devices screen shipped (rename + remove + edit existing overrides). The "+ Add override" typed editor for new keys is the partial gap. |
-| Paywall | 0 | 4 | Manage subscription, Pro checkout, Donate, donation surface — all four ship as link-out tiles via the share sheet. Native RevenueCat / Play Billing flows still pending; the `url_launcher` dep would unlock proper "open in browser" UX too. |
+| Paywall | 0 | 4 | Manage subscription, Pro checkout, Donate, donation surface — all four open in the system browser via `url_launcher`. Native RevenueCat / Play Billing flows still pending. |
 
 The web-canonical rule from [`decisions.md § 24`](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) means every row above (except where physically impossible — none of these are) is a real gap to close, not a deferred-by-design item.
 

@@ -2066,4 +2066,47 @@ class ApiClient {
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
     );
   }
+
+  // ──────────────────── Integrations ────────────────────
+
+  /// Connected providers for the current user. Mirrors web
+  /// `fetchIntegrations` — RLS gates results to the viewer.
+  Future<List<IntegrationRow>> fetchIntegrations() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    final data = await _client
+        .from(IntegrationRow.table)
+        .select()
+        .eq(IntegrationRow.colUserId, viewerId)
+        .order(IntegrationRow.colCreatedAt, ascending: true);
+    return data.map<IntegrationRow>((r) => IntegrationRow.fromJson(r)).toList();
+  }
+
+  /// Remove the integration row for the given provider. The Edge
+  /// Function does NOT need to be called — Strava revocation happens
+  /// when we drop our refresh token.
+  Future<void> disconnectIntegration(String provider) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(IntegrationRow.table)
+        .delete()
+        .eq(IntegrationRow.colUserId, viewerId)
+        .eq(IntegrationRow.colProvider, provider);
+  }
+
+  /// Trigger a manual Strava backfill via the `strava-import` Edge
+  /// Function. Mirrors the web `syncStrava` helper. Returns the raw
+  /// response payload so the caller can surface
+  /// `{imported, skipped, failed}` in a toast.
+  Future<Map<String, dynamic>> syncStrava({int lookbackDays = 90}) async {
+    final res = await _client.functions.invoke(
+      'strava-import',
+      body: {'action': 'sync', 'lookbackDays': lookbackDays},
+    );
+    final data = res.data;
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return const {};
+  }
 }

@@ -45,17 +45,37 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _darkMode = themeModeNotifier.value == ThemeMode.dark;
+  List<IntegrationRow> _integrations = const [];
+  bool _stravaBusy = false;
 
   @override
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
+    _refreshIntegrations();
   }
 
   @override
   void dispose() {
     widget.preferences.removeListener(_onChange);
     super.dispose();
+  }
+
+  Future<void> _refreshIntegrations() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final list = await api.fetchIntegrations();
+      if (!mounted) return;
+      setState(() => _integrations = list);
+    } catch (_) {}
+  }
+
+  IntegrationRow? _strava() {
+    for (final i in _integrations) {
+      if (i.provider == 'strava') return i;
+    }
+    return null;
   }
 
   void _onChange() {
@@ -795,6 +815,127 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ---------- Account actions ----------
 
+  Widget _buildStravaTile() {
+    final s = _strava();
+    final connected = s != null;
+    final last = s?.lastSyncAt;
+    final subtitle = !connected
+        ? 'Connect to auto-sync activities'
+        : last == null
+            ? 'Connected · waiting for first sync'
+            : 'Connected · last sync ${_relTime(last)}';
+    return ListTile(
+      leading: const Icon(Icons.sync, color: Color(0xFFFC4C02)),
+      title: const Text('Strava'),
+      subtitle: Text(subtitle),
+      trailing: _stravaBusy
+          ? const SizedBox(
+              width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : connected
+              ? PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'sync') _syncStrava();
+                    if (v == 'disconnect') _disconnectStrava();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'sync', child: Text('Sync now')),
+                    PopupMenuItem(
+                        value: 'disconnect', child: Text('Disconnect')),
+                  ],
+                )
+              : const Icon(Icons.chevron_right),
+      onTap: _stravaBusy ? null : (connected ? _syncStrava : _connectStrava),
+    );
+  }
+
+  static String _relTime(DateTime t) {
+    final diff = DateTime.now().toUtc().difference(t.toUtc());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${(diff.inDays / 7).floor()}w ago';
+  }
+
+  Future<void> _connectStrava() async {
+    await _openExternal('https://run.app/settings/integrations');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Complete the Strava sign-in in your browser, then return here '
+          'and pull to refresh.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncStrava() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    setState(() => _stravaBusy = true);
+    try {
+      final res = await api.syncStrava();
+      if (!mounted) return;
+      final imported = (res['imported'] as num?)?.toInt() ?? 0;
+      final skipped = (res['skipped'] as num?)?.toInt() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synced. $imported new, $skipped already present.')),
+      );
+      await _refreshIntegrations();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _stravaBusy = false);
+    }
+  }
+
+  Future<void> _disconnectStrava() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Disconnect Strava?'),
+            content: const Text(
+              'Future activities will stop syncing automatically. Already-imported '
+              'runs stay in your history.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Disconnect'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    setState(() => _stravaBusy = true);
+    try {
+      await api.disconnectIntegration('strava');
+      await _refreshIntegrations();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Strava disconnected.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Disconnect failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _stravaBusy = false);
+    }
+  }
+
   Future<void> _importParkrun() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
@@ -1165,6 +1306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text('Integrations', style: theme.textTheme.titleSmall),
             ),
+            _buildStravaTile(),
             ListTile(
               leading: const Icon(Icons.directions_run),
               title: const Text('parkrun'),

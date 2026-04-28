@@ -53,7 +53,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `route_detail_screen.dart` — route map + metadata + reviews + public/private toggle
 - `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
 - `explore_routes_screen.dart` — search and browse public routes with filters (distance, surface), save to library
-- `settings_screen.dart` — preferences, integrations, data export
+- `settings_screen.dart` — preferences, integrations (Strava connect/sync/disconnect via `url_launcher` hand-off + native sync via Edge Function; parkrun athlete-number import), data export
 - `clubs_screen.dart` — Browse / My clubs, 6th bottom-nav tab. FAB opens `widgets/club_form_sheet.dart` (Create club)
 - `club_detail_screen.dart` — five tabs: Feed (threaded posts) · Events (admin Create button + RSVP cards) · Members (admin pending-requests panel + count) · Routes (club-owned routes via `routes.club_id`, lazy-loaded; tap → `public_route_screen.dart`) · Templates (admin/member-visible plan templates with per-row Adopt → `clone_plan_template` RPC)
 - `event_detail_screen.dart` — per-instance RSVP + admin update composer + admin-only Race control card (Arm / Fire Go / End / Cancel, gated on `ClubView.isRaceDirector`, backed by `SocialService.armRace` / `startRace` / `endRace`)
