@@ -43,6 +43,81 @@
 
 	let followsAnyone = $derived(followees.length > 0);
 
+	// ── Author combobox state ───────────────────────────────────────
+	// A naked <select> is fine for 5 followees but folds at 100+ and
+	// can't search. We render a button + popover with a typeahead
+	// input and a virtualised-friendly scroll list. Filter is purely
+	// client-side against the followee list (loaded with limit=500),
+	// which is fast for any realistic follow graph; if a user breaks
+	// 500 we promote to a server-side search RPC.
+	let authorOpen = $state(false);
+	let authorQuery = $state('');
+	let authorHighlight = $state(0);
+	let authorSearchEl: HTMLInputElement | null = $state(null);
+
+	let authorOptions = $derived.by(() => {
+		const q = authorQuery.trim().toLowerCase();
+		const list = q
+			? followees.filter((f) =>
+					(f.display_name ?? '').toLowerCase().includes(q),
+				)
+			: followees;
+		// Always show the "everyone" sentinel as the first option when
+		// the query is empty; once the user types it implicitly drops
+		// off so they can pick a person without it grabbing focus.
+		return q
+			? list.map((f) => ({ id: f.id, label: f.display_name ?? 'Runner' }))
+			: [
+					{ id: 'all', label: 'Everyone you follow' },
+					...list.map((f) => ({ id: f.id, label: f.display_name ?? 'Runner' })),
+				];
+	});
+
+	let authorLabel = $derived.by(() => {
+		if (authorFilter === 'all') return 'Everyone you follow';
+		const f = followees.find((x) => x.id === authorFilter);
+		return f?.display_name ?? 'Runner';
+	});
+
+	function openAuthor() {
+		authorOpen = true;
+		authorQuery = '';
+		authorHighlight = 0;
+		// Focus the search input on next tick so the popover has rendered.
+		queueMicrotask(() => authorSearchEl?.focus());
+	}
+
+	function pickAuthor(id: string) {
+		authorFilter = id;
+		authorOpen = false;
+		authorQuery = '';
+	}
+
+	function onAuthorKey(e: KeyboardEvent) {
+		const opts = authorOptions;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			authorHighlight = (authorHighlight + 1) % Math.max(opts.length, 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			authorHighlight = (authorHighlight - 1 + opts.length) % Math.max(opts.length, 1);
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+			const opt = opts[authorHighlight];
+			if (opt) pickAuthor(opt.id);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			authorOpen = false;
+		}
+	}
+
+	// Reset highlight whenever the filtered list changes so the user
+	// doesn't see ↑/↓ skip past out-of-range indices.
+	$effect(() => {
+		const _ = authorOptions;
+		authorHighlight = 0;
+	});
+
 	function openRun(id: string) {
 		openRunId = id;
 	}
@@ -60,7 +135,7 @@
 				authorId: authorFilter === 'all' ? null : authorFilter,
 				activityType: activityFilter,
 			}),
-			uid ? fetchFollowing(uid, 100) : Promise.resolve([]),
+			uid ? fetchFollowing(uid, 500) : Promise.resolve([]),
 		]);
 		entries = feed;
 		followees = following;
@@ -214,12 +289,64 @@
 				{/each}
 			</div>
 
-			<select bind:value={authorFilter} class="toolbar-select" aria-label="Author">
-				<option value="all">Everyone you follow</option>
-				{#each followees as f}
-					<option value={f.id}>{f.display_name ?? 'Runner'}</option>
-				{/each}
-			</select>
+			<div class="author-combo">
+				<button
+					type="button"
+					class="combo-btn"
+					class:open={authorOpen}
+					onclick={() => (authorOpen ? (authorOpen = false) : openAuthor())}
+					aria-haspopup="listbox"
+					aria-expanded={authorOpen}
+					aria-label="Filter by author"
+				>
+					<span class="combo-label">{authorLabel}</span>
+					<span class="material-symbols">expand_more</span>
+				</button>
+
+				{#if authorOpen}
+					<button
+						type="button"
+						class="combo-backdrop"
+						aria-label="Close"
+						onclick={() => (authorOpen = false)}
+					></button>
+					<div class="combo-pop" role="listbox" aria-label="Followees">
+						<div class="combo-search">
+							<span class="material-symbols">search</span>
+							<input
+								bind:this={authorSearchEl}
+								bind:value={authorQuery}
+								type="search"
+								placeholder="Search by name…"
+								onkeydown={onAuthorKey}
+								aria-autocomplete="list"
+							/>
+						</div>
+						{#if authorOptions.length === 0}
+							<p class="combo-empty">No matches.</p>
+						{:else}
+							<ul class="combo-list">
+								{#each authorOptions as opt, i (opt.id)}
+									<li>
+										<button
+											type="button"
+											class="combo-item"
+											class:active={i === authorHighlight}
+											class:selected={authorFilter === opt.id}
+											onclick={() => pickAuthor(opt.id)}
+											onmouseenter={() => (authorHighlight = i)}
+											role="option"
+											aria-selected={authorFilter === opt.id}
+										>
+											{opt.label}
+										</button>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+				{/if}
+			</div>
 
 			<span class="window-hint">Last {FEED_WINDOW_DAYS} days</span>
 		</header>
@@ -415,6 +542,131 @@
 	.toolbar-select:focus-visible {
 		outline: 2px solid var(--color-primary);
 		outline-offset: 1px;
+	}
+
+	/* Searchable combobox for the author filter — looks like a sibling
+	   of `.toolbar-select` when closed; opens a typeahead popover. */
+	.author-combo {
+		position: relative;
+	}
+	.combo-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-width: 12rem;
+		max-width: 18rem;
+		padding: 0.45rem 0.6rem 0.45rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.85rem;
+		font-weight: 500;
+		font: inherit;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: border-color var(--transition-fast);
+	}
+	.combo-btn .combo-label {
+		flex: 1;
+		text-align: left;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.combo-btn .material-symbols {
+		font-size: 1.05rem;
+		color: var(--color-text-tertiary);
+		transition: transform var(--transition-fast);
+	}
+	.combo-btn:hover {
+		border-color: var(--color-primary);
+	}
+	.combo-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+	.combo-btn.open .material-symbols {
+		transform: rotate(180deg);
+	}
+
+	.combo-backdrop {
+		position: fixed;
+		inset: 0;
+		background: transparent;
+		border: 0;
+		cursor: default;
+		z-index: 50;
+	}
+	.combo-pop {
+		position: absolute;
+		top: calc(100% + 0.25rem);
+		left: 0;
+		min-width: 16rem;
+		max-width: 22rem;
+		max-height: min(60vh, 22rem);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-lg);
+		z-index: 51;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	.combo-search {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.45rem 0.6rem;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.combo-search .material-symbols {
+		font-size: 1rem;
+		color: var(--color-text-tertiary);
+	}
+	.combo-search input {
+		flex: 1;
+		min-width: 0;
+		border: 0;
+		outline: none;
+		background: transparent;
+		font: inherit;
+		font-size: 0.85rem;
+		color: var(--color-text);
+	}
+	.combo-list {
+		list-style: none;
+		margin: 0;
+		padding: 0.25rem 0;
+		overflow-y: auto;
+	}
+	.combo-item {
+		display: block;
+		width: 100%;
+		text-align: left;
+		padding: 0.5rem 0.75rem;
+		background: transparent;
+		border: 0;
+		font: inherit;
+		font-size: 0.85rem;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+	.combo-item.active,
+	.combo-item:hover {
+		background: var(--color-bg-tertiary);
+	}
+	.combo-item.selected {
+		color: var(--color-primary);
+		font-weight: 600;
+	}
+	.combo-empty {
+		padding: 0.75rem;
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+		margin: 0;
+		text-align: center;
 	}
 
 	.window-hint {
