@@ -2992,3 +2992,120 @@ export async function computeSegmentEffortsForRun(input: {
 	}
 	return written;
 }
+
+// --- Notifications (decisions §38) ---
+
+export type NotificationKind = 'kudos' | 'comment' | 'comment_reply' | 'follow';
+
+export interface NotificationRow {
+	id: string;
+	user_id: string;
+	actor_id: string | null;
+	kind: NotificationKind;
+	run_id: string | null;
+	comment_id: string | null;
+	read_at: string | null;
+	created_at: string;
+}
+
+export interface NotificationView {
+	row: NotificationRow;
+	actor: PublicProfile | null;
+	run_distance_m: number | null;
+	run_started_at: string | null;
+	comment_excerpt: string | null;
+}
+
+/**
+ * Last `limit` notifications for the current user, joined to actor
+ * profiles + small run/comment metadata so the UI can render
+ * "Alice commented on your 8 km run" without follow-up queries.
+ */
+export async function fetchNotifications(limit = 50): Promise<NotificationView[]> {
+	const { data: rows, error } = await supabase
+		.from('notifications')
+		.select('*')
+		.order('created_at', { ascending: false })
+		.limit(limit);
+	if (error || !rows || rows.length === 0) {
+		if (error) console.error('fetchNotifications failed', error);
+		return [];
+	}
+
+	const actorIds = Array.from(new Set(rows.map((r) => r.actor_id).filter((x): x is string => !!x)));
+	const runIds = Array.from(new Set(rows.map((r) => r.run_id).filter((x): x is string => !!x)));
+	const commentIds = Array.from(new Set(rows.map((r) => r.comment_id).filter((x): x is string => !!x)));
+
+	const [profiles, runs, comments] = await Promise.all([
+		actorIds.length > 0
+			? supabase.from('user_profiles').select('id, display_name, avatar_url').in('id', actorIds)
+			: Promise.resolve({ data: [] as PublicProfile[] }),
+		runIds.length > 0
+			? supabase.from('runs').select('id, distance_m, started_at').in('id', runIds)
+			: Promise.resolve({ data: [] as { id: string; distance_m: number; started_at: string }[] }),
+		commentIds.length > 0
+			? supabase.from('run_comments').select('id, body').in('id', commentIds)
+			: Promise.resolve({ data: [] as { id: string; body: string }[] }),
+	]);
+
+	const profileBy = new Map<string, PublicProfile>();
+	for (const p of (profiles.data ?? []) as PublicProfile[]) profileBy.set(p.id, p);
+	const runBy = new Map<string, { distance_m: number; started_at: string }>();
+	for (const r of (runs.data ?? []) as { id: string; distance_m: number; started_at: string }[]) {
+		runBy.set(r.id, { distance_m: r.distance_m, started_at: r.started_at });
+	}
+	const commentBy = new Map<string, string>();
+	for (const c of (comments.data ?? []) as { id: string; body: string }[]) {
+		commentBy.set(c.id, c.body);
+	}
+
+	return rows.map((row) => {
+		const r = row as NotificationRow;
+		const run = r.run_id ? runBy.get(r.run_id) ?? null : null;
+		const body = r.comment_id ? commentBy.get(r.comment_id) ?? null : null;
+		return {
+			row: r,
+			actor: r.actor_id ? profileBy.get(r.actor_id) ?? null : null,
+			run_distance_m: run?.distance_m ?? null,
+			run_started_at: run?.started_at ?? null,
+			comment_excerpt: body ? (body.length > 120 ? body.slice(0, 117) + '…' : body) : null,
+		};
+	});
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+	const { count, error } = await supabase
+		.from('notifications')
+		.select('*', { count: 'exact', head: true })
+		.is('read_at', null);
+	if (error) {
+		console.error('fetchUnreadNotificationCount failed', error);
+		return 0;
+	}
+	return count ?? 0;
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+	const { error } = await supabase
+		.from('notifications')
+		.update({ read_at: new Date().toISOString() })
+		.eq('id', id)
+		.is('read_at', null);
+	if (error) throw error;
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) return;
+	const { error } = await supabase
+		.from('notifications')
+		.update({ read_at: new Date().toISOString() })
+		.eq('user_id', userId)
+		.is('read_at', null);
+	if (error) throw error;
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+	const { error } = await supabase.from('notifications').delete().eq('id', id);
+	if (error) throw error;
+}
