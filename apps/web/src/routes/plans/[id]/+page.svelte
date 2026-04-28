@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fetchPlan, fetchMyClubs, setPlanIsTemplate } from '$lib/data';
+	import { fetchPlan, fetchMyClubs, publishPlanAsTemplate } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
+	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -26,6 +27,9 @@
 
 	let adminClubs = $state<ClubWithMeta[]>([]);
 	let publishingTo = $state('');
+	let editingPlanMeta = $state(false);
+
+	let isOwner = $derived(plan != null && plan.user_id === auth.user?.id);
 
 	async function load() {
 		loading = true;
@@ -51,9 +55,11 @@
 	async function publishAsTemplate() {
 		if (!plan || !publishingTo) return;
 		try {
-			await setPlanIsTemplate(plan.id, true, publishingTo);
-			showToast('Plan published as a club template.');
-			await load();
+			await publishPlanAsTemplate(plan.id, publishingTo);
+			showToast('Plan published as a club template. Your personal plan is unchanged.');
+			publishingTo = '';
+			// No reload needed — the source plan stayed put. The new
+			// template lives on the club's Templates tab.
 		} catch (e) {
 			showToast(`Failed to publish: ${e}`, 'error');
 		}
@@ -132,8 +138,20 @@
 		{/if}
 
 		<header class="hero">
-			<div>
-				<h1>{plan.name}</h1>
+			<div class="hero-body">
+				<div class="hero-title-row">
+					<h1>{plan.name}</h1>
+					{#if isOwner && !plan.is_template}
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => (editingPlanMeta = true)}
+						>
+							<span class="material-symbols">edit</span>
+							Edit plan
+						</button>
+					{/if}
+				</div>
 				{#if plan.parent_template_id}
 					<a class="parent-chip" href="/plans/{plan.parent_template_id}">
 						<span class="material-symbols">link</span>
@@ -315,6 +333,17 @@
 	/>
 {/if}
 
+{#if editingPlanMeta && plan}
+	<PlanMetaEditor
+		{plan}
+		onClose={() => (editingPlanMeta = false)}
+		onSaved={async () => {
+			editingPlanMeta = false;
+			await load();
+		}}
+	/>
+{/if}
+
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
@@ -341,6 +370,22 @@
 	h1 {
 		font-size: 1.5rem;
 		font-weight: 700;
+	}
+	.hero-body {
+		flex: 1;
+		min-width: 0;
+	}
+	.hero-title-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+	}
+	.hero-title-row .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1rem;
+		vertical-align: -2px;
+		margin-right: 0.2rem;
 	}
 	.meta {
 		display: flex;

@@ -1864,6 +1864,106 @@ export async function setPlanIsTemplate(
 	if (error) throw error;
 }
 
+/**
+ * Clone a user's plan into a new club-owned template, leaving the
+ * original plan untouched on the user's /plans list. Mirrors
+ * `clone_plan_template` but in the publish direction: copy the plan
+ * row + every plan_week + every plan_workout into a new
+ * `is_template = true, club_id = X` sibling. Completion fields are
+ * intentionally not copied — templates start fresh.
+ */
+export async function publishPlanAsTemplate(
+	sourcePlanId: string,
+	clubId: string
+): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const source = await fetchPlan(sourcePlanId);
+	if (!source.plan) throw new Error('Source plan not found');
+	if (source.plan.user_id !== userId) {
+		throw new Error('Only the plan owner can publish');
+	}
+	const src = source.plan;
+
+	const { data: tmpl, error: planErr } = await supabase
+		.from('training_plans')
+		.insert({
+			user_id: userId,
+			name: src.name,
+			goal_event: src.goal_event,
+			goal_distance_m: src.goal_distance_m,
+			goal_time_seconds: src.goal_time_seconds,
+			start_date: src.start_date,
+			end_date: src.end_date,
+			days_per_week: src.days_per_week,
+			vdot: src.vdot,
+			current_5k_seconds: src.current_5k_seconds,
+			status: 'completed',
+			source: src.source ?? 'manual',
+			notes: src.notes,
+			rules: src.rules,
+			is_template: true,
+			club_id: clubId,
+			parent_template_id: null,
+		})
+		.select('id')
+		.single();
+	if (planErr || !tmpl) throw planErr ?? new Error('Template insert failed');
+	const newPlanId = tmpl.id as string;
+
+	if (source.weeks.length === 0) return newPlanId;
+
+	const weekRows = source.weeks.map((w) => ({
+		plan_id: newPlanId,
+		week_index: w.week_index,
+		phase: w.phase,
+		target_volume_m: w.target_volume_m,
+		notes: w.notes,
+	}));
+	const { data: weekRes, error: weekErr } = await supabase
+		.from('plan_weeks')
+		.insert(weekRows)
+		.select('id, week_index');
+	if (weekErr || !weekRes) throw weekErr ?? new Error('Weeks insert failed');
+
+	const byIdx = new Map<number, string>();
+	for (const w of weekRes as { id: string; week_index: number }[]) {
+		byIdx.set(w.week_index, w.id);
+	}
+	const oldToNew = new Map<string, string>();
+	for (const old of source.weeks) {
+		const newId = byIdx.get(old.week_index);
+		if (newId) oldToNew.set(old.id, newId);
+	}
+
+	const workoutRows = source.workouts
+		.map((w) => {
+			const newWeekId = oldToNew.get(w.week_id);
+			if (!newWeekId) return null;
+			return {
+				week_id: newWeekId,
+				scheduled_date: w.scheduled_date,
+				kind: w.kind,
+				target_distance_m: w.target_distance_m,
+				target_duration_seconds: w.target_duration_seconds,
+				target_pace_sec_per_km: w.target_pace_sec_per_km,
+				target_pace_end_sec_per_km: w.target_pace_end_sec_per_km,
+				target_pace_tolerance_sec: w.target_pace_tolerance_sec,
+				pace_zone: w.pace_zone,
+				structure: w.structure,
+				notes: w.notes,
+			};
+		})
+		.filter((r): r is NonNullable<typeof r> => r != null);
+	if (workoutRows.length > 0) {
+		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
+		if (woErr) throw woErr;
+	}
+
+	return newPlanId;
+}
+
 export async function fetchPlan(id: string): Promise<{
 	plan: TrainingPlan | null;
 	weeks: PlanWeek[];
@@ -2180,7 +2280,13 @@ export async function updatePlanWeek(
 
 export async function updatePlanMeta(
 	id: string,
-	patch: Partial<{ name: string; notes: string | null }>
+	patch: Partial<{
+		name: string;
+		notes: string | null;
+		goal_time_seconds: number | null;
+		days_per_week: number;
+		rules: unknown[] | null;
+	}>
 ): Promise<void> {
 	const { error } = await supabase.from('training_plans').update(patch).eq('id', id);
 	if (error) throw error;
