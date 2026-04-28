@@ -16,6 +16,7 @@ import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
 import '../settings_sync.dart';
 import 'import_screen.dart';
+import 'devices_screen.dart';
 import 'profile_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -792,6 +793,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ---------- Account actions ----------
 
+  /// Opens an external URL via the share sheet so the user can pick
+  /// "Open in browser". A native `url_launcher` plugin would be a
+  /// better fit; deferred until that dep lands.
+  Future<void> _openExternal(String url) async {
+    try {
+      await Share.share(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open: $e')),
+      );
+    }
+  }
+
   Future<void> _changePassword() async {
     final pwdCtl = TextEditingController();
     final confirmCtl = TextEditingController();
@@ -963,6 +978,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
               },
+            ),
+            ListTile(
+              leading: const Icon(Icons.devices_other),
+              title: const Text('Devices'),
+              subtitle: const Text(
+                  'Where you\'re signed in and per-device overrides'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final api = widget.apiClient;
+                if (api == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DevicesScreen(
+                      api: api,
+                      currentDeviceId: widget.preferences.deviceId,
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.workspace_premium_outlined),
+              title: const Text('Manage subscription'),
+              subtitle:
+                  const Text('Open the subscription portal in your browser'),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () => _openExternal('https://run.app/settings/upgrade'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.volunteer_activism_outlined),
+              title: const Text('Support the app'),
+              subtitle: const Text('One-off donation in your browser'),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () => _openExternal('https://run.app/settings/upgrade'),
             ),
             ListTile(
               leading: const Icon(Icons.lock_outline),

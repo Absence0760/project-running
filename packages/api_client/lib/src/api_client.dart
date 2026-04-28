@@ -1036,6 +1036,85 @@ class ApiClient {
     return SegmentRow.fromJson(inserted);
   }
 
+  // ──────────────────── Device list (user_device_settings) ─────────
+
+  /// Every device row the current user has registered. Used by the
+  /// Settings → Devices screen to show "where am I signed in".
+  Future<List<UserDeviceSettingRow>> fetchMyDevices() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    final rows = await _client
+        .from(UserDeviceSettingRow.table)
+        .select()
+        .eq(UserDeviceSettingRow.colUserId, viewerId)
+        .order(UserDeviceSettingRow.colLastSeenAt, ascending: false);
+    return rows
+        .map<UserDeviceSettingRow>(
+            (r) => UserDeviceSettingRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Rename a device (the human-readable label shown in Settings).
+  Future<void> updateDeviceLabel({
+    required String deviceId,
+    required String label,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(UserDeviceSettingRow.table)
+        .update({UserDeviceSettingRow.colLabel: label})
+        .eq(UserDeviceSettingRow.colUserId, viewerId)
+        .eq(UserDeviceSettingRow.colDeviceId, deviceId);
+  }
+
+  /// Drop a device row (and any per-device prefs it carried). The
+  /// device itself isn't signed out — that's a sign-out flow on the
+  /// device. This only forgets the per-device preference overrides.
+  Future<void> removeDevice(String deviceId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(UserDeviceSettingRow.table)
+        .delete()
+        .eq(UserDeviceSettingRow.colUserId, viewerId)
+        .eq(UserDeviceSettingRow.colDeviceId, deviceId);
+  }
+
+  /// Patch a single key in a non-current device's `prefs` bag. Use the
+  /// `SettingsService` for the *current* device; this method is the
+  /// override-editor write-path on the Settings → Devices screen.
+  Future<void> setDeviceOverride({
+    required String deviceId,
+    required String key,
+    required dynamic value,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(UserDeviceSettingRow.table)
+        .select(UserDeviceSettingRow.colPrefs)
+        .eq(UserDeviceSettingRow.colUserId, viewerId)
+        .eq(UserDeviceSettingRow.colDeviceId, deviceId)
+        .maybeSingle();
+    final prefs = Map<String, dynamic>.from(
+        (row?[UserDeviceSettingRow.colPrefs] as Map?) ?? const <String, dynamic>{});
+    if (value == null) {
+      prefs.remove(key);
+    } else {
+      prefs[key] = value;
+    }
+    await _client
+        .from(UserDeviceSettingRow.table)
+        .update({
+          UserDeviceSettingRow.colPrefs: prefs,
+          UserDeviceSettingRow.colUpdatedAt:
+              DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq(UserDeviceSettingRow.colUserId, viewerId)
+        .eq(UserDeviceSettingRow.colDeviceId, deviceId);
+  }
+
   /// Routes owned by a club. Read-gated by RLS to club members; used
   /// by the club home Routes tab and event-editor route pickers.
   Future<List<Route>> fetchClubRoutes(String clubId) async {
