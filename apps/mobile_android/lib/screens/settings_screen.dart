@@ -17,6 +17,7 @@ import '../preferences.dart';
 import '../settings_sync.dart';
 import 'import_screen.dart';
 import 'devices_screen.dart';
+import 'privacy_zones_screen.dart';
 import 'profile_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -1088,6 +1089,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       api: api,
                       currentDeviceId: widget.preferences.deviceId,
                     ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy zones'),
+              subtitle:
+                  const Text('Clip start/end of public tracks near home'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final s = widget.settingsSync;
+                if (s == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PrivacyZonesScreen(settingsSync: s),
                   ),
                 );
               },
