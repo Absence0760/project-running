@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../backup.dart';
@@ -887,17 +888,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Opens an external URL via the share sheet so the user can pick
-  /// "Open in browser". A native `url_launcher` plugin would be a
-  /// better fit; deferred until that dep lands.
   Future<void> _openExternal(String url) async {
+    final uri = Uri.parse(url);
     try {
-      await Share.share(url);
-    } catch (e) {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        await Share.share(url);
+      }
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open: $e')),
-      );
+      try {
+        await Share.share(url);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open: $e')),
+        );
+      }
     }
   }
 
