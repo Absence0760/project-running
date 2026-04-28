@@ -536,7 +536,7 @@ The activity feed shipped in §31 needs an engagement loop. Strava's pattern —
 **Schema:**
 
 - **`run_kudos (user_id, run_id, given_at)`** — composite PK so a user can only kudos a run once. ON DELETE CASCADE on both sides. No `id` column; the natural key is the relationship itself.
-- **`run_comments (id, run_id, author_id, parent_comment_id, body, created_at, updated_at)`** — `parent_comment_id` is a self-FK (nullable). One level of nesting is enforced in the policy: `with check (parent_comment_id is null or (select parent_comment_id is null from run_comments where id = parent_comment_id))`. `body` is CHECK-constrained to 1..2000 chars to keep an `<input maxlength>` honest.
+- **`run_comments (id, run_id, author_id, parent_comment_id, body, created_at, updated_at)`** — `parent_comment_id` is a self-FK (nullable). One level of nesting is enforced in the INSERT policy. The original `with check (parent_comment_id is null or (select parent_comment_id is null from run_comments where id = parent_comment_id))` shape produced `infinite recursion detected in policy for relation "run_comments"` on every authenticated insert: PostgreSQL's RLS planner flags any policy that selects from its own table as recursive even when the runtime graph is acyclic. Migration `20260529_001` lifts the depth check into a SECURITY DEFINER helper (`_run_comment_parent_is_top_level(uuid)`) so the policy graph no longer self-references. `body` is CHECK-constrained to 1..2000 chars to keep an `<input maxlength>` honest.
 
 **RLS — visibility tracks runs.** The lever-pulling decision is making kudos / comments inherit the parent run's visibility, not setting a new policy from scratch:
 

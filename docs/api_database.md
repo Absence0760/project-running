@@ -200,7 +200,7 @@ create table run_comments (
 );
 ```
 
-Threading is one level deep, enforced by the INSERT policy: `parent_comment_id is null OR (the parent's parent_comment_id is null)`. Run owner can DELETE any comment on their run for moderation; otherwise authors edit / delete their own. The `run_comments_set_updated_at` BEFORE-UPDATE trigger keeps `updated_at` honest so consumers can tell edited comments apart.
+Threading is one level deep, enforced by the INSERT policy: `parent_comment_id is null OR (the parent's parent_comment_id is null)`. The depth check delegates to the SECURITY DEFINER helper `_run_comment_parent_is_top_level(uuid)` because PostgreSQL's RLS planner flags any policy that selects from its own table as recursive — even when the runtime path is acyclic — and would otherwise return `infinite recursion detected in policy for relation "run_comments"` on every authenticated INSERT (fixed in `20260529_001`). Run owner can DELETE any comment on their run for moderation; otherwise authors edit / delete their own. The `run_comments_set_updated_at` BEFORE-UPDATE trigger keeps `updated_at` honest so consumers can tell edited comments apart.
 
 ### `run_photos`
 
