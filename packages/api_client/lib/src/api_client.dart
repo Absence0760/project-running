@@ -860,6 +860,602 @@ class ApiClient {
         .eq(NotificationRow.colUserId, viewerId);
   }
 
+  // ──────────────────── Run photos (P1.B) ────────────────────
+  //
+  // Metadata in `run_photos`; bytes in the public-read `run-photos`
+  // Storage bucket at `{owner_id}/{photo_id}.{ext}`. Owner gates
+  // upload + delete; visibility on the metadata row tracks the run.
+
+  /// Photos for a run, ordered by position then created_at. Capped.
+  Future<List<RunPhotoRow>> fetchRunPhotos(
+    String runId, {
+    int limit = 50,
+  }) async {
+    final data = await _client
+        .from(RunPhotoRow.table)
+        .select()
+        .eq(RunPhotoRow.colRunId, runId)
+        .order(RunPhotoRow.colPositionIdx, ascending: true)
+        .order(RunPhotoRow.colCreatedAt, ascending: true)
+        .limit(limit);
+    return data.map<RunPhotoRow>((r) => RunPhotoRow.fromJson(r)).toList();
+  }
+
+  /// Upload bytes to the `run-photos` bucket and insert the metadata
+  /// row. The caller passes the storage extension (e.g. 'jpg', 'png').
+  Future<RunPhotoRow> addRunPhoto({
+    required String runId,
+    required Uint8List bytes,
+    required String contentType,
+    required String extension,
+    String? caption,
+    int positionIdx = 0,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final id = _client.auth.currentUser!.id;
+    // Storage layout matches web: `{owner_id}/{photo_id}.{ext}`. The
+    // photo_id is a fresh uuid generated server-side, so we let the
+    // insert return it and *then* upload — keeps the storage path
+    // and the row in lockstep without a follow-up update.
+    final inserted = await _client
+        .from(RunPhotoRow.table)
+        .insert({
+          RunPhotoRow.colRunId: runId,
+          RunPhotoRow.colOwnerId: viewerId,
+          RunPhotoRow.colStoragePath: '', // placeholder; updated below
+          RunPhotoRow.colCaption: caption,
+          RunPhotoRow.colPositionIdx: positionIdx,
+        })
+        .select()
+        .single();
+    final photoId = inserted[RunPhotoRow.colId] as String;
+    final path = '$id/$photoId.$extension';
+    await _client.storage.from('run-photos').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
+    await _client
+        .from(RunPhotoRow.table)
+        .update({RunPhotoRow.colStoragePath: path})
+        .eq(RunPhotoRow.colId, photoId);
+    return RunPhotoRow.fromJson({...inserted, RunPhotoRow.colStoragePath: path});
+  }
+
+  /// Update an existing photo's caption.
+  Future<void> updateRunPhotoCaption({
+    required String photoId,
+    String? caption,
+  }) async {
+    await _client
+        .from(RunPhotoRow.table)
+        .update({RunPhotoRow.colCaption: caption})
+        .eq(RunPhotoRow.colId, photoId);
+  }
+
+  /// Delete a photo. Removes both the metadata row (RLS gates author
+  /// / run-owner permissions) and the underlying Storage object.
+  Future<void> deleteRunPhoto(RunPhotoRow photo) async {
+    await _client
+        .from(RunPhotoRow.table)
+        .delete()
+        .eq(RunPhotoRow.colId, photo.id);
+    if (photo.storagePath.isNotEmpty) {
+      await _client.storage.from('run-photos').remove([photo.storagePath]);
+    }
+  }
+
+  // ──────────────────── Segments (P1.B) ────────────────────
+  //
+  // Route-anchored segments + per-run efforts. Auto-effort generation
+  // is client-side on web (decisions §37); the android equivalent
+  // walks the run track in `core_models`/segments and posts efforts
+  // through `recordSegmentEffort` below.
+
+  /// Segments anchored on a route, sorted by start distance.
+  Future<List<SegmentRow>> fetchSegmentsForRoute(
+    String routeId, {
+    int limit = 100,
+  }) async {
+    final data = await _client
+        .from(SegmentRow.table)
+        .select()
+        .eq(SegmentRow.colRouteId, routeId)
+        .order(SegmentRow.colStartDistanceM, ascending: true)
+        .limit(limit);
+    return data.map<SegmentRow>((r) => SegmentRow.fromJson(r)).toList();
+  }
+
+  /// Define a new segment on a route. The DB computes `length_m` as
+  /// a generated column, so we don't pass it.
+  Future<SegmentRow> createSegment({
+    required String routeId,
+    required String name,
+    required double startDistanceM,
+    required double endDistanceM,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final inserted = await _client
+        .from(SegmentRow.table)
+        .insert({
+          SegmentRow.colRouteId: routeId,
+          SegmentRow.colName: name,
+          SegmentRow.colStartDistanceM: startDistanceM,
+          SegmentRow.colEndDistanceM: endDistanceM,
+          SegmentRow.colCreatedBy: viewerId,
+        })
+        .select()
+        .single();
+    return SegmentRow.fromJson(inserted);
+  }
+
+  /// Leaderboard for a single segment — fastest effort per user
+  /// already enforced by `unique(segment_id, run_id)` and the client
+  /// further dedupes per user. Capped at `limit` raw rows.
+  Future<List<SegmentEffortRow>> fetchSegmentLeaderboard(
+    String segmentId, {
+    int limit = 200,
+  }) async {
+    final data = await _client
+        .from(SegmentEffortRow.table)
+        .select()
+        .eq(SegmentEffortRow.colSegmentId, segmentId)
+        .order(SegmentEffortRow.colTimeSeconds, ascending: true)
+        .limit(limit);
+    return data
+        .map<SegmentEffortRow>((r) => SegmentEffortRow.fromJson(r))
+        .toList();
+  }
+
+  /// All segment efforts for a single run (so the run-detail page can
+  /// surface "you ranked 3rd on Centennial Hill" pills).
+  Future<List<SegmentEffortRow>> fetchEffortsForRun(String runId) async {
+    final data = await _client
+        .from(SegmentEffortRow.table)
+        .select()
+        .eq(SegmentEffortRow.colRunId, runId);
+    return data
+        .map<SegmentEffortRow>((r) => SegmentEffortRow.fromJson(r))
+        .toList();
+  }
+
+  /// Insert a single segment effort row. Idempotent against the
+  /// `unique(segment_id, run_id)` constraint — the upsert with
+  /// `ignoreDuplicates: true` swallows reimports of the same run.
+  Future<void> recordSegmentEffort({
+    required String segmentId,
+    required String runId,
+    required int timeSeconds,
+    required DateTime startedAt,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client.from(SegmentEffortRow.table).upsert(
+      {
+        SegmentEffortRow.colSegmentId: segmentId,
+        SegmentEffortRow.colRunId: runId,
+        SegmentEffortRow.colUserId: viewerId,
+        SegmentEffortRow.colTimeSeconds: timeSeconds,
+        SegmentEffortRow.colStartedAt: startedAt.toIso8601String(),
+      },
+      onConflict:
+          '${SegmentEffortRow.colSegmentId},${SegmentEffortRow.colRunId}',
+      ignoreDuplicates: true,
+    );
+  }
+
+  // ──────────────────── Privacy zones (P1.C) ────────────────────
+
+  /// Server-side privacy-zone clipping. The zones never reach the
+  /// client; the RPC reads them with security-definer privileges and
+  /// returns the clipped middle of the input track. Falls back to
+  /// the input if the RPC fails so a transient server error never
+  /// leaks the unclipped track to a non-owner viewer of a public run.
+  Future<List<Map<String, dynamic>>> clipTrackForUser({
+    required String targetUserId,
+    required List<Map<String, dynamic>> points,
+  }) async {
+    if (points.isEmpty) return points;
+    try {
+      final data = await _client.rpc('clip_track_for_user', params: {
+        'target_user_id': targetUserId,
+        'points': points,
+      });
+      if (data is List) {
+        return data.cast<Map<String, dynamic>>();
+      }
+      return points;
+    } catch (_) {
+      return points;
+    }
+  }
+
+  // ──────────────────── Coach messages (P1.C) ────────────────────
+  //
+  // Active thread is `archived_at IS NULL` filtered by `(user_id,
+  // plan_id)`. `plan_id IS NULL` is its own thread. The streaming
+  // send path is mounted as a server-only edge function that the
+  // android client should hit over fetch/SSE — that's a separate
+  // wire concern; the methods below cover the reads + reactions +
+  // archiving.
+
+  /// Active-thread messages, oldest-first.
+  Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    var q = _client
+        .from(CoachMessageRow.table)
+        .select()
+        .eq(CoachMessageRow.colUserId, viewerId)
+        .isFilter(CoachMessageRow.colArchivedAt, null);
+    q = planId == null
+        ? q.isFilter(CoachMessageRow.colPlanId, null)
+        : q.eq(CoachMessageRow.colPlanId, planId);
+    final data = await q
+        .order(CoachMessageRow.colCreatedAt, ascending: true)
+        .limit(500);
+    return data
+        .map<CoachMessageRow>((r) => CoachMessageRow.fromJson(r))
+        .toList();
+  }
+
+  /// Set / clear the up/down reaction on an assistant bubble.
+  Future<void> setCoachReaction({
+    required String messageId,
+    String? reaction, // 'up' | 'down' | null to clear
+  }) async {
+    await _client
+        .from(CoachMessageRow.table)
+        .update({CoachMessageRow.colReaction: reaction})
+        .eq(CoachMessageRow.colId, messageId);
+  }
+
+  /// Archive every message in the active thread for the current
+  /// `(user_id, plan_id)` scope so a fresh conversation can begin.
+  Future<void> archiveCoachThread({String? planId}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    final ts = DateTime.now().toIso8601String();
+    var q = _client
+        .from(CoachMessageRow.table)
+        .update({CoachMessageRow.colArchivedAt: ts})
+        .eq(CoachMessageRow.colUserId, viewerId)
+        .isFilter(CoachMessageRow.colArchivedAt, null);
+    q = planId == null
+        ? q.isFilter(CoachMessageRow.colPlanId, null)
+        : q.eq(CoachMessageRow.colPlanId, planId);
+    await q;
+  }
+
+  /// Distinct archived_at timestamps (one per archived thread) for
+  /// the history sidebar.
+  Future<List<DateTime>> listCoachArchives({String? planId}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    var q = _client
+        .from(CoachMessageRow.table)
+        .select(CoachMessageRow.colArchivedAt)
+        .eq(CoachMessageRow.colUserId, viewerId)
+        .not(CoachMessageRow.colArchivedAt, 'is', null);
+    q = planId == null
+        ? q.isFilter(CoachMessageRow.colPlanId, null)
+        : q.eq(CoachMessageRow.colPlanId, planId);
+    final data = await q.order(CoachMessageRow.colArchivedAt, ascending: false);
+    final seen = <String>{};
+    final out = <DateTime>[];
+    for (final row in data) {
+      final raw = row[CoachMessageRow.colArchivedAt] as String?;
+      if (raw == null || !seen.add(raw)) continue;
+      out.add(DateTime.parse(raw));
+    }
+    return out;
+  }
+
+  /// Fetch a specific archived thread (read-only viewer).
+  Future<List<CoachMessageRow>> fetchCoachArchive({
+    required DateTime archivedAt,
+    String? planId,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    var q = _client
+        .from(CoachMessageRow.table)
+        .select()
+        .eq(CoachMessageRow.colUserId, viewerId)
+        .eq(CoachMessageRow.colArchivedAt, archivedAt.toIso8601String());
+    q = planId == null
+        ? q.isFilter(CoachMessageRow.colPlanId, null)
+        : q.eq(CoachMessageRow.colPlanId, planId);
+    final data =
+        await q.order(CoachMessageRow.colCreatedAt, ascending: true);
+    return data
+        .map<CoachMessageRow>((r) => CoachMessageRow.fromJson(r))
+        .toList();
+  }
+
+  /// RPC for the per-user-per-day usage counter. Free tier capped at
+  /// 10/day server-side; `is_pro()` lifts the cap.
+  Future<int> getCoachUsage() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return 0;
+    final value = await _client.rpc(
+      'get_coach_usage',
+      params: {'p_user_id': viewerId},
+    );
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  /// RPC `is_pro` — true when the viewer's active subscription tier
+  /// is paid. Used to short-circuit the daily cap and gate Pro UI.
+  Future<bool> isPro() async {
+    final value = await _client.rpc('is_pro');
+    return value == true;
+  }
+
+  // ──────────────────── Clubs + events (P1.D) ────────────────────
+
+  /// Create a new club. `joinPolicy` is one of 'open' | 'request' |
+  /// 'invite'. The `enroll_club_owner` trigger auto-inserts the
+  /// owner's club_members row, so we don't add it here.
+  Future<ClubRow> createClub({
+    required String name,
+    required String slug,
+    String? description,
+    String? locationLabel,
+    bool isPublic = true,
+    String joinPolicy = 'open',
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final inserted = await _client
+        .from(ClubRow.table)
+        .insert({
+          ClubRow.colOwnerId: viewerId,
+          ClubRow.colName: name,
+          ClubRow.colSlug: slug,
+          ClubRow.colDescription: description,
+          ClubRow.colLocationLabel: locationLabel,
+          ClubRow.colIsPublic: isPublic,
+          ClubRow.colJoinPolicy: joinPolicy,
+        })
+        .select()
+        .single();
+    return ClubRow.fromJson(inserted);
+  }
+
+  /// Edit owner-side club fields.
+  Future<void> updateClub({
+    required String clubId,
+    String? name,
+    String? description,
+    String? locationLabel,
+    bool? isPublic,
+    String? joinPolicy,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (name != null) patch[ClubRow.colName] = name;
+    if (description != null) patch[ClubRow.colDescription] = description;
+    if (locationLabel != null) patch[ClubRow.colLocationLabel] = locationLabel;
+    if (isPublic != null) patch[ClubRow.colIsPublic] = isPublic;
+    if (joinPolicy != null) patch[ClubRow.colJoinPolicy] = joinPolicy;
+    if (patch.isEmpty) return;
+    await _client.from(ClubRow.table).update(patch).eq(ClubRow.colId, clubId);
+  }
+
+  /// Redeem a join token from a public invite link.
+  Future<String> joinClubByToken(String token) async {
+    final result =
+        await _client.rpc('join_club_by_token', params: {'p_token': token});
+    return result as String;
+  }
+
+  /// Request to join a club whose policy is `request`. Status starts
+  /// `pending`; an admin approves via the methods below.
+  Future<void> requestJoinClub(String clubId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client.from(ClubMemberRow.table).insert({
+      ClubMemberRow.colClubId: clubId,
+      ClubMemberRow.colUserId: viewerId,
+      ClubMemberRow.colRole: 'member',
+      ClubMemberRow.colStatus: 'pending',
+    });
+  }
+
+  /// Pending join requests for an admin to action.
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async {
+    final data = await _client
+        .from(ClubMemberRow.table)
+        .select()
+        .eq(ClubMemberRow.colClubId, clubId)
+        .eq(ClubMemberRow.colStatus, 'pending')
+        .order(ClubMemberRow.colJoinedAt, ascending: false);
+    return data
+        .map<ClubMemberRow>((r) => ClubMemberRow.fromJson(r))
+        .toList();
+  }
+
+  /// Approve a pending member.
+  Future<void> approveJoinRequest({
+    required String clubId,
+    required String userId,
+  }) async {
+    await _client
+        .from(ClubMemberRow.table)
+        .update({ClubMemberRow.colStatus: 'active'})
+        .eq(ClubMemberRow.colClubId, clubId)
+        .eq(ClubMemberRow.colUserId, userId);
+  }
+
+  /// Deny / remove a pending member.
+  Future<void> denyJoinRequest({
+    required String clubId,
+    required String userId,
+  }) async {
+    await _client
+        .from(ClubMemberRow.table)
+        .delete()
+        .eq(ClubMemberRow.colClubId, clubId)
+        .eq(ClubMemberRow.colUserId, userId)
+        .eq(ClubMemberRow.colStatus, 'pending');
+  }
+
+  /// Create a new event under a club. Recurrence fields are exposed
+  /// as raw `recurrence_freq` / `recurrence_byday` strings — the
+  /// caller is responsible for the format the backend expects.
+  Future<EventRow> createEvent({
+    required String clubId,
+    required String title,
+    required DateTime startsAt,
+    String? description,
+    int? durationMin,
+    String? meetLabel,
+    double? meetLat,
+    double? meetLng,
+    String? routeId,
+    double? distanceM,
+    int? paceTargetSec,
+    int? capacity,
+    String? recurrenceFreq,
+    String? recurrenceByDay,
+    DateTime? recurrenceUntil,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final inserted = await _client
+        .from(EventRow.table)
+        .insert({
+          EventRow.colClubId: clubId,
+          EventRow.colTitle: title,
+          EventRow.colDescription: description,
+          EventRow.colStartsAt: startsAt.toIso8601String(),
+          EventRow.colDurationMin: durationMin,
+          EventRow.colMeetLabel: meetLabel,
+          EventRow.colMeetLat: meetLat,
+          EventRow.colMeetLng: meetLng,
+          EventRow.colRouteId: routeId,
+          EventRow.colDistanceM: distanceM,
+          EventRow.colPaceTargetSec: paceTargetSec,
+          EventRow.colCapacity: capacity,
+          EventRow.colCreatedBy: viewerId,
+          if (recurrenceFreq != null) 'recurrence_freq': recurrenceFreq,
+          if (recurrenceByDay != null) 'recurrence_byday': recurrenceByDay,
+          if (recurrenceUntil != null)
+            'recurrence_until': recurrenceUntil.toIso8601String(),
+        })
+        .select()
+        .single();
+    return EventRow.fromJson(inserted);
+  }
+
+  /// Edit any event field — back-end CHECK constraints validate.
+  Future<void> updateEvent({
+    required String eventId,
+    Map<String, dynamic> patch = const {},
+  }) async {
+    if (patch.isEmpty) return;
+    await _client
+        .from(EventRow.table)
+        .update(patch)
+        .eq(EventRow.colId, eventId);
+  }
+
+  /// Cancel an event (cascade-deletes attendees + per-instance
+  /// updates).
+  Future<void> deleteEvent(String eventId) async {
+    await _client.from(EventRow.table).delete().eq(EventRow.colId, eventId);
+  }
+
+  /// RSVP to an event for the current viewer. `status` is one of
+  /// 'going' | 'maybe' | 'declined'. `instanceStart` is the recurring
+  /// instance start; for one-off events, pass the event's `startsAt`.
+  Future<void> setEventRsvp({
+    required String eventId,
+    required DateTime instanceStart,
+    required String status,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client.from(EventAttendeeRow.table).upsert(
+      {
+        EventAttendeeRow.colEventId: eventId,
+        EventAttendeeRow.colUserId: viewerId,
+        EventAttendeeRow.colStatus: status,
+        EventAttendeeRow.colInstanceStart: instanceStart.toIso8601String(),
+      },
+      onConflict:
+          '${EventAttendeeRow.colEventId},${EventAttendeeRow.colUserId},${EventAttendeeRow.colInstanceStart}',
+    );
+  }
+
+  /// Per-instance attendee list.
+  Future<List<EventAttendeeRow>> fetchEventAttendees({
+    required String eventId,
+    required DateTime instanceStart,
+  }) async {
+    final data = await _client
+        .from(EventAttendeeRow.table)
+        .select()
+        .eq(EventAttendeeRow.colEventId, eventId)
+        .eq(EventAttendeeRow.colInstanceStart, instanceStart.toIso8601String());
+    return data
+        .map<EventAttendeeRow>((r) => EventAttendeeRow.fromJson(r))
+        .toList();
+  }
+
+  // ──────────────────── Plan templates (P1.D) ────────────────────
+
+  /// Plan templates owned by `clubId` — visible to club members.
+  Future<List<TrainingPlanRow>> fetchClubTemplates(
+    String clubId, {
+    int limit = 100,
+  }) async {
+    final data = await _client
+        .from(TrainingPlanRow.table)
+        .select()
+        .eq('is_template', true)
+        .eq('club_id', clubId)
+        .order(TrainingPlanRow.colCreatedAt, ascending: false)
+        .limit(limit);
+    return data
+        .map<TrainingPlanRow>((r) => TrainingPlanRow.fromJson(r))
+        .toList();
+  }
+
+  /// Publish a personal plan as a club template. Server-side RPC
+  /// clones the source plan + its weeks + workouts so the source
+  /// stays in the user's plan list (decisions §35).
+  Future<String> publishPlanAsTemplate({
+    required String planId,
+    required String clubId,
+  }) async {
+    final newId = await _client.rpc(
+      'publish_plan_as_template',
+      params: {'p_source_plan_id': planId, 'p_club_id': clubId},
+    );
+    return newId as String;
+  }
+
+  /// Adopt a club template — clones the template back into a personal
+  /// plan for the current viewer.
+  Future<String> clonePlanTemplate({
+    required String templateId,
+    DateTime? startDate,
+  }) async {
+    final newId = await _client.rpc(
+      'clone_plan_template',
+      params: {
+        'p_template_id': templateId,
+        if (startDate != null) 'p_start_date': startDate.toIso8601String(),
+      },
+    );
+    return newId as String;
+  }
+
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
   //
   // These go through the generated row classes so that column renames surface
