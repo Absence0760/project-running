@@ -2,14 +2,17 @@
 	import { onMount } from 'svelte';
 	import {
 		fetchFollowingFeed,
+		fetchFollowing,
 		fetchEngagementSummaries,
 		giveKudos,
 		rescindKudos,
+		FEED_WINDOW_DAYS,
 		type FeedEntry,
 	} from '$lib/data';
 	import { formatDuration } from '$lib/mock-data';
 	import { formatDistance, formatPace } from '$lib/units.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 	import RunShareView from '$lib/components/RunShareView.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
@@ -21,6 +24,7 @@
 	let loadingMore = $state(false);
 	let exhausted = $state(false);
 	let kudosBusy = $state<Set<string>>(new Set());
+	let followsAnyone = $state(false);
 	let openRunId = $state<string | null>(null);
 
 	function openRun(id: string) {
@@ -33,7 +37,13 @@
 
 	async function loadInitial() {
 		loading = true;
-		entries = await fetchFollowingFeed({ limit: 20 });
+		const uid = auth.user?.id;
+		const [feed, following] = await Promise.all([
+			fetchFollowingFeed({ limit: 20 }),
+			uid ? fetchFollowing(uid, 1) : Promise.resolve([]),
+		]);
+		entries = feed;
+		followsAnyone = following.length > 0;
 		exhausted = entries.length < 20;
 		engagement = await fetchEngagementSummaries(entries.map((e) => e.id));
 		loading = false;
@@ -123,12 +133,20 @@
 	{:else if entries.length === 0}
 		<div class="empty">
 			<span class="material-symbols empty-icon">groups</span>
-			<h2>Your feed is empty</h2>
-			<p>
-				Follow other runners to see their public runs here. Visit a club's Members tab or open a
-				public run to find a profile to follow.
-			</p>
-			<a href="/clubs" class="btn btn-primary">Browse clubs</a>
+			{#if followsAnyone}
+				<h2>No recent activity</h2>
+				<p>
+					Nobody you follow has logged a public run in the last {FEED_WINDOW_DAYS} days. Older runs
+					are still on each runner's profile.
+				</p>
+			{:else}
+				<h2>Your feed is empty</h2>
+				<p>
+					Follow other runners to see their public runs here. Visit a club's Members tab or open a
+					public run to find a profile to follow.
+				</p>
+				<a href="/clubs" class="btn btn-primary">Browse clubs</a>
+			{/if}
 		</div>
 	{:else}
 		<div class="feed">

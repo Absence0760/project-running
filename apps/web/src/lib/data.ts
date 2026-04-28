@@ -2420,6 +2420,8 @@ export interface FeedEntry extends Run {
 /// Activity feed: recent public runs from people the caller follows.
 /// Cursor is the started_at + id of the last entry on the previous page;
 /// pass null for the first page.
+export const FEED_WINDOW_DAYS = 14;
+
 export async function fetchFollowingFeed(opts?: {
 	limit?: number;
 	cursor?: { started_at: string; id: string } | null;
@@ -2437,11 +2439,13 @@ export async function fetchFollowingFeed(opts?: {
 	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
 	if (followeeIds.length === 0) return [];
 
+	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 	let q = supabase
 		.from('runs')
 		.select('*')
 		.in('user_id', followeeIds)
 		.eq('is_public', true)
+		.gte('started_at', cutoff)
 		.order('started_at', { ascending: false })
 		.order('id', { ascending: false })
 		.limit(limit);
