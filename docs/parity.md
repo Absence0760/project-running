@@ -190,14 +190,14 @@ See [docs/clubs.md](clubs.md). No features.md section yet — update this row-bl
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
 | Browse clubs | ✓ | ✗ | ✓ | N/A | N/A | |
-| Create club | ✗ | ✗ | ✓ | N/A | N/A | Intentional: admins create clubs on the web. |
+| Create club | ✓ | ✗ | ✓ | N/A | N/A | Android: FAB on `clubs_screen.dart` opens `widgets/club_form_sheet.dart` (name, description, location, public/private, join policy with the same visibility ↔ policy linking as web `ClubEditor`). Auto-slugifies the name; the `enroll_club_owner` trigger inserts the owner's `club_members` row server-side. |
 | Club detail (feed / events / members tabs) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Club posts with threaded replies | ✓ | ✗ | ✓ | N/A | N/A | |
-| Create event | ✗ | ✗ | ✓ | N/A | N/A | Intentional: event creation is a web-only admin surface. |
+| Create event | ✓ | ✗ | ✓ | N/A | N/A | Android: admin-only "Create event" button on the Events tab of `club_detail_screen.dart` opens `widgets/event_form_sheet.dart` (title, starts_at picker, description, meet label, distance/duration, recurrence none/weekly/biweekly/monthly with auto-byday from the picked DOW). |
 | Event detail + RSVP | ✓ | ✗ | ✓ | N/A | N/A | |
 | Recurring events (per-instance RSVP) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Invite tokens / join links | ✓ | ✗ | ✓ | N/A | N/A | |
-| Join-request approval flow | ✗ | ✗ | ✓ | N/A | N/A | Web-only admin surface. |
+| Join-request approval flow | ✓ | ✗ | ✓ | N/A | N/A | Android: pending-requests panel on the Members tab of `club_detail_screen.dart` (admin-only — RLS filters non-admins to []). Per-row Approve / Deny buttons call `SocialService.approveJoinRequest` / `denyJoinRequest` and remove the row optimistically. |
 | Upcoming-event card on home (within 48h) | ✓ | ✗ | ✓ | N/A | N/A | Web: `fetchNextRsvpedEvent(48)` on dashboard mount; card renders above stats when a matching RSVP exists, links to the event detail page. |
 | Realtime subscriptions (posts / RSVPs / members) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Push notifications (event reminders, admin updates) | ✗ | ✗ | Partial | ✗ | ✗ | **Web subscribe path shipped.** Service worker at `apps/web/static/sw.js` (handles `push` + `notificationclick`); `lib/push.ts` registers the SW, requests permission, calls `pushManager.subscribe`, persists the subscription onto `user_device_settings.prefs.push_subscription` keyed by the per-browser device id. UI on `/settings/account` → "Notifications" card with Enable / Disable toggle and a clear "blocked in browser" / "build not configured" fallback. Gated on `PUBLIC_VAPID_PUBLIC_KEY` being set at build time — when absent the UI renders an honest "not configured" hint instead of a broken button. **Server-side delivery (Edge Function that signs and POSTs payloads via Web Push) is the remaining gap** — needs the matching `VAPID_PRIVATE_KEY` env. Native FCM / APNs paths still TBD on mobile / watch. |

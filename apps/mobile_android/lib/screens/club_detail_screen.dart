@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:core_models/core_models.dart' hide Route;
+
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/event_form_sheet.dart';
 import 'event_detail_screen.dart';
 
 class ClubDetailScreen extends StatefulWidget {
@@ -26,6 +29,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   ClubView? _club;
   List<EventView> _upcoming = const [];
   List<ClubPostView> _posts = const [];
+  List<ClubMemberRow> _pending = const [];
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -57,15 +61,21 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         if (mounted) setState(() => _loading = false);
         return;
       }
-      final results = await Future.wait([
+      final results = await Future.wait<dynamic>([
         widget.social.fetchUpcomingEvents(club.row.id),
         widget.social.fetchClubPosts(club.row.id),
+        // Pending requests only meaningful when the viewer is admin.
+        // RLS will return [] for non-admins; keep the call simple.
+        club.isAdmin
+            ? widget.social.fetchPendingRequests(club.row.id)
+            : Future.value(const <ClubMemberRow>[]),
       ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
         _club = club;
         _upcoming = results[0] as List<EventView>;
         _posts = results[1] as List<ClubPostView>;
+        _pending = results[2] as List<ClubMemberRow>;
         _loading = false;
       });
       if (_channel == null) {
@@ -681,17 +691,42 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     );
   }
 
+  Future<void> _createEvent(ClubView c) async {
+    final ok = await showEventFormSheet(
+      context,
+      social: widget.social,
+      clubId: c.row.id,
+    );
+    if (ok != null) _load();
+  }
+
   Widget _buildEventsTab(ThemeData theme, ClubView c) {
+    final showCreate = c.isAdmin;
     if (_upcoming.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Text(
-            'No upcoming events. Admins can create events from the web app.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                showCreate
+                    ? 'No upcoming events. Tap Create to add one.'
+                    : 'No upcoming events.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+              if (showCreate) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => _createEvent(c),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create event'),
+                ),
+              ],
+            ],
           ),
         ),
       );
@@ -700,10 +735,20 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: _upcoming.length,
+        itemCount: _upcoming.length + (showCreate ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (ctx, i) {
-          final e = _upcoming[i];
+          if (showCreate && i == 0) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () => _createEvent(c),
+                icon: const Icon(Icons.add),
+                label: const Text('Create event'),
+              ),
+            );
+          }
+          final e = _upcoming[showCreate ? i - 1 : i];
           return InkWell(
             onTap: () async {
               await Navigator.of(ctx).push(
@@ -814,17 +859,97 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     );
   }
 
+  Future<void> _approve(String userId) async {
+    final c = _club;
+    if (c == null) return;
+    try {
+      await widget.social.approveJoinRequest(
+        clubId: c.row.id,
+        userId: userId,
+      );
+      if (mounted) {
+        setState(() => _pending =
+            _pending.where((m) => m.userId != userId).toList());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Approve failed: $e')));
+    }
+  }
+
+  Future<void> _deny(String userId) async {
+    final c = _club;
+    if (c == null) return;
+    try {
+      await widget.social.denyJoinRequest(
+        clubId: c.row.id,
+        userId: userId,
+      );
+      if (mounted) {
+        setState(() => _pending =
+            _pending.where((m) => m.userId != userId).toList());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Deny failed: $e')));
+    }
+  }
+
   Widget _buildMembersTab(ThemeData theme, ClubView c) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Text(
-          '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}.\nFull member list coming soon on mobile.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.outline,
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (c.isAdmin && _pending.isNotEmpty) ...[
+            Text(
+              'Pending requests (${_pending.length})',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            for (final m in _pending)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'User ${m.userId.substring(0, 8)}…',
+                          style: theme.textTheme.bodyMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _deny(m.userId),
+                        child: const Text('Deny'),
+                      ),
+                      const SizedBox(width: 4),
+                      FilledButton(
+                        onPressed: () => _approve(m.userId),
+                        child: const Text('Approve'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 24),
+          ],
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

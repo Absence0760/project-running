@@ -1004,6 +1004,31 @@ class ApiClient {
     return SegmentRow.fromJson(inserted);
   }
 
+  /// Routes owned by a club. Read-gated by RLS to club members; used
+  /// by the club home Routes tab and event-editor route pickers.
+  Future<List<Route>> fetchClubRoutes(String clubId) async {
+    final rows = await _client
+        .from(RouteRow.table)
+        .select()
+        .eq(RouteRow.colClubId, clubId)
+        .order(RouteRow.colCreatedAt, ascending: false);
+    return rows
+        .map<Route>((r) => _routeFromRow(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Transfer a route the viewer owns to a club they admin (or detach
+  /// it back to personal by passing `null`). Admin-write-gated by RLS.
+  Future<void> setRouteClub({
+    required String routeId,
+    required String? clubId,
+  }) async {
+    await _client
+        .from(RouteRow.table)
+        .update({RouteRow.colClubId: clubId})
+        .eq(RouteRow.colId, routeId);
+  }
+
   // ──────────────────── Saved (bookmarked) routes ────────────────────
 
   /// Bookmark a public route via the `saved_routes` reference table

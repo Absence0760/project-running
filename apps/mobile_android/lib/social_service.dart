@@ -229,6 +229,76 @@ class SocialService extends ChangeNotifier {
     ];
   }
 
+  /// Create a new club. The `enroll_club_owner` trigger auto-inserts
+  /// the owner's `club_members` row, so we don't add it here.
+  Future<ClubRow> createClub({
+    required String name,
+    required String slug,
+    String? description,
+    String? locationLabel,
+    bool isPublic = true,
+    String joinPolicy = 'open',
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+    final inserted = await _c
+        .from('clubs')
+        .insert({
+          'owner_id': uid,
+          'name': name,
+          'slug': slug,
+          'description': description,
+          'location_label': locationLabel,
+          'is_public': isPublic,
+          'join_policy': joinPolicy,
+        })
+        .select()
+        .single();
+    notifyListeners();
+    return ClubRow.fromJson(inserted);
+  }
+
+  /// Pending join requests on a club (admins only — RLS will filter).
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async {
+    final rows = await _c
+        .from('club_members')
+        .select()
+        .eq('club_id', clubId)
+        .eq('status', 'pending')
+        .order('joined_at', ascending: false);
+    return (rows as List)
+        .map<ClubMemberRow>((r) =>
+            ClubMemberRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Approve a pending join request.
+  Future<void> approveJoinRequest({
+    required String clubId,
+    required String userId,
+  }) async {
+    await _c
+        .from('club_members')
+        .update({'status': 'active'})
+        .eq('club_id', clubId)
+        .eq('user_id', userId);
+    notifyListeners();
+  }
+
+  /// Deny / remove a pending join request.
+  Future<void> denyJoinRequest({
+    required String clubId,
+    required String userId,
+  }) async {
+    await _c
+        .from('club_members')
+        .delete()
+        .eq('club_id', clubId)
+        .eq('user_id', userId)
+        .eq('status', 'pending');
+    notifyListeners();
+  }
+
   Future<String> joinClub(String clubId, String policy) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
@@ -255,6 +325,54 @@ class SocialService extends ChangeNotifier {
   }
 
   // ─────────────────────── Events ───────────────────────
+
+  /// Create a new event under a club. Recurrence fields are raw
+  /// strings — `recurrence.dart` produces them. Admin-write-gated by RLS.
+  Future<EventRow> createEvent({
+    required String clubId,
+    required String title,
+    required DateTime startsAt,
+    String? description,
+    int? durationMin,
+    String? meetLabel,
+    double? meetLat,
+    double? meetLng,
+    String? routeId,
+    double? distanceM,
+    int? paceTargetSec,
+    int? capacity,
+    String? recurrenceFreq,
+    String? recurrenceByDay,
+    DateTime? recurrenceUntil,
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+    final inserted = await _c
+        .from('events')
+        .insert({
+          'club_id': clubId,
+          'title': title,
+          'description': description,
+          'starts_at': startsAt.toIso8601String(),
+          'duration_min': durationMin,
+          'meet_label': meetLabel,
+          'meet_lat': meetLat,
+          'meet_lng': meetLng,
+          'route_id': routeId,
+          'distance_m': distanceM,
+          'pace_target_sec': paceTargetSec,
+          'capacity': capacity,
+          'created_by': uid,
+          if (recurrenceFreq != null) 'recurrence_freq': recurrenceFreq,
+          if (recurrenceByDay != null) 'recurrence_byday': recurrenceByDay,
+          if (recurrenceUntil != null)
+            'recurrence_until': recurrenceUntil.toIso8601String(),
+        })
+        .select()
+        .single();
+    notifyListeners();
+    return EventRow.fromJson(inserted);
+  }
 
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async {
     final rows = await _c

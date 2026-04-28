@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../social_service.dart';
 import '../backend_timeout.dart';
+import '../widgets/club_form_sheet.dart';
 import '../widgets/error_state.dart';
 import 'club_detail_screen.dart';
 
@@ -130,6 +131,26 @@ class _ClubsScreenState extends State<ClubsScreen> {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'clubs_create_fab',
+        onPressed: () async {
+          final slug = await showClubFormSheet(context, social: widget.social);
+          if (slug == null || !mounted) return;
+          // Drop into the new club so the owner sees the immediate
+          // shape of what they just created.
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ClubDetailScreen(
+                social: widget.social,
+                slug: slug,
+              ),
+            ),
+          );
+          _load();
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('New club'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
