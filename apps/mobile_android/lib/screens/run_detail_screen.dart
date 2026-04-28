@@ -15,6 +15,7 @@ import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/run_share_card.dart';
+import '../widgets/run_social_section.dart';
 import '../widgets/workout_review_section.dart';
 
 /// Detail view for a completed run, showing the route map, splits, and stats.
@@ -629,6 +630,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             ),
             ..._buildSplits(theme, unit),
           ],
+
+          // Local RunDetail only opens runs owned by the viewer, so the
+          // viewer is also the run owner — gates "delete any comment".
+          if (widget.apiClient != null && widget.apiClient!.userId != null)
+            RunSocialSection(
+              api: widget.apiClient!,
+              runId: run.id,
+              runOwnerId: widget.apiClient!.userId,
+            ),
 
           const SizedBox(height: 32),
         ],
