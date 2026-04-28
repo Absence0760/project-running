@@ -171,6 +171,13 @@ INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata)
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-13T09:00:00Z', 9000, 11500, 'app',
   '{"activity_type":"hike","avg_bpm":128,"perceived_effort":4,"notes":"Bondi → Coogee coastal."}');
 
+-- Mark runner's runs public so the social loop (kudos / comments /
+-- feed visibility) has material to work against when alex@test.com
+-- (the second seed user) browses the app. The runs.is_public column
+-- defaults to false; without this update Alex sees an empty profile.
+UPDATE runs SET is_public = true
+  WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
 -- 5. Integrations
 INSERT INTO integrations (user_id, provider, last_sync_at) VALUES
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'parkrun', '2026-04-01T10:00:00Z'),
