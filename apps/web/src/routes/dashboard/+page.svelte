@@ -237,7 +237,34 @@
 		sourceFilter === 'all' ? runs : runs.filter((r) => r.source === sourceFilter)
 	);
 	let thisWeekRuns = $derived(filteredRuns.filter((r) => new Date(r.started_at) >= weekStart));
-	let thisWeekDistance = $derived(thisWeekRuns.reduce((sum, r) => sum + r.distance_m, 0));
+	let thisWeekRunDistance = $derived(thisWeekRuns.reduce((sum, r) => sum + r.distance_m, 0));
+
+	/// Plan workouts the user marked as done this week without
+	/// recording a run. Their target distance is folded into the
+	/// "This Week" card so the dashboard reflects the user's stated
+	/// progress, matching the mark-as-done UX expectation. Workouts
+	/// linked to an actual run (`completed_run_id != null`) are
+	/// excluded since the run already counts via `thisWeekRuns`.
+	let thisWeekManualWorkouts = $derived.by(() => {
+		const overview = planOverview;
+		if (!overview) return [];
+		return overview.workouts.filter((w) => {
+			if (!(w.manually_completed === true && w.completed_run_id == null)) return false;
+			if (!w.scheduled_date) return false;
+			const d = new Date(w.scheduled_date + 'T00:00:00');
+			return d >= weekStart && d <= now;
+		});
+	});
+	let thisWeekManualDistance = $derived(
+		thisWeekManualWorkouts.reduce((sum, w) => sum + (w.target_distance_m ?? 0), 0)
+	);
+
+	/// Combined distance + activity count for the "This Week" card.
+	/// Distance includes manually-completed workouts' target distance;
+	/// the count includes them too so "X runs / workouts" reflects
+	/// actions taken this week.
+	let thisWeekDistance = $derived(thisWeekRunDistance + thisWeekManualDistance);
+	let thisWeekActivityCount = $derived(thisWeekRuns.length + thisWeekManualWorkouts.length);
 	let totalRuns = $derived(filteredRuns.length);
 	let longestRun = $derived(filteredRuns.length > 0 ? Math.max(...filteredRuns.map((r) => r.distance_m)) : 0);
 
@@ -367,7 +394,15 @@
 			>
 				<span class="stat-label">This Week</span>
 				<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
-				<span class="stat-sub">{thisWeekRuns.length} run{thisWeekRuns.length !== 1 ? 's' : ''}</span>
+				<span class="stat-sub">
+					{thisWeekActivityCount}
+					{thisWeekActivityCount === 1 ? 'activity' : 'activities'}
+					{#if thisWeekManualWorkouts.length > 0}
+						<span class="manual-hint">
+							incl. {thisWeekManualWorkouts.length} marked done
+						</span>
+					{/if}
+				</span>
 			</button>
 			<div class="stat-card">
 				<span class="stat-label">Total Runs</span>
@@ -1334,6 +1369,12 @@
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
 		margin-top: var(--space-xs);
+	}
+	.manual-hint {
+		display: block;
+		font-size: 0.7rem;
+		color: var(--color-primary);
+		margin-top: 0.15rem;
 	}
 
 	.card {
