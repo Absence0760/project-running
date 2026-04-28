@@ -8,8 +8,10 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
+import '../training_load.dart';
 import '../widgets/fitness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
+import '../widgets/training_load_chart.dart';
 import 'feed_screen.dart';
 import 'period_summary_screen.dart';
 import 'profile_screen.dart';
@@ -78,6 +80,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         settingsSync: widget.settingsSync,
         existing: goal,
       );
+
+  Widget _buildTrainingLoadChart(List<Run> runs, DateTime now) {
+    final hrPrefs = HrPrefs(
+      restingHrBpm: widget.settingsSync?.service
+          ?.effective<num>(SettingsKeys.restingHrBpm),
+      maxHrBpm: widget.settingsSync?.service
+          ?.effective<num>(SettingsKeys.maxHrBpm),
+    );
+    final series =
+        computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
+    return TrainingLoadChart(
+      points: series,
+      hasHr: hasTrimpSignal(runs, hrPrefs),
+    );
+  }
 
   void _openPeriodSummary(PeriodType period) {
     Navigator.push(
@@ -285,6 +302,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 24),
                 ],
                 FitnessCard(runs: runs, now: now),
+                _buildTrainingLoadChart(runs, now),
+                const SizedBox(height: 16),
+
                 Text('All Time', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Card(
