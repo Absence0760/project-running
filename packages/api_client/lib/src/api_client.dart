@@ -537,6 +537,329 @@ class ApiClient {
         .eq(RouteRow.colId, routeId);
   }
 
+  // ────────────────── Following + public profiles ──────────────────
+  //
+  // Mirror of `apps/web/src/lib/data.ts` — the social engagement loop
+  // is web-canonical (decisions §31), and the android app needs the
+  // same primitives to build feed / profile / notifications screens.
+  // Methods are intentionally narrow wrappers over the row classes;
+  // any cross-shape (FeedEntry, ProfileSummary) lives in core_models.
+
+  /// Follow `targetUserId`. No-op if already following (composite-PK
+  /// duplicate is swallowed by the unique-violation guard).
+  Future<void> followUser(String targetUserId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    if (viewerId == targetUserId) return;
+    await _client.from(UserFollowRow.table).insert({
+      UserFollowRow.colFollowerId: viewerId,
+      UserFollowRow.colFolloweeId: targetUserId,
+    });
+  }
+
+  /// Stop following `targetUserId`.
+  Future<void> unfollowUser(String targetUserId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(UserFollowRow.table)
+        .delete()
+        .eq(UserFollowRow.colFollowerId, viewerId)
+        .eq(UserFollowRow.colFolloweeId, targetUserId);
+  }
+
+  /// People who follow `userId`. `limit` is a protective cap, not a
+  /// pagination cursor — promote to cursor pagination if any user
+  /// approaches the ceiling in practice.
+  Future<List<UserProfileRow>> fetchFollowers(
+    String userId, {
+    int limit = 100,
+  }) async {
+    final edges = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFollowerId)
+        .eq(UserFollowRow.colFolloweeId, userId)
+        .order(UserFollowRow.colFollowedAt, ascending: false)
+        .limit(limit);
+    final ids = edges
+        .map<String>((e) => e[UserFollowRow.colFollowerId] as String)
+        .toList();
+    if (ids.isEmpty) return const [];
+    final profiles = await _client
+        .from(UserProfileRow.table)
+        .select()
+        .inFilter(UserProfileRow.colId, ids);
+    return profiles
+        .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
+        .toList();
+  }
+
+  /// People `userId` follows.
+  Future<List<UserProfileRow>> fetchFollowing(
+    String userId, {
+    int limit = 100,
+  }) async {
+    final edges = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFolloweeId)
+        .eq(UserFollowRow.colFollowerId, userId)
+        .order(UserFollowRow.colFollowedAt, ascending: false)
+        .limit(limit);
+    final ids = edges
+        .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
+        .toList();
+    if (ids.isEmpty) return const [];
+    final profiles = await _client
+        .from(UserProfileRow.table)
+        .select()
+        .inFilter(UserProfileRow.colId, ids);
+    return profiles
+        .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
+        .toList();
+  }
+
+  /// Public profile lookup by user ID. Returns null when the row
+  /// doesn't exist or RLS hides it.
+  Future<UserProfileRow?> fetchPublicProfile(String userId) async {
+    final row = await _client
+        .from(UserProfileRow.table)
+        .select()
+        .eq(UserProfileRow.colId, userId)
+        .maybeSingle();
+    if (row == null) return null;
+    return UserProfileRow.fromJson(row);
+  }
+
+  /// Follower / following counts via `count: 'exact', head: true`.
+  /// Returned as a `(followers, following)` tuple to keep the call
+  /// sites readable.
+  Future<({int followers, int following})> fetchFollowCounts(
+    String userId,
+  ) async {
+    final followers = await _client
+        .from(UserFollowRow.table)
+        .count(CountOption.exact)
+        .eq(UserFollowRow.colFolloweeId, userId);
+    final following = await _client
+        .from(UserFollowRow.table)
+        .count(CountOption.exact)
+        .eq(UserFollowRow.colFollowerId, userId);
+    return (followers: followers, following: following);
+  }
+
+  /// Whether the current viewer follows `userId`.
+  Future<bool> viewerFollows(String userId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null || viewerId == userId) return false;
+    final row = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFollowerId)
+        .eq(UserFollowRow.colFollowerId, viewerId)
+        .eq(UserFollowRow.colFolloweeId, userId)
+        .maybeSingle();
+    return row != null;
+  }
+
+  // ───────────────────── Kudos on runs ─────────────────────
+
+  /// One-tap kudos on a run. Composite-PK enforcement makes this
+  /// idempotent — a second tap is a no-op rather than a duplicate.
+  Future<void> giveKudos(String runId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client.from(RunKudosRow.table).insert({
+      RunKudosRow.colUserId: viewerId,
+      RunKudosRow.colRunId: runId,
+    });
+  }
+
+  /// Rescind kudos previously given on a run.
+  Future<void> rescindKudos(String runId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(RunKudosRow.table)
+        .delete()
+        .eq(RunKudosRow.colUserId, viewerId)
+        .eq(RunKudosRow.colRunId, runId);
+  }
+
+  /// Per-run engagement summary (kudos count, comment count, whether
+  /// the viewer has given kudos). Mirrors the web `fetchEngagement
+  /// Summaries` shape — used by feed cards and run-detail pages.
+  Future<Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>>
+      fetchEngagementSummaries(List<String> runIds) async {
+    if (runIds.isEmpty) return const {};
+    final viewerId = _client.auth.currentUser?.id;
+
+    final kudos = await _client
+        .from(RunKudosRow.table)
+        .select('${RunKudosRow.colRunId}, ${RunKudosRow.colUserId}')
+        .inFilter(RunKudosRow.colRunId, runIds);
+    final comments = await _client
+        .from(RunCommentRow.table)
+        .select(RunCommentRow.colRunId)
+        .inFilter(RunCommentRow.colRunId, runIds);
+
+    final kudosCount = <String, int>{};
+    final viewerHas = <String, bool>{};
+    for (final row in kudos) {
+      final rid = row[RunKudosRow.colRunId] as String;
+      kudosCount[rid] = (kudosCount[rid] ?? 0) + 1;
+      if (viewerId != null && row[RunKudosRow.colUserId] == viewerId) {
+        viewerHas[rid] = true;
+      }
+    }
+    final commentCount = <String, int>{};
+    for (final row in comments) {
+      final rid = row[RunCommentRow.colRunId] as String;
+      commentCount[rid] = (commentCount[rid] ?? 0) + 1;
+    }
+    return {
+      for (final id in runIds)
+        id: (
+          kudosCount: kudosCount[id] ?? 0,
+          viewerHasKudos: viewerHas[id] ?? false,
+          commentCount: commentCount[id] ?? 0,
+        ),
+    };
+  }
+
+  // ──────────────────── Comments on runs ────────────────────
+
+  /// Comments on a run, sorted oldest-first. Capped at `limit` rows
+  /// (default 200) — promote to cursor pagination if a viral run
+  /// regularly hits the cap.
+  Future<List<RunCommentRow>> fetchRunComments(
+    String runId, {
+    int limit = 200,
+  }) async {
+    final data = await _client
+        .from(RunCommentRow.table)
+        .select()
+        .eq(RunCommentRow.colRunId, runId)
+        .order(RunCommentRow.colCreatedAt, ascending: true)
+        .limit(limit);
+    return data
+        .map<RunCommentRow>((row) => RunCommentRow.fromJson(row))
+        .toList();
+  }
+
+  /// Post a comment on a run. `parentCommentId` is set for replies
+  /// (one-level deep — the INSERT policy rejects deeper nesting via
+  /// the `_run_comment_parent_is_top_level` helper).
+  Future<RunCommentRow> addRunComment({
+    required String runId,
+    required String body,
+    String? parentCommentId,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final inserted = await _client
+        .from(RunCommentRow.table)
+        .insert({
+          RunCommentRow.colRunId: runId,
+          RunCommentRow.colAuthorId: viewerId,
+          RunCommentRow.colBody: body,
+          if (parentCommentId != null)
+            RunCommentRow.colParentCommentId: parentCommentId,
+        })
+        .select()
+        .single();
+    return RunCommentRow.fromJson(inserted);
+  }
+
+  /// Edit your own comment body. The `run_comments_set_updated_at`
+  /// trigger keeps `updated_at` honest so consumers can tell edited
+  /// comments apart.
+  Future<void> editRunComment({
+    required String commentId,
+    required String body,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(RunCommentRow.table)
+        .update({RunCommentRow.colBody: body})
+        .eq(RunCommentRow.colId, commentId)
+        .eq(RunCommentRow.colAuthorId, viewerId);
+  }
+
+  /// Delete a comment. The author can always delete their own; the
+  /// run owner can delete any comment on their run (separate DELETE
+  /// policy). RLS enforces the rest.
+  Future<void> deleteRunComment(String commentId) async {
+    await _client
+        .from(RunCommentRow.table)
+        .delete()
+        .eq(RunCommentRow.colId, commentId);
+  }
+
+  // ──────────────────── Notifications inbox ────────────────────
+
+  /// The viewer's notifications, newest-first. Capped at `limit`.
+  Future<List<NotificationRow>> fetchNotifications({int limit = 100}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    final data = await _client
+        .from(NotificationRow.table)
+        .select()
+        .eq(NotificationRow.colUserId, viewerId)
+        .order(NotificationRow.colCreatedAt, ascending: false)
+        .limit(limit);
+    return data
+        .map<NotificationRow>((row) => NotificationRow.fromJson(row))
+        .toList();
+  }
+
+  /// Unread count for the bell badge. Hot read-path so we use
+  /// `count: 'exact', head: true` against the partial index
+  /// `notifications_user_unread`.
+  Future<int> fetchUnreadNotificationCount() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return 0;
+    return _client
+        .from(NotificationRow.table)
+        .count(CountOption.exact)
+        .eq(NotificationRow.colUserId, viewerId)
+        .isFilter(NotificationRow.colReadAt, null);
+  }
+
+  /// Mark one notification read. Optimistic-write friendly — the
+  /// bell decrements its badge before this fires.
+  Future<void> markNotificationRead(String id) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(NotificationRow.table)
+        .update({NotificationRow.colReadAt: DateTime.now().toIso8601String()})
+        .eq(NotificationRow.colId, id)
+        .eq(NotificationRow.colUserId, viewerId)
+        .isFilter(NotificationRow.colReadAt, null);
+  }
+
+  /// Bulk mark-all-read for the viewer's unread inbox.
+  Future<void> markAllNotificationsRead() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(NotificationRow.table)
+        .update({NotificationRow.colReadAt: DateTime.now().toIso8601String()})
+        .eq(NotificationRow.colUserId, viewerId)
+        .isFilter(NotificationRow.colReadAt, null);
+  }
+
+  /// Per-row dismiss.
+  Future<void> deleteNotification(String id) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client
+        .from(NotificationRow.table)
+        .delete()
+        .eq(NotificationRow.colId, id)
+        .eq(NotificationRow.colUserId, viewerId);
+  }
+
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
   //
   // These go through the generated row classes so that column renames surface
