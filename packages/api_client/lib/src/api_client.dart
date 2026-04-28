@@ -284,6 +284,14 @@ class ApiClient {
     return _downloadTrack(url);
   }
 
+  /// Download a track by its Storage path. Used when a caller has a
+  /// raw `RunRow` (e.g. public-share screens) and doesn't want to
+  /// shape it into a `Run` first.
+  Future<List<Waypoint>> fetchTrackByPath(String path) async {
+    if (path.isEmpty) return const [];
+    return _downloadTrack(path);
+  }
+
   /// Download the raw gzipped track bytes from Storage without decoding.
   /// Used by the backup flow which wants to archive the gzipped blob
   /// verbatim so restore is a byte-for-byte upload.
@@ -620,6 +628,30 @@ class ApiClient {
 
   /// Recent public runs from a single user — drives the runs tab on
   /// `/u/[id]`-equivalent profile screens. Capped at `limit`.
+  /// Fetch a single run by id. RLS gates access — owners see their own
+  /// (public or private), other viewers only see runs where `is_public`
+  /// is true.
+  Future<RunRow?> fetchRunById(String runId) async {
+    final row = await _client
+        .from(RunRow.table)
+        .select()
+        .eq(RunRow.colId, runId)
+        .maybeSingle();
+    return row == null ? null : RunRow.fromJson(row);
+  }
+
+  /// Fetch a single route by id. RLS gates: owners see their own
+  /// (public or private), other viewers only see public routes or
+  /// routes owned by a club they belong to.
+  Future<Route?> fetchRouteById(String routeId) async {
+    final row = await _client
+        .from(RouteRow.table)
+        .select()
+        .eq(RouteRow.colId, routeId)
+        .maybeSingle();
+    return row == null ? null : _routeFromRow(row);
+  }
+
   Future<List<RunRow>> fetchPublicRunsByUser(String userId, {int limit = 50}) async {
     final data = await _client
         .from(RunRow.table)

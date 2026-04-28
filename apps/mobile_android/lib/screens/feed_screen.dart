@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/error_state.dart';
 import 'profile_screen.dart';
+import 'public_run_screen.dart';
 
 /// Activity feed of public runs from people you follow, capped to the
 /// last 14 days. Mirrors the web `/feed` route (decisions §31).
@@ -258,6 +259,15 @@ class _FeedScreenState extends State<FeedScreen> {
                                           ),
                                         ),
                                       ),
+                                      onCardTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => PublicRunScreen(
+                                            api: widget.api,
+                                            runId: _entries[i].run.id,
+                                          ),
+                                        ),
+                                      ),
                                     );
                                   },
                                 ),
@@ -385,6 +395,7 @@ class _EntryCard extends StatelessWidget {
   final bool kudosBusy;
   final VoidCallback onToggleKudos;
   final VoidCallback onAuthorTap;
+  final VoidCallback onCardTap;
 
   const _EntryCard({
     required this.entry,
@@ -392,6 +403,7 @@ class _EntryCard extends StatelessWidget {
     required this.kudosBusy,
     required this.onToggleKudos,
     required this.onAuthorTap,
+    required this.onCardTap,
   });
 
   @override
@@ -438,25 +450,30 @@ class _EntryCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          // Stats — distance / time / pace
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _Stat(
-                  label: 'Distance',
-                  value: _fmtKm(entry.run.distanceM),
-                ),
-                _Stat(
-                  label: 'Time',
-                  value: _fmtDuration(Duration(seconds: entry.run.durationS)),
-                ),
-                _Stat(
-                  label: 'Pace',
-                  value: _fmtPace(entry.run.distanceM, entry.run.durationS),
-                ),
-              ],
+          // Stats — distance / time / pace; tap opens PublicRunScreen.
+          InkWell(
+            onTap: onCardTap,
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _Stat(
+                    label: 'Distance',
+                    value: _fmtKm(entry.run.distanceM),
+                  ),
+                  _Stat(
+                    label: 'Time',
+                    value:
+                        _fmtDuration(Duration(seconds: entry.run.durationS)),
+                  ),
+                  _Stat(
+                    label: 'Pace',
+                    value: _fmtPace(entry.run.distanceM, entry.run.durationS),
+                  ),
+                ],
+              ),
             ),
           ),
           const Divider(height: 1),
