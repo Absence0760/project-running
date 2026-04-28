@@ -9,22 +9,29 @@ description: Sequenced plan for closing the gap between web (canonical) and mobi
 
 ## Where we stand
 
-As of 2026-04-28 mobile_android sits at **~70% feature parity with web** (99 of 142 non-physical-exception rows). Forty-three features are `✗` on Android while web has them shipped.
+As of 2026-04-28 mobile_android sits at **~85% feature parity with web** — 118 of 142 non-physical-exception rows are `✓` and 7 more are `Partial` (covered with a documented follow-up). 17 features remain `✗` on Android while web has them shipped.
 
 By section (drawn from parity.md, `web ✓ ∧ android ✗`):
 
-| Section | Missing | Notes |
-|---|---:|---|
-| AI Coach | 12 | Whole surface — chat UI, streaming, sidebar, composer, plan switcher, runs window, tones, usage cap, history, markdown, bubble actions, multi-line input. |
-| Social — following + activity feed | 11 | Follow/unfollow, profile pages, feed, kudos, comments, privacy zones, plan templates, training-load curves, photos, segments, notifications inbox. |
-| Route management | 5 | Click-to-place builder, OSRM snap, elevation preview, club-owned routes, bookmark public routes. |
-| Settings | 5 | Device list, per-device override editor, remove-device, manage subscription, donation surface. |
-| Clubs / events | 3 | Create club, create event, join-request approval flow. |
-| Public sharing | 3 | `/share/run/{id}` parity, `/share/route/{id}` parity, live spectator. |
-| Integrations | 2 | Strava OAuth live sync, parkrun athlete-number import. |
-| Paywall | 2 | Pro checkout UI, donate button. |
+| Section | Hard gaps | Partials | Notes |
+|---|---:|---:|---|
+| AI Coach | 12 | 0 | Whole surface still pending — chat UI, streaming, sidebar, composer, plan switcher, runs window, tones, usage cap, history, markdown, bubble actions, multi-line input. Single screen file (~1500 lines) — its own session. |
+| Route management | 3 | 1 | Click-to-place builder, OSRM snap, elevation-preview-while-drawing — all blocked on a MapLibre-Flutter polyline editor (one cohesive surface, ~1500 lines). Club-owned routes is `Partial` — list + view shipped, admin transfer-from-route-detail still pending. |
+| Integrations | 1 | 0 | Strava OAuth live sync — needs `url_launcher` plugin. parkrun athlete-number import shipped. |
+| Photos / privacy | 1 | 0 | Photos on runs — needs `image_picker` plugin. Privacy zones shipped. |
+| Plan templates | 0 | 1 | Adopt shipped; publish-to-club from `plan_detail_screen` still pending. |
+| Settings | 0 | 1 | Devices screen shipped (rename + remove + edit existing overrides). The "+ Add override" typed editor for new keys is the partial gap. |
+| Paywall | 0 | 4 | Manage subscription, Pro checkout, Donate, donation surface — all four ship as link-out tiles via the share sheet. Native RevenueCat / Play Billing flows still pending; the `url_launcher` dep would unlock proper "open in browser" UX too. |
 
 The web-canonical rule from [`decisions.md § 24`](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) means every row above (except where physically impossible — none of these are) is a real gap to close, not a deferred-by-design item.
+
+## Plugin dependencies still needed
+
+Three Pub packages are needed to close the remaining gaps without falling back to share-sheet workarounds. Each is a one-line `pubspec.yaml` add but requires `flutter pub get` + a manifest review:
+
+- `image_picker` — required for **Photos on runs**.
+- `url_launcher` — required for **Strava OAuth live sync**, and would upgrade the four paywall link-out tiles from share-sheet to direct browser hand-off.
+- (Optional but useful) `webview_flutter` — needed if we want an in-app OAuth callback handler instead of the deep-link route.
 
 ## Sequencing principle
 

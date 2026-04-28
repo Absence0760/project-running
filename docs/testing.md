@@ -43,7 +43,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **at least 374 tests across 40+ documented files** — 296 Dart tests in mobile_android (37 test files, 109 `testWidgets` calls across 22 widget-test files), 17 in mobile_ios, 38 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the exact current count.
+Total: **at least 400 tests across 40+ documented files** — 322 Dart tests in mobile_android (40 test files, 109 `testWidgets` calls across 22 widget-test files), 17 in mobile_ios, 38 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the exact current count.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -194,6 +194,18 @@ Dart mirror of `apps/web/src/lib/training.test.ts`. The Dart engine (`lib/traini
 - `resolveTrainingPaces`: 2 tests (recent 5k anchor, fallback)
 - `phaseFor`: 2 tests (phase splits, final week)
 - `generatePlan`: 7 tests (week count, day distribution, taper volume, race week, intervals, no-input fallback, stepback)
+
+### `apps/mobile_android/test/training_load_test.dart` — 10 tests
+
+Dart mirror of `apps/web/src/lib/training_load.test.ts`. The Dart engine (`lib/training_load.dart`) must produce the same Fitness / Fatigue / Form curves as the TypeScript engine for the same inputs. Covers `computeStress` (distance fallback ~50 for an easy 5k, TRIMP path lights up with `avg_bpm` + resting + max, zero-input → 0), `aggregateDailyStress` (sums same-day runs), `computeTrainingLoadSeries` (emits exactly `windowDays` entries, TSB rises during a 14-day taper, all-zero with no runs), and `hasTrimpSignal` (no `avg_bpm` / has `avg_bpm` + prefs / prefs missing).
+
+### `apps/mobile_android/test/segments_test.dart` — 8 tests
+
+Dart mirror of `apps/web/src/lib/segments.test.ts`. Pure tests for the segment-effort walker in `lib/segments.dart#computeEffortFromTrack`. Same `straightTrack` synthetic helper (meridian-aligned, constant pace) so haversine cumulative distance is predictable. Covers a clean segment, run shorter than segment end, sub-2-point tracks, zero / negative segment windows, sparse-sampling guard (median step > segLen / 5), missing timestamps in the interpolation bracket, mid-segment interpolation, and sample-aligned endpoints.
+
+### `apps/mobile_android/test/privacy_test.dart` — 8 tests
+
+Dart mirror of `apps/web/src/lib/privacy.test.ts`. Pure tests for `lib/privacy.dart`. Covers `isInAnyZone` (empty zones, centre, far point) and `clipPointsToZones` (empty zones returns input, drops leading + trailing in-zone, keeps interior, every-point-in-zone returns empty, multi-zone union).
 
 ### `apps/mobile_ios/test/local_run_store_test.dart` — 17 tests
 
