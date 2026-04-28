@@ -286,59 +286,57 @@
 
 <div class="page">
 	<header class="page-header">
-		<div class="title-row">
-			<div class="title-actions">
-				{#if selecting}
-					<button class="link-btn" onclick={selectAllVisible} type="button"
-						>Select all</button
-					>
-					<button class="link-btn" onclick={exitSelectMode} type="button"
-						>Done</button
-					>
-				{:else}
+		<div class="toolbar">
+			<div class="activity-group" role="group" aria-label="Activity type">
+				{#each activities as act}
 					<button
-						class="link-btn"
-						onclick={() => (selecting = true)}
-						type="button">Select</button
+						class="activity-btn"
+						class:active={activityFilter === act.value}
+						onclick={() => (activityFilter = act.value)}
+						title={act.label}
+						aria-label={act.label}
+						aria-pressed={activityFilter === act.value}
+						type="button"
 					>
+						<span class="material-symbols">{act.icon}</span>
+						<span class="activity-label">{act.label}</span>
+					</button>
+				{/each}
+			</div>
+
+			<div class="select-group">
+				<select bind:value={sourceFilter} class="toolbar-select" aria-label="Source">
+					{#each sources as src}
+						<option value={src.value}>{src.label}</option>
+					{/each}
+				</select>
+				<select bind:value={dateRange} class="toolbar-select" aria-label="Date range">
+					<option value="all">All time</option>
+					<option value="today">Today</option>
+					<option value="week">This week</option>
+					<option value="month">Last 30 days</option>
+					<option value="year">This year</option>
+					<option value="custom">Custom…</option>
+				</select>
+				<select bind:value={sortKey} class="toolbar-select" aria-label="Sort">
+					<option value="newest">Newest first</option>
+					<option value="oldest">Oldest first</option>
+					<option value="longest">Longest</option>
+					<option value="fastest">Fastest pace</option>
+				</select>
+			</div>
+
+			<div class="toolbar-actions">
+				{#if selecting}
+					<button class="link-btn" onclick={selectAllVisible} type="button">Select all</button>
+					<button class="link-btn" onclick={exitSelectMode} type="button">Done</button>
+				{:else}
+					<button class="link-btn" onclick={() => (selecting = true)} type="button">Select</button>
 					<button class="add-btn" type="button" onclick={() => (showRunModal = true)}>+ Add run</button>
 				{/if}
 			</div>
 		</div>
-		<div class="filters">
-			{#each sources as src}
-				<button
-					class="filter-btn"
-					class:active={sourceFilter === src.value}
-					onclick={() => (sourceFilter = src.value)}
-				>
-					{src.label}
-				</button>
-			{/each}
-		</div>
-		<div class="filters" style="margin-top: var(--space-xs)">
-			{#each activities as act}
-				<button
-					class="filter-btn"
-					class:active={activityFilter === act.value}
-					onclick={() => (activityFilter = act.value)}
-				>
-					<span class="material-symbols" style="font-size: 0.9rem; vertical-align: middle">{act.icon}</span>
-					{act.label}
-				</button>
-			{/each}
-		</div>
-		<div class="filters" style="margin-top: var(--space-xs)">
-			{#each [{v: 'all', l: 'All time'}, {v: 'today', l: 'Today'}, {v: 'week', l: 'This week'}, {v: 'month', l: 'Last 30 days'}, {v: 'year', l: 'This year'}, {v: 'custom', l: 'Custom…'}] as r (r.v)}
-				<button
-					class="filter-btn"
-					class:active={dateRange === r.v}
-					onclick={() => (dateRange = r.v as DateRange)}
-				>
-					{r.l}
-				</button>
-			{/each}
-		</div>
+
 		{#if dateRange === 'custom'}
 			<div class="date-picker-row">
 				<label>
@@ -356,22 +354,10 @@
 						onclick={() => {
 							customFrom = '';
 							customTo = '';
-						}}>Clear</button
-					>
+						}}>Clear</button>
 				{/if}
 			</div>
 		{/if}
-		<div class="sort-row" style="margin-top: var(--space-xs)">
-			<label class="sort-label">
-				Sort
-				<select bind:value={sortKey} class="sort-select">
-					<option value="newest">Newest first</option>
-					<option value="oldest">Oldest first</option>
-					<option value="longest">Longest</option>
-					<option value="fastest">Fastest pace</option>
-				</select>
-			</label>
-		</div>
 	</header>
 
 	{#if loading}
@@ -503,31 +489,98 @@
 		margin-bottom: var(--space-md);
 	}
 
-	.filters {
+	.toolbar {
 		display: flex;
-		gap: var(--space-xs);
+		align-items: center;
+		gap: var(--space-md);
+		flex-wrap: wrap;
 	}
 
-	.filter-btn {
-		padding: var(--space-xs) var(--space-md);
+	.activity-group {
+		display: inline-flex;
 		border: 1px solid var(--color-border);
-		border-radius: 9999px;
+		border-radius: var(--radius-md);
 		background: var(--color-surface);
-		font-size: 0.8rem;
+		padding: 2px;
+		gap: 2px;
+	}
+
+	.activity-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.35rem 0.7rem;
+		border: none;
+		border-radius: calc(var(--radius-md) - 2px);
+		background: transparent;
+		font: inherit;
+		font-size: 0.85rem;
 		font-weight: 500;
 		color: var(--color-text-secondary);
+		cursor: pointer;
 		transition: all var(--transition-fast);
 	}
-
-	.filter-btn:hover {
-		border-color: var(--color-primary);
-		color: var(--color-primary);
+	.activity-btn .material-symbols {
+		font-size: 1.05rem;
+	}
+	.activity-btn:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+	}
+	.activity-btn.active {
+		background: var(--color-primary);
+		color: white;
+	}
+	.activity-btn.active:hover {
+		background: var(--color-primary-hover);
 	}
 
-	.filter-btn.active {
-		background: var(--color-primary);
+	.select-group {
+		display: inline-flex;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+
+	.toolbar-select {
+		padding: 0.45rem 2rem 0.45rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.85rem;
+		font-weight: 500;
+		appearance: none;
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+		background-repeat: no-repeat;
+		background-position: right 0.6rem center;
+		background-size: 0.75rem;
+		cursor: pointer;
+		transition: border-color var(--transition-fast);
+	}
+	.toolbar-select:hover {
 		border-color: var(--color-primary);
-		color: white;
+	}
+	.toolbar-select:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
+	.toolbar-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin-left: auto;
+	}
+
+	@media (max-width: 50rem) {
+		.activity-label {
+			display: none;
+		}
+		.toolbar-actions {
+			margin-left: 0;
+			width: 100%;
+			justify-content: flex-end;
+		}
 	}
 
 	.loading-text {
@@ -670,36 +723,6 @@
 		background: var(--color-surface);
 		color: var(--color-text-primary);
 		font-size: 0.85rem;
-	}
-	.sort-row {
-		display: flex;
-		align-items: center;
-	}
-	.sort-label {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.85rem;
-		color: var(--color-text-secondary);
-	}
-	.sort-select {
-		padding: 0.35rem 0.6rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		color: var(--color-text-primary);
-		font-size: 0.85rem;
-	}
-	.title-row {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		margin-bottom: var(--space-sm);
-	}
-	.title-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
 	}
 	.link-btn {
 		background: transparent;
