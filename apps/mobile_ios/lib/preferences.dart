@@ -147,6 +147,14 @@ class Preferences extends ChangeNotifier {
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
   static const _kSplitIntervalMetres = 'split_interval_metres';
+  // Mirrors the universal `default_activity_type` settings-bag key.
+  // Drives the run screen's initial activity selection. One of
+  // 'run', 'walk', 'cycle', 'hike'. Empty / unknown = 'run'.
+  static const _kDefaultActivityType = 'default_activity_type';
+  // Mirrors the device-scoped `keep_screen_on` settings-bag key.
+  // Defaults true so existing users keep the wakelock-on-during-run
+  // behaviour they're used to.
+  static const _kKeepScreenOn = 'keep_screen_on';
   // Timestamp of the last successful runs-list fetch. Drives the
   // delta-fetch path in RunsScreen so refreshes only pull rows modified
   // since, instead of re-paging the entire history every time.
@@ -169,6 +177,8 @@ class Preferences extends ChangeNotifier {
   bool _advancedGps = false;
   int _splitIntervalMetres = 0;
   String _deviceId = '';
+  String _defaultActivityType = 'run';
+  bool _keepScreenOn = true;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -179,6 +189,15 @@ class Preferences extends ChangeNotifier {
   /// Custom split interval in metres. 0 means use the activity-type default
   /// (1 km for run/walk/hike, 5 km for cycling).
   int get splitIntervalMetres => _splitIntervalMetres;
+
+  /// Default activity type for the run screen. Mirrors the universal
+  /// `default_activity_type` settings-bag key so the choice roams
+  /// across devices. One of 'run', 'walk', 'cycle', 'hike'.
+  String get defaultActivityType => _defaultActivityType;
+
+  /// Whether the run screen should hold a wakelock while recording.
+  /// Mirrors the device-scoped `keep_screen_on` settings-bag key.
+  bool get keepScreenOn => _keepScreenOn;
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
@@ -212,6 +231,9 @@ class Preferences extends ChangeNotifier {
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
+    _defaultActivityType =
+        _prefs.getString(_kDefaultActivityType) ?? 'run';
+    _keepScreenOn = _prefs.getBool(_kKeepScreenOn) ?? true;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
     if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
@@ -282,6 +304,18 @@ class Preferences extends ChangeNotifier {
   Future<void> setSplitIntervalMetres(int v) async {
     _splitIntervalMetres = v;
     await _prefs.setInt(_kSplitIntervalMetres, v);
+    notifyListeners();
+  }
+
+  Future<void> setDefaultActivityType(String v) async {
+    _defaultActivityType = v;
+    await _prefs.setString(_kDefaultActivityType, v);
+    notifyListeners();
+  }
+
+  Future<void> setKeepScreenOn(bool v) async {
+    _keepScreenOn = v;
+    await _prefs.setBool(_kKeepScreenOn, v);
     notifyListeners();
   }
 

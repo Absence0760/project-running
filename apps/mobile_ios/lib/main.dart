@@ -21,6 +21,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/sign_in_screen.dart';
 import 'settings_sync.dart';
 import 'social_service.dart';
+import 'sync_service.dart';
 import 'training_service.dart';
 import 'watch_ingest_queue.dart';
 
@@ -80,6 +81,7 @@ Future<void> main() async {
   final heartRate = BleHeartRate();
   unawaited(heartRate.connectCached());
 
+  SyncService? syncService;
   ApiClient? api;
   if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
     try {
@@ -105,6 +107,9 @@ Future<void> main() async {
       debugPrint('Supabase init failed: $e');
     }
   }
+
+  syncService = SyncService(apiClient: api, runStore: runStore);
+  syncService.start();
 
   // Wire up the Apple Watch → iPhone → Supabase ingest path. When the user
   // is authenticated, saves directly. When unauthenticated, queues the

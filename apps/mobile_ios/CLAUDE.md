@@ -25,8 +25,9 @@ Flutter iOS app. **The structural catch-up to the Android twin is in progress �
 
 **iOS-owned files (NOT verbatim copies — keep these as-is):**
 
-- `main.dart` — bootstraps the iOS-specific bits: bridges `--dart-define-from-file=dart_defines.json` into `dotenv` (so verbatim libs that read `dotenv.env['X']` don't need an iOS fork), inits the same `Preferences` / `LocalRunStore` / `LocalRouteStore` / `WatchIngestQueue` / `SettingsSyncService` / `AudioCues` / `SocialService` / `RaceController` / `TrainingService` / `BleHeartRate` chain Android does, and threads them all through `HomeScreen`.
-- `screens/sign_in_screen.dart` — email/password + Apple Sign-In button (gated behind `_kAppleSignInEnabled = false` pending Services ID setup). Diverges from Android's Google-Sign-In version intentionally.
+- `main.dart` — bootstraps the iOS-specific bits: bridges `--dart-define-from-file=dart_defines.json` into `dotenv` (so verbatim libs that read `dotenv.env['X']` don't need an iOS fork), inits the same `Preferences` / `LocalRunStore` / `LocalRouteStore` / `WatchIngestQueue` / `SettingsSyncService` / `AudioCues` / `SocialService` / `RaceController` / `TrainingService` / `BleHeartRate` / `SyncService` chain Android does, and threads them all through `HomeScreen`.
+- `screens/sign_in_screen.dart` — email/password + Apple Sign-In button (gated behind `_kAppleSignInEnabled = false` pending Services ID setup). Diverges from Android's Google-Sign-In version intentionally. Pushes `sign_up_screen.dart` from the "Don't have an account?" link.
+- `screens/sign_up_screen.dart` — email/password account creation + Apple Sign-In; mirrors Android's `sign_up_screen.dart` shape with Apple substituted for Google.
 - `screens/onboarding_screen.dart` — three-page first-launch flow with geolocator-based location permission request.
 - `screens/run_screen.dart` — basic `RunRecorder`-driven recording (idle → countdown → recording → paused → finished). The Android twin is much richer (race mode, structured workouts, BLE HR overlay, off-route detection, foreground notification, etc.); iOS lags here on purpose because `run_notification_bridge.dart` is android-only and the rest needs end-to-end testing on a paired iPhone before it's safe to ship.
 - `screens/settings_screen.dart` — full iOS settings surface; deliberately omits Android-only tiles (BLE pairing UI, Strava ZIP import, backup/restore, advanced-GPS toggle, dark-mode toggle).
@@ -34,17 +35,16 @@ Flutter iOS app. **The structural catch-up to the Android twin is in progress �
 
 **Verbatim copies of `mobile_android/lib/*.dart`** (no edits — re-copy when the twin changes):
 
-- Library: `audio_cues.dart`, `backend_timeout.dart`, `ble_heart_rate.dart`, `fitness.dart`, `goals.dart`, `hr_zones.dart`, `local_route_store.dart`, `local_run_store.dart`, `preferences.dart`, `privacy.dart`, `race_controller.dart`, `recurrence.dart`, `route_simplify.dart`, `run_stats.dart`, `segments.dart`, `settings_sync.dart`, `social_service.dart`, `training.dart`, `training_load.dart`, `training_service.dart`.
-- Every file under `screens/` except the four iOS-owned screens listed above.
+- Library: `audio_cues.dart`, `backend_timeout.dart`, `backup.dart`, `ble_heart_rate.dart`, `fitness.dart`, `goals.dart`, `hr_zones.dart`, `local_route_store.dart`, `local_run_store.dart`, `preferences.dart`, `privacy.dart`, `race_controller.dart`, `recurrence.dart`, `route_simplify.dart`, `run_stats.dart`, `segments.dart`, `settings_sync.dart`, `social_service.dart`, `strava_importer.dart`, `sync_service.dart`, `tile_cache.dart`, `training.dart`, `training_load.dart`, `training_service.dart`.
+- Every file under `screens/` except the six iOS-owned screens listed above.
 - Every file under `widgets/`.
 
-Things deliberately NOT copied across (Android-only or wired differently):
+Things deliberately NOT copied across (Android-only mechanisms — iOS uses different counterparts):
 
-- `background_sync.dart` (WorkManager) — iOS uses `BGTaskScheduler` natively; not yet wired.
-- `run_notification_bridge.dart` (foreground-service notification) — iOS uses `CLLocationManager.allowsBackgroundLocationUpdates` and a different control-state pattern.
+- `background_sync.dart` (WorkManager) — iOS will use `BGTaskScheduler` when the bg-fetch path is wired.
+- `run_notification_bridge.dart` (foreground-service notification) — iOS uses `CLLocationManager.allowsBackgroundLocationUpdates`.
 - `wear_auth_bridge.dart` (Wear OS data layer) — iOS reads watch payloads through `WatchIngestBridge.swift` instead.
-- `health_connect_importer.dart` — iOS will use HealthKit (still TBD).
-- `strava_importer.dart`, `backup.dart`, `sync_service.dart`, `tile_cache.dart` — these have no Android-only code and *can* be copied later when iOS surfaces a screen that needs them.
+- `health_connect_importer.dart` — iOS will use a HealthKit importer (still TBD).
 
 Native iOS files under `ios/Runner/`:
 
@@ -74,7 +74,8 @@ iOS-only concerns with no Android analogue:
 ## Catch-up status
 
 - **Phase 1 done** — 14 platform-agnostic Dart libraries copied verbatim from android.
-- **Phase 2 done** — entire `screens/` and `widgets/` trees copied verbatim from android (29 screens + 20 widgets), with the four iOS-owned screens above kept intact. `main.dart` updated to construct the Android-twin service set (`AudioCues`, `SocialService`, `RaceController`, `TrainingService`, `BleHeartRate`).
+- **Phase 2 done** — entire `screens/` and `widgets/` trees copied verbatim from android (29 screens + 20 widgets), with the iOS-owned screens kept intact. `main.dart` updated to construct the Android-twin service set (`AudioCues`, `SocialService`, `RaceController`, `TrainingService`, `BleHeartRate`).
+- **Drift catch-up done** — `preferences.dart` + `settings_sync.dart` resynced to the Android twin (recent additions like `default_activity_type`, `keep_screen_on` now present on iOS too). The four remaining portable libs (`backup.dart`, `strava_importer.dart`, `sync_service.dart`, `tile_cache.dart`) ported verbatim. `SyncService` now starts in `main.dart` so background reconciliation runs on iOS the same way it does on Android. `sign_up_screen.dart` shipped on iOS (mirrors android's shape, Apple Sign-In substituted for Google) and wired from `sign_in_screen.dart`.
 - **Phase 3+ deferred until a simulator pass** — runtime issues (Info.plist keys for Health / BLE / Background Modes, `permission_handler` configuration, `flutter pub get` on a Mac, `pod install`, native channel wiring for things like `run_notification_bridge` if iOS adopts a watch / phone-side background notification) get exercised the next time someone builds the app on a Mac. The compiled-and-imported state is the deliverable here; a green build in CI is the next gate.
 
 ## Recommended approach for a new task here
