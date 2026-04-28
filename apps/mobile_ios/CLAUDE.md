@@ -2,6 +2,23 @@
 
 Flutter iOS app. **Phone-side WCSession sink for Apple Watch runs is live; sign-in, onboarding, local stores, preferences, and GPS recording are now wired.** The hard work of Phase 1 has been done on Android first. See Phase 1 in [../../docs/roadmap.md](../../docs/roadmap.md) for the remaining iOS-specific boxes.
 
+## Scope — read before writing code
+
+**Web is the canonical feature surface. This app mirrors web and adds iOS-only capabilities.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) and the live matrix at [../../docs/parity.md](../../docs/parity.md).
+
+**Build here:**
+
+- **iOS-led features** (the physical-exception list in §24, applied to iOS): live GPS recording with `CLLocationManager.allowsBackgroundLocationUpdates`, on-device crash recovery, BLE chest-strap HR, pedometer / cadence, haptic / TTS pace alerts, OS share sheets, **HealthKit** import (replaces Health Connect on Android), **Apple Sign-In** (replaces Google Sign-In on Android), **Watch Connectivity** ingest from `watch_ios` (already live in `WatchIngestBridge.swift`).
+- **Mirroring** of an already-shipped web feature, scoped to the gap analysis in `reviews/mobile-ios/gap-analysis.md` and the iOS rows in `parity.md` where web is `✓` and iOS is `✗` / `Partial`. Use `mobile_android` as the **Flutter implementation reference** (idioms, store shape, screen layout) — not as the feature spec.
+
+**Don't build here first:**
+
+- A user-facing feature that doesn't yet exist on web — build it on web first, mirror after. Same rule as Android per §24.
+- An Android-only tile that has no iOS equivalent. The deliberately omitted set (already documented in `screens/settings_screen.dart`): BLE pairing UI, Strava ZIP import, backup/restore, advanced-GPS toggle, dark-mode toggle. Don't add these without a fresh decision.
+- New abstractions / DI frameworks. Match Android's `StatefulWidget + setState + ChangeNotifier` stack — verbatim. The iOS app is "structurally identical to mobile_android" by design (see "What 'done' means" below).
+- Direct `Supabase.instance.client.from(...)` calls in screens. Route through `packages/api_client`.
+- Comments, decision docs, READMEs. Conventions in [../../docs/conventions.md](../../docs/conventions.md) apply in full.
+
 ## Current state
 
 Dart files under `lib/`:
@@ -48,7 +65,7 @@ iOS-only concerns with no Android analogue:
 
 1. **Don't mirror Android file-by-file.** Port only what the task needs. The gap is large enough that a greenfield port of every screen is more churn than the task is worth.
 2. **Prefer lifting shared code into a package** (`packages/ui_kit`, a new `packages/local_stores`, etc.) over copying Dart files between the two app directories. Two divergent copies of the same screen is the drift problem the parity-enforcement initiative is trying to prevent.
-3. **Check Android first** for the pattern being asked for. If it exists there, port; if not, design on Android first and port second — Android is where the fast iteration happens.
+3. **Feature spec lives on web; Flutter idiom lives on Android.** When deciding *what* a screen does, read the web component (`apps/web/src/lib/components/...` or `apps/web/src/routes/...`) and `parity.md`. When deciding *how* to write a Flutter screen, look at the corresponding `apps/mobile_android/lib/screens/...` for the idiom, store wiring, and api_client usage. Don't invent a new feature on iOS — that violates §24.
 
 ## Dart analyzer
 

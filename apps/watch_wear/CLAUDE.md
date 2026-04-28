@@ -4,6 +4,43 @@
 The Flutter build was removed when the team committed to Compose-for-Wear
 native UI (see [../../docs/decisions.md § 15](../../docs/decisions.md)).
 
+## Scope — read before writing code
+
+**Web is the canonical feature surface; the watch is a wrist-only complement,
+not a parallel client.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+and the live matrix at [../../docs/parity.md](../../docs/parity.md). Watch
+columns in `parity.md` are `N/A` for almost everything by design — the watch
+is **not** trying to mirror web's feature surface.
+
+**Build here:**
+
+- **Wrist-only capabilities**: standalone `HKWorkoutSession`-equivalent via
+  Health Services, `FusedLocationProviderClient` background recording,
+  on-device crash recovery, on-watch HR via Health Services `MeasureClient`,
+  haptic pace alerts, route preview on-watch, ambient-mode rendering, watch
+  faces / tiles / complications.
+- **Direct cloud sync** of completed runs (the watch posts straight to
+  Supabase via `SupabaseClient.kt` — no phone hop). Schema-typed against the
+  same Supabase migrations via the generated `DbRows.kt`.
+
+**Don't build here:**
+
+- Anything that belongs in a pocket app: history browse, settings panels,
+  social feed, club detail, plan editing, photo upload, OAuth setup. The
+  watch is a recording surface and a status surface — not a phone in a
+  smaller form factor. If a feature can wait for the runner to be near
+  their phone, it doesn't go on the watch.
+- A feature that doesn't exist on web yet. Same web-first rule as Android /
+  iOS — you don't pioneer a feature on the watch.
+- A Flutter or React-Native UI layer. The decision to be native Kotlin +
+  Compose-for-Wear is in [§ 15](../../docs/decisions.md). Don't reintroduce
+  Flutter even for "shared code" reasons.
+- Hand-edits to `generated/DbRows.kt`. Schema changes regenerate it via
+  `dart run scripts/gen_dart_models.dart` — see "Schema drift protection"
+  below.
+- New layout abstractions or DI frameworks. `RunViewModel` + Compose state
+  is the entire UI stack. Adding Hilt / Koin / Anvil is out of scope.
+
 ## Layout
 
 ```

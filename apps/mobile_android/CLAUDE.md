@@ -2,6 +2,24 @@
 
 The most mature Flutter target in the monorepo. Almost every "Android" checkbox in [../../docs/roadmap.md](../../docs/roadmap.md) Phase 1 is ticked. Treat this app as the reference implementation — when in doubt about what a feature *should* look like on mobile, look here first.
 
+## Scope — read before writing code
+
+**Web is the canonical feature surface. This app mirrors web and adds device-only capabilities.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) and the live matrix at [../../docs/parity.md](../../docs/parity.md).
+
+**Build here:**
+
+- **Device-led features** (the physical-exception list in §24): live GPS recording + foreground service, auto-pause, on-device crash recovery, BLE chest-strap HR, pedometer / cadence, haptic / TTS pace alerts, OS share sheets, OS share-target intents (GPX / KML import), Health Connect import, disk-backed tile cache, background sync via WorkManager.
+- **Mirroring** of an already-shipped web feature into a Flutter screen + api_client method + (when needed) a domain model in `core_models`. Driven by `parity.md` rows where web is `✓` and android is `✗` / `Partial`.
+
+**Don't build here first:**
+
+- A user-facing feature that doesn't yet exist on web — build it on web first, mirror after. This applies even when the request lands on an Android session ("can you add X to Android?"); push back, ship X on web, then mirror. The exception is the device-led list above.
+- New abstractions / DI frameworks. `StatefulWidget + setState + ChangeNotifier` is the entire UI stack. No Provider, no Riverpod, no Bloc. If a screen needs cross-cutting state, add a `ChangeNotifier` and wire `addListener` / `removeListener` in `initState` / `dispose`.
+- Direct `Supabase.instance.client.from(...)` calls in screens. Route through `packages/api_client` so the typed client stays the single Supabase entry point. (Realtime channels are the documented exception.)
+- Comments, decision docs, READMEs, or "removed X" markers under `lib/`. Conventions in [../../docs/conventions.md](../../docs/conventions.md) apply here in full — comments only for non-obvious *why*.
+
+When closing a parity gap, the order is: row classes (already generated) → `api_client` typed methods → domain model in `core_models` if the shape isn't 1:1 → ChangeNotifier or screen-local state → screen. See [../../docs/mobile_android_backlog.md](../../docs/mobile_android_backlog.md) for the live execution order.
+
 ## Stack
 
 - **Flutter** stable, Dart 3.x

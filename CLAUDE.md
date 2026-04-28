@@ -31,12 +31,12 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
 | Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
 
-Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas):
-- [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target
-- [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter, mostly stubbed
-- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter)
-- [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional
-- [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes
+Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas). **Each non-web app's CLAUDE.md opens with a "Scope — read before writing code" section** that spells out what to build there vs. what to push to web first per [decisions.md § 24](docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive). Read it before adding a feature on a non-web client.
+- [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes; **canonical feature surface** for the whole product
+- [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target; mirrors web + adds device-led capabilities
+- [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter, mostly stubbed; mirrors web + adds iOS-led capabilities (HealthKit, Apple Sign-In, watch ingest)
+- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter); wrist-only complement, NOT a pocket-app mirror
+- [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional; wrist-only complement, NOT a pocket-app mirror
 
 ## Branches & PRs
 

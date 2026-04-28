@@ -6,6 +6,43 @@
 
 See [decisions.md § 1](../../docs/decisions.md). Flutter's watchOS story isn't production-ready, and a running watch app needs direct access to `HKWorkoutSession`, `CLLocationManager` background modes, and `WKExtendedRuntimeSession` — all of which are cleaner through native APIs than through a Flutter channel.
 
+## Scope — read before writing code
+
+**Web is the canonical feature surface; the watch is a wrist-only complement,
+not a parallel client.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+and the live matrix at [../../docs/parity.md](../../docs/parity.md). Watch
+columns in `parity.md` are `N/A` for almost everything by design — the watch
+is **not** trying to mirror web's feature surface.
+
+**Build here:**
+
+- **Wrist-only capabilities**: `HKWorkoutSession` standalone workouts,
+  `CLLocationManager` background GPS, `WKExtendedRuntimeSession` for long
+  recordings, `HKLiveWorkoutBuilder` HR streams, haptic pace alerts via
+  `WKInterfaceDevice`, on-watch crash recovery, watch faces / complications,
+  Always-On (ambient) rendering.
+- **Watch Connectivity** push to the paired iPhone (`WCSession.transferFile`)
+  + DEBUG-only direct Supabase REST as a fallback (`SupabaseService.swift`).
+  The phone is the durable sync target.
+
+**Don't build here:**
+
+- Anything that belongs in a pocket app: history browse, settings, social
+  feed, club detail, plan editing, OAuth setup. The watch is a recording
+  surface and a status surface — not a phone in a smaller form factor. If a
+  feature can wait for the runner to be near their phone, it doesn't go on
+  the watch.
+- A feature that doesn't exist on web yet. Same web-first rule as the rest
+  of the monorepo per §24.
+- A Flutter or React-Native UI layer (see [§ 1](../../docs/decisions.md)).
+  Don't reintroduce Flutter even for "shared code" reasons.
+- A new direct-to-Supabase code path in `SupabaseService.swift` for any
+  feature beyond completing a workout. The watch is not the place to grow
+  the Supabase surface — that lives in `packages/api_client` (Dart) and
+  `apps/web/src/lib/data.ts` (TS).
+- New layout abstractions or DI frameworks. `@StateObject` / `@ObservedObject`
+  / `@Published` is the whole UI stack.
+
 ## Source files
 
 All under `WatchApp/` inside `WatchApp.xcodeproj`:
