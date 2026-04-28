@@ -171,6 +171,61 @@ INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata)
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-13T09:00:00Z', 9000, 11500, 'app',
   '{"activity_type":"hike","avg_bpm":128,"perceived_effort":4,"notes":"Bondi → Coogee coastal."}');
 
+-- 4b. Bulk back-history for pagination testing.
+--
+-- The hand-curated runs above stop on 2026-03-08; everything older is
+-- generated programmatically here so /runs "All time" mode (PAGE_SIZE
+-- = 50 per page) needs multiple "Load more" clicks to walk the full
+-- list, and the dashboard / training-load chart / personal-records
+-- cache all have realistic depth to exercise.
+--
+-- Each row gets a deterministic but varied duration / distance /
+-- source pulled from a modular shuffle of the iteration index, so
+-- the list reads as plausible variety rather than a constant
+-- treadmill block. Activity type is always 'run' to keep the
+-- default activity filter populated.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata)
+SELECT
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid,
+  ('2026-03-07T07:00:00Z'::timestamptz - (n * INTERVAL '1 day')),
+  (1800 + (n * 137 % 3000))::integer,
+  (5000 + (n * 211 % 12000))::numeric,
+  CASE n % 5
+    WHEN 0 THEN 'strava'
+    WHEN 1 THEN 'app'
+    WHEN 2 THEN 'app'
+    WHEN 3 THEN 'healthkit'
+    ELSE 'parkrun'
+  END,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 145 + (n % 30),
+    'perceived_effort', 4 + (n % 5)
+  )
+FROM generate_series(1, 130) AS n;
+
+-- Extra recent runs spread across the last ~7 days so /feed cursor
+-- pagination (20 entries per page within the 14-day window) needs
+-- a "Load more" click when alex@test.com browses runner's activity.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata)
+SELECT
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid,
+  ('2026-04-26T18:00:00Z'::timestamptz - (n * INTERVAL '11 hours')),
+  (1500 + (n * 89 % 1800))::integer,
+  (4500 + (n * 137 % 7000))::numeric,
+  CASE n % 4
+    WHEN 0 THEN 'app'
+    WHEN 1 THEN 'strava'
+    WHEN 2 THEN 'app'
+    ELSE 'healthkit'
+  END,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 150 + (n % 25),
+    'perceived_effort', 4 + (n % 4)
+  )
+FROM generate_series(1, 15) AS n;
+
 -- Mark runner's runs public so the social loop (kudos / comments /
 -- feed visibility) has material to work against when alex@test.com
 -- (the second seed user) browses the app. The runs.is_public column
