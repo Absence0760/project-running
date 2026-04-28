@@ -124,7 +124,7 @@
 <div class="bell-wrap">
 	<button
 		class="bell-btn"
-		class:has-unread={notificationStore.unreadCount > 0}
+		class:active={open}
 		type="button"
 		aria-label={notificationStore.unreadCount > 0
 			? `Notifications, ${notificationStore.unreadCount} unread`
@@ -133,13 +133,17 @@
 		onclick={togglePanel}
 		title={collapsed ? 'Notifications' : undefined}
 	>
-		<span class="material-symbols">{notificationStore.unreadCount > 0 ? 'notifications' : 'notifications_none'}</span>
-		<span class="bell-label">Notifications</span>
-		{#if notificationStore.unreadCount > 0}
-			<span class="badge">
-				{notificationStore.unreadCount > 99 ? '99+' : notificationStore.unreadCount}
+		<span class="bell-icon-wrap">
+			<span class="bell-icon material-symbols">
+				{notificationStore.unreadCount > 0 ? 'notifications_active' : 'notifications'}
 			</span>
-		{/if}
+			{#if notificationStore.unreadCount > 0}
+				<span class="badge">
+					{notificationStore.unreadCount > 9 ? '9+' : notificationStore.unreadCount}
+				</span>
+			{/if}
+		</span>
+		<span class="bell-label">Notifications</span>
 	</button>
 
 	{#if open}
@@ -205,58 +209,118 @@
 
 <style>
 	.bell-wrap {
+		--accent: #F2C55C;
 		position: relative;
 	}
+	/* Mirror the layout's `.nav-link` shape so the bell reads as
+	   another sidebar entry: icon-wrap + label, hover lift, no
+	   harsh focus border. */
 	.bell-btn {
 		display: flex;
 		align-items: center;
-		gap: 0.85rem;
-		width: 100%;
-		padding: 0.55rem 0.85rem;
-		background: transparent;
-		border: none;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
-		color: rgba(255, 255, 255, 0.85);
-		cursor: pointer;
-		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 500;
+		color: var(--sidebar-text-muted);
+		transition:
+			background var(--transition-fast),
+			color var(--transition-fast),
+			transform var(--transition-fast);
+		border: none;
+		background: none;
+		width: 100%;
 		text-align: left;
+		cursor: pointer;
+		font-family: inherit;
 		position: relative;
-		transition: background var(--transition-fast);
+	}
+	.bell-btn:focus { outline: none; }
+	.bell-btn:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+		outline-offset: 2px;
 	}
 	.bell-btn:hover {
-		background: rgba(255, 255, 255, 0.08);
-		color: white;
+		color: var(--sidebar-text);
+		background: var(--sidebar-hover-bg);
 	}
-	.bell-btn .material-symbols {
-		font-family: 'Material Symbols Outlined';
-		font-size: 1.35rem;
+	.bell-btn:hover .bell-icon-wrap {
+		background: color-mix(in srgb, var(--accent) 24%, transparent);
+		box-shadow:
+			inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+			0 6px 18px -6px color-mix(in srgb, var(--accent) 55%, transparent);
+		transform: translateY(-1px) scale(1.06);
+	}
+	.bell-btn:hover .bell-label {
+		transform: translateX(2px);
+	}
+	.bell-btn.active {
+		color: var(--sidebar-text);
+		background: var(--sidebar-hover-bg);
+	}
+	.bell-btn.active .bell-icon-wrap {
+		background: var(--accent);
+		color: #1B1628;
+		box-shadow:
+			inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
+			0 8px 22px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+	}
+	.bell-icon-wrap {
+		display: grid;
+		place-items: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+		color: var(--accent);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+		transition:
+			background var(--transition-base),
+			color var(--transition-base),
+			transform var(--transition-base),
+			box-shadow var(--transition-base);
 		flex-shrink: 0;
+		position: relative;
+	}
+	.bell-icon {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.25rem;
+		font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+		line-height: 1;
+		width: 1.25rem;
+		height: 1.25rem;
+		display: block;
+		text-align: center;
+	}
+	.bell-btn.active .bell-icon {
+		font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
 	}
 	.bell-label {
 		flex: 1;
 		min-width: 0;
-		font-size: 0.95rem;
+		transition: transform var(--transition-base);
 	}
 	:global(.sidebar.collapsed) .bell-btn .bell-label {
 		display: none;
 	}
 	.badge {
-		min-width: 1.25rem;
-		height: 1.25rem;
-		padding: 0 0.35rem;
+		position: absolute;
+		top: -4px;
+		right: -4px;
+		min-width: 1.05rem;
+		height: 1.05rem;
+		padding: 0 0.3rem;
 		display: inline-grid;
 		place-items: center;
 		background: #ef4444;
 		color: white;
-		font-size: 0.7rem;
+		font-size: 0.65rem;
 		font-weight: 700;
 		border-radius: 9999px;
 		font-variant-numeric: tabular-nums;
-	}
-	:global(.sidebar.collapsed) .bell-btn .badge {
-		position: absolute;
-		top: 0.25rem;
-		right: 0.25rem;
+		box-shadow: 0 0 0 2px var(--gradient-sidebar, #1B1628);
+		line-height: 1;
 	}
 
 	.popover-backdrop {

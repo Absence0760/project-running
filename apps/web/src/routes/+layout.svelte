@@ -388,9 +388,8 @@
 	}
 
 	.sidebar-bell {
-		padding: 0.25rem 0;
-		border-top: 1px solid var(--sidebar-border);
-		margin-top: var(--space-sm);
+		padding: 0;
+		margin: 0;
 	}
 
 	.sidebar-footer {
