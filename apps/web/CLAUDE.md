@@ -54,8 +54,8 @@ src/
     segments.ts     # Pure compute for segment efforts — haversine cumulative distance + timestamp interpolation. 8 unit tests. Used by RunSegmentEfforts on /runs/[id] for client-side auto-effort generation. Decisions §37.
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
-    feed/           # Activity feed — recent public runs from people you follow (decisions §31). Cursor-paginated on (started_at, id).
-    u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs, Follow toggle. Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31).
+    feed/           # Activity feed — public runs from people you follow, time-windowed to last 14 days (FEED_WINDOW_DAYS in data.ts). Cursor-paginated on (started_at, id) at 20-per-page. Full-width card grid with per-entry track preview. Toolbar: activity-segmented + author searchable combobox + window hint. Cards open RunShareView in a modal. (decisions §31)
+    u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs (open in a modal), Follow toggle. Honours ?tab=runs|followers|following|notifications (notifications gated to isSelf — decisions §38). Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31).
     dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
     runs/           # Run history with source + activity type filters

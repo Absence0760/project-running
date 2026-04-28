@@ -210,7 +210,7 @@ Strava-style follow graph; layered on top of (but independent of) the clubs/even
 |---|---|---|---|---|---|---|
 | Follow / unfollow another user | ✗ | ✗ | ✓ | N/A | N/A | `user_follows` join table; Follow button on `/u/[id]`. |
 | Public user profile page | ✗ | ✗ | ✓ | N/A | N/A | `/u/[id]` shows display_name, avatar, recent public runs, follower/following counts. |
-| Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; cursor-paginated on `runs.started_at`. Each card shows kudos + comment counts. |
+| Activity feed (followed users' runs) | ✗ | ✗ | ✓ | N/A | N/A | `/feed` route; server-side time-windowed to the last `FEED_WINDOW_DAYS` (14) days; cursor-paginated on `(runs.started_at desc, id desc)` 20-per-page. Full-width responsive card grid with per-entry track-preview map. Toolbar with activity-segmented control + author searchable combobox + "Last 14 days" hint. Cards open `RunShareView` in a modal — public `/share/run/[id]` URL still works for off-app sharing. Each card shows kudos + comment counts. See `decisions.md § 31`. |
 | Kudos on runs | ✗ | ✗ | ✓ | N/A | N/A | `run_kudos` composite-PK join; one-tap toggle. RLS inherits from runs (`decisions.md § 32`). |
 | Comments on runs (one-level threading) | ✗ | ✗ | ✓ | N/A | N/A | `run_comments` with `parent_comment_id`; author + run-owner can delete; INSERT policy enforces shallow nesting. |
 | Privacy zones (clip start/end of public tracks) | ✗ | ✗ | ✓ | ✗ | ✗ | `user_settings.prefs.privacy_zones` + `clip_track_for_user` SECURITY DEFINER RPC. Settings UI on `/settings/preferences` with MapLibre map picker. v1 known gap: `routes.start_point` (nearby search) still uses unclipped first waypoint — see `decisions.md § 33`. |
