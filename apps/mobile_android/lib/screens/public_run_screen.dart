@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../run_stats.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/run_photos.dart';
 import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_social_section.dart';
 
@@ -186,6 +187,14 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
             runId: row.id,
             runOwnerId: row.userId,
           ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: RunPhotos(
+            api: widget.api,
+            runId: row.id,
+            runOwnerId: row.userId,
+          ),
+        ),
         const SizedBox(height: 32),
       ],
     );
