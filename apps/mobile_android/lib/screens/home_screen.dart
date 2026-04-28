@@ -123,6 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ClubsScreen(
           key: const PageStorageKey('clubs'),
           social: widget.social,
+          training: widget.training,
         ),
       ),
       _KeepAlive(

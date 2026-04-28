@@ -6,17 +6,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:core_models/core_models.dart' hide Route;
 
 import '../social_service.dart';
+import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/event_form_sheet.dart';
 import 'event_detail_screen.dart';
+import 'plan_detail_screen.dart';
 
 class ClubDetailScreen extends StatefulWidget {
   final SocialService social;
+  final TrainingService training;
   final String slug;
   const ClubDetailScreen({
     super.key,
     required this.social,
+    required this.training,
     required this.slug,
   });
 
@@ -30,8 +34,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<EventView> _upcoming = const [];
   List<ClubPostView> _posts = const [];
   List<ClubMemberRow> _pending = const [];
+  List<TrainingPlanRow> _templates = const [];
   bool _loading = true;
   bool _busy = false;
+  bool _templatesLoaded = false;
   String? _error;
   late final TabController _tabs;
   final _postCtrl = TextEditingController();
@@ -44,7 +50,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
+    _tabs.addListener(_onTabChanged);
     _load();
   }
 
@@ -271,10 +278,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         title: Text(c.row.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         bottom: TabBar(
           controller: _tabs,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Feed'),
             Tab(text: 'Events'),
             Tab(text: 'Members'),
+            Tab(text: 'Templates'),
           ],
         ),
       ),
@@ -304,6 +313,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 _buildFeedTab(theme, c),
                 _buildEventsTab(theme, c),
                 _buildMembersTab(theme, c),
+                _buildTemplatesTab(theme, c),
               ],
             ),
           ),
@@ -950,6 +960,116 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _onTabChanged() {
+    if (_tabs.indexIsChanging) return;
+    if (_tabs.index == 3 && !_templatesLoaded) {
+      _loadTemplates();
+    }
+  }
+
+  Future<void> _loadTemplates() async {
+    final c = _club;
+    if (c == null) return;
+    try {
+      final list = await widget.training.fetchClubTemplates(c.row.id);
+      if (!mounted) return;
+      setState(() {
+        _templates = list;
+        _templatesLoaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _templatesLoaded = true);
+    }
+  }
+
+  Future<void> _adoptTemplate(TrainingPlanRow t) async {
+    try {
+      final newId = await widget.training.clonePlanTemplate(templateId: t.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Template added to your plans.')),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => PlanDetailScreen(
+            training: widget.training,
+            planId: newId,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Adopt failed: $e')),
+      );
+    }
+  }
+
+  Widget _buildTemplatesTab(ThemeData theme, ClubView c) {
+    if (!_templatesLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_templates.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            c.isAdmin
+                ? 'No templates yet. Publish one of your plans from its detail page.'
+                : 'No plan templates yet for this club.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadTemplates,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _templates.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final t = _templates[i];
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.name, style: theme.textTheme.titleSmall),
+                        if (t.notes != null && t.notes!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            t.notes!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => _adoptTemplate(t),
+                    child: const Text('Adopt'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

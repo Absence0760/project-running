@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../social_service.dart';
+import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/error_state.dart';
@@ -10,7 +11,12 @@ import 'club_detail_screen.dart';
 
 class ClubsScreen extends StatefulWidget {
   final SocialService social;
-  const ClubsScreen({super.key, required this.social});
+  final TrainingService training;
+  const ClubsScreen({
+    super.key,
+    required this.social,
+    required this.training,
+  });
 
   @override
   State<ClubsScreen> createState() => _ClubsScreenState();
@@ -143,6 +149,7 @@ class _ClubsScreenState extends State<ClubsScreen> {
             MaterialPageRoute<void>(
               builder: (_) => ClubDetailScreen(
                 social: widget.social,
+                training: widget.training,
                 slug: slug,
               ),
             ),
@@ -171,6 +178,7 @@ class _ClubsScreenState extends State<ClubsScreen> {
                           MaterialPageRoute<void>(
                             builder: (_) => ClubDetailScreen(
                               social: widget.social,
+                              training: widget.training,
                               slug: list[i].row.slug,
                             ),
                           ),

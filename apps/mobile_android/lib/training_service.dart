@@ -28,6 +28,50 @@ class TrainingService extends ChangeNotifier {
   SupabaseClient get _c => Supabase.instance.client;
   String? get _uid => _c.auth.currentUser?.id;
 
+  /// Plan templates owned by `clubId`. Visible to club members per RLS.
+  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async {
+    final rows = await _c
+        .from('training_plans')
+        .select()
+        .eq('is_template', true)
+        .eq('club_id', clubId)
+        .order('created_at', ascending: false);
+    return (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(TrainingPlanRow.fromJson)
+        .toList();
+  }
+
+  /// Publish one of the viewer's plans as a template under a club they
+  /// admin. Returns the new template id.
+  Future<String> publishPlanAsTemplate({
+    required String planId,
+    required String clubId,
+  }) async {
+    final newId = await _c.rpc(
+      'publish_plan_as_template',
+      params: {'p_source_plan_id': planId, 'p_club_id': clubId},
+    );
+    notifyListeners();
+    return newId as String;
+  }
+
+  /// Adopt a club template — RPC clones it back into a personal plan.
+  Future<String> clonePlanTemplate({
+    required String templateId,
+    DateTime? startDate,
+  }) async {
+    final newId = await _c.rpc(
+      'clone_plan_template',
+      params: {
+        'p_template_id': templateId,
+        if (startDate != null) 'p_start_date': startDate.toIso8601String(),
+      },
+    );
+    notifyListeners();
+    return newId as String;
+  }
+
   Future<List<TrainingPlanRow>> fetchMyPlans() async {
     final uid = _uid;
     if (uid == null) return const [];
