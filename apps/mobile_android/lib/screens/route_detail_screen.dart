@@ -41,6 +41,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   bool _reviewsOffline = false;
   double _avgRating = 0;
 
+  bool? _bookmarked;
+  bool _bookmarkBusy = false;
+
   bool get _isOwner => widget.isOwner && widget.apiClient?.userId != null;
 
   Widget _inlineMeta(ThemeData theme, IconData icon, String label) {
@@ -65,6 +68,44 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   void initState() {
     super.initState();
     _fetchReviews();
+    _loadBookmarkState();
+  }
+
+  Future<void> _loadBookmarkState() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null || widget.isOwner) return;
+    try {
+      final saved = await api.isRouteBookmarked(widget.route.id);
+      if (!mounted) return;
+      setState(() => _bookmarked = saved);
+    } catch (_) {
+      // Best-effort; the toggle still falls through.
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null || _bookmarkBusy) return;
+    final before = _bookmarked ?? false;
+    setState(() {
+      _bookmarkBusy = true;
+      _bookmarked = !before;
+    });
+    try {
+      if (before) {
+        await api.unbookmarkRoute(widget.route.id);
+      } else {
+        await api.bookmarkRoute(widget.route.id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bookmarked = before);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bookmark failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _bookmarkBusy = false);
+    }
   }
 
   Future<void> _fetchReviews() async {
@@ -216,6 +257,16 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               icon: Icon(_isPublic ? Icons.public : Icons.public_off),
               tooltip: _isPublic ? 'Make private' : 'Make public',
               onPressed: _togglePublic,
+            ),
+          if (!widget.isOwner &&
+              widget.apiClient != null &&
+              widget.apiClient!.userId != null)
+            IconButton(
+              icon: Icon(
+                (_bookmarked ?? false) ? Icons.bookmark : Icons.bookmark_border,
+              ),
+              tooltip: (_bookmarked ?? false) ? 'Remove bookmark' : 'Bookmark route',
+              onPressed: _bookmarkBusy ? null : _toggleBookmark,
             ),
           if (_isOwner)
             IconButton(

@@ -1004,6 +1004,70 @@ class ApiClient {
     return SegmentRow.fromJson(inserted);
   }
 
+  // ──────────────────── Saved (bookmarked) routes ────────────────────
+
+  /// Bookmark a public route via the `saved_routes` reference table
+  /// (decisions §30 — never clone the row). Idempotent against the
+  /// composite-PK; duplicates resolve as a no-op.
+  Future<void> bookmarkRoute(String routeId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    try {
+      await _client.from(SavedRouteRow.table).insert({
+        SavedRouteRow.colUserId: viewerId,
+        SavedRouteRow.colRouteId: routeId,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') rethrow;
+    }
+  }
+
+  /// Drop the bookmark. Idempotent.
+  Future<void> unbookmarkRoute(String routeId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(SavedRouteRow.table)
+        .delete()
+        .eq(SavedRouteRow.colUserId, viewerId)
+        .eq(SavedRouteRow.colRouteId, routeId);
+  }
+
+  /// Whether the current viewer has bookmarked this route.
+  Future<bool> isRouteBookmarked(String routeId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return false;
+    final row = await _client
+        .from(SavedRouteRow.table)
+        .select(SavedRouteRow.colRouteId)
+        .eq(SavedRouteRow.colUserId, viewerId)
+        .eq(SavedRouteRow.colRouteId, routeId)
+        .maybeSingle();
+    return row != null;
+  }
+
+  /// All routes the current viewer has bookmarked, joined to the parent
+  /// `routes` row so callers can render full route cards. Sorted by
+  /// `saved_at` desc.
+  Future<List<Route>> fetchBookmarkedRoutes({int limit = 200}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    final rows = await _client
+        .from(SavedRouteRow.table)
+        .select('saved_at, route:${RouteRow.table}(*)')
+        .eq(SavedRouteRow.colUserId, viewerId)
+        .order(SavedRouteRow.colSavedAt, ascending: false)
+        .limit(limit);
+    final out = <Route>[];
+    for (final r in rows) {
+      final inner = r['route'];
+      if (inner is Map<String, dynamic>) {
+        out.add(_routeFromRow(inner));
+      }
+    }
+    return out;
+  }
+
   /// Delete a segment. RLS lets the route owner remove segments on
   /// their own route; cascades drop the segment_efforts rows.
   Future<void> deleteSegment(String segmentId) async {
