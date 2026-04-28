@@ -14,6 +14,8 @@
 	import { formatDistance, formatPace } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import RunShareView from '$lib/components/RunShareView.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type { Run } from '$lib/types';
 
 	let userId = $derived($page.params.id as string);
@@ -26,6 +28,7 @@
 	let tab = $state<'runs' | 'followers' | 'following'>('runs');
 
 	let isSelf = $derived(auth.user?.id === userId);
+	let openRunId = $state<string | null>(null);
 
 	async function load() {
 		loading = true;
@@ -176,7 +179,7 @@
 			{:else}
 				<div class="run-list">
 					{#each runs as r (r.id)}
-						<a href="/share/run/{r.id}" class="run-row">
+						<button type="button" class="run-row" onclick={() => (openRunId = r.id)}>
 							<div class="run-date">{fmtDate(r.started_at)}</div>
 							<div class="run-main">
 								<h3>Run</h3>
@@ -195,7 +198,7 @@
 									</span>
 								</div>
 							</div>
-						</a>
+						</button>
 					{/each}
 				</div>
 			{/if}
@@ -240,6 +243,14 @@
 		{/if}
 	{/if}
 </div>
+
+<Modal open={openRunId !== null} onclose={() => (openRunId = null)} title="Run" wide>
+	{#if openRunId}
+		{#key openRunId}
+			<RunShareView runId={openRunId} compact />
+		{/key}
+	{/if}
+</Modal>
 
 <style>
 	.page {
@@ -378,12 +389,16 @@
 		grid-template-columns: 6rem 1fr;
 		gap: var(--space-md);
 		align-items: center;
+		width: 100%;
 		padding: var(--space-md) var(--space-lg);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
+		text-align: left;
 		text-decoration: none;
 		color: inherit;
+		font: inherit;
+		cursor: pointer;
 		transition: border-color var(--transition-fast);
 	}
 
