@@ -8,7 +8,23 @@
 		WORKOUT_KIND_LABEL,
 	} from '$lib/training';
 	import type { GoalEvent, GeneratedPlan, WorkoutKind } from '$lib/training';
-	import { fmtKm, fmtPace } from '$lib/units.svelte';
+	import { fmtKm, fmtPace, getUnit } from '$lib/units.svelte';
+
+	const METRES_PER_MILE = 1609.344;
+	let distanceUnit = $derived(getUnit());
+	let distancePerUnit = $derived(distanceUnit === 'mi' ? METRES_PER_MILE : 1000);
+	let distanceStep = $derived(distanceUnit === 'mi' ? '0.1' : '0.5');
+
+	function metresToDistanceInput(metres: number | null | undefined): string {
+		if (metres == null) return '';
+		return String(Math.round((metres / distancePerUnit) * 10) / 10);
+	}
+	function distanceInputToMetres(raw: string): number | null {
+		if (raw === '') return null;
+		const num = parseFloat(raw);
+		if (Number.isNaN(num)) return null;
+		return Math.max(0, num * distancePerUnit);
+	}
 
 	interface Props {
 		oncreated?: (plan: { id: string }) => void;
@@ -307,7 +323,7 @@
 												})}
 											</div>
 											<label class="wo-field">
-												<span>Kind</span>
+												<span>Run type</span>
 												<select bind:value={w.workouts[woIdx].kind}>
 													{#each KIND_OPTIONS as k}
 														<option value={k}>{WORKOUT_KIND_LABEL[k]}</option>
@@ -315,18 +331,16 @@
 												</select>
 											</label>
 											<label class="wo-field">
-												<span>Distance (km)</span>
+												<span>Distance ({distanceUnit})</span>
 												<input
 													type="number"
 													min="0"
-													step="0.5"
-													value={wo.target_distance_m != null
-														? Math.round((wo.target_distance_m / 1000) * 10) / 10
-														: ''}
+													step={distanceStep}
+													value={metresToDistanceInput(wo.target_distance_m)}
 													oninput={(e) => {
-														const v = (e.currentTarget as HTMLInputElement).value;
-														w.workouts[woIdx].target_distance_m =
-															v === '' ? null : Math.max(0, parseFloat(v) * 1000);
+														w.workouts[woIdx].target_distance_m = distanceInputToMetres(
+															(e.currentTarget as HTMLInputElement).value,
+														);
 													}}
 													disabled={wo.kind === 'rest'}
 												/>
@@ -557,20 +571,24 @@
 		border-top: 1px solid var(--color-border);
 	}
 	.wo-row {
+		/* Date + run type + distance + pace on one row; notes always
+		   wraps to its own line so the four primary fields aren't
+		   squeezed against each other and the run-type dropdown has
+		   room to display its longer labels (e.g. "Marathon Pace"). */
 		display: grid;
-		grid-template-columns: minmax(5rem, 1fr) minmax(7rem, 1fr) minmax(5rem, 0.7fr) minmax(5rem, 0.7fr) minmax(8rem, 1.4fr);
-		gap: 0.4rem;
+		grid-template-columns: minmax(5.5rem, auto) minmax(8rem, 1.3fr) minmax(6rem, 1fr) minmax(6rem, 1fr);
+		gap: 0.5rem;
 		align-items: end;
-		padding: 0.45rem 0.5rem;
+		padding: 0.55rem 0.6rem;
 		background: var(--color-surface);
 		border-radius: var(--radius-sm);
+	}
+	.wo-notes {
+		grid-column: 1 / -1;
 	}
 	@media (max-width: 50rem) {
 		.wo-row {
 			grid-template-columns: repeat(2, 1fr);
-		}
-		.wo-notes {
-			grid-column: 1 / -1;
 		}
 	}
 	.wo-date {
