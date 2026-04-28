@@ -5,8 +5,9 @@
 		defaultPlanWeeks,
 		generatePlan,
 		PHASE_LABEL,
+		WORKOUT_KIND_LABEL,
 	} from '$lib/training';
-	import type { GoalEvent } from '$lib/training';
+	import type { GoalEvent, GeneratedPlan, WorkoutKind } from '$lib/training';
 	import { fmtKm, fmtPace } from '$lib/units.svelte';
 
 	interface Props {
@@ -30,6 +31,49 @@
 	let weekOverride = $state<number | null>(null);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+
+	// Editable plan state. The auto-generator produces a candidate
+	// outline whenever core form inputs change; the user can then
+	// tweak individual workouts before clicking Create plan. Touching
+	// any non-week input regenerates and discards user edits — matches
+	// the "if you change the goal, the schedule changes" expectation.
+	let plan = $state<GeneratedPlan | null>(null);
+	let expandedWeek = $state<number | null>(null);
+
+	const KIND_OPTIONS: WorkoutKind[] = [
+		'easy',
+		'long',
+		'recovery',
+		'tempo',
+		'interval',
+		'marathon_pace',
+		'race',
+		'rest',
+	];
+
+	function paceToInput(secPerKm: number | null): string {
+		if (secPerKm == null || secPerKm <= 0) return '';
+		const m = Math.floor(secPerKm / 60);
+		const s = Math.round(secPerKm % 60);
+		return `${m}:${String(s).padStart(2, '0')}`;
+	}
+
+	function inputToPace(raw: string): number | null {
+		const trimmed = raw.trim();
+		if (!trimmed) return null;
+		const m = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+		if (!m) return null;
+		return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+	}
+
+	function paceInputHandler(weekIdx: number, woIdx: number) {
+		return (e: Event) => {
+			if (!plan) return;
+			const value = (e.currentTarget as HTMLInputElement).value;
+			const sec = inputToPace(value);
+			plan.weeks[weekIdx].workouts[woIdx].target_pace_sec_per_km = sec;
+		};
+	}
 
 	function describeError(e: unknown): string {
 		if (e instanceof Error) return e.message;
@@ -68,20 +112,30 @@
 			: null
 	);
 
-	let preview = $derived.by(() => {
-		if (!startDate) return null;
+	// Re-generate the editable plan whenever any input that drives
+	// generation changes. Replaces the previous $derived preview so we
+	// can mutate workouts in-place; the user's edits live on `plan`
+	// until they touch a top-level input again.
+	$effect(() => {
+		// Read every input we care about so the effect tracks them.
+		void [goalEvent, goalDistance, goalTimeSec, recent5kTotal, startDate, daysPerWeek, weeks];
+		if (!startDate) {
+			plan = null;
+			return;
+		}
 		try {
-			return generatePlan({
+			plan = generatePlan({
 				goalEvent,
 				goalDistanceM: goalDistance,
 				goalTimeSec,
 				recent5kSec: recent5kTotal,
 				startDate,
 				daysPerWeek,
-				weeks
+				weeks,
 			});
+			expandedWeek = null;
 		} catch (_) {
-			return null;
+			plan = null;
 		}
 	});
 
@@ -94,11 +148,11 @@
 
 	async function submit(e: Event) {
 		e.preventDefault();
-		if (!name.trim() || !preview || busy) return;
+		if (!name.trim() || !plan || busy) return;
 		busy = true;
 		error = null;
 		try {
-			const plan = await createTrainingPlan({
+			const created = await createTrainingPlan({
 				name: name.trim(),
 				goalEvent,
 				goalDistanceM: goalDistance,
@@ -106,9 +160,9 @@
 				recent5kSec: recent5kTotal,
 				startDate,
 				daysPerWeek,
-				generated: preview
+				generated: plan,
 			});
-			oncreated?.(plan);
+			oncreated?.(created);
 		} catch (e: unknown) {
 			error = describeError(e);
 			console.error('Plan create failed', e);
@@ -196,42 +250,114 @@
 				{#if oncancel}
 					<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>Cancel</button>
 				{/if}
-				<button type="submit" class="btn btn-primary" disabled={!name.trim() || !preview || busy}>
+				<button type="submit" class="btn btn-primary" disabled={!name.trim() || !plan || busy}>
 					{busy ? 'Creating…' : 'Create plan'}
 				</button>
 			</div>
 		</section>
 
 		<aside class="preview">
-			<h2>Preview</h2>
-			{#if preview}
+			<h2>Preview &amp; edit</h2>
+			{#if plan}
 				<div class="paces">
-					<div class="pace-row"><span>Easy</span><strong>{fmtPace(preview.paces.easy)}</strong></div>
-					<div class="pace-row"><span>Marathon</span><strong>{fmtPace(preview.paces.marathon)}</strong></div>
-					<div class="pace-row"><span>Tempo</span><strong>{fmtPace(preview.paces.tempo)}</strong></div>
-					<div class="pace-row"><span>Interval</span><strong>{fmtPace(preview.paces.interval)}</strong></div>
-					<div class="pace-row"><span>Repetition</span><strong>{fmtPace(preview.paces.repetition)}</strong></div>
+					<div class="pace-row"><span>Easy</span><strong>{fmtPace(plan.paces.easy)}</strong></div>
+					<div class="pace-row"><span>Marathon</span><strong>{fmtPace(plan.paces.marathon)}</strong></div>
+					<div class="pace-row"><span>Tempo</span><strong>{fmtPace(plan.paces.tempo)}</strong></div>
+					<div class="pace-row"><span>Interval</span><strong>{fmtPace(plan.paces.interval)}</strong></div>
+					<div class="pace-row"><span>Repetition</span><strong>{fmtPace(plan.paces.repetition)}</strong></div>
 				</div>
 
-				{#if preview.vdot}
-					<p class="vdot">Daniels VDOT: <strong>{preview.vdot.toFixed(1)}</strong></p>
+				{#if plan.vdot}
+					<p class="vdot">Daniels VDOT: <strong>{plan.vdot.toFixed(1)}</strong></p>
 				{/if}
 
 				<h3>Week outline</h3>
+				<p class="outline-hint">
+					Click a week to expand the day-by-day editor. Changes are kept until you tweak
+					a top-level input above (which regenerates the whole plan).
+				</p>
 				<ul class="weeks">
-					{#each preview.weeks.slice(0, 6) as w}
-						<li>
-							<span class="week-num">#{w.week_index + 1}</span>
-							<span class="week-phase">{PHASE_LABEL[w.phase]}</span>
-							<span class="week-km">{fmtKm(w.target_volume_m, 0)}</span>
-							<span class="week-workouts">
-								{w.workouts.filter((x) => x.kind !== 'rest').length} sessions
-							</span>
+					{#each plan.weeks as w, weekIdx (w.week_index)}
+						<li class="week-item" class:expanded={expandedWeek === weekIdx}>
+							<button
+								type="button"
+								class="week-row"
+								onclick={() => (expandedWeek = expandedWeek === weekIdx ? null : weekIdx)}
+							>
+								<span class="week-num">#{w.week_index + 1}</span>
+								<span class="week-phase">{PHASE_LABEL[w.phase]}</span>
+								<span class="week-km">{fmtKm(w.target_volume_m, 0)}</span>
+								<span class="week-workouts">
+									{w.workouts.filter((x) => x.kind !== 'rest').length} sessions
+								</span>
+								<span class="caret material-symbols">
+									{expandedWeek === weekIdx ? 'expand_less' : 'expand_more'}
+								</span>
+							</button>
+
+							{#if expandedWeek === weekIdx}
+								<div class="week-editor">
+									{#each w.workouts as wo, woIdx (woIdx)}
+										<div class="wo-row">
+											<div class="wo-date">
+												{new Date(wo.scheduled_date).toLocaleDateString(undefined, {
+													weekday: 'short',
+													month: 'short',
+													day: 'numeric',
+												})}
+											</div>
+											<label class="wo-field">
+												<span>Kind</span>
+												<select bind:value={w.workouts[woIdx].kind}>
+													{#each KIND_OPTIONS as k}
+														<option value={k}>{WORKOUT_KIND_LABEL[k]}</option>
+													{/each}
+												</select>
+											</label>
+											<label class="wo-field">
+												<span>Distance (km)</span>
+												<input
+													type="number"
+													min="0"
+													step="0.5"
+													value={wo.target_distance_m != null
+														? Math.round((wo.target_distance_m / 1000) * 10) / 10
+														: ''}
+													oninput={(e) => {
+														const v = (e.currentTarget as HTMLInputElement).value;
+														w.workouts[woIdx].target_distance_m =
+															v === '' ? null : Math.max(0, parseFloat(v) * 1000);
+													}}
+													disabled={wo.kind === 'rest'}
+												/>
+											</label>
+											<label class="wo-field">
+												<span>Pace (mm:ss)</span>
+												<input
+													type="text"
+													inputmode="numeric"
+													pattern={'[0-9]{1,2}:[0-9]{2}'}
+													placeholder="—"
+													value={paceToInput(wo.target_pace_sec_per_km)}
+													oninput={paceInputHandler(weekIdx, woIdx)}
+													disabled={wo.kind === 'rest'}
+												/>
+											</label>
+											<label class="wo-field wo-notes">
+												<span>Notes</span>
+												<input
+													type="text"
+													bind:value={w.workouts[woIdx].notes}
+													placeholder="—"
+													maxlength="200"
+												/>
+											</label>
+										</div>
+									{/each}
+								</div>
+							{/if}
 						</li>
 					{/each}
-					{#if preview.weeks.length > 6}
-						<li class="more">+ {preview.weeks.length - 6} more weeks</li>
-					{/if}
 				</ul>
 			{:else}
 				<p class="muted">Fill in the form to see a preview.</p>
@@ -246,10 +372,10 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+		grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
 		gap: var(--space-lg);
 	}
-	@media (max-width: 48rem) {
+	@media (max-width: 60rem) {
 		.grid {
 			grid-template-columns: 1fr;
 		}
@@ -355,28 +481,45 @@
 		font-size: 0.9rem;
 		margin-top: -0.2rem;
 	}
+	.outline-hint {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		margin: 0 0 0.4rem 0;
+	}
 	.weeks {
 		list-style: none;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
+		gap: 0.35rem;
 	}
-	.weeks li {
+	.week-item {
+		background: var(--color-surface);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+		min-width: 0;
+		overflow: hidden;
+	}
+	.week-item.expanded {
+		border-color: var(--color-primary);
+	}
+	.week-row {
 		display: grid;
-		grid-template-columns: 2rem minmax(0, 1fr) auto auto;
+		grid-template-columns: 2rem minmax(0, 1fr) auto auto auto;
 		gap: 0.5rem;
 		align-items: center;
 		font-size: 0.85rem;
-		padding: 0.3rem 0.55rem;
-		background: var(--color-surface);
-		border-radius: var(--radius-md);
-		min-width: 0;
+		padding: 0.45rem 0.6rem;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+		width: 100%;
+		color: inherit;
+		font: inherit;
 	}
-	.weeks li.more {
-		display: block;
-		text-align: center;
-		color: var(--color-text-tertiary);
+	.week-row:hover {
+		background: var(--color-bg-secondary);
 	}
 	.week-num {
 		font-weight: 700;
@@ -399,6 +542,70 @@
 		color: var(--color-text-tertiary);
 		font-size: 0.78rem;
 		white-space: nowrap;
+	}
+	.caret {
+		color: var(--color-text-tertiary);
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
+	}
+	.week-editor {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		padding: 0.5rem 0.75rem 0.75rem;
+		background: var(--color-bg-secondary);
+		border-top: 1px solid var(--color-border);
+	}
+	.wo-row {
+		display: grid;
+		grid-template-columns: minmax(5rem, 1fr) minmax(7rem, 1fr) minmax(5rem, 0.7fr) minmax(5rem, 0.7fr) minmax(8rem, 1.4fr);
+		gap: 0.4rem;
+		align-items: end;
+		padding: 0.45rem 0.5rem;
+		background: var(--color-surface);
+		border-radius: var(--radius-sm);
+	}
+	@media (max-width: 50rem) {
+		.wo-row {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		.wo-notes {
+			grid-column: 1 / -1;
+		}
+	}
+	.wo-date {
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+	}
+	.wo-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		min-width: 0;
+	}
+	.wo-field input,
+	.wo-field select {
+		padding: 0.35rem 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-size: 0.85rem;
+		text-transform: none;
+		letter-spacing: 0;
+		font-weight: 400;
+		min-width: 0;
+	}
+	.wo-field input:disabled,
+	.wo-field select:disabled {
+		opacity: 0.5;
 	}
 	.muted {
 		color: var(--color-text-tertiary);
