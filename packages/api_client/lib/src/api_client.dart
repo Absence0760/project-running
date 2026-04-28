@@ -1036,6 +1036,40 @@ class ApiClient {
     return SegmentRow.fromJson(inserted);
   }
 
+  // ──────────────────── parkrun import ────────────────────
+
+  /// Persist the user's parkrun athlete number on their `user_profiles`
+  /// row (matches web). The Edge Function reads this field if no
+  /// override is passed; we still pass it explicitly on import.
+  Future<void> setParkrunAthleteNumber(String? athleteNumber) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(UserProfileRow.table)
+        .update({UserProfileRow.colParkrunNumber: athleteNumber})
+        .eq(UserProfileRow.colId, viewerId);
+  }
+
+  /// Trigger the `parkrun-import` Edge Function. Returns the count of
+  /// new results inserted.
+  Future<int> importParkrunResults(String athleteNumber) async {
+    final res = await _client.functions.invoke(
+      'parkrun-import',
+      body: {'athleteNumber': athleteNumber.trim()},
+    );
+    if (res.status >= 400) {
+      final err = res.data is Map<String, dynamic>
+          ? res.data['error'] as String?
+          : null;
+      throw Exception(err ?? 'parkrun-import failed (HTTP ${res.status})');
+    }
+    final data = res.data;
+    if (data is Map<String, dynamic> && data['imported'] is num) {
+      return (data['imported'] as num).toInt();
+    }
+    return 0;
+  }
+
   // ──────────────────── Device list (user_device_settings) ─────────
 
   /// Every device row the current user has registered. Used by the

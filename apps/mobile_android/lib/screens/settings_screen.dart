@@ -793,6 +793,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ---------- Account actions ----------
 
+  Future<void> _importParkrun() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+
+    // Pre-fill from user_profiles.parkrun_number when available so a
+    // returning user doesn't have to re-type it.
+    String existing = '';
+    try {
+      final profile = await api.fetchPublicProfile(api.userId!);
+      existing = profile?.parkrunNumber ?? '';
+    } catch (_) {}
+
+    final ctrl = TextEditingController(text: existing);
+    if (!mounted) return;
+    final athleteNumber = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Import parkrun results'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Enter your parkrun athlete number (e.g. A123456). We\'ll '
+              'fetch your finish history and add any new results to your '
+              'runs list.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              maxLength: 20,
+              decoration: const InputDecoration(
+                labelText: 'Athlete number',
+                hintText: 'A123456',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    if (athleteNumber == null || athleteNumber.isEmpty) return;
+    if (!mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Importing parkrun results…')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Persist the number first so the next import is one-tap.
+      await api.setParkrunAthleteNumber(athleteNumber);
+      final imported = await api.importParkrunResults(athleteNumber);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // dismiss progress
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            imported > 0
+                ? 'Imported $imported parkrun result${imported == 1 ? '' : 's'}.'
+                : 'No new parkrun results since last import.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+    }
+  }
+
   /// Opens an external URL via the share sheet so the user can pick
   /// "Open in browser". A native `url_launcher` plugin would be a
   /// better fit; deferred until that dep lands.
@@ -1040,6 +1133,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           _HeartRateTile(heartRate: widget.heartRate),
           const Divider(),
+
+          // Integrations
+          if (signedIn) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Integrations', style: theme.textTheme.titleSmall),
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_run),
+              title: const Text('parkrun'),
+              subtitle: const Text('Import results by athlete number'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _importParkrun,
+            ),
+            const Divider(),
+          ],
 
           // Preferences
           Padding(
