@@ -475,12 +475,13 @@ export async function updateRunMetadata(
 
 // --- Route reviews ---
 
-export async function getRouteReviews(routeId: string) {
+export async function getRouteReviews(routeId: string, limit = 100) {
 	const { data, error } = await supabase
 		.from('route_reviews')
 		.select('*')
 		.eq('route_id', routeId)
-		.order('created_at', { ascending: false });
+		.order('created_at', { ascending: false })
+		.limit(limit);
 	if (error) throw error;
 	return data ?? [];
 }
@@ -1174,11 +1175,14 @@ export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta
 	// next instance is in the future. Pull anything that's either (a) one-off
 	// in the future OR (b) recurring with an until-date that's still ahead.
 	// The client-side enrichment computes `next_instance_start` per event.
+	// Cap at 200 — busy clubs accumulate event history but the upcoming-set
+	// of interest is far smaller; the client filter discards the rest.
 	const { data } = await supabase
 		.from('events')
 		.select('*')
 		.eq('club_id', clubId)
-		.order('starts_at', { ascending: true });
+		.order('starts_at', { ascending: true })
+		.limit(200);
 	const events = (data as Event[]) ?? [];
 	const now = new Date();
 	const enriched = await enrichEvents(events);
@@ -1725,12 +1729,13 @@ export async function fetchClubPosts(
 	return enrichPosts(posts as ClubPost[]);
 }
 
-export async function fetchPostReplies(parentId: string): Promise<ClubPostWithAuthor[]> {
+export async function fetchPostReplies(parentId: string, limit = 200): Promise<ClubPostWithAuthor[]> {
 	const { data: posts } = await supabase
 		.from('club_posts')
 		.select('*')
 		.eq('parent_post_id', parentId)
-		.order('created_at', { ascending: true });
+		.order('created_at', { ascending: true })
+		.limit(limit);
 	if (!posts) return [];
 	return enrichPosts(posts as ClubPost[]);
 }
@@ -1750,6 +1755,7 @@ async function enrichPosts(posts: ClubPost[]): Promise<ClubPostWithAuthor[]> {
 					.from('club_posts')
 					.select('parent_post_id')
 					.in('parent_post_id', topLevelIds)
+					.limit(5000)
 			: Promise.resolve({ data: [] as { parent_post_id: string }[] })
 	]);
 
@@ -1801,26 +1807,28 @@ export async function deleteClubPost(id: string): Promise<void> {
 
 // --- Training plans ---
 
-export async function fetchMyPlans(): Promise<TrainingPlan[]> {
+export async function fetchMyPlans(limit = 100): Promise<TrainingPlan[]> {
 	// Templates live in the same table; filter them out of the
 	// user-facing plan list (decisions §35).
 	const { data } = await supabase
 		.from('training_plans')
 		.select('*')
 		.eq('is_template', false)
-		.order('created_at', { ascending: false });
+		.order('created_at', { ascending: false })
+		.limit(limit);
 	return ((data ?? []) as TrainingPlan[]) ?? [];
 }
 
 /// Plan templates owned by `clubId`. Visible to club members; admins
 /// can write. See decisions §35.
-export async function fetchClubTemplates(clubId: string): Promise<TrainingPlan[]> {
+export async function fetchClubTemplates(clubId: string, limit = 100): Promise<TrainingPlan[]> {
 	const { data, error } = await supabase
 		.from('training_plans')
 		.select('*')
 		.eq('is_template', true)
 		.eq('club_id', clubId)
-		.order('created_at', { ascending: false });
+		.order('created_at', { ascending: false })
+		.limit(limit);
 	if (error) {
 		console.error('fetchClubTemplates failed', error);
 		return [];
@@ -2617,12 +2625,13 @@ export async function rescindKudos(runId: string): Promise<void> {
 
 /// Comments on a run, sorted oldest-first. Author profiles are joined
 /// in a second round trip so PostgREST doesn't need an embedded select.
-export async function fetchRunComments(runId: string): Promise<RunCommentWithAuthor[]> {
+export async function fetchRunComments(runId: string, limit = 200): Promise<RunCommentWithAuthor[]> {
 	const { data: rows, error } = await supabase
 		.from('run_comments')
 		.select('*')
 		.eq('run_id', runId)
-		.order('created_at', { ascending: true });
+		.order('created_at', { ascending: true })
+		.limit(limit);
 	if (error) {
 		console.error('fetchRunComments failed', error);
 		return [];
@@ -2688,13 +2697,14 @@ const PHOTO_MIME_TO_EXT: Record<string, string> = {
 
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
-export async function fetchRunPhotos(runId: string): Promise<RunPhoto[]> {
+export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhoto[]> {
 	const { data, error } = await supabase
 		.from('run_photos')
 		.select('*')
 		.eq('run_id', runId)
 		.order('position_idx', { ascending: true })
-		.order('created_at', { ascending: true });
+		.order('created_at', { ascending: true })
+		.limit(limit);
 	if (error) {
 		console.error('fetchRunPhotos failed', error);
 		return [];
@@ -2826,12 +2836,13 @@ export interface SegmentEffortWithSegment {
 	rank: number;
 }
 
-export async function fetchSegmentsForRoute(routeId: string): Promise<Segment[]> {
+export async function fetchSegmentsForRoute(routeId: string, limit = 100): Promise<Segment[]> {
 	const { data, error } = await supabase
 		.from('segments')
 		.select('*')
 		.eq('route_id', routeId)
-		.order('start_distance_m', { ascending: true });
+		.order('start_distance_m', { ascending: true })
+		.limit(limit);
 	if (error) {
 		console.error('fetchSegmentsForRoute failed', error);
 		return [];

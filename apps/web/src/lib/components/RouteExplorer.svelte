@@ -107,7 +107,9 @@
 
 	async function loadSavedIds() {
 		if (!auth.loggedIn) return;
-		const { data } = await supabase.from('saved_routes').select('route_id');
+		// Cap at a sane upper bound — this only feeds the bookmark-icon
+		// state on visible cards, so we don't need every saved row.
+		const { data } = await supabase.from('saved_routes').select('route_id').limit(1000);
 		savedIds = new Set((data ?? []).map((r) => r.route_id as string));
 	}
 
