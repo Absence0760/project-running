@@ -15,6 +15,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunShareView from '$lib/components/RunShareView.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import type { Snapshot } from './$types';
 
 	let entries = $state<FeedEntry[]>([]);
 	let engagement = $state<
@@ -66,7 +67,31 @@
 		loadingMore = false;
 	}
 
-	onMount(loadInitial);
+	onMount(() => {
+		// Skip the fetch when snapshot already restored the feed.
+		if (entries.length === 0 && loading) loadInitial();
+	});
+
+	export const snapshot: Snapshot<{
+		entries: FeedEntry[];
+		engagement: Array<[string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }]>;
+		exhausted: boolean;
+		followsAnyone: boolean;
+	}> = {
+		capture: () => ({
+			entries,
+			engagement: Array.from(engagement.entries()),
+			exhausted,
+			followsAnyone,
+		}),
+		restore: (s) => {
+			entries = s.entries;
+			engagement = new Map(s.engagement);
+			exhausted = s.exhausted;
+			followsAnyone = s.followsAnyone;
+			loading = false;
+		},
+	};
 
 	async function toggleKudos(runId: string) {
 		if (kudosBusy.has(runId)) return;

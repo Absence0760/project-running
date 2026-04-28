@@ -16,6 +16,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import type { Run, RunSource } from '$lib/types';
+	import type { Snapshot } from './$types';
 
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
@@ -250,6 +251,28 @@
 			loadInitial();
 		}
 	});
+
+	/// Preserve the loaded list across in-app navigation so clicking a
+	/// run, then `back`, lands the user at the same scroll position
+	/// they were at — instead of a flash of "Loading…" plus a jump to
+	/// the top. Filters are already in localStorage; what we add here
+	/// is the runs array + pagination cursor so the page renders to
+	/// its full height synchronously and SvelteKit's built-in scroll
+	/// restoration can actually run. Snapshot fires for every internal
+	/// navigation away (link, goto, popstate) and restores on return.
+	export const snapshot: Snapshot<{
+		runs: Run[];
+		hasMore: boolean;
+		lastFetchMode: 'paginated' | 'full' | '';
+	}> = {
+		capture: () => ({ runs, hasMore, lastFetchMode }),
+		restore: (s) => {
+			runs = s.runs;
+			hasMore = s.hasMore;
+			lastFetchMode = s.lastFetchMode;
+			loading = false;
+		},
+	};
 
 	let showRunModal = $state(false);
 

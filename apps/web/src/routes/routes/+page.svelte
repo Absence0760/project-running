@@ -8,6 +8,7 @@
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import TrackPreview from '$lib/components/TrackPreview.svelte';
 	import type { Route } from '$lib/types';
+	import type { Snapshot } from './$types';
 
 	let tab = $state<'mine' | 'explore'>('mine');
 	let routes = $state<Route[]>([]);
@@ -36,8 +37,19 @@
 	onMount(() => {
 		const initial = $page.url.searchParams.get('tab');
 		if (initial === 'explore') tab = 'explore';
-		load();
+		// Skip the fetch when snapshot already restored a list — see
+		// the snapshot block below.
+		if (routes.length === 0 && loading) load();
 	});
+
+	export const snapshot: Snapshot<{ routes: Route[]; tab: 'mine' | 'explore' }> = {
+		capture: () => ({ routes, tab }),
+		restore: (s) => {
+			routes = s.routes;
+			tab = s.tab;
+			loading = false;
+		},
+	};
 </script>
 
 {#if showImport}

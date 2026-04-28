@@ -196,6 +196,35 @@ Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.mod
 
 `ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
 
+## Web list pages — preserve scroll on back-navigation
+
+Any list page that links into a detail page (`/runs`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
+
+The shape is:
+
+```ts
+import type { Snapshot } from './$types';
+
+export const snapshot: Snapshot<{ /* the loaded list + any tab/filter not in localStorage */ }> = {
+  capture: () => ({ items, tab }),
+  restore: (s) => {
+    items = s.items;
+    tab = s.tab;
+    loading = false;     // skip the loading flash — we already have data
+  },
+};
+```
+
+Then guard the initial fetch in `onMount` so a restored list isn't immediately clobbered by a re-fetch:
+
+```ts
+onMount(() => {
+  if (items.length === 0) load();
+});
+```
+
+Capture the heaviest stateful arrays (the items list, pagination cursors), not derived values — derived state recomputes from restored inputs. Filters that already live in `localStorage` don't need to be in the snapshot.
+
 ## Commit and PR conventions
 
 - Branch: `dev` is the working branch. `main` is the PR target. See [decisions.md § 6](decisions.md).

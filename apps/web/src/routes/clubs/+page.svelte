@@ -5,6 +5,7 @@
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { ClubWithMeta } from '$lib/types';
+	import type { Snapshot } from './$types';
 
 	let tab = $state<'browse' | 'mine'>('mine');
 	let loading = $state(true);
@@ -27,14 +28,28 @@
 	}
 
 	onMount(() => {
-		loadMine();
-		loadBrowse();
+		// Snapshot restore (below) repopulates these synchronously when
+		// navigating back. Skip the fetch in that case — re-running it
+		// flashes "loading" over the restored list and breaks scroll.
+		if (myClubs.length === 0) loadMine();
+		if (browseResults.length === 0) loadBrowse();
 	});
 
-	$effect(() => {
-		if (tab === 'browse') loadBrowse();
-		if (tab === 'mine') loadMine();
-	});
+	export const snapshot: Snapshot<{
+		myClubs: ClubWithMeta[];
+		browseResults: ClubWithMeta[];
+		tab: 'browse' | 'mine';
+		search: string;
+	}> = {
+		capture: () => ({ myClubs, browseResults, tab, search }),
+		restore: (s) => {
+			myClubs = s.myClubs;
+			browseResults = s.browseResults;
+			tab = s.tab;
+			search = s.search;
+			loading = false;
+		},
+	};
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 	function onSearchInput() {

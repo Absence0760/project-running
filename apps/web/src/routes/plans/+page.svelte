@@ -7,6 +7,7 @@
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { TrainingPlan } from '$lib/types';
+	import type { Snapshot } from './$types';
 
 	let plans = $state<TrainingPlan[]>([]);
 	let loading = $state(true);
@@ -20,7 +21,10 @@
 	}
 
 	onMount(async () => {
-		await load();
+		// Snapshot restore (below) repopulates `plans` synchronously
+		// when navigating back, so skip the fetch — otherwise a flash
+		// of "loading" replaces the restored list and breaks scroll.
+		if (!(plans.length > 0 && !loading)) await load();
 		// Deep-link from the dashboard's "Pick a goal race" CTA: opening
 		// `/plans?new=1` lands here with the create-plan modal already
 		// open. Strip the query so a refresh doesn't re-open the modal.
@@ -29,6 +33,14 @@
 			goto('/plans', { replaceState: true, noScroll: true });
 		}
 	});
+
+	export const snapshot: Snapshot<{ plans: TrainingPlan[] }> = {
+		capture: () => ({ plans }),
+		restore: (s) => {
+			plans = s.plans;
+			loading = false;
+		},
+	};
 
 	const eventLabels: Record<string, string> = {
 		distance_5k: '5K',
