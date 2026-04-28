@@ -6,16 +6,22 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import 'audio_cues.dart';
+import 'ble_heart_rate.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
+import 'race_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/sign_in_screen.dart';
 import 'settings_sync.dart';
+import 'social_service.dart';
+import 'training_service.dart';
 import 'watch_ingest_queue.dart';
 
 /// Compile-time Supabase config. Secrets are passed to `flutter run` via
@@ -29,6 +35,20 @@ const _devPassword = String.fromEnvironment('DEV_USER_PASSWORD');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Bridge `--dart-define-from-file=dart_defines.json` into dotenv so
+  // library code copied verbatim from android (which reads through
+  // `dotenv.env['X']`) keeps working without an iOS-specific fork.
+  // Anything not passed at build time falls through to the `?? fallback`
+  // paths in those libraries.
+  const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
+  const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
+  const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
+  dotenv.testLoad(fileInput: [
+    if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
+    if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
+    if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
+  ].join('\n'));
 
   final preferences = Preferences();
   await preferences.init();
@@ -51,6 +71,14 @@ Future<void> main() async {
   await watchQueue.init();
 
   final settingsSync = SettingsSyncService(preferences: preferences);
+
+  final audioCues = AudioCues();
+  final social = SocialService();
+  final raceController = RaceController(social);
+  unawaited(raceController.start());
+  final training = TrainingService();
+  final heartRate = BleHeartRate();
+  unawaited(heartRate.connectCached());
 
   ApiClient? api;
   if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
@@ -116,6 +144,11 @@ Future<void> main() async {
     routeStore: routeStore,
     watchQueue: watchQueue,
     settingsSync: settingsSync,
+    audioCues: audioCues,
+    social: social,
+    raceController: raceController,
+    training: training,
+    heartRate: heartRate,
   ));
 }
 
@@ -126,6 +159,11 @@ class RunApp extends StatefulWidget {
   final LocalRouteStore routeStore;
   final WatchIngestQueue watchQueue;
   final SettingsSyncService? settingsSync;
+  final AudioCues audioCues;
+  final SocialService social;
+  final RaceController raceController;
+  final TrainingService training;
+  final BleHeartRate heartRate;
 
   const RunApp({
     super.key,
@@ -135,6 +173,11 @@ class RunApp extends StatefulWidget {
     required this.routeStore,
     required this.watchQueue,
     this.settingsSync,
+    required this.audioCues,
+    required this.social,
+    required this.raceController,
+    required this.training,
+    required this.heartRate,
   });
 
   @override
@@ -184,6 +227,11 @@ class _RunAppState extends State<RunApp> {
       routeStore: widget.routeStore,
       apiClient: widget.apiClient,
       settingsSync: widget.settingsSync,
+      audioCues: widget.audioCues,
+      social: widget.social,
+      raceController: widget.raceController,
+      training: widget.training,
+      heartRate: widget.heartRate,
     );
   }
 }

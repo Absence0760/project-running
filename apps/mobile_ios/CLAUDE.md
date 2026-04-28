@@ -1,6 +1,6 @@
 # mobile_ios — AI session notes
 
-Flutter iOS app. **Phone-side WCSession sink for Apple Watch runs is live; sign-in, onboarding, local stores, preferences, and GPS recording are now wired.** The hard work of Phase 1 has been done on Android first. See Phase 1 in [../../docs/roadmap.md](../../docs/roadmap.md) for the remaining iOS-specific boxes.
+Flutter iOS app. **The structural catch-up to the Android twin is in progress — the entire `screens/` and `widgets/` trees plus the platform-agnostic `lib/*.dart` libraries are now copied verbatim from `mobile_android`.** Compilation parity is the goal of the catch-up; runtime parity follows as iOS-specific runtime issues (permissions, background modes, native bridges) get exercised on a simulator or device. See `mobile_android_backlog.md` for the canonical execution order — most of it applies to iOS too.
 
 ## Scope — read before writing code
 
@@ -21,21 +21,35 @@ Flutter iOS app. **Phone-side WCSession sink for Apple Watch runs is live; sign-
 
 ## Current state
 
-Dart files under `lib/`:
+`lib/` mostly mirrors `apps/mobile_android/lib/` byte-for-byte. The pattern is "copy-then-converge" (the team's chosen alternative to a shared-package extraction — see "What 'done' means" below). When you change a file under `mobile_android/lib/`, the iOS twin needs the same change unless the change is android-specific.
 
-- `main.dart` — **wired**: initialises Supabase from `--dart-define-from-file=dart_defines.json`; inits `Preferences`, `LocalRunStore` (with crash recovery), `LocalRouteStore`, and `WatchIngestQueue`; routes unauthenticated users to `SignInScreen`, first-launch users to `OnboardingScreen`, and signed-in/onboarded users to `HomeScreen`; wires `WatchIngest.attach` on sign-in and drains the persistent queue via `onAuthStateChange`.
-- `preferences.dart` — `SharedPreferences` wrapper; ported verbatim from `mobile_android`. `Preferences.init()` called at startup. `SettingsScreen` unit toggle persists across restarts.
-- `goals.dart` — `RunGoal` model + `evaluateGoal`; ported verbatim from `mobile_android`.
-- `local_run_store.dart` — on-disk run persistence with sidecar sync state, crash recovery (`in_progress.json`), and parallel load; ported verbatim from `mobile_android`.
-- `local_route_store.dart` — on-disk route persistence; ported verbatim from `mobile_android`.
-- `watch_ingest_queue.dart` — persists watch-run payloads received before sign-in to `<documents>/watch_ingest_queue/` and replays them on the next sign-in. Fixes the previous behaviour where unauthenticated watch runs were silently dropped on app restart.
-- `mock_data.dart` — fallback UI data (still used by RunsScreen/RoutesScreen until M1/M2 land)
-- `screens/home_screen.dart`, `runs_screen.dart`, `routes_screen.dart` — minimal shells (runs/routes still show mock data)
-- `screens/sign_in_screen.dart` — email/password + Apple Sign-In button (gated behind `_kAppleSignInEnabled = false` pending Services ID setup)
-- `screens/onboarding_screen.dart` — three-page first-launch flow with geolocator-based location permission request
-- `screens/run_screen.dart` — **wired**: `RunRecorder` from `packages/run_recorder`; state machine idle → countdown → recording → paused → finished; saves to `LocalRunStore` on stop with incremental crash-safe persistence every 10s
-- `screens/settings_screen.dart` — full settings surface: account (change password + delete account via `delete-account` Edge Function), preferences (units, audio cues, split interval, default activity, map style, pace format, auto-pause), profile & training (DOB, HR zones, resting/max HR, weekly goal, week start, privacy default, Strava auto-share, coach personality). All bag-backed keys round-trip through `SettingsSyncService`; Android-only tiles (BLE pairing, Strava ZIP import, backup/restore, advanced-GPS, dark mode) are deliberately omitted.
-- `settings_sync.dart` — **verbatim port** of `mobile_android/lib/settings_sync.dart`. Keep in sync; when a key is added to the Android twin, mirror it here. Long-term this wants to live in a shared package; copy-then-converge for now.
+**iOS-owned files (NOT verbatim copies — keep these as-is):**
+
+- `main.dart` — bootstraps the iOS-specific bits: bridges `--dart-define-from-file=dart_defines.json` into `dotenv` (so verbatim libs that read `dotenv.env['X']` don't need an iOS fork), inits the same `Preferences` / `LocalRunStore` / `LocalRouteStore` / `WatchIngestQueue` / `SettingsSyncService` / `AudioCues` / `SocialService` / `RaceController` / `TrainingService` / `BleHeartRate` chain Android does, and threads them all through `HomeScreen`.
+- `screens/sign_in_screen.dart` — email/password + Apple Sign-In button (gated behind `_kAppleSignInEnabled = false` pending Services ID setup). Diverges from Android's Google-Sign-In version intentionally.
+- `screens/onboarding_screen.dart` — three-page first-launch flow with geolocator-based location permission request.
+- `screens/run_screen.dart` — basic `RunRecorder`-driven recording (idle → countdown → recording → paused → finished). The Android twin is much richer (race mode, structured workouts, BLE HR overlay, off-route detection, foreground notification, etc.); iOS lags here on purpose because `run_notification_bridge.dart` is android-only and the rest needs end-to-end testing on a paired iPhone before it's safe to ship.
+- `screens/settings_screen.dart` — full iOS settings surface; deliberately omits Android-only tiles (BLE pairing UI, Strava ZIP import, backup/restore, advanced-GPS toggle, dark-mode toggle).
+- `watch_ingest_queue.dart` — iOS-specific Apple Watch ingest queue.
+
+**Verbatim copies of `mobile_android/lib/*.dart`** (no edits — re-copy when the twin changes):
+
+- Library: `audio_cues.dart`, `backend_timeout.dart`, `ble_heart_rate.dart`, `fitness.dart`, `goals.dart`, `hr_zones.dart`, `local_route_store.dart`, `local_run_store.dart`, `preferences.dart`, `privacy.dart`, `race_controller.dart`, `recurrence.dart`, `route_simplify.dart`, `run_stats.dart`, `segments.dart`, `settings_sync.dart`, `social_service.dart`, `training.dart`, `training_load.dart`, `training_service.dart`.
+- Every file under `screens/` except the four iOS-owned screens listed above.
+- Every file under `widgets/`.
+
+Things deliberately NOT copied across (Android-only or wired differently):
+
+- `background_sync.dart` (WorkManager) — iOS uses `BGTaskScheduler` natively; not yet wired.
+- `run_notification_bridge.dart` (foreground-service notification) — iOS uses `CLLocationManager.allowsBackgroundLocationUpdates` and a different control-state pattern.
+- `wear_auth_bridge.dart` (Wear OS data layer) — iOS reads watch payloads through `WatchIngestBridge.swift` instead.
+- `health_connect_importer.dart` — iOS will use HealthKit (still TBD).
+- `strava_importer.dart`, `backup.dart`, `sync_service.dart`, `tile_cache.dart` — these have no Android-only code and *can* be copied later when iOS surfaces a screen that needs them.
+
+Native iOS files under `ios/Runner/`:
+
+- `AppDelegate.swift` — activates the `WatchIngestBridge` singleton at launch + attaches its method channel when the Flutter engine spins up.
+- `WatchIngestBridge.swift` — **live**: `WCSessionDelegate` that receives `WCSessionFile` transfers from the watch, reads the gzipped-JSON track contents, and forwards to Dart via the `run_app/watch_ingest` method channel. Payloads arriving before Flutter is ready are buffered in-process and flushed on attach.
 
 Native iOS files under `ios/Runner/`:
 
@@ -57,15 +71,18 @@ Android-specific concerns that don't port:
 iOS-only concerns with no Android analogue:
 - **Watch run ingest.** `WatchIngestBridge.swift` is live. The `WatchIngestQueue` now persists unauthenticated payloads to disk and replays them on sign-in — no runs are lost across restarts. Previously the in-process `pending` buffer was lost on app restart.
 
-## Remaining HIGH gaps (from reviews/mobile-ios/gap-analysis.md)
+## Catch-up status
 
-- **H4 — GPX/KML import**: `import_screen.dart` not yet wired. `gpx_parser` is in pubspec; this is the next highest-value easy win.
+- **Phase 1 done** — 14 platform-agnostic Dart libraries copied verbatim from android.
+- **Phase 2 done** — entire `screens/` and `widgets/` trees copied verbatim from android (29 screens + 20 widgets), with the four iOS-owned screens above kept intact. `main.dart` updated to construct the Android-twin service set (`AudioCues`, `SocialService`, `RaceController`, `TrainingService`, `BleHeartRate`).
+- **Phase 3+ deferred until a simulator pass** — runtime issues (Info.plist keys for Health / BLE / Background Modes, `permission_handler` configuration, `flutter pub get` on a Mac, `pod install`, native channel wiring for things like `run_notification_bridge` if iOS adopts a watch / phone-side background notification) get exercised the next time someone builds the app on a Mac. The compiled-and-imported state is the deliverable here; a green build in CI is the next gate.
 
 ## Recommended approach for a new task here
 
-1. **Don't mirror Android file-by-file.** Port only what the task needs. The gap is large enough that a greenfield port of every screen is more churn than the task is worth.
-2. **Prefer lifting shared code into a package** (`packages/ui_kit`, a new `packages/local_stores`, etc.) over copying Dart files between the two app directories. Two divergent copies of the same screen is the drift problem the parity-enforcement initiative is trying to prevent.
-3. **Feature spec lives on web; Flutter idiom lives on Android.** When deciding *what* a screen does, read the web component (`apps/web/src/lib/components/...` or `apps/web/src/routes/...`) and `parity.md`. When deciding *how* to write a Flutter screen, look at the corresponding `apps/mobile_android/lib/screens/...` for the idiom, store wiring, and api_client usage. Don't invent a new feature on iOS — that violates §24.
+1. **Feature spec lives on web; Flutter idiom lives on Android.** When deciding *what* a screen does, read the web component (`apps/web/src/lib/components/...` or `apps/web/src/routes/...`) and `parity.md`. When deciding *how* to write a Flutter screen, look at the corresponding `apps/mobile_android/lib/screens/...` for the idiom, store wiring, and api_client usage. Don't invent a new feature on iOS — that violates §24.
+2. **If the task is "port the latest Android change to iOS,"** copy the file verbatim (or apply the same diff) — the convergence cost stays low only as long as the twins don't drift.
+3. **If the task is "fix iOS-only behaviour,"** keep the change in the four iOS-owned files (`main.dart`, the three iOS-owned screens) or in `ios/Runner/`. Don't fork a verbatim copy unless there is no other way.
+4. **Prefer lifting shared code into a package** (`packages/ui_kit`, a new `packages/local_stores`, etc.) over deepening the verbatim duplication when a third client (or shared test surface) will need it. The bar for extracting a package is "more than two clients consume the same file or the file gets meaningfully edited on one twin without the other catching up."
 
 ## Dart analyzer
 
