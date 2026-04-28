@@ -10,6 +10,8 @@
 	import { formatDuration } from '$lib/mock-data';
 	import { formatDistance, formatPace } from '$lib/units.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import RunShareView from '$lib/components/RunShareView.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 
 	let entries = $state<FeedEntry[]>([]);
 	let engagement = $state<
@@ -19,6 +21,15 @@
 	let loadingMore = $state(false);
 	let exhausted = $state(false);
 	let kudosBusy = $state<Set<string>>(new Set());
+	let openRunId = $state<string | null>(null);
+
+	function openRun(id: string) {
+		openRunId = id;
+	}
+
+	function closeRun() {
+		openRunId = null;
+	}
 
 	async function loadInitial() {
 		loading = true;
@@ -137,7 +148,7 @@
 						</a>
 						<span class="when">{fmtRelative(entry.started_at)}</span>
 					</header>
-					<a href="/share/run/{entry.id}" class="entry-body">
+					<button type="button" class="entry-body" onclick={() => openRun(entry.id)}>
 						<div class="stats">
 							<div class="stat">
 								<span class="stat-num">{formatDistance(entry.distance_m)}</span>
@@ -152,7 +163,7 @@
 								<span class="stat-label">Pace</span>
 							</div>
 						</div>
-					</a>
+					</button>
 					<footer class="entry-foot">
 						<button
 							class="kudos-pill"
@@ -166,10 +177,10 @@
 							</span>
 							<span>{eng.kudos_count}</span>
 						</button>
-						<a class="comment-pill" href="/share/run/{entry.id}#comments">
+						<button class="comment-pill" type="button" onclick={() => openRun(entry.id)}>
 							<span class="material-symbols">chat_bubble_outline</span>
 							<span>{eng.comment_count}</span>
-						</a>
+						</button>
 					</footer>
 				</article>
 			{/each}
@@ -184,6 +195,14 @@
 		{/if}
 	{/if}
 </div>
+
+<Modal open={openRunId !== null} onclose={closeRun} title="Run" wide>
+	{#if openRunId}
+		{#key openRunId}
+			<RunShareView runId={openRunId} compact />
+		{/key}
+	{/if}
+</Modal>
 
 <style>
 	.page {
@@ -251,9 +270,14 @@
 
 	.entry-body {
 		display: block;
+		width: 100%;
 		padding: var(--space-lg);
 		text-decoration: none;
 		color: inherit;
+		background: transparent;
+		border: 0;
+		text-align: left;
+		cursor: pointer;
 		transition: background var(--transition-fast);
 	}
 
