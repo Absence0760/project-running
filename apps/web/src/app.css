@@ -332,12 +332,20 @@ img {
 	z-index: 200;
 }
 .modal {
+	/*
+	 * Anchor the top edge — not the centre — to a fixed offset. If we
+	 * vertically-centred the modal (`top: 50%; translate(-50%, -50%)`)
+	 * any content-height change inside (tab switch, list grow / shrink)
+	 * would shift the whole card visibly because its centre stays pinned
+	 * but its top edge moves. Anchoring the top means the card grows
+	 * downwards without the header jumping.
+	 */
 	position: fixed;
-	top: 50%;
+	top: 4rem;
 	left: 50%;
-	transform: translate(-50%, -50%);
+	transform: translateX(-50%);
 	width: min(38rem, calc(100vw - 2rem));
-	max-height: calc(100vh - 4rem);
+	max-height: calc(100vh - 6rem);
 	background: var(--color-surface);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-lg);
