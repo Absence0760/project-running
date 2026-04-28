@@ -31,7 +31,7 @@ src/
                     # RunShareView (the public run share body — extracted so /share/run/[id] (standalone page) and the /feed modal can both render it without duplicating layout),
                     # RunPhotos (gallery for run_photos — mounted on /runs/[id] and /share/run/[id]; owner gates upload + delete; decisions §36),
                     # SegmentsPanel + RunSegmentEfforts (segment leaderboards on /routes/[id] + per-run effort chips on /runs/[id]; decisions §37),
-                    # NotificationBell (sidebar bell with unread badge + popover for kudos/comments/follows; /notifications full-list view; decisions §38).
+                    # NotificationBell (compact bell icon next to the profile button in the sidebar footer — unread badge + popover for kudos/comments/follows; /notifications full-list view; decisions §38).
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications), notifications.svelte.ts (unread badge for the sidebar bell — decisions §38)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types

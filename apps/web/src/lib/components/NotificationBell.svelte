@@ -9,11 +9,6 @@
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 
-	interface Props {
-		collapsed?: boolean;
-	}
-	let { collapsed = false }: Props = $props();
-
 	let open = $state(false);
 	let loading = $state(false);
 	let items = $state<NotificationView[]>([]);
@@ -131,19 +126,16 @@
 			: 'Notifications'}
 		aria-expanded={open}
 		onclick={togglePanel}
-		title={collapsed ? 'Notifications' : undefined}
+		title="Notifications"
 	>
-		<span class="bell-icon-wrap">
-			<span class="bell-icon material-symbols">
-				{notificationStore.unreadCount > 0 ? 'notifications_active' : 'notifications'}
-			</span>
-			{#if notificationStore.unreadCount > 0}
-				<span class="badge">
-					{notificationStore.unreadCount > 9 ? '9+' : notificationStore.unreadCount}
-				</span>
-			{/if}
+		<span class="bell-icon material-symbols">
+			{notificationStore.unreadCount > 0 ? 'notifications_active' : 'notifications'}
 		</span>
-		<span class="bell-label">Notifications</span>
+		{#if notificationStore.unreadCount > 0}
+			<span class="badge">
+				{notificationStore.unreadCount > 9 ? '9+' : notificationStore.unreadCount}
+			</span>
+		{/if}
 	</button>
 
 	{#if open}
@@ -209,113 +201,58 @@
 
 <style>
 	.bell-wrap {
-		--accent: #F2C55C;
 		position: relative;
+		flex-shrink: 0;
 	}
-	/* Mirror the layout's `.nav-link` shape so the bell reads as
-	   another sidebar entry: icon-wrap + label, hover lift, no
-	   harsh focus border. */
+	/* Compact icon-button that visually pairs with the profile button
+	   in the sidebar footer. Same height as the collapse-toggle so the
+	   row reads as one unit. */
 	.bell-btn {
-		display: flex;
-		align-items: center;
-		gap: var(--space-md);
-		padding: var(--space-sm) var(--space-md);
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border: none;
 		border-radius: var(--radius-md);
-		font-size: 0.9rem;
-		font-weight: 500;
+		background: transparent;
 		color: var(--sidebar-text-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		position: relative;
 		transition:
 			background var(--transition-fast),
-			color var(--transition-fast),
-			transform var(--transition-fast);
-		border: none;
-		background: none;
-		width: 100%;
-		text-align: left;
-		cursor: pointer;
-		font-family: inherit;
-		position: relative;
+			color var(--transition-fast);
 	}
 	.bell-btn:focus { outline: none; }
 	.bell-btn:focus-visible {
-		outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 	}
 	.bell-btn:hover {
-		color: var(--sidebar-text);
 		background: var(--sidebar-hover-bg);
-	}
-	.bell-btn:hover .bell-icon-wrap {
-		background: color-mix(in srgb, var(--accent) 24%, transparent);
-		box-shadow:
-			inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
-			0 6px 18px -6px color-mix(in srgb, var(--accent) 55%, transparent);
-		transform: translateY(-1px) scale(1.06);
-	}
-	.bell-btn:hover .bell-label {
-		transform: translateX(2px);
+		color: var(--sidebar-text);
 	}
 	.bell-btn.active {
-		color: var(--sidebar-text);
 		background: var(--sidebar-hover-bg);
-	}
-	.bell-btn.active .bell-icon-wrap {
-		background: var(--accent);
-		color: #1B1628;
-		box-shadow:
-			inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
-			0 8px 22px -6px color-mix(in srgb, var(--accent) 60%, transparent);
-	}
-	.bell-icon-wrap {
-		display: grid;
-		place-items: center;
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: 10px;
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		color: var(--accent);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
-		transition:
-			background var(--transition-base),
-			color var(--transition-base),
-			transform var(--transition-base),
-			box-shadow var(--transition-base);
-		flex-shrink: 0;
-		position: relative;
+		color: var(--sidebar-text);
 	}
 	.bell-icon {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.25rem;
-		font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
 		line-height: 1;
-		width: 1.25rem;
-		height: 1.25rem;
-		display: block;
-		text-align: center;
-	}
-	.bell-btn.active .bell-icon {
-		font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
-	}
-	.bell-label {
-		flex: 1;
-		min-width: 0;
-		transition: transform var(--transition-base);
-	}
-	:global(.sidebar.collapsed) .bell-btn .bell-label {
-		display: none;
 	}
 	.badge {
 		position: absolute;
-		top: -4px;
-		right: -4px;
-		min-width: 1.05rem;
-		height: 1.05rem;
-		padding: 0 0.3rem;
+		top: -2px;
+		right: -2px;
+		min-width: 1rem;
+		height: 1rem;
+		padding: 0 0.25rem;
 		display: inline-grid;
 		place-items: center;
 		background: #ef4444;
 		color: white;
-		font-size: 0.65rem;
+		font-size: 0.62rem;
 		font-weight: 700;
 		border-radius: 9999px;
 		font-variant-numeric: tabular-nums;

@@ -151,10 +151,6 @@
 				{/each}
 			</ul>
 
-			<div class="sidebar-bell">
-				<NotificationBell collapsed={sidebarCollapsed} />
-			</div>
-
 			<div class="sidebar-footer">
 				{#if auth.user}
 					<button
@@ -171,6 +167,7 @@
 						</div>
 					</button>
 				{/if}
+				<NotificationBell />
 				<button
 					class="collapse-toggle"
 					type="button"
@@ -385,11 +382,6 @@
 		width: 3px;
 		border-radius: 2px;
 		background: var(--accent);
-	}
-
-	.sidebar-bell {
-		padding: 0;
-		margin: 0;
 	}
 
 	.sidebar-footer {
