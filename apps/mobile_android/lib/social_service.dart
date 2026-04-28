@@ -299,6 +299,53 @@ class SocialService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Routes owned by this club. Read-gated by RLS to club members.
+  Future<List<Route>> fetchClubRoutes(String clubId) async {
+    final rows = await _c
+        .from('routes')
+        .select()
+        .eq('club_id', clubId)
+        .order('created_at', ascending: false);
+    return (rows as List)
+        .map<Route>((r) => _routeFromRow(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Transfer a route the viewer owns to a club they admin (or detach
+  /// it back to personal by passing `null`).
+  Future<void> setRouteClub({
+    required String routeId,
+    required String? clubId,
+  }) async {
+    await _c.from('routes').update({'club_id': clubId}).eq('id', routeId);
+    notifyListeners();
+  }
+
+  // Mirrors `ApiClient._routeFromRow` shape — kept here to avoid a
+  // circular import. Update both if the row → domain mapping changes.
+  Route _routeFromRow(Map<String, dynamic> row) {
+    final r = RouteRow.fromJson(row);
+    return Route(
+      id: r.id,
+      name: r.name,
+      waypoints: r.waypoints
+          .map((m) => Waypoint(
+                lat: (m['lat'] as num).toDouble(),
+                lng: (m['lng'] as num).toDouble(),
+                elevationMetres: (m['ele'] as num?)?.toDouble(),
+              ))
+          .toList(),
+      distanceMetres: r.distanceM,
+      elevationGainMetres: r.elevationM ?? 0,
+      isPublic: r.isPublic ?? false,
+      surface: r.surface,
+      createdAt: r.createdAt,
+      tags: (row['tags'] as List?)?.cast<String>() ?? const [],
+      featured: row['featured'] == true,
+      runCount: (row['run_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   Future<String> joinClub(String clubId, String policy) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');

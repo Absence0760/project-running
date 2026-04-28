@@ -86,7 +86,7 @@ See [features § Community route library](features.md#community-route-library).
 | Explore public routes (search + filters) | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Popular / near-me feed (PostGIS) | ✓ | ✗ | ✓ | ✗ | ✗ | Uses `nearby_routes` RPC. |
 | Route ratings and comments | ✓ | ✗ | ✓ | ✗ | ✗ | Shared `route_reviews` table; one review per user per route. |
-| Club-owned routes | ✗ | ✗ | ✓ | ✗ | ✗ | `routes.club_id` + Routes tab on `/clubs/[slug]`. Admins create / transfer / remove. See `docs/clubs.md § Club-owned routes`. |
+| Club-owned routes | Partial | ✗ | ✓ | ✗ | ✗ | `routes.club_id` + Routes tab on `/clubs/[slug]`. Admins create / transfer / remove. See `docs/clubs.md § Club-owned routes`. Android: 4th "Routes" tab on `club_detail_screen.dart` lazy-loads via `SocialService.fetchClubRoutes`; rows open in `PublicRouteScreen` (read-only). The owner-side **transfer** + **detach** actions on `route_detail_screen.dart` are still pending — `SocialService.setRouteClub` is wired but there's no admin-clubs picker yet. |
 | Bookmark public routes (saved_routes ref) | ✓ | ✗ | ✓ | ✗ | ✗ | Replaces the old "save = clone the row" flow. `decisions.md § 30`. Android: `route_detail_screen.dart` shows a bookmark toggle in the AppBar for non-owner viewers (idempotent against `saved_routes` composite-PK). `routes_screen.dart` fetches bookmarks alongside the owned list and merges them with a "Saved" badge so they appear in the route library — taps open the detail with `isOwner: false`. |
 
 ## Run recording

@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart' hide Route;
+
+import 'package:api_client/api_client.dart';
 
 import '../social_service.dart';
 import '../training_service.dart';
@@ -12,6 +15,7 @@ import '../widgets/error_state.dart';
 import '../widgets/event_form_sheet.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
+import 'public_route_screen.dart';
 
 class ClubDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -35,9 +39,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<ClubPostView> _posts = const [];
   List<ClubMemberRow> _pending = const [];
   List<TrainingPlanRow> _templates = const [];
+  List<cm.Route> _routes = const [];
   bool _loading = true;
   bool _busy = false;
   bool _templatesLoaded = false;
+  bool _routesLoaded = false;
   String? _error;
   late final TabController _tabs;
   final _postCtrl = TextEditingController();
@@ -50,7 +56,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 5, vsync: this);
     _tabs.addListener(_onTabChanged);
     _load();
   }
@@ -283,6 +289,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             Tab(text: 'Feed'),
             Tab(text: 'Events'),
             Tab(text: 'Members'),
+            Tab(text: 'Routes'),
             Tab(text: 'Templates'),
           ],
         ),
@@ -313,6 +320,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 _buildFeedTab(theme, c),
                 _buildEventsTab(theme, c),
                 _buildMembersTab(theme, c),
+                _buildRoutesTab(theme, c),
                 _buildTemplatesTab(theme, c),
               ],
             ),
@@ -966,8 +974,26 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   void _onTabChanged() {
     if (_tabs.indexIsChanging) return;
-    if (_tabs.index == 3 && !_templatesLoaded) {
+    if (_tabs.index == 3 && !_routesLoaded) {
+      _loadRoutes();
+    }
+    if (_tabs.index == 4 && !_templatesLoaded) {
       _loadTemplates();
+    }
+  }
+
+  Future<void> _loadRoutes() async {
+    final c = _club;
+    if (c == null) return;
+    try {
+      final list = await widget.social.fetchClubRoutes(c.row.id);
+      if (!mounted) return;
+      setState(() {
+        _routes = list;
+        _routesLoaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _routesLoaded = true);
     }
   }
 
@@ -1008,6 +1034,62 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         SnackBar(content: Text('Adopt failed: $e')),
       );
     }
+  }
+
+  Widget _buildRoutesTab(ThemeData theme, ClubView c) {
+    if (!_routesLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_routes.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            c.isAdmin
+                ? 'No routes yet. Admins can transfer one of their personal routes from the route detail screen.'
+                : 'No routes shared with this club yet.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadRoutes,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _routes.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final r = _routes[i];
+          return Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                child: Icon(Icons.route, color: theme.colorScheme.secondary),
+              ),
+              title: Text(r.name),
+              subtitle: Text(
+                '${(r.distanceMetres / 1000).toStringAsFixed(2)} km'
+                '  •  ${r.elevationGainMetres.round()}m gain',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => PublicRouteScreen(
+                    api: ApiClient(),
+                    routeId: r.id,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildTemplatesTab(ThemeData theme, ClubView c) {
