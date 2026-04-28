@@ -504,3 +504,93 @@ SET completed_run_id = (
     ),
     completed_at = now()
 WHERE pw.scheduled_date = '2026-04-05' AND pw.kind = 'long';
+
+-- ─────────────────────────────────────────────────────────────────────
+-- 11. Social-feed seeding for runner@test.com
+--
+-- Runner has 173 public runs of their own but follows nobody, so /feed
+-- is empty when logged in as runner. Add a third seed user (Morgan)
+-- plus a small pile of recent public runs for both Alex and Morgan,
+-- and have runner follow both of them. Result:
+--   - runner sees ~25 entries in /feed → /feed cursor pagination (20
+--     per page within the 14-day window) needs a "Load more" click.
+--   - the feed visibly mixes two authors so the per-entry author
+--     avatar / name UI is exercised, not just one-author monotony.
+-- ─────────────────────────────────────────────────────────────────────
+
+-- Morgan, the third seed user. testtest password, same shape as Alex.
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change_token_current,
+  email_change, phone, phone_change, phone_change_token, reauthentication_token,
+  is_sso_user, is_anonymous, raw_app_meta_data, raw_user_meta_data
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  'authenticated', 'authenticated',
+  'morgan@test.com',
+  extensions.crypt('testtest', extensions.gen_salt('bf')),
+  now(), now(), now(),
+  '', '', '', '',
+  '', NULL, '', '', '',
+  false, false,
+  '{"provider":"email","providers":["email"]}',
+  '{"email_verified":true}'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO auth.identities (
+  id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) VALUES (
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  jsonb_build_object('sub', 'c3d4e5f6-a7b8-9012-cdef-345678901234', 'email', 'morgan@test.com', 'email_verified', true),
+  'email', now(), now(), now()
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier)
+VALUES ('c3d4e5f6-a7b8-9012-cdef-345678901234', 'Morgan Lee', 'km', 'free')
+ON CONFLICT (id) DO NOTHING;
+
+-- Recent public runs for Alex — 12 entries spread across the last
+-- ~7 days so the feed has variety even before pagination kicks in.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata)
+SELECT
+  'b2c3d4e5-f6a7-8901-bcde-f23456789012'::uuid,
+  ('2026-04-27T17:00:00Z'::timestamptz - (n * INTERVAL '14 hours')),
+  (1800 + (n * 173 % 2400))::integer,
+  (5000 + (n * 251 % 8000))::numeric,
+  CASE n % 3 WHEN 0 THEN 'app' WHEN 1 THEN 'strava' ELSE 'healthkit' END,
+  true,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 152 + (n % 22),
+    'perceived_effort', 4 + (n % 4)
+  )
+FROM generate_series(1, 12) AS n;
+
+-- Recent public runs for Morgan — 13 entries on a different cadence
+-- so the feed mixes the two authors rather than alternating cleanly.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata)
+SELECT
+  'c3d4e5f6-a7b8-9012-cdef-345678901234'::uuid,
+  ('2026-04-27T06:30:00Z'::timestamptz - (n * INTERVAL '17 hours')),
+  (1500 + (n * 197 % 2700))::integer,
+  (4500 + (n * 293 % 9500))::numeric,
+  CASE n % 4 WHEN 0 THEN 'app' WHEN 1 THEN 'app' WHEN 2 THEN 'strava' ELSE 'parkrun' END,
+  true,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 148 + (n % 28),
+    'perceived_effort', 4 + (n % 5)
+  )
+FROM generate_series(1, 13) AS n;
+
+-- The follow graph that surfaces all of the above on runner's /feed.
+-- Two-way alex ↔ runner so social-loop testing flows both directions.
+INSERT INTO user_follows (follower_id, followee_id) VALUES
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
+  ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
+ON CONFLICT DO NOTHING;
