@@ -30,6 +30,10 @@
 	}
 
 	let messages = $state<Msg[]>([]);
+	/// True once `loadThread` has finished its fetch. Gates the empty-
+	/// state primer so saved threads don't render the welcome / suggestion
+	/// block for a frame on reload before the rows arrive.
+	let threadLoaded = $state(false);
 	let draft = $state('');
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -69,17 +73,22 @@
 		);
 		if (err) {
 			console.error('[coach] load thread failed', err);
+			threadLoaded = true;
 			return;
 		}
 		const rows = (data ?? []) as Msg[];
 		if (rows.length > 0) {
 			messages = rows;
+			threadLoaded = true;
 			return;
 		}
 		// One-time migration from the previous localStorage build.
 		try {
 			const raw = localStorage.getItem(legacyStorageKey(userId, planId));
-			if (!raw) return;
+			if (!raw) {
+				threadLoaded = true;
+				return;
+			}
 			const parsed = JSON.parse(raw) as { messages?: Msg[] };
 			const legacy = (parsed?.messages ?? []).filter(
 				(m) =>
@@ -89,6 +98,7 @@
 			);
 			if (legacy.length === 0) {
 				localStorage.removeItem(legacyStorageKey(userId, planId));
+				threadLoaded = true;
 				return;
 			}
 			const { error: insertErr } = await supabase.from('coach_messages').insert(
@@ -102,9 +112,11 @@
 			if (!insertErr) {
 				await loadThread(userId);
 				localStorage.removeItem(legacyStorageKey(userId, planId));
+			} else {
+				threadLoaded = true;
 			}
 		} catch (_) {
-			/* noop */
+			threadLoaded = true;
 		}
 	}
 
@@ -193,6 +205,7 @@
 	async function backToActive() {
 		viewingArchiveAt = null;
 		messages = [];
+		threadLoaded = false;
 		if (cachedUserId) await loadThread(cachedUserId);
 		await scrollToBottom();
 	}
@@ -810,7 +823,7 @@
 		{/if}
 
 		<div class="scroll" bind:this={scrollEl}>
-			{#if messages.length === 0}
+			{#if threadLoaded && messages.length === 0}
 				<div class="primer">
 					<p>
 						{#if hasPlan}
