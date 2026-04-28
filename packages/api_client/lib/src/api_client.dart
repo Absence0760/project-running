@@ -1456,6 +1456,272 @@ class ApiClient {
     return newId as String;
   }
 
+  // ──────────────────── Phase 2 — domain joins ────────────────────
+  //
+  // Methods that combine multiple rows into a `core_models/social.dart`
+  // shape. Lives here rather than in the screen layer so every
+  // consumer (feed, profile, run-detail comments) sees the same
+  // typed view.
+
+  /// Profile + follower / following counts + whether the current
+  /// viewer follows. Three reads in flight in parallel; null when
+  /// the user doesn't exist or RLS hides the row.
+  Future<ProfileSummary?> fetchProfileSummary(String userId) async {
+    final results = await Future.wait([
+      fetchPublicProfile(userId),
+      fetchFollowCounts(userId),
+      viewerFollows(userId),
+    ]);
+    final profile = results[0] as UserProfileRow?;
+    if (profile == null) return null;
+    final counts = results[1] as ({int followers, int following});
+    final follows = results[2] as bool;
+    return ProfileSummary(
+      id: profile.id,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarUrl,
+      followerCount: counts.followers,
+      followingCount: counts.following,
+      viewerFollows: follows,
+    );
+  }
+
+  /// Activity feed: public runs from people the caller follows in the
+  /// last `feedWindowDays` (defaults to 14, matching the web cap on
+  /// `FEED_WINDOW_DAYS`). Cursor-paginated on `(started_at desc, id
+  /// desc)`. Optional filters scope to a single followee or a single
+  /// activity type so the feed toolbar can drive them server-side.
+  Future<List<FeedEntry>> fetchFollowingFeed({
+    int limit = 20,
+    ({DateTime startedAt, String id})? cursor,
+    String? authorId,
+    String? activityType,
+    int feedWindowDays = 14,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+
+    final edges = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFolloweeId)
+        .eq(UserFollowRow.colFollowerId, viewerId);
+    final followeeIds = edges
+        .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
+        .toList();
+    if (followeeIds.isEmpty) return const [];
+
+    final filtered = authorId == null
+        ? followeeIds
+        : followeeIds.where((id) => id == authorId).toList();
+    if (filtered.isEmpty) return const [];
+
+    final cutoff = DateTime.now()
+        .toUtc()
+        .subtract(Duration(days: feedWindowDays))
+        .toIso8601String();
+
+    var q = _client
+        .from(RunRow.table)
+        .select()
+        .inFilter(RunRow.colUserId, filtered)
+        .eq(RunRow.colIsPublic, true)
+        .gte(RunRow.colStartedAt, cutoff);
+    if (activityType != null && activityType != 'all') {
+      q = q.eq('metadata->>activity_type', activityType);
+    }
+    if (cursor != null) {
+      // Stable (started_at desc, id desc) cursor — strictly less than
+      // the cursor row.
+      final iso = cursor.startedAt.toIso8601String();
+      q = q.or(
+        'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
+      );
+    }
+    final runs = await q
+        .order(RunRow.colStartedAt, ascending: false)
+        .order(RunRow.colId, ascending: false)
+        .limit(limit);
+    if (runs.isEmpty) return const [];
+
+    final authorIds = runs
+        .map<String>((r) => r[RunRow.colUserId] as String)
+        .toSet()
+        .toList();
+    final profileRows = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, authorIds);
+    final profilesById = {
+      for (final p in profileRows)
+        p['id'] as String: PublicProfile.fromJson(p as Map<String, dynamic>),
+    };
+
+    return runs.map<FeedEntry>((r) {
+      final row = RunRow.fromJson(r);
+      return FeedEntry(
+        run: row,
+        author: profilesById[row.userId] ??
+            PublicProfile(id: row.userId, displayName: null, avatarUrl: null),
+      );
+    }).toList();
+  }
+
+  /// Comments on a run with author profiles joined.
+  Future<List<RunCommentWithAuthor>> fetchRunCommentsWithAuthors(
+    String runId, {
+    int limit = 200,
+  }) async {
+    final comments = await fetchRunComments(runId, limit: limit);
+    if (comments.isEmpty) return const [];
+    final authorIds =
+        comments.map((c) => c.authorId).toSet().toList();
+    final profileRows = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, authorIds);
+    final profilesById = {
+      for (final p in profileRows)
+        p['id'] as String: PublicProfile.fromJson(p as Map<String, dynamic>),
+    };
+    return comments
+        .map((c) => RunCommentWithAuthor(
+              comment: c,
+              author: profilesById[c.authorId] ??
+                  PublicProfile(
+                      id: c.authorId, displayName: null, avatarUrl: null),
+            ))
+        .toList();
+  }
+
+  /// Notifications with actor profiles + lightweight run / comment
+  /// metadata joined for the verb line. Three round-trips: notifs,
+  /// actors, runs (only the rows referenced).
+  Future<List<NotificationView>> fetchNotificationViews({
+    int limit = 100,
+  }) async {
+    final rows = await fetchNotifications(limit: limit);
+    if (rows.isEmpty) return const [];
+
+    final actorIds = rows
+        .where((r) => r.actorId != null)
+        .map<String>((r) => r.actorId!)
+        .toSet()
+        .toList();
+    final runIds = rows
+        .where((r) => r.runId != null)
+        .map<String>((r) => r.runId!)
+        .toSet()
+        .toList();
+    final commentIds = rows
+        .where((r) => r.commentId != null)
+        .map<String>((r) => r.commentId!)
+        .toSet()
+        .toList();
+
+    final actorRowsF = actorIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _client
+            .from(UserProfileRow.table)
+            .select('id, display_name, avatar_url')
+            .inFilter(UserProfileRow.colId, actorIds);
+    final runRowsF = runIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _client
+            .from(RunRow.table)
+            .select('${RunRow.colId}, ${RunRow.colDistanceM}')
+            .inFilter(RunRow.colId, runIds);
+    final commentRowsF = commentIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _client
+            .from(RunCommentRow.table)
+            .select('${RunCommentRow.colId}, ${RunCommentRow.colBody}')
+            .inFilter(RunCommentRow.colId, commentIds);
+
+    final results = await Future.wait([actorRowsF, runRowsF, commentRowsF]);
+    final actorRows = results[0] as List<dynamic>;
+    final runRows = results[1] as List<dynamic>;
+    final commentRows = results[2] as List<dynamic>;
+
+    final actorsById = <String, PublicProfile>{};
+    for (final r in actorRows) {
+      final row = r as Map<String, dynamic>;
+      actorsById[row['id'] as String] = PublicProfile.fromJson(row);
+    }
+    final runDistanceById = <String, double>{};
+    for (final r in runRows) {
+      final row = r as Map<String, dynamic>;
+      final dist = row[RunRow.colDistanceM];
+      if (dist is num) runDistanceById[row[RunRow.colId] as String] = dist.toDouble();
+    }
+    final commentBodyById = <String, String>{};
+    for (final r in commentRows) {
+      final row = r as Map<String, dynamic>;
+      commentBodyById[row[RunCommentRow.colId] as String] =
+          (row[RunCommentRow.colBody] as String?) ?? '';
+    }
+
+    String? excerpt(String? id) {
+      if (id == null) return null;
+      final body = commentBodyById[id];
+      if (body == null || body.isEmpty) return null;
+      return body.length > 140 ? '${body.substring(0, 140)}…' : body;
+    }
+
+    return rows
+        .map((row) => NotificationView(
+              row: row,
+              actor: row.actorId == null ? null : actorsById[row.actorId!],
+              runDistanceM:
+                  row.runId == null ? null : runDistanceById[row.runId!],
+              commentExcerpt: excerpt(row.commentId),
+            ))
+        .toList();
+  }
+
+  /// Segment leaderboard with athlete profiles + ranks. Sorted
+  /// by time ascending; dedupes per user (keeps each athlete's
+  /// fastest effort).
+  Future<List<SegmentLeaderboardEntry>> fetchSegmentLeaderboardWithAthletes(
+    String segmentId, {
+    int limit = 200,
+  }) async {
+    final raw = await fetchSegmentLeaderboard(segmentId, limit: limit);
+    if (raw.isEmpty) return const [];
+
+    final byUser = <String, SegmentEffortRow>{};
+    for (final eff in raw) {
+      final existing = byUser[eff.userId];
+      if (existing == null || eff.timeSeconds < existing.timeSeconds) {
+        byUser[eff.userId] = eff;
+      }
+    }
+    final efforts = byUser.values.toList()
+      ..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
+
+    final athleteIds = efforts.map((e) => e.userId).toList();
+    final profileRows = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, athleteIds);
+    final athletesById = {
+      for (final p in profileRows)
+        p['id'] as String: PublicProfile.fromJson(p as Map<String, dynamic>),
+    };
+
+    final out = <SegmentLeaderboardEntry>[];
+    for (var i = 0; i < efforts.length; i++) {
+      final eff = efforts[i];
+      out.add(SegmentLeaderboardEntry(
+        effort: eff,
+        athlete: athletesById[eff.userId] ??
+            PublicProfile(
+                id: eff.userId, displayName: null, avatarUrl: null),
+        rank: i + 1,
+      ));
+    }
+    return out;
+  }
+
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
   //
   // These go through the generated row classes so that column renames surface
