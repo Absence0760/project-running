@@ -220,6 +220,27 @@ create table run_photos (
 
 In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies allow public-read on the bucket and per-user-folder INSERT/DELETE. Known gaps: no server-side thumbnail generation and no EXIF stripping.
 
+### `notifications`
+
+Inbox rows for the social loop (decisions §38). Materialised by `after insert` SECURITY DEFINER triggers on `run_kudos`, `run_comments`, and `user_follows` so the notification lands in the same transaction as the source write.
+
+```sql
+create table notifications (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references auth.users(id) on delete cascade not null,
+  actor_id    uuid references auth.users(id) on delete set null,
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow')),
+  run_id      uuid references runs(id) on delete cascade,
+  comment_id  uuid references run_comments(id) on delete cascade,
+  read_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+```
+
+Two indexes: `(user_id, created_at desc)` for the list view, and a **partial** `(user_id, created_at desc) where read_at is null` so the bell-badge count query is O(unread). Source FKs use `on delete cascade` so notifications die with their parent (deleted run, deleted comment), keeping the inbox honest without a cleanup job.
+
+RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them.
+
 ### `segments` / `segment_efforts`
 
 Segments + leaderboards (decisions §37). v1 segments are slices of a *saved route* — `(route_id, start_distance_m, end_distance_m)` — not arbitrary geometry. Visibility on both tables tracks the parent route via EXISTS.

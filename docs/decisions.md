@@ -752,6 +752,35 @@ The full Strava model is hard: an arbitrary polyline anywhere on Earth becomes a
 
 ---
 
+## 38. Notifications inbox is a `notifications` table fed by SECURITY DEFINER triggers
+
+**Decided:** April 2026 · captured before the migration.
+
+The social loop (kudos, comments, replies, follows) was discoverable only by visiting each surface and noticing new state. A central inbox that aggregates "who did what" + a per-user unread count is the standard fix. Two design questions: (1) materialise notifications as rows or compute on the fly, (2) populate from server-side triggers or client-side after the action.
+
+**Decided:** materialise as rows + populate via triggers.
+
+- *Materialise* — the alternative ("fan out at read time by `union all`-ing run_kudos, run_comments, user_follows … filtered by recipient") is appealing because it has no schema cost, but it ties the unread badge query to the count of all engagement events on your runs forever. A `select count(*) from notifications where user_id = $1 and read_at is null` against a partial index is O(unread), which is what the bell badge actually wants. Storage cost is small (one row per kudos/comment/follow you receive), and we keep cascade-delete on the source FKs so cleanups happen automatically.
+- *Triggers* — the alternative ("create a notification client-side after each kudos/comment/follow insert") splits the truth across N codepaths and gets out of sync the moment Android gives kudos via the REST API directly. SECURITY DEFINER `after insert` triggers on `run_kudos`, `run_comments`, and `user_follows` write the row in the same transaction as the source write, so a kudos either lands with its notification or both fail.
+
+**Schema:** `notifications (id, user_id, actor_id, kind, run_id, comment_id, read_at, created_at)` with `kind ∈ {kudos, comment, comment_reply, follow}`. Two indexes: `(user_id, created_at desc)` for the list view, and a partial `(user_id, created_at desc) where read_at is null` for the badge count.
+
+**RLS:** users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed off — only the trigger functions write, and they run as SECURITY DEFINER to bypass RLS for the recipient (who isn't auth.uid() at insert time).
+
+**v1 scope:** kudos on your runs, comments on your runs, replies to your comments, new followers. Deliberately **not** included: event RSVPs (large fan-out per-event when many people RSVP), club post replies (high noise), realtime push (poll on focus is enough). When realtime + mobile push are needed, layer on top — `notifications` is the durable record, push is a delivery mechanism.
+
+**UI:** sidebar bell with an unread badge, popover showing the last 15, and a `/notifications` standalone page that filters by all / unread. Marking-as-read is optimistic + best-effort — the badge updates immediately and the row write is fire-and-forget.
+
+**Trade-offs:**
+
+1. **Storage grows with engagement.** A user with 1000 followers and a public run getting 500 kudos has 500 notification rows. Acceptable until it isn't — the cleanup hatch is a `delete notifications where created_at < now() - interval '90 days'` cron; not built yet because nobody's hit the volume.
+2. **Self-engagement is silently filtered.** If user X kudoes their own run (RLS blocks this today, but the trigger guards `actor != recipient` defensively) we don't notify. Acceptable.
+3. **No batch / collapse.** "Alice and 4 others gave kudos to your 5K" is a Twitter-style affordance we skip in v1 — every kudos is its own row. If the inbox gets noisy this becomes the natural improvement; the kind + run_id keys are already in place.
+
+**Don't re-litigate unless:** notification volume becomes the user-facing complaint (then add batch-collapse), or push-on-mobile lands as a real ask (then add a separate fan-out worker that subscribes to inserts on `notifications`).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
