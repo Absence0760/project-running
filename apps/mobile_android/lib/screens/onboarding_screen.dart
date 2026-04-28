@@ -1,5 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../preferences.dart';
 
@@ -54,11 +55,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeOut,
       );
     } else {
-      await Permission.location.request();
-      await Permission.locationAlways.request();
+      await _requestLocationPermission();
       await widget.preferences.setOnboarded(true);
       if (!mounted) return;
       widget.onDone();
+    }
+  }
+
+  Future<void> _requestLocationPermission() async {
+    try {
+      final status = await Geolocator.checkPermission();
+      if (status == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+    } catch (e) {
+      debugPrint('Location permission request failed: $e');
     }
   }
 
@@ -125,7 +136,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   decoration: BoxDecoration(
                     color: i == _page
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outline.withOpacity(0.3),
+                        : theme.colorScheme.outline.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );

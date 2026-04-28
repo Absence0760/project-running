@@ -1,188 +1,325 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
-import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:api_client/api_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import 'audio_cues.dart';
-import 'ble_heart_rate.dart';
+import 'background_sync.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
 import 'race_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/sign_in_screen.dart';
 import 'settings_sync.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
+import 'ble_heart_rate.dart';
+import 'tile_cache.dart';
 import 'training_service.dart';
 import 'watch_ingest_queue.dart';
+import 'wear_auth_bridge.dart';
 
-/// Compile-time Supabase config. Secrets are passed to `flutter run` via
-/// `apps/mobile_ios/dart_defines.json` (gitignored) because inline
-/// `--dart-define=` flags break on Supabase's `sb_publishable_...` anon
-/// keys — see `docs/decisions.md § 13`.
-const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-const _devEmail = String.fromEnvironment('DEV_USER_EMAIL');
-const _devPassword = String.fromEnvironment('DEV_USER_PASSWORD');
-
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Bridge `--dart-define-from-file=dart_defines.json` into dotenv so
-  // library code copied verbatim from android (which reads through
-  // `dotenv.env['X']`) keeps working without an iOS-specific fork.
-  // Anything not passed at build time falls through to the `?? fallback`
-  // paths in those libraries.
-  const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
-  const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
-  const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
-  dotenv.testLoad(fileInput: [
-    if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
-    if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
-    if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
-  ].join('\n'));
-
-  final preferences = Preferences();
-  await preferences.init();
-
-  final runStore = LocalRunStore();
-  await runStore.init();
-
-  // Crash recovery: if a previous session left an in-progress run, load it
-  // so the run screen can surface a recovery prompt when it is wired to
-  // LocalRunStore.
-  final inProgress = await runStore.loadInProgress();
-  if (inProgress != null) {
-    debugPrint('Recovered in-progress run: ${inProgress.id}');
+  // Replace Flutter's default red-screen error widget in release builds
+  // with a quiet fallback card. A crash inside a single subtree (most
+  // likely the live map — flutter_map is the widest surface area in the
+  // run screen) would otherwise take down the whole screen, including
+  // the recording stats. RunRecorder lives outside the widget tree, so
+  // recording itself keeps going while the user sees a replaced subtree.
+  //
+  // Kept as the default red screen in debug so we don't mask bugs during
+  // development.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (details) {
+      debugPrint('ErrorWidget: ${details.exception}');
+      return Container(
+        color: const Color(0xFF1E1B4B),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(16),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFF59E0B),
+              size: 32,
+            ),
+            SizedBox(height: 8),
+            Text(
+              "This section couldn't load.\nRecording is still running.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    };
   }
 
+  // `dotenv` must resolve first because the Supabase URL/key come from it,
+  // and Supabase.initialize is one of the parallel tasks below. Android
+  // ships `.env.local` as an asset; iOS uses `--dart-define-from-file=
+  // dart_defines.json` and we bridge the same keys into dotenv so the
+  // verbatim libraries that read `dotenv.env['X']` keep working
+  // unchanged. See [docs/decisions.md § 13].
+  if (Platform.isIOS) {
+    const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
+    const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
+    const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
+    const supabaseUrlDef = String.fromEnvironment('SUPABASE_URL');
+    const supabaseAnonKeyDef = String.fromEnvironment('SUPABASE_ANON_KEY');
+    const devEmailDef = String.fromEnvironment('DEV_USER_EMAIL');
+    const devPasswordDef = String.fromEnvironment('DEV_USER_PASSWORD');
+    dotenv.testLoad(fileInput: [
+      if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
+      if (supabaseAnonKeyDef.isNotEmpty) 'SUPABASE_ANON_KEY=$supabaseAnonKeyDef',
+      if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
+      if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
+      if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
+      if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
+      if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
+    ].join('\n'));
+    // Best-effort .env.local load too, so a contributor who created one
+    // for parity with Android still gets it.
+    try {
+      await dotenv.load(fileName: '.env.local', mergeWith: dotenv.env);
+    } catch (_) {}
+  } else {
+    await dotenv.load(fileName: '.env.local');
+  }
+
+  // Construct stores synchronously so we can kick off their `init()`s in
+  // parallel with the other independent launch tasks. Nothing here
+  // depends on anything else — the previous sequential-await chain was
+  // just paying plugin-channel round-trip latency N times for no reason.
+  final store = LocalRunStore();
   final routeStore = LocalRouteStore();
-  await routeStore.init();
-
+  final prefs = Preferences();
   final watchQueue = WatchIngestQueue();
-  await watchQueue.init();
 
-  final settingsSync = SettingsSyncService(preferences: preferences);
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  final hasSupabase = supabaseUrl != null &&
+      anonKey != null &&
+      supabaseUrl.isNotEmpty &&
+      anonKey.isNotEmpty;
+
+  // Parallel batch. Each of these is independent — the platform plugin
+  // channels (`getApplicationDocumentsDirectory`, `getApplicationCacheDirectory`,
+  // `SharedPreferences.getInstance`, etc.) multiplex fine.
+  await Future.wait([
+    TileCache.init(),
+    store.init(),
+    routeStore.init(),
+    prefs.init(),
+    watchQueue.init(),
+    if (hasSupabase)
+      ApiClient.initialize(url: supabaseUrl, anonKey: anonKey)
+          .catchError((Object e) {
+        debugPrint('Supabase init failed, running offline: $e');
+      }),
+  ]);
+
+  // Recover a run that was in progress when the app was last killed
+  // (crash, force-stop, OOM). We promote the partial data to a regular
+  // completed run so at least the user keeps whatever was captured. Only
+  // runs with meaningful content are kept — tiny "I tapped start then
+  // backgrounded" runs are dropped silently.
+  //
+  // An indoor (pedometer-only) run has no track and its distance came
+  // from `steps × stride`. For those, we accept the run if duration ≥ 60s
+  // instead of requiring GPS waypoints — a treadmill session that crashed
+  // after 10 minutes shouldn't evaporate just because there are no fixes.
+  cm.Run? recoveredRun;
+  try {
+    final partial = await store.loadInProgress();
+    final indoorEstimated =
+        partial?.metadata?['indoor_estimated'] == true;
+    final hasEnoughGps = partial != null &&
+        partial.track.length >= 3 &&
+        partial.distanceMetres >= 50;
+    final hasEnoughIndoor = partial != null &&
+        indoorEstimated &&
+        partial.duration.inSeconds >= 60;
+    if (hasEnoughGps || hasEnoughIndoor) {
+      final metadata = Map<String, dynamic>.from(partial.metadata ?? {});
+      metadata['recovered_from_crash'] = true;
+      final recovered = cm.Run(
+        id: partial.id,
+        startedAt: partial.startedAt,
+        duration: partial.duration,
+        distanceMetres: partial.distanceMetres,
+        track: partial.track,
+        routeId: partial.routeId,
+        source: partial.source,
+        externalId: partial.externalId,
+        metadata: metadata,
+        createdAt: partial.createdAt,
+      );
+      await store.save(recovered);
+      recoveredRun = recovered;
+    }
+    await store.clearInProgress();
+  } catch (e) {
+    debugPrint('In-progress recovery failed: $e');
+  }
 
   final audioCues = AudioCues();
+
+  // ApiClient is created synchronously if Supabase initialised. The
+  // awaited `Supabase.initialize` above guarantees the global client is
+  // wired; all downstream calls just need the config — they don't need
+  // to wait for the network.
+  ApiClient? api;
+  SettingsSyncService? settingsSync;
+  if (hasSupabase) {
+    try {
+      api = ApiClient();
+      settingsSync = SettingsSyncService(preferences: prefs);
+    } catch (e) {
+      debugPrint('ApiClient construction failed: $e');
+    }
+  }
+
+  final syncService = SyncService(apiClient: api, runStore: store);
+  syncService.start();
+
   final social = SocialService();
   final raceController = RaceController(social);
   unawaited(raceController.start());
   final training = TrainingService();
   final heartRate = BleHeartRate();
+  // Kick off auto-reconnect in the background. If the user has paired a
+  // strap previously, HR is ready when they tap Start; otherwise it's a
+  // no-op and the run records without HR.
   unawaited(heartRate.connectCached());
 
-  SyncService? syncService;
-  ApiClient? api;
-  if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
-    try {
-      await ApiClient.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
-      api = ApiClient();
-      if (_devEmail.isNotEmpty && _devPassword.isNotEmpty) {
-        try {
-          await api.signIn(email: _devEmail, password: _devPassword);
-        } catch (e) {
-          debugPrint('Auto sign-in failed: $e');
-        }
-      }
-      if (api.userId != null) {
-        // Best-effort cloud-settings pull; offline launches just keep the
-        // local prefs as the source of truth.
-        try {
-          await settingsSync.onSignedIn();
-        } catch (e) {
-          debugPrint('Settings sync on startup failed: $e');
-        }
-      }
-    } catch (e) {
-      debugPrint('Supabase init failed: $e');
-    }
-  }
-
-  syncService = SyncService(apiClient: api, runStore: runStore);
-  syncService.start();
-
-  // Wire up the Apple Watch → iPhone → Supabase ingest path. When the user
-  // is authenticated, saves directly. When unauthenticated, queues the
-  // payload to disk so it survives an app restart and is replayed on
-  // the next sign-in event.
+  // Apple Watch ingest path. The native iOS bridge
+  // (`Runner/WatchIngestBridge.swift`) forwards `WCSession` payloads via
+  // the `run_app/watch_ingest` MethodChannel. On Android the channel
+  // isn't registered, so `WatchIngest.attach` fires `MissingPluginException`
+  // (caught) and the no-op is invisible — keeps the bootstrap identical
+  // across both apps.
   if (api != null) {
-    final isSignedIn = api.userId != null;
-    if (isSignedIn) {
+    if (api.userId != null) {
       WatchIngest.attach(api, watchQueue);
     }
-
-    // Re-attach WatchIngest and drain the queue whenever auth state becomes
-    // signed-in. This covers: (a) sign-in from SignInScreen, (b) session
-    // restored from storage on a cold launch where the user was already
-    // signed in. The subscription is held for the lifetime of the app.
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-      if (event.event == AuthChangeEvent.signedIn) {
-        WatchIngest.attach(api!, watchQueue);
+      if (event.event == AuthChangeEvent.signedIn && api != null) {
+        WatchIngest.attach(api, watchQueue);
         try {
-          watchQueue.drain(api).catchError((e) {
+          watchQueue.drain(api).catchError((Object e) {
             debugPrint('Watch ingest queue drain failed: $e');
           });
         } catch (e) {
           debugPrint('Watch ingest queue drain error: $e');
         }
-        settingsSync.onSignedIn().catchError((e) {
+        settingsSync?.onSignedIn().catchError((Object e) {
           debugPrint('Settings sync on signedIn failed: $e');
         });
       }
     });
   }
 
+  // Everything below here runs AFTER the first frame paints:
+  //
+  //  - WorkManager background-sync registration (plugin channel work the
+  //    user never sees)
+  //  - Dev-only auto sign-in (network round-trip)
+  //  - SettingsSync cloud fetch (network round-trip)
+  //  - WearAuthBridge attach (method channel)
+  //
+  // Previously these all awaited before runApp and held the splash screen
+  // open for hundreds of ms on slow connections. None of them change the
+  // first-frame render — if the user isn't signed in yet, the dashboard
+  // shows the signed-out state and updates when auth finishes.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    registerBackgroundSync();
+    if (!hasSupabase || api == null) return;
+    WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
+    final devEmail = dotenv.env['DEV_USER_EMAIL'];
+    final devPassword = dotenv.env['DEV_USER_PASSWORD'];
+    Future(() async {
+      if (devEmail != null &&
+          devEmail.isNotEmpty &&
+          devPassword != null &&
+          devPassword.isNotEmpty) {
+        try {
+          await api!.signIn(email: devEmail, password: devPassword);
+        } catch (e) {
+          debugPrint('Auto sign-in failed: $e');
+        }
+      }
+      // Best-effort — the service stores `lastError` for the settings
+      // screen to surface.
+      try {
+        await settingsSync?.onSignedIn();
+      } catch (e) {
+        debugPrint('Settings sync failed: $e');
+      }
+    });
+  });
+
   runApp(RunApp(
     apiClient: api,
-    preferences: preferences,
-    runStore: runStore,
+    runStore: store,
     routeStore: routeStore,
-    watchQueue: watchQueue,
-    settingsSync: settingsSync,
+    preferences: prefs,
     audioCues: audioCues,
+    syncService: syncService,
+    settingsSync: settingsSync,
     social: social,
     raceController: raceController,
     training: training,
     heartRate: heartRate,
+    recoveredRun: recoveredRun,
   ));
 }
 
+class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
+  ThemeModeNotifier() : super(ThemeMode.dark);
+}
+
+final themeModeNotifier = ThemeModeNotifier();
+
 class RunApp extends StatefulWidget {
   final ApiClient? apiClient;
-  final Preferences preferences;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
-  final WatchIngestQueue watchQueue;
-  final SettingsSyncService? settingsSync;
+  final Preferences preferences;
   final AudioCues audioCues;
+  final SyncService syncService;
+  final SettingsSyncService? settingsSync;
   final SocialService social;
   final RaceController raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
-
+  final cm.Run? recoveredRun;
   const RunApp({
     super.key,
     this.apiClient,
-    required this.preferences,
     required this.runStore,
     required this.routeStore,
-    required this.watchQueue,
-    this.settingsSync,
+    required this.preferences,
     required this.audioCues,
+    required this.syncService,
+    this.settingsSync,
     required this.social,
     required this.raceController,
     required this.training,
     required this.heartRate,
+    this.recoveredRun,
   });
 
   @override
@@ -190,63 +327,82 @@ class RunApp extends StatefulWidget {
 }
 
 class _RunAppState extends State<RunApp> {
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
+  @override
+  void initState() {
+    super.initState();
+    final recovered = widget.recoveredRun;
+    if (recovered != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _messengerKey.currentState?.showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 6),
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Recovered unfinished run — '
+              '${(recovered.distanceMetres / 1000).toStringAsFixed(2)} km, '
+              '${recovered.duration.inMinutes} min',
+            ),
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () {
+                // Navigating from a root snackbar action is app-specific —
+                // for now the run is already in history, surfaced by the
+                // default list view. Dismiss the snackbar.
+                _messengerKey.currentState?.hideCurrentSnackBar();
+              },
+            ),
+          ),
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Run',
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      home: _resolveHome(),
-    );
-  }
-
-  Widget _resolveHome() {
-    final api = widget.apiClient;
-
-    // No Supabase configured — go straight to the app (offline-only mode).
-    if (api == null) {
-      return _onboardingOrHome();
-    }
-
-    final isSignedIn = api.userId != null;
-    if (!isSignedIn) {
-      return SignInScreen(
-        apiClient: api,
-        onSignedIn: () => setState(() {}),
-      );
-    }
-
-    return _onboardingOrHome();
-  }
-
-  Widget _onboardingOrHome() {
-    if (!widget.preferences.onboarded) {
-      return OnboardingScreen(
-        preferences: widget.preferences,
-        onDone: () => setState(() {}),
-      );
-    }
-    return HomeScreen(
-      preferences: widget.preferences,
-      runStore: widget.runStore,
-      routeStore: widget.routeStore,
-      apiClient: widget.apiClient,
-      settingsSync: widget.settingsSync,
-      audioCues: widget.audioCues,
-      social: widget.social,
-      raceController: widget.raceController,
-      training: widget.training,
-      heartRate: widget.heartRate,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, mode, _) {
+        return MaterialApp(
+          title: 'Run Onward',
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: mode,
+          scaffoldMessengerKey: _messengerKey,
+          home: widget.preferences.onboarded
+              ? HomeScreen(
+                  apiClient: widget.apiClient,
+                  runStore: widget.runStore,
+                  routeStore: widget.routeStore,
+                  preferences: widget.preferences,
+                  audioCues: widget.audioCues,
+                  social: widget.social,
+                  raceController: widget.raceController,
+                  training: widget.training,
+                  heartRate: widget.heartRate,
+                  settingsSync: widget.settingsSync,
+                )
+              : OnboardingScreen(
+                  preferences: widget.preferences,
+                  onDone: () => setState(() {}),
+                ),
+        );
+      },
     );
   }
 }
 
 /// Receives runs from the paired Apple Watch via a method channel owned
-/// by `Runner/AppDelegate.swift` + `Runner/WatchIngestBridge.swift`.
+/// by `Runner/AppDelegate.swift` + `Runner/WatchIngestBridge.swift` on
+/// iOS. Android doesn't register the channel, so the `setMethodCallHandler`
+/// installation is a harmless no-op and the bridge never fires.
+///
 /// Each call carries: `{id, started_at, duration_s, distance_m, source,
 /// avg_bpm?, track: [{lat, lng, ele?, ts?}]}`. We construct a
 /// `core_models.Run` and upload via `ApiClient.saveRun` — same path
-/// any other recording source uses, so web + Android see it identically.
+/// any other recording source uses, so web sees it identically.
 ///
 /// When the user is not authenticated, the payload is persisted to the
 /// [WatchIngestQueue] on disk and replayed on the next sign-in.
@@ -260,7 +416,6 @@ class WatchIngest {
       if (args == null) return false;
 
       if (api.userId == null) {
-        // User is not signed in — persist to disk for later replay.
         try {
           final payload = Map<String, dynamic>.fromEntries(
             args.entries
@@ -271,9 +426,6 @@ class WatchIngest {
         } catch (e) {
           debugPrint('Watch ingest queue write failed: $e');
         }
-        // Return false so WatchIngestBridge re-queues on its side too,
-        // ensuring the run is not lost if the app process restarts before
-        // our queue file is written.
         return false;
       }
 
@@ -310,7 +462,6 @@ class WatchIngest {
         }
       }
     } else if (trackRaw is String) {
-      // Swift side passed the raw JSON file contents — decode here.
       final decoded = jsonDecode(trackRaw);
       if (decoded is List) {
         for (final p in decoded) {

@@ -89,8 +89,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _KeepAlive(
         child: RunScreen(
           key: const PageStorageKey('run'),
+          apiClient: widget.apiClient,
           runStore: widget.runStore,
+          routeStore: widget.routeStore,
           preferences: widget.preferences,
+          audioCues: widget.audioCues,
+          social: widget.social,
+          raceController: widget.raceController,
+          training: widget.training,
+          heartRate: widget.heartRate,
+          initialRoute: _preselectedRoute,
         ),
       ),
       _KeepAlive(
@@ -124,6 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
           key: const PageStorageKey('settings'),
           apiClient: widget.apiClient,
           preferences: widget.preferences,
+          runStore: widget.runStore,
+          heartRate: widget.heartRate,
           settingsSync: widget.settingsSync,
         ),
       ),
@@ -138,7 +148,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startRunWithRoute(cm.Route route) {
+    // The Run tab takes a preselected route via constructor; changing it
+    // means rebuilding that page. Cheap — only called from the Routes tab's
+    // "start with this route" flow, not during a swipe.
     _preselectedRoute = route;
+    setState(_rebuildPages);
     _currentIndex.value = 1;
     _pageController.jumpToPage(1);
   }

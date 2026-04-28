@@ -1,16 +1,23 @@
+import 'dart:io' show Platform;
+
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'sign_up_screen.dart';
 
-/// Email/password sign-in screen.
+/// Email/password sign-in screen with Google + Apple OAuth alongside.
 ///
-/// Returns `true` from `Navigator.pop` if sign-in succeeded so the caller
-/// can refresh state.
+/// Returns `true` from `Navigator.pop` when sign-in succeeds. The optional
+/// `onSignedIn` callback fires before pop so a top-level `MaterialApp`
+/// owner that drives its own routing can re-render in response.
 class SignInScreen extends StatefulWidget {
   final ApiClient apiClient;
-  const SignInScreen({super.key, required this.apiClient});
+  final VoidCallback? onSignedIn;
+  const SignInScreen({super.key, required this.apiClient, this.onSignedIn});
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -39,6 +46,7 @@ class _SignInScreenState extends State<SignInScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -47,13 +55,10 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  /// Google Sign-In via the native Android flow. Requires:
-  /// - `GOOGLE_WEB_CLIENT_ID` in `.env.local` — the Web client ID from the
-  ///   same Google Cloud Console project configured in Supabase's Google
-  ///   auth provider.
-  /// - Android OAuth 2.0 client configured with the app's SHA-1
-  ///   fingerprint.
-  /// See apps/mobile_android/local_testing.md for the full setup walkthrough.
+  /// Google Sign-In via the native flow. On Android, requires
+  /// `GOOGLE_WEB_CLIENT_ID` in `.env.local` and an Android OAuth 2.0
+  /// client configured with the app's SHA-1 fingerprint. See
+  /// `apps/mobile_android/local_testing.md`.
   Future<void> _signInWithGoogle() async {
     setState(() {
       _loading = true;
@@ -71,7 +76,6 @@ class _SignInScreenState extends State<SignInScreen> {
       final googleSignIn = GoogleSignIn(serverClientId: webClientId);
       final account = await googleSignIn.signIn();
       if (account == null) {
-        // User cancelled — not an error.
         if (mounted) setState(() => _loading = false);
         return;
       }
@@ -85,6 +89,40 @@ class _SignInScreenState extends State<SignInScreen> {
         idToken: idToken,
         accessToken: auth.accessToken,
       );
+      widget.onSignedIn?.call();
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Apple Sign-In via the native flow on iOS, web fallback on Android.
+  /// Needs a Services ID in the Apple Developer portal + the Apple auth
+  /// provider enabled in Supabase. The flow returns an Apple identity
+  /// token that we hand to `Supabase.auth.signInWithIdToken` directly.
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw Exception('Apple sign-in did not return an identity token');
+      }
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+      );
+      widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -96,6 +134,11 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Show Apple as the primary OAuth on iOS (App Store guideline 4.8 — apps
+    // that offer third-party login must offer Sign in with Apple alongside).
+    // Android keeps Google as the primary; Apple is still available via the
+    // package's web fallback for users who'd prefer it.
+    final appleFirst = Platform.isIOS;
     return Scaffold(
       appBar: AppBar(title: const Text('Sign In')),
       // Scaffold already inherits resizeToAvoidBottomInset: true, so the
@@ -182,14 +225,43 @@ class _SignInScreenState extends State<SignInScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _signInWithGoogle,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              if (appleFirst) ...[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithApple,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.apple, size: 18),
+                  label: const Text('Sign in with Apple'),
                 ),
-                icon: const Icon(Icons.login, size: 18),
-                label: const Text('Sign in with Google'),
-              ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Sign in with Google'),
+                ),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Sign in with Google'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithApple,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.apple, size: 18),
+                  label: const Text('Sign in with Apple'),
+                ),
+              ],
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -204,7 +276,10 @@ class _SignInScreenState extends State<SignInScreen> {
                           SignUpScreen(apiClient: widget.apiClient),
                     ),
                   );
-                  if (mounted && signedUp == true) Navigator.pop(context, true);
+                  if (mounted && signedUp == true) {
+                    widget.onSignedIn?.call();
+                    Navigator.pop(context, true);
+                  }
                 },
                 child: const Text("Don't have an account? Create one"),
               ),
@@ -215,4 +290,3 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 }
-

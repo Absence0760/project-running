@@ -1,9 +1,13 @@
+import 'dart:io' show Platform;
+
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Email/password account-creation screen.
+/// Email/password account-creation screen with Google + Apple OAuth.
 ///
 /// Returns `true` from `Navigator.pop` if registration succeeded so the
 /// caller can refresh state — same contract as `SignInScreen`.
@@ -86,9 +90,39 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw Exception('Apple sign-in did not return an identity token');
+      }
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      debugPrint('SignUpScreen._signInWithApple failed: $e');
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appleFirst = Platform.isIOS;
     return Scaffold(
       appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
@@ -171,14 +205,43 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _signInWithGoogle,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              if (appleFirst) ...[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithApple,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.apple, size: 18),
+                  label: const Text('Continue with Apple'),
                 ),
-                icon: const Icon(Icons.login, size: 18),
-                label: const Text('Continue with Google'),
-              ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Continue with Google'),
+                ),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Continue with Google'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithApple,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.apple, size: 18),
+                  label: const Text('Continue with Apple'),
+                ),
+              ],
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(context),

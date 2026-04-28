@@ -1,10 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../preferences.dart';
 
-/// First-launch welcome flow. Three swipable pages followed by a location
-/// permission request. Marks preferences.onboarded = true on completion.
+/// First-launch welcome flow. Three swipable pages followed by permission
+/// request. Marks preferences.onboarded = true on completion.
 class OnboardingScreen extends StatefulWidget {
   final Preferences preferences;
   final VoidCallback onDone;
@@ -28,7 +29,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.directions_run,
       title: 'Track every run',
       description:
-          'GPS recording with live map, splits, pace, and elevation. '
+          'GPS recording with live map, splits, pace, cadence, and elevation. '
           'Works fully offline — sign in later to sync across devices.',
     ),
     _PageData(
@@ -42,9 +43,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.location_on,
       title: 'Location access',
       description:
-          'Run App uses your location to record runs. Background location '
-          'keeps GPS tracking active when your screen is off or you receive '
-          'a call — so you never lose data mid-run.',
+          'We need location permission to record your runs. Background '
+          'location keeps GPS tracking active when your screen is off.',
     ),
   ];
 
@@ -57,6 +57,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     } else {
       await _requestLocationPermission();
       await widget.preferences.setOnboarded(true);
+      if (!mounted) return;
       widget.onDone();
     }
   }

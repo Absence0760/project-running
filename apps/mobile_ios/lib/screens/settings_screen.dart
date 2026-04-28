@@ -1,27 +1,41 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:api_client/api_client.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../backup.dart';
+import '../ble_heart_rate.dart';
+import '../goals.dart';
+import '../local_run_store.dart';
+import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
 import '../settings_sync.dart';
+import 'import_screen.dart';
+import 'devices_screen.dart';
+import 'privacy_zones_screen.dart';
+import 'profile_screen.dart';
 import 'sign_in_screen.dart';
 
 /// Account settings, preferences, and integrations.
-///
-/// Mirrors the structure of `mobile_android/lib/screens/settings_screen.dart`
-/// for the bag-backed controls. Android-only surfaces (BLE chest-strap
-/// pairing, Strava ZIP import, JSON backup/restore, advanced-GPS toggle,
-/// dark-mode switch) are omitted here until the underlying packages are
-/// wired on iOS.
 class SettingsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
+  final LocalRunStore? runStore;
+  final BleHeartRate heartRate;
   final SettingsSyncService? settingsSync;
 
   const SettingsScreen({
     super.key,
     this.apiClient,
     required this.preferences,
+    required this.heartRate,
+    this.runStore,
     this.settingsSync,
   });
 
@@ -30,25 +44,321 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _darkMode = themeModeNotifier.value == ThemeMode.dark;
+  List<IntegrationRow> _integrations = const [];
+  bool _stravaBusy = false;
+
   @override
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
-    widget.settingsSync?.addListener(_onChange);
+    _refreshIntegrations();
   }
 
   @override
   void dispose() {
     widget.preferences.removeListener(_onChange);
-    widget.settingsSync?.removeListener(_onChange);
     super.dispose();
+  }
+
+  Future<void> _refreshIntegrations() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final list = await api.fetchIntegrations();
+      if (!mounted) return;
+      setState(() => _integrations = list);
+    } catch (_) {}
+  }
+
+  IntegrationRow? _strava() {
+    for (final i in _integrations) {
+      if (i.provider == 'strava') return i;
+    }
+    return null;
   }
 
   void _onChange() {
     if (mounted) setState(() {});
   }
 
-  // ---------- Labels ----------
+  String _unitSubtitle() {
+    final base = widget.preferences.useMiles ? 'mi, ft' : 'km, m';
+    final sync = widget.settingsSync;
+    if (sync == null || !sync.synced) return base;
+    return '$base · synced to your other devices';
+  }
+
+  Future<void> _signIn() async {
+    final api = widget.apiClient;
+    if (api == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backend not configured')),
+      );
+      return;
+    }
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => SignInScreen(apiClient: api)),
+    );
+    if (ok == true && mounted) setState(() {});
+  }
+
+  Future<void> _signOut() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      await api.signOut();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign out failed — check your connection')),
+        );
+        return;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  static String _splitIntervalLabel(int metres, DistanceUnit unit) {
+    if (unit == DistanceUnit.mi) {
+      final miles = metres / 1609.344;
+      if ((miles - miles.roundToDouble()).abs() < 0.01) {
+        return '${miles.round()} mi';
+      }
+      return '${miles.toStringAsFixed(1)} mi';
+    }
+    if (metres >= 1000 && metres % 1000 == 0) {
+      return '${metres ~/ 1000} km';
+    }
+    return '${metres}m';
+  }
+
+  Future<void> _editSplitInterval() async {
+    final prefs = widget.preferences;
+    final options = prefs.useMiles
+        ? <int>[0, 805, 1609, 3219, 8047]   // ~0.5 mi, 1 mi, 2 mi, 5 mi
+        : <int>[0, 500, 1000, 2000, 5000];
+    final labels = prefs.useMiles
+        ? ['Default', '0.5 mi', '1 mi', '2 mi', '5 mi']
+        : ['Default', '500m', '1 km', '2 km', '5 km'];
+
+    final result = await showDialog<int?>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Split interval'),
+        children: [
+          for (var i = 0; i < options.length; i++)
+            RadioListTile<int>(
+              title: Text(labels[i]),
+              value: options[i],
+              groupValue: prefs.splitIntervalMetres,
+              onChanged: (v) => Navigator.pop(ctx, v),
+            ),
+        ],
+      ),
+    );
+    if (result != null) {
+      await prefs.setSplitIntervalMetres(result);
+      await widget.settingsSync?.pushSplitInterval();
+    }
+  }
+
+  Future<void> _editTargetPace() async {
+    final prefs = widget.preferences;
+    final current = prefs.targetPaceSecPerKm;
+    int minutes = current > 0 ? current ~/ 60 : 5;
+    int seconds = current > 0 ? current % 60 : 30;
+
+    final result = await showDialog<int?>(
+      context: context,
+      builder: (ctx) {
+        final mCtl = TextEditingController(text: '$minutes');
+        final sCtl = TextEditingController(text: '$seconds');
+        return AlertDialog(
+          title: const Text('Live pace alert'),
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 60,
+                child: TextField(
+                  controller: mCtl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'min'),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text(':', style: TextStyle(fontSize: 20)),
+              ),
+              SizedBox(
+                width: 60,
+                child: TextField(
+                  controller: sCtl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'sec'),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 0),
+              child: const Text('Clear'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final m = int.tryParse(mCtl.text) ?? 0;
+                final s = int.tryParse(sCtl.text) ?? 0;
+                Navigator.pop(ctx, m * 60 + s);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result != null) await prefs.setTargetPaceSecPerKm(result);
+  }
+
+  Future<void> _exportRunsCsv() async {
+    final store = widget.runStore;
+    final messenger = ScaffoldMessenger.of(context);
+    final runs = store?.runs ?? const [];
+    if (runs.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No runs to export.')),
+      );
+      return;
+    }
+    try {
+      final buf = StringBuffer('date,distance_m,duration_s,pace_s_per_km,source\n');
+      for (final r in runs) {
+        final pace = r.distanceMetres > 0
+            ? (r.duration.inSeconds / (r.distanceMetres / 1000)).round()
+            : 0;
+        buf.writeln(
+          '${r.startedAt.toUtc().toIso8601String()},'
+          '${r.distanceMetres.round()},'
+          '${r.duration.inSeconds},'
+          '$pace,'
+          '${r.source.name}',
+        );
+      }
+      final tmp = await getTemporaryDirectory();
+      final ts = DateTime.now()
+          .toIso8601String()
+          .replaceAll(RegExp(r'[:.]'), '-');
+      final file = File('${tmp.path}/runs-$ts.csv');
+      await file.writeAsString(buf.toString());
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        text: 'Run app — runs export',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('CSV export failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _exportBackup() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in first to back up your runs.')),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Preparing backup…')),
+    );
+    try {
+      final tmp = await getTemporaryDirectory();
+      final ts = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+      final file = File('${tmp.path}/run-app-backup-$ts.zip');
+      await BackupService(api: api).createBackup(outputFile: file);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Run app backup',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Backup failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final api = widget.apiClient;
+    final store = widget.runStore;
+    if (api == null || store == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup service unavailable.')),
+      );
+      return;
+    }
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final path = picked.files.first.path;
+    if (path == null) return;
+    final offline = api.userId == null;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from backup?'),
+        content: Text(
+          offline
+              ? 'You\'re not signed in. Runs will be restored to this device '
+                  'and synced to your account the next time you sign in.'
+              : 'This adds or overwrites runs and routes matching IDs in the '
+                  'backup. It will not delete runs or routes that aren\'t in '
+                  'the backup.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Restoring…')));
+    try {
+      final res = await BackupService(api: api).restore(
+        zipFile: File(path),
+        runStore: store,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Restored ${res.runsImported} runs · ${res.tracksUploaded} tracks · ${res.routesImported} routes'
+            '${res.warnings.isNotEmpty ? ' · ${res.warnings.length} warnings' : ''}',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+    }
+  }
+
+  // ---------- Label helpers for bag-backed tiles ----------
 
   static String _toTitle(String raw) => raw
       .split('_')
@@ -85,20 +395,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  static String _splitIntervalLabel(int metres, DistanceUnit unit) {
-    if (unit == DistanceUnit.mi) {
-      final miles = metres / 1609.344;
-      if ((miles - miles.roundToDouble()).abs() < 0.01) {
-        return '${miles.round()} mi';
-      }
-      return '${miles.toStringAsFixed(1)} mi';
-    }
-    if (metres >= 1000 && metres % 1000 == 0) {
-      return '${metres ~/ 1000} km';
-    }
-    return '${metres}m';
-  }
-
   String _hrZonesSummary() {
     final raw = _bagValue<Map>(SettingsKeys.hrZones);
     if (raw == null) return 'Not set';
@@ -117,18 +413,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (metres == null) return 'Not set';
     final useMiles = widget.preferences.useMiles;
     final display = useMiles ? metres / 1609.344 : metres / 1000;
-    return '${display.toStringAsFixed(display < 10 ? 1 : 0)} '
-        '${useMiles ? 'mi' : 'km'} / week';
+    return '${display.toStringAsFixed(display < 10 ? 1 : 0)} ${useMiles ? 'mi' : 'km'} / week';
   }
 
-  String _unitSubtitle() {
-    final base = widget.preferences.useMiles ? 'mi, ft' : 'km, m';
-    final sync = widget.settingsSync;
-    if (sync == null || !sync.synced) return base;
-    return '$base · synced to your other devices';
-  }
-
-  // ---------- Bag helpers ----------
+  // ---------- Bag-backed settings helpers ----------
+  //
+  // Thin wrappers around `SettingsSyncService.updateUniversal` for keys that
+  // don't have a local `Preferences` mirror — the settings screen reads
+  // through `service.effective<T>(key)` and writes the user's choice
+  // straight to the cloud bag. Offline edits are silently dropped; the
+  // cloud value is the source of truth for these keys across devices.
 
   bool get _bagReady => widget.settingsSync?.synced == true;
 
@@ -187,7 +481,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           if (allowClear)
             TextButton(
-              onPressed: () => Navigator.pop(ctx, -1),
+              onPressed: () => Navigator.pop(ctx, -1), // sentinel "clear"
               child: const Text('Clear'),
             ),
           TextButton(
@@ -234,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           if (allowClear)
             TextButton(
-              onPressed: () => Navigator.pop(ctx, -1.0),
+              onPressed: () => Navigator.pop(ctx, -1.0), // sentinel "clear"
               child: const Text('Clear'),
             ),
           TextButton(
@@ -257,38 +551,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ---------- Bag editors ----------
-
-  Future<void> _editSplitInterval() async {
-    final prefs = widget.preferences;
-    final options = prefs.useMiles
-        ? <int>[0, 805, 1609, 3219, 8047]
-        : <int>[0, 500, 1000, 2000, 5000];
-    final labels = prefs.useMiles
-        ? ['Default', '0.5 mi', '1 mi', '2 mi', '5 mi']
-        : ['Default', '500m', '1 km', '2 km', '5 km'];
-
-    final result = await showDialog<int?>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Split interval'),
-        children: [
-          for (var i = 0; i < options.length; i++)
-            RadioListTile<int>(
-              title: Text(labels[i]),
-              value: options[i],
-              groupValue: prefs.splitIntervalMetres,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-        ],
-      ),
-    );
-    if (result != null) {
-      await prefs.setSplitIntervalMetres(result);
-      await widget.settingsSync?.pushSplitInterval();
-    }
-  }
-
   Future<void> _editDefaultActivityType() async {
     const opts = ['run', 'walk', 'hike', 'cycle'];
     const labels = ['Run', 'Walk', 'Hike', 'Cycle'];
@@ -300,6 +562,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.defaultActivityType, picked);
+      await widget.preferences.setDefaultActivityType(picked);
     }
   }
 
@@ -466,15 +729,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: TextField(
                   controller: entry.value,
                   keyboardType: TextInputType.number,
-                  decoration:
-                      InputDecoration(labelText: entry.key.toUpperCase()),
+                  decoration: InputDecoration(labelText: entry.key.toUpperCase()),
                 ),
               ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, <String, int>{}),
+            onPressed: () => Navigator.pop(ctx, <String, int>{}), // clear
             child: const Text('Clear'),
           ),
           TextButton(
@@ -506,9 +768,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final current =
         _bagValue<num>(SettingsKeys.weeklyMileageGoalMetres)?.toDouble();
     final useMiles = widget.preferences.useMiles;
-    final currentDisplay = current == null
-        ? null
-        : (useMiles ? current / 1609.344 : current / 1000);
+    final currentDisplay =
+        current == null ? null : (useMiles ? current / 1609.344 : current / 1000);
     final picked = await _pickDouble(
       title: 'Weekly mileage goal',
       current: currentDisplay,
@@ -519,49 +780,273 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (picked == null) return;
     if (picked == -1.0) {
       await _putUniversal(SettingsKeys.weeklyMileageGoalMetres, null);
+      // Also clear the local weekly distance goal so the dashboard
+      // doesn't keep showing one after the user removed it here.
+      final existing = widget.preferences.goals.firstWhere(
+        (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
+        orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
+      );
+      if (existing.id.isNotEmpty) {
+        await widget.preferences.removeGoal(existing.id);
+      }
     } else {
       final metres = useMiles ? picked * 1609.344 : picked * 1000;
       await _putUniversal(
         SettingsKeys.weeklyMileageGoalMetres,
         metres.round(),
       );
+      // Mirror into the local list so the dashboard's Goals row picks
+      // it up immediately.
+      final existing = widget.preferences.goals.firstWhere(
+        (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
+        orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
+      );
+      await widget.preferences.upsertGoal(RunGoal(
+        id: existing.id.isEmpty ? newGoalId() : existing.id,
+        period: GoalPeriod.week,
+        distanceMetres: metres,
+        title: existing.title,
+        timeSeconds: existing.timeSeconds,
+        avgPaceSecPerKm: existing.avgPaceSecPerKm,
+        runCount: existing.runCount,
+      ));
     }
   }
 
   // ---------- Account actions ----------
 
-  Future<void> _signIn() async {
-    final api = widget.apiClient;
-    if (api == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backend not configured')),
-      );
-      return;
-    }
-    final ok = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => SignInScreen(apiClient: api),
-      ),
+  Widget _buildStravaTile() {
+    final s = _strava();
+    final connected = s != null;
+    final last = s?.lastSyncAt;
+    final subtitle = !connected
+        ? 'Connect to auto-sync activities'
+        : last == null
+            ? 'Connected · waiting for first sync'
+            : 'Connected · last sync ${_relTime(last)}';
+    return ListTile(
+      leading: const Icon(Icons.sync, color: Color(0xFFFC4C02)),
+      title: const Text('Strava'),
+      subtitle: Text(subtitle),
+      trailing: _stravaBusy
+          ? const SizedBox(
+              width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : connected
+              ? PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'sync') _syncStrava();
+                    if (v == 'disconnect') _disconnectStrava();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'sync', child: Text('Sync now')),
+                    PopupMenuItem(
+                        value: 'disconnect', child: Text('Disconnect')),
+                  ],
+                )
+              : const Icon(Icons.chevron_right),
+      onTap: _stravaBusy ? null : (connected ? _syncStrava : _connectStrava),
     );
-    if (ok == true && mounted) setState(() {});
   }
 
-  Future<void> _signOut() async {
+  static String _relTime(DateTime t) {
+    final diff = DateTime.now().toUtc().difference(t.toUtc());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${(diff.inDays / 7).floor()}w ago';
+  }
+
+  Future<void> _connectStrava() async {
+    await _openExternal('https://run.app/settings/integrations');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Complete the Strava sign-in in your browser, then return here '
+          'and pull to refresh.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncStrava() async {
     final api = widget.apiClient;
     if (api == null) return;
+    setState(() => _stravaBusy = true);
     try {
-      await api.signOut();
+      final res = await api.syncStrava();
+      if (!mounted) return;
+      final imported = (res['imported'] as num?)?.toInt() ?? 0;
+      final skipped = (res['skipped'] as num?)?.toInt() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synced. $imported new, $skipped already present.')),
+      );
+      await _refreshIntegrations();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sign out failed — check your connection'),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _stravaBusy = false);
+    }
+  }
+
+  Future<void> _disconnectStrava() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Disconnect Strava?'),
+            content: const Text(
+              'Future activities will stop syncing automatically. Already-imported '
+              'runs stay in your history.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Disconnect'),
+              ),
+            ],
           ),
+        ) ??
+        false;
+    if (!ok) return;
+    setState(() => _stravaBusy = true);
+    try {
+      await api.disconnectIntegration('strava');
+      await _refreshIntegrations();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Strava disconnected.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Disconnect failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _stravaBusy = false);
+    }
+  }
+
+  Future<void> _importParkrun() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+
+    // Pre-fill from user_profiles.parkrun_number when available so a
+    // returning user doesn't have to re-type it.
+    String existing = '';
+    try {
+      final profile = await api.fetchPublicProfile(api.userId!);
+      existing = profile?.parkrunNumber ?? '';
+    } catch (_) {}
+
+    final ctrl = TextEditingController(text: existing);
+    if (!mounted) return;
+    final athleteNumber = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Import parkrun results'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Enter your parkrun athlete number (e.g. A123456). We\'ll '
+              'fetch your finish history and add any new results to your '
+              'runs list.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              maxLength: 20,
+              decoration: const InputDecoration(
+                labelText: 'Athlete number',
+                hintText: 'A123456',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    if (athleteNumber == null || athleteNumber.isEmpty) return;
+    if (!mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Importing parkrun results…')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Persist the number first so the next import is one-tap.
+      await api.setParkrunAthleteNumber(athleteNumber);
+      final imported = await api.importParkrunResults(athleteNumber);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // dismiss progress
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            imported > 0
+                ? 'Imported $imported parkrun result${imported == 1 ? '' : 's'}.'
+                : 'No new parkrun results since last import.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _openExternal(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        await Share.share(url);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      try {
+        await Share.share(url);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open: $e')),
         );
-        return;
       }
     }
-    if (mounted) setState(() {});
   }
 
   Future<void> _changePassword() async {
@@ -602,8 +1087,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               FilledButton(
                 onPressed: () {
                   if (pwdCtl.text.length < 8) {
-                    setInner(() =>
-                        error = 'Password must be at least 8 characters');
+                    setInner(() => error = 'Password must be at least 8 characters');
                     return;
                   }
                   if (pwdCtl.text != confirmCtl.text) {
@@ -677,14 +1161,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // ---------- Build ----------
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final prefs = widget.preferences;
     final signedIn = widget.apiClient?.userId != null;
-    final email = widget.apiClient?.userEmail;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -701,12 +1182,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? theme.colorScheme.primaryContainer
                   : theme.colorScheme.surfaceContainerHighest,
               child: Text(
-                email != null && email.isNotEmpty
-                    ? email[0].toUpperCase()
+                widget.apiClient?.userEmail != null
+                    ? widget.apiClient!.userEmail![0].toUpperCase()
                     : '?',
               ),
             ),
-            title: Text(email ?? 'Offline mode'),
+            title: Text(widget.apiClient?.userEmail ?? 'Offline mode'),
             subtitle: Text(signedIn
                 ? 'Signed in — runs will sync'
                 : 'Sign in to sync runs across devices'),
@@ -722,6 +1203,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
           ),
           if (signedIn) ...[
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('View profile'),
+              subtitle:
+                  const Text('Your runs, followers, following, notifications'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final api = widget.apiClient;
+                final uid = api?.userId;
+                if (api == null || uid == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(api: api, userId: uid),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.devices_other),
+              title: const Text('Devices'),
+              subtitle: const Text(
+                  'Where you\'re signed in and per-device overrides'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final api = widget.apiClient;
+                if (api == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DevicesScreen(
+                      api: api,
+                      currentDeviceId: widget.preferences.deviceId,
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy zones'),
+              subtitle:
+                  const Text('Clip start/end of public tracks near home'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final s = widget.settingsSync;
+                if (s == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PrivacyZonesScreen(settingsSync: s),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.workspace_premium_outlined),
+              title: const Text('Manage subscription'),
+              subtitle:
+                  const Text('Open the subscription portal in your browser'),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () => _openExternal('https://run.app/settings/upgrade'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.volunteer_activism_outlined),
+              title: const Text('Support the app'),
+              subtitle: const Text('One-off donation in your browser'),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () => _openExternal('https://run.app/settings/upgrade'),
+            ),
             ListTile(
               leading: const Icon(Icons.lock_outline),
               title: const Text('Change password'),
@@ -741,6 +1292,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
           const Divider(),
 
+          // Sensors
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('Sensors', style: theme.textTheme.titleSmall),
+          ),
+          _HeartRateTile(heartRate: widget.heartRate),
+          const Divider(),
+
+          // Integrations
+          if (signedIn) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Integrations', style: theme.textTheme.titleSmall),
+            ),
+            _buildStravaTile(),
+            ListTile(
+              leading: const Icon(Icons.directions_run),
+              title: const Text('parkrun'),
+              subtitle: const Text('Import results by athlete number'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _importParkrun,
+            ),
+            const Divider(),
+          ],
+
           // Preferences
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -752,6 +1328,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: prefs.useMiles,
             onChanged: (v) async {
               await prefs.setUseMiles(v);
+              // Best-effort cloud push — no UI error if we're offline.
+              // The cloud value is re-pulled on next sign-in anyway.
               await widget.settingsSync?.pushPreferredUnit();
               if (mounted) setState(() {});
             },
@@ -765,6 +1343,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await widget.settingsSync?.pushAudioCues();
             },
           ),
+          SwitchListTile(
+            title: const Text('Keep screen on'),
+            subtitle: const Text('Hold a wakelock during a run'),
+            value: prefs.keepScreenOn,
+            onChanged: (v) async {
+              await prefs.setKeepScreenOn(v);
+              await widget.settingsSync?.pushKeepScreenOn();
+            },
+          ),
           ListTile(
             title: const Text('Split interval'),
             subtitle: Text(
@@ -774,6 +1361,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _editSplitInterval,
+          ),
+          ListTile(
+            title: const Text('Live pace alert'),
+            subtitle: Text(
+              prefs.targetPaceSecPerKm > 0
+                  ? '${UnitFormat.pace(prefs.targetPaceSecPerKm.toDouble(), prefs.unit)} '
+                      '${UnitFormat.paceLabel(prefs.unit)} '
+                      '— spoken alert during a run when 30s+ off'
+                  : 'Off — set a pace to get spoken alerts during a run',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _editTargetPace,
+          ),
+          SwitchListTile(
+            title: const Text('Dark mode'),
+            value: _darkMode,
+            onChanged: (v) {
+              setState(() => _darkMode = v);
+              themeModeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Advanced GPS'),
+            subtitle: const Text(
+              'Higher accuracy, finer track detail, more battery usage',
+            ),
+            value: prefs.advancedGps,
+            onChanged: prefs.setAdvancedGps,
           ),
           ListTile(
             title: const Text('Default activity'),
@@ -804,14 +1419,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Auto-pause'),
-            subtitle: const Text(
-              'Stops the clock when you stop moving. Moving time is also '
-              'recomputed from the GPS trace at save time.',
-            ),
+            subtitle: const Text('Not available on this device.'),
             value: _bagValue<bool>(SettingsKeys.autoPauseEnabled) ?? true,
-            onChanged: _bagReady
-                ? (v) => _putUniversal(SettingsKeys.autoPauseEnabled, v)
-                : null,
+            onChanged: null,
           ),
           ListTile(
             title: const Text('Auto-pause threshold'),
@@ -824,11 +1434,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // Profile & training
+          // Profile & training (universal bag)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child:
-                Text('Profile & training', style: theme.textTheme.titleSmall),
+            child: Text('Profile & training', style: theme.textTheme.titleSmall),
           ),
           if (!_bagReady)
             const Padding(
@@ -921,38 +1530,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // Integrations (placeholder — OAuth not yet wired on iOS)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Integrations', style: theme.textTheme.titleSmall),
-          ),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: const Text('Strava'),
-            subtitle: const Text('Not connected'),
-            trailing: FilledButton.tonal(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Strava connect coming soon')),
+          // Data
+          if (widget.runStore != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Data', style: theme.textTheme.titleSmall),
+            ),
+            ListTile(
+              leading: const Icon(Icons.move_to_inbox),
+              title: const Text('Import from another app'),
+              subtitle: const Text('Strava, GPX, TCX'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ImportScreen(
+                      apiClient: widget.apiClient,
+                      runStore: widget.runStore!,
+                    ),
+                  ),
                 );
               },
-              child: const Text('Connect'),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.directions_run),
-            title: const Text('parkrun'),
-            subtitle: const Text('Not connected'),
-            trailing: FilledButton.tonal(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('parkrun connect coming soon')),
-                );
-              },
-              child: const Text('Connect'),
+            ListTile(
+              leading: const Icon(Icons.archive_outlined),
+              title: const Text('Full backup'),
+              subtitle: const Text(
+                'Every run with its GPS trace, plus routes, profile, and preferences. '
+                'Restores on web or Android.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _exportBackup,
             ),
-          ),
-          const Divider(),
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined),
+              title: const Text('Export runs as CSV'),
+              subtitle: const Text(
+                'date, distance, duration, pace, source — one row per run. '
+                'Same shape as the web GDPR export.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _exportRunsCsv,
+            ),
+            ListTile(
+              leading: const Icon(Icons.unarchive_outlined),
+              title: const Text('Restore from backup'),
+              subtitle: const Text('Pick a previously saved .zip backup.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _restoreBackup,
+            ),
+            const Divider(),
+          ],
 
           // About
           Padding(
@@ -970,6 +1599,184 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => showLicensePage(context: context),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// List tile that shows whether a BLE chest strap is paired and opens a
+/// scan sheet to pair one. Delegates to `BleHeartRate` for everything.
+class _HeartRateTile extends StatefulWidget {
+  final BleHeartRate heartRate;
+  const _HeartRateTile({required this.heartRate});
+
+  @override
+  State<_HeartRateTile> createState() => _HeartRateTileState();
+}
+
+class _HeartRateTileState extends State<_HeartRateTile> {
+  String? _pairedName;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final name = await widget.heartRate.pairedName();
+    if (!mounted) return;
+    setState(() {
+      _pairedName = name;
+      _loading = false;
+    });
+  }
+
+  Future<void> _pair() async {
+    final device = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _HeartRateScanSheet(heartRate: widget.heartRate),
+    );
+    if (device != null) {
+      try {
+        await widget.heartRate.pair(device);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Pair failed: $e')),
+          );
+        }
+      }
+      await _refresh();
+    }
+  }
+
+  Future<void> _forget() async {
+    await widget.heartRate.forget();
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final paired = _pairedName;
+    return ListTile(
+      leading: const Icon(Icons.favorite_border),
+      title: const Text('Heart rate monitor'),
+      subtitle: Text(
+        _loading
+            ? 'Checking…'
+            : paired != null
+                ? 'Paired: $paired'
+                : 'No strap paired — tap to scan',
+      ),
+      trailing: paired != null
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Forget',
+              onPressed: _forget,
+            )
+          : const Icon(Icons.chevron_right),
+      onTap: _pair,
+    );
+  }
+}
+
+/// Modal bottom sheet that scans for BLE straps advertising the Heart
+/// Rate Service and returns the selected `BluetoothDevice` via `pop`.
+/// Re-imports `flutter_blue_plus` dynamically so the public surface of
+/// `BleHeartRate` can keep the dep hidden from UI callers.
+class _HeartRateScanSheet extends StatefulWidget {
+  final BleHeartRate heartRate;
+  const _HeartRateScanSheet({required this.heartRate});
+
+  @override
+  State<_HeartRateScanSheet> createState() => _HeartRateScanSheetState();
+}
+
+class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
+  List<dynamic> _results = const [];
+  bool _scanning = true;
+  StreamSubscription<List<dynamic>>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = widget.heartRate.scan().listen(
+      (list) {
+        if (mounted) setState(() => _results = list);
+      },
+      onDone: () {
+        if (mounted) setState(() => _scanning = false);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Scan for heart rate monitor',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_scanning)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Wake your strap / chest band. Apps typically take 3–8 seconds.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            if (_results.isEmpty && !_scanning)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No straps found. Make sure it\'s nearby and awake.'),
+              ),
+            ..._results.map((r) {
+              final device = r.device;
+              final name = device.platformName.isNotEmpty
+                  ? device.platformName
+                  : device.remoteId.str;
+              return ListTile(
+                leading: const Icon(Icons.bluetooth),
+                title: Text(name),
+                subtitle: Text('RSSI ${r.rssi} dBm'),
+                onTap: () => Navigator.of(context).pop(device),
+              );
+            }),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

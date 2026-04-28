@@ -6,6 +6,8 @@ The most mature Flutter target in the monorepo. Almost every "Android" checkbox 
 
 **Web is the canonical feature surface. This app mirrors web and adds device-only capabilities.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) and the live matrix at [../../docs/parity.md](../../docs/parity.md).
 
+**One-Dart-codebase rule.** `apps/mobile_android/lib/` and `apps/mobile_ios/lib/` are kept byte-for-byte identical, plus `apps/mobile_android/test/` and `apps/mobile_ios/test/`. Every change you make under `lib/` or `test/` must be applied to the iOS twin in the same commit. Platform-specific runtime behaviour goes inside the unified files via `Platform.isAndroid` / `Platform.isIOS`. The pubspec deltas between the two apps are limited to `name` and `description` — every dependency, version, and asset stays in lockstep. Verify with `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` (should be empty).
+
 **Build here:**
 
 - **Device-led features** (the physical-exception list in §24): live GPS recording + foreground service, auto-pause, on-device crash recovery, BLE chest-strap HR, pedometer / cadence, haptic / TTS pace alerts, OS share sheets, OS share-target intents (GPX / KML import), Health Connect import, disk-backed tile cache, background sync via WorkManager.

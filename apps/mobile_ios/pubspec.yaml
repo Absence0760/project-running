@@ -22,35 +22,37 @@ dependencies:
   ui_kit:
     path: ../../packages/ui_kit
   supabase_flutter: ^2.3.0
-  flutter_map: ^8.0.0
-  flutter_map_maplibre: ^0.0.5
-  latlong2: ^0.9.1
   geolocator: ^14.0.0
-  health: ^13.0.0
-  drift: ^2.14.0
-  sqlite3_flutter_libs: ^0.6.0
   path_provider: ^2.1.0
-  file_picker: ^11.0.0
-  shared_preferences: ^2.2.0
-  sign_in_with_apple: ^6.0.0
-  uuid: ^4.5.0
-  flutter_tts: ^4.0.2
-  flutter_blue_plus: ^1.32.12
   flutter_dotenv: ^6.0.0
-  flutter_map_cache: ^2.0.0
-  flutter_markdown: ^0.7.4
-  image_picker: ^1.1.2
+  flutter_map: ^8.0.0
+  latlong2: ^0.9.1
   pedometer: ^4.0.2
+  flutter_tts: ^4.0.2
+  file_picker: ^11.0.0
+  shared_preferences: ^2.3.0
   permission_handler: ^12.0.0
   share_plus: ^12.0.0
-  url_launcher: ^6.3.1
+  uuid: ^4.5.0
   wakelock_plus: ^1.2.8
-  archive: ^4.0.0
-  csv: ^8.0.0
-  connectivity_plus: ^7.0.0
+  flutter_map_cache: ^2.0.0
   dio: ^5.7.0
   dio_cache_interceptor: ^4.0.0
   http_cache_file_store: ^2.0.0
+  connectivity_plus: ^7.0.0
+  archive: ^4.0.0
+  csv: ^8.0.0
+  health: ^13.0.0
+  google_sign_in: ^6.2.0
+  workmanager: ^0.9.0
+  # Bluetooth LE chest-strap HR during live runs. Uses the standard BLE
+  # Heart Rate Service (UUID 0x180D) + Heart Rate Measurement
+  # characteristic (0x2A37). See `lib/ble_heart_rate.dart`.
+  flutter_blue_plus: ^1.32.12
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.1
+  flutter_markdown: ^0.7.4
+  sign_in_with_apple: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -59,3 +61,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - .env.local

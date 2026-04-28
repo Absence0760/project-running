@@ -1,24 +1,22 @@
+import 'dart:io' show Platform;
+
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'sign_up_screen.dart';
 
-/// Set to true once a Services ID is configured in the Apple Developer portal
-/// and the Supabase Apple auth provider is wired. Until then the button is
-/// rendered but the tap handler is a no-op so the build does not fail on
-/// missing credentials.
-const _kAppleSignInEnabled = false;
-
-/// Email/password sign-in screen for iOS.
+/// Email/password sign-in screen with Google + Apple OAuth alongside.
 ///
-/// Returns `true` from `Navigator.pop` when sign-in succeeds so the caller
-/// can update auth state.
+/// Returns `true` from `Navigator.pop` when sign-in succeeds. The optional
+/// `onSignedIn` callback fires before pop so a top-level `MaterialApp`
+/// owner that drives its own routing can re-render in response.
 class SignInScreen extends StatefulWidget {
   final ApiClient apiClient;
   final VoidCallback? onSignedIn;
-
   const SignInScreen({super.key, required this.apiClient, this.onSignedIn});
 
   @override
@@ -57,9 +55,54 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  Future<void> _signInWithApple() async {
-    if (!_kAppleSignInEnabled) return;
+  /// Google Sign-In via the native flow. On Android, requires
+  /// `GOOGLE_WEB_CLIENT_ID` in `.env.local` and an Android OAuth 2.0
+  /// client configured with the app's SHA-1 fingerprint. See
+  /// `apps/mobile_android/local_testing.md`.
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+      if (webClientId == null || webClientId.isEmpty) {
+        throw Exception(
+          'Google Sign-In not configured — set GOOGLE_WEB_CLIENT_ID in .env.local. '
+          'See apps/mobile_android/local_testing.md.',
+        );
+      }
 
+      final googleSignIn = GoogleSignIn(serverClientId: webClientId);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        throw Exception('Google sign-in did not return an ID token');
+      }
+
+      await widget.apiClient.signInWithGoogleIdToken(
+        idToken: idToken,
+        accessToken: auth.accessToken,
+      );
+      widget.onSignedIn?.call();
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Apple Sign-In via the native flow on iOS, web fallback on Android.
+  /// Needs a Services ID in the Apple Developer portal + the Apple auth
+  /// provider enabled in Supabase. The flow returns an Apple identity
+  /// token that we hand to `Supabase.auth.signInWithIdToken` directly.
+  Future<void> _signInWithApple() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -91,8 +134,17 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Show Apple as the primary OAuth on iOS (App Store guideline 4.8 — apps
+    // that offer third-party login must offer Sign in with Apple alongside).
+    // Android keeps Google as the primary; Apple is still available via the
+    // package's web fallback for users who'd prefer it.
+    final appleFirst = Platform.isIOS;
     return Scaffold(
       appBar: AppBar(title: const Text('Sign In')),
+      // Scaffold already inherits resizeToAvoidBottomInset: true, so the
+      // body gets shrunk by the keyboard — the Column inside has to be
+      // scrollable to absorb the remaining content, otherwise Flutter's
+      // debug overlay shows "BOTTOM OVERFLOWED BY N PIXELS".
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -173,35 +225,63 @@ class _SignInScreenState extends State<SignInScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _signInWithApple,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              if (appleFirst) ...[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithApple,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.apple, size: 18),
+                  label: const Text('Sign in with Apple'),
                 ),
-                icon: const Icon(Icons.apple, size: 18),
-                label: const Text('Sign in with Apple'),
-              ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Sign in with Google'),
+                ),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.login, size: 18),
+                  label: const Text('Sign in with Google'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _signInWithApple,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.apple, size: 18),
+                  label: const Text('Sign in with Apple'),
+                ),
+              ],
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: _loading
-                    ? null
-                    : () async {
-                        final ok = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                SignUpScreen(apiClient: widget.apiClient),
-                          ),
-                        );
-                        if (ok == true && mounted) {
-                          widget.onSignedIn?.call();
-                          Navigator.pop(context, true);
-                        }
-                      },
-                child: const Text("Don't have an account? Sign up"),
-              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Continue offline'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final signedUp = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          SignUpScreen(apiClient: widget.apiClient),
+                    ),
+                  );
+                  if (mounted && signedUp == true) {
+                    widget.onSignedIn?.call();
+                    Navigator.pop(context, true);
+                  }
+                },
+                child: const Text("Don't have an account? Create one"),
               ),
             ],
           ),
