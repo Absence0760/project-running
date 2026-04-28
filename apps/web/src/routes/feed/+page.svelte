@@ -16,6 +16,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunShareView from '$lib/components/RunShareView.svelte';
+	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { Snapshot } from './$types';
 
@@ -233,18 +234,25 @@
 						<span class="when">{fmtRelative(entry.started_at)}</span>
 					</header>
 					<button type="button" class="entry-body" onclick={() => openRun(entry.id)}>
-						<div class="stats">
-							<div class="stat">
-								<span class="stat-num">{formatDistance(entry.distance_m)}</span>
-								<span class="stat-label">Distance</span>
+						{#if entry.track_url}
+							<div class="entry-map">
+								<RunTrackPreview trackUrl={entry.track_url} />
 							</div>
-							<div class="stat">
-								<span class="stat-num">{formatDuration(entry.duration_s)}</span>
-								<span class="stat-label">Time</span>
-							</div>
-							<div class="stat">
-								<span class="stat-num">{pace(entry.distance_m, entry.duration_s)}</span>
-								<span class="stat-label">Pace</span>
+						{/if}
+						<div class="entry-stats-wrap">
+							<div class="stats">
+								<div class="stat">
+									<span class="stat-num">{formatDistance(entry.distance_m)}</span>
+									<span class="stat-label">Distance</span>
+								</div>
+								<div class="stat">
+									<span class="stat-num">{formatDuration(entry.duration_s)}</span>
+									<span class="stat-label">Time</span>
+								</div>
+								<div class="stat">
+									<span class="stat-num">{pace(entry.distance_m, entry.duration_s)}</span>
+									<span class="stat-label">Pace</span>
+								</div>
 							</div>
 						</div>
 					</button>
@@ -294,7 +302,6 @@
 	}
 
 	.me-card {
-		max-width: 48rem;
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
@@ -302,7 +309,7 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		margin-bottom: var(--space-md);
+		margin-bottom: var(--space-xl);
 	}
 	.me-avatar {
 		width: 2.75rem;
@@ -396,18 +403,36 @@
 		}
 	}
 
+	/* Match the rest of the app: list pages fill the available width
+	   with a card grid that auto-fills as many columns as fit. /runs
+	   uses the same minmax(22rem, 1fr) shape. */
 	.feed {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
 		gap: var(--space-md);
-		max-width: 48rem;
 	}
 
 	.entry {
+		display: flex;
+		flex-direction: column;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
+		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+	}
+	.entry:hover {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+	}
+
+	.entry-map {
+		width: 100%;
+		height: 9rem;
+		background: var(--color-bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.entry-head {
@@ -458,17 +483,22 @@
 	.entry-body {
 		display: block;
 		width: 100%;
-		padding: var(--space-lg);
+		padding: 0;
 		text-decoration: none;
 		color: inherit;
 		background: transparent;
 		border: 0;
 		text-align: left;
 		cursor: pointer;
+		flex: 1;
+	}
+
+	.entry-stats-wrap {
+		padding: var(--space-lg);
 		transition: background var(--transition-fast);
 	}
 
-	.entry-body:hover {
+	.entry-body:hover .entry-stats-wrap {
 		background: var(--color-bg-tertiary);
 	}
 
