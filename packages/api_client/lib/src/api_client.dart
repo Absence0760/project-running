@@ -2127,4 +2127,43 @@ class ApiClient {
     if (data is Map) return Map<String, dynamic>.from(data);
     return const {};
   }
+
+  /// Lightweight count of a user's runs, capped by [limit]. The coach
+  /// context strip uses this to show how much history the model is
+  /// reasoning over — only the count matters, so the column projection
+  /// stays at `id` to keep the payload small.
+  Future<int> countRunsForUser(String userId, {int limit = 100}) async {
+    final rows = await _client
+        .from(RunRow.table)
+        .select(RunRow.colId)
+        .eq(RunRow.colUserId, userId)
+        .limit(limit);
+    return (rows as List).length;
+  }
+
+  /// Universal user-prefs bag (`user_settings.prefs`). Returns null when
+  /// the row doesn't exist yet (fresh sign-up). Callers extract specific
+  /// keys (`hr_zones`, `weekly_mileage_goal_m`, etc.).
+  Future<Map<String, dynamic>?> fetchUserSettingsPrefs(String userId) async {
+    final row = await _client
+        .from('user_settings')
+        .select('prefs')
+        .eq('user_id', userId)
+        .maybeSingle();
+    final prefs = row?['prefs'];
+    if (prefs is Map) return Map<String, dynamic>.from(prefs);
+    return null;
+  }
+
+  /// Live-spectator hydration. Fetches existing `live_run_pings` for a
+  /// run in chronological order so a newly-mounted spectator screen can
+  /// catch up on the trail before subscribing to realtime inserts.
+  Future<List<Map<String, dynamic>>> fetchLiveRunPings(String runId) async {
+    final rows = await _client
+        .from('live_run_pings')
+        .select('lat, lng, ele, distance_m, elapsed_s, at')
+        .eq('run_id', runId)
+        .order('at', ascending: true);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
 }

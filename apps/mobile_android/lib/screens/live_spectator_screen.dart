@@ -52,14 +52,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
 
   Future<void> _hydrate() async {
     try {
-      final rows = await Supabase.instance.client
-          .from('live_run_pings')
-          .select('lat, lng, ele, distance_m, elapsed_s, at')
-          .eq('run_id', widget.runId)
-          .order('at', ascending: true);
+      final rows = await widget.api.fetchLiveRunPings(widget.runId);
       if (!mounted) return;
-      for (final row in rows as List) {
-        _ingest(row as Map<String, dynamic>);
+      for (final row in rows) {
+        _ingest(row);
       }
       setState(() {
         _loading = false;

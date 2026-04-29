@@ -461,7 +461,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           const SizedBox(height: 24),
           _ResultsSection(
             results: _results,
-            myUserId: Supabase.instance.client.auth.currentUser?.id,
+            myUserId: widget.social.currentUserId,
             submitting: _submittingResult,
             onSubmit: _submitMyTime,
             onRemove: _removeMyResult,

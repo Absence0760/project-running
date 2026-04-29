@@ -133,6 +133,10 @@ class SocialService extends ChangeNotifier {
 
   String? get _uid => _c.auth.currentUser?.id;
 
+  /// Public mirror of [_uid] for screens that need the viewer id but
+  /// shouldn't be reaching into `Supabase.instance.client.auth` directly.
+  String? get currentUserId => _uid;
+
   /// Public clubs matching an optional search term.
   Future<List<ClubView>> browseClubs({String? query}) async {
     var q = _c.from('clubs').select().eq('is_public', true);

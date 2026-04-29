@@ -275,23 +275,15 @@ class _CoachScreenState extends State<CoachScreen> {
           planWeeks = detail.weeks.length;
         }
       }
-      final supa = Supabase.instance.client;
-      final runRows = await supa
-          .from('runs')
-          .select('id')
-          .eq('user_id', viewerId)
-          .limit(_runsLimit)
+      runCount = await api
+          .countRunsForUser(viewerId, limit: _runsLimit)
           .timeout(kBackendLoadTimeout);
       if (gen != _ctxGen) return;
-      runCount = (runRows as List).length;
-      final settings = await supa
-          .from('user_settings')
-          .select('prefs')
-          .eq('user_id', viewerId)
-          .maybeSingle()
-          .timeout(kBackendLoadTimeout);
+      final prefs = await api
+              .fetchUserSettingsPrefs(viewerId)
+              .timeout(kBackendLoadTimeout) ??
+          const <String, dynamic>{};
       if (gen != _ctxGen) return;
-      final prefs = (settings?['prefs'] as Map?) ?? const {};
       final zones = prefs['hr_zones'] as Map?;
       if (zones != null) {
         final ks = ['z1', 'z2', 'z3', 'z4', 'z5'];
