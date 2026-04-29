@@ -20,6 +20,7 @@ import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../race_controller.dart';
 import '../run_notification_bridge.dart';
@@ -243,12 +244,36 @@ class _RunScreenState extends State<RunScreen> {
     widget.runStore.addListener(_onPrefsChange);
     widget.social.addListener(_onSocialChange);
     widget.training.addListener(_onTrainingChange);
+    pendingStartWorkout.addListener(_onPendingStartWorkout);
     _activityType =
         ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
     _maybePreloadWorkoutRunner();
     _refreshUpcomingEvent();
     _refreshPlanOverview();
+    // Drain after first frame: if a deeper screen set
+    // `pendingStartWorkout` *before* this State existed (lazy tab
+    // construction), we'd have missed the listener fire. Run once
+    // post-frame to consume whatever was queued.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onPendingStartWorkout();
+    });
+  }
+
+  void _onPendingStartWorkout() {
+    final wo = pendingStartWorkout.value;
+    if (wo == null) return;
+    if (!mounted) return;
+    if (_state != _ScreenState.idle) {
+      // A run is already in progress / saving — don't clobber. Leave
+      // the notifier set; the user can finish or discard, return to
+      // idle, and the post-frame drain on the next state transition
+      // would still need to be revisited if we want to honour it.
+      debugPrint('pendingStartWorkout dropped: state=$_state');
+      return;
+    }
+    pendingStartWorkout.value = null;
+    _startStructuredWorkout(wo);
   }
 
   /// Build a [WorkoutRunner] from the incoming planned workout — its
@@ -1268,6 +1293,7 @@ class _RunScreenState extends State<RunScreen> {
 
   @override
   void dispose() {
+    pendingStartWorkout.removeListener(_onPendingStartWorkout);
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
     widget.social.removeListener(_onSocialChange);

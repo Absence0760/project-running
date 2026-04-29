@@ -6,6 +6,7 @@ import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../race_controller.dart';
 import '../settings_sync.dart';
@@ -71,6 +72,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _rebuildPages();
+    pendingStartWorkout.addListener(_onPendingStartWorkout);
+  }
+
+  /// Bring the user to the Run tab when something deeper in the nav
+  /// stack (e.g. plan_detail's calendar → workout_detail → Start) signals
+  /// that a structured workout should start. RunScreen handles the actual
+  /// workout-load on its end via the same notifier.
+  void _onPendingStartWorkout() {
+    if (pendingStartWorkout.value == null) return;
+    if (!mounted) return;
+    if (_currentIndex.value != 1) {
+      _currentIndex.value = 1;
+      _pageController.jumpToPage(1);
+    }
   }
 
   void _rebuildPages() {
@@ -148,6 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    pendingStartWorkout.removeListener(_onPendingStartWorkout);
     _pageController.dispose();
     _currentIndex.dispose();
     super.dispose();

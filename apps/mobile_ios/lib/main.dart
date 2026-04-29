@@ -314,6 +314,20 @@ class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
 
 final themeModeNotifier = ThemeModeNotifier();
 
+/// Cross-screen handoff for "start this workout now". Set by deep
+/// flows (e.g. plan_detail_screen's calendar → workout_detail →
+/// Start workout) that need to bring the user back to the Run tab and
+/// preload the structured runner. HomeScreen listens and switches to
+/// the Run tab; RunScreen listens (or drains in initState) and calls
+/// the workout runner.
+///
+/// Intentionally global rather than threaded through ~5 layers of
+/// widget constructors — every entry path (run-screen, plans-screen,
+/// plan-new-screen, club-detail) ultimately routes through the same
+/// HomeScreen, so a single notifier centralises the handoff.
+final ValueNotifier<cm.PlanWorkoutRow?> pendingStartWorkout =
+    ValueNotifier<cm.PlanWorkoutRow?>(null);
+
 class RunApp extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;

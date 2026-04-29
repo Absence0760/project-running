@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../main.dart' show pendingStartWorkout;
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -129,18 +130,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               startDate: p.startDate,
               endDate: p.endDate,
               workouts: _byWeek.values.expand((x) => x).toList(),
-              onSelect: (wo) async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => WorkoutDetailScreen(
-                      training: widget.training,
-                      planId: p.id,
-                      workoutId: wo.id,
-                    ),
-                  ),
-                );
-                _load();
-              },
+              onSelect: _openWorkout,
             ),
             const SizedBox(height: 16),
             for (final w in _weeks)
@@ -245,18 +235,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final kind = workoutKindFromDb(wo.kind);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => WorkoutDetailScreen(
-              training: widget.training,
-              planId: p.id,
-              workoutId: wo.id,
-            ),
-          ),
-        );
-        _load();
-      },
+      onTap: () => _openWorkout(wo),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -375,20 +354,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         [wo.scheduledDate.weekday % 7];
     return InkWell(
-      onTap: isRest
-          ? null
-          : () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => WorkoutDetailScreen(
-                    training: widget.training,
-                    planId: p.id,
-                    workoutId: wo.id,
-                  ),
-                ),
-              );
-              _load();
-            },
+      onTap: isRest ? null : () => _openWorkout(wo),
       onLongPress: () => _editWorkout(wo),
       borderRadius: BorderRadius.circular(8),
       child: Container(
@@ -453,5 +419,29 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       training: widget.training,
     );
     if (ok) await _load();
+  }
+
+  /// Push WorkoutDetailScreen, then either kick the structured runner
+  /// (when the user tapped Start) or just refresh the plan. The runner
+  /// lives on the Run tab — popping back to root and signalling
+  /// `pendingStartWorkout` lets HomeScreen switch tabs and RunScreen
+  /// load the workout.
+  Future<void> _openWorkout(PlanWorkoutRow wo) async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute<PlanWorkoutRow?>(
+        builder: (_) => WorkoutDetailScreen(
+          training: widget.training,
+          planId: widget.planId,
+          workoutId: wo.id,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (result != null) {
+      pendingStartWorkout.value = result;
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    }
+    _load();
   }
 }
