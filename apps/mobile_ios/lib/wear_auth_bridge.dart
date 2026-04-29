@@ -17,6 +17,11 @@ class WearAuthBridge {
   StreamSubscription<AuthState>? _sub;
 
   void attach({required String url, required String anonKey}) {
+    // Idempotent — a second attach() (e.g. after a reconnect) shouldn't
+    // leak the prior subscription nor double-push session changes.
+    _sub?.cancel();
+    _sub = null;
+
     final auth = Supabase.instance.client.auth;
 
     // Push whatever's current right now — handles the common "phone already

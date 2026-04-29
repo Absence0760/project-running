@@ -28,6 +28,12 @@ import 'training_service.dart';
 import 'watch_ingest_queue.dart';
 import 'wear_auth_bridge.dart';
 
+/// Holds the auth-state subscription registered in [main]. Top-level so
+/// a re-entrant main (rare — full hot-restart resets isolate state, but
+/// belt-and-braces for future reconnect logic) can cancel any prior
+/// listener instead of stacking duplicates.
+StreamSubscription<AuthState>? _authStateSub;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -236,7 +242,13 @@ void main() async {
     registerBackgroundSync();
     if (!hasSupabase || api == null) return;
     final apiNonNull = api;
-    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+    // Cancel any prior subscription before attaching a fresh one.
+    // Hot-restart resets isolate state so this is normally a no-op,
+    // but it makes a re-entrant main() (or future reconnect logic)
+    // safe against leaked listeners.
+    _authStateSub?.cancel();
+    _authStateSub = Supabase.instance.client.auth.onAuthStateChange
+        .listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         WatchIngest.attach(apiNonNull, watchQueue);
         try {
