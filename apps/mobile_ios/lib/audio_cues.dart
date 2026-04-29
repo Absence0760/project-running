@@ -8,6 +8,68 @@ import 'package:run_recorder/run_recorder.dart' show
 import 'preferences.dart';
 
 /// Speaks running stats out loud (km splits, etc.) using text-to-speech.
+/// Format a speed string for TTS.
+///
+/// Returns the empty string when [secondsPerKm] is null or non-positive
+/// — the caller appends this to a split announcement, so the empty
+/// string degrades the cue to just the distance.
+String formatSpeedUtterance(double? secondsPerKm, DistanceUnit unit) {
+  if (secondsPerKm == null || secondsPerKm <= 0) return '';
+  final kmh = 3600 / secondsPerKm;
+  if (unit == DistanceUnit.mi) {
+    final mph = kmh / 1.609344;
+    return 'Speed, ${mph.toStringAsFixed(1)} miles per hour';
+  }
+  return 'Speed, ${kmh.toStringAsFixed(1)} kilometres per hour';
+}
+
+/// Format a pace string for TTS. Mirror of [formatSpeedUtterance] —
+/// empty-string on null or non-positive input.
+String formatPaceUtterance(double? secondsPerKm, DistanceUnit unit) {
+  if (secondsPerKm == null || secondsPerKm <= 0) return '';
+  const metresPerMile = 1609.344;
+  final secondsPerUnit = unit == DistanceUnit.mi
+      ? secondsPerKm * (metresPerMile / 1000)
+      : secondsPerKm;
+  final m = secondsPerUnit ~/ 60;
+  final s = (secondsPerUnit % 60).toInt();
+  final unitWord = unit == DistanceUnit.mi ? 'per mile' : 'per kilometre';
+  return 'Pace, $m minutes $s seconds $unitWord';
+}
+
+/// Spoken distance: km when ≥ 1000 m, metres otherwise. Round km values
+/// drop the decimal ("5 kilometres" not "5.0 kilometres").
+String formatSpokenDistance(double metres) {
+  if (metres >= 1000) {
+    final km = metres / 1000;
+    if (km == km.roundToDouble()) return '${km.round()} kilometres';
+    return '${km.toStringAsFixed(1)} kilometres';
+  }
+  return '${metres.round()} metres';
+}
+
+/// Compose the workout-step intro line ("Warmup", "Rep 3 of 5", etc.)
+/// followed by spoken distance + pace. Pure — used by the live audio
+/// cues during a structured workout.
+String formatWorkoutStepUtterance(WorkoutStep step) {
+  final paceM = step.targetPaceSecPerKm ~/ 60;
+  final paceS = step.targetPaceSecPerKm % 60;
+  final paceTail = paceS == 0
+      ? '$paceM minutes per kilometre'
+      : '$paceM minutes $paceS seconds per kilometre';
+  final dist = formatSpokenDistance(step.targetDistanceMetres);
+  final intro = switch (step.kind) {
+    WorkoutStepKind.warmup => 'Warmup',
+    WorkoutStepKind.rep => step.repIndex != null && step.repTotal != null
+        ? 'Rep ${step.repIndex} of ${step.repTotal}'
+        : 'Rep',
+    WorkoutStepKind.recovery => 'Recovery',
+    WorkoutStepKind.steady => 'Steady',
+    WorkoutStepKind.cooldown => 'Cooldown',
+  };
+  return '$intro. $dist at $paceTail.';
+}
+
 class AudioCues {
   final FlutterTts _tts = FlutterTts();
   bool _initialized = false;
@@ -43,15 +105,8 @@ class AudioCues {
     await _tts.speak('$totalUnits $unitWord. $tail');
   }
 
-  String _formatSpeed(double? secondsPerKm, DistanceUnit unit) {
-    if (secondsPerKm == null || secondsPerKm <= 0) return '';
-    final kmh = 3600 / secondsPerKm;
-    if (unit == DistanceUnit.mi) {
-      final mph = kmh / 1.609344;
-      return 'Speed, ${mph.toStringAsFixed(1)} miles per hour';
-    }
-    return 'Speed, ${kmh.toStringAsFixed(1)} kilometres per hour';
-  }
+  String _formatSpeed(double? secondsPerKm, DistanceUnit unit) =>
+      formatSpeedUtterance(secondsPerKm, unit);
 
   /// Announce that the run started.
   Future<void> announceStart() async {
@@ -118,47 +173,15 @@ class AudioCues {
     await _tts.speak('Workout complete. Nice work.');
   }
 
-  String _workoutStepUtterance(WorkoutStep step) {
-    final paceM = step.targetPaceSecPerKm ~/ 60;
-    final paceS = step.targetPaceSecPerKm % 60;
-    final paceTail = paceS == 0
-        ? '$paceM minutes per kilometre'
-        : '$paceM minutes $paceS seconds per kilometre';
-    final dist = _spokenDistance(step.targetDistanceMetres);
-    final intro = switch (step.kind) {
-      WorkoutStepKind.warmup => 'Warmup',
-      WorkoutStepKind.rep => step.repIndex != null && step.repTotal != null
-          ? 'Rep ${step.repIndex} of ${step.repTotal}'
-          : 'Rep',
-      WorkoutStepKind.recovery => 'Recovery',
-      WorkoutStepKind.steady => 'Steady',
-      WorkoutStepKind.cooldown => 'Cooldown',
-    };
-    return '$intro. $dist at $paceTail.';
-  }
+  String _workoutStepUtterance(WorkoutStep step) =>
+      formatWorkoutStepUtterance(step);
 
-  String _spokenDistance(double metres) {
-    if (metres >= 1000) {
-      final km = metres / 1000;
-      if (km == km.roundToDouble()) return '${km.round()} kilometres';
-      return '${km.toStringAsFixed(1)} kilometres';
-    }
-    return '${metres.round()} metres';
-  }
+  String _spokenDistance(double metres) => formatSpokenDistance(metres);
 
   Future<void> stop() async {
     await _tts.stop();
   }
 
-  String _formatPace(double? secondsPerKm, DistanceUnit unit) {
-    if (secondsPerKm == null || secondsPerKm <= 0) return '';
-    const metresPerMile = 1609.344;
-    final secondsPerUnit = unit == DistanceUnit.mi
-        ? secondsPerKm * (metresPerMile / 1000)
-        : secondsPerKm;
-    final m = secondsPerUnit ~/ 60;
-    final s = (secondsPerUnit % 60).toInt();
-    final unitWord = unit == DistanceUnit.mi ? 'per mile' : 'per kilometre';
-    return 'Pace, $m minutes $s seconds $unitWord';
-  }
+  String _formatPace(double? secondsPerKm, DistanceUnit unit) =>
+      formatPaceUtterance(secondsPerKm, unit);
 }
