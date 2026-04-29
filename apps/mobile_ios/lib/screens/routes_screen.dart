@@ -72,9 +72,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     setState(() => _syncing = true);
     try {
       final remote = await api.getRoutes();
-      for (final r in remote) {
-        await widget.routeStore.save(r);
-      }
+      await widget.routeStore.saveBatch(remote);
     } catch (e) {
       debugPrint('Fetch routes failed: $e');
       if (mounted) {

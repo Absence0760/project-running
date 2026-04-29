@@ -29,6 +29,24 @@ class LocalRouteStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Bulk variant of [save] — writes every file in parallel and only
+  /// notifies once. Used by the routes screen's remote-sync path so a
+  /// 100-route pull doesn't fire 100 listener callbacks (each rebuilding
+  /// the list).
+  Future<void> saveBatch(Iterable<Route> routes) async {
+    if (routes.isEmpty) return;
+    final list = routes.toList();
+    await Future.wait(list.map((route) {
+      final file = File('${_dir.path}/${route.id}.json');
+      return file.writeAsString(jsonEncode(route.toJson()));
+    }));
+    for (final route in list) {
+      _routes.removeWhere((r) => r.id == route.id);
+      _routes.insert(0, route);
+    }
+    notifyListeners();
+  }
+
   Future<void> delete(String routeId) async {
     final file = File('${_dir.path}/$routeId.json');
     if (file.existsSync()) await file.delete();
