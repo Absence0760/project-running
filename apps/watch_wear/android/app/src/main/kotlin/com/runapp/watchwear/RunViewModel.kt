@@ -9,8 +9,6 @@ import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RunRecordingService
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonArray
 import com.runapp.watchwear.system.BatteryOptimization
 import com.runapp.watchwear.system.BatteryStatus
 import com.runapp.watchwear.system.NetworkWatcher
@@ -23,8 +21,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.UUID
 
@@ -812,27 +808,12 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun pushRun(run: QueuedRun) {
-        val metadata: JsonObject = buildJsonObject {
-            put("activity_type", run.activityType)
-            if (run.avgBpm != null) put("avg_bpm", run.avgBpm)
-            if (run.steps != null && run.steps > 0) put("steps", run.steps)
-            if (run.laps.isNotEmpty()) {
-                put("laps", buildJsonArray {
-                    var prevMs = 0L
-                    var prevDist = 0.0
-                    for (lap in run.laps) {
-                        addJsonObject {
-                            put("index", lap.number)
-                            put("start_offset_s", (lap.atMs / 1000).toInt())
-                            put("distance_m", (lap.distanceM - prevDist).coerceAtLeast(0.0))
-                            put("duration_s", ((lap.atMs - prevMs) / 1000).toInt().coerceAtLeast(0))
-                        }
-                        prevMs = lap.atMs
-                        prevDist = lap.distanceM
-                    }
-                })
-            }
-        }
+        val metadata: JsonObject = buildRunMetadata(
+            activityType = run.activityType,
+            avgBpm = run.avgBpm,
+            steps = run.steps,
+            laps = run.laps,
+        )
         val trackFile = File(run.trackFilePath)
         supabase.saveRun(
             runId = run.id,

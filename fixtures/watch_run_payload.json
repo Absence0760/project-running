@@ -1,0 +1,43 @@
+{
+  "_doc": "Canonical watch-run payload + expected row shape. Cross-platform contract for the watch-ingest path. ALL THREE platforms (Flutter ingest queue, Wear OS metadata encoder, web row reader) read this file in their respective tests and must agree on the shape. If you change a field, update all three tests in the same commit. The fields here are the union of what the Apple Watch sends via WCSession and what the Wear OS app produces directly. See docs/decisions.md ADR 40 + docs/metadata.md for the registry.",
+
+  "payload": {
+    "_doc": "The raw watch-run payload as it arrives at the Flutter ingest queue (the same shape Apple Watch writes to WCSession metadata + file).",
+    "id": "9c4dca1e-cf7a-4f12-9f19-e29c70bdf101",
+    "started_at": "2026-04-15T07:30:00Z",
+    "duration_s": 1800,
+    "distance_m": 5230.5,
+    "source": "watch",
+    "activity_type": "run",
+    "avg_bpm": 152,
+    "track": [
+      { "lat": 51.4513, "lng": -0.1962, "ele": 12.0, "ts": "2026-04-15T07:30:01Z", "bpm": 145 },
+      { "lat": 51.4514, "lng": -0.1961, "ele": 12.5, "ts": "2026-04-15T07:30:11Z", "bpm": 148 },
+      { "lat": 51.4516, "lng": -0.1957, "ele": 13.0, "ts": "2026-04-15T07:30:21Z", "bpm": 152 }
+    ],
+    "laps": [
+      { "index": 1, "start_offset_s": 0, "distance_m": 1000, "duration_s": 320 },
+      { "index": 2, "start_offset_s": 320, "distance_m": 1000, "duration_s": 335 }
+    ]
+  },
+
+  "expectedRow": {
+    "_doc": "The fields a `runs` row carries after either watch path lands. Web reads these; the Wear OS encoder must produce these.",
+    "source": "watch",
+    "duration_s": 1800,
+    "distance_m": 5230.5
+  },
+
+  "expectedMetadata": {
+    "_doc": "The jsonb keys on runs.metadata after a watch run lands. Lap shape is canonical per docs/metadata.md § laps — `index` is 1-based (matches lap.number on both platforms), `start_offset_s` is the cumulative duration BEFORE this lap (so the first lap has 0), and `distance_m` + `duration_s` are per-lap deltas.",
+    "activity_type": "run",
+    "avg_bpm": 152,
+    "laps": [
+      { "index": 1, "start_offset_s": 0, "distance_m": 1000, "duration_s": 320 },
+      { "index": 2, "start_offset_s": 320, "distance_m": 1000, "duration_s": 335 }
+    ]
+  },
+
+  "expectedTrackCount": 3,
+  "expectedFirstPointBpm": 145
+}

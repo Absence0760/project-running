@@ -38,6 +38,9 @@ jobs:
           echo "Run 'npm run gen:types' locally and commit the result."
       - name: CHECK constraints vs TS unions
         run: npm run check:check-constraints --workspace=apps/web
+      - name: Web TS unit tests
+        working-directory: apps/web
+        run: npx tsx --test src/lib/*.test.ts
 
   build-watch-wear:
     name: Build Wear OS app (Kotlin)

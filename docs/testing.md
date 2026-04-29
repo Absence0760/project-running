@@ -233,6 +233,7 @@ Several private formatters were extracted from stateful classes into top-level p
 - **`audio_cues_helpers_test.dart` (15 tests):** `formatSpeedUtterance`, `formatPaceUtterance`, `formatSpokenDistance`, `formatWorkoutStepUtterance` — covers the km / mi forks, the empty-string fallback for null pace, integer-vs-fractional km wording, and the rep / warmup / recovery / steady / cooldown intros.
 - **`strava_importer_helpers_test.dart` (9 tests):** `parseStravaDate` — ISO 8601 fast path, `"Apr 9, 2026, 7:30:00 AM"` canonical Strava format, AM/PM noon and midnight edges, case-insensitive month, long month names, null fallback for unparseable input.
 - **`watch_ingest_queue_helpers_test.dart` (10 tests):** `runFromWatchPayload` + `parseRunSource` — required-fields happy path, missing id / source defaults, optional track waypoints with elevation + timestamp, non-Map track entries skipped, avg_bpm + activity_type promoted into Run.metadata, metadata stays null when neither is set, non-numeric avg_bpm ignored, unknown source falls back to RunSource.watch.
+- **`watch_payload_fixture_test.dart` (5 tests):** Cross-platform contract test against `fixtures/watch_run_payload.json`. Decodes the same canonical fixture the Wear OS Kotlin test (`apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`) and the web test (`apps/web/src/lib/watch_payload_fixture.test.ts`) read; asserts row fields match `expectedRow`, `metadata.activity_type` / `avg_bpm` / `laps` round-trip, per-point `bpm` survives the decoder, and the canonical lap shape is preserved. Editing the fixture without updating all three platform tests is a deliberate hard-fail.
 
 ### `apps/mobile_ios/test/` — same 72 files, byte-for-byte
 
@@ -351,6 +352,18 @@ TypeScript unit tests for the training-load curves (`lib/training_load.ts`, deci
 The TrainingLoadChart component on `/dashboard` renders the three series; `hasTrimpSignal` flips the chart's "TRIMP / distance proxy" subtitle.
 
 **Test-runner constraint:** `tsx --test` runs raw TypeScript through the Node loader and does not understand Svelte runes. That means `*.svelte.ts` modules (`units.svelte.ts`, `stores/auth.svelte.ts`, `stores/toast.svelte.ts`) cannot be imported — the `$state(...)` call at module load fails with `ReferenceError: $state is not defined`. Keep test-targeted modules (`training.ts`, `fitness.ts`, etc.) free of imports from `.svelte.ts` files. The unit-aware formatters `fmtKm` / `fmtPace` live in `units.svelte.ts` for that reason; UI code imports them from `$lib/units.svelte` directly. Adding vitest with the Svelte plugin would lift this restriction — not done yet.
+
+### `apps/web/src/lib/types.test.ts` — 6 tests
+
+`parseRunSource` defensive-fallback contract — every valid `RunSource` value passes through; null, undefined, empty string, unknown string, and case-mismatched input all fall back to `'app'`.
+
+### `apps/web/src/lib/watch_payload_fixture.test.ts` — 6 tests
+
+Cross-platform contract test against `fixtures/watch_run_payload.json`. The same fixture is decoded by `apps/mobile_android/test/watch_payload_fixture_test.dart`, its `mobile_ios` mirror, and the Wear OS Kotlin test (`apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`). Editing the fixture without updating all three platform tests is a deliberate hard-fail. Web's slice asserts: source parses to a valid `RunSource`, `metadata.activity_type` is a registered value, `avg_bpm` is positive, laps use the canonical 1-based `index` + cumulative-BEFORE `start_offset_s` shape with deltas accumulating correctly, and the row + payload sources agree.
+
+### `apps/watch_wear/.../WatchRunPayloadFixtureTest.kt` — 3 tests
+
+Kotlin/JUnit slice of the same cross-platform fixture contract. Exercises `buildRunMetadata` (the pure helper extracted from `RunViewModel.pushRun`) by feeding it cumulative-form `QueuedLap` inputs derived from the fixture's expected per-lap-delta shape and asserting it produces matching JSON. Also asserts the payload source and per-point bpm round-trip.
 
 ---
 
