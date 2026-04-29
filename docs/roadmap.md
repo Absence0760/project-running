@@ -299,7 +299,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] `mv_weekly_mileage` materialized view
 - [x] Full-text search index on `routes.name`
 - [x] Composite indexes for dashboard queries (runs by source, distance range)
-- [ ] `pg_cron` job to refresh materialized view (every 5 min)
+- [x] `pg_cron` job to refresh materialized view (every 5 min) — migration `20260602_001_pg_cron_schedules.sql` schedules `refresh materialized view concurrently mv_weekly_mileage` at `*/5 * * * *` plus a 15-minute `cleanup_stale_live_run_pings()` sweep that the `20260509_001` follow-up note had pending.
 - [ ] Verify dashboard queries perform under 2 seconds for users with 200+ runs
 
 ### Milestone: web app live at `app.runapp.com`
