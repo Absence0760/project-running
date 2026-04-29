@@ -92,9 +92,15 @@ class CoachScreen extends StatefulWidget {
 class _Msg {
   String? id;
   final String role;
-  String content;
+  // Content is a ValueNotifier so the SSE token-stream path can append
+  // characters at the engine's pace without setStating CoachScreen
+  // (which would rebuild the AppBar, drawer, every prior message, and
+  // the composer per token). Bubble widgets subscribe via
+  // ValueListenableBuilder so only the active assistant bubble rebuilds.
+  final ValueNotifier<String> content;
   String? reaction;
-  _Msg({this.id, required this.role, required this.content, this.reaction});
+  _Msg({this.id, required this.role, required String content, this.reaction})
+      : content = ValueNotifier<String>(content);
 }
 
 class _ContextSummary {
@@ -396,7 +402,7 @@ class _CoachScreenState extends State<CoachScreen> {
       }
       final payloadMessages = _messages
           .sublist(0, assistantIdx)
-          .map((m) => {'role': m.role, 'content': m.content})
+          .map((m) => {'role': m.role, 'content': m.content.value})
           .toList();
       final body = jsonEncode({
         'messages': payloadMessages,
@@ -516,7 +522,8 @@ class _CoachScreenState extends State<CoachScreen> {
     } else if (event == 'token') {
       final text = (data['text'] as String?) ?? '';
       if (assistantIdx < _messages.length) {
-        setState(() => _messages[assistantIdx].content += text);
+        // No setState — the bubble subscribes via ValueListenableBuilder.
+        _messages[assistantIdx].content.value += text;
       }
       _scrollToBottom();
     } else if (event == 'done') {
@@ -644,7 +651,7 @@ class _CoachScreenState extends State<CoachScreen> {
 
   String _activeThreadTitle() {
     for (final m in _messages) {
-      if (m.role == 'user') return coachTitleFromMessage(m.content);
+      if (m.role == 'user') return coachTitleFromMessage(m.content.value);
     }
     return 'New conversation';
   }
@@ -1016,19 +1023,24 @@ class _CoachScreenState extends State<CoachScreen> {
                   ),
                   child: isEditing
                       ? _buildEditForm()
-                      : (isUser
-                          ? Text(m.content, style: TextStyle(color: fg))
-                          : (m.content.isEmpty && _busy
-                              ? _buildTyping(theme)
-                              : MarkdownBody(
-                                  data: m.content,
-                                  selectable: true,
-                                  styleSheet: MarkdownStyleSheet.fromTheme(theme)
-                                      .copyWith(
-                                    p: TextStyle(color: fg, height: 1.45),
-                                    listBullet: TextStyle(color: fg),
-                                  ),
-                                ))),
+                      : ValueListenableBuilder<String>(
+                          valueListenable: m.content,
+                          builder: (context, content, _) => isUser
+                              ? Text(content, style: TextStyle(color: fg))
+                              : (content.isEmpty && _busy
+                                  ? _buildTyping(theme)
+                                  : MarkdownBody(
+                                      data: content,
+                                      selectable: true,
+                                      styleSheet:
+                                          MarkdownStyleSheet.fromTheme(theme)
+                                              .copyWith(
+                                        p: TextStyle(
+                                            color: fg, height: 1.45),
+                                        listBullet: TextStyle(color: fg),
+                                      ),
+                                    )),
+                        ),
                 ),
                 if (m.id != null && _viewingArchiveAt == null)
                   _buildBubbleActions(theme, m, isUser),
@@ -1100,7 +1112,7 @@ class _CoachScreenState extends State<CoachScreen> {
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: () => _copy(m.content),
+            onPressed: () => _copy(m.content.value),
           ),
           if (isUser)
             IconButton(
@@ -1112,7 +1124,7 @@ class _CoachScreenState extends State<CoachScreen> {
               onPressed: _busy
                   ? null
                   : () {
-                      _editCtrl.text = m.content;
+                      _editCtrl.text = m.content.value;
                       setState(() => _editingId = m.id);
                     },
             )
