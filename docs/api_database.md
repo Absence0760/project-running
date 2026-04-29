@@ -138,21 +138,37 @@ OAuth tokens and connection state for each external platform per user.
 
 ```sql
 create table integrations (
-  id              uuid primary key default gen_random_uuid(),
-  user_id         uuid references auth.users not null,
-  provider        text not null,            -- 'strava' | 'garmin' | 'parkrun' | 'runsignup'
-  access_token    text,                     -- encrypted at rest by Supabase
-  refresh_token   text,
-  token_expiry    timestamptz,
-  external_id     text,                     -- athlete ID on the provider
-  scope           text,                     -- OAuth scopes granted
-  last_sync_at    timestamptz,
-  sync_cursor     text,                     -- pagination cursor for backfill
-  created_at      timestamptz default now(),
-  updated_at      timestamptz default now(),
+  id                       uuid primary key default gen_random_uuid(),
+  user_id                  uuid references auth.users not null,
+  provider                 text not null,            -- 'strava' | 'garmin' | 'parkrun' | 'runsignup'
+  access_token_secret_id   uuid references vault.secrets(id) on delete set null,
+  refresh_token_secret_id  uuid references vault.secrets(id) on delete set null,
+  token_expiry             timestamptz,
+  external_id              text,                     -- athlete ID on the provider
+  scope                    text,                     -- OAuth scopes granted
+  last_sync_at             timestamptz,
+  sync_cursor              text,                     -- pagination cursor for backfill
+  created_at               timestamptz default now(),
+  updated_at               timestamptz default now(),
   unique (user_id, provider)
 );
 ```
+
+**Tokens live in Supabase Vault, not on the row.** OAuth access / refresh
+tokens are encrypted at rest by Supabase Vault (libsodium, project-managed
+master key with built-in rotation). The `integrations` row carries only
+UUID references into `vault.secrets`. Never `select access_token from
+integrations` — that column was dropped in migration `20260603_001`.
+
+To read or write tokens, call the SECURITY DEFINER helpers:
+
+- `get_integration_tokens(p_user_id, p_provider)` returns
+  `(access_token text, refresh_token text, token_expiry timestamptz)`.
+  Service role bypasses the owner check; everyone else can only read
+  their own.
+- `set_integration_tokens(p_user_id, p_provider, p_access, p_refresh, p_expiry)`
+  upserts the row + creates / updates the vault secrets in place
+  (so `access_token_secret_id` stays stable across token refreshes).
 
 ---
 

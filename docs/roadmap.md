@@ -132,7 +132,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
       jsonb column bloat on the dashboard query path, and lets bulk imports
       (Strava, Health Connect) scale to 100K users on a $25/month Supabase
       plan instead of needing the Team tier.
-- [ ] Encrypt OAuth tokens in `integrations` table with `pgcrypto`
+- [x] Encrypt OAuth tokens in `integrations` — migration `20260603_001_integrations_vault.sql` drops the plaintext `access_token` / `refresh_token` columns and replaces them with `access_token_secret_id` / `refresh_token_secret_id` UUID references into `vault.secrets` (Supabase Vault, libsodium, project-managed master key). SECURITY DEFINER helpers `get_integration_tokens` / `set_integration_tokens` encapsulate the admin-only `vault.decrypted_secrets` view so EFs don't need extra grants. See decisions.md § 41.
 - [ ] Add rate limiting to Edge Function endpoints
 - [x] Validate Strava webhook receivers — Strava doesn't sign POST payloads (their model is "the callback URL is secret"). The function requires `STRAVA_WEBHOOK_SECRET` in the URL query string, validates it with a `timingSafeEqual` constant-time compare, and additionally checks `hub.verify_token` on the GET handshake. Fails closed when the env var is missing. See `apps/backend/supabase/functions/strava-webhook/index.ts`.
 - [ ] Set up MapTiler API usage monitoring

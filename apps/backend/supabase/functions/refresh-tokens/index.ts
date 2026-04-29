@@ -7,23 +7,36 @@ serve(async () => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  // Find Strava integrations with tokens expiring within 1 hour
+  // Find Strava integrations with tokens expiring within 1 hour. The
+  // `id, user_id` projection used to also pull `refresh_token`; tokens
+  // now live in Vault, accessed via `get_integration_tokens`.
   const { data: expiring } = await supabase
     .from('integrations')
-    .select('id, user_id, refresh_token')
+    .select('id, user_id')
     .eq('provider', 'strava')
     .lt('token_expiry', new Date(Date.now() + 3600_000).toISOString());
 
   let refreshed = 0;
 
   for (const integration of expiring ?? []) {
+    // Decrypt the existing refresh token through the SECURITY DEFINER
+    // helper. Service role bypasses the owner check.
+    const { data: tokenRows, error: tokenErr } = await supabase
+      .rpc('get_integration_tokens', {
+        p_user_id: integration.user_id,
+        p_provider: 'strava',
+      });
+    if (tokenErr || !tokenRows || tokenRows.length === 0) continue;
+    const refreshToken = tokenRows[0]?.refresh_token;
+    if (!refreshToken) continue;
+
     const response = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_id: Deno.env.get('STRAVA_CLIENT_ID'),
         client_secret: Deno.env.get('STRAVA_CLIENT_SECRET'),
-        refresh_token: integration.refresh_token,
+        refresh_token: refreshToken,
         grant_type: 'refresh_token',
       }),
     });
@@ -32,15 +45,17 @@ serve(async () => {
 
     const tokens = await response.json();
 
-    await supabase
-      .from('integrations')
-      .update({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', integration.id);
+    // Round-trip the refreshed pair through the setter so the vault
+    // entries get updated in place (secret_id stays stable). The
+    // setter also writes token_expiry + updated_at on the row.
+    const { error: setErr } = await supabase.rpc('set_integration_tokens', {
+      p_user_id: integration.user_id,
+      p_provider: 'strava',
+      p_access_token: tokens.access_token,
+      p_refresh_token: tokens.refresh_token,
+      p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
+    });
+    if (setErr) continue;
 
     refreshed++;
   }

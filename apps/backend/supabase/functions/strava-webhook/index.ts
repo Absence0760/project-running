@@ -60,10 +60,12 @@ serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  // Look up user by Strava athlete ID.
+  // Look up user by Strava athlete ID. The token now lives in Vault;
+  // we only need user_id from the integration row, then a follow-up
+  // RPC to decrypt when the activity-fetch TODO below is wired.
   const { data: integration } = await supabase
     .from('integrations')
-    .select('user_id, access_token')
+    .select('user_id')
     .eq('provider', 'strava')
     .eq('external_id', String(owner_id))
     .single();
@@ -73,6 +75,11 @@ serve(async (req: Request) => {
   }
 
   // TODO: Fetch activity detail + GPS stream from Strava API
+  //   const { data: tokenRows } = await supabase.rpc('get_integration_tokens', {
+  //     p_user_id: integration.user_id,
+  //     p_provider: 'strava',
+  //   });
+  //   const accessToken = tokenRows?.[0]?.access_token;
   // TODO: Map to Run and upsert into runs table
 
   return new Response('OK');

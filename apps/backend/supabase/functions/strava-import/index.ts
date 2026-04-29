@@ -97,21 +97,30 @@ async function handleConnect(
 
 	const tokens = (await tokenResponse.json()) as StravaTokens;
 
-	const { error } = await supabase.from('integrations').upsert(
+	// Upsert non-secret fields (external_id, scope) directly; the
+	// access / refresh tokens go to Vault via set_integration_tokens.
+	const { error: upsertErr } = await supabase.from('integrations').upsert(
 		{
 			user_id: userId,
 			provider: 'strava',
-			access_token: tokens.access_token,
-			refresh_token: tokens.refresh_token,
-			token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
 			external_id: String(tokens.athlete.id),
 			scope,
 		},
 		{ onConflict: 'user_id,provider' },
 	);
+	if (upsertErr) {
+		return new Response(`Store integration failed: ${upsertErr.message}`, { status: 500 });
+	}
 
-	if (error) {
-		return new Response(`Store tokens failed: ${error.message}`, { status: 500 });
+	const { error: tokErr } = await supabase.rpc('set_integration_tokens', {
+		p_user_id: userId,
+		p_provider: 'strava',
+		p_access_token: tokens.access_token,
+		p_refresh_token: tokens.refresh_token,
+		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
+	});
+	if (tokErr) {
+		return new Response(`Store tokens failed: ${tokErr.message}`, { status: 500 });
 	}
 
 	// First-time connects always trigger a backfill so the user sees data
@@ -127,26 +136,24 @@ async function handleSync(
 	userId: string,
 	lookbackDays: number,
 ): Promise<Response> {
-	const { data: integration } = await supabase
-		.from('integrations')
-		.select('access_token, refresh_token, token_expiry')
-		.eq('user_id', userId)
-		.eq('provider', 'strava')
-		.maybeSingle();
-
-	if (!integration?.access_token) {
+	const { data: tokenRows, error: tokenErr } = await supabase.rpc(
+		'get_integration_tokens',
+		{ p_user_id: userId, p_provider: 'strava' },
+	);
+	const tokenRow = tokenRows?.[0];
+	if (tokenErr || !tokenRow?.access_token) {
 		return new Response('Strava not connected', { status: 400 });
 	}
 
-	let accessToken = integration.access_token as string;
+	let accessToken = tokenRow.access_token as string;
 
 	// Refresh on-demand if the stored token is within 5 minutes of expiry.
 	// This path runs independently of the scheduled refresh job so an
 	// ad-hoc sync after a long gap still works.
-	if (integration.token_expiry) {
-		const expiryMs = new Date(integration.token_expiry as string).getTime();
+	if (tokenRow.token_expiry) {
+		const expiryMs = new Date(tokenRow.token_expiry as string).getTime();
 		if (Date.now() + 300_000 > expiryMs) {
-			const refreshed = await refreshStravaToken(supabase, userId, integration.refresh_token as string);
+			const refreshed = await refreshStravaToken(supabase, userId, tokenRow.refresh_token as string);
 			if (refreshed) accessToken = refreshed;
 		}
 	}
@@ -172,16 +179,13 @@ async function refreshStravaToken(
 	});
 	if (!resp.ok) return null;
 	const tokens = (await resp.json()) as StravaTokens;
-	await supabase
-		.from('integrations')
-		.update({
-			access_token: tokens.access_token,
-			refresh_token: tokens.refresh_token,
-			token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
-			updated_at: new Date().toISOString(),
-		})
-		.eq('user_id', userId)
-		.eq('provider', 'strava');
+	await supabase.rpc('set_integration_tokens', {
+		p_user_id: userId,
+		p_provider: 'strava',
+		p_access_token: tokens.access_token,
+		p_refresh_token: tokens.refresh_token,
+		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
+	});
 	return tokens.access_token;
 }
 

@@ -478,13 +478,13 @@ export type Database = {
       }
       integrations: {
         Row: {
-          access_token: string | null
+          access_token_secret_id: string | null
           created_at: string | null
           external_id: string | null
           id: string
           last_sync_at: string | null
           provider: string
-          refresh_token: string | null
+          refresh_token_secret_id: string | null
           scope: string | null
           sync_cursor: string | null
           token_expiry: string | null
@@ -492,13 +492,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          access_token?: string | null
+          access_token_secret_id?: string | null
           created_at?: string | null
           external_id?: string | null
           id?: string
           last_sync_at?: string | null
           provider: string
-          refresh_token?: string | null
+          refresh_token_secret_id?: string | null
           scope?: string | null
           sync_cursor?: string | null
           token_expiry?: string | null
@@ -506,13 +506,13 @@ export type Database = {
           user_id: string
         }
         Update: {
-          access_token?: string | null
+          access_token_secret_id?: string | null
           created_at?: string | null
           external_id?: string | null
           id?: string
           last_sync_at?: string | null
           provider?: string
-          refresh_token?: string | null
+          refresh_token_secret_id?: string | null
           scope?: string | null
           sync_cursor?: string | null
           token_expiry?: string | null
@@ -1519,6 +1519,14 @@ export type Database = {
         Returns: string
       }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
+      get_integration_tokens: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: {
+          access_token: string
+          refresh_token: string
+          token_expiry: string
+        }[]
+      }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }
@@ -1650,6 +1658,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      set_integration_tokens: {
+        Args: {
+          p_access_token: string
+          p_provider: string
+          p_refresh_token: string
+          p_token_expiry?: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
       weekly_mileage: {
         Args: { weeks_back?: number }

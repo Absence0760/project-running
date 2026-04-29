@@ -831,6 +831,27 @@ This is intentional, not technical debt.
 
 ---
 
+## 41. OAuth tokens are stored in Supabase Vault, not as plaintext columns
+
+**Decided:** `integrations.access_token` and `integrations.refresh_token` were dropped (migration `20260603_001_integrations_vault.sql`) and replaced with `access_token_secret_id` / `refresh_token_secret_id` UUID references into `vault.secrets`. All reads/writes go through SECURITY DEFINER helpers `get_integration_tokens(user_id, provider)` and `set_integration_tokens(user_id, provider, access, refresh, expiry)`.
+
+**Why Vault rather than `pgcrypto`:**
+
+- The master key never leaves Supabase. Vault is libsodium with a project-managed key; the platform handles rotation. With `pgcrypto` the key would have to live in Edge Function env vars — a leaked deploy log or env-dump would give up every token at once.
+- Key-handling mistakes are the most common real-world crypto bug. Vault removes that whole class — there is no key for the application to mismanage.
+- Schema overhead is small: two `uuid` columns and two helper functions. The functions encapsulate the admin-only `vault.decrypted_secrets` view so EFs don't need broad grants.
+
+**Why not Supabase Vault as the *primary* storage (i.e. naming each secret instead of referencing by id):**
+
+- Vault is designed for app-level secrets (API keys, service tokens) — not thousands of per-user entries. Naming by `integration_access_<user>_<provider>` is workable but non-idiomatic; UUID indirection plus one helper function is clearer.
+- `set_integration_tokens` updates the existing vault entry in place on rotation so the secret_id stays stable across token refreshes — anything that caches an integration row reference doesn't need to invalidate.
+
+**Trade-off:** every read of an OAuth token is now an RPC call (`supabase.rpc('get_integration_tokens', ...)`) instead of a column projection. That's one extra round-trip per scheduled-job iteration, small in absolute terms. Service role bypasses the owner check inside the function, so the existing `refresh-tokens` Edge Function cron still works.
+
+**Don't re-litigate unless:** Supabase removes Vault, or a regulatory requirement forces external KMS (HIPAA, FedRAMP). Both shift the calculus toward AWS KMS / GCP KMS envelope encryption.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -632,8 +632,6 @@ class IntegrationRow {
   static const String colId = 'id';
   static const String colUserId = 'user_id';
   static const String colProvider = 'provider';
-  static const String colAccessToken = 'access_token';
-  static const String colRefreshToken = 'refresh_token';
   static const String colTokenExpiry = 'token_expiry';
   static const String colExternalId = 'external_id';
   static const String colScope = 'scope';
@@ -641,12 +639,12 @@ class IntegrationRow {
   static const String colSyncCursor = 'sync_cursor';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colAccessTokenSecretId = 'access_token_secret_id';
+  static const String colRefreshTokenSecretId = 'refresh_token_secret_id';
 
   final String id;
   final String userId;
   final String provider;
-  final String? accessToken;
-  final String? refreshToken;
   final DateTime? tokenExpiry;
   final String? externalId;
   final String? scope;
@@ -654,13 +652,13 @@ class IntegrationRow {
   final String? syncCursor;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? accessTokenSecretId;
+  final String? refreshTokenSecretId;
 
   const IntegrationRow({
     required this.id,
     required this.userId,
     required this.provider,
-    this.accessToken,
-    this.refreshToken,
     this.tokenExpiry,
     this.externalId,
     this.scope,
@@ -668,14 +666,14 @@ class IntegrationRow {
     this.syncCursor,
     this.createdAt,
     this.updatedAt,
+    this.accessTokenSecretId,
+    this.refreshTokenSecretId,
   });
 
   factory IntegrationRow.fromJson(Map<String, dynamic> json) => IntegrationRow(
     id: json['id'] as String,
     userId: json['user_id'] as String,
     provider: json['provider'] as String,
-    accessToken: json['access_token'] as String?,
-    refreshToken: json['refresh_token'] as String?,
     tokenExpiry: json['token_expiry'] == null ? null : DateTime.parse(json['token_expiry'] as String),
     externalId: json['external_id'] as String?,
     scope: json['scope'] as String?,
@@ -683,14 +681,14 @@ class IntegrationRow {
     syncCursor: json['sync_cursor'] as String?,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    accessTokenSecretId: json['access_token_secret_id'] as String?,
+    refreshTokenSecretId: json['refresh_token_secret_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     colId: id,
     colUserId: userId,
     colProvider: provider,
-    colAccessToken: accessToken,
-    colRefreshToken: refreshToken,
     colTokenExpiry: tokenExpiry?.toIso8601String(),
     colExternalId: externalId,
     colScope: scope,
@@ -698,6 +696,8 @@ class IntegrationRow {
     colSyncCursor: syncCursor,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
+    colAccessTokenSecretId: accessTokenSecretId,
+    colRefreshTokenSecretId: refreshTokenSecretId,
   };
 }
 
