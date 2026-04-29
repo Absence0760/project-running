@@ -393,12 +393,26 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  // Both services notify several times in a row when the user takes a
+  // single action (e.g. RSVP toggle → membership row update + count
+  // refresh + my-rsvp refresh). Debounce so we don't fire 3 fetches
+  // for one logical change.
+  Timer? _socialDebounce;
+  Timer? _trainingDebounce;
+  static const _listenerDebounce = Duration(milliseconds: 500);
+
   void _onSocialChange() {
-    _refreshUpcomingEvent();
+    _socialDebounce?.cancel();
+    _socialDebounce = Timer(_listenerDebounce, () {
+      if (mounted) _refreshUpcomingEvent();
+    });
   }
 
   void _onTrainingChange() {
-    _refreshPlanOverview();
+    _trainingDebounce?.cancel();
+    _trainingDebounce = Timer(_listenerDebounce, () {
+      if (mounted) _refreshPlanOverview();
+    });
   }
 
   @override
@@ -1258,6 +1272,8 @@ class _RunScreenState extends State<RunScreen> {
     widget.runStore.removeListener(_onPrefsChange);
     widget.social.removeListener(_onSocialChange);
     widget.training.removeListener(_onTrainingChange);
+    _socialDebounce?.cancel();
+    _trainingDebounce?.cancel();
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _countdownTimer?.cancel();
@@ -2451,7 +2467,7 @@ class _HoldToStopButton extends StatefulWidget {
 /// (map, stats panel, banners) doesn't rebuild at 60 Hz during a hold.
 /// Only this ~68 px button rebuilds while the user holds the stop.
 class _HoldToStopButtonState extends State<_HoldToStopButton>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   Ticker? _ticker;
   Duration _holdStart = Duration.zero;
   double _progress = 0;
