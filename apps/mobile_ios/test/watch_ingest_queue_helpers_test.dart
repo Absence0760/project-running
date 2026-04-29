@@ -65,6 +65,24 @@ void main() {
       expect(run.track.last.timestamp, isNull);
     });
 
+    test('decodes per-point bpm into Waypoint.bpm', () {
+      // Reason: both watch platforms ship per-point heart rate; the
+      // Apr 2026 audit caught the decoder dropping it. The phone
+      // re-uploads the run with track.bpm preserved, which is what
+      // the web HR-zones panel and mobile run-detail screens read.
+      final raw = _basePayload()
+        ..['track'] = [
+          {'lat': 37.0, 'lng': -122.0, 'bpm': 145},
+          {'lat': 37.0001, 'lng': -122.0001, 'bpm': 152.7}, // float → floor
+          {'lat': 37.0002, 'lng': -122.0002}, // no bpm → null
+        ];
+      final run = runFromWatchPayload(raw);
+      expect(run.track, hasLength(3));
+      expect(run.track[0].bpm, 145);
+      expect(run.track[1].bpm, 152);
+      expect(run.track[2].bpm, isNull);
+    });
+
     test('skips non-Map entries inside the track list', () {
       final raw = _basePayload()
         ..['track'] = [

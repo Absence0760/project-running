@@ -106,6 +106,11 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
           timestamp: (p['ts'] as String?) != null
               ? DateTime.tryParse(p['ts'] as String)
               : null,
+          // Per-point heart rate: both Apple Watch (HKLiveWorkoutBuilder)
+          // and Wear OS (Health Services) ship a `bpm` field per
+          // sample. `Waypoint.bpm` is `int?` so floor any decimal that
+          // sneaks through and skip non-numeric values.
+          bpm: (p['bpm'] as num?)?.toInt(),
         ));
       }
     }
