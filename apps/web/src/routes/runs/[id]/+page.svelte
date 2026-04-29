@@ -5,6 +5,7 @@
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
+	import RouteHistory from '$lib/components/RouteHistory.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import {
 		formatDuration,
@@ -718,6 +719,16 @@
 					runOwnerId={run.user_id}
 					routeId={run.route_id}
 					track={run.track ?? []}
+				/>
+			</section>
+			<section class="section">
+				<h2>Route History</h2>
+				<RouteHistory
+					currentRunId={run.id}
+					routeId={run.route_id}
+					distanceM={run.distance_m}
+					durationS={run.duration_s}
+					metadata={run.metadata as Record<string, unknown> | null}
 				/>
 			</section>
 		{/if}

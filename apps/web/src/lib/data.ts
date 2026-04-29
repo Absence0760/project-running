@@ -95,6 +95,26 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 	return { ...data, source: parseRunSource(data.source), track };
 }
 
+/// Fetch every run by the signed-in user against `routeId`, ordered
+/// by duration ascending so the caller can read off PB / rank without
+/// re-sorting. Used by the Route History panel on `/runs/[id]`. The
+/// returned rows are the column subset `route_history.ts` declares —
+/// no track download.
+export async function fetchRunsOnRoute(
+	routeId: string,
+): Promise<{ id: string; route_id: string | null; distance_m: number; duration_s: number; metadata: Record<string, unknown> | null }[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('runs')
+		.select('id, route_id, distance_m, duration_s, metadata')
+		.eq('user_id', userId)
+		.eq('route_id', routeId)
+		.order('duration_s', { ascending: true });
+	if (error || !data) return [];
+	return data as never;
+}
+
 /**
  * Download a gzipped GPS track from the `runs` Storage bucket.
  * Throws if the path is invalid or the user can't read it.

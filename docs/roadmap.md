@@ -255,7 +255,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Key stats (distance, duration, pace, HR, elevation)
 - [x] Back link to run list
 - [x] Trace animation (replay run as moving dot with animated trace)
-- [ ] Comparison against previous runs on same route
+- [x] Comparison against previous runs on same route — `lib/route_history.ts` ports the mobile filter (same `route_id` + same `metadata.activity_type` + > 100 m, sorted by duration); `RouteHistory.svelte` mounts on `/runs/[id]` and renders the PB / "+Δs behind PB" / "Attempt N of M — PB: H:MM:SS" card. 10 unit tests in `route_history.test.ts`.
 
 ### Live tracking spectator view (web)
 
