@@ -803,81 +803,57 @@ class _RunHeatmap extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final now = DateTime.now();
-    // Today in local time; column index 0 = start of the leftmost week.
     final today = DateTime(now.year, now.month, now.day);
     final weekStart = weekStartLocal(now);
     final gridStart = weekStart.subtract(Duration(days: 7 * (weeks - 1)));
 
-    // Build count-per-day map keyed by epoch-day (millisecondsSinceEpoch
-    // truncated to local-day boundary). int keys avoid the per-run +
-    // per-cell `'$year-$month-$day'` string allocation, which adds up
-    // at 10k+ runs × 140 cells.
-    int epochDay(DateTime d) {
-      final local = DateTime(d.year, d.month, d.day);
-      return local.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
-    }
-
     final counts = <int, int>{};
     for (final r in runs) {
-      final key = epochDay(r.startedAt.toLocal());
+      final key = _epochDay(r.startedAt.toLocal());
       counts[key] = (counts[key] ?? 0) + 1;
     }
 
-    // Intensity: 0 runs → empty square; 1 run → light; 2 → medium;
-    // 3+ → darkest. Uses the theme primary with varying opacity so it
-    // adapts to dark/light mode.
-    Color cellColour(int count) {
-      if (count <= 0) return theme.colorScheme.surfaceContainerHighest;
-      if (count == 1) return theme.colorScheme.primary.withValues(alpha: 0.35);
-      if (count == 2) return theme.colorScheme.primary.withValues(alpha: 0.65);
-      return theme.colorScheme.primary;
+    final emptyColour = theme.colorScheme.surfaceContainerHighest;
+    final l1Colour = theme.colorScheme.primary.withValues(alpha: 0.35);
+    final l2Colour = theme.colorScheme.primary.withValues(alpha: 0.65);
+    final l3Colour = theme.colorScheme.primary;
+
+    Color legendColour(int c) {
+      if (c <= 0) return emptyColour;
+      if (c == 1) return l1Colour;
+      if (c == 2) return l2Colour;
+      return l3Colour;
     }
 
     return LayoutBuilder(builder: (context, constraints) {
-      // Target cell size keeps the grid comfortable on most phones but
-      // scales down gracefully on narrow screens. 2 dp gap between cells.
       const gap = 2.0;
       final cellSize = ((constraints.maxWidth - gap * (weeks - 1)) / weeks)
           .clamp(8.0, 16.0);
+      final gridWidth = cellSize * weeks + gap * (weeks - 1);
+      final gridHeight = cellSize * 7 + gap * 6;
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var w = 0; w < weeks; w++) ...[
-                Column(
-                  children: [
-                    for (var d = 0; d < 7; d++) ...[
-                      Builder(builder: (_) {
-                        final day = gridStart.add(Duration(days: w * 7 + d));
-                        // Don't colour future days — they're outside the
-                        // scale and look weird with an "empty" state.
-                        final isFuture = day.isAfter(today);
-                        final count = isFuture
-                            ? 0
-                            : counts[epochDay(day)] ?? 0;
-                        return Container(
-                          width: cellSize,
-                          height: cellSize,
-                          margin: EdgeInsets.only(
-                            bottom: d < 6 ? gap : 0,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isFuture
-                                ? Colors.transparent
-                                : cellColour(count),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        );
-                      }),
-                    ],
-                  ],
-                ),
-                if (w < weeks - 1) SizedBox(width: gap),
-              ],
-            ],
+          // Single CustomPaint replaces the previous 7×20=140 Container +
+          // Builder + EdgeInsets allocations per dashboard rebuild.
+          SizedBox(
+            width: gridWidth,
+            height: gridHeight,
+            child: CustomPaint(
+              painter: _HeatmapPainter(
+                counts: counts,
+                gridStart: gridStart,
+                today: today,
+                weeks: weeks,
+                cellSize: cellSize,
+                gap: gap,
+                emptyColour: emptyColour,
+                l1: l1Colour,
+                l2: l2Colour,
+                l3: l3Colour,
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -892,7 +868,7 @@ class _RunHeatmap extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: cellColour(c),
+                    color: legendColour(c),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -908,4 +884,82 @@ class _RunHeatmap extends StatelessWidget {
       );
     });
   }
+}
+
+int _epochDay(DateTime d) {
+  final local = DateTime(d.year, d.month, d.day);
+  return local.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+}
+
+class _HeatmapPainter extends CustomPainter {
+  final Map<int, int> counts;
+  final DateTime gridStart;
+  final DateTime today;
+  final int weeks;
+  final double cellSize;
+  final double gap;
+  final Color emptyColour;
+  final Color l1;
+  final Color l2;
+  final Color l3;
+
+  _HeatmapPainter({
+    required this.counts,
+    required this.gridStart,
+    required this.today,
+    required this.weeks,
+    required this.cellSize,
+    required this.gap,
+    required this.emptyColour,
+    required this.l1,
+    required this.l2,
+    required this.l3,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = const Radius.circular(2);
+    final emptyP = Paint()..color = emptyColour;
+    final l1P = Paint()..color = l1;
+    final l2P = Paint()..color = l2;
+    final l3P = Paint()..color = l3;
+
+    for (var w = 0; w < weeks; w++) {
+      for (var d = 0; d < 7; d++) {
+        final day = gridStart.add(Duration(days: w * 7 + d));
+        // Don't paint future days — they're outside the scale and look
+        // weird with an "empty" tile shown.
+        if (day.isAfter(today)) continue;
+        final count = counts[_epochDay(day)] ?? 0;
+        final paint = count <= 0
+            ? emptyP
+            : count == 1
+                ? l1P
+                : count == 2
+                    ? l2P
+                    : l3P;
+        final x = w * (cellSize + gap);
+        final y = d * (cellSize + gap);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, y, cellSize, cellSize),
+            radius,
+          ),
+          paint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HeatmapPainter old) =>
+      !identical(old.counts, counts) ||
+      old.gridStart != gridStart ||
+      old.today != today ||
+      old.weeks != weeks ||
+      old.cellSize != cellSize ||
+      old.emptyColour != emptyColour ||
+      old.l1 != l1 ||
+      old.l2 != l2 ||
+      old.l3 != l3;
 }
