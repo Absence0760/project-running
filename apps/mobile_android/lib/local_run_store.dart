@@ -118,6 +118,55 @@ class LocalRunStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Bulk variant of [saveFromRemote] used by the runs-screen pull-to-refresh
+  /// path. A delta fetch can return up to 200 rows; calling [saveFromRemote]
+  /// in a loop fired N file writes plus N `notifyListeners()` calls, each
+  /// rebuilding the runs screen — a fresh user pulling for the first time
+  /// rebuilt the screen 200 times. This variant batches all writes with
+  /// `Future.wait`, then notifies listeners once at the end.
+  Future<void> saveManyFromRemote(Iterable<Run> runs) async {
+    if (runs.isEmpty) return;
+    final toWrite = <Run>[];
+    for (final run in runs) {
+      final existing = _runs.where((r) => r.id == run.id).firstOrNull;
+      if (existing != null) {
+        final localTs = _lastModifiedOf(existing);
+        final remoteTs = _lastModifiedOf(run);
+        if (localTs.isAfter(remoteTs)) continue;
+      }
+      final merged = (run.track.isEmpty &&
+              existing != null &&
+              existing.track.isNotEmpty)
+          ? Run(
+              id: run.id,
+              startedAt: run.startedAt,
+              duration: run.duration,
+              distanceMetres: run.distanceMetres,
+              track: existing.track,
+              routeId: run.routeId,
+              source: run.source,
+              externalId: run.externalId,
+              metadata: run.metadata,
+              createdAt: run.createdAt,
+            )
+          : run;
+      toWrite.add(merged);
+    }
+    if (toWrite.isEmpty) return;
+    await Future.wait(toWrite.map((merged) {
+      final file = File('${_dir.path}/${merged.id}.json');
+      final data = {'run': merged.toJson(), 'synced': true};
+      return file.writeAsString(jsonEncode(data));
+    }));
+    for (final merged in toWrite) {
+      _runs.removeWhere((r) => r.id == merged.id);
+      _runs.insert(0, merged);
+      _syncedIds.add(merged.id);
+    }
+    _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    notifyListeners();
+  }
+
   /// Whether a run with this id already exists locally.
   bool contains(String runId) => _runs.any((r) => r.id == runId);
 

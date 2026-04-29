@@ -176,9 +176,7 @@ class _RunsScreenState extends State<RunsScreen> {
       final remote = since == null
           ? await api.getRuns(limit: 200)
           : await api.getRuns(limit: 200, updatedSince: since);
-      for (final run in remote) {
-        await widget.runStore.saveFromRemote(run);
-      }
+      await widget.runStore.saveManyFromRemote(remote);
       await widget.preferences.setRunsLastFetchedAt(fetchStartedAt);
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');
