@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import '../run_stats.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
@@ -102,7 +103,7 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
               _Stat(
                 label: 'Distance',
                 value: UnitFormat.distanceValue(
-                    route.distanceMetres, cm.DistanceUnit.km),
+                    route.distanceMetres, DistanceUnit.km),
                 unit: 'km',
               ),
               _Stat(

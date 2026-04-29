@@ -18,6 +18,7 @@ ActivePlanOverview _overview({
     targetDistanceM: targetDistanceM,
     targetPaceSecPerKm: targetPaceSecPerKm,
     completedRunId: completedRunId,
+    manuallyCompleted: false,
   );
   final plan = TrainingPlanRow(
     id: 'p1',

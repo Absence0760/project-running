@@ -440,9 +440,16 @@ void main() {
       // notification by posting with the SAME channel id + notification
       // id. If a future geolocator release changes these, the
       // replacement silently becomes a second row.
-      final source = File(
+      //
+      // The Kotlin source only exists in the android/ host project of
+      // `apps/mobile_android`. The byte-identical test file also runs
+      // from `apps/mobile_ios` — skip the assertion there since the
+      // host file is shared between targets and only ever lives once.
+      final file = File(
         'android/app/src/main/kotlin/com/betterrunner/app/RunNotificationBridge.kt',
-      ).readAsStringSync();
+      );
+      if (!file.existsSync()) return;
+      final source = file.readAsStringSync();
       expect(
         source,
         contains('"geolocator_channel_01"'),

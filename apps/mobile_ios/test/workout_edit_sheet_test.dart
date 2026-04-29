@@ -47,6 +47,7 @@ PlanWorkoutRow _workout({
       targetDistanceM: targetDistanceM,
       targetPaceSecPerKm: targetPaceSecPerKm,
       notes: notes,
+      manuallyCompleted: false,
     );
 
 Future<bool?> _pumpSheet(

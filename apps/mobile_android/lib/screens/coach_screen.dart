@@ -243,18 +243,20 @@ class _CoachScreenState extends State<CoachScreen> {
                   id: '',
                   userId: '',
                   name: '',
-                  status: 'draft',
-                  startDate: DateTime.now(),
+                  goalEvent: '',
                   goalDistanceM: 0,
-                  goalDate: DateTime.now(),
+                  startDate: DateTime.now(),
+                  endDate: DateTime.now(),
                   daysPerWeek: 0,
+                  status: 'draft',
+                  source: 'manual',
                   createdAt: DateTime.now(),
                 ),
         );
         if (p.id == _planId) {
           planName = p.name;
-          final weeks = await widget.training.fetchPlanDetail(_planId!);
-          planWeeks = weeks.weeks.length;
+          final detail = await widget.training.fetchPlan(_planId!);
+          planWeeks = detail.weeks.length;
         }
       }
       final supa = Supabase.instance.client;

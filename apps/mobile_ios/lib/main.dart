@@ -81,15 +81,18 @@ void main() async {
     const supabaseAnonKeyDef = String.fromEnvironment('SUPABASE_ANON_KEY');
     const devEmailDef = String.fromEnvironment('DEV_USER_EMAIL');
     const devPasswordDef = String.fromEnvironment('DEV_USER_PASSWORD');
-    dotenv.testLoad(fileInput: [
-      if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
-      if (supabaseAnonKeyDef.isNotEmpty) 'SUPABASE_ANON_KEY=$supabaseAnonKeyDef',
-      if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
-      if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
-      if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
-      if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
-      if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
-    ].join('\n'));
+    dotenv.loadFromString(
+      envString: [
+        if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
+        if (supabaseAnonKeyDef.isNotEmpty) 'SUPABASE_ANON_KEY=$supabaseAnonKeyDef',
+        if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
+        if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
+        if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
+        if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
+        if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
+      ].join('\n'),
+      isOptional: true,
+    );
     // Best-effort .env.local load too, so a contributor who created one
     // for parity with Android still gets it.
     try {
@@ -211,15 +214,33 @@ void main() async {
   // isn't registered, so `WatchIngest.attach` fires `MissingPluginException`
   // (caught) and the no-op is invisible — keeps the bootstrap identical
   // across both apps.
-  if (api != null) {
-    if (api.userId != null) {
-      WatchIngest.attach(api, watchQueue);
-    }
+  if (api != null && api.userId != null) {
+    WatchIngest.attach(api, watchQueue);
+  }
+
+  // Everything below here runs AFTER the first frame paints:
+  //
+  //  - WorkManager background-sync registration (plugin channel work the
+  //    user never sees)
+  //  - Dev-only auto sign-in (network round-trip)
+  //  - SettingsSync cloud fetch (network round-trip)
+  //  - WearAuthBridge attach (method channel)
+  //  - Auth-state subscription (reactive sign-in plumbing —
+  //    settingsSync.onSignedIn must not appear on the critical path)
+  //
+  // Previously these all awaited before runApp and held the splash screen
+  // open for hundreds of ms on slow connections. None of them change the
+  // first-frame render — if the user isn't signed in yet, the dashboard
+  // shows the signed-out state and updates when auth finishes.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    registerBackgroundSync();
+    if (!hasSupabase || api == null) return;
+    final apiNonNull = api;
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-      if (event.event == AuthChangeEvent.signedIn && api != null) {
-        WatchIngest.attach(api, watchQueue);
+      if (event.event == AuthChangeEvent.signedIn) {
+        WatchIngest.attach(apiNonNull, watchQueue);
         try {
-          watchQueue.drain(api).catchError((Object e) {
+          watchQueue.drain(apiNonNull).catchError((Object e) {
             debugPrint('Watch ingest queue drain failed: $e');
           });
         } catch (e) {
@@ -230,23 +251,6 @@ void main() async {
         });
       }
     });
-  }
-
-  // Everything below here runs AFTER the first frame paints:
-  //
-  //  - WorkManager background-sync registration (plugin channel work the
-  //    user never sees)
-  //  - Dev-only auto sign-in (network round-trip)
-  //  - SettingsSync cloud fetch (network round-trip)
-  //  - WearAuthBridge attach (method channel)
-  //
-  // Previously these all awaited before runApp and held the splash screen
-  // open for hundreds of ms on slow connections. None of them change the
-  // first-frame render — if the user isn't signed in yet, the dashboard
-  // shows the signed-out state and updates when auth finishes.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    registerBackgroundSync();
-    if (!hasSupabase || api == null) return;
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
     final devEmail = dotenv.env['DEV_USER_EMAIL'];
     final devPassword = dotenv.env['DEV_USER_PASSWORD'];

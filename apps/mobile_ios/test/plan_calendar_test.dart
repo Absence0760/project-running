@@ -13,6 +13,7 @@ void main() {
       scheduledDate: DateTime(2026, 4, 15),
       kind: 'tempo',
       targetDistanceM: 10000,
+      manuallyCompleted: false,
     );
 
     await tester.pumpWidget(MaterialApp(
@@ -67,6 +68,7 @@ void main() {
       kind: 'long',
       targetDistanceM: 18000,
       completedRunId: 'run-1',
+      manuallyCompleted: false,
     );
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(

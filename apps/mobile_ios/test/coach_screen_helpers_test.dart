@@ -31,12 +31,12 @@ void main() {
     });
 
     test('exactly 48 chars stays verbatim (no ellipsis)', () {
-      const exactly48 = 'a' * 48;
+      final exactly48 = 'a' * 48;
       expect(coachTitleFromMessage(exactly48), exactly48);
     });
 
     test('49 chars triggers truncation with ellipsis', () {
-      const fortyNine = 'a' * 49;
+      final fortyNine = 'a' * 49;
       final out = coachTitleFromMessage(fortyNine);
       expect(out, '${'a' * 47}…');
     });
