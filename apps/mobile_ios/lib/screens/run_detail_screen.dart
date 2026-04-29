@@ -58,6 +58,40 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   AnimationController? _replayController;
   final ValueNotifier<int?> _replayIndex = ValueNotifier<int?>(null);
 
+  // Memoised derived stats. The recorder only ever appends to a run's
+  // track (or a fresh fetch swaps the whole `run` object), so a matching
+  // (id, length) pair guarantees the underlying waypoints are unchanged
+  // and any O(n) walk over them can be reused.
+  String? _statsCacheRunId;
+  int _statsCacheTrackLen = -1;
+  DistanceUnit? _statsCacheSplitsUnit;
+  double? _cachedElevationGain;
+  double? _cachedElevationLoss;
+  Duration? _cachedMovingTime;
+  List<MapEntry<String, Duration>>? _cachedBestEfforts;
+  List<_Split>? _cachedSplits;
+  ({int min, int max, int avg})? _cachedBpmStats;
+  List<HrZoneBucket>? _cachedHrBuckets;
+  bool _hrCacheChecked = false;
+
+  void _resetStatsCacheIfStale() {
+    if (_statsCacheRunId == run.id &&
+        _statsCacheTrackLen == run.track.length) {
+      return;
+    }
+    _statsCacheRunId = run.id;
+    _statsCacheTrackLen = run.track.length;
+    _cachedElevationGain = null;
+    _cachedElevationLoss = null;
+    _cachedMovingTime = null;
+    _cachedBestEfforts = null;
+    _cachedSplits = null;
+    _statsCacheSplitsUnit = null;
+    _cachedBpmStats = null;
+    _cachedHrBuckets = null;
+    _hrCacheChecked = false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -719,6 +753,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// Falls back to the full duration when the track is missing or too
   /// sparse to compute a meaningful value (e.g. imported runs without GPS).
   Duration get _movingTime {
+    _resetStatsCacheIfStale();
+    return _cachedMovingTime ??= _computeMovingTime();
+  }
+
+  Duration _computeMovingTime() {
     if (run.track.length < 2) return run.duration;
     final computed = movingTimeOf(run.track);
     if (computed.inSeconds == 0) return run.duration;
@@ -742,6 +781,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   double get _elevationGain {
+    _resetStatsCacheIfStale();
+    return _cachedElevationGain ??= _computeElevationGain();
+  }
+
+  double _computeElevationGain() {
     double gain = 0;
     for (int i = 1; i < run.track.length; i++) {
       final prev = run.track[i - 1].elevationMetres;
@@ -752,6 +796,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   double get _elevationLoss {
+    _resetStatsCacheIfStale();
+    return _cachedElevationLoss ??= _computeElevationLoss();
+  }
+
+  double _computeElevationLoss() {
     double loss = 0;
     for (int i = 1; i < run.track.length; i++) {
       final prev = run.track[i - 1].elevationMetres;
@@ -791,21 +840,31 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return 0;
   }
 
-  List<Widget> _buildBestEfforts(ThemeData theme, DistanceUnit unit) {
-    const distances = <String, double>{
-      '1 km': 1000,
-      '1 mi': 1609.344,
-      '5 km': 5000,
-      '10 km': 10000,
-      'Half Marathon': 21097,
-      'Marathon': 42195,
-    };
+  static const _bestEffortDistances = <String, double>{
+    '1 km': 1000,
+    '1 mi': 1609.344,
+    '5 km': 5000,
+    '10 km': 10000,
+    'Half Marathon': 21097,
+    'Marathon': 42195,
+  };
 
-    final efforts = <MapEntry<String, Duration>>[];
-    for (final e in distances.entries) {
+  List<MapEntry<String, Duration>> get _bestEfforts {
+    _resetStatsCacheIfStale();
+    return _cachedBestEfforts ??= _computeBestEfforts();
+  }
+
+  List<MapEntry<String, Duration>> _computeBestEfforts() {
+    final out = <MapEntry<String, Duration>>[];
+    for (final e in _bestEffortDistances.entries) {
       final best = fastestWindowOf(run.track, e.value);
-      if (best != null) efforts.add(MapEntry(e.key, best));
+      if (best != null) out.add(MapEntry(e.key, best));
     }
+    return out;
+  }
+
+  List<Widget> _buildBestEfforts(ThemeData theme, DistanceUnit unit) {
+    final efforts = _bestEfforts;
     if (efforts.isEmpty) return const [];
 
     return [
@@ -815,7 +874,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ),
       ...efforts.map((e) {
         final paceSecPerKm =
-            e.value.inSeconds / (distances[e.key]! / 1000);
+            e.value.inSeconds / (_bestEffortDistances[e.key]! / 1000);
         return ListTile(
           leading: CircleAvatar(
             backgroundColor: theme.colorScheme.tertiaryContainer,
@@ -925,9 +984,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   List<Widget> _buildHrZoneBreakdown(ThemeData theme) {
-    final stats = bpmStatsOf(run.track);
+    _resetStatsCacheIfStale();
+    if (!_hrCacheChecked) {
+      _cachedBpmStats = bpmStatsOf(run.track);
+      _cachedHrBuckets = _cachedBpmStats == null
+          ? const []
+          : hrZoneBreakdown(run.track, cutoffs: _userHrCutoffs());
+      _hrCacheChecked = true;
+    }
+    final stats = _cachedBpmStats;
     if (stats == null) return const [];
-    final buckets = hrZoneBreakdown(run.track, cutoffs: _userHrCutoffs());
+    final buckets = _cachedHrBuckets!;
     if (buckets.isEmpty) return const [];
 
     const colors = [
@@ -1081,20 +1148,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return '${sec}s';
   }
 
-  List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {
-    if (run.track.length < 2) {
-      return const [
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Text('No GPS data for splits'),
-        ),
-      ];
+  List<_Split> _splitsFor(DistanceUnit unit) {
+    _resetStatsCacheIfStale();
+    if (_cachedSplits != null && _statsCacheSplitsUnit == unit) {
+      return _cachedSplits!;
     }
+    _cachedSplits = _computeSplits(unit);
+    _statsCacheSplitsUnit = unit;
+    return _cachedSplits!;
+  }
 
+  List<_Split> _computeSplits(DistanceUnit unit) {
+    if (run.track.length < 2) return const [];
     const metresPerMile = 1609.344;
     final tickLength = unit == DistanceUnit.mi ? metresPerMile : 1000.0;
-    final unitLabel = UnitFormat.distanceLabel(unit);
-
     final splits = <_Split>[];
     double cumulative = 0;
     int nextTick = 1;
@@ -1113,6 +1180,24 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         nextTick++;
       }
     }
+    return splits;
+  }
+
+  List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {
+    if (run.track.length < 2) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Text('No GPS data for splits'),
+        ),
+      ];
+    }
+
+    const metresPerMile = 1609.344;
+    final tickLength = unit == DistanceUnit.mi ? metresPerMile : 1000.0;
+    final unitLabel = UnitFormat.distanceLabel(unit);
+
+    final splits = _splitsFor(unit);
 
     if (splits.isEmpty) {
       return [
