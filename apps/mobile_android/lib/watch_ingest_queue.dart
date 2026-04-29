@@ -79,50 +79,60 @@ class WatchIngestQueue {
     }
   }
 
-  static cm.Run _runFromPayload(Map<String, dynamic> raw) {
-    final id = raw['id'] as String? ?? '';
-    final startedAt = DateTime.parse(raw['started_at'] as String);
-    final durationS = (raw['duration_s'] as num).toInt();
-    final distanceM = (raw['distance_m'] as num).toDouble();
-    final source = raw['source'] as String? ?? 'watch';
-    final trackRaw = raw['track'];
-    final track = <cm.Waypoint>[];
-    if (trackRaw is List) {
-      for (final p in trackRaw) {
-        if (p is Map) {
-          track.add(cm.Waypoint(
-            lat: (p['lat'] as num).toDouble(),
-            lng: (p['lng'] as num).toDouble(),
-            elevationMetres: (p['ele'] as num?)?.toDouble(),
-            timestamp: (p['ts'] as String?) != null
-                ? DateTime.tryParse(p['ts'] as String)
-                : null,
-          ));
-        }
+  static cm.Run _runFromPayload(Map<String, dynamic> raw) =>
+      runFromWatchPayload(raw);
+
+  static cm.RunSource _parseSource(String raw) => parseRunSource(raw);
+}
+
+/// Decode a raw watch-run payload (the JSON shape that lives in the
+/// queue directory) into a [cm.Run]. Pure — exposed for tests so the
+/// payload schema can be exercised without disk IO.
+cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
+  final id = raw['id'] as String? ?? '';
+  final startedAt = DateTime.parse(raw['started_at'] as String);
+  final durationS = (raw['duration_s'] as num).toInt();
+  final distanceM = (raw['distance_m'] as num).toDouble();
+  final source = raw['source'] as String? ?? 'watch';
+  final trackRaw = raw['track'];
+  final track = <cm.Waypoint>[];
+  if (trackRaw is List) {
+    for (final p in trackRaw) {
+      if (p is Map) {
+        track.add(cm.Waypoint(
+          lat: (p['lat'] as num).toDouble(),
+          lng: (p['lng'] as num).toDouble(),
+          elevationMetres: (p['ele'] as num?)?.toDouble(),
+          timestamp: (p['ts'] as String?) != null
+              ? DateTime.tryParse(p['ts'] as String)
+              : null,
+        ));
       }
     }
-
-    final metadata = <String, dynamic>{};
-    final avgBpm = raw['avg_bpm'];
-    if (avgBpm is num) metadata['avg_bpm'] = avgBpm.toDouble();
-    final activity = raw['activity_type'];
-    if (activity is String) metadata['activity_type'] = activity;
-
-    return cm.Run(
-      id: id,
-      startedAt: startedAt,
-      duration: Duration(seconds: durationS),
-      distanceMetres: distanceM,
-      track: track,
-      source: _parseSource(source),
-      metadata: metadata.isEmpty ? null : metadata,
-    );
   }
 
-  static cm.RunSource _parseSource(String raw) {
-    for (final s in cm.RunSource.values) {
-      if (s.name == raw) return s;
-    }
-    return cm.RunSource.watch;
+  final metadata = <String, dynamic>{};
+  final avgBpm = raw['avg_bpm'];
+  if (avgBpm is num) metadata['avg_bpm'] = avgBpm.toDouble();
+  final activity = raw['activity_type'];
+  if (activity is String) metadata['activity_type'] = activity;
+
+  return cm.Run(
+    id: id,
+    startedAt: startedAt,
+    duration: Duration(seconds: durationS),
+    distanceMetres: distanceM,
+    track: track,
+    source: parseRunSource(source),
+    metadata: metadata.isEmpty ? null : metadata,
+  );
+}
+
+/// Parse a run-source enum by name with [cm.RunSource.watch] as the
+/// default. Used for the watch-payload `source` field.
+cm.RunSource parseRunSource(String raw) {
+  for (final s in cm.RunSource.values) {
+    if (s.name == raw) return s;
   }
+  return cm.RunSource.watch;
 }
