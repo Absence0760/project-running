@@ -86,6 +86,13 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   int _cachedPaceSegmentsForLength = -1;
   ActivityType? _cachedPaceSegmentsForActivity;
 
+  // Cached halo + dark-underline polylines for the recorded track. Without
+  // this, the 45 Hz position-tween setState path re-allocates three
+  // Polyline + three PolylineLayer widgets every frame even though their
+  // points are unchanged. Keyed by length only — the styling is constant.
+  List<Polyline>? _cachedHaloPolylines;
+  int _cachedHaloForLength = -1;
+
   String get _tileUrl {
     final key = dotenv.env['MAPTILER_KEY'] ?? '';
     return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
@@ -177,6 +184,37 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     return segs;
   }
 
+  /// Halo + dark-underline polylines for [rendered], cached by length.
+  /// Three Polylines bundled into a single layer (replacing three
+  /// PolylineLayers in the previous version) — fewer Layer widgets means
+  /// fewer diffs per position-tween tick.
+  List<Polyline> _haloPolylinesFor(List<LatLng> rendered) {
+    if (_cachedHaloPolylines != null &&
+        _cachedHaloForLength == rendered.length) {
+      return _cachedHaloPolylines!;
+    }
+    final out = <Polyline>[
+      Polyline(
+        points: rendered,
+        strokeWidth: 18,
+        color: const Color(0xFF818CF8).withValues(alpha: 0.18),
+      ),
+      Polyline(
+        points: rendered,
+        strokeWidth: 10,
+        color: const Color(0xFF818CF8).withValues(alpha: 0.35),
+      ),
+      Polyline(
+        points: rendered,
+        strokeWidth: 8,
+        color: const Color(0xFF1E1B4B),
+      ),
+    ];
+    _cachedHaloPolylines = out;
+    _cachedHaloForLength = rendered.length;
+    return out;
+  }
+
   /// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
   /// shows as a smoother line instead of a visible zig-zag. The first two
   /// and last two points are preserved unchanged. Display-only — the stored
@@ -238,6 +276,8 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       _cachedPaceSegments = null;
       _cachedPaceSegmentsForLength = -1;
       _cachedPaceSegmentsForActivity = null;
+      _cachedHaloPolylines = null;
+      _cachedHaloForLength = -1;
     }
 
     final pos = _latestPosition;
@@ -381,33 +421,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             //      between coalesced pace buckets)
             //   4. pace heatmap OR legacy gradient on top
             if (trackLatLngs.length >= 2) ...[
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: trackLatLngs,
-                    strokeWidth: 18,
-                    color: const Color(0xFF818CF8).withValues(alpha: 0.18),
-                  ),
-                ],
-              ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: trackLatLngs,
-                    strokeWidth: 10,
-                    color: const Color(0xFF818CF8).withValues(alpha: 0.35),
-                  ),
-                ],
-              ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: trackLatLngs,
-                    strokeWidth: 8,
-                    color: const Color(0xFF1E1B4B),
-                  ),
-                ],
-              ),
+              PolylineLayer(polylines: _haloPolylinesFor(trackLatLngs)),
               if (widget.activity != null)
                 PolylineLayer(
                   polylines: _pacedSegmentsFor(
