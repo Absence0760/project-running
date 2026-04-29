@@ -11,7 +11,6 @@ import 'package:api_client/api_client.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
-import '../widgets/error_state.dart';
 import '../widgets/event_form_sheet.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';

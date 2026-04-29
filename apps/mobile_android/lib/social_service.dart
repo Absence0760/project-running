@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Route;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'recurrence.dart';
 

@@ -176,8 +176,6 @@ class AudioCues {
   String _workoutStepUtterance(WorkoutStep step) =>
       formatWorkoutStepUtterance(step);
 
-  String _spokenDistance(double metres) => formatSpokenDistance(metres);
-
   Future<void> stop() async {
     await _tts.stop();
   }

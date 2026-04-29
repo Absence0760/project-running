@@ -81,8 +81,6 @@ class WatchIngestQueue {
 
   static cm.Run _runFromPayload(Map<String, dynamic> raw) =>
       runFromWatchPayload(raw);
-
-  static cm.RunSource _parseSource(String raw) => parseRunSource(raw);
 }
 
 /// Decode a raw watch-run payload (the JSON shape that lives in the

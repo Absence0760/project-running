@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,19 +10,6 @@ import '../lib/screens/runs_screen.dart';
 import '../lib/screens/add_run_screen.dart';
 
 late Directory _runsDir;
-
-Run _run({
-  String id = 'run-1',
-  double distanceMetres = 5000,
-  Duration duration = const Duration(minutes: 25),
-}) =>
-    Run(
-      id: id,
-      startedAt: DateTime.utc(2026, 4, 15, 7, 30),
-      duration: duration,
-      distanceMetres: distanceMetres,
-      source: RunSource.app,
-    );
 
 Future<({LocalRunStore runStore, LocalRouteStore routeStore, Preferences prefs})>
     _makeStores() async {

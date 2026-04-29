@@ -37,7 +37,7 @@ void main() {
         ..addFile(ArchiveFile(
             'activities/98765.gpx', gpxContent.length, utf8.encode(gpxContent)));
 
-      final zipBytes = ZipEncoder().encode(archive)!;
+      final zipBytes = ZipEncoder().encode(archive);
 
       final tmpDir = Directory.systemTemp.createTempSync('strava_import_test_');
       final zipFile = File('${tmpDir.path}/strava_export.zip');

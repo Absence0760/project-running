@@ -3,7 +3,6 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../preferences.dart';
-import '../run_stats.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/run_photos.dart';

@@ -1084,7 +1084,7 @@ class ApiClient {
         .order(UserDeviceSettingRow.colLastSeenAt, ascending: false);
     return rows
         .map<UserDeviceSettingRow>(
-            (r) => UserDeviceSettingRow.fromJson(r as Map<String, dynamic>))
+            (r) => UserDeviceSettingRow.fromJson(r))
         .toList();
   }
 
@@ -1158,7 +1158,7 @@ class ApiClient {
         .eq(RouteRow.colClubId, clubId)
         .order(RouteRow.colCreatedAt, ascending: false);
     return rows
-        .map<Route>((r) => _routeFromRow(r as Map<String, dynamic>))
+        .map<Route>((r) => _routeFromRow(r))
         .toList();
   }
 
@@ -1827,7 +1827,7 @@ class ApiClient {
         .inFilter(UserProfileRow.colId, authorIds);
     final profilesById = {
       for (final p in profileRows)
-        p['id'] as String: PublicProfile.fromJson(p as Map<String, dynamic>),
+        p['id'] as String: PublicProfile.fromJson(p),
     };
 
     return runs.map<FeedEntry>((r) {
@@ -1855,7 +1855,7 @@ class ApiClient {
         .inFilter(UserProfileRow.colId, authorIds);
     final profilesById = {
       for (final p in profileRows)
-        p['id'] as String: PublicProfile.fromJson(p as Map<String, dynamic>),
+        p['id'] as String: PublicProfile.fromJson(p),
     };
     return comments
         .map((c) => RunCommentWithAuthor(
@@ -1912,9 +1912,9 @@ class ApiClient {
             .inFilter(RunCommentRow.colId, commentIds);
 
     final results = await Future.wait([actorRowsF, runRowsF, commentRowsF]);
-    final actorRows = results[0] as List<dynamic>;
-    final runRows = results[1] as List<dynamic>;
-    final commentRows = results[2] as List<dynamic>;
+    final actorRows = results[0];
+    final runRows = results[1];
+    final commentRows = results[2];
 
     final actorsById = <String, PublicProfile>{};
     for (final r in actorRows) {
@@ -1979,7 +1979,7 @@ class ApiClient {
         .inFilter(UserProfileRow.colId, athleteIds);
     final athletesById = {
       for (final p in profileRows)
-        p['id'] as String: PublicProfile.fromJson(p as Map<String, dynamic>),
+        p['id'] as String: PublicProfile.fromJson(p),
     };
 
     final out = <SegmentLeaderboardEntry>[];
@@ -2011,7 +2011,7 @@ class ApiClient {
         .inFilter(SegmentRow.colId, segIds);
     final segById = {
       for (final s in segRows)
-        s['id'] as String: SegmentRow.fromJson(s as Map<String, dynamic>),
+        s['id'] as String: SegmentRow.fromJson(s),
     };
 
     final out = <SegmentEffortWithSegment>[];
