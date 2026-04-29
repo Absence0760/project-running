@@ -55,7 +55,13 @@ struct ContentView: View {
                 "started_at": formatter.string(from: run.startedAt),
                 "duration_s": run.durationSeconds,
                 "distance_m": run.distanceMetres,
-                "source": "watch"
+                "source": "watch",
+                // Apr 2026 cross-client audit caught Apple-Watch runs
+                // arriving on the phone with no `activity_type` set,
+                // even though `WatchIngestBridge.swift` filters for it.
+                // Hardcode "run" to match Wear OS until the watch app
+                // grows an activity picker.
+                "activity_type": "run"
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
             connectivity.transferRun(fileURL: fileURL, metadata: metadata)
