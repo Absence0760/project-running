@@ -46,7 +46,7 @@ The primary differentiator. Users export a KML from Google My Maps or any other 
 - [x] Display route with distance and elevation summary on import
 - [x] Save imported route to Supabase
 - [x] Parse GPX, KML, GeoJSON, and TCX on Android (file picker + LocalRouteStore)
-- [ ] Parse on iOS
+- [x] Parse on iOS — `apps/mobile_ios/lib/screens/import_screen.dart` is byte-identical to mobile_android per [decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) and uses the same `packages/gpx_parser` engine; iOS widget suite (`import_screen_test.dart`, `importer_external_id_test.dart`, `strava_importer_helpers_test.dart`) exercises the path. Real-device file-picker validation still TBD.
 
 ### Live GPS run recording (phone)
 
@@ -167,7 +167,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Pedometer + `metadata.steps` — `Pedometer.kt` via `Sensor.TYPE_STEP_COUNTER` with per-run baseline; live "N steps" readout on RunningScreen; writes `run.metadata.steps` when the sensor produced samples. Requires `ACTIVITY_RECOGNITION` (added to `permissionLauncher`).
 - [x] GPS self-heal — 10 s watchdog in `RunRecordingService` re-subscribes to the Fused provider when the stream stalls for 30 s despite `locationAvailable=true`
 - [x] Indoor / no-GPS mode — clock + `TrackWriter` handle zero-fix runs; RunningScreen banner distinguishes "No GPS — time only" (never had a fix) from "GPS lost" (lost mid-run)
-- [ ] Auto-sync on reconnect (today `drainQueue` fires on app start + after stop; connectivity-change listener is a TODO)
+- [x] Auto-sync on reconnect — `system/NetworkWatcher.kt` exposes a `ConnectivityManager.NetworkCallback` flow; `RunViewModel.observeConnectivity()` fires `drainQueue()` on every offline→online transition (seeds first emission to skip the cold-start case).
 
 ### Route navigation on watch
 
