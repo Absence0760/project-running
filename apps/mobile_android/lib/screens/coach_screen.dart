@@ -251,6 +251,7 @@ class _CoachScreenState extends State<CoachScreen> {
                   status: 'draft',
                   source: 'manual',
                   createdAt: DateTime.now(),
+                  isTemplate: false,
                 ),
         );
         if (p.id == _planId) {

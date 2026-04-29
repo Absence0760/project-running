@@ -1676,7 +1676,7 @@ class TrainingPlanRow {
     this.updatedAt,
     required this.source,
     this.rules,
-    this.isTemplate = false,
+    required this.isTemplate,
     this.parentTemplateId,
     this.clubId,
   });
@@ -1699,7 +1699,7 @@ class TrainingPlanRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     source: json['source'] as String,
     rules: json['rules'],
-    isTemplate: json['is_template'] as bool? ?? false,
+    isTemplate: json['is_template'] as bool,
     parentTemplateId: json['parent_template_id'] as String?,
     clubId: json['club_id'] as String?,
   );
@@ -1725,37 +1725,6 @@ class TrainingPlanRow {
     colIsTemplate: isTemplate,
     colParentTemplateId: parentTemplateId,
     colClubId: clubId,
-  };
-}
-
-/// Row shape for the `user_follows` table. Mirrors the Supabase schema
-/// exactly — field names are snake_case to match the JSON wire format.
-class UserFollowRow {
-  static const String table = 'user_follows';
-  static const String colFollowerId = 'follower_id';
-  static const String colFolloweeId = 'followee_id';
-  static const String colFollowedAt = 'followed_at';
-
-  final String followerId;
-  final String followeeId;
-  final DateTime followedAt;
-
-  const UserFollowRow({
-    required this.followerId,
-    required this.followeeId,
-    required this.followedAt,
-  });
-
-  factory UserFollowRow.fromJson(Map<String, dynamic> json) => UserFollowRow(
-    followerId: json['follower_id'] as String,
-    followeeId: json['followee_id'] as String,
-    followedAt: DateTime.parse(json['followed_at'] as String),
-  );
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    colFollowerId: followerId,
-    colFolloweeId: followeeId,
-    colFollowedAt: followedAt.toIso8601String(),
   };
 }
 
@@ -1838,6 +1807,37 @@ class UserDeviceSettingRow {
     colPrefs: prefs,
     colLastSeenAt: lastSeenAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `user_follows` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class UserFollowRow {
+  static const String table = 'user_follows';
+  static const String colFollowerId = 'follower_id';
+  static const String colFolloweeId = 'followee_id';
+  static const String colFollowedAt = 'followed_at';
+
+  final String followerId;
+  final String followeeId;
+  final DateTime followedAt;
+
+  const UserFollowRow({
+    required this.followerId,
+    required this.followeeId,
+    required this.followedAt,
+  });
+
+  factory UserFollowRow.fromJson(Map<String, dynamic> json) => UserFollowRow(
+    followerId: json['follower_id'] as String,
+    followeeId: json['followee_id'] as String,
+    followedAt: DateTime.parse(json['followed_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colFollowerId: followerId,
+    colFolloweeId: followeeId,
+    colFollowedAt: followedAt.toIso8601String(),
   };
 }
 

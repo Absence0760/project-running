@@ -85,6 +85,21 @@ const _tables = <String>{
   'fitness_snapshots',
   'personal_records',
   'coach_messages',
+  'user_follows',
+  'run_kudos',
+  'run_comments',
+  'run_photos',
+  'saved_routes',
+  'segments',
+  'segment_efforts',
+  'notifications',
+};
+
+// Tables whose pluralised name doesn't follow the strip-trailing-`s` rule
+// in `_singular`. Adding here keeps the existing class name stable for
+// callers (e.g. `run_kudos` → `RunKudosRow`, not `RunKudoRow`).
+const _uncountableTables = <String>{
+  'run_kudos',
 };
 
 class _Column {
@@ -560,6 +575,7 @@ String _camel(String s) {
 }
 
 String _singular(String table) {
+  if (_uncountableTables.contains(table)) return table;
   if (table.endsWith('ies')) return '${table.substring(0, table.length - 3)}y';
   if (table.endsWith('s')) return table.substring(0, table.length - 1);
   return table;

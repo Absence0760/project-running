@@ -31,6 +31,7 @@ ActivePlanOverview _overview({
     daysPerWeek: 4,
     status: 'active',
     source: 'generated',
+    isTemplate: false,
   );
   return ActivePlanOverview(
     plan: plan,
