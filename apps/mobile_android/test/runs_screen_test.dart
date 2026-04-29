@@ -52,10 +52,10 @@ void main() {
   });
 
   group('RunsScreen', () {
-    testWidgets('renders Runs app-bar title', (tester) async {
+    testWidgets('renders History app-bar title', (tester) async {
       final s = await _makeStores();
       await _pump(tester, runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
-      expect(find.text('Runs'), findsOneWidget);
+      expect(find.text('History'), findsOneWidget);
     });
 
     testWidgets('shows empty state when store has no runs', (tester) async {

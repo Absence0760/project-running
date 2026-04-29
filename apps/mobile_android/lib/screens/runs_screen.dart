@@ -383,7 +383,7 @@ class _RunsScreenState extends State<RunsScreen> {
   AppBar _normalAppBar() {
     final unsyncedCount = widget.runStore.unsyncedCount;
     return AppBar(
-      title: const Text('Runs'),
+      title: const Text('History'),
       actions: [
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
@@ -750,6 +750,14 @@ class _RunsFilterHeader extends StatelessWidget {
     (RunSource.healthconnect, 'Health Connect'),
   ];
 
+  // Pastel purple for the selected chip background. The default
+  // theme.colorScheme.secondaryContainer derived from the dusk seed
+  // rendered as dark purple, dropping the label into low-contrast
+  // territory. This matches the existing `lilac` palette entry in
+  // ui_kit's AppPalette without pulling the package as a dep.
+  static const _selectedChipColour = Color(0xFFD8CCFA);
+  static const _selectedChipLabel = Color(0xFF120D22);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -769,50 +777,66 @@ class _RunsFilterHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              FilterChip(
-                label: const Text('All'),
-                selected: activityFilter == null,
-                onSelected: (_) => onActivityChanged(null),
-              ),
-              const SizedBox(width: 8),
-              for (final type in ActivityType.values) ...[
-                FilterChip(
-                  avatar: Icon(type.icon, size: 18),
-                  label: Text(type.label),
-                  selected: activityFilter == type,
-                  onSelected: (_) => onActivityChanged(type),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ],
+        ChipTheme(
+          data: theme.chipTheme.copyWith(
+            selectedColor: _selectedChipColour,
+            secondarySelectedColor: _selectedChipColour,
+            checkmarkColor: _selectedChipLabel,
+            secondaryLabelStyle: theme.chipTheme.secondaryLabelStyle?.copyWith(
+                  color: _selectedChipLabel,
+                ) ??
+                const TextStyle(color: _selectedChipLabel),
           ),
-        ),
-        const SizedBox(height: 8),
-        // Source filter — matches the web's dashboard chip row so a
-        // runner filtering by "Strava-imported only" on both surfaces
-        // sees the same subset. `null` = all sources.
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FilterChip(
-                label: const Text('All sources'),
-                selected: sourceFilter == null,
-                onSelected: (_) => onSourceChanged(null),
-              ),
-              const SizedBox(width: 8),
-              for (final entry in _sourceChips) ...[
-                FilterChip(
-                  label: Text(entry.$2),
-                  selected: sourceFilter == entry.$1,
-                  onSelected: (_) => onSourceChanged(entry.$1),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('All'),
+                      selected: activityFilter == null,
+                      onSelected: (_) => onActivityChanged(null),
+                    ),
+                    const SizedBox(width: 8),
+                    for (final type in ActivityType.values) ...[
+                      FilterChip(
+                        avatar: Icon(type.icon, size: 18),
+                        label: Text(type.label),
+                        selected: activityFilter == type,
+                        onSelected: (_) => onActivityChanged(type),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
                 ),
-                const SizedBox(width: 8),
-              ],
+              ),
+              const SizedBox(height: 8),
+              // Source filter — matches the web's dashboard chip row so a
+              // runner filtering by "Strava-imported only" on both
+              // surfaces sees the same subset. `null` = all sources.
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('All sources'),
+                      selected: sourceFilter == null,
+                      onSelected: (_) => onSourceChanged(null),
+                    ),
+                    const SizedBox(width: 8),
+                    for (final entry in _sourceChips) ...[
+                      FilterChip(
+                        label: Text(entry.$2),
+                        selected: sourceFilter == entry.$1,
+                        onSelected: (_) => onSourceChanged(entry.$1),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),
