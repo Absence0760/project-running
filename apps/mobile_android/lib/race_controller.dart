@@ -60,7 +60,12 @@ class RaceController extends ChangeNotifier {
   Future<void> start() async {
     if (_pollTimer != null) return;
     await _refresh();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
+    // Realtime on race_sessions handles the live case (any change fires
+    // a refresh). The 60 s timer is a watchdog for when the channel
+    // silently disconnects — short enough to recover quickly, long
+    // enough not to duplicate the realtime path. Was 15 s; that did 4×
+    // the round-trips for no functional gain.
+    _pollTimer = Timer.periodic(const Duration(seconds: 60), (_) => _refresh());
     // Realtime on race_sessions — the server-published filter scopes to
     // all rows; we narrow in-client against the user's RSVPed events
     // because Postgres-level filtering by a join is awkward. For a v1
@@ -111,9 +116,10 @@ class RaceController extends ChangeNotifier {
       if (list.isEmpty) { _setActive(null); return; }
 
       // Check each for an armed/running race session. In practice a user
-      // has 1-3 upcoming RSVPs at most so this is a small scan.
-      ActiveRace? next;
-      for (final r in list) {
+      // has 1-3 upcoming RSVPs at most, but firing the per-RSVP fetches
+      // in parallel via Future.wait means we get done in the wall time
+      // of the slowest one rather than the sum of all of them.
+      final sessionResults = await Future.wait(list.map((r) async {
         final eventId = r['event_id'] as String;
         final inst = DateTime.parse(r['instance_start'] as String);
         final res = await _c
@@ -123,11 +129,17 @@ class RaceController extends ChangeNotifier {
             .eq('instance_start', inst.toIso8601String())
             .inFilter('status', ['armed', 'running'])
             .maybeSingle();
+        return (eventId: eventId, inst: inst, row: res);
+      }));
+
+      ActiveRace? next;
+      for (final s in sessionResults) {
+        final res = s.row;
         if (res == null) continue;
-        final title = await _eventTitle(eventId);
+        final title = await _eventTitle(s.eventId);
         next = ActiveRace(
-          eventId: eventId,
-          instanceStart: inst,
+          eventId: s.eventId,
+          instanceStart: s.inst,
           status: res['status'] as String,
           startedAt: res['started_at'] == null
               ? null
