@@ -43,7 +43,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **at least 350 unique Dart mobile tests across 42 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 38 tests in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. Both mobile apps run the same 42 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~700 mobile test runs. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **at least 474 unique Dart mobile tests across 72 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 38 tests in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. Both mobile apps run the same 72 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~950 mobile test runs. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -217,7 +217,24 @@ Pure-function tests for two top-level helpers in `lib/widgets/run_photos.dart` e
 
 Pure-function tests for the three top-level helpers in `lib/screens/coach_screen.dart`: `coachTitleFromMessage` (verbatim under 48 chars, whitespace collapse, leading/trailing trim, ellipsis past the cap, exact-48 vs 49 boundary), `coachArchiveLabel` ("Today" same day, "Yesterday" 1 day, "N days ago" 2..6, `YYYY-MM-DD` past a week, zero-padded month and day), and `parseCoachSseEvent` (event + data block parsing for `meta` / `token` / `done`, null when the block has no data line, null on invalid JSON, null on non-Map JSON, default `event: 'message'` when no event line, multi-line `data:` concatenation, `done` block with `cache` usage stats).
 
-### `apps/mobile_ios/test/` — same 42 files, byte-for-byte
+### Screen + widget smoke tests — 27 files, ~70 tests
+
+After the April 2026 mobile-codebase unification, every screen and most user-facing widgets gained a smoke test. Each one verifies the *initial render* surface — app-bar title, primary action visibility, loading-spinner-vs-error fork — without exercising the post-fetch state, since none of these tests have a mockable Supabase backend. Tests that need a real `ApiClient` use a `setUpAll` helper that calls `Supabase.initialize(url: 'http://127.0.0.1:54321', anonKey: 'eyJ.local.test')` plus `SharedPreferences.setMockInitialValues({})` — the fake URL is never reached because each screen catches the connection failure into an ErrorState.
+
+- **Screens (19 files):** plans_screen (not-signed-in path), clubs_screen (segmented tabs + FAB), routes_screen (cloud_off icon hidden when api null), feed_screen (loading spinner), profile_screen (3 tabs for non-self, 4 for self), public_run_screen / public_route_screen (loading + fallback titles), explore_routes_screen (Featured chip), devices_screen, onboarding_screen (page advance + final-page CTA swap), plan_new_screen (wizard structure incl. scrolled bottom buttons), plan_detail_screen / workout_detail_screen / club_detail_screen / event_detail_screen (loading-only Scaffold), live_spectator_screen, privacy_zones_screen (Save action), period_summary_screen (week/month title swap + empty state), run_screen (idle-state ChoiceChip row + 4 activity labels), coach_screen (title + plan dropdown gate; pumps 100ms after the assertion to drain the screen's 50ms streaming timer).
+- **Widgets (4 files):** training_load_chart (heading, empty hint, hasHr subtitle copy, legend keys), run_segment_efforts (loading hint), run_social_section (loading spinner), segments_panel (heading + canCreate gate).
+- **Form sheets (2 files):** showClubFormSheet + showEventFormSheet — open the sheet from a launcher widget at `600x1200` test viewport (default `600x800` clips the bottom of the modal column).
+
+### Pure-helper extractions — 4 files, ~55 tests
+
+Several private formatters were extracted from stateful classes into top-level pure functions so they can be tested without booting their host (TTS, queue IO, importer ZIP path). The original private static methods are kept as one-line delegates so the runtime call paths are unchanged.
+
+- **`preferences_helpers_test.dart` (21 tests):** `UnitFormat.distance` / `distanceValue` / `distanceLabel`, `pace` / `paceLabel`, `distanceTicks`, `activityTicks`, `speed` / `speedLabel`; `ActivityType.label` / `usesSpeed` / `kcalPerKgPerKm` / `splitIntervalMetres` / `gpsDistanceFilter`.
+- **`audio_cues_helpers_test.dart` (15 tests):** `formatSpeedUtterance`, `formatPaceUtterance`, `formatSpokenDistance`, `formatWorkoutStepUtterance` — covers the km / mi forks, the empty-string fallback for null pace, integer-vs-fractional km wording, and the rep / warmup / recovery / steady / cooldown intros.
+- **`strava_importer_helpers_test.dart` (9 tests):** `parseStravaDate` — ISO 8601 fast path, `"Apr 9, 2026, 7:30:00 AM"` canonical Strava format, AM/PM noon and midnight edges, case-insensitive month, long month names, null fallback for unparseable input.
+- **`watch_ingest_queue_helpers_test.dart` (10 tests):** `runFromWatchPayload` + `parseRunSource` — required-fields happy path, missing id / source defaults, optional track waypoints with elevation + timestamp, non-Map track entries skipped, avg_bpm + activity_type promoted into Run.metadata, metadata stays null when neither is set, non-numeric avg_bpm ignored, unknown source falls back to RunSource.watch.
+
+### `apps/mobile_ios/test/` — same 72 files, byte-for-byte
 
 After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
 
