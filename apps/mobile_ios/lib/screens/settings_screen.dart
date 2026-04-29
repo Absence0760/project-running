@@ -1379,8 +1379,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Dark mode'),
             value: _darkMode,
             onChanged: (v) {
+              final mode = v ? ThemeMode.dark : ThemeMode.light;
               setState(() => _darkMode = v);
-              themeModeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
+              themeModeNotifier.value = mode;
+              // Persist so the choice survives app restarts. Was
+              // previously only setting the in-memory notifier, so
+              // every cold start fell back to the default dark mode.
+              widget.preferences.setThemeMode(mode);
             },
           ),
           SwitchListTile(

@@ -140,6 +140,11 @@ void main() async {
       }),
   ]);
 
+  // Hydrate the theme-mode notifier from the persisted preference.
+  // Must run before runApp so the first frame paints in the user's
+  // chosen mode instead of flashing the default and then snapping over.
+  themeModeNotifier.value = prefs.themeMode;
+
   // Recover a run that was in progress when the app was last killed
   // (crash, force-stop, OOM). We promote the partial data to a regular
   // completed run so at least the user keeps whatever was captured. Only

@@ -163,6 +163,11 @@ class Preferences extends ChangeNotifier {
   // rows. Minted on first launch and never rotated — rotating would
   // orphan the device's row and lose per-device preferences.
   static const _kDeviceId = 'device_id';
+  // Persisted theme mode (light / dark / system). Stored as a string
+  // so the value reads cleanly in `flutter:run -d` shared-prefs dumps.
+  // Defaults to 'dark' to preserve the original launch experience for
+  // users who haven't explicitly chosen.
+  static const _kThemeMode = 'theme_mode';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -179,6 +184,7 @@ class Preferences extends ChangeNotifier {
   String _deviceId = '';
   String _defaultActivityType = 'run';
   bool _keepScreenOn = true;
+  ThemeMode _themeMode = ThemeMode.dark;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -201,6 +207,41 @@ class Preferences extends ChangeNotifier {
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
+
+  /// Persisted theme mode. Hydrated in [init] and updated via
+  /// [setThemeMode]; survives app restarts so the user only picks
+  /// light/dark once.
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    if (mode == _themeMode) return;
+    _themeMode = mode;
+    await _prefs.setString(_kThemeMode, _themeModeToString(mode));
+    notifyListeners();
+  }
+
+  static String _themeModeToString(ThemeMode m) {
+    switch (m) {
+      case ThemeMode.light:
+        return 'light';
+      case ThemeMode.dark:
+        return 'dark';
+      case ThemeMode.system:
+        return 'system';
+    }
+  }
+
+  static ThemeMode _themeModeFromString(String? s) {
+    switch (s) {
+      case 'light':
+        return ThemeMode.light;
+      case 'system':
+        return ThemeMode.system;
+      case 'dark':
+      default:
+        return ThemeMode.dark;
+    }
+  }
 
   /// Timestamp of the last successful `getRuns` call. Used to drive the
   /// delta-fetch path so refreshing the Runs tab only pulls rows updated
@@ -234,6 +275,7 @@ class Preferences extends ChangeNotifier {
     _defaultActivityType =
         _prefs.getString(_kDefaultActivityType) ?? 'run';
     _keepScreenOn = _prefs.getBool(_kKeepScreenOn) ?? true;
+    _themeMode = _themeModeFromString(_prefs.getString(_kThemeMode));
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
     if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
