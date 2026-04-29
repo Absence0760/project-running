@@ -69,22 +69,4 @@
 		margin-bottom: var(--space-md);
 	}
 
-	.btn-primary,
-	.btn-secondary {
-		display: inline-block;
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: var(--color-bg);
-	}
-
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-	}
 </style>

@@ -6,13 +6,27 @@
 
 A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a SvelteKit web app, sharing a single Supabase backend and MapLibre GL JS for route planning and navigation.
 
-The architecture is designed around three principles:
+The architecture is designed around four principles:
 
-- **Offline first** — runs record and save locally; sync happens in the background
-- **Platform parity** — watch apps are standalone GPS computers, not thin companions
-- **Open data** — import and export via standard formats (GPX, FIT, TCX) and official APIs
+- **Web is the canonical feature surface** — every user-facing feature lives on the web app unless it is physically impossible there. Mobile and watches are web-equivalent + platform-additive. See [decisions.md § 24](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
+- **Offline first** — runs record and save locally; sync happens in the background.
+- **Platform parity** — watch apps are standalone GPS computers, not thin companions. (This principle lives in tension with the web-canonical rule; watches lead on the physical-exception features, web leads on everything else.)
+- **Open data** — import and export via standard formats (GPX, FIT, TCX) and official APIs.
 
 The web app and mobile apps are separate codebases — different languages, different UI frameworks — but share exactly the same Supabase backend, database schema, and REST API. No duplication of business logic.
+
+### Web-canonical model in one screen
+
+| Class of feature | Lives on | Mirrored on |
+|---|---|---|
+| Route builder, route library, discovery, public share pages | Web | Mobile (read + view) |
+| Dashboard, run analysis, calendar heatmap, personal records, history filters / sort | Web | Mobile |
+| Clubs, events, posts, live race organiser controls | Web | Mobile (participant + admin) |
+| Training plans, AI Coach, paywall / Pro tier, donations | Web | Mobile (read-mostly) |
+| **Live GPS recording, sensors (HR, pedometer), haptics, crash-safe recording, watch complications** | Mobile / watch | N/A on web |
+| **Route import via OS share sheet, bulk Strava ZIP, HealthKit / Health Connect** | Mobile | N/A on web (drag-and-drop substitutes) |
+
+New product work starts on web. Drift in the mobile → web direction (Android has X that web doesn't) is closed by building the web version; drift in the web → mobile direction (web has X that mobile doesn't) is closed by porting down. The [parity matrix](parity.md) is the living checklist for both directions.
 
 ---
 
@@ -134,11 +148,12 @@ A standalone Xcode project living at `apps/watch_ios/`. Separate from Flutter �
 
 **Architecture pattern:**
 ```
-WatchKit Extension
-├── WorkoutManager.swift       # HealthKit workout session
-├── LocationManager.swift      # GPS tracking
-├── RouteNavigator.swift       # Off-route detection
-└── WatchConnectivity.swift    # Sync with iPhone
+WatchApp/
+├── WorkoutManager.swift           # HealthKit + GPS + run lifecycle
+├── HealthKitManager.swift         # Heart rate sensor
+├── CheckpointStore.swift          # 15s crash checkpoint + recovery
+├── RouteNavigator.swift           # Off-route detection (stub — not wired)
+└── WatchConnectivityManager.swift # Sync with iPhone
 ```
 
 ### Wear OS app (Kotlin + Compose-for-Wear)
@@ -176,8 +191,12 @@ src/routes/
 │   └── +page.svelte            # Google + Apple sign-in
 ├── dashboard/
 │   └── +page.svelte            # Weekly mileage, heatmap, records
+├── feed/
+│   └── +page.svelte            # Activity feed — public runs from people you follow
+├── u/[id]/
+│   └── +page.svelte            # Public user profile (display_name, avatar, follower/following counts, recent public runs, follow button)
 ├── routes/
-│   ├── +page.svelte            # Route library list
+│   ├── +page.svelte            # Tabbed: My routes (saved) + Explore (community discovery)
 │   ├── new/+page.svelte        # Full-screen MapLibre route builder
 │   └── [id]/+page.svelte       # Route detail (public or private)
 ├── runs/
@@ -185,17 +204,18 @@ src/routes/
 │   └── [id]/+page.svelte       # Run detail — map + full analysis
 ├── clubs/                       # Social layer — browse + create + detail
 ├── plans/                       # Training plans list + create + detail
-├── explore/                     # Public route discovery (nearby, search)
+├── explore/                     # Redirect to /routes?tab=explore (kept for old links)
 ├── live/                        # Live spectator tracking
-├── api/coach/+server.ts         # Claude coach endpoint (server-side)
+├── coach/+page.svelte           # Standalone AI coach with plan switcher + runs-limit chip
+├── api/coach/+server.ts         # Coach endpoint — Claude (default) or OpenAI-compatible (COACH_PROVIDER=openai)
 ├── share/                       # Public run/route share pages (no auth)
 └── settings/
     ├── +layout.svelte           # Tabbed settings layout
-    ├── account/+page.svelte     # Profile, display name, data export
-    ├── preferences/+page.svelte # Units, activity defaults, coach tone
+    ├── account/+page.svelte     # Profile, sign-in methods (link Google/Apple), data export
+    ├── preferences/+page.svelte # Units, map style, activity defaults, coach tone, HR zones
     ├── integrations/+page.svelte # Connect Strava, Garmin, parkrun
     ├── devices/+page.svelte     # Per-device settings
-    └── upgrade/+page.svelte     # Funding transparency + donate
+    └── upgrade/+page.svelte     # Pro tier ($9.99 / mo) + one-off donate
 ```
 
 **Route builder (web-specific):**

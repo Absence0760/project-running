@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
-	import { fmtPace } from '$lib/training';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import PlanEditor from '$lib/components/PlanEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type { TrainingPlan } from '$lib/types';
+	import type { Snapshot } from './$types';
 
 	let plans = $state<TrainingPlan[]>([]);
 	let loading = $state(true);
@@ -16,7 +20,27 @@
 		loading = false;
 	}
 
-	onMount(load);
+	onMount(async () => {
+		// Snapshot restore (below) repopulates `plans` synchronously
+		// when navigating back, so skip the fetch — otherwise a flash
+		// of "loading" replaces the restored list and breaks scroll.
+		if (!(plans.length > 0 && !loading)) await load();
+		// Deep-link from the dashboard's "Pick a goal race" CTA: opening
+		// `/plans?new=1` lands here with the create-plan modal already
+		// open. Strip the query so a refresh doesn't re-open the modal.
+		if ($page.url.searchParams.get('new') === '1') {
+			showPlanModal = true;
+			goto('/plans', { replaceState: true, noScroll: true });
+		}
+	});
+
+	export const snapshot: Snapshot<{ plans: TrainingPlan[] }> = {
+		capture: () => ({ plans }),
+		restore: (s) => {
+			plans = s.plans;
+			loading = false;
+		},
+	};
 
 	const eventLabels: Record<string, string> = {
 		distance_5k: '5K',
@@ -24,6 +48,12 @@
 		distance_half: 'Half marathon',
 		distance_full: 'Marathon',
 		custom: 'Custom'
+	};
+
+	const statusIcon: Record<string, string> = {
+		active: 'play_circle',
+		completed: 'check_circle',
+		abandoned: 'cancel'
 	};
 
 	function goalTime(p: TrainingPlan): string {
@@ -62,16 +92,24 @@
 		confirmTarget = null;
 		confirmAction = null;
 	}
+
+	let showPlanModal = $state(false);
+
+	function handlePlanCreated(plan: { id: string }) {
+		showPlanModal = false;
+		// Plan creation is heavyweight — drop straight into the new plan
+		// detail page so the user can review weeks, edit workouts, etc.
+		goto(`/plans/${plan.id}`);
+	}
 </script>
 
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<h1>Training plans</h1>
-			<a href="/plans/new" class="btn-primary">
+			<button class="btn-primary" type="button" onclick={() => (showPlanModal = true)}>
 				<span class="material-symbols">add</span>
 				New plan
-			</a>
+			</button>
 		</div>
 		<p class="sub">
 			Goal-race plans, 8–16 weeks, with easy / long / tempo / interval /
@@ -86,10 +124,10 @@
 		<div class="empty">
 			<h2>No plans yet.</h2>
 			<p>Pick a goal race and we'll schedule the weeks for you.</p>
-			<a href="/plans/new" class="btn-primary">
+			<button class="btn-primary" type="button" onclick={() => (showPlanModal = true)}>
 				<span class="material-symbols">add</span>
 				Create your first plan
-			</a>
+			</button>
 		</div>
 	{:else}
 		<div class="grid">
@@ -97,7 +135,10 @@
 				<a class="card" href="/plans/{p.id}">
 					<div class="card-head">
 						<h3>{p.name}</h3>
-						<span class="badge status-{p.status}">{p.status}</span>
+						<span class="badge status-{p.status}">
+						<span class="material-symbols">{statusIcon[p.status] ?? 'help'}</span>
+						{p.status}
+					</span>
 					</div>
 					<div class="meta">
 						<span>
@@ -158,11 +199,18 @@
 	danger
 />
 
+<Modal
+	open={showPlanModal}
+	title="New plan"
+	wide
+	onclose={() => (showPlanModal = false)}
+>
+	<PlanEditor oncreated={handlePlanCreated} oncancel={() => (showPlanModal = false)} />
+</Modal>
+
 <style>
 	.page {
-		max-width: 64rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 	.page-header {
 		margin-bottom: var(--space-lg);
@@ -170,7 +218,7 @@
 	.title-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-end;
 	}
 	h1 {
 		font-size: 1.75rem;
@@ -181,30 +229,25 @@
 		margin-top: 0.3rem;
 		max-width: 44rem;
 	}
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.9rem;
-	}
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
 	.btn-ghost {
 		background: transparent;
-		border: none;
+		border: 1px solid var(--color-border);
 		color: var(--color-text-secondary);
 		font-weight: 600;
 		cursor: pointer;
-		font-size: 0.85rem;
+		font-size: 0.8rem;
+		padding: 0.35rem 0.8rem;
+		border-radius: var(--radius-md);
+		transition:
+			background var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
+	.btn-ghost:hover,
 	.btn-ghost.danger:hover {
-		color: var(--color-danger);
+		background: var(--color-primary-light);
+		border-color: var(--color-primary);
+		color: var(--color-primary);
 	}
 	.grid {
 		display: grid;
@@ -238,23 +281,29 @@
 		font-weight: 700;
 	}
 	.badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		font-size: 0.7rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		padding: 0.15rem 0.5rem;
+		padding: 0.2rem 0.55rem;
 		border-radius: var(--radius-sm);
+	}
+	.badge .material-symbols {
+		font-size: 0.95rem;
 	}
 	.status-active {
 		background: var(--color-primary-light);
 		color: var(--color-primary);
 	}
 	.status-completed {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-secondary);
+		background: var(--color-success-light);
+		color: var(--color-success);
 	}
 	.status-abandoned {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-tertiary);
+		background: var(--color-danger-light);
+		color: var(--color-danger);
 	}
 	.meta {
 		display: flex;
@@ -301,4 +350,6 @@
 	.muted {
 		color: var(--color-text-tertiary);
 	}
+
+	/* .modal-* classes live in app.css. */
 </style>

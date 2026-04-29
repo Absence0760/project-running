@@ -4,6 +4,43 @@
 The Flutter build was removed when the team committed to Compose-for-Wear
 native UI (see [../../docs/decisions.md § 15](../../docs/decisions.md)).
 
+## Scope — read before writing code
+
+**Web is the canonical feature surface; the watch is a wrist-only complement,
+not a parallel client.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+and the live matrix at [../../docs/parity.md](../../docs/parity.md). Watch
+columns in `parity.md` are `N/A` for almost everything by design — the watch
+is **not** trying to mirror web's feature surface.
+
+**Build here:**
+
+- **Wrist-only capabilities**: standalone `HKWorkoutSession`-equivalent via
+  Health Services, `FusedLocationProviderClient` background recording,
+  on-device crash recovery, on-watch HR via Health Services `MeasureClient`,
+  haptic pace alerts, route preview on-watch, ambient-mode rendering, watch
+  faces / tiles / complications.
+- **Direct cloud sync** of completed runs (the watch posts straight to
+  Supabase via `SupabaseClient.kt` — no phone hop). Schema-typed against the
+  same Supabase migrations via the generated `DbRows.kt`.
+
+**Don't build here:**
+
+- Anything that belongs in a pocket app: history browse, settings panels,
+  social feed, club detail, plan editing, photo upload, OAuth setup. The
+  watch is a recording surface and a status surface — not a phone in a
+  smaller form factor. If a feature can wait for the runner to be near
+  their phone, it doesn't go on the watch.
+- A feature that doesn't exist on web yet. Same web-first rule as Android /
+  iOS — you don't pioneer a feature on the watch.
+- A Flutter or React-Native UI layer. The decision to be native Kotlin +
+  Compose-for-Wear is in [§ 15](../../docs/decisions.md). Don't reintroduce
+  Flutter even for "shared code" reasons.
+- Hand-edits to `generated/DbRows.kt`. Schema changes regenerate it via
+  `dart run scripts/gen_dart_models.dart` — see "Schema drift protection"
+  below.
+- New layout abstractions or DI frameworks. `RunViewModel` + Compose state
+  is the entire UI stack. Adding Hilt / Koin / Anvil is out of scope.
+
 ## Layout
 
 ```
@@ -220,8 +257,14 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   UI doesn't yet have a low-color "ambient" branch. Wire
   `AmbientLifecycleObserver` + a dimmed Compose render path. (Glanceable
   watch face complication is a separate, larger item.)
-- **Pause / resume.** No way to pause mid-run.
-- **Laps / splits.**
+- **Live map during recording / live position marker on a route.** The
+  RunningScreen is still pure stats. The off-route banner + "X to go"
+  badge ship without a map (the math runs per GPS sample); the
+  *visual* position marker on the planned route is blocked on adding
+  a tile renderer, which is a multi-day platform project in its own
+  right. Not started.
+- **Live HTTP tile cache.** Blocked on the live map above;
+  pre-downloaded tiles are still the only path.
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).
@@ -230,6 +273,86 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   this session as compiles-cleanly code; verifying it actually
   records 60+ minutes without dropping samples requires putting it on a
   watch and going for a real run.
+
+## Recording UX — what's shipped on the Running screen
+
+What the UI exposes during a recording, for quick reference when reading
+`ui/RunWatchApp.kt`:
+
+- **Pre-run activity picker.** `CompactChip` on `PreRunScreen` cycles
+  `run → walk → hike → cycle`; the choice flows through to
+  `metadata.activity_type` on save.
+- **3-second start countdown.** Between permission grant and
+  `vm.start()`, a full-screen `CountdownOverlay` shows `3 → 2 → 1`
+  (tap anywhere to cancel). UI-only — the recording service isn't live
+  during the countdown.
+- **Pause / resume.** `||` button toggles to `Go`; stage flips
+  `Running ↔ Paused`. The foreground service owns the actual pause state
+  via `RunRecordingService.pause / resume`.
+- **Lap button.** `vm.markLap()` → service appends to the laps list;
+  `FinishedSummary.laps` powers the splits table on `PostRunScreen`
+  and writes `metadata.laps` on sync.
+- **Hold-to-stop.** `HoldToStopButton` requires an 800 ms press before
+  `vm.stop()` fires; a circular progress ring fills during the hold,
+  releasing early cancels. Stops a single accidental tap from ending a
+  long run.
+- **Haptic confirmations.** Pause / Resume / Lap buttons fire
+  `LocalHapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)`
+  on tap — the runner feels a confirmation pulse on every control
+  action, not just the countdown-less Start.
+- **GPS self-heal retry.** `RunRecordingService.gpsRetryJob` mirrors
+  the `_startGpsRetryLoop` shape from
+  `packages/run_recorder/lib/src/run_recorder.dart`: a 10 s poll that
+  re-subscribes whenever the subscription is dead. Primary trigger is
+  `gpsJob?.isActive != true` (same as Android's `_positionSub == null`);
+  secondary Wear-only trigger is "stream silent for >30 s mid-run",
+  added because `FusedLocationProviderClient` can keep a callback
+  registered while silently emitting nothing — a failure mode
+  Geolocator surfaces as a stream error. Initial no-fix
+  (`lastPointAtMs == 0L`) is explicitly not a stall; that's indoor mode.
+- **Indoor / no-GPS mode.** The elapsed clock ticks regardless of GPS;
+  distance stays 0 until the first fix lands. `TrackWriter.close()`
+  produces a valid empty `[]` track, so the upload and downstream run
+  detail render without special-casing. The RunningScreen banner reads
+  "No GPS — time only" when no fix has landed yet, and "GPS lost"
+  after a mid-run drop, so the runner can tell the two apart.
+- **Route overlay (no map).** Pre-run Route chip → `Stage.RoutePicker`
+  (backed by `LocalRouteStore` + `SupabaseClient.fetchRoutes`).
+  Selected waypoints flow via `ACTION_START` extras into
+  `RunRecordingService.parseRouteWaypoints`, which calls
+  `RouteMath.offRouteDistanceM` + `routeRemainingM` per GPS sample.
+  `RunningScreen` renders the "Off route · N m" banner (with hysteresis
+  at 40 m / 20 m and a double-haptic on entry) and a "X.XX km to go"
+  badge under the distance readout. The *visual* position marker on a
+  rendered route is still deferred — no live map yet.
+- **TTS audio cues.** `recording/TtsAnnouncer.kt` wraps
+  `android.speech.tts.TextToSpeech` with an async init + flush-queued
+  speak. `RunRecordingService` announces "Run started" on begin,
+  a split on each completed kilometre ("1 kilometre. Pace 5 minutes
+  30 seconds per kilometre" — same phrasing as Android's
+  `audio_cues.dart`), pace-drift nudges from `firePaceAlert`, and a
+  finish summary in `stopRecording`. Gated on `BuildConfig.ENABLE_TTS`
+  (defaults on; set `DISABLE_TTS=true` in `.env.local` to silence).
+- **Target-pace picker + haptic pace alerts.** Pre-run **Pace** chip
+  cycles `off / 4:00 / 4:30 / 5:00 / 5:30 / 6:00 / 6:30 / 7:00 /km` via
+  `RunViewModel.cycleTargetPace`. `start()` passes the value through
+  `EXTRA_TARGET_PACE_SEC_PER_KM`; the service compares live pace every
+  GPS sample (after the 50 m stabilisation gate used for pace) and
+  calls `firePaceAlert(tooSlow)` when drift > 30 s/km, rate-limited to
+  one alert per 30 s. Haptic fires via `VibratorManager` — a
+  `createWaveform(longArrayOf(0, 180, 180, 180), ...)` double pulse
+  for "speed up", a `createOneShot(220, DEFAULT_AMPLITUDE)` single
+  pulse for "slow down", paired with a TTS nudge. Matches the
+  two-pulse vs single-pulse pattern on Android.
+- **Pedometer.** `Pedometer.kt` wraps `Sensor.TYPE_STEP_COUNTER` with a
+  per-run baseline subtraction so the flow yields cumulative steps
+  since recording started. `RunRecordingService` collects into
+  `RecordingRepository.Metrics.steps`; `QueuedRun.steps` persists the
+  final count; `pushRun` writes `run.metadata.steps` when non-zero.
+  Requires `ACTIVITY_RECOGNITION` at runtime — requested alongside
+  `ACCESS_FINE_LOCATION` + `BODY_SENSORS` by `permissionLauncher`.
+  `RunningScreen` surfaces the live count as a `"N steps"` caption
+  beneath `bpm`.
 
 ## Before reporting a task done
 

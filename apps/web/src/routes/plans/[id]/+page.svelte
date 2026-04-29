@@ -1,19 +1,22 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fetchPlan } from '$lib/data';
+	import { fetchPlan, fetchMyClubs, publishPlanAsTemplate } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
-	import CoachChat from '$lib/components/CoachChat.svelte';
+	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
+	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 	import {
-		fmtPace,
-		fmtKm,
 		fmtHms,
+		isWorkoutCompleted,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
 		parseISO,
 		todayISO
 	} from '$lib/training';
-	import type { TrainingPlan, PlanWeek, PlanWorkout } from '$lib/types';
+	import { fmtKm, fmtPace } from '$lib/units.svelte';
+	import type { TrainingPlan, PlanWeek, PlanWorkout, ClubWithMeta } from '$lib/types';
 
 	let id = $derived($page.params.id as string);
 	let plan = $state<TrainingPlan | null>(null);
@@ -21,6 +24,12 @@
 	let workouts = $state<PlanWorkout[]>([]);
 	let loading = $state(true);
 	let editing = $state<PlanWorkout | null>(null);
+
+	let adminClubs = $state<ClubWithMeta[]>([]);
+	let publishingTo = $state('');
+	let editingPlanMeta = $state(false);
+
+	let isOwner = $derived(plan != null && plan.user_id === auth.user?.id);
 
 	async function load() {
 		loading = true;
@@ -31,7 +40,30 @@
 		loading = false;
 	}
 
-	onMount(load);
+	onMount(async () => {
+		await load();
+		// Only owners-of-this-plan see the publish-as-template control,
+		// and only when they have at least one club they admin.
+		if (auth.user?.id && plan?.user_id === auth.user.id) {
+			const clubs = await fetchMyClubs();
+			adminClubs = clubs.filter(
+				(c) => c.viewer_role === 'owner' || c.viewer_role === 'admin'
+			);
+		}
+	});
+
+	async function publishAsTemplate() {
+		if (!plan || !publishingTo) return;
+		try {
+			await publishPlanAsTemplate(plan.id, publishingTo);
+			showToast('Plan published as a club template. Your personal plan is unchanged.');
+			publishingTo = '';
+			// No reload needed — the source plan stayed put. The new
+			// template lives on the club's Templates tab.
+		} catch (e) {
+			showToast(`Failed to publish: ${e}`, 'error');
+		}
+	}
 
 	let workoutsByWeek = $derived.by(() => {
 		const m = new Map<string, PlanWorkout[]>();
@@ -59,7 +91,7 @@
 		return Math.min(weeks.length - 1, Math.floor(dayIndex / 7));
 	});
 
-	let completed = $derived(workouts.filter((w) => w.completed_run_id).length);
+	let completed = $derived(workouts.filter(isWorkoutCompleted).length);
 	let totalActive = $derived(workouts.filter((w) => w.kind !== 'rest').length);
 	let pct = $derived(totalActive === 0 ? 0 : Math.round((completed / totalActive) * 100));
 
@@ -106,8 +138,32 @@
 		{/if}
 
 		<header class="hero">
-			<div>
-				<h1>{plan.name}</h1>
+			<div class="hero-body">
+				<div class="hero-title-row">
+					<h1>{plan.name}</h1>
+					{#if isOwner && !plan.is_template}
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							onclick={() => (editingPlanMeta = true)}
+						>
+							<span class="material-symbols">edit</span>
+							Edit plan
+						</button>
+					{/if}
+				</div>
+				{#if plan.parent_template_id}
+					<a class="parent-chip" href="/plans/{plan.parent_template_id}">
+						<span class="material-symbols">link</span>
+						Cloned from a template
+					</a>
+				{/if}
+				{#if plan.is_template && plan.club_id}
+					<span class="template-chip">
+						<span class="material-symbols">groups</span>
+						Club template
+					</span>
+				{/if}
 				<div class="meta">
 					<span>
 						<span class="material-symbols">flag</span>
@@ -141,10 +197,34 @@
 			</div>
 		</header>
 
+		{#if !plan.is_template && adminClubs.length > 0 && plan.user_id === auth.user?.id}
+			<section class="publish-row">
+				<span class="publish-label">Publish as a club template:</span>
+				<select bind:value={publishingTo}>
+					<option value="">— pick a club —</option>
+					{#each adminClubs as c (c.id)}
+						<option value={c.id}>{c.name}</option>
+					{/each}
+				</select>
+				<button
+					class="btn btn-outline"
+					type="button"
+					disabled={!publishingTo}
+					onclick={publishAsTemplate}
+				>
+					Publish
+				</button>
+			</section>
+		{/if}
+
 		{#if todayWorkout}
 			<section class="today">
 				<span class="label">TODAY</span>
-				<a class="today-link" href="/plans/{plan.id}/workouts/{todayWorkout.id}">
+				<button
+					class="today-link"
+					type="button"
+					onclick={() => (editing = todayWorkout)}
+				>
 					<h2>
 						{WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind}
 					</h2>
@@ -155,7 +235,7 @@
 						{#if todayWorkout.target_pace_sec_per_km}
 							<span>@ {fmtPace(todayWorkout.target_pace_sec_per_km)}</span>
 						{/if}
-						{#if todayWorkout.completed_run_id}
+						{#if isWorkoutCompleted(todayWorkout)}
 							<span class="done-chip">
 								<span class="material-symbols">check_circle</span>
 								Completed
@@ -165,9 +245,20 @@
 					{#if todayWorkout.notes}
 						<p class="today-notes">{todayWorkout.notes}</p>
 					{/if}
-				</a>
+				</button>
 			</section>
 		{/if}
+
+		<section class="calendar-section">
+			<h2 class="section-title">Calendar</h2>
+			<PlanCalendar
+				startDate={plan.start_date}
+				endDate={plan.end_date}
+				{workouts}
+				planId={plan.id}
+				onSelect={(wo) => (editing = wo)}
+			/>
+		</section>
 
 		<section class="weeks">
 			{#each weeks as w (w.id)}
@@ -191,11 +282,16 @@
 							<div
 								class="day"
 								class:today={wo.scheduled_date === today}
-								class:completed={!!wo.completed_run_id}
+								class:completed={isWorkoutCompleted(wo)}
 								class:rest={wo.kind === 'rest'}
 								style="--kind-color: {kindColor[wo.kind] ?? 'var(--color-text-secondary)'}"
 							>
-								<a class="day-link" href="/plans/{plan.id}/workouts/{wo.id}">
+								<button
+									class="day-link"
+									type="button"
+									aria-label="View / edit workout"
+									onclick={() => (editing = wo)}
+								>
 									<span class="dow">{dayOfWeek(wo.scheduled_date)}</span>
 									<span class="kind">
 										{WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ??
@@ -204,16 +300,9 @@
 									{#if wo.target_distance_m != null && wo.kind !== 'rest'}
 										<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>
 									{/if}
-									{#if wo.completed_run_id}
+									{#if isWorkoutCompleted(wo)}
 										<span class="material-symbols check">check_circle</span>
 									{/if}
-								</a>
-								<button
-									class="edit"
-									aria-label="Edit workout"
-									onclick={() => (editing = wo)}
-								>
-									<span class="material-symbols">edit</span>
 								</button>
 							</div>
 						{/each}
@@ -222,10 +311,14 @@
 			{/each}
 		</section>
 
-		<section class="coach-section">
-			<h2 class="section-title">Coach</h2>
-			<CoachChat planId={plan.id} />
-		</section>
+		<a class="coach-link" href="/coach?plan={plan.id}">
+			<span class="material-symbols">sports</span>
+			<div class="coach-link-body">
+				<strong>Ask the coach about this plan</strong>
+				<span>Should I run today? Am I on track? Why this week's long run?</span>
+			</div>
+			<span class="material-symbols arrow">chevron_right</span>
+		</a>
 	</div>
 {/if}
 
@@ -240,11 +333,20 @@
 	/>
 {/if}
 
+{#if editingPlanMeta && plan}
+	<PlanMetaEditor
+		{plan}
+		onClose={() => (editingPlanMeta = false)}
+		onSaved={async () => {
+			editingPlanMeta = false;
+			await load();
+		}}
+	/>
+{/if}
+
 <style>
 	.page {
-		max-width: 60rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 	.back {
 		display: inline-flex;
@@ -269,6 +371,22 @@
 		font-size: 1.5rem;
 		font-weight: 700;
 	}
+	.hero-body {
+		flex: 1;
+		min-width: 0;
+	}
+	.hero-title-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+	}
+	.hero-title-row .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1rem;
+		vertical-align: -2px;
+		margin-right: 0.2rem;
+	}
 	.meta {
 		display: flex;
 		flex-wrap: wrap;
@@ -284,6 +402,49 @@
 	}
 	.meta .material-symbols {
 		font-size: 1rem;
+	}
+	.parent-chip,
+	.template-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: 0.3rem;
+		padding: 0.2rem 0.6rem;
+		border-radius: 9999px;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+		font-size: 0.78rem;
+		text-decoration: none;
+	}
+	.parent-chip:hover {
+		color: var(--color-primary);
+	}
+	.parent-chip .material-symbols,
+	.template-chip .material-symbols {
+		font-size: 0.95rem;
+	}
+	.publish-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		padding: var(--space-md) var(--space-lg);
+		margin: var(--space-md) 0;
+		background: var(--color-surface);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.publish-label {
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+	}
+	.publish-row select {
+		padding: 0.4rem 0.7rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-size: 0.9rem;
 	}
 	.progress-circle {
 		width: 5rem;
@@ -323,6 +484,13 @@
 	.today-link {
 		color: inherit;
 		display: block;
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
 	}
 	.today-link h2 {
 		font-size: 1.25rem;
@@ -422,6 +590,13 @@
 		flex-direction: column;
 		gap: 0.15rem;
 		color: inherit;
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
 	}
 	.edit {
 		position: absolute;
@@ -474,8 +649,43 @@
 		color: var(--color-primary);
 		font-size: 1rem;
 	}
-	.coach-section {
+	.coach-link {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
 		margin-top: var(--space-xl);
+		padding: 0.9rem 1.25rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		color: inherit;
+		text-decoration: none;
+		transition: border-color 0.15s ease, background 0.15s ease;
+	}
+	.coach-link:hover {
+		border-color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+	}
+	.coach-link > .material-symbols {
+		color: var(--color-primary);
+		font-size: 1.5rem;
+	}
+	.coach-link-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+	.coach-link-body span {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.coach-link .arrow {
+		color: var(--color-text-tertiary);
+	}
+	.calendar-section {
+		margin: var(--space-md) 0;
 	}
 	.section-title {
 		font-size: 0.85rem;

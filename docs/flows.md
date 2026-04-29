@@ -19,12 +19,11 @@ Traces of the user journeys that cross multiple files, packages, or platforms. E
 
 **Owning doc:** [web_app_auth.md](web_app_auth.md) — this section is a summary.
 
-The web app has **two login paths**:
+The web app has **one login path**:
 
-1. **Demo login** (local dev + preview deploys): bypasses OAuth, creates a mock session in `localStorage`, no Supabase round-trip. Entry point: `src/routes/login/+page.svelte` → `auth.demoLogin(email)`.
-2. **Supabase Auth** (production): Google or Apple OAuth. Redirect lands at `/auth/callback`, which exchanges the code and populates the Supabase session cookie.
+1. **Supabase Auth**: Google or Apple OAuth. Redirect lands at `/auth/callback`, which exchanges the code and populates the Supabase session in `localStorage`.
 
-### Runtime sequence (Supabase path)
+### Runtime sequence
 
 ```
 User → /login                     src/routes/login/+page.svelte
@@ -32,9 +31,9 @@ User → /login                     src/routes/login/+page.svelte
   → auth.signInWithGoogle()       src/lib/stores/auth.svelte.ts
   → supabase.auth.signInWithOAuth({ provider: 'google', redirectTo: /auth/callback })
   → browser redirects to Google
-Google → /auth/callback?code=…    src/routes/auth/callback/+page.svelte (or +server.ts)
+Google → /auth/callback?code=…    src/routes/auth/callback/+page.svelte
   → supabase.auth.exchangeCodeForSession(code)
-  → session cookie set
+  → session stored in localStorage
   → goto('/dashboard')
 /dashboard                        src/routes/+layout.svelte
   $effect checks auth.loggedIn — now true — renders sidebar + content
@@ -46,8 +45,7 @@ Every protected route relies on a root-layout `$effect` that calls `goto('/login
 
 ### Watch out
 
-- `apps/web/src/lib/supabase.ts` is the browser client. `supabase-server.ts` is the SSR client. They do not share a session object — cookies bridge them.
-- The demo login path does not produce a Supabase JWT, so any code that calls an Edge Function or a REST endpoint with `Authorization: Bearer <token>` will fail under demo login. Keep the JWT-dependent calls behind a "real session only" gate or stub them for demo.
+- `apps/web/src/lib/supabase.ts` is the only Supabase client. It is a browser-side client (`createBrowserClient` from `@supabase/ssr`). There is no SSR client; the app is fully static (`adapter-static` with `fallback: index.html`). The JWT lives in `localStorage`.
 
 ---
 

@@ -78,9 +78,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _KeepAlive(
         child: DashboardScreen(
           key: const PageStorageKey('dashboard'),
+          apiClient: widget.apiClient,
+          training: widget.training,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
           preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
         ),
       ),
       _KeepAlive(
@@ -105,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
           runStore: widget.runStore,
           routeStore: widget.routeStore,
           preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
         ),
       ),
       _KeepAlive(
@@ -120,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ClubsScreen(
           key: const PageStorageKey('clubs'),
           social: widget.social,
+          training: widget.training,
         ),
       ),
       _KeepAlive(

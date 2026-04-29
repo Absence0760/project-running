@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { updatePlanWorkout } from '$lib/data';
+	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/data';
 	import {
-		fmtPace,
-		fmtKm,
+		isWorkoutCompleted,
 		WORKOUT_KIND_LABEL,
 		type WorkoutKind
 	} from '$lib/training';
+	import { getUnit } from '$lib/units.svelte';
 	import type { PlanWorkout } from '$lib/types';
+	import Modal from './Modal.svelte';
 
 	interface Props {
 		workout: PlanWorkout;
@@ -15,26 +16,44 @@
 	}
 	let { workout, onClose, onSaved }: Props = $props();
 
+	// All inputs are rendered + stored in the user's preferred unit so
+	// the form matches the rest of the app. Conversion to the canonical
+	// metric storage shape (metres + sec/km) happens at save time only.
+	const METRES_PER_MILE = 1609.344;
+	const unit = getUnit();
+	const distanceDivisor = unit === 'mi' ? METRES_PER_MILE : 1000;
+	const paceFactor = unit === 'mi' ? METRES_PER_MILE / 1000 : 1;
+
+	function paceFromCanonical(sec: number): number {
+		return sec * paceFactor;
+	}
+
 	// Local form state. Initialised from the workout row and only pushed to
 	// the server when the user hits Save, so cancelling restores cleanly.
 	let kind = $state<WorkoutKind>(workout.kind as WorkoutKind);
-	let distanceKm = $state<number | null>(
-		workout.target_distance_m != null ? +(workout.target_distance_m / 1000).toFixed(2) : null
+	let distance = $state<number | null>(
+		workout.target_distance_m != null
+			? +(workout.target_distance_m / distanceDivisor).toFixed(2)
+			: null
 	);
 	let paceMin = $state<number | null>(
-		workout.target_pace_sec_per_km != null ? Math.floor(workout.target_pace_sec_per_km / 60) : null
+		workout.target_pace_sec_per_km != null
+			? Math.floor(paceFromCanonical(workout.target_pace_sec_per_km) / 60)
+			: null
 	);
 	let paceSec = $state<number | null>(
-		workout.target_pace_sec_per_km != null ? workout.target_pace_sec_per_km % 60 : null
+		workout.target_pace_sec_per_km != null
+			? Math.round(paceFromCanonical(workout.target_pace_sec_per_km) % 60)
+			: null
 	);
 	let paceEndMin = $state<number | null>(
 		workout.target_pace_end_sec_per_km != null
-			? Math.floor(workout.target_pace_end_sec_per_km / 60)
+			? Math.floor(paceFromCanonical(workout.target_pace_end_sec_per_km) / 60)
 			: null
 	);
 	let paceEndSec = $state<number | null>(
 		workout.target_pace_end_sec_per_km != null
-			? workout.target_pace_end_sec_per_km % 60
+			? Math.round(paceFromCanonical(workout.target_pace_end_sec_per_km) % 60)
 			: null
 	);
 	let toleranceSec = $state<number | null>(workout.target_pace_tolerance_sec);
@@ -43,24 +62,62 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	// Workouts can be completed two ways: (1) auto-matched from a tracked
+	// run via /runs (sets completed_run_id), or (2) the user taps
+	// "Mark as done" here when they ran without recording — sets the
+	// manually_completed flag instead. The two are mutually compatible:
+	// linking a real run later overrides the manual flag without losing
+	// the timestamp.
+	const wasCompleted = isWorkoutCompleted(workout);
+	const hasLinkedRun = workout.completed_run_id != null;
+
 	const kindOptions: WorkoutKind[] = [
 		'easy', 'long', 'recovery', 'tempo', 'interval', 'marathon_pace', 'race', 'rest'
 	];
+
+	async function toggleCompleted() {
+		busy = true;
+		error = null;
+		try {
+			if (wasCompleted) {
+				// Both paths clear via runId=null. The unlink confirm flow on
+				// the workout-detail page handles linked-run unlinking with
+				// a dialog; here we keep it one-tap because the user is in
+				// an editor context.
+				await markWorkoutCompleted(workout.id, null);
+			} else {
+				await markWorkoutCompleted(workout.id, null, { manual: true });
+			}
+			onSaved();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Update failed';
+		} finally {
+			busy = false;
+		}
+	}
 
 	async function save() {
 		busy = true;
 		error = null;
 		try {
-			const paceStart =
+			const paceStartUnit =
 				paceMin != null ? paceMin * 60 + (paceSec ?? 0) : null;
-			const paceEnd =
+			const paceEndUnit =
 				paceEndMin != null ? paceEndMin * 60 + (paceEndSec ?? 0) : null;
+			const paceStart =
+				paceStartUnit != null ? paceStartUnit / paceFactor : null;
+			const paceEnd =
+				paceEndUnit != null ? paceEndUnit / paceFactor : null;
 			const isRest = kind === 'rest';
 			const unstructuredKinds = ['easy', 'long', 'recovery', 'rest'] as const;
 			const isUnstructured = (unstructuredKinds as readonly string[]).includes(kind);
 			await updatePlanWorkout(workout.id, {
 				kind,
-				target_distance_m: isRest ? null : distanceKm != null ? distanceKm * 1000 : null,
+				target_distance_m: isRest
+					? null
+					: distance != null
+						? distance * distanceDivisor
+						: null,
 				target_pace_sec_per_km: isRest ? null : paceStart,
 				target_pace_end_sec_per_km: isRest ? null : paceEnd,
 				target_pace_tolerance_sec: isRest ? null : toleranceSec,
@@ -77,21 +134,11 @@
 	}
 </script>
 
-<div class="backdrop" role="presentation" onclick={onClose}>
-	<div
-		class="drawer"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Edit workout"
-		onclick={(e) => e.stopPropagation()}
-	>
-		<header>
-			<span class="date">{workout.scheduled_date}</span>
-			<button class="close" onclick={onClose} aria-label="Close">
-				<span class="material-symbols">close</span>
-			</button>
-		</header>
-
+<Modal
+	open={true}
+	title="Edit workout · {workout.scheduled_date}"
+	onclose={onClose}
+>
 		<label>
 			<span>Kind</span>
 			<select bind:value={kind}>
@@ -103,12 +150,12 @@
 
 		{#if kind !== 'rest'}
 			<label>
-				<span>Distance <span class="hint">km</span></span>
-				<input type="number" min="0" step="0.1" bind:value={distanceKm} />
+				<span>Distance <span class="hint">{unit}</span></span>
+				<input type="number" min="0" step="0.1" bind:value={distance} />
 			</label>
 
 			<fieldset>
-				<legend>Target pace <span class="hint">per km</span></legend>
+				<legend>Target pace <span class="hint">per {unit}</span></legend>
 				<div class="pace-row">
 					<input type="number" min="0" max="59" bind:value={paceMin} placeholder="min" />
 					<span>:</span>
@@ -156,51 +203,37 @@
 		{/if}
 
 		<div class="actions">
-			<button class="btn-secondary" onclick={onClose} disabled={busy}>Cancel</button>
-			<button class="btn-primary" onclick={save} disabled={busy}>
+			<button class="btn btn-secondary" onclick={onClose} disabled={busy}>Cancel</button>
+			<button
+				class="btn btn-outline"
+				onclick={toggleCompleted}
+				disabled={busy || hasLinkedRun}
+				title={hasLinkedRun
+					? 'A run is linked — unlink it from the workout detail page first.'
+					: wasCompleted
+						? 'Clear the manual completion flag.'
+						: 'Mark this workout as done without a tracked run.'}
+			>
+				{wasCompleted ? 'Mark not done' : 'Mark as done'}
+			</button>
+			<button class="btn btn-primary" onclick={save} disabled={busy}>
 				{busy ? 'Saving…' : 'Save'}
 			</button>
 		</div>
-	</div>
-</div>
+</Modal>
 
 <style>
-	.backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.45);
-		display: flex;
-		justify-content: flex-end;
-		z-index: 100;
-	}
-	.drawer {
-		background: var(--color-bg);
-		width: 24rem;
-		max-width: 100vw;
-		padding: var(--space-lg);
+	/* Canonical .modal-backdrop / .modal / .modal-header / .modal-close /
+	   .modal-body live in app.css; only field-level styling stays
+	   here. */
+	.modal-body {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		overflow-y: auto;
-	}
-	header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: var(--space-sm);
 	}
 	.date {
-		font-size: 0.78rem;
-		letter-spacing: 0.08em;
 		color: var(--color-primary);
 		font-weight: 700;
-		text-transform: uppercase;
-	}
-	.close {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-text-secondary);
 	}
 	label,
 	fieldset {
@@ -252,27 +285,6 @@
 		justify-content: flex-end;
 		gap: 0.5rem;
 		margin-top: var(--space-sm);
-	}
-	.btn-primary {
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: none;
-		cursor: pointer;
-	}
-	.btn-primary:disabled {
-		opacity: 0.6;
-	}
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: 1px solid var(--color-border);
-		cursor: pointer;
 	}
 	.error {
 		color: var(--color-danger);

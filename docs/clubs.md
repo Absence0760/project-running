@@ -8,7 +8,7 @@ The social layer. A club is a group with an owner, members, events, and a feed o
 |---|---|
 | `/clubs` | Two tabs: **Browse** (public clubs, searchable by name/location) and **My clubs**. |
 | `/clubs/new` | Create a club (name, optional description + location, visibility: public/private, join policy: anyone / approval required / invite-only). |
-| `/clubs/[slug]` | Club home. Three tabs: **Feed** (admin posts + "next event" card, with threaded replies), **Events** (upcoming + past), **Members**. Join/Leave button in the hero. Admins see "New event", a post composer, a pending-requests panel, and the invite-link panel. |
+| `/clubs/[slug]` | Club home. Four tabs: **Feed** (admin posts + "next event" card, with threaded replies), **Events** (upcoming + past), **Routes** (club-owned routes — see below), **Members**. Join/Leave button in the hero. Admins see "New event", a post composer, a pending-requests panel, and the invite-link panel. |
 | `/clubs/[slug]/events/new` | Admin-only. Title, date/time, duration, meeting point, optional attached route, distance, target pace, capacity, recurrence (`none` / `weekly` / `biweekly` / `monthly` + weekday picker + until date). |
 | `/clubs/[slug]/events/[id]` | Event detail. RSVP buttons (Going / Maybe / Can't make it), attendee list, **results leaderboard with Submit-my-time flow**, admin-only per-event updates, linked route chip. For recurring events, an instance picker above the RSVP row lets the user pick which occurrence they're RSVPing to / submitting results for. |
 | `/clubs/join/[token]` | Public invite-link landing page. Redeems the token via the `join_club_by_token` RPC and redirects to the club page. |
@@ -32,6 +32,16 @@ Admin = the club owner or a member with `role = 'admin'` whose `status = 'active
 SQL helpers (`20260428_001_role_permissions.sql`): `is_event_organiser(club_id)` matches `owner | admin | event_organiser`; `is_race_director(club_id)` matches `owner | admin | race_director`. Both are `security definer` + pinned `search_path`. RLS policies on `events`, `event_attendees`, `race_sessions`, `event_results`, and `club_posts` reference these helpers rather than `is_club_admin` for the actions they govern. Admin-only actions (settings, member management) continue to use `is_club_admin`.
 
 Admins can change any non-owner member's role from the Members tab on the web club page via a dropdown. The `setMemberRole(clubId, userId, role)` helper in `data.ts` and the `club_members` UPDATE policy (which requires `is_club_admin`) enforce this.
+
+### Club-owned routes
+
+A route can belong to a club via `routes.club_id` (nullable FK, added in `20260520_001_club_owned_routes.sql`). When set, the route survives admin churn — any club admin can edit it, any member can read it regardless of `is_public`. `user_id` stays as the *uploader* (audit trail), not authority. Two RLS policies layer on top of the existing user-owned and public-readable policies: `"club members read club routes"` (SELECT) and `"club admins write club routes"` (ALL).
+
+Surfaces:
+- The **Routes tab on `/clubs/[slug]`** lists `routes where club_id = <this club>`. Admins get a "New route" button (links to `/routes/new?club=<id>` so the new row inherits `club_id`) and a "Transfer from My routes" modal that flips `club_id` on a personal route via `setRouteClubId(routeId, clubId)`. Each row has a remove affordance that returns the route to the original uploader's library (`setRouteClubId(routeId, null)`).
+- **`EventEditor` route picker** (`/clubs/[slug]/events/new` and the in-club modal) shows two `<optgroup>`s: "This club's routes" and "My routes". The picker dedupes by id so a saved-but-not-yet-transferred route doesn't appear twice.
+
+Companion table: `saved_routes (user_id, route_id, saved_at)`. RouteExplorer's bookmark icon inserts a reference here instead of cloning the row, killing the duplicate-public-routes problem the previous "save to library" flow caused. The `/routes` "My routes" tab unions personal `routes` with `saved_routes` so bookmarks still appear in the user's library view. RLS scopes saved_routes rows to `auth.uid() = user_id`; the underlying route is gated independently by routes RLS (public + own + club-member). See `docs/decisions.md § 30` for the design rationale (and why we deliberately leapfrog Strava's user-only-ownership model here).
 
 ## Data model
 
@@ -71,15 +81,15 @@ Organisers can turn an event instance into a live, server-coordinated race: ever
 **Surfaces**:
 
 - Web event page: admin race-control panel (Arm → GO → End), `auto_approve` checkbox before arming. Attendees see a "Race armed" / "Race LIVE" banner with live elapsed. Approval buttons on pending rows for admins.
-- `/live/event/{id}/{instance_start}`: public-ish spectator page. Live-ranked list of runners on course (distance, pace, elapsed) driven by `race_pings`, plus the finisher leaderboard below.
-- Mobile Android `lib/race_controller.dart` polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop.
-- Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows.
+- `/live/event/{id}/{instance_start}`: public-ish spectator page. Live MapLibre map with each runner as a colour-coded dot + recent trail (latest 30 ping samples), Realtime-subscribed to `race_pings`. Below the map: live-ranked list of runners on course (distance, pace, elapsed) driven by the same data, plus the finisher leaderboard.
+- Mobile Android: `lib/race_controller.dart` handles the **participant** side — polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop. **Organiser Arm / Fire Go / End** controls now also live on Android (`SocialService.armRace / startRace / endRace` + the race-control card on `event_detail_screen.dart`, gated on `ClubView.isRaceDirector`), with live state updates via the existing `subscribeToEvent` realtime channel extended to `race_sessions`.
+- Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows. No organiser controls on Wear by design — typing admin actions on a wrist is a bad UX; use web or Android phone instead.
 
 **Not wired yet** (deferred follow-ups):
 
 - Remote auto-start of the recorder on the `running` signal. Today the user still taps Start; plumbing the permission flow + countdown into a remote trigger is a Wear-specific engineering task.
 - Apple Watch (watchOS Swift) race-armed UI. The `event_results` upload path exists; the "armed" screen is the missing piece.
-- Mobile iOS Flutter — the app is still scaffolded per [apps/mobile_ios/CLAUDE.md](../apps/mobile_ios/CLAUDE.md), so race mode doesn't surface there yet.
+- Mobile iOS Flutter — Phase 1 foundations landed (auth, local stores, GPS recording via `run_recorder`) but the clubs / race-mode UI (participant *and* organiser) has not been ported yet. Port `mobile_android/lib/race_controller.dart`, the Run-tab banner, and the `event_detail_screen.dart` race-control card when that work is picked up.
 - Spectator map. Today the spectator page is a live-updating list; adding a MapLibre view of runner dots is a straightforward extension using the existing `/live/[id]` pattern.
 
 ### Event results

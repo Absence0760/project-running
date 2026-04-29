@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { browseClubs, fetchMyClubs } from '$lib/data';
+	import ClubEditor from '$lib/components/ClubEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type { ClubWithMeta } from '$lib/types';
+	import type { Snapshot } from './$types';
 
-	let tab = $state<'browse' | 'mine'>('browse');
+	let tab = $state<'browse' | 'mine'>('mine');
 	let loading = $state(true);
 	let search = $state('');
 	let browseResults = $state<ClubWithMeta[]>([]);
@@ -24,30 +28,50 @@
 	}
 
 	onMount(() => {
-		loadMine();
-		loadBrowse();
+		// Snapshot restore (below) repopulates these synchronously when
+		// navigating back. Skip the fetch in that case — re-running it
+		// flashes "loading" over the restored list and breaks scroll.
+		if (myClubs.length === 0) loadMine();
+		if (browseResults.length === 0) loadBrowse();
 	});
 
-	$effect(() => {
-		if (tab === 'browse') loadBrowse();
-		if (tab === 'mine') loadMine();
-	});
+	export const snapshot: Snapshot<{
+		myClubs: ClubWithMeta[];
+		browseResults: ClubWithMeta[];
+		tab: 'browse' | 'mine';
+		search: string;
+	}> = {
+		capture: () => ({ myClubs, browseResults, tab, search }),
+		restore: (s) => {
+			myClubs = s.myClubs;
+			browseResults = s.browseResults;
+			tab = s.tab;
+			search = s.search;
+			loading = false;
+		},
+	};
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 	function onSearchInput() {
 		if (searchTimer) clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadBrowse, 250);
 	}
+
+	let showClubModal = $state(false);
+
+	function handleClubCreated(club: { slug: string }) {
+		showClubModal = false;
+		goto(`/clubs/${club.slug}`);
+	}
 </script>
 
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
-			<h1>Clubs</h1>
-			<a href="/clubs/new" class="btn-primary">
+			<button class="btn btn-primary" type="button" onclick={() => (showClubModal = true)}>
 				<span class="material-symbols">add</span>
 				Create club
-			</a>
+			</button>
 		</div>
 		<div class="tabs">
 			<button class="tab" class:active={tab === 'browse'} onclick={() => (tab = 'browse')}>
@@ -76,7 +100,7 @@
 		<div class="empty">
 			{#if tab === 'mine'}
 				<p>You haven't joined a club yet.</p>
-				<button class="btn-secondary" onclick={() => (tab = 'browse')}>Find one to join</button>
+				<button class="btn btn-secondary" onclick={() => (tab = 'browse')}>Find one to join</button>
 			{:else}
 				<p>No clubs match that search.</p>
 			{/if}
@@ -120,6 +144,14 @@
 	{/if}
 </div>
 
+<Modal
+	open={showClubModal}
+	title="Create a club"
+	onclose={() => (showClubModal = false)}
+>
+	<ClubEditor oncreated={handleClubCreated} oncancel={() => (showClubModal = false)} />
+</Modal>
+
 <script module lang="ts">
 	function hashHue(id: string): number {
 		let h = 0;
@@ -130,9 +162,7 @@
 
 <style>
 	.page {
-		max-width: 64rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 
 	.page-header {
@@ -142,39 +172,13 @@
 	.title-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-end;
 		margin-bottom: var(--space-md);
 	}
 
 	h1 {
 		font-size: 1.75rem;
 		font-weight: 700;
-	}
-
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		background: var(--color-primary);
-		color: var(--color-bg);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.9rem;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-secondary {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text);
-		padding: 0.5rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		border: 1px solid var(--color-border);
-		cursor: pointer;
 	}
 
 	.tabs {
@@ -357,4 +361,7 @@
 	.muted {
 		color: var(--color-text-tertiary);
 	}
+
+	/* .modal-backdrop / .modal / .modal-header / .modal-close /
+	   .modal-body live in app.css. */
 </style>

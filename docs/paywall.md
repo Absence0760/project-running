@@ -1,42 +1,69 @@
 # Paywall
 
-## Current model: free with donations
+## Current model: Pro subscription + optional donations
 
-**Everything is free.** The app pivoted from a paid subscription model
-to a donation-funded model. `isLocked()` in `features.ts` always
-returns `false` — no feature is gated behind a paywall. The gate
-infrastructure (tiers, `ProGate` component, server-side checks) is
-retained so features can be re-gated later if needed.
+**Every feature is available to every signed-in user** — `isLocked()` in
+`features.ts` always returns `false`, so no screen is hidden behind a
+paywall. What the Pro tier changes is behaviour *inside* two features:
 
-The donate/funding page at `/settings/upgrade` shows a transparent
-cost breakdown (Supabase, Claude API, MapTiler, etc.) with progress
-bars showing how much of the monthly server cost is covered by
-donations. Donation data is stored in the `monthly_funding` table
-(see `api_database.md`).
+- **AI Coach.** Free users get 10 messages / day (cost-control for the
+  Claude API bill). Pro users get no cap.
+- **Priority processing.** Pro users get a wider processing budget on
+  every coach request: a 2048 max-token response (vs 768 for free) for
+  longer / more thorough answers, and up to 200 runs of context per
+  turn (vs 30 for free). Coupled with the unlimited daily cap above,
+  these are concrete tier-aware budgets enforced server-side on
+  `/api/coach/+server.ts` and surfaced in `X-Coach-Tier` /
+  `X-RateLimit-*` response headers. Backend Edge Functions don't
+  currently branch on tier; that's the next planned widening when
+  individual functions get hot.
 
-## Tiers (infrastructure retained)
+`/settings/upgrade` shows a two-card layout: a Pro plan card
+($9.99 / month, feature bullets, "Get Pro" CTA) and a one-off Donate
+button that links to an external payment provider. The transparent
+cost breakdown, monthly progress bars, donor count, and tiered
+donation buttons that existed under the previous donations-only model
+are gone — see [decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
+
+The `monthly_funding` table stays in the schema (orphaned but not
+dropped); reviving transparent funding later is a one-page revert.
+
+## Tiers
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Everything |
-| `pro` | RevenueCat (not currently sold) | Same as free (gate is disabled) |
-| `lifetime` | RevenueCat (not currently sold) | Same as free (gate is disabled) |
+| `free` | Default for every new account | Every feature. AI coach capped at 10 messages / day. Standard request priority. |
+| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + unlimited AI coach + priority processing. |
+| `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
 constraint enforces the three valid values. The `is_pro()` SQL helper
-returns `true` for both `pro` and `lifetime`.
+takes no arguments and gates internally on `auth.uid()`; it returns
+`true` for both `pro` and `lifetime`. (An earlier `is_user_pro(uuid)`
+variant was dropped in `20260516_001_drop_is_user_pro.sql` — it took a
+user-id parameter and let any authenticated caller probe another user's
+tier.)
 
-## Gated features (currently all unlocked)
+## Pro perks and where they're enforced
 
-| Feature key | Label | Where gated (if re-enabled) |
+| Perk | Feature key | Enforcement point |
 |---|---|---|
-| `ai_coach` | AI Coach | Server: `/api/coach/+server.ts` checks tier (skipped when `isLocked` returns false). Client: `CoachChat.svelte` shows `<ProGate>`. Currently ungated; usage limited to 10 messages/day instead (see `user_coach_usage` table). |
-| `priority_sync` | Priority Background Sync | Mobile: `main.dart` skips `registerBackgroundSync()` for free users. Currently ungated. |
+| Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_pro()` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
+| Priority processing | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 200-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 
-All features are free. The AI Coach has a **daily usage limit of 10
-messages per user** (enforced server-side via `increment_coach_usage`
-RPC) instead of a paywall, keeping API costs manageable without
-charging users.
+These perks are **behaviour changes**, not gated screens, so they do
+not call through `isLocked()`. `isLocked()` remains the correct hook
+for a future feature that should be hidden entirely behind Pro (e.g.
+"live spectator link") — flip it to return `!isPro()` for the key.
+
+## Client-side `isPro()` helper
+
+`apps/web/src/lib/features.ts` exports `isPro()` — reads the auth
+store's cached `user_profiles.subscription_tier` and returns true for
+`pro` / `lifetime`. Use it for conditional UI flourishes (a "Pro"
+badge, a "Pro — unlimited" label next to the coach input). Never use
+it as the sole check for anything expensive: always mirror the check
+server-side with the `is_pro()` RPC.
 
 ## Adding a new gated feature
 
@@ -68,7 +95,7 @@ charging users.
    ```
    Or in an Edge Function:
    ```ts
-   const { data } = await supabase.rpc('is_user_pro', { p_user_id: userId });
+   const { data } = await supabase.rpc('is_pro');
    if (!data) return new Response('Pro required', { status: 403 });
    ```
 
@@ -132,12 +159,15 @@ secrets (`supabase secrets set REVENUECAT_WEBHOOK_SECRET=whsec_...`).
 
 ### Client → RevenueCat SDK
 
-**Web**: use the `@revenuecat/purchases-js` package (or a simple
-fetch to RevenueCat's REST API). Configure with the RevenueCat project
-API key and the Supabase user id as the `app_user_id`. Show a checkout
-flow and let RevenueCat handle payment + receipt validation. After a
-successful purchase, the webhook fires and the server updates the tier;
-the client refetches the profile to see the change.
+**Web (shipped)**: `@revenuecat/purchases-js` is wired via
+`apps/web/src/lib/revenuecat.ts`. `/settings/upgrade` "Get Pro" button
+calls `Purchases.purchase(...)` with the Supabase user id as the
+`appUserId`. The `managementURL` on `CustomerInfo` backs the
+"Manage subscription" button. Env-gated by `PUBLIC_REVENUECAT_WEB_API_KEY`;
+builds without the key fall back to the original "coming soon" toast so
+local dev and previews still compile. After a successful purchase the
+`revenuecat-webhook` Edge Function flips `subscription_tier` server-side
+and the web re-fetches the user profile via `auth.fetchUser()`.
 
 **Android (Flutter)**: use `purchases_flutter` package. Initialise in
 `main.dart` after sign-in with the user id as `appUserId`. The
@@ -157,7 +187,7 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_WEBHOOK_SECRET` | Supabase function env | HMAC signing secret from RevenueCat |
 | `REVENUECAT_API_KEY_IOS` | iOS app `.env` / CI secrets | RevenueCat project API key for iOS |
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
-| `REVENUECAT_API_KEY_WEB` | Web `.env` / CI secrets | RevenueCat project API key for web |
+| `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
 
 ## Donation flow (user perspective)
 

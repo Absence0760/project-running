@@ -32,6 +32,7 @@ class RoutesScreen extends StatefulWidget {
 
 class _RoutesScreenState extends State<RoutesScreen> {
   bool _syncing = false;
+  List<cm.Route> _bookmarks = const [];
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     widget.routeStore.addListener(_onChange);
     widget.preferences.addListener(_onChange);
     _fetchRemoteRoutes();
+    _fetchBookmarks();
   }
 
   @override
@@ -52,6 +54,18 @@ class _RoutesScreenState extends State<RoutesScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _fetchBookmarks() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final marks = await api.fetchBookmarkedRoutes();
+      if (!mounted) return;
+      setState(() => _bookmarks = marks);
+    } catch (_) {
+      // Best-effort; the owned list still renders.
+    }
+  }
+
   Future<void> _fetchRemoteRoutes() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
@@ -63,6 +77,11 @@ class _RoutesScreenState extends State<RoutesScreen> {
       }
     } catch (e) {
       debugPrint('Fetch routes failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not sync routes — working offline')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -105,7 +124,12 @@ class _RoutesScreenState extends State<RoutesScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
-    final routes = widget.routeStore.routes;
+    final owned = widget.routeStore.routes;
+    final ownedIds = {for (final r in owned) r.id};
+    final routes = <cm.Route>[
+      ...owned,
+      ..._bookmarks.where((b) => !ownedIds.contains(b.id)),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -174,18 +198,22 @@ class _RoutesScreenState extends State<RoutesScreen> {
               itemCount: routes.length,
               itemBuilder: (context, index) {
                 final route = routes[index];
+                final isOwned = ownedIds.contains(route.id);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: theme.colorScheme.secondaryContainer,
-                      child: Icon(Icons.route,
-                          color: theme.colorScheme.secondary),
+                      child: Icon(
+                        isOwned ? Icons.route : Icons.bookmark,
+                        color: theme.colorScheme.secondary,
+                      ),
                     ),
                     title: Text(route.name),
                     subtitle: Text(
                       '${UnitFormat.distance(route.distanceMetres, unit)}'
-                      '  •  ${route.elevationGainMetres.round()}m gain',
+                      '  •  ${route.elevationGainMetres.round()}m gain'
+                      '${isOwned ? '' : '  •  Saved'}',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
@@ -197,13 +225,16 @@ class _RoutesScreenState extends State<RoutesScreen> {
                             routeStore: widget.routeStore,
                             preferences: widget.preferences,
                             apiClient: widget.apiClient,
-                            isOwner: true,
+                            isOwner: isOwned,
                           ),
                         ),
                       );
                       if (picked != null) {
                         widget.onStartRun?.call(picked);
                       }
+                      // Refresh bookmarks so unbookmarks made on the
+                      // detail screen flow back into the list.
+                      _fetchBookmarks();
                     },
                   ),
                 );

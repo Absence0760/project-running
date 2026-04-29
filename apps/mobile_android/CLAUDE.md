@@ -2,6 +2,26 @@
 
 The most mature Flutter target in the monorepo. Almost every "Android" checkbox in [../../docs/roadmap.md](../../docs/roadmap.md) Phase 1 is ticked. Treat this app as the reference implementation — when in doubt about what a feature *should* look like on mobile, look here first.
 
+## Scope — read before writing code
+
+**Web is the canonical feature surface. This app mirrors web and adds device-only capabilities.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) and the live matrix at [../../docs/parity.md](../../docs/parity.md).
+
+**One-Dart-codebase rule.** `apps/mobile_android/lib/` and `apps/mobile_ios/lib/` are kept byte-for-byte identical, plus `apps/mobile_android/test/` and `apps/mobile_ios/test/`. Every change you make under `lib/` or `test/` must be applied to the iOS twin in the same commit. Platform-specific runtime behaviour goes inside the unified files via `Platform.isAndroid` / `Platform.isIOS`. The pubspec deltas between the two apps are limited to `name` and `description` — every dependency, version, and asset stays in lockstep. Verify with `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` (should be empty).
+
+**Build here:**
+
+- **Device-led features** (the physical-exception list in §24): live GPS recording + foreground service, auto-pause, on-device crash recovery, BLE chest-strap HR, pedometer / cadence, haptic / TTS pace alerts, OS share sheets, OS share-target intents (GPX / KML import), Health Connect import, disk-backed tile cache, background sync via WorkManager.
+- **Mirroring** of an already-shipped web feature into a Flutter screen + api_client method + (when needed) a domain model in `core_models`. Driven by `parity.md` rows where web is `✓` and android is `✗` / `Partial`.
+
+**Don't build here first:**
+
+- A user-facing feature that doesn't yet exist on web — build it on web first, mirror after. This applies even when the request lands on an Android session ("can you add X to Android?"); push back, ship X on web, then mirror. The exception is the device-led list above.
+- New abstractions / DI frameworks. `StatefulWidget + setState + ChangeNotifier` is the entire UI stack. No Provider, no Riverpod, no Bloc. If a screen needs cross-cutting state, add a `ChangeNotifier` and wire `addListener` / `removeListener` in `initState` / `dispose`.
+- Direct `Supabase.instance.client.from(...)` calls in screens. Route through `packages/api_client` so the typed client stays the single Supabase entry point. (Realtime channels are the documented exception.)
+- Comments, decision docs, READMEs, or "removed X" markers under `lib/`. Conventions in [../../docs/conventions.md](../../docs/conventions.md) apply here in full — comments only for non-obvious *why*.
+
+When closing a parity gap, the order is: row classes (already generated) → `api_client` typed methods → domain model in `core_models` if the shape isn't 1:1 → ChangeNotifier or screen-local state → screen. See [../../docs/mobile_android_backlog.md](../../docs/mobile_android_backlog.md) for the live execution order.
+
 ## Stack
 
 - **Flutter** stable, Dart 3.x
@@ -34,9 +54,18 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 **Screens** (`lib/screens/`):
 - `onboarding_screen.dart` — first-launch permission ask
 - `sign_in_screen.dart` — email/password + Google sign-in
+- `sign_up_screen.dart` — email/password registration + Google sign-in, linked from sign-in
 - `home_screen.dart` — the dashboard + nav tabs host
 - `run_screen.dart` — the primary recording screen (countdown, live stats, route overlay, finish summary); hosts the recorder state machine and all the hardening described in [../../docs/run_recording.md](../../docs/run_recording.md)
-- `dashboard_screen.dart` — weekly mileage, PBs, goal progress
+- `dashboard_screen.dart` — weekly mileage, PBs, goal progress; AppBar actions push `coach_screen.dart` (AI Coach), `feed_screen.dart` (activity feed) and `profile_screen.dart` (own profile)
+- `coach_screen.dart` — AI Coach chat. Mirrors web `CoachChat.svelte` + `/coach/+page.svelte`. Plan switcher in the AppBar (when >1 plan), end-Drawer archive sidebar, context strip (plan / runs window 10|20|50|100 / HR pill / weekly-goal pill), markdown bubbles via `flutter_markdown`, inline edit / regenerate / copy / thumbs actions, multi-line composer with circular send button, daily-cap banner driven by `get_coach_usage` + `is_pro`. Streams from the web `/api/coach` endpoint via `dart:io` HttpClient + UTF-8 SSE parser; Realtime subscription on `coach_messages` stitches in messages persisted by other tabs.
+- `feed_screen.dart` — activity feed of public runs from people you follow (14-day window, mirrors web `/feed`); activity-segmented filter + author dropdown + infinite-scroll. Tapping a card body pushes `public_run_screen.dart`
+- `profile_screen.dart` — public user profile (`/u/[id]` mirror): header, Follow toggle, and tabs for Runs / Followers / Following / Notifications (notifications tab gated to self)
+- `public_run_screen.dart` — read-only mirror of web `/share/run/[id]`. Reads via `ApiClient.fetchRunById` (RLS hides private), reuses `LiveRunMap` + segment chips + social section. Reachable from feed-card body taps
+- `public_route_screen.dart` — read-only mirror of web `/share/route/[id]`. Reads via `ApiClient.fetchRouteById`; renders the planned-route polyline + stats + segments panel (read-only). Reachable from the Routes tab on `club_detail_screen`
+- `live_spectator_screen.dart` — read-only mirror of web `/live/[run_id]`. Hydrates existing `live_run_pings`, then subscribes via `Supabase.channel.onPostgresChanges(insert)` filtered by `run_id`; renders the trace on `LiveRunMap` (follow-runner) with a Live / Idle / Connecting badge
+- `devices_screen.dart` — Settings → Devices: lists `user_device_settings` rows with Rename / Edit overrides… / Remove popup actions. Mirrors web `/settings/devices`
+- `privacy_zones_screen.dart` — Settings → Privacy zones: tap-to-add geofence picker on `flutter_map`. Persists to `user_settings.prefs.privacy_zones` via `SettingsService.updateUniversal`. Mirrors web `PrivacyZonePicker`
 - `runs_screen.dart` — run list with sorting, FAB opens `add_run_screen`
 - `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
 - `run_detail_screen.dart` — single run map + stats (primary + secondary) + interactive elevation/pace chart + best efforts + pace-bar splits + laps
@@ -45,10 +74,10 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `route_detail_screen.dart` — route map + metadata + reviews + public/private toggle
 - `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
 - `explore_routes_screen.dart` — search and browse public routes with filters (distance, surface), save to library
-- `settings_screen.dart` — preferences, integrations, data export
-- `clubs_screen.dart` — Browse / My clubs, 6th bottom-nav tab
-- `club_detail_screen.dart` — feed (threaded), upcoming events, members, join/leave
-- `event_detail_screen.dart` — per-instance RSVP + admin update composer
+- `settings_screen.dart` — preferences, integrations (Strava connect/sync/disconnect via `url_launcher` hand-off + native sync via Edge Function; parkrun athlete-number import), data export
+- `clubs_screen.dart` — Browse / My clubs, 6th bottom-nav tab. FAB opens `widgets/club_form_sheet.dart` (Create club)
+- `club_detail_screen.dart` — five tabs: Feed (threaded posts) · Events (admin Create button + RSVP cards) · Members (admin pending-requests panel + count) · Routes (club-owned routes via `routes.club_id`, lazy-loaded; tap → `public_route_screen.dart`) · Templates (admin/member-visible plan templates with per-row Adopt → `clone_plan_template` RPC)
+- `event_detail_screen.dart` — per-instance RSVP + admin update composer + admin-only Race control card (Arm / Fire Go / End / Cancel, gated on `ClubView.isRaceDirector`, backed by `SocialService.armRace` / `startRace` / `endRace`)
 - `plans_screen.dart` — Training plans list (accessed from Run tab idle button)
 - `plan_new_screen.dart` — Wizard with live pace + week-outline preview
 - `plan_detail_screen.dart` — Hero + progress ring + today card + week grid
@@ -63,12 +92,11 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `local_run_store.dart` / `local_route_store.dart` — `ChangeNotifier`-style on-disk stores
 - `preferences.dart` — SharedPreferences wrapper for settings
 - `tile_cache.dart` — disk-backed map tile cache glue
-- `audio_cues.dart` — TTS for splits and pace alerts
+- `audio_cues.dart` — TTS for splits and pace alerts. Pace alerts are paired with a `HapticFeedback.heavyImpact()` pulse in `run_screen.dart` (two pulses for "speed up", one for "slow down") so the cue registers with headphones paused
 - `run_stats.dart` — pace/distance/split formatting helpers (tested)
 - `goals.dart` — `RunGoal` model + pure `evaluateGoal` for dashboard goal cards (tested)
 - `route_simplify.dart` — Ramer–Douglas–Peucker track simplifier used when saving a run as a route (tested)
 - `health_connect_importer.dart` / `strava_importer.dart` — bulk importers
-- `mock_data.dart` — fallback data when Supabase returns nothing (dev only)
 - `widgets/live_run_map.dart` — live map with route overlay, off-route banner, NRC-style pace heatmap (when `activity` is non-null, falls through to the legacy single gradient polyline otherwise)
 - `widgets/pace_segments.dart` — pure helpers `buildPaceSegments` / `paceBucketForSpeed` / `ageBandFor`. Pace-coloured, age-faded segment builder for the live track. No Flutter state — unit-tested in `test/pace_segments_test.dart`
 - `widgets/collapsible_panel.dart` — the run screen's expandable stats panel
@@ -76,9 +104,26 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `widgets/goal_editor_sheet.dart` — modal bottom sheet for creating/editing/deleting a `RunGoal` (type + period + target)
 - `widgets/upcoming_event_card.dart` — Run tab idle-state card shown when the user has a `going` RSVP within 48h
 - `widgets/todays_workout_card.dart` — Run tab idle-state priority card when an active plan has a workout scheduled today
+- `widgets/plan_calendar.dart` — Dart port of `apps/web/src/lib/components/PlanCalendar.svelte`. Month-by-month grid with prev/next chevrons, Monday-first DOW row, kind-coloured cells, completed-tick. Renders on `plan_detail_screen` between the today card and the week cards.
+- `widgets/workout_edit_sheet.dart` — modal bottom sheet for inline edit of a `PlanWorkoutRow` (kind, target distance, target pace, notes). Opened via the pencil button or long-press on a workout row in `plan_detail_screen`; saves through `TrainingService.updateWorkout`.
+- `widgets/workout_execution_band.dart` — top-of-map overlay shown while a structured workout is running. Reads through a `ValueListenable<WorkoutBandState>` so transitions / progress events don't trigger a Stack-wide rebuild. Surfaces the current step label, pace pip with signed delta, progress bar + remaining metres, and Skip / Abandon controls.
+- `widgets/workout_review_section.dart` — post-run planned-vs-actual table on `run_detail_screen`. Reads `runs.metadata.workout_step_results` + `workout_adherence`; hidden when those keys are absent. Mirrors the web `/runs/[id]` Workout section. Pure widget + helpers (`paceDeltaOf`, `formatPace`) — no controller state, widget-tested.
+- `widgets/run_social_section.dart` — kudos pill + one-level comment thread + composer for `run_detail_screen`. Self-fetches engagement and `fetchRunCommentsWithAuthors` on mount. Optimistic kudos toggle with rollback. Replies bucket client-side; author/owner gate the Delete affordance. Mirrors `apps/web/src/lib/components/RunSocial.svelte`.
+- `widgets/run_photos.dart` — run-detail photo gallery. Owner gates Add photo (uses `image_picker` to pick from gallery, uploads via `ApiClient.addRunPhoto` to the `run-photos` Storage bucket), inline caption edit + delete. Tap a tile for a full-screen `InteractiveViewer` lightbox. Mounted on both `run_detail_screen` (owner: full controls) and `public_run_screen` (read-only when viewer is not the owner). Mirrors `apps/web/src/lib/components/RunPhotos.svelte`.
+- `widgets/club_form_sheet.dart` — modal create-club form (name, description, location, public/private, join policy). Auto-slugifies the name; visibility ↔ policy linking matches web `ClubEditor.svelte`. Mounted from the FAB on `clubs_screen.dart`.
+- `widgets/event_form_sheet.dart` — modal create-event form (title, starts-at picker, description, meet label, distance / duration, recurrence none/weekly/biweekly/monthly with auto-byday from the picked DOW). Mounted from the admin Create button on the Events tab of `club_detail_screen`.
+- `widgets/run_segment_efforts.dart` — per-run segment-effort chips on `run_detail_screen`. On mount, when the viewer owns the run and it's linked to a saved route, walks the track via `lib/segments.dart#autoComputeEffortsForRun` to insert any new efforts (idempotent against the unique(segment_id, run_id) constraint), then fetches the joined effort + segment + rank rows via `ApiClient.fetchEffortsForRunWithSegments`. Mirrors `apps/web/src/lib/components/RunSegmentEfforts.svelte`.
+- `widgets/segments_panel.dart` — route-detail segments panel on `route_detail_screen`: lists every segment, expand-on-tap to a per-segment leaderboard via `fetchSegmentLeaderboardWithAthletes`. Route owner gets a "New segment" form (name + start_m + end_m, ≥100 m enforcement) and a per-row delete button (uses `ApiClient.deleteSegment`). Mirrors `apps/web/src/lib/components/SegmentsPanel.svelte`.
+- `widgets/training_load_chart.dart` — dashboard "Fitness, Fatigue & Form" `CustomPaint` chart. Reads HR prefs from `SettingsService` (`resting_hr_bpm` + `max_hr_bpm`); renders three line series (CTL / ATL / TSB) over the last 90 days plus a dashed zero line, a legend, and a one-line reading. Mirrors `apps/web/src/lib/components/TrainingLoadChart.svelte`.
+- `training_load.dart` — pure Dart port of `apps/web/src/lib/training_load.ts` (decisions §34). Same TRIMP-when-HR / distance-fallback stress ladder, same daily aggregation, same EWMA trio (ATL halflife 7, CTL halflife 42); `hasTrimpSignal` drives the "HR-based" vs "volume-based" subtitle.
+- `segments.dart` — pure Dart port of `apps/web/src/lib/segments.ts` (decisions §37). `computeEffortFromTrack` walks a track once, accumulates haversine distance, and interpolates timestamps at the start / end crossings; `autoComputeEffortsForRun` fans the walker over every segment on a route and posts new efforts. Sparsity guard mirrors web (median sample step must be ≤ segLen / 5). 8-test mirror suite in `test/segments_test.dart`.
+- `privacy.dart` — pure Dart port of `apps/web/src/lib/privacy.ts` (decisions §33). `PrivacyZone` shape, `isInAnyZone` haversine check, `clipPointsToZones` walks-from-each-end clipper. Owner-side preview only — non-owner tracks go through the `clip_track_for_user` SECURITY DEFINER RPC server-side. 8-test mirror suite in `test/privacy_test.dart`.
+- `widgets/fitness_card.dart` — the dashboard's Fitness card (VO₂ max + VDOT + qualifying-run count, then CTL / ATL / TSB, then a recovery-advice line). Renders nothing when `qualifyingRunCount == 0`. Reuses `lib/fitness.dart` for the math; widget-tested.
 - `social_service.dart` — `ChangeNotifier` wrapping all Supabase calls for clubs / events / posts
 - `training_service.dart` — `ChangeNotifier` wrapping Supabase calls for training plans + workouts
 - `ble_heart_rate.dart` — BLE chest-strap GATT client for live BPM stream (tested); wires into the run screen via `BleHeartRate.stream`
+- `hr_zones.dart` — pure helpers `hrZoneBreakdown` (time-weighted, 30 s pause cap) and `bpmStatsOf`. No Flutter state — unit-tested. Backs the HR-zone panel on `run_detail_screen` for runs whose track carries per-point `bpm` (Strava, FIT/TCX imports, watch recorders).
+- `fitness.dart` — Dart port of `apps/web/src/lib/fitness.ts` (VDOT / VO₂ max from Daniels' formula, EWMA-based ATL/CTL/TSB, `recoveryAdvice`). Pure functions; backs the dashboard's Fitness card. Keep in sync with the web module.
 - `race_controller.dart` — live-race orchestration: pings spectator feed, auto-submits finisher time to the leaderboard
 - `settings_sync.dart` — reads/writes the user-preferences row so settings roam across devices
 - `backup.dart` — export + import of the local run / route stores (troubleshooting + device-swap path)
@@ -99,18 +144,29 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 Test files in `test/`:
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
-- `local_run_store_test.dart` — 16 tests: store persistence, sync state, in-progress save/load, edge cases
+- `local_run_store_test.dart` — 17 tests: store persistence, sync state, in-progress save/load, deleteMany batch, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
 - `goals_test.dart` — 20 tests: goal evaluation (distance/time/pace/run-count, weekly/monthly, multi-target)
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
 - `training_test.dart` — 18 tests: VDOT, Riegel, pace derivation, plan generation (mirrors `apps/web/src/lib/training.test.ts`)
 - `ble_heart_rate_test.dart` — 9 tests: BLE HR characteristic 0x2A37 parser (8-bit/16-bit BPM, edge cases)
 - `pace_segments_test.dart` — 15 tests: pace-bucket clamping, activity-specific scaling, age-band partitioning, coalescing, vertex-sharing continuity, timestamp-less fallback — backs the NRC-style pace heatmap in `widgets/pace_segments.dart`
+- `hr_zones_test.dart` — 8 tests: time-weighted vs sample-count fallback, the 30 s pause cap, custom cutoffs, malformed-input rejection, `bpmStatsOf` aggregation
+- `fitness_test.dart` — 17 tests: VDOT range checks (5k, marathon), `currentVdot` 90-day window + qualifying-source filter, `runTss` Coggan reference, EWMA training-load smoke, `recoveryAdvice` thresholds, `computeSnapshot` end-to-end
+- `training_load_test.dart` — 10 tests for `lib/training_load.dart`: distance-fallback stress (~50 for an easy 5k), TRIMP path lights up with avg_bpm + resting + max, zero-input → 0, daily aggregation sums same-day runs, series emits exactly windowDays entries, TSB rises during a 14-day taper, all-zero with no runs, `hasTrimpSignal` gating (no avg_bpm / has avg_bpm + prefs / prefs missing). Mirrors `apps/web/src/lib/training_load.test.ts`.
+- `segments_test.dart` — 8 tests for `lib/segments.dart`: clean segment, run shorter than segment end, ≤2-point tracks, zero / negative segment windows, sparse-sampling guard (median step > segLen / 5), missing timestamps in the interpolation bracket, mid-segment interpolation, sample-aligned endpoints. Mirrors `apps/web/src/lib/segments.test.ts`.
+- `privacy_test.dart` — 8 tests for `lib/privacy.dart`: `isInAnyZone` (empty / centre / far), `clipPointsToZones` (empty zones returns input, drops leading + trailing in-zone, keeps interior, every-point-in-zone returns empty, multi-zone union). Mirrors `apps/web/src/lib/privacy.test.ts`.
+- `plan_calendar_test.dart` — 3 widget tests: month rendering with kind labels, chevron navigation, completed-tick presence
+- `workout_execution_band_test.dart` — 6 widget tests: empty render, header / step counter / remaining-metres formatting, Skip + Abandon callbacks, complete + abandoned shells, em-dash for null pace
+- `workout_review_section_test.dart` — 11 tests for `widgets/workout_review_section.dart`: hidden when metadata absent / empty / null, header + adherence pill rendered with one row per step, kind-specific labels (Warmup / Rep i/n / Recovery i/n / Cooldown), strikethrough + "skip" label for skipped steps, em-dash + neutral colour when actual pace is null, signed `+/−Ns` delta label, and tone classification thresholds (`on` / `amber` / `off` against the 10 s tolerance) plus `formatPace` formatting
+- `fitness_card_test.dart` — 5 widget tests for `widgets/fitness_card.dart`: hidden with no runs, hidden when no runs qualify (sub-3 km / sub-5 min), populated card renders all six stat labels + the recovery-advice icon + the qualifying-run count, em-dash placeholder when VDOT can't be computed but qualifying runs exist, plus a smoke test for the `FitnessStat` value-over-label primitive
 - `metadata_registry_test.dart` — 2 tests: (1) every `runs.metadata` key referenced in Dart source is registered in [docs/metadata.md](../../docs/metadata.md) — catches cross-client drift like `metadata.activityType` vs `metadata.activity_type` at CI time; (2) a soft "dead-key" info log surfacing registered keys that no Dart reader touches (may be web/watch/EF-only). Fails on unknown-key writes; purely informational on the reverse direction.
-- `architecture_guards_test.dart` — 18 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
-- plus `run_recorder`'s own tests in `packages/run_recorder/test/` (17 behavioural + 7 guards)
+- `recurrence_test.dart` — 8 tests: weekly / biweekly / monthly `expandInstances`, hour/minute local-tz preservation, `count` cap, `until` cap, non-recurring single-instance
+- `importer_external_id_test.dart` — 2 tests: `StravaImporter` ZIP import produces `strava:<id>` prefix; source-text guard confirms `HealthConnectImporter` uses `healthconnect:<uuid>` prefix
+- `architecture_guards_test.dart` — 20 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
+- plus `run_recorder`'s own tests in `packages/run_recorder/test/` — 17 behavioural + 7 guards + 13 `workout_runner_test.dart` (step expansion, auto-advance, halfway / last-50m progress, skip / abandon, pace-adherence wayBehind, results JSON shape)
 
-See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
+See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for all screens and widgets except `RunScreen` and `LiveRunMap` (109 `testWidgets` calls across 22 files); see `test/` for the full list.
 
 ## Running it locally
 

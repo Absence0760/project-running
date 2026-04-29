@@ -13,6 +13,7 @@ Waypoint _$WaypointFromJson(Map<String, dynamic> json) => Waypoint(
   timestamp: json['timestamp'] == null
       ? null
       : DateTime.parse(json['timestamp'] as String),
+  bpm: (json['bpm'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$WaypointToJson(Waypoint instance) => <String, dynamic>{
@@ -20,4 +21,5 @@ Map<String, dynamic> _$WaypointToJson(Waypoint instance) => <String, dynamic>{
   'lng': instance.lng,
   'elevationMetres': instance.elevationMetres,
   'timestamp': instance.timestamp?.toIso8601String(),
+  'bpm': instance.bpm,
 };

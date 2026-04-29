@@ -51,6 +51,82 @@ export function elevationGainMetres(track: TrackPoint[] | null | undefined): num
 	return Math.round(gain);
 }
 
+export interface Split {
+	km: number;
+	pace_s: number;
+	distance_m: number;
+	elevation_m: number | null;
+}
+
+/**
+ * Compute per-km splits from a GPS track. Requires timestamps on track
+ * points; returns [] when fewer than two points carry timestamps. Mirrors
+ * the Android `run_detail_screen.dart` split logic.
+ *
+ * Elevation per split is the net gain/loss (positive = gain) over that
+ * km segment. Null when the track has no elevation data.
+ */
+export function computeRealSplits(track: TrackPoint[]): Split[] {
+	if (track.length < 2) return [];
+	const hasTs = track.some((p) => p.ts != null);
+	if (!hasTs) return [];
+
+	const hasEle = track.some((p) => p.ele != null);
+
+	// Accumulate cumulative distance and find the indices at each km boundary.
+	let cumDist = 0;
+	let splitStart = { idx: 0, dist: 0, timeMs: Date.parse(track[0].ts ?? ''), ele: track[0].ele };
+	const splits: Split[] = [];
+
+	for (let i = 1; i < track.length; i++) {
+		const a = track[i - 1];
+		const b = track[i];
+		cumDist += haversineMetres(a.lat, a.lng, b.lat, b.lng);
+		const boundary = splits.length + 1;
+
+		if (cumDist >= boundary * 1000) {
+			const endTimeMs = b.ts ? Date.parse(b.ts) : NaN;
+			const durationS = Number.isFinite(endTimeMs) ? (endTimeMs - splitStart.timeMs) / 1000 : 0;
+			const splitDist = cumDist - splitStart.dist;
+			const paceS = durationS > 0 && splitDist > 0 ? Math.round(durationS / (splitDist / 1000)) : 0;
+			const eleNet = hasEle && b.ele != null && splitStart.ele != null
+				? Math.round(b.ele - splitStart.ele)
+				: null;
+
+			splits.push({
+				km: boundary,
+				pace_s: paceS,
+				distance_m: Math.round(splitDist),
+				elevation_m: eleNet,
+			});
+
+			splitStart = { idx: i, dist: cumDist, timeMs: endTimeMs, ele: b.ele };
+		}
+	}
+
+	// Final partial split if there are remaining metres.
+	if (splits.length > 0 || cumDist > 0) {
+		const lastPoint = track[track.length - 1];
+		const endTimeMs = lastPoint.ts ? Date.parse(lastPoint.ts) : NaN;
+		const durationS = Number.isFinite(endTimeMs) ? (endTimeMs - splitStart.timeMs) / 1000 : 0;
+		const remainingDist = cumDist - splitStart.dist;
+		if (remainingDist > 50) {
+			const paceS = durationS > 0 && remainingDist > 0 ? Math.round(durationS / (remainingDist / 1000)) : 0;
+			const eleNet = hasEle && lastPoint.ele != null && splitStart.ele != null
+				? Math.round(lastPoint.ele - splitStart.ele)
+				: null;
+			splits.push({
+				km: splits.length + 1,
+				pace_s: paceS,
+				distance_m: Math.round(remainingDist),
+				elevation_m: eleNet,
+			});
+		}
+	}
+
+	return splits;
+}
+
 /**
  * Great-circle distance between two lat/lng points, in metres.
  */

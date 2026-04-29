@@ -23,14 +23,16 @@ serve(async (req: Request) => {
     return new Response('Webhook not configured', { status: 503 });
   }
 
-  // Verify HMAC signature.
+  // Verify HMAC signature with a constant-time compare so an attacker
+  // can't tease the digest out one byte at a time via response-timing
+  // (low practical risk over a network, but free to do correctly).
   const body = await req.text();
   const sig = req.headers.get('x-revenuecat-hmac');
   if (!sig) {
     return new Response('Missing signature', { status: 401 });
   }
   const expected = hmac('sha256', secret, body, 'utf8', 'hex');
-  if (sig !== expected) {
+  if (!timingSafeEqual(sig, expected)) {
     return new Response('Bad signature', { status: 401 });
   }
 
@@ -111,4 +113,17 @@ interface RevenueCatEvent {
   app_user_id: string;
   product_id?: string;
   [key: string]: unknown;
+}
+
+/// Constant-time string compare. Returns false on length mismatch
+/// without short-circuiting on content. The length check itself is
+/// observable, but the digest length is fixed (sha256 hex = 64 chars)
+/// and known to anyone reading this source — no new information.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
 }

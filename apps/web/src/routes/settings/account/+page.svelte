@@ -14,6 +14,13 @@
 		type RestoreProgress,
 		type RestoreResult,
 	} from '$lib/backup';
+	import {
+		isPushSupported,
+		pushPermission,
+		subscribeToPush,
+		unsubscribeFromPush,
+		getCurrentSubscription,
+	} from '$lib/push';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -23,6 +30,7 @@
 	let saving = $state(false);
 	let saved = $state(false);
 	let exporting = $state(false);
+	let exportingJson = $state(false);
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
@@ -40,6 +48,46 @@
 	let passwordStatus = $state<string | null>(null);
 	let passwordError = $state<string | null>(null);
 
+	let parkrunImporting = $state(false);
+
+	/// Kick the existing `parkrun-import` Edge Function with the
+	/// user's stashed athlete number. The function does the scrape +
+	/// runs insert; we just surface a status toast with what came
+	/// back. One-button import — no OAuth, no tokens to manage.
+	async function handleParkrunImport() {
+		if (!parkrunNumber || parkrunNumber.trim().length === 0 || parkrunImporting) return;
+		parkrunImporting = true;
+		try {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) throw new Error('Not signed in');
+			const url = `${import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/parkrun-import`;
+			const resp = await fetch(url, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ athleteNumber: parkrunNumber.trim() }),
+			});
+			if (!resp.ok) {
+				const body = await resp.json().catch(() => ({}));
+				throw new Error(body.error ?? `HTTP ${resp.status}`);
+			}
+			const body = await resp.json().catch(() => ({}));
+			const imported = (body.imported as number) ?? 0;
+			showToast(
+				imported > 0
+					? `Imported ${imported} parkrun result${imported === 1 ? '' : 's'}.`
+					: 'No new parkrun results since last import.',
+				'success',
+			);
+		} catch (err) {
+			showToast(`parkrun import failed: ${(err as Error).message}`, 'error');
+		} finally {
+			parkrunImporting = false;
+		}
+	}
+
 	onMount(async () => {
 		if (!auth.user) return;
 		// Load settings bag for DOB / HR fields.
@@ -54,16 +102,60 @@
 			restingHr = (p.resting_hr_bpm as number)?.toString() ?? '';
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
 		}
+		await loadIdentities();
+		await refreshPushState();
 	});
+
+	// --- Web push notifications ---
+
+	let pushSubscribed = $state(false);
+	let pushBusy = $state(false);
+	let pushPermissionState = $state<NotificationPermission | 'unsupported'>('default');
+	const pushSupported = isPushSupported();
+
+	async function refreshPushState() {
+		pushPermissionState = pushPermission();
+		if (!pushSupported) return;
+		pushSubscribed = !!(await getCurrentSubscription());
+	}
+
+	async function handleEnablePush() {
+		pushBusy = true;
+		try {
+			await subscribeToPush();
+			await refreshPushState();
+			showToast('Notifications enabled on this device.', 'success');
+		} catch (e) {
+			showToast(`Could not enable notifications: ${(e as Error).message}`, 'error');
+		} finally {
+			pushBusy = false;
+		}
+	}
+
+	async function handleDisablePush() {
+		pushBusy = true;
+		try {
+			await unsubscribeFromPush();
+			await refreshPushState();
+			showToast('Notifications disabled on this device.', 'success');
+		} finally {
+			pushBusy = false;
+		}
+	}
 
 	async function handleSave() {
 		if (!auth.user) return;
 		saving = true;
 		saved = false;
-		await supabase.from('user_profiles').update({
+		const { error: profileError } = await supabase.from('user_profiles').update({
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
 		}).eq('id', auth.user.id);
+		if (profileError) {
+			showToast(`Save failed: ${profileError.message}`, 'error');
+			saving = false;
+			return;
+		}
 
 		// Persist DOB + HR into user_settings.prefs.
 		const prefs: Record<string, unknown> = {};
@@ -77,11 +169,16 @@
 				.eq('user_id', auth.user.id)
 				.maybeSingle();
 			const merged = { ...((data?.prefs as Record<string, unknown>) ?? {}), ...prefs };
-			await supabase.from('user_settings').upsert({
+			const { error: settingsError } = await supabase.from('user_settings').upsert({
 				user_id: auth.user.id,
 				prefs: merged,
 				updated_at: new Date().toISOString(),
 			});
+			if (settingsError) {
+				showToast(`Save failed: ${settingsError.message}`, 'error');
+				saving = false;
+				return;
+			}
 		}
 		saved = true;
 		saving = false;
@@ -113,6 +210,35 @@
 			}).join('\n');
 			downloadFile(header + rows, 'runs_export.csv', 'text/csv');
 		} finally { exporting = false; }
+	}
+
+	/// Single-file `runs.json` download. Same row shape as the
+	/// `runs.json` entry inside a Full backup ZIP (and Android's
+	/// equivalent), so scripts that consume one consume the other.
+	/// `user_id` is stripped so the file is re-homeable; tracks aren't
+	/// included — use the Full backup for a lossless copy with GPS.
+	async function handleExportJson() {
+		const userId = auth.user?.id;
+		if (!userId) return;
+		exportingJson = true;
+		try {
+			const { data, error } = await supabase
+				.from('runs')
+				.select('*')
+				.eq('user_id', userId)
+				.order('started_at', { ascending: false });
+			if (error) throw error;
+			const runs = (data ?? []).map((r) => {
+				const { user_id: _uid, ...rest } = r as Record<string, unknown>;
+				return rest;
+			});
+			const ts = new Date().toISOString().replace(/[:.]/g, '-');
+			downloadFile(JSON.stringify(runs, null, 2), `runs-${ts}.json`, 'application/json');
+		} catch (e) {
+			showToast(`Export failed: ${(e as Error).message}`, 'error');
+		} finally {
+			exportingJson = false;
+		}
 	}
 
 	async function handleBackup() {
@@ -155,6 +281,94 @@
 		restoreFileInput.value = '';
 	}
 
+	// ─── Sign-in methods (linked identities) ─────────────────────────────
+	// Backed by Supabase Auth's identity-link API. `getUserIdentities()`
+	// returns one row per provider attached to the user; `linkIdentity()`
+	// kicks off an OAuth redirect identical to fresh sign-in; the API
+	// blocks unlink of the last remaining identity, but we mirror that
+	// rule client-side so the button can give a useful message.
+	interface Identity {
+		identity_id: string;
+		id?: string;
+		provider: string;
+		identity_data?: Record<string, unknown>;
+		created_at?: string;
+		last_sign_in_at?: string;
+	}
+	const LINKABLE_PROVIDERS = ['google', 'apple'] as const;
+	type LinkableProvider = (typeof LINKABLE_PROVIDERS)[number];
+	const PROVIDER_LABEL: Record<string, string> = {
+		email: 'Email & password',
+		google: 'Google',
+		apple: 'Apple',
+	};
+	let identities = $state<Identity[]>([]);
+	let identitiesLoading = $state(true);
+	let identityError = $state<string | null>(null);
+	let linkingProvider = $state<string | null>(null);
+	let unlinkingProvider = $state<string | null>(null);
+
+	async function loadIdentities() {
+		identitiesLoading = true;
+		identityError = null;
+		try {
+			const { data, error } = await supabase.auth.getUserIdentities();
+			if (error) throw error;
+			identities = (data?.identities ?? []) as unknown as Identity[];
+		} catch (e) {
+			identityError = (e as Error).message ?? 'Failed to load sign-in methods.';
+		} finally {
+			identitiesLoading = false;
+		}
+	}
+
+	async function linkProvider(provider: LinkableProvider) {
+		linkingProvider = provider;
+		try {
+			const { error } = await supabase.auth.linkIdentity({
+				provider,
+				options: { redirectTo: `${window.location.origin}/auth/callback` },
+			});
+			if (error) throw error;
+			// Successful path navigates away to the OAuth provider. If we
+			// reach here without redirect, surface a generic failure.
+		} catch (e) {
+			identityError = (e as Error).message ?? `Could not link ${PROVIDER_LABEL[provider]}.`;
+			linkingProvider = null;
+		}
+	}
+
+	async function unlinkProvider(identity: Identity) {
+		if (identities.length <= 1) {
+			identityError = 'You need at least one sign-in method. Link another before unlinking this one.';
+			return;
+		}
+		const label = PROVIDER_LABEL[identity.provider] ?? identity.provider;
+		if (!confirm(`Unlink ${label}? You won't be able to sign in with this method until you link it again.`)) {
+			return;
+		}
+		unlinkingProvider = identity.provider;
+		identityError = null;
+		try {
+			// Supabase's typing wants the full identity row from
+			// `getUserIdentities()`, but the JS SDK only reads
+			// `identity_id`. Cast to the SDK's shape.
+			const { error } = await supabase.auth.unlinkIdentity(
+				identity as unknown as Parameters<typeof supabase.auth.unlinkIdentity>[0]
+			);
+			if (error) throw error;
+			showToast(`${label} sign-in unlinked.`);
+			await loadIdentities();
+		} catch (e) {
+			identityError = (e as Error).message ?? `Could not unlink ${label}.`;
+		} finally {
+			unlinkingProvider = null;
+		}
+	}
+
+	let linkedProviderSet = $derived(new Set(identities.map((i) => i.provider)));
+	let unlinkedProviders = $derived(LINKABLE_PROVIDERS.filter((p) => !linkedProviderSet.has(p)));
+
 	let showDeleteAccount = $state(false);
 	let deleting = $state(false);
 
@@ -189,10 +403,6 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<h1>Account</h1>
-	</header>
-
 	<!-- Profile -->
 	<section class="card">
 		<h2>Profile</h2>
@@ -208,6 +418,16 @@
 			<label>
 				<span class="label-text">parkrun Athlete Number</span>
 				<input type="text" bind:value={parkrunNumber} placeholder="A123456" />
+				{#if parkrunNumber && parkrunNumber.trim().length > 0}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm parkrun-import-btn"
+						onclick={handleParkrunImport}
+						disabled={parkrunImporting}
+					>
+						{parkrunImporting ? 'Importing…' : 'Pull latest parkrun results'}
+					</button>
+				{/if}
 			</label>
 			<label>
 				<span class="label-text">Date of Birth</span>
@@ -225,6 +445,95 @@
 		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
 			{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
 		</button>
+	</section>
+
+	<!-- Sign-in methods -->
+	<section class="card">
+		<h2>Sign-in Methods</h2>
+		<p class="section-desc">
+			Methods you can use to sign in to this account. Linking another method opens an OAuth
+			redirect just like signing in. You need at least one method linked at all times.
+		</p>
+
+		{#if identitiesLoading}
+			<p class="muted">Loading…</p>
+		{:else}
+			<ul class="identity-list">
+				{#each identities as id (id.identity_id)}
+					{@const label = PROVIDER_LABEL[id.provider] ?? id.provider}
+					{@const email = (id.identity_data?.email as string) ?? ''}
+					<li class="identity-row">
+						<span class="provider-icon" data-provider={id.provider} aria-hidden="true">
+							{#if id.provider === 'google'}
+								<svg viewBox="0 0 24 24" width="20" height="20">
+									<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+									<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+									<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+									<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+								</svg>
+							{:else if id.provider === 'apple'}
+								<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+									<path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+								</svg>
+							{:else}
+								<span class="material-symbols">mail</span>
+							{/if}
+						</span>
+						<div class="identity-info">
+							<strong>{label}</strong>
+							{#if email}<span class="identity-meta">{email}</span>{/if}
+							{#if id.created_at}
+								<span class="identity-meta">
+									Linked {new Date(id.created_at).toLocaleDateString(undefined, {
+										year: 'numeric', month: 'short', day: 'numeric',
+									})}
+								</span>
+							{/if}
+						</div>
+						<button
+							class="btn btn-outline btn-sm"
+							onclick={() => unlinkProvider(id)}
+							disabled={unlinkingProvider === id.provider || identities.length <= 1}
+							title={identities.length <= 1
+								? 'Link another method first — you need at least one to sign in.'
+								: ''}
+						>
+							{unlinkingProvider === id.provider ? 'Unlinking…' : 'Unlink'}
+						</button>
+					</li>
+				{/each}
+			</ul>
+
+			{#if unlinkedProviders.length > 0}
+				<div class="link-buttons">
+					{#each unlinkedProviders as provider}
+						{@const label = PROVIDER_LABEL[provider]}
+						{@const busy = linkingProvider === provider}
+						<button
+							class="btn btn-provider btn-{provider}"
+							onclick={() => linkProvider(provider)}
+							disabled={linkingProvider !== null}
+						>
+							{#if provider === 'google'}
+								<svg class="oauth-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+									<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+									<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+									<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+									<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+								</svg>
+							{:else if provider === 'apple'}
+								<svg class="oauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+									<path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+								</svg>
+							{/if}
+							<span>{busy ? `Linking ${label}…` : `Link ${label}`}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
+		{/if}
+
+		{#if identityError}<p class="error-text">{identityError}</p>{/if}
 	</section>
 
 	<!-- Password -->
@@ -250,6 +559,41 @@
 		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword}>
 			{passwordSaving ? 'Saving...' : 'Save Password'}
 		</button>
+	</section>
+
+	<!-- Notifications -->
+	<section class="card">
+		<h2>Notifications</h2>
+		{#if !pushSupported}
+			<p class="section-desc">
+				This browser doesn't support web push, or this build was deployed without
+				a <code>PUBLIC_VAPID_PUBLIC_KEY</code>. Notifications are off.
+			</p>
+		{:else if pushPermissionState === 'denied'}
+			<p class="section-desc">
+				Notifications are blocked at the browser level. Re-enable them in your
+				browser's site settings, then come back and toggle on.
+			</p>
+		{:else}
+			<p class="section-desc">
+				Get a system notification when a club event you're attending is starting,
+				when a race goes live, or when an admin posts an update. Per-device — each
+				browser / phone toggles independently.
+			</p>
+			<div class="btn-row">
+				{#if pushSubscribed}
+					<button class="btn btn-outline" onclick={handleDisablePush} disabled={pushBusy}>
+						<span class="material-symbols">notifications_off</span>
+						{pushBusy ? 'Updating...' : 'Disable notifications'}
+					</button>
+				{:else}
+					<button class="btn btn-primary" onclick={handleEnablePush} disabled={pushBusy}>
+						<span class="material-symbols">notifications_active</span>
+						{pushBusy ? 'Enabling...' : 'Enable notifications'}
+					</button>
+				{/if}
+			</div>
+		{/if}
 	</section>
 
 	<!-- Backup & Restore -->
@@ -278,14 +622,24 @@
 		{#if restoreError}<p class="error-text">Restore failed: {restoreError}</p>{/if}
 	</section>
 
-	<!-- Data Export (CSV) -->
+	<!-- Data Export -->
 	<section class="card">
-		<h2>Data Export (CSV)</h2>
-		<p class="section-desc">Summary CSV for spreadsheet analysis. No GPS traces — use Full backup for a lossless copy.</p>
-		<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting}>
-			<span class="material-symbols">download</span>
-			{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
-		</button>
+		<h2>Data Export</h2>
+		<p class="section-desc">
+			CSV for spreadsheet analysis, or a single <code>runs.json</code> for scripts —
+			same row shape as the <code>runs.json</code> inside a Full backup. No GPS traces in either;
+			use Full backup for a lossless copy.
+		</p>
+		<div class="btn-row">
+			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson}>
+				<span class="material-symbols">download</span>
+				{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
+			</button>
+			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson}>
+				<span class="material-symbols">code</span>
+				{exportingJson ? 'Exporting...' : 'Export All Runs (JSON)'}
+			</button>
+		</div>
 	</section>
 
 	<ConfirmDialog
@@ -319,7 +673,7 @@
 />
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 44rem; }
+	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
 	.page-header { margin-bottom: var(--space-xl); }
 	h1 { font-size: 1.5rem; font-weight: 700; }
 	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
@@ -331,17 +685,53 @@
 	input:focus { outline: none; border-color: var(--color-primary); }
 	input:disabled { opacity: 0.6; cursor: not-allowed; }
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
-	.btn { display: inline-flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-md); font-size: 0.85rem; font-weight: 600; transition: all var(--transition-fast); cursor: pointer; }
-	.btn-primary { background: var(--color-primary); color: white; border: none; }
-	.btn-primary:hover { background: var(--color-primary-hover); }
-	.btn-outline { background: transparent; border: 1.5px solid var(--color-border); color: var(--color-text); }
-	.btn-outline:hover { border-color: var(--color-primary); color: var(--color-primary); }
-	.btn-danger { background: transparent; border: 1.5px solid rgba(229, 57, 53, 0.3); color: var(--color-danger); }
-	.btn-danger:hover { background: var(--color-danger-light); }
 	.btn-save { width: auto; }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: #66bb6a; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.danger-heading { color: var(--color-danger); }
 	.material-symbols { font-family: 'Material Symbols Outlined'; font-size: 1.1rem; }
+	.muted { color: var(--color-text-tertiary); font-size: 0.9rem; }
+	.identity-list { list-style: none; padding: 0; margin: 0 0 var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }
+	.identity-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); }
+	.identity-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+	.identity-info strong { font-size: 0.95rem; }
+	.identity-meta { font-size: 0.8rem; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.btn-sm { padding: 0.35rem 0.85rem; font-size: 0.8rem; }
+	.link-buttons { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+	.btn-provider {
+		gap: 0.6rem;
+		padding: var(--space-sm) var(--space-lg);
+		border: 1.5px solid var(--color-border);
+		font-weight: 600;
+	}
+	.btn-provider:disabled { opacity: 0.6; cursor: not-allowed; }
+	.btn-google {
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+	.btn-google:hover:not(:disabled) {
+		border-color: var(--color-text-secondary);
+		box-shadow: var(--shadow-sm);
+	}
+	.btn-apple {
+		background: #000;
+		border-color: #000;
+		color: #FFF;
+	}
+	.btn-apple:hover:not(:disabled) { background: #1a1a1a; }
+	.oauth-icon { flex-shrink: 0; display: block; }
+	.provider-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.provider-icon[data-provider="apple"] { background: #000; color: #FFF; border-color: #000; }
+	.provider-icon[data-provider="email"] { background: var(--color-primary-light); color: var(--color-primary); border-color: transparent; }
 </style>

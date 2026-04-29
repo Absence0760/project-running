@@ -6,6 +6,7 @@ import '../goals.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../settings_sync.dart';
 import 'add_run_screen.dart';
 import 'run_detail_screen.dart';
 
@@ -19,12 +20,14 @@ class RunsScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final Preferences preferences;
+  final SettingsSyncService? settingsSync;
   const RunsScreen({
     super.key,
     this.apiClient,
     required this.runStore,
     required this.routeStore,
     required this.preferences,
+    this.settingsSync,
   });
 
   @override
@@ -41,6 +44,9 @@ class _RunsScreenState extends State<RunsScreen> {
   _RunsSort _sort = _RunsSort.newest;
   _RunsRange _range = _RunsRange.week;
   ActivityType? _activityFilter;
+  /// `null` means "all sources" — the default. Non-null values match
+  /// `Run.source` exactly; see `RunSource` in `core_models`.
+  RunSource? _sourceFilter;
 
   // Derived view — recomputed when the store, filter, or sort changes,
   // never on an unrelated rebuild. Keeps scroll jank down at 10k+ runs.
@@ -77,8 +83,8 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   void _recompute() {
-    _visible =
-        _filterAndSort(widget.runStore.runs, _range, _sort, _activityFilter);
+    _visible = _filterAndSort(
+      widget.runStore.runs, _range, _sort, _activityFilter, _sourceFilter);
     _unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
   }
 
@@ -87,6 +93,7 @@ class _RunsScreenState extends State<RunsScreen> {
     _RunsRange range,
     _RunsSort sort,
     ActivityType? activityFilter,
+    RunSource? sourceFilter,
   ) {
     final cutoff = _rangeCutoff(range);
     var filtered = cutoff == null
@@ -98,6 +105,9 @@ class _RunsScreenState extends State<RunsScreen> {
             r.metadata?['activity_type'] as String?);
         return type == activityFilter;
       }).toList();
+    }
+    if (sourceFilter != null) {
+      filtered = filtered.where((r) => r.source == sourceFilter).toList();
     }
     switch (sort) {
       case _RunsSort.newest:
@@ -280,6 +290,7 @@ class _RunsScreenState extends State<RunsScreen> {
     );
     if (ok != true) return;
     final ids = Set<String>.from(_selected);
+    final failedIds = <String>{};
     final api = widget.apiClient;
     if (api != null && api.userId != null) {
       final runsToDelete =
@@ -287,18 +298,36 @@ class _RunsScreenState extends State<RunsScreen> {
       for (final run in runsToDelete) {
         try {
           await api.deleteRun(run);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('deleteRun failed for ${run.id}: $e');
+          failedIds.add(run.id);
+        }
       }
     }
-    await widget.runStore.deleteMany(ids);
+    // Only delete locally the runs whose remote delete succeeded.
+    // Runs whose remote delete failed are kept locally so they don't
+    // silently resurface on the next sync.
+    // TODO: queue failed deletes for retry — see data-sync audit P0-1.
+    await widget.runStore.deleteMany(ids.difference(failedIds));
     if (!mounted) return;
     setState(() {
       _selecting = false;
       _selected.clear();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Deleted $count run${count == 1 ? '' : 's'}')),
-    );
+    if (failedIds.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${ids.length - failedIds.length} deleted; '
+            '${failedIds.length} could not be removed from the cloud.',
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $count run${count == 1 ? '' : 's'}')),
+      );
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────
@@ -526,6 +555,48 @@ class _RunsScreenState extends State<RunsScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              // Source filter — matches the web's dashboard chip row so
+              // a runner filtering by "Strava-imported only" on both
+              // surfaces sees the same subset. `null` = all sources.
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('All sources'),
+                      selected: _sourceFilter == null,
+                      onSelected: (_) {
+                        setState(() {
+                          _sourceFilter = null;
+                          _recompute();
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    for (final entry in const [
+                      (RunSource.app, 'Recorded'),
+                      (RunSource.watch, 'Watch'),
+                      (RunSource.strava, 'Strava'),
+                      (RunSource.parkrun, 'parkrun'),
+                      (RunSource.healthkit, 'HealthKit'),
+                      (RunSource.healthconnect, 'Health Connect'),
+                    ]) ...[
+                      FilterChip(
+                        label: Text(entry.$2),
+                        selected: _sourceFilter == entry.$1,
+                        onSelected: (_) {
+                          setState(() {
+                            _sourceFilter = entry.$1;
+                            _recompute();
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
           );
         }
@@ -546,6 +617,7 @@ class _RunsScreenState extends State<RunsScreen> {
                   onPressed: () {
                     setState(() {
                       _activityFilter = null;
+                      _sourceFilter = null;
                       _range = _RunsRange.all;
                       _recompute();
                     });
@@ -583,6 +655,7 @@ class _RunsScreenState extends State<RunsScreen> {
                   routeStore: widget.routeStore,
                   preferences: widget.preferences,
                   apiClient: widget.apiClient,
+                  settingsSync: widget.settingsSync,
                 ),
               ),
             );

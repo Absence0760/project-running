@@ -26,7 +26,9 @@ import {
 	phaseFor,
 	generatePlan,
 	defaultPlanWeeks,
-	GOAL_DISTANCES_M
+	GOAL_DISTANCES_M,
+	formatISO,
+	isWorkoutCompleted
 } from './training';
 
 // ─────────────────────── VDOT ───────────────────────
@@ -100,6 +102,13 @@ test('resolveTrainingPaces: a recent 5k beats a goal time as the anchor', () => 
 test('resolveTrainingPaces: fall-back produces a valid pace set', () => {
 	const p = resolveTrainingPaces({ goalDistanceM: 10_000 });
 	assert.ok(p.easy > 0 && p.interval > 0);
+});
+
+test('resolveTrainingPaces: marathon-only goal time yields valid pace set', () => {
+	const p = resolveTrainingPaces({ goalDistanceM: 42195, goalTimeSec: 4 * 3600 });
+	// 4h marathon = 341 s/km goal pace. Easy should be ~416, tempo ~330.
+	assert.ok(p.easy > 350 && p.easy < 500, `easy out of range: ${p.easy}`);
+	assert.ok(p.tempo < p.marathon, 'tempo must be faster than marathon');
 });
 
 // ─────────────────────── Phases ───────────────────────
@@ -251,3 +260,52 @@ test('generatePlan: every generated workout has a kind (regression for the null-
 		}
 	}
 });
+
+// Regression: period-summary prev/next was using `toISOString().slice(0,10)`,
+// which rolls the date back a day in any positive-offset zone before
+// midnight local. `formatISO` builds yyyy-mm-dd from local components so the
+// week-shift always lands on the same wall-clock day.
+test('formatISO: returns local-tz components, not UTC', () => {
+	// 2025-12-15 at 00:30 local — in any UTC+1..+12 zone, toISOString() would
+	// return 2025-12-14. formatISO must stay on the 15th.
+	const d = new Date(2025, 11, 15, 0, 30, 0, 0);
+	assert.equal(formatISO(d), '2025-12-15');
+});
+
+test('formatISO: zero-pads single-digit month and day', () => {
+	const d = new Date(2026, 0, 5, 12, 0, 0, 0);
+	assert.equal(formatISO(d), '2026-01-05');
+});
+
+test('formatISO: shiftPeriod by 7 days lands on the same weekday', () => {
+	const start = new Date(2025, 11, 15, 0, 0, 0, 0); // Mon
+	const next = new Date(start);
+	next.setDate(next.getDate() + 7);
+	assert.equal(formatISO(next), '2025-12-22');
+});
+
+// ─────────────────────── isWorkoutCompleted ───────────────────────
+
+test("isWorkoutCompleted: false when neither flag set", () => {
+	assert.equal(isWorkoutCompleted({}), false);
+	assert.equal(
+		isWorkoutCompleted({ manually_completed: false, completed_run_id: null }),
+		false
+	);
+});
+
+test("isWorkoutCompleted: true when run is linked", () => {
+	assert.equal(isWorkoutCompleted({ completed_run_id: "run-123" }), true);
+});
+
+test("isWorkoutCompleted: true when manually marked", () => {
+	assert.equal(isWorkoutCompleted({ manually_completed: true }), true);
+});
+
+test("isWorkoutCompleted: true when both set", () => {
+	assert.equal(
+		isWorkoutCompleted({ manually_completed: true, completed_run_id: "run-1" }),
+		true
+	);
+});
+

@@ -15,11 +15,15 @@ struct ContentView: View {
                         workoutManager: workoutManager,
                         queuedCount: connectivity.queuedCount
                     )
+                case .recovering:
+                    RecoveryView(workoutManager: workoutManager, onRecover: recoverRun, onDiscard: discardRecovery)
                 case .recording:
                     RunningView(
                         workoutManager: workoutManager,
                         healthKit: workoutManager.healthKit
                     )
+                case .paused:
+                    PausedView(workoutManager: workoutManager)
                 case .finished:
                     PostRunView(
                         workoutManager: workoutManager,
@@ -33,7 +37,10 @@ struct ContentView: View {
                 }
             }
         }
-        .task { await workoutManager.healthKit.requestAuthorization() }
+        .task {
+            await workoutManager.healthKit.requestAuthorization()
+            workoutManager.checkForPendingRecovery()
+        }
     }
 
     private func syncRun() {
@@ -48,7 +55,13 @@ struct ContentView: View {
                 "started_at": formatter.string(from: run.startedAt),
                 "duration_s": run.durationSeconds,
                 "distance_m": run.distanceMetres,
-                "source": "watch"
+                "source": "watch",
+                // Apr 2026 cross-client audit caught Apple-Watch runs
+                // arriving on the phone with no `activity_type` set,
+                // even though `WatchIngestBridge.swift` filters for it.
+                // Hardcode "run" to match Wear OS until the watch app
+                // grows an activity picker.
+                "activity_type": "run"
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
             connectivity.transferRun(fileURL: fileURL, metadata: metadata)
@@ -80,6 +93,23 @@ struct ContentView: View {
         #endif
     }
 
+    private func recoverRun() {
+        guard let run = workoutManager.recoverRun() else {
+            discardRecovery()
+            return
+        }
+        workoutManager.clearRecovery()
+        workoutManager.finishedRun = run
+        workoutManager.distanceMetres = run.distanceMetres
+        workoutManager.elapsedSeconds = TimeInterval(run.durationSeconds)
+        workoutManager.state = .finished
+    }
+
+    private func discardRecovery() {
+        workoutManager.clearRecovery()
+        workoutManager.state = .idle
+    }
+
     /// Return to the idle screen. Leaves any WCSession-queued transfers
     /// intact — they continue delivering in the background when the phone
     /// is next reachable.
@@ -92,26 +122,65 @@ struct ContentView: View {
 
 // MARK: - Pre-Run View
 
+private let pacePresets: [(label: String, secondsPerKm: Double)] = [
+    ("5:00/km", 300),
+    ("5:30/km", 330),
+    ("6:00/km", 360),
+    ("6:30/km", 390),
+    ("7:00/km", 420),
+    ("7:30/km", 450),
+]
+
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
     let queuedCount: Int
+    @State private var selectedPaceIndex: Int? = nil
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Ready to Run")
-                .font(.headline)
+        ScrollView {
+            VStack(spacing: 12) {
+                Text("Ready to Run")
+                    .font(.headline)
 
-            if queuedCount > 0 {
-                Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+                if queuedCount > 0 {
+                    Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
-            Button("Start") {
-                workoutManager.start()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Target pace")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    ForEach(pacePresets.indices, id: \.self) { i in
+                        Button(pacePresets[i].label) {
+                            if selectedPaceIndex == i {
+                                selectedPaceIndex = nil
+                                workoutManager.targetPaceSecondsPerKm = nil
+                            } else {
+                                selectedPaceIndex = i
+                                workoutManager.targetPaceSecondsPerKm = pacePresets[i].secondsPerKm
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(selectedPaceIndex == i ? AppTheme.coral : .primary)
+                        .buttonStyle(.plain)
+                    }
+
+                    if selectedPaceIndex == nil {
+                        Text("None — tap to set")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Button("Start") {
+                    workoutManager.start()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.coralDeep)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(AppTheme.coralDeep)
         }
     }
 }
@@ -156,12 +225,103 @@ struct RunningView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
 
-            Button("Stop") {
-                workoutManager.stop()
+            HStack(spacing: 12) {
+                Button("Pause") {
+                    workoutManager.pause()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.duskDeep)
+
+                Button("Stop") {
+                    workoutManager.stop()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.error)
+            }
+        }
+    }
+}
+
+// MARK: - Paused View
+
+struct PausedView: View {
+    @ObservedObject var workoutManager: WorkoutManager
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Paused")
+                .font(.headline)
+
+            VStack(spacing: 4) {
+                Text(workoutManager.formattedElapsed)
+                    .font(.system(.title3, design: .monospaced))
+                Text(workoutManager.formattedDistance)
+                    .font(.body)
+            }
+
+            Button("Resume") {
+                workoutManager.resume()
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.error)
+            .tint(AppTheme.coralDeep)
+
+            Button("Stop", role: .destructive) {
+                workoutManager.stop()
+            }
+            .font(.caption)
         }
+    }
+}
+
+// MARK: - Recovery View
+
+struct RecoveryView: View {
+    let workoutManager: WorkoutManager
+    let onRecover: () -> Void
+    let onDiscard: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                Text("Unsaved Run")
+                    .font(.headline)
+
+                if let cp = CheckpointStore.peekCheckpoint() {
+                    let dateStr = Self.formatDate(cp.startedAt)
+                    let distStr = String(format: "%.1f km", cp.distanceMetres / 1000)
+                    let durStr = Self.formatDuration(cp.activeDurationSeconds)
+                    Text("Recover unsaved run from \(dateStr), \(distStr), \(durStr)?")
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                }
+
+                Button("Recover") {
+                    onRecover()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.coralDeep)
+
+                Button("Discard", role: .destructive) {
+                    onDiscard()
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private static func formatDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
+    }
+
+    private static func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m) min"
     }
 }
 

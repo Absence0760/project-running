@@ -28,7 +28,7 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.UUID
 
-enum class Stage { PreRun, Running, Paused, PostRun, SignIn }
+enum class Stage { PreRun, Running, Paused, PostRun, SignIn, RoutePicker }
 
 data class UiState(
     val stage: Stage = Stage.PreRun,
@@ -53,6 +53,27 @@ data class UiState(
     val activityType: String = "run",
     val lapCount: Int = 0,
     val activeRace: ActiveRaceState? = null,
+    /// Routes the user has saved, populated from `LocalRouteStore` on
+    /// launch and refreshed from Supabase whenever PreRun is entered.
+    val routes: List<SavedRoute> = emptyList(),
+    /// The route the runner picked on the PreRun screen, if any. Flows
+    /// into `RunRecordingService` at `start()` time so the off-route
+    /// banner + "X to go" badge have a polyline to work against.
+    val selectedRoute: SavedRoute? = null,
+    val routesLoading: Boolean = false,
+    /// Live off-route distance in metres (perpendicular distance to the
+    /// nearest segment). Null when no route is loaded. Published by the
+    /// recording service per GPS sample via `RouteMath.offRouteDistanceM`.
+    val offRouteDistanceM: Double? = null,
+    /// Live "distance to end of route" in metres. Null when no route.
+    val routeRemainingM: Double? = null,
+    /// User-picked target pace for this run, in seconds per kilometre.
+    /// Null means "no target — don't fire pace alerts". Set via the
+    /// pre-run Pace chip; flows through `ACTION_START` to the service.
+    val targetPaceSecPerKm: Int? = null,
+    /// Live step count for the current run from the pedometer. Null
+    /// when the device has no step sensor or no samples have arrived.
+    val steps: Int? = null,
 )
 
 data class ActiveRaceState(
@@ -91,6 +112,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val store = LocalRunStore(application)
     private val sessionStore = SessionStore(application)
     private val sessionBridge = SessionBridge(application)
+    private val routeStore = LocalRouteStore(application)
     private val checkpoints = CheckpointStore(application)
     private val networkWatcher = NetworkWatcher(application)
     private val raceClient = RaceSessionClient(
@@ -123,6 +145,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         checkBatteryOptimisation()
         checkBatteryLevel()
         checkRecovery()
+        loadCachedRoutes()
     }
 
     private fun observeRecording() {
@@ -141,6 +164,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             locationAvailable = m.locationAvailable,
                             activityType = m.activityType,
                             lapCount = m.laps.size,
+                            offRouteDistanceM = m.offRouteDistanceM,
+                            routeRemainingM = m.routeRemainingM,
+                            steps = m.steps,
                         )
                         maybePushRacePing(m)
                     }
@@ -416,6 +442,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         if (_state.value.stage != Stage.PreRun) return
         checkBatteryLevel()
         val runId = UUID.randomUUID().toString()
+        val route = _state.value.selectedRoute
         _state.value = _state.value.copy(
             stage = Stage.Running,
             elapsedMs = 0,
@@ -426,13 +453,95 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             syncError = null,
             thisRunId = runId,
             thisRunSynced = false,
+            offRouteDistanceM = null,
+            routeRemainingM = null,
         )
-        RunRecordingService.start(getApplication(), runId, _state.value.activityType)
+        RunRecordingService.start(
+            context = getApplication(),
+            runId = runId,
+            activityType = _state.value.activityType,
+            routeWaypointsJson = route?.waypointsAsJson(),
+            targetPaceSecPerKm = _state.value.targetPaceSecPerKm,
+        )
     }
 
     fun setActivityType(type: String) {
         if (_state.value.stage != Stage.PreRun) return
         _state.value = _state.value.copy(activityType = type)
+    }
+
+    /// Cycle the pre-run target pace through the standard options.
+    /// `null` means "no target"; the chip label renders "Pace: off".
+    /// The other values were picked to cover the common marathon +
+    /// half-marathon + parkrun training paces a club runner cares about
+    /// — it's not a configurable list, because typing numbers on a 46mm
+    /// screen is miserable. If a runner wants a custom target, they
+    /// should set it on the phone once the universal-bag integration
+    /// lands and ride it across devices.
+    fun cycleTargetPace() {
+        if (_state.value.stage != Stage.PreRun) return
+        val order = listOf<Int?>(null, 240, 270, 300, 330, 360, 390, 420)
+        val idx = order.indexOf(_state.value.targetPaceSecPerKm)
+        val next = order[(idx + 1) % order.size]
+        _state.value = _state.value.copy(targetPaceSecPerKm = next)
+    }
+
+    // ----- Routes -----
+
+    /// Populate the initial route list from the DataStore cache so the
+    /// picker has something to show during a cold-launch offline. The
+    /// network refresh in `refreshRoutes` fires when the user opens
+    /// the picker.
+    private fun loadCachedRoutes() {
+        viewModelScope.launch {
+            try {
+                val cached = routeStore.current()
+                if (cached.isNotEmpty()) {
+                    _state.value = _state.value.copy(routes = cached)
+                }
+            } catch (_: Throwable) { /* empty cache is fine */ }
+        }
+    }
+
+    /// Pull saved routes from Supabase and overwrite the local cache.
+    /// Called when the user opens the picker; failures leave the
+    /// cached list intact so the UI doesn't blank out.
+    fun refreshRoutes() {
+        if (!authReady.value) return
+        _state.value = _state.value.copy(routesLoading = true)
+        viewModelScope.launch {
+            try {
+                val fresh = supabase.fetchRoutes()
+                routeStore.save(fresh)
+                _state.value = _state.value.copy(routes = fresh, routesLoading = false)
+            } catch (_: Throwable) {
+                _state.value = _state.value.copy(routesLoading = false)
+            }
+        }
+    }
+
+    fun openRoutePicker() {
+        _state.value = _state.value.copy(stage = Stage.RoutePicker)
+        refreshRoutes()
+    }
+
+    fun closeRoutePicker() {
+        if (_state.value.stage != Stage.RoutePicker) return
+        _state.value = _state.value.copy(stage = Stage.PreRun)
+    }
+
+    fun selectRoute(route: SavedRoute) {
+        _state.value = _state.value.copy(
+            selectedRoute = route,
+            stage = Stage.PreRun,
+        )
+    }
+
+    fun clearSelectedRoute() {
+        _state.value = _state.value.copy(
+            selectedRoute = null,
+            stage = Stage.PreRun,
+        )
     }
 
     fun markLap() {
@@ -491,6 +600,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     avgBpm = m.avgBpm,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
+                    steps = m.steps,
                 )
             )
             RecordingRepository.reset()
@@ -553,11 +663,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             supabase.clearCredentials()
             sessionStore.clear()
+            routeStore.clear()
             authReady.value = false
             _state.value = _state.value.copy(
                 authed = false,
                 authError = null,
                 stage = Stage.PreRun,
+                routes = emptyList(),
+                selectedRoute = null,
             )
         }
     }
@@ -702,6 +815,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val metadata: JsonObject = buildJsonObject {
             put("activity_type", run.activityType)
             if (run.avgBpm != null) put("avg_bpm", run.avgBpm)
+            if (run.steps != null && run.steps > 0) put("steps", run.steps)
             if (run.laps.isNotEmpty()) {
                 put("laps", buildJsonArray {
                     var prevMs = 0L

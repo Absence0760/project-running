@@ -1,82 +1,141 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { formatDistance } from '$lib/mock-data';
-	import { fetchRoutes } from '$lib/data';
+	import { fetchRoutesWithError } from '$lib/data';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
+	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
+	import TrackPreview from '$lib/components/TrackPreview.svelte';
 	import type { Route } from '$lib/types';
+	import type { Snapshot } from './$types';
 
+	let tab = $state<'mine' | 'explore'>('mine');
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
+	let fetchError = $state<string | null>(null);
 	let showImport = $state(false);
 
-	onMount(async () => {
-		routes = await fetchRoutes();
+	async function load() {
+		loading = true;
+		fetchError = null;
+		const result = await fetchRoutesWithError();
+		routes = result.routes;
+		fetchError = result.error;
 		loading = false;
+	}
+
+	function setTab(next: 'mine' | 'explore') {
+		tab = next;
+		goto(next === 'explore' ? '/routes?tab=explore' : '/routes', {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true,
+		});
+	}
+
+	onMount(() => {
+		const initial = $page.url.searchParams.get('tab');
+		if (initial === 'explore') tab = 'explore';
+		// Skip the fetch when snapshot already restored a list — see
+		// the snapshot block below.
+		if (routes.length === 0 && loading) load();
 	});
+
+	export const snapshot: Snapshot<{ routes: Route[]; tab: 'mine' | 'explore' }> = {
+		capture: () => ({ routes, tab }),
+		restore: (s) => {
+			routes = s.routes;
+			tab = s.tab;
+			loading = false;
+		},
+	};
 </script>
 
 {#if showImport}
-	<ImportRoute onclose={() => (showImport = false)} />
+	<ImportRoute onclose={() => (showImport = false)} onimport={load} />
 {/if}
 
 <div class="page">
 	<header class="page-header">
-		<h1>Routes</h1>
 		<div class="header-actions">
-			<button class="btn btn-outline" onclick={() => (showImport = true)}>
-				<span class="material-symbols">upload_file</span>
-				Import
+			{#if tab === 'mine'}
+				<button class="btn btn-outline" onclick={() => (showImport = true)}>
+					<span class="material-symbols">upload_file</span>
+					Import
+				</button>
+				<a href="/routes/new" class="btn btn-primary">
+					<span class="material-symbols">add</span>
+					New Route
+				</a>
+			{/if}
+		</div>
+		<div class="tabs">
+			<button class="tab" class:active={tab === 'mine'} onclick={() => setTab('mine')}>
+				My routes
 			</button>
-			<a href="/routes/new" class="btn btn-primary">
-				<span class="material-symbols">add</span>
-				New Route
-			</a>
+			<button class="tab" class:active={tab === 'explore'} onclick={() => setTab('explore')}>
+				Explore routes
+			</button>
 		</div>
 	</header>
 
-	{#if loading}
-		<p class="loading">&nbsp;</p>
-	{:else if routes.length === 0}
-		<div class="empty">
-			<span class="material-symbols empty-icon">route</span>
-			<p>No routes yet. Create your first route!</p>
-			<a href="/routes/new" class="btn btn-primary">New Route</a>
-		</div>
-	{:else}
-		<div class="route-grid">
-			{#each routes as route}
-				<a href="/routes/{route.id}" class="route-card">
-					<div class="route-map-placeholder">
-						<span class="material-symbols">route</span>
-					</div>
-					<div class="route-info">
-						<h3>{route.name}</h3>
-						<div class="route-meta">
-							<span>{formatDistance(route.distance_m)}</span>
-							{#if route.elevation_m}
-								<span class="meta-sep">&middot;</span>
-								<span>{route.elevation_m} m elev</span>
+	{#if tab === 'mine'}
+		{#if loading}
+			<p class="loading">&nbsp;</p>
+		{:else if fetchError}
+			<div class="error-banner">
+				<span class="material-symbols">error</span>
+				<div>
+					<strong>Couldn't load your routes.</strong>
+					<span class="error-detail">{fetchError}</span>
+				</div>
+				<button class="btn btn-outline" onclick={load}>Retry</button>
+			</div>
+		{:else if routes.length === 0}
+			<div class="empty">
+				<span class="material-symbols empty-icon">route</span>
+				<p>No routes yet. Create your first route!</p>
+				<a href="/routes/new" class="btn btn-primary">New Route</a>
+			</div>
+		{:else}
+			<div class="route-grid">
+				{#each routes as route (route.id)}
+					<a href="/routes/{route.id}" class="route-card">
+						<div class="route-map-placeholder">
+							{#if route.waypoints && route.waypoints.length > 1}
+								<TrackPreview points={route.waypoints} />
+							{:else}
+								<span class="material-symbols">route</span>
 							{/if}
-							<span class="meta-sep">&middot;</span>
-							<span class="surface-tag">{route.surface}</span>
 						</div>
-					</div>
-				</a>
-			{/each}
-		</div>
+						<div class="route-info">
+							<h3>{route.name}</h3>
+							<div class="route-meta">
+								<span>{formatDistance(route.distance_m)}</span>
+								{#if route.elevation_m}
+									<span class="meta-sep">&middot;</span>
+									<span>{route.elevation_m} m elev</span>
+								{/if}
+								<span class="meta-sep">&middot;</span>
+								<span class="surface-tag">{route.surface}</span>
+							</div>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
+	{:else}
+		<RouteExplorer />
 	{/if}
 </div>
 
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
-		max-width: 72rem;
 	}
 
 	.page-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
 		margin-bottom: var(--space-xl);
 	}
 
@@ -85,47 +144,68 @@
 		font-weight: 700;
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.875rem;
-		transition: all var(--transition-fast);
-		border: none;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-outline {
-		background: transparent;
-		border: 1.5px solid var(--color-border);
-		color: var(--color-text);
-	}
-
-	.btn-outline:hover {
-		border-color: var(--color-primary);
-		color: var(--color-primary);
-	}
-
 	.header-actions {
 		display: flex;
+		justify-content: flex-end;
 		gap: var(--space-sm);
+		flex-wrap: wrap;
+		min-height: 2.5rem;
+		margin-bottom: var(--space-md);
+	}
+
+	.tabs {
+		display: flex;
+		gap: 0.5rem;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.tab {
+		background: none;
+		border: none;
+		padding: 0.6rem 0.2rem;
+		margin-right: 1rem;
+		font-size: 0.95rem;
+		color: var(--color-text-secondary);
+		border-bottom: 2px solid transparent;
+		cursor: pointer;
+		font-weight: 500;
+	}
+
+	.tab.active {
+		color: var(--color-primary);
+		border-bottom-color: var(--color-primary);
 	}
 
 	.loading {
 		text-align: center;
 		color: var(--color-text-tertiary);
 		padding: var(--space-2xl);
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		margin-bottom: var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 
 	.empty {
@@ -153,6 +233,8 @@
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		transition: all var(--transition-fast);
+		text-decoration: none;
+		color: inherit;
 	}
 
 	.route-card:hover {
@@ -162,7 +244,13 @@
 
 	.route-map-placeholder {
 		height: 8rem;
-		background: var(--color-bg-tertiary);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-tertiary)),
+			var(--color-bg-tertiary) 60%,
+			color-mix(in srgb, var(--color-accent-cyan, var(--color-primary)) 5%, var(--color-bg-tertiary))
+		);
+		border-bottom: 1px solid var(--color-border);
 		display: flex;
 		align-items: center;
 		justify-content: center;

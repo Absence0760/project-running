@@ -10,6 +10,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 |---|---|
 | Anything at all, first time in a session | [docs/architecture.md](docs/architecture.md) — the map |
 | Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
+| Checking which platforms a feature ships on | [docs/parity.md](docs/parity.md) — feature × platform matrix, single source of truth for drift |
 | Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
 | Touching a user setting / preference | [docs/settings.md](docs/settings.md) — universal + per-device prefs registry |
@@ -30,12 +31,12 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
 | Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
 
-Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas):
-- [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target
-- [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter, mostly stubbed
-- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter)
-- [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional
-- [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes
+Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas). **Each non-web app's CLAUDE.md opens with a "Scope — read before writing code" section** that spells out what to build there vs. what to push to web first per [decisions.md § 24](docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive). Read it before adding a feature on a non-web client.
+- [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes; **canonical feature surface** for the whole product
+- [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target; mirrors web + adds device-led capabilities
+- [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter; **`lib/` and `test/` are byte-identical to `mobile_android`** ([decisions.md § 39](docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)); platform-specific behaviour dispatches via `Platform.isIOS` inside the unified files
+- [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter); wrist-only complement, NOT a pocket-app mirror
+- [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional; wrist-only complement, NOT a pocket-app mirror
 
 ## Branches & PRs
 
@@ -50,7 +51,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 
 Concretely, before you report a task as done:
 
-1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
+1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `parity.md` (flip cells for every platform the change affects), `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
 2. **Schema change** — regenerate both type files (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`). Update `api_database.md` if a column, index, or RLS policy moved. See [schema_codegen.md](docs/schema_codegen.md).
 3. **New convention or house rule** — add it to `docs/conventions.md`.
 4. **Non-obvious decision or trade-off** — append an entry to `docs/decisions.md`. One paragraph. Don't rewrite history entries.
@@ -75,7 +76,7 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 
 - **Every migration requires two regenerations.** TypeScript: `npm run gen:types`. Dart: `dart run scripts/gen_dart_models.dart`. Both outputs are committed. CI runs `gen:types:check` in the `parity-types` job and will fail PRs that skip it. See [docs/schema_codegen.md](docs/schema_codegen.md).
 - **The Dart generator only understands `create table`, `alter table ... add column`, `alter table ... drop column`.** Everything else (indexes, functions, RLS, storage buckets, `$$...$$` bodies) is ignored. If you need a new SQL form, grow the parser in `scripts/gen_dart_models.dart` — don't hand-edit `db_rows.dart`.
-- **Narrow unions live client-side** — `RunSource`, `RouteSurface`, `IntegrationProvider`, `PreferredUnit`, `SubscriptionTier` are not enforced by the DB (no CHECK constraints). They're overlaid in `apps/web/src/lib/types.ts` via `Omit & {...}`. If you add a new value, add it to the union; if you want the DB to enforce it, add a CHECK constraint in a migration and drop the overlay.
+- **Narrow unions live client-side AND in CHECK constraints** — `RunSource`, `RouteSurface`, `IntegrationProvider`, `PreferredUnit`, `SubscriptionTier` are overlaid as TS unions in `apps/web/src/lib/types.ts` via `Omit & {...}` AND enforced by CHECK constraints (see `apps/backend/supabase/migrations/20260505_001_narrow_union_check_constraints.sql` for the first four, `20260429_001_subscription_paywall.sql` for `subscription_tier`). The TS union and the CHECK must stay in lockstep — updating one without the other lets one client write a value the other rejects (postgres 23514 `check_violation`). Dart treats these columns as raw `String` (no Dart enum to update), but invalid writes are still rejected at the DB. If you add a new value: update the migration, regenerate types, update the TS union.
 - **`runs.track` is not a column.** The GPS trace lives as a gzipped JSON file in the `runs` Storage bucket at `{user_id}/{run_id}.json.gz`; the row stores `track_url`. Never try to read `row.track` — it's `row.track_url` + a lazy download via `fetchTrack()`. See [docs/decisions.md](docs/decisions.md) for why.
 - **`Run.metadata` is a `jsonb` bag** with no schema. It currently holds `activity_type`, `steps`, `event` (parkrun), `position` (parkrun), `age_grade`, and — client-only — a synthesised `track_url` key stuck there by `_runFromRow` for convenience. If you add a new metadata key, write a roadmap note; there is no type-level protection on these.
 
@@ -97,8 +98,8 @@ apps/
   web/               → SvelteKit 2 + Svelte 5 runes
     src/lib/database.types.ts  (generated, committed)
     src/lib/types.ts            (Run/Route/Integration/UserProfile overlays)
-  mobile_android/    → Flutter, most mature; real screens, stores, sync, tile cache
-  mobile_ios/        → Flutter, skeleton screens only (Phase 1 unfinished)
+  mobile_android/    → Flutter; real screens, stores, sync, tile cache
+  mobile_ios/        → Flutter; lib/ + test/ kept byte-identical to mobile_android (see decisions.md § 39)
   watch_wear/        → native Kotlin + Compose-for-Wear (not Flutter)
   watch_ios/         → native SwiftUI Xcode project, functional
 packages/
@@ -106,7 +107,7 @@ packages/
     lib/src/generated/db_rows.dart  (generated by scripts/gen_dart_models.dart)
   api_client/        → Typed Supabase client for Flutter apps
   gpx_parser/        → Pure Dart GPX/KML/KMZ/GeoJSON parser
-  run_recorder/      → Live GPS recording state machine (used by mobile_android; mobile_ios is scaffold-only and does not wire it yet)
+  run_recorder/      → Live GPS recording state machine (used by both mobile apps via the unified Dart codebase)
   ui_kit/            → Shared Flutter widgets
 docs/                → The canonical reference — read these first
 scripts/

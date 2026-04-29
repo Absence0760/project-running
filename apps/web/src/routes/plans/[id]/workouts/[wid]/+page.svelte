@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { fetchWorkout, markWorkoutCompleted } from '$lib/data';
-	import { fmtPace, fmtKm, fmtHms, WORKOUT_KIND_LABEL } from '$lib/training';
+	import { fmtHms, isWorkoutCompleted, WORKOUT_KIND_LABEL } from '$lib/training';
+	import { fmtKm, fmtPace } from '$lib/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import type { WorkoutStructure } from '$lib/training';
@@ -26,7 +27,7 @@
 	);
 
 	function unlink() {
-		if (!workout?.completed_run_id) return;
+		if (!workout || !isWorkoutCompleted(workout)) return;
 		showUnlinkConfirm = true;
 	}
 
@@ -102,11 +103,13 @@
 					{/if}
 				</div>
 			</div>
-			{#if workout.completed_run_id}
+			{#if isWorkoutCompleted(workout)}
 				<div class="completed-card">
 					<span class="material-symbols">check_circle</span>
 					<span>Completed</span>
-					<button class="btn-ghost" onclick={unlink}>Unlink</button>
+					<button class="btn-ghost" onclick={unlink}>
+						{workout.completed_run_id ? 'Unlink' : 'Mark not done'}
+					</button>
 				</div>
 			{/if}
 		</header>
@@ -203,8 +206,7 @@
 <style>
 	.page {
 		max-width: 48rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 	.back {
 		display: inline-flex;

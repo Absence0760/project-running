@@ -1,25 +1,35 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { fetchPublicRoute } from '$lib/data';
+	import { fetchPublicRoute, clipTrackForUser } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
-	import type { Route } from '$lib/types';
+	import type { Route, TrackPoint } from '$lib/types';
 
 	let { data } = $props();
 
 	let route = $state<Route | null>(null);
+	let waypoints = $state<TrackPoint[]>([]);
 	let loading = $state(true);
 	let notFound = $state(false);
 
 	onMount(async () => {
-		route = await fetchPublicRoute(data.id);
-		if (!route) notFound = true;
+		const r = await fetchPublicRoute(data.id);
+		if (!r) {
+			notFound = true;
+		} else {
+			route = r;
+			// Clip start + end against the owner's privacy zones (§33).
+			waypoints = (await clipTrackForUser(r.user_id, r.waypoints ?? [])) as TrackPoint[];
+		}
 		loading = false;
 	});
 
-	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
-	let pageTitle = $derived(route ? `${route.name} — Better Runner` : 'Route — Better Runner');
+	let elevations = $derived(waypoints.map((w) => w.ele ?? 0));
+	let hasElevationData = $derived(
+		elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations)
+	);
+	let pageTitle = $derived(route ? `${route.name} — Run Onward` : 'Route — Run Onward');
 	let pageDesc = $derived(route ? `${(route.distance_m / 1000).toFixed(1)} km ${route.surface} route${route.elevation_m ? ` with ${route.elevation_m} m elevation` : ''}` : '');
 </script>
 
@@ -34,7 +44,7 @@
 <div class="share-page">
 	<header class="share-header">
 		<a href="/" class="share-logo">
-			<span class="logo-icon">&#9654;</span> Run
+			Run Onward
 		</a>
 	</header>
 
@@ -58,20 +68,22 @@
 				<span class="surface-tag">{route.surface}</span>
 			</div>
 
-			{#if route.waypoints.length > 0}
+			{#if waypoints.length > 0}
 				<div class="map-container">
-					<RunMap track={route.waypoints} />
+					<RunMap track={waypoints} />
 				</div>
 
-				<section class="card">
-					<h2>Elevation Profile</h2>
-					<ElevationProfile {elevations} totalDistance={route.distance_m} />
-				</section>
+				{#if hasElevationData}
+					<section class="card">
+						<h2>Elevation Profile</h2>
+						<ElevationProfile {elevations} totalDistance={route.distance_m} />
+					</section>
+				{/if}
 			{/if}
 
 			<div class="cta">
 				<p>Want to run this route?</p>
-				<a href="/login" class="btn btn-primary">Sign up free</a>
+				<a href="/login?signup=1" class="btn btn-primary">Sign up for Free</a>
 			</div>
 		</div>
 	{/if}
@@ -176,16 +188,4 @@
 		color: var(--color-text-secondary);
 	}
 
-	.btn-primary {
-		display: inline-block;
-		padding: var(--space-sm) var(--space-xl);
-		background: var(--color-primary);
-		color: white;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
 </style>

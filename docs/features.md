@@ -21,7 +21,7 @@ Each feature has:
 
 ### GPX / KML import
 
-**Phase:** 1 | **Platform:** iOS, Android, Web
+**Phase:** 1 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#import)
 
 **Why:** The primary differentiator. No competitor provides a clean route import pipeline. Runners plan routes in various tools (Google My Maps, Komoot, AllTrails) — the friction of the current export/import workflow is the gap to fill.
 
@@ -48,7 +48,7 @@ Routes are stored locally in JSON files (mobile Android via `path_provider` + `d
 
 ### Live GPS run recording
 
-**Phase:** 1 | **Platform:** Android (shipped); iOS (not yet implemented — scaffold only)
+**Phase:** 1 | **Platform:** Android (shipped); iOS (not yet implemented — scaffold only) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** The core product function. Without this nothing else matters.
 
@@ -73,6 +73,8 @@ During recording, the screen shows a dark full-screen map with:
 
 **Hold-to-stop**: the red stop button requires an 800 ms press before the run ends. A circular progress ring animates around the button during the hold; releasing early cancels. Prevents accidental one-tap stops mid-run.
 
+**Pace cues — TTS + haptic**: when the runner drifts more than 30 s / km off the target pace (rate-limited to at most one cue per 30 s), the app fires a TTS callout ("Pick up the pace" / "Slow down") *and* a haptic pulse: two `heavyImpact` pulses for "speed up", one for "slow down". The direction is distinguishable by feel alone, so the cue registers with earbuds paused or ambient noise masking the speech.
+
 **Background recording**: GPS tracking continues when the screen is off or the user switches apps, via the foreground service notification. Requires the user to grant location permission as "Allow all the time" and to disable battery optimisation for the app.
 
 **Crash-safe persistence**: the current run state is serialised to disk every 10 seconds. If the app is killed mid-run (OOM, force-stop, battery), the next launch promotes the partial data to a completed run tagged `recovered_from_crash` and shows a snackbar: *"Recovered unfinished run — X.XX km, Y min"*. Tiny runs (< 3 waypoints or < 50 m) are dropped silently.
@@ -95,7 +97,7 @@ See [run_recording.md](run_recording.md) for the full technical reference.
 
 ### Route overlay during run
 
-**Phase:** 1 | **Platform:** iOS, Android
+**Phase:** 1 | **Platform:** iOS, Android | **Parity:** [see matrix](parity.md#route-overlay-during-run)
 
 **Why:** Turns a passive GPS tracker into an active navigation tool. Key for users running unfamiliar routes — the feature that makes importing a route actually useful.
 
@@ -120,7 +122,7 @@ The map auto-centres on the user's position during the run (follow mode). Users 
 
 ### Run history
 
-**Phase:** 1 | **Platform:** iOS, Android, Web
+**Phase:** 1 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#run-history-and-analytics)
 
 **Why:** The reason users come back every day. The history screen is what makes the app feel like a training log, not just a timer.
 
@@ -144,7 +146,7 @@ A weekly summary card at the top of the history list shows total distance and ru
 
 ### Cloud sync and auth
 
-**Phase:** 1 | **Platform:** iOS, Android, Web
+**Phase:** 1 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#auth-and-onboarding)
 
 **Why:** Without this, uninstalling the app loses all data. Cross-device access (phone + watch + web) requires a server-side record of all runs.
 
@@ -169,7 +171,7 @@ Sync strategy: write-to-local-first, sync-in-background. Runs are written to JSO
 
 ### Apple Watch standalone GPS recording
 
-**Phase:** 2 | **Platform:** Apple Watch (native Swift)
+**Phase:** 2 | **Platform:** Apple Watch (native Swift) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** The killer feature gap vs. every competitor. Strava, NRC, and AllTrails all require the phone nearby or produce inferior data when the watch is standalone. Runners who leave their phone at home have no good option today.
 
@@ -196,7 +198,7 @@ On Stop: run is saved to watch-local storage as an `HKWorkout`. `WCSession` tran
 
 ### Wear OS standalone GPS recording
 
-**Phase:** 2 | **Platform:** Wear OS (native Kotlin + Compose-for-Wear)
+**Phase:** 2 | **Platform:** Wear OS (native Kotlin + Compose-for-Wear) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** NRC dropped Wear OS support. Android users with Pixel Watch or Galaxy Watch have no dedicated standalone running app. A genuine gap in a growing market.
 
@@ -216,7 +218,7 @@ On Stop: run transferred to phone via Wear Data Layer API. Phone app ingests and
 
 ### Route navigation on watch
 
-**Phase:** 2 | **Platform:** Apple Watch, Wear OS
+**Phase:** 2 | **Platform:** Apple Watch, Wear OS | **Parity:** [see matrix](parity.md#route-overlay-during-run)
 
 **Why:** The combination of standalone GPS + route navigation is what no single competitor delivers on both watch platforms. It's the feature a trail runner or race-day runner most needs.
 
@@ -237,7 +239,7 @@ The map on the watch does not pan or zoom — it auto-scales to always show both
 
 ### Glanceable tiles and complications
 
-**Phase:** 2 | **Platform:** Apple Watch, Wear OS
+**Phase:** 2 | **Platform:** Apple Watch, Wear OS | **Parity:** not in matrix — platform-specific OS surfaces (watchOS complication, Wear OS tile) with no phone / web counterpart.
 
 **Why:** The watch is most useful when data is available without opening an app. Tiles and complications are how the OS surfaces running data in context.
 
@@ -265,7 +267,7 @@ The map on the watch does not pan or zoom — it auto-scales to always show both
 
 ### Full-screen route builder (web)
 
-**Phase:** 2b | **Platform:** Web
+**Phase:** 2b | **Platform:** Web | **Parity:** [see matrix](parity.md#builder-and-library)
 
 **Why:** Planning routes is fundamentally a desktop task — you want a large screen, precise mouse control, and the ability to cross-reference maps side by side. The mobile route builder is a convenience; the web route builder is the power tool.
 
@@ -296,7 +298,7 @@ Saved routes appear immediately in the mobile apps on next open.
 
 ### Analytics dashboard (web)
 
-**Phase:** 2b | **Platform:** Web
+**Phase:** 2b | **Platform:** Web | **Parity:** [see matrix](parity.md#run-history-and-analytics)
 
 **Why:** Reviewing running data is much better on a large screen. This is the screen a runner opens on Monday morning to review last week and plan ahead.
 
@@ -321,7 +323,7 @@ Saved routes appear immediately in the mobile apps on next open.
 
 ### Deep run analysis (web)
 
-**Phase:** 2b | **Platform:** Web
+**Phase:** 2b | **Platform:** Web | **Parity:** [see matrix](parity.md#run-history-and-analytics)
 
 **Why:** The full GPS trace, split tables, and HR zone breakdowns are the features that make a running app worth paying for. They're much more useful on a big screen.
 
@@ -349,7 +351,7 @@ Full-page view for a single run:
 
 ### In-app route builder (mobile)
 
-**Phase:** 3 | **Platform:** iOS, Android
+**Phase:** 3 | **Platform:** iOS, Android | **Parity:** [see matrix](parity.md#builder-and-library)
 
 **Why:** Users should be able to plan routes on their phone without needing a computer. Strava paywalls this. Komoot does it well on mobile. This is a top acquisition driver.
 
@@ -370,45 +372,37 @@ Gesture UX: pinch to zoom, long-press to undo last waypoint, double-tap to finis
 
 ---
 
-### Premium tier
+### Pro tier
 
-**Phase:** 3 | **Platform:** iOS, Android, Web
+**Phase:** 3 | **Platform:** iOS, Android, Web | **Parity:** [see matrix — paywall](parity.md#paywall-and-funding)
 
-**Why:** The business model. Free users generate the user base; premium users generate revenue. The paywall should feel fair — the free app is genuinely great; premium adds intelligence.
+**Why:** A price-anchored value proposition converts better than an open-ended donation ask and aligns cost with usage — heavy coach users are exactly who benefits, and they're the ones generating the Claude API spend. See [decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
 
 **Spec:**
 
-Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store + Play Store in-app purchases).
+Price: **$9.99 / month**. Managed via RevenueCat (abstracts App Store + Play Store + Stripe web checkout). The Pro tier is the only paying tier marketed today; the `lifetime` tier exists in the schema as a future option.
 
 **Free forever:**
-- Unlimited run recording
-- Route import (GPX, KML, GPX)
-- Route builder (mobile + web)
-- Run history with map
-- Basic stats (distance, pace, time)
-- Strava, HealthKit, Health Connect sync
-- parkrun import
+- Every feature. Recording, routes, plans, clubs, sync, imports, dashboard, public share pages.
+- AI Coach — capped at 10 messages / day (enforced server-side via `increment_coach_usage`).
+- Standard processing priority.
 
-**Premium:**
-- Training plans (5k, 10k, half, full marathon — adaptive based on current fitness)
-- VO2 max estimate (calculated from pace and HR data)
-- Recovery advisor (days to next hard run, based on training load)
-- Race pace calculator
-- HR zone analysis
-- Splits comparison vs. personal best
-- Advanced elevation analysis
-- Offline maps
+**Pro:**
+- **Unlimited AI Coach** — no 10 / day cap. Server skips the rate-limit block when `is_pro()` returns true.
+- **Priority processing** — Pro requests routed ahead of the free queue when the service is under heavy load. Today this is a marketing claim implemented via the coach-cap bypass; tier-aware rate-limiting on other endpoints lands over time.
+
+**Donations:** a one-off "Donate" button on `/settings/upgrade` links to an external payment provider (GitHub Sponsors placeholder today). Donations are kept alongside the subscription because a chunk of users will want to chip in without committing to a recurring charge.
 
 **Done when:**
-- In-app purchase flow works on both iOS and Android
-- Premium features gate correctly — non-paying users see a paywall prompt, not a crash
-- RevenueCat webhook updates `subscription_tier` in Supabase within 60 seconds of purchase
+- RevenueCat web SDK is wired behind the "Get Pro" button.
+- `/api/coach` returns 200 with no rate-limit response for pro users, and 429 with the "Upgrade to Pro or come back tomorrow" copy for free users who hit 10.
+- The account tier flips to `pro` within 60 seconds of a successful RevenueCat purchase (webhook → `user_profiles.subscription_tier`).
 
 ---
 
 ### Community route library
 
-**Phase:** 3 | **Platform:** iOS, Android, Web
+**Phase:** 3 | **Platform:** iOS, Android, Web | **Parity:** [see matrix](parity.md#discovery)
 
 **Why:** Network effects and organic SEO. Every public route creates an indexed page. Discovery of "popular routes near me" creates engagement loops that keep users returning.
 
@@ -429,17 +423,27 @@ Price: $5.99/month or $49.99/year. Managed via RevenueCat (abstracts App Store +
 
 ## AI Coach
 
-**Phase:** 3 (shipped) | **Platform:** Web
+**Phase:** 3 (shipped) | **Platform:** Web | **Parity:** [see matrix](parity.md#ai-coach)
 
 **Why:** Runners want a "second opinion" on their plan adherence without hiring a human coach. The coach is grounded in the user's actual data (plan, recent runs, settings) and deliberately scoped to avoid liability (no plan generation, no medical/nutrition advice).
 
 **Spec:**
 
-Claude-powered chat embedded in the web app via `CoachChat.svelte`. The server endpoint at `/api/coach/+server.ts` sends the user's active training plan, recent runs, and profile/preferences as cached context, then streams the conversation. Two prompt-cache breakpoints (system prompt + context dump) keep repeat turns cheap.
+Chat surface delivered two ways: as a top-level `/coach` page (with a plan switcher when the user has more than one plan and a configurable run-window selector) and embedded inline anywhere it's contextually useful (today: a deep-link card on `/plans/[id]`). The reusable component is `CoachChat.svelte`. The server endpoint at `/api/coach/+server.ts` sends the user's active or selected training plan, the last N runs (user-chosen, default 20, capped at 100), and profile/preferences as cached context, then returns the assistant turn. Two prompt-cache breakpoints (system prompt + context dump) keep repeat turns cheap.
+
+**Provider switch:** `COACH_PROVIDER` selects the backend. Default `anthropic` uses Claude with prompt caching (production). Setting `COACH_PROVIDER=openai` routes to any OpenAI-compatible `/v1/chat/completions` endpoint (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`). The default base URL `http://localhost:11434/v1` matches a local Ollama install, so contributors can iterate on prompt + UI changes without burning tokens. The wire format from the endpoint is identical regardless of provider.
+
+**Grounding strip:** Above the chat, a "Grounded in:" row shows what `buildContext()` actually loaded — plan name + week count, run count, HR-zones-loaded indicator, weekly-mileage goal — so the user can see exactly what the model has in front of it before asking. The runs-count chip is a `<select>` (10 / 20 / 50 / 100) that updates the limit on the next message.
 
 **Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
 
-**Usage limits:** 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. The UI shows "N of M remaining" before the user types. `BYPASS_PAYWALL=true` skips the limit in dev.
+**Usage limits:** Free users get 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. Pro users (`is_pro()` → `true`) bypass the cap entirely. The UI shows "N of M remaining" for free users; Pro users see "Unlimited". `BYPASS_PAYWALL=true` skips the limit in dev.
+
+**Conversation history (cross-device):** Messages persist to `coach_messages` (RLS owner-only, scoped per `user × plan`). "Start new" archives the current thread by setting `archived_at = now()` rather than deleting; the sidebar lists each archive titled by its first user message and lets the runner view (read-only) or delete an archive. Pre-existing localStorage threads migrate once on first read and the legacy key is removed.
+
+**Streaming + markdown:** The endpoint emits Server-Sent Events; the client renders tokens as they arrive into the assistant bubble. A bouncing-dot indicator runs while waiting for the first token and persists across reload mid-stream via a Realtime subscription on `coach_messages`. Replies render through `marked` + `DOMPurify` so lists, **bold**, code, and links work. The system prompt instructs Claude to format references to specific runs as markdown links pointing to `/runs/<id>`, constrained to runs actually in the context.
+
+**Inline bubble actions:** Hover a message to reveal copy (both roles), regenerate (assistant), edit-and-resend (user — inline textarea), and thumbs-up / thumbs-down (assistant). Reactions persist via column-level UPDATE on `coach_messages.reaction`; `content` and `role` are immutable to clients (column-level GRANT enforcement). Regenerate / edit pass `mode` + `anchor_message_id` to the server, which truncates the active thread from the anchor onward and re-runs without duplicating user messages.
 
 **What the coach does:**
 - Critique adherence (hitting planned sessions, mileage, pace targets)
@@ -459,39 +463,38 @@ See `decisions.md #12` for the rationale.
 **Done when:**
 - Coach responds within 3 seconds on a warm cache
 - Personality tone is audibly different across the three presets
-- Usage limit rejects at 11th message with a clear "come back tomorrow" message
+- Free-user usage limit rejects at the 11th message with "upgrade to Pro or come back tomorrow" copy
+- Pro users see no rate-limit message regardless of send count
 - Context includes the user's plan and last 20 runs
 
 ---
 
-## Funding transparency
+## One-off donations
 
-**Phase:** 3 (shipped) | **Platform:** Web
+**Phase:** 3 (shipped) | **Platform:** Web | **Parity:** [see matrix](parity.md#paywall-and-funding)
 
-**Why:** The app uses a free-with-donations model (see `decisions.md #18`). Transparency about costs builds trust and motivates donations.
+**Why:** A chunk of users want to support the project without committing to a recurring subscription. Keeping a one-off "Donate" button on the upgrade page next to the Pro plan lets them chip in without friction. See [decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations) for why the prior transparent-funding page was simplified.
 
 **Spec:**
 
-The `/settings/upgrade` page shows:
-- A line-item cost breakdown (Supabase, Claude API, MapTiler, domain, misc)
-- A progress bar for server costs covered this month
-- A progress bar for total costs (server + dev time) covered this month
-- Donor count for the current month
-- Donation tiers with icons and accent colors (gel, day of servers, week, month)
-- A full feature list confirming everything is free
+The `/settings/upgrade` page shows a single Donate card below the Pro plan card:
 
-Data is read from the `monthly_funding` table (publicly readable, owner-writable).
+- A short headline + one sentence of copy.
+- A single "Donate" button that opens an external payment provider (GitHub Sponsors placeholder today; swap for Stripe / Ko-fi / Buy Me a Coffee as preferred).
+- No in-app amount picker, no recurring option, no progress bars, no cost breakdown.
+
+The `monthly_funding` table stays in the schema but is no longer read by the page. If transparent funding ever returns as a marketing angle, reviving it is a one-page revert — history is preserved in git.
 
 **Done when:**
-- Progress bars reflect the current month's `monthly_funding` row
-- Cost breakdown matches actual infrastructure spend
-- Donation buttons link to external payment
+- Clicking Donate opens the external link in a new tab.
+- Pro users see the same Donate card (a subscription doesn't preclude one-offs).
+- No references to `monthly_funding` remain on the upgrade page.
 
 ---
 
 ## Custom dialogs and toast system
 
-**Phase:** 3 (shipped) | **Platform:** Web
+**Phase:** 3 (shipped) | **Platform:** Web | **Parity:** not in matrix — shared-UI infrastructure, not a user-facing feature row.
 
 **Why:** Browser `confirm()`/`alert()`/`prompt()` are unstyled, block the main thread, and break the app's visual language.
 

@@ -52,7 +52,7 @@
 {:else}
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
-		<span class="logo-icon">&#9654;</span> Run
+		Run Onward
 	</a>
 	<div class="nav-links">
 		<a href="#apps" class="nav-link">Apps</a>
@@ -120,7 +120,7 @@
 </section>
 
 <footer class="landing-footer">
-	<span>&copy; Run — track anywhere, review everywhere.</span>
+	<span>&copy; Run Onward — track anywhere, review everywhere.</span>
 	<div class="footer-links">
 		<a href="/login">Sign In</a>
 		<a href="#apps">Apps</a>

@@ -12,6 +12,11 @@
 		fetchClubPosts,
 		fetchPostReplies,
 		fetchPendingRequests,
+		fetchClubRoutes,
+		fetchRoutes,
+		setRouteClubId,
+		fetchClubTemplates,
+		setPlanIsTemplate,
 		approveMember,
 		rejectMember,
 		setMemberRole,
@@ -22,8 +27,13 @@
 		deleteClubPost,
 		deleteClub
 	} from '$lib/data';
+	import { formatDistance } from '$lib/mock-data';
+	import TrackPreview from '$lib/components/TrackPreview.svelte';
+	import type { Route, TrainingPlan } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import EventEditor from '$lib/components/EventEditor.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -39,7 +49,21 @@
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
-	let tab = $state<'feed' | 'events' | 'members'>('feed');
+	let tab = $state<'feed' | 'events' | 'routes' | 'templates' | 'members'>('feed');
+	let showEventModal = $state(false);
+	let clubRoutes = $state<Route[]>([]);
+	let transferableRoutes = $state<Route[]>([]);
+	let showTransferModal = $state(false);
+	let transferRouteId = $state('');
+	let clubTemplates = $state<TrainingPlan[]>([]);
+
+	async function handleEventCreated(event: { id: string }) {
+		showEventModal = false;
+		// Refresh the events lists so the new one shows up immediately;
+		// admins typically stay on the club page after creating.
+		await load();
+		showToast('Event created.');
+	}
 
 	let draftPost = $state('');
 	let postingBusy = $state(false);
@@ -66,21 +90,65 @@
 			loading = false;
 			return;
 		}
-		const [up, pa, po, me, pe] = await Promise.all([
+		const [up, pa, po, me, pe, rt, tp] = await Promise.all([
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
 			fetchClubMembers(club.id),
 			club.viewer_role === 'owner' || club.viewer_role === 'admin'
 				? fetchPendingRequests(club.id)
-				: Promise.resolve([])
+				: Promise.resolve([]),
+			fetchClubRoutes(club.id),
+			fetchClubTemplates(club.id)
 		]);
 		upcoming = up;
 		past = pa;
 		posts = po;
 		members = me;
 		pending = pe;
+		clubRoutes = rt;
+		clubTemplates = tp;
 		loading = false;
+	}
+
+	async function unmakeTemplate(planId: string) {
+		try {
+			await setPlanIsTemplate(planId, false, null);
+			showToast('Template removed from club.');
+			await load();
+		} catch (e) {
+			showToast(`Failed: ${e}`, 'error');
+		}
+	}
+
+	async function openTransferModal() {
+		const mine = await fetchRoutes();
+		// Only routes that don't already belong to a club are transferable.
+		transferableRoutes = mine.filter((r) => r.club_id == null);
+		transferRouteId = '';
+		showTransferModal = true;
+	}
+
+	async function confirmTransfer() {
+		if (!transferRouteId || !club) return;
+		try {
+			await setRouteClubId(transferRouteId, club.id);
+			showTransferModal = false;
+			showToast('Route transferred to club.');
+			await load();
+		} catch (e) {
+			showToast(`Failed to transfer route: ${e}`, 'error');
+		}
+	}
+
+	async function removeRouteFromClub(routeId: string) {
+		try {
+			await setRouteClubId(routeId, null);
+			showToast('Route returned to your personal library.');
+			await load();
+		} catch (e) {
+			showToast(`Failed to remove route from club: ${e}`, 'error');
+		}
 	}
 
 	let channel: RealtimeChannel | null = null;
@@ -362,10 +430,10 @@
 					</button>
 				{/if}
 				{#if isAdmin}
-					<a class="btn-primary" href="/clubs/{club.slug}/events/new">
+					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 						<span class="material-symbols">add</span>
 						New event
-					</a>
+					</button>
 				{/if}
 			</div>
 		</div>
@@ -415,7 +483,7 @@
 								<strong>{p.display_name ?? 'Member'}</strong>
 								<span class="when">Requested {fmtRelative(p.joined_at ?? new Date().toISOString())}</span>
 							</div>
-							<button class="btn-primary small" onclick={() => approve(p.user_id)}>Approve</button>
+							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)}>Approve</button>
 							<button class="btn-ghost" onclick={() => reject(p.user_id)}>Reject</button>
 						</div>
 					{/each}
@@ -427,6 +495,12 @@
 			<button class="tab" class:active={tab === 'feed'} onclick={() => (tab = 'feed')}>Feed</button>
 			<button class="tab" class:active={tab === 'events'} onclick={() => (tab = 'events')}>
 				Events{upcoming.length ? ` (${upcoming.length})` : ''}
+			</button>
+			<button class="tab" class:active={tab === 'routes'} onclick={() => (tab = 'routes')}>
+				Routes{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
+			</button>
+			<button class="tab" class:active={tab === 'templates'} onclick={() => (tab = 'templates')}>
+				Templates{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
 			</button>
 			<button class="tab" class:active={tab === 'members'} onclick={() => (tab = 'members')}>
 				Members
@@ -485,13 +559,15 @@
 					{#each posts as post (post.id)}
 						<article class="post">
 							<div class="post-author">
-								<div class="avatar-sm" style="--seed: {hashHue(post.author_id)}">
-									{initial(post.author_display_name)}
-								</div>
-								<div>
-									<strong>{post.author_display_name ?? 'Member'}</strong>
-									<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
-								</div>
+								<a href="/u/{post.author_id}" class="author-link">
+									<div class="avatar-sm" style="--seed: {hashHue(post.author_id)}">
+										{initial(post.author_display_name)}
+									</div>
+									<div>
+										<strong>{post.author_display_name ?? 'Member'}</strong>
+										<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
+									</div>
+								</a>
 								{#if isAdmin}
 									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label="Delete post">
 										<span class="material-symbols">close</span>
@@ -518,12 +594,14 @@
 									<div class="replies">
 										{#each expandedThreads[post.id] ?? [] as reply (reply.id)}
 											<div class="reply">
-												<div class="avatar-sm" style="--seed: {hashHue(reply.author_id)}">
-													{initial(reply.author_display_name)}
-												</div>
+												<a href="/u/{reply.author_id}" class="reply-author-link">
+													<div class="avatar-sm" style="--seed: {hashHue(reply.author_id)}">
+														{initial(reply.author_display_name)}
+													</div>
+												</a>
 												<div class="reply-body">
 													<div class="reply-head">
-														<strong>{reply.author_display_name ?? 'Member'}</strong>
+														<a href="/u/{reply.author_id}" class="author-link"><strong>{reply.author_display_name ?? 'Member'}</strong></a>
 														<span class="when">{fmtRelative(reply.created_at ?? new Date().toISOString())}</span>
 													</div>
 													<p>{reply.body}</p>
@@ -543,7 +621,7 @@
 												bind:value={replyDrafts[post.id]}
 											/>
 											<button
-												class="btn-primary small"
+												class="btn-primary btn-sm"
 												type="submit"
 												disabled={!replyDrafts[post.id]?.trim()}
 											>
@@ -606,10 +684,10 @@
 				<div class="empty">
 					<p>No upcoming events.</p>
 					{#if isAdmin}
-						<a href="/clubs/{club.slug}/events/new" class="btn-primary">
+						<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 							<span class="material-symbols">add</span>
 							Create the first one
-						</a>
+						</button>
 					{/if}
 				</div>
 			{/if}
@@ -638,15 +716,119 @@
 					{/each}
 				</div>
 			{/if}
+		{:else if tab === 'routes'}
+			{#if isAdmin}
+				<div class="routes-actions">
+					<a href="/routes/new?club={club.id}" class="btn btn-primary">
+						<span class="material-symbols">add</span>
+						New route
+					</a>
+					<button class="btn btn-outline" type="button" onclick={openTransferModal}>
+						<span class="material-symbols">arrow_outward</span>
+						Transfer from My routes
+					</button>
+				</div>
+			{/if}
+			{#if clubRoutes.length === 0}
+				<div class="empty">
+					<p>No club routes yet.</p>
+					{#if isAdmin}
+						<p class="muted">Build the official course or transfer one of your personal routes.</p>
+					{/if}
+				</div>
+			{:else}
+				<div class="club-route-grid">
+					{#each clubRoutes as route (route.id)}
+						<div class="club-route-card">
+							<a href="/routes/{route.id}" class="club-route-link">
+								<div class="club-route-preview">
+									{#if route.waypoints && route.waypoints.length > 1}
+										<TrackPreview points={route.waypoints} />
+									{:else}
+										<span class="material-symbols">route</span>
+									{/if}
+								</div>
+								<div class="club-route-info">
+									<h3>{route.name}</h3>
+									<div class="club-route-meta">
+										<span>{formatDistance(route.distance_m)}</span>
+										{#if route.elevation_m}
+											<span class="meta-sep">·</span>
+											<span>{route.elevation_m} m elev</span>
+										{/if}
+										<span class="meta-sep">·</span>
+										<span class="surface-tag">{route.surface}</span>
+										{#if route.is_public}
+											<span class="meta-sep">·</span>
+											<span class="public-tag">Public</span>
+										{/if}
+									</div>
+								</div>
+							</a>
+							{#if isAdmin}
+								<button
+									class="route-remove"
+									type="button"
+									title="Remove from club (returns to uploader's library)"
+									onclick={() => removeRouteFromClub(route.id)}
+								>
+									<span class="material-symbols">link_off</span>
+								</button>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if tab === 'templates'}
+			<p class="section-hint">
+				Plan templates the club hosts. Members can clone any template into a personal plan with a
+				start date of their choosing — edits won't propagate back to the template.
+			</p>
+			{#if clubTemplates.length === 0}
+				<div class="empty">
+					<p>No plan templates yet.</p>
+					{#if isAdmin}
+						<p class="muted">
+							Create a plan, then on its detail page mark it as a template for this club.
+						</p>
+					{/if}
+				</div>
+			{:else}
+				<ul class="template-list">
+					{#each clubTemplates as t (t.id)}
+						<li class="template-row">
+							<a href="/plans/{t.id}" class="template-link">
+								<strong>{t.name}</strong>
+								<span class="template-meta">
+									{t.goal_event} · {(Number(t.goal_distance_m) / 1000).toFixed(1)} km
+									· {t.days_per_week}/wk
+								</span>
+							</a>
+							{#if isAdmin}
+								<button
+									class="btn btn-outline btn-sm"
+									type="button"
+									onclick={() => unmakeTemplate(t.id)}
+									title="Remove from club templates (the plan stays in the author's library)"
+								>
+									Unpublish
+								</button>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{:else if tab === 'members'}
 			<div class="member-list">
 				{#each members as m (m.user_id)}
 					<div class="member">
-						<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}">
-							{initial(m.display_name)}
-						</div>
-						<div class="member-info">
+						<a href="/u/{m.user_id}" class="member-link">
+							<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}">
+								{initial(m.display_name)}
+							</div>
 							<strong>{m.display_name ?? 'Member'}</strong>
+						</a>
+						<div class="member-info">
 							{#if isAdmin && m.role !== 'owner' && m.user_id !== club?.owner_id}
 								<select
 									class="role-select"
@@ -717,13 +899,63 @@
 	oncancel={() => showDeleteClubConfirm = false}
 	danger
 />
+
+<Modal
+	open={showEventModal && club != null}
+	title="New event"
+	onclose={() => (showEventModal = false)}
+>
+	{#if club}
+		<EventEditor
+			clubId={club.id}
+			clubName={club.name}
+			oncreated={handleEventCreated}
+			oncancel={() => (showEventModal = false)}
+		/>
+	{/if}
+</Modal>
+
+<Modal
+	open={showTransferModal}
+	title="Transfer route to club"
+	onclose={() => (showTransferModal = false)}
+>
+	<form
+		class="transfer-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			confirmTransfer();
+		}}
+	>
+		{#if transferableRoutes.length === 0}
+			<p class="muted">You don't have any personal routes that aren't already in a club.</p>
+		{:else}
+			<label>
+				<span>Pick a route</span>
+				<select bind:value={transferRouteId} required>
+					<option value="">— select —</option>
+					{#each transferableRoutes as r (r.id)}
+						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+					{/each}
+				</select>
+			</label>
+			<p class="hint muted">
+				The route's uploader stays the same; ownership and editing rights move to the club's admins.
+			</p>
+		{/if}
+		<div class="transfer-actions">
+			<button type="button" class="btn btn-outline" onclick={() => (showTransferModal = false)}>
+				Cancel
+			</button>
+			<button type="submit" class="btn btn-primary" disabled={!transferRouteId}>Transfer</button>
+		</div>
+	</form>
+</Modal>
 {/if}
 
 <style>
 	.page {
-		max-width: 56rem;
-		margin: 0 auto;
-		padding: var(--space-xl);
+		padding: var(--space-xl) var(--space-2xl);
 	}
 
 	.back {
@@ -813,46 +1045,10 @@
 		align-items: stretch;
 	}
 
-	.btn-primary,
-	.btn-secondary {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.35rem;
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.9rem;
-		cursor: pointer;
-		text-decoration: none;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: var(--color-bg);
-		border: none;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-	}
-
 	.btn-secondary.danger {
 		color: var(--color-danger);
 		border-color: var(--color-danger-light);
 	}
-
 	.btn-secondary.danger:hover {
 		background: var(--color-danger-light);
 	}
@@ -948,11 +1144,6 @@
 
 	.btn-ghost:hover {
 		background: var(--color-bg-tertiary);
-	}
-
-	.btn-primary.small {
-		padding: 0.35rem 0.7rem;
-		font-size: 0.85rem;
 	}
 
 	.pending-list {
@@ -1268,6 +1459,33 @@
 		border-radius: var(--radius-md);
 	}
 
+	.member-link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex: 1;
+		min-width: 0;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.member-link:hover strong,
+	.author-link:hover strong {
+		color: var(--color-primary);
+	}
+
+	.author-link {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.reply-author-link {
+		text-decoration: none;
+	}
+
 	.member-info {
 		display: flex;
 		flex-direction: column;
@@ -1326,4 +1544,170 @@
 	.muted {
 		color: var(--color-text-tertiary);
 	}
+
+	.routes-actions {
+		display: flex;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+		flex-wrap: wrap;
+	}
+
+	.club-route-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		gap: var(--space-md);
+	}
+
+	.club-route-card {
+		position: relative;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		transition: all var(--transition-fast);
+	}
+
+	.club-route-card:hover {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+	}
+
+	.club-route-link {
+		display: block;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.club-route-preview {
+		height: 8rem;
+		background: var(--color-bg-tertiary);
+		border-bottom: 1px solid var(--color-border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.club-route-preview .material-symbols {
+		font-size: 2rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.club-route-info {
+		padding: var(--space-md) var(--space-lg);
+	}
+
+	.club-route-info h3 {
+		font-size: 1rem;
+		font-weight: 600;
+		margin-bottom: var(--space-xs);
+	}
+
+	.club-route-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs);
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+
+	.public-tag {
+		color: var(--color-primary);
+	}
+
+	.surface-tag {
+		text-transform: capitalize;
+	}
+
+	.route-remove {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		background: rgba(0, 0, 0, 0.45);
+		border: none;
+		border-radius: 50%;
+		color: white;
+		cursor: pointer;
+	}
+	.route-remove:hover {
+		background: var(--color-danger, #ef4444);
+	}
+
+	.transfer-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+
+	.transfer-form label {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.transfer-form select {
+		padding: var(--space-sm) var(--space-md);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.9rem;
+	}
+
+	.transfer-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-sm);
+	}
+
+	.hint {
+		font-size: 0.85rem;
+	}
+
+	.section-hint {
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+		line-height: 1.5;
+		margin: 0 0 var(--space-md) 0;
+	}
+
+	.template-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.template-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+
+	.template-link {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		text-decoration: none;
+		color: inherit;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.template-meta {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+
+	/* .modal-* classes live in app.css. */
 </style>

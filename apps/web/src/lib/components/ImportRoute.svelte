@@ -3,15 +3,26 @@
 	import { saveRoute } from '$lib/data';
 	import { formatDistance } from '$lib/mock-data';
 	import { goto } from '$app/navigation';
+	import Modal from './Modal.svelte';
 
-	let { onclose = () => {} }: { onclose?: () => void } = $props();
+	let {
+		onclose = () => {},
+		onimport = (_ids: string[]) => {},
+	}: {
+		onclose?: () => void;
+		onimport?: (ids: string[]) => void;
+	} = $props();
 
 	let dragging = $state(false);
 	let parsing = $state(false);
 	let saving = $state(false);
 	let error = $state('');
-	let parsed = $state<ImportedRoute | null>(null);
-	let routeName = $state('');
+	// Every parsed file yields an array — a single-route file is just a
+	// one-element list. `names` and `selected` are parallel to `parsed`
+	// so the user can rename and deselect individual tracks before save.
+	let parsed = $state<ImportedRoute[]>([]);
+	let names = $state<string[]>([]);
+	let selected = $state<boolean[]>([]);
 
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
@@ -38,10 +49,12 @@
 	async function processFile(file: File) {
 		error = '';
 		parsing = true;
-		parsed = null;
+		parsed = [];
 		try {
-			parsed = await parseRouteFile(file);
-			routeName = parsed.name;
+			const routes = await parseRouteFile(file);
+			parsed = routes;
+			names = routes.map((r) => r.name);
+			selected = routes.map(() => true);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to parse file';
 		} finally {
@@ -50,19 +63,41 @@
 	}
 
 	async function handleSave() {
-		if (!parsed) return;
+		if (parsed.length === 0) return;
 		saving = true;
 		error = '';
 		try {
-			const saved = await saveRoute({
-				name: routeName || parsed.name,
-				waypoints: parsed.waypoints,
-				distance_m: parsed.distance_m,
-				elevation_m: parsed.elevation_m,
-				surface: 'road',
-				is_public: false,
-			});
-			goto(`/routes/${saved.id}`);
+			const toSave = parsed
+				.map((r, i) => ({ route: r, name: names[i] || r.name, keep: selected[i] }))
+				.filter((x) => x.keep);
+			if (toSave.length === 0) {
+				error = 'Select at least one route to import.';
+				saving = false;
+				return;
+			}
+			const savedIds: string[] = [];
+			for (const item of toSave) {
+				const saved = await saveRoute({
+					name: item.name,
+					waypoints: item.route.waypoints,
+					distance_m: item.route.distance_m,
+					elevation_m: item.route.elevation_m,
+					surface: 'road',
+					is_public: false,
+				});
+				savedIds.push(saved.id);
+			}
+			// Single import → jump to the new route; multi-import → hand
+			// control back to the parent so it can refetch + close the
+			// modal. `goto('/routes')` is a no-op when the modal is
+			// already opened from the routes list (same URL, no state
+			// refresh), so we rely on the callback instead.
+			if (savedIds.length === 1) {
+				goto(`/routes/${savedIds[0]}`);
+			} else {
+				onimport(savedIds);
+				onclose();
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to save route';
 		} finally {
@@ -71,26 +106,23 @@
 	}
 
 	function reset() {
-		parsed = null;
-		routeName = '';
+		parsed = [];
+		names = [];
+		selected = [];
 		error = '';
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onclose}>
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal" onclick={(e) => e.stopPropagation()}>
-		<header class="modal-header">
-			<h2>Import Route</h2>
-			<button class="close-btn" onclick={onclose}>&times;</button>
-		</header>
+<Modal open={true} title="Import Route" {onclose}>
+	{@render importBody()}
+</Modal>
 
+{#snippet importBody()}
 		{#if error}
 			<div class="error">{error}</div>
 		{/if}
 
-		{#if !parsed}
+		{#if parsed.length === 0}
 			<!-- Drop zone -->
 			<div
 				class="drop-zone"
@@ -105,33 +137,33 @@
 				{:else}
 					<span class="material-symbols">upload_file</span>
 					<p>Drag & drop a route file here</p>
-					<p class="drop-hint">GPX, KML, KMZ, or GeoJSON</p>
+					<p class="drop-hint">GPX, KML, KMZ, GeoJSON, or TCX</p>
 					<p class="drop-hint">Works with Google Maps, Google Earth, Strava, Garmin, and more</p>
 					<label class="browse-btn">
 						Browse files
-						<input type="file" accept=".gpx,.kml,.kmz,.geojson,.json" onchange={handleFileSelect} hidden />
+						<input type="file" accept=".gpx,.kml,.kmz,.geojson,.json,.tcx" onchange={handleFileSelect} hidden />
 					</label>
 				{/if}
 			</div>
-		{:else}
-			<!-- Preview -->
+		{:else if parsed.length === 1}
+			<!-- Single-route preview (current behaviour) -->
 			<div class="preview">
 				<label>
 					<span class="label-text">Route Name</span>
-					<input type="text" bind:value={routeName} />
+					<input type="text" bind:value={names[0]} />
 				</label>
 
 				<div class="stats">
 					<div class="stat">
-						<span class="stat-value">{formatDistance(parsed.distance_m)}</span>
+						<span class="stat-value">{formatDistance(parsed[0].distance_m)}</span>
 						<span class="stat-label">Distance</span>
 					</div>
 					<div class="stat">
-						<span class="stat-value">{parsed.elevation_m ?? 0} m</span>
+						<span class="stat-value">{parsed[0].elevation_m ?? 0} m</span>
 						<span class="stat-label">Elevation Gain</span>
 					</div>
 					<div class="stat">
-						<span class="stat-value">{parsed.waypoints.length}</span>
+						<span class="stat-value">{parsed[0].waypoints.length}</span>
 						<span class="stat-label">Points</span>
 					</div>
 				</div>
@@ -143,55 +175,48 @@
 					</button>
 				</div>
 			</div>
+		{:else}
+			<!-- Multi-route preview — one card per parsed track. Allows the
+			     user to rename or deselect individual tracks before import. -->
+			<div class="preview">
+				<p class="multi-intro">
+					Found <strong>{parsed.length}</strong> routes in this file. Pick which
+					ones to import — each becomes its own route in Run Onward.
+				</p>
+				<ul class="multi-list">
+					{#each parsed as route, i (i)}
+						<li class="multi-item">
+							<label class="multi-toggle">
+								<input type="checkbox" bind:checked={selected[i]} />
+							</label>
+							<div class="multi-fields">
+								<input type="text" bind:value={names[i]} disabled={!selected[i]} />
+								<div class="multi-meta">
+									<span>{formatDistance(route.distance_m)}</span>
+									<span class="meta-sep">·</span>
+									<span>{route.elevation_m ?? 0} m elev</span>
+									<span class="meta-sep">·</span>
+									<span>{route.waypoints.length} pts</span>
+								</div>
+							</div>
+						</li>
+					{/each}
+				</ul>
+				<div class="actions">
+					<button class="btn btn-ghost" onclick={reset}>Choose different file</button>
+					<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
+						{saving
+							? 'Saving...'
+							: `Import ${selected.filter(Boolean).length} route${selected.filter(Boolean).length === 1 ? '' : 's'}`}
+					</button>
+				</div>
+			</div>
 		{/if}
-	</div>
-</div>
+{/snippet}
 
 <style>
-	.overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 100;
-	}
-
-	.modal {
-		background: var(--color-surface);
-		border-radius: var(--radius-lg);
-		width: 100%;
-		max-width: 32rem;
-		padding: var(--space-xl);
-		box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.2));
-	}
-
-	.modal-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: var(--space-lg);
-	}
-
-	h2 {
-		font-size: 1.25rem;
-		font-weight: 700;
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		color: var(--color-text-tertiary);
-		cursor: pointer;
-		padding: 0;
-		line-height: 1;
-	}
-
-	.close-btn:hover {
-		color: var(--color-text);
-	}
+	/* .modal-backdrop / .modal / .modal-header / .modal-close /
+	   .modal-body live in app.css. */
 
 	.error {
 		background: var(--color-danger-light, #fef2f2);
@@ -306,33 +331,65 @@
 		letter-spacing: 0.05em;
 	}
 
+	.multi-intro {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+	}
+	.multi-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		max-height: 20rem;
+		overflow-y: auto;
+	}
+	.multi-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem 0.75rem;
+		background: var(--color-bg-secondary, var(--color-bg));
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.multi-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.multi-toggle input {
+		width: 1rem;
+		height: 1rem;
+		margin: 0;
+		padding: 0;
+	}
+	.multi-fields {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+	.multi-fields input {
+		width: 100%;
+	}
+	.multi-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.multi-meta .meta-sep {
+		color: var(--color-text-tertiary);
+	}
 	.actions {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-sm);
-	}
-
-	.btn {
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: all var(--transition-fast);
-	}
-
-	.btn:disabled {
-		opacity: 0.5;
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-		border: none;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		background: var(--color-primary-hover);
 	}
 
 	.btn-ghost {

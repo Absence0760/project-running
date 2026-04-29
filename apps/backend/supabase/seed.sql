@@ -54,41 +54,184 @@ INSERT INTO user_profiles (id, display_name, parkrun_number, preferred_unit, sub
 VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km', 'free')
 ON CONFLICT (id) DO NOTHING;
 
+-- 2a. User settings — runner_context for the AI Coach. Without these the
+-- coach has nothing to ground HR / age / weekly-goal answers in. Keys
+-- match `docs/settings.md` § Universal prefs registry.
+INSERT INTO user_settings (user_id, prefs) VALUES (
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  jsonb_build_object(
+    'date_of_birth', '1992-09-12',
+    'resting_hr_bpm', 48,
+    'max_hr_bpm', 192,
+    'hr_zones', jsonb_build_object('z1', 134, 'z2', 154, 'z3', 173, 'z4', 183, 'z5', 192),
+    'weekly_mileage_goal_m', 50000,
+    'coach_personality', 'supportive',
+    'auto_pause_enabled', true,
+    'preferred_unit', 'km',
+    'week_start_day', 'monday'
+  )
+) ON CONFLICT (user_id) DO UPDATE SET prefs = EXCLUDED.prefs;
+
 -- 3. Routes
+-- Waypoints include `ele` (metres above sea level) so the route detail
+-- page's elevation grid + interactive chart light up. Density is also
+-- bumped above the original 2-4 sparse corner clicks so the rendered
+-- polyline approximates the saved `distance_m` and the elevation
+-- profile has enough samples to read like a real run.
 INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Richmond Park Loop',
-  '[{"lat":-37.8136,"lng":144.9631},{"lat":-37.8100,"lng":144.9700},{"lat":-37.8050,"lng":144.9650},{"lat":-37.8136,"lng":144.9631}]',
+  '[{"lat":-37.8136,"lng":144.9631,"ele":30},{"lat":-37.8128,"lng":144.9650,"ele":40},{"lat":-37.8120,"lng":144.9670,"ele":55},{"lat":-37.8112,"lng":144.9690,"ele":70},{"lat":-37.8104,"lng":144.9700,"ele":85},{"lat":-37.8096,"lng":144.9690,"ele":100},{"lat":-37.8088,"lng":144.9680,"ele":115},{"lat":-37.8080,"lng":144.9670,"ele":105},{"lat":-37.8072,"lng":144.9660,"ele":95},{"lat":-37.8060,"lng":144.9650,"ele":85},{"lat":-37.8056,"lng":144.9640,"ele":75},{"lat":-37.8064,"lng":144.9630,"ele":65},{"lat":-37.8076,"lng":144.9625,"ele":55},{"lat":-37.8088,"lng":144.9620,"ele":48},{"lat":-37.8100,"lng":144.9618,"ele":42},{"lat":-37.8112,"lng":144.9620,"ele":38},{"lat":-37.8120,"lng":144.9624,"ele":34},{"lat":-37.8128,"lng":144.9628,"ele":31},{"lat":-37.8136,"lng":144.9631,"ele":30}]',
   10200, 85, 'trail', true),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Thames Path 5K',
-  '[{"lat":-37.8200,"lng":144.9500},{"lat":-37.8180,"lng":144.9600}]',
+  '[{"lat":-37.8200,"lng":144.9500,"ele":18},{"lat":-37.8195,"lng":144.9510,"ele":19},{"lat":-37.8192,"lng":144.9525,"ele":21},{"lat":-37.8189,"lng":144.9540,"ele":22},{"lat":-37.8187,"lng":144.9555,"ele":24},{"lat":-37.8185,"lng":144.9568,"ele":26},{"lat":-37.8183,"lng":144.9580,"ele":28},{"lat":-37.8182,"lng":144.9588,"ele":30},{"lat":-37.8181,"lng":144.9594,"ele":30},{"lat":-37.8181,"lng":144.9598,"ele":28},{"lat":-37.8180,"lng":144.9600,"ele":26}]',
   5000, 12, 'road', false),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Battersea Park Out & Back',
-  '[{"lat":-37.8150,"lng":144.9550},{"lat":-37.8100,"lng":144.9700},{"lat":-37.8150,"lng":144.9550}]',
+  '[{"lat":-37.8150,"lng":144.9550,"ele":5},{"lat":-37.8140,"lng":144.9580,"ele":7},{"lat":-37.8132,"lng":144.9610,"ele":11},{"lat":-37.8120,"lng":144.9645,"ele":16},{"lat":-37.8108,"lng":144.9675,"ele":20},{"lat":-37.8100,"lng":144.9700,"ele":25},{"lat":-37.8108,"lng":144.9675,"ele":23},{"lat":-37.8120,"lng":144.9645,"ele":19},{"lat":-37.8132,"lng":144.9610,"ele":15},{"lat":-37.8140,"lng":144.9580,"ele":12},{"lat":-37.8146,"lng":144.9565,"ele":9},{"lat":-37.8150,"lng":144.9550,"ele":5}]',
   7800, 20, 'road', true),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Sunday Long Run',
-  '[{"lat":-37.8136,"lng":144.9631},{"lat":-37.7900,"lng":144.9800},{"lat":-37.8000,"lng":145.0000},{"lat":-37.8136,"lng":144.9631}]',
+  '[{"lat":-37.8136,"lng":144.9631,"ele":50},{"lat":-37.8100,"lng":144.9670,"ele":62},{"lat":-37.8060,"lng":144.9710,"ele":78},{"lat":-37.8020,"lng":144.9750,"ele":98},{"lat":-37.7980,"lng":144.9780,"ele":118},{"lat":-37.7920,"lng":144.9800,"ele":135},{"lat":-37.7900,"lng":144.9800,"ele":120},{"lat":-37.7920,"lng":144.9850,"ele":105},{"lat":-37.7950,"lng":144.9900,"ele":95},{"lat":-37.7980,"lng":144.9940,"ele":105},{"lat":-37.8000,"lng":145.0000,"ele":120},{"lat":-37.8030,"lng":144.9980,"ele":140},{"lat":-37.8050,"lng":144.9950,"ele":160},{"lat":-37.8060,"lng":144.9920,"ele":180},{"lat":-37.8075,"lng":144.9890,"ele":160},{"lat":-37.8090,"lng":144.9850,"ele":135},{"lat":-37.8100,"lng":144.9810,"ele":110},{"lat":-37.8110,"lng":144.9770,"ele":92},{"lat":-37.8118,"lng":144.9730,"ele":78},{"lat":-37.8124,"lng":144.9690,"ele":68},{"lat":-37.8128,"lng":144.9665,"ele":60},{"lat":-37.8132,"lng":144.9650,"ele":55},{"lat":-37.8134,"lng":144.9640,"ele":52},{"lat":-37.8136,"lng":144.9631,"ele":50}]',
   21100, 140, 'mixed', false),
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Commute Run',
-  '[{"lat":-37.8180,"lng":144.9550},{"lat":-37.8100,"lng":144.9700}]',
+  '[{"lat":-37.8180,"lng":144.9550,"ele":10},{"lat":-37.8170,"lng":144.9575,"ele":14},{"lat":-37.8160,"lng":144.9600,"ele":20},{"lat":-37.8150,"lng":144.9620,"ele":27},{"lat":-37.8140,"lng":144.9640,"ele":35},{"lat":-37.8130,"lng":144.9655,"ele":40},{"lat":-37.8125,"lng":144.9665,"ele":38},{"lat":-37.8118,"lng":144.9675,"ele":42},{"lat":-37.8112,"lng":144.9685,"ele":45},{"lat":-37.8108,"lng":144.9692,"ele":42},{"lat":-37.8105,"lng":144.9697,"ele":40},{"lat":-37.8100,"lng":144.9700,"ele":38}]',
   6400, 35, 'road', false);
 
--- 4. Runs (spanning ~3 weeks of realistic training)
+-- 4. Runs (spanning ~6 weeks of realistic training, anchored on 2026-04-26
+-- as "today"). Metadata carries activity_type + HR + perceived effort so
+-- the coach has signal to talk about effort drift, zone splits, and easy /
+-- hard days. The most recent week (Apr 19-25) is the live picture the
+-- coach grounds "should I run today?" answers in.
 INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata) VALUES
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-05T07:30:00Z', 1620, 5120, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-03T06:45:00Z', 2940, 10030, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-01T18:00:00Z', 1505, 5000, 'parkrun',
-  '{"event":"Richmond","position":42,"age_grade":"54.23%"}'),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-30T07:00:00Z', 3780, 12500, 'strava', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-28T17:30:00Z', 1680, 5200, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-26T06:30:00Z', 5460, 21100, 'strava', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-25T07:15:00Z', 1500, 5000, 'parkrun',
-  '{"event":"Bushy Park","position":38,"age_grade":"55.10%"}'),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-23T06:00:00Z', 2700, 8800, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-21T07:00:00Z', 1860, 6100, 'healthkit', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-19T18:15:00Z', 2400, 7600, 'app', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-17T06:45:00Z', 3300, 10100, 'strava', null),
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-15T07:30:00Z', 1560, 5000, 'parkrun',
-  '{"event":"Richmond","position":45,"age_grade":"53.80%"}');
+-- Last week — the picture the coach uses to answer "today / tomorrow"
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-25T07:00:00Z', 5640, 21100, 'app',
+  '{"activity_type":"run","avg_bpm":162,"max_bpm":178,"perceived_effort":7,"notes":"Long run — Centennial loops. Felt strong through 18 km, last 3 km in zone 4."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-23T17:30:00Z', 2880, 10000, 'app',
+  '{"activity_type":"run","avg_bpm":174,"max_bpm":188,"perceived_effort":8,"notes":"Tempo: 6 km @ 4:35 sandwich between 2 km easy. Hit splits on the nose."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-22T06:45:00Z', 2640, 8000, 'app',
+  '{"activity_type":"run","avg_bpm":146,"max_bpm":158,"perceived_effort":4,"notes":"Easy. Legs heavy from Tuesday."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-21T17:30:00Z', 3000, 12000, 'app',
+  '{"activity_type":"run","avg_bpm":171,"max_bpm":189,"perceived_effort":8,"notes":"5×1000 @ 4:00 with 400 jog. Last rep dropped to 4:08."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-19T07:00:00Z', 4920, 17000, 'app',
+  '{"activity_type":"run","avg_bpm":154,"max_bpm":168,"perceived_effort":5,"notes":"Long run — Centennial out & back. Comfortable."}'),
+-- Two weeks ago
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-18T07:30:00Z', 1620, 5120, 'app',
+  '{"activity_type":"run","avg_bpm":150,"max_bpm":162,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-16T18:00:00Z', 2940, 10030, 'app',
+  '{"activity_type":"run","avg_bpm":172,"max_bpm":186,"perceived_effort":7,"notes":"Threshold — tempo block hit pace target."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-15T07:30:00Z', 2640, 8000, 'app',
+  '{"activity_type":"run","avg_bpm":148,"max_bpm":160,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-14T17:30:00Z', 3060, 12000, 'app',
+  '{"activity_type":"run","avg_bpm":174,"max_bpm":190,"perceived_effort":9,"notes":"VO2 intervals — 5×1000. Strong session."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-12T07:00:00Z', 4980, 17000, 'app',
+  '{"activity_type":"run","avg_bpm":152,"max_bpm":165,"perceived_effort":5}'),
+-- A parkrun PB (5K @ 21:00 = 1260s) — drives the personal_records cache
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-11T08:00:00Z', 1260, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Centennial","position":12,"age_grade":"61.42%","avg_bpm":182,"max_bpm":194,"perceived_effort":10,"notes":"5K PB! Even splits 4:14 / 4:12 / 4:10 / 4:12 / 4:12."}'),
+-- Three weeks back
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-05T07:30:00Z', 1620, 5120, 'app',
+  '{"activity_type":"run","avg_bpm":151,"max_bpm":163,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-03T06:45:00Z', 2940, 10030, 'app',
+  '{"activity_type":"run","avg_bpm":166,"max_bpm":178,"perceived_effort":6}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-01T18:00:00Z', 1320, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Richmond","position":18,"age_grade":"58.64%","avg_bpm":180,"max_bpm":192,"perceived_effort":10}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-30T07:00:00Z', 3780, 12500, 'strava',
+  '{"activity_type":"run","avg_bpm":156,"max_bpm":169,"perceived_effort":5}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-28T17:30:00Z', 1680, 5200, 'app',
+  '{"activity_type":"run","avg_bpm":150,"max_bpm":162,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-26T06:30:00Z', 5460, 21100, 'strava',
+  '{"activity_type":"run","avg_bpm":160,"max_bpm":174,"perceived_effort":6,"notes":"Long run — felt fine, pace drifted late."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-25T07:15:00Z', 1380, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Bushy Park","position":22,"age_grade":"57.08%","avg_bpm":181,"max_bpm":193,"perceived_effort":10}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-23T06:00:00Z', 2700, 8800, 'app',
+  '{"activity_type":"run","avg_bpm":148,"max_bpm":160,"perceived_effort":4}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-21T07:00:00Z', 1860, 6100, 'healthkit',
+  '{"activity_type":"run","avg_bpm":152,"max_bpm":166,"perceived_effort":5}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-19T18:15:00Z', 2400, 7600, 'app',
+  '{"activity_type":"run","avg_bpm":158,"max_bpm":172,"perceived_effort":5}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-17T06:45:00Z', 3300, 10100, 'strava',
+  '{"activity_type":"run","avg_bpm":162,"max_bpm":175,"perceived_effort":6}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-15T07:30:00Z', 1410, 5000, 'parkrun',
+  '{"activity_type":"run","event":"Richmond","position":24,"age_grade":"56.14%","avg_bpm":179,"max_bpm":190,"perceived_effort":10}'),
+-- A 10K PB (40:00 = 2400s) — race source is excluded from the PB
+-- cache, so this seeds the "all-runs" view but not personal_records.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-08T08:30:00Z', 2400, 10000, 'race',
+  '{"activity_type":"run","event":"Sydney 10K","avg_bpm":180,"max_bpm":192,"perceived_effort":10,"notes":"10K PB. Even pace, last 2 km hurt."}'),
+-- 5K time trial (21:00 = 1260s) under `app` source so the personal_records
+-- cache picks it up — the parkrun 5K at 4/11 is excluded by the cache's
+-- source filter but is the actual all-time best the user references.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-04T07:00:00Z', 1260, 5000, 'app',
+  '{"activity_type":"run","avg_bpm":182,"max_bpm":195,"perceived_effort":10,"notes":"5K solo time trial. 4:14 / 4:12 / 4:10 / 4:12 / 4:12 — 21:00 flat."}'),
+-- A 10K tempo at 41:00 (2460s) so the cache 10K PB is competitive
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-03-22T07:00:00Z', 2460, 10000, 'app',
+  '{"activity_type":"run","avg_bpm":175,"max_bpm":188,"perceived_effort":9,"notes":"10K time-trial effort. Strong."}'),
+-- A walk + a hike to exercise the activity_type mix. Distances kept
+-- outside the 5K / 10K / half PB buckets so they don't pollute the
+-- personal_records cache (the trigger groups by distance, not type).
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-20T16:00:00Z', 3600, 4200, 'app',
+  '{"activity_type":"walk","avg_bpm":110,"perceived_effort":2,"notes":"Recovery walk."}'),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', '2026-04-13T09:00:00Z', 9000, 11500, 'app',
+  '{"activity_type":"hike","avg_bpm":128,"perceived_effort":4,"notes":"Bondi → Coogee coastal."}');
+
+-- 4b. Bulk back-history for pagination testing.
+--
+-- The hand-curated runs above stop on 2026-03-08; everything older is
+-- generated programmatically here so /runs "All time" mode (PAGE_SIZE
+-- = 50 per page) needs multiple "Load more" clicks to walk the full
+-- list, and the dashboard / training-load chart / personal-records
+-- cache all have realistic depth to exercise.
+--
+-- Each row gets a deterministic but varied duration / distance /
+-- source pulled from a modular shuffle of the iteration index, so
+-- the list reads as plausible variety rather than a constant
+-- treadmill block. Activity type is always 'run' to keep the
+-- default activity filter populated.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata)
+SELECT
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid,
+  ('2026-03-07T07:00:00Z'::timestamptz - (n * INTERVAL '1 day')),
+  (1800 + (n * 137 % 3000))::integer,
+  (5000 + (n * 211 % 12000))::numeric,
+  CASE n % 5
+    WHEN 0 THEN 'strava'
+    WHEN 1 THEN 'app'
+    WHEN 2 THEN 'app'
+    WHEN 3 THEN 'healthkit'
+    ELSE 'parkrun'
+  END,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 145 + (n % 30),
+    'perceived_effort', 4 + (n % 5)
+  )
+FROM generate_series(1, 130) AS n;
+
+-- Extra recent runs spread across the last ~7 days so /feed cursor
+-- pagination (20 entries per page within the 14-day window) needs
+-- a "Load more" click when alex@test.com browses runner's activity.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, metadata)
+SELECT
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid,
+  ('2026-04-26T18:00:00Z'::timestamptz - (n * INTERVAL '11 hours')),
+  (1500 + (n * 89 % 1800))::integer,
+  (4500 + (n * 137 % 7000))::numeric,
+  CASE n % 4
+    WHEN 0 THEN 'app'
+    WHEN 1 THEN 'strava'
+    WHEN 2 THEN 'app'
+    ELSE 'healthkit'
+  END,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 150 + (n % 25),
+    'perceived_effort', 4 + (n % 4)
+  )
+FROM generate_series(1, 15) AS n;
+
+-- Mark runner's runs public so the social loop (kudos / comments /
+-- feed visibility) has material to work against when alex@test.com
+-- (the second seed user) browses the app. The runs.is_public column
+-- defaults to false; without this update Alex sees an empty profile.
+UPDATE runs SET is_public = true
+  WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 -- 5. Integrations
 INSERT INTO integrations (user_id, provider, last_sync_at) VALUES
@@ -361,3 +504,93 @@ SET completed_run_id = (
     ),
     completed_at = now()
 WHERE pw.scheduled_date = '2026-04-05' AND pw.kind = 'long';
+
+-- ─────────────────────────────────────────────────────────────────────
+-- 11. Social-feed seeding for runner@test.com
+--
+-- Runner has 173 public runs of their own but follows nobody, so /feed
+-- is empty when logged in as runner. Add a third seed user (Morgan)
+-- plus a small pile of recent public runs for both Alex and Morgan,
+-- and have runner follow both of them. Result:
+--   - runner sees ~25 entries in /feed → /feed cursor pagination (20
+--     per page within the 14-day window) needs a "Load more" click.
+--   - the feed visibly mixes two authors so the per-entry author
+--     avatar / name UI is exercised, not just one-author monotony.
+-- ─────────────────────────────────────────────────────────────────────
+
+-- Morgan, the third seed user. testtest password, same shape as Alex.
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change_token_current,
+  email_change, phone, phone_change, phone_change_token, reauthentication_token,
+  is_sso_user, is_anonymous, raw_app_meta_data, raw_user_meta_data
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  'authenticated', 'authenticated',
+  'morgan@test.com',
+  extensions.crypt('testtest', extensions.gen_salt('bf')),
+  now(), now(), now(),
+  '', '', '', '',
+  '', NULL, '', '', '',
+  false, false,
+  '{"provider":"email","providers":["email"]}',
+  '{"email_verified":true}'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO auth.identities (
+  id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) VALUES (
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  'c3d4e5f6-a7b8-9012-cdef-345678901234',
+  jsonb_build_object('sub', 'c3d4e5f6-a7b8-9012-cdef-345678901234', 'email', 'morgan@test.com', 'email_verified', true),
+  'email', now(), now(), now()
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier)
+VALUES ('c3d4e5f6-a7b8-9012-cdef-345678901234', 'Morgan Lee', 'km', 'free')
+ON CONFLICT (id) DO NOTHING;
+
+-- Recent public runs for Alex — 12 entries spread across the last
+-- ~7 days so the feed has variety even before pagination kicks in.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata)
+SELECT
+  'b2c3d4e5-f6a7-8901-bcde-f23456789012'::uuid,
+  ('2026-04-27T17:00:00Z'::timestamptz - (n * INTERVAL '14 hours')),
+  (1800 + (n * 173 % 2400))::integer,
+  (5000 + (n * 251 % 8000))::numeric,
+  CASE n % 3 WHEN 0 THEN 'app' WHEN 1 THEN 'strava' ELSE 'healthkit' END,
+  true,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 152 + (n % 22),
+    'perceived_effort', 4 + (n % 4)
+  )
+FROM generate_series(1, 12) AS n;
+
+-- Recent public runs for Morgan — 13 entries on a different cadence
+-- so the feed mixes the two authors rather than alternating cleanly.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata)
+SELECT
+  'c3d4e5f6-a7b8-9012-cdef-345678901234'::uuid,
+  ('2026-04-27T06:30:00Z'::timestamptz - (n * INTERVAL '17 hours')),
+  (1500 + (n * 197 % 2700))::integer,
+  (4500 + (n * 293 % 9500))::numeric,
+  CASE n % 4 WHEN 0 THEN 'app' WHEN 1 THEN 'app' WHEN 2 THEN 'strava' ELSE 'parkrun' END,
+  true,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 148 + (n % 28),
+    'perceived_effort', 4 + (n % 5)
+  )
+FROM generate_series(1, 13) AS n;
+
+-- The follow graph that surfaces all of the above on runner's /feed.
+-- Two-way alex ↔ runner so social-loop testing flows both directions.
+INSERT INTO user_follows (follower_id, followee_id) VALUES
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
+  ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
+ON CONFLICT DO NOTHING;

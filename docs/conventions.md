@@ -40,7 +40,7 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 ### Swift
 
 - Follow [Apple's API Design Guidelines](https://swift.org/documentation/api-design-guidelines/) — that's the canonical reference for the watch app.
-- `WorkoutManager`, `LocationManager`, one class per file, files named for the class.
+- `WorkoutManager`, `HealthKitManager`, `CheckpointStore` — one class per file, files named for the class.
 
 ### SQL
 
@@ -140,6 +140,90 @@ This is a pre-launch codebase with no shipped users. Backwards-compatibility shi
 - Just change the code, run the build, fix the compile errors.
 
 When you genuinely need a migration (e.g. on-disk data format changing), write the migration, not a permanent dual-read path.
+
+## Web page padding
+
+Every top-level web page wraps its content in a `.page` div with `padding: var(--space-xl) var(--space-2xl)` (2rem vertical, 3rem horizontal) and is **left-aligned** — do not add `margin: 0 auto`. The constant `var(--space-2xl)` left gutter is the gap between the sidebar and the content; centering with `margin: 0 auto` makes that gap balloon on wide screens whenever the page sets a small `max-width`, and makes navigating between pages feel like the content is jumping around. List and detail pages **do not set `max-width`** — they fill the available width so card grids, week strips, and run lists use the full screen instead of stranding empty space on the right. Focused single-form pages may still cap narrow (40–48rem) and tabbed settings panes cap at 64rem so labelled rows don't stretch awkwardly; everything else stays uncapped. Keep the horizontal padding fixed and don't centre. Public layouts without the sidebar (`/`, `/login`, `/share/...`, `/clubs/join/[token]`, `/live/...`) are exempt because they don't share the chrome and centring is the right call there.
+
+## Web page titles and sidebar chrome
+
+Top-level sidebar-routed pages (`/dashboard`, `/runs`, `/routes`, `/explore`, `/plans`, `/clubs`, `/settings/*`) **don't carry an `<h1>` page-name title** — the sidebar nav already shows the active section, so a heading that reads "Dashboard" / "Runs" / etc. is redundant chrome. Action buttons and explanatory subtitles stay; the redundant heading goes. Detail pages (`/runs/[id]`, `/routes/[id]`, `/plans/[id]`) keep their `<h1>` because that heading is the *content* title (the run's name, the route's name) — not a page label.
+
+Sidebar palette is theme-aware via CSS variables in `app.css`: `--gradient-sidebar`, `--sidebar-text`, `--sidebar-text-muted`, `--sidebar-hover-bg`, `--sidebar-active-bg`, `--sidebar-active-text`, `--sidebar-border`, `--sidebar-logo`. Don't hardcode sidebar colours in `+layout.svelte` — flip the variable in the `:root` (light) or `:root[data-theme="dark"]` block instead. The light/dark sidebar gradients differ; the rest of the variables are derived from the same `--color-*` palette so most adjustments only need a one-line change.
+
+The sidebar is collapsible — there's a `menu` / `menu_open` icon button in `.sidebar-head` that toggles between full width (`var(--sidebar-width)`, ~15rem) and an icon-only rail (`var(--sidebar-collapsed-width)`, ~4.5rem). State persists in `localStorage` under the key `sidebar_collapsed` (`'1'` / `'0'`). When collapsed, `.nav-label` and `.user-details` are hidden via `visibility: hidden; width: 0`; the logo is `display: none` so the menu button stands alone on the rail. Don't add features that assume the sidebar is always expanded — width-sensitive content lives in `.main-content`, which has its own `margin-left` transition.
+
+## Material Symbols icons
+
+The web app loads Material Symbols Outlined as a webfont and renders icons via **font ligatures** — `<span class="material-symbols">close</span>`, `<span class="material-symbols">menu_open</span>`, etc. Ligatures only form when the icon name is the only text node inside the span, **with no surrounding whitespace**. That means `<span class="material-symbols">{cond ? 'menu' : 'menu_open'}</span>` works, but breaking the expression onto its own line — leaving newlines and indentation between the tags — makes the browser render the literal text `"menu_open"`. Keep dynamic icon names on the same line as their tags.
+
+## Local-tz date strings
+
+Don't use `new Date().toISOString().slice(0, 10)` to derive a "yyyy-mm-dd today" or "yyyy-mm-dd of week start" string. `toISOString()` formats in UTC, so in any positive-offset timezone it rolls the date back a day before midnight local — week boundaries snap to the wrong Monday and prev/next navigation jumps two periods at once. Use `formatISO(d)` (or `todayISO()`) from `apps/web/src/lib/training.ts` — both build the string from `getFullYear` / `getMonth` / `getDate`, which stay in local time. The same rule applies to Dart on the mobile side: call `DateTime.local()` and format the components yourself, don't go via UTC.
+
+## Web buttons
+
+Canonical button styles live in `apps/web/src/app.css` under the comma-separated `.btn, .btn-primary, .btn-secondary, .btn-outline, .btn-danger` selector, plus the `.btn-sm` size modifier. Every variant works standalone (e.g. `class="btn-primary"`) or with an explicit base (`class="btn btn-primary"`) — they pick up the same padding, font size, radius, and transition.
+
+**Don't redefine these classes in a page or component.** Local copies drift over time and the buttons stop matching across pages — exactly the problem the centralisation solved. If you need a one-off variant, give it a page-specific name (`.btn-google`, `.btn-save`, `.btn-ghost`, `.btn-connect`, ...) and let it extend the canonical class via the markup (`class="btn btn-primary btn-save"`). Avoid overriding the `padding` or `font-size` of the canonical classes — that's how drift starts.
+
+The `/settings/upgrade`, `/login`, and `/` (landing) surfaces deliberately ship larger marketing-CTA buttons; those override the canonical sizes via Svelte-scoped local rules and are documented exceptions, not the pattern.
+
+## Web modals
+
+Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.modal`, `.modal-header`, `.modal-close`, `.modal-body`, plus `.modal-wide` for the form-with-side-panel case and `.modal-narrow` for confirmation-style dialogs). Every dialog in the app uses this shape: a horizontally-centered card **anchored to a fixed top offset** (`top: 4rem`, `transform: translateX(-50%)`), on a 50%-opacity backdrop, with a header bar that holds the title + an `×` close button, and a scrollable body. The top-anchor is deliberate — vertically centring the card pinned its midpoint, so any content-height change inside (tab switch, list grow / shrink, autocomplete suggestions appearing) made the entire card visibly shift up or down. Anchoring the top edge keeps the header still while the body grows downward into the available `max-height: calc(100vh - 6rem)`. Side-drawer / right-rail variants are not the convention — when you find one (`apps/web/src/lib/components/WorkoutEditor.svelte` was the last holdout), convert it.
+
+**Markup contract:**
+
+```svelte
+{#if show}
+  <div class="modal-backdrop" onclick={close} role="presentation"></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="...">
+    <header class="modal-header">
+      <h2>Title</h2>
+      <button class="modal-close" type="button" aria-label="Close" onclick={close}>
+        <span class="material-symbols">close</span>
+      </button>
+    </header>
+    <div class="modal-body">
+      …form / content / actions row at the bottom…
+    </div>
+  </div>
+{/if}
+```
+
+**Don't redefine `.modal*` classes in a page or component.** Pages that *host* the modal (e.g. `/clubs`, `/plans`, `/runs`, `/clubs/[slug]`, `/dashboard` for goals, `/settings/devices` for overrides) provide local CSS *only* for body-level layout (e.g. `.goal-editor-body { display: grid; gap: 0.9rem }`) — never the backdrop, card, header, or close button. Components that own their own modal (`WorkoutEditor`, `ImportRoute`, `ConfirmDialog`) follow the same rule.
+
+`ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
+
+## Web list pages — preserve scroll on back-navigation
+
+Any list page that links into a detail page (`/runs`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
+
+The shape is:
+
+```ts
+import type { Snapshot } from './$types';
+
+export const snapshot: Snapshot<{ /* the loaded list + any tab/filter not in localStorage */ }> = {
+  capture: () => ({ items, tab }),
+  restore: (s) => {
+    items = s.items;
+    tab = s.tab;
+    loading = false;     // skip the loading flash — we already have data
+  },
+};
+```
+
+Then guard the initial fetch in `onMount` so a restored list isn't immediately clobbered by a re-fetch:
+
+```ts
+onMount(() => {
+  if (items.length === 0) load();
+});
+```
+
+Capture the heaviest stateful arrays (the items list, pagination cursors), not derived values — derived state recomputes from restored inputs. Filters that already live in `localStorage` don't need to be in the snapshot.
 
 ## Commit and PR conventions
 

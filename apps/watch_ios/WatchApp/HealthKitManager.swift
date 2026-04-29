@@ -49,6 +49,14 @@ class HealthKitManager: NSObject, ObservableObject {
         }
     }
 
+    func pauseSession() {
+        session?.pause()
+    }
+
+    func resumeSession() {
+        session?.resume()
+    }
+
     func stopWorkout() {
         guard let session, let builder else { return }
         let endDate = Date()

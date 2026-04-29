@@ -49,6 +49,10 @@ dependencies:
   # Heart Rate Service (UUID 0x180D) + Heart Rate Measurement
   # characteristic (0x2A37). See `lib/ble_heart_rate.dart`.
   flutter_blue_plus: ^1.32.12
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.1
+  flutter_markdown: ^0.7.4
+  sign_in_with_apple: ^6.0.0
 
 dev_dependencies:
   flutter_test:

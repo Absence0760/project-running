@@ -12,6 +12,9 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
@@ -21,6 +24,7 @@ import com.runapp.watchwear.GpsPoint
 import com.runapp.watchwear.GpsRecorder
 import com.runapp.watchwear.HeartRateMonitor
 import com.runapp.watchwear.MainActivity
+import com.runapp.watchwear.Pedometer
 import com.runapp.watchwear.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,21 +57,47 @@ class RunRecordingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var gpsJob: Job? = null
+    private var gpsRetryJob: Job? = null
     private var hrJob: Job? = null
+    private var stepsJob: Job? = null
     private var tickerJob: Job? = null
     private var checkpointJob: Job? = null
 
     private lateinit var gps: GpsRecorder
     private lateinit var hr: HeartRateMonitor
+    private lateinit var pedometer: Pedometer
     private lateinit var checkpoints: CheckpointStore
     private var wakeLock: PowerManager.WakeLock? = null
     private var trackWriter: TrackWriter? = null
+    private var tts: TtsAnnouncer? = null
+    /// Highest kilometre we've already spoken a split for. `floor(dist/1000) > lastAnnouncedKm`
+    /// triggers an announcement. Resets to 0 at the start of each run.
+    private var lastAnnouncedKm = 0
+    /// Rate-limit for pace alerts: do not re-fire within this window.
+    /// Matches the 30 s gap used on Android.
+    private var lastPaceAlertAtMs = 0L
 
     private var lastLocation: Location? = null
+    /// Wall-clock timestamp of the most recent GPS point delivered while
+    /// Recording. Used by the self-heal watchdog to re-subscribe if the
+    /// FusedLocationProviderClient stream goes silent despite availability
+    /// reporting true. `0L` means "no point received yet in this run" —
+    /// the indoor / no-GPS case, which is a legitimate state.
+    private var lastPointAtMs = 0L
     private val laps = mutableListOf<RecordingRepository.Lap>()
     private var startedAtMs = 0L
     private var runId: String = ""
     private var activityType: String = "run"
+    /// Planned route waypoints for this run, parsed once from the
+    /// ACTION_START intent. Empty when the runner didn't pick a route;
+    /// `RouteMath` helpers below skip when this is empty.
+    private var routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng> =
+        emptyList()
+    /// Seconds-per-km target set via the pre-run pace chip. Null means
+    /// no target; the pace-alert branch in `onGps` is a no-op in that
+    /// case. Non-null values fire a haptic + TTS alert whenever the
+    /// live pace drifts >30 s from the target.
+    private var targetPaceSecPerKm: Int? = null
 
     // Rolling HR aggregation instead of a list of every sample.
     // `bpmSum` / `bpmCount` let us compute avg in O(1) regardless of
@@ -87,15 +117,23 @@ class RunRecordingService : Service() {
         super.onCreate()
         gps = GpsRecorder(this)
         hr = HeartRateMonitor(this)
+        pedometer = Pedometer(this)
         checkpoints = CheckpointStore(this)
         ensureChannel()
+        if (BuildConfig.ENABLE_TTS) {
+            tts = TtsAnnouncer(this)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startRecording(
-                intent.getStringExtra(EXTRA_RUN_ID) ?: UUID.randomUUID().toString(),
-                intent.getStringExtra(EXTRA_ACTIVITY_TYPE) ?: "run",
+                runId = intent.getStringExtra(EXTRA_RUN_ID) ?: UUID.randomUUID().toString(),
+                activity = intent.getStringExtra(EXTRA_ACTIVITY_TYPE) ?: "run",
+                routeWaypointsJson = intent.getStringExtra(EXTRA_ROUTE_WAYPOINTS_JSON),
+                targetPaceSecPerKm = intent
+                    .getIntExtra(EXTRA_TARGET_PACE_SEC_PER_KM, 0)
+                    .takeIf { it > 0 },
             )
             ACTION_PAUSE -> pauseRecording()
             ACTION_RESUME -> resumeRecording()
@@ -112,23 +150,36 @@ class RunRecordingService : Service() {
         scope.cancel()
         releaseWakeLock()
         trackWriter?.close()
+        tts?.shutdown()
+        tts = null
     }
 
     // ----- Lifecycle -----
 
-    private fun startRecording(id: String, activity: String) {
+    private fun startRecording(
+        runId: String,
+        activity: String,
+        routeWaypointsJson: String?,
+        targetPaceSecPerKm: Int?,
+    ) {
         if (RecordingRepository.metrics.value.isActive) return
 
-        runId = id
-        activityType = activity
+        this.runId = runId
+        this.activityType = activity
+        this.targetPaceSecPerKm = targetPaceSecPerKm
         startedAtMs = System.currentTimeMillis()
         pausedAccumulatedMs = 0
         pausedSinceMs = 0
         laps.clear()
         lastLocation = null
+        lastPointAtMs = 0L
         bpmSum = 0
         bpmCount = 0
         tickIndex = 0
+        lastAnnouncedKm = 0
+        lastPaceAlertAtMs = 0L
+        routeWaypoints = parseRouteWaypoints(routeWaypointsJson)
+        tts?.announceStart()
 
         val file = TrackWriter.fileFor(applicationContext, runId)
         trackWriter = TrackWriter(file).also { it.open() }
@@ -147,13 +198,45 @@ class RunRecordingService : Service() {
             )
         }
 
-        gpsJob = scope.launch {
-            gps.stream().collect { event ->
-                when (event) {
-                    is GpsEvent.Point -> if (!isPaused()) onGps(event.point)
-                    is GpsEvent.Availability -> RecordingRepository.update {
-                        it.copy(locationAvailable = event.available)
-                    }
+        subscribeToGps()
+        // Self-healing GPS retry loop. Mirrors Android's
+        // `_startGpsRetryLoop` in `packages/run_recorder/lib/src/run_recorder.dart`:
+        // a periodic timer that (re-)opens the stream whenever the
+        // subscription is dead. Two triggers, in priority order:
+        //
+        // 1. **Subscription died** (`gpsJob?.isActive != true`). Same
+        //    shape as Android's `_positionSub == null` check. Covers
+        //    service-level crashes, explicit cancellation, scope
+        //    teardown, and the future "we'll null it on error" path.
+        //
+        // 2. **Stream silent mid-run** (Wear-specific). On the mobile
+        //    Geolocator, a dead stream errors and we see it as
+        //    `_positionSub == null`. FusedLocationProviderClient on Wear
+        //    doesn't — the callback can stay registered while silently
+        //    emitting nothing. So we additionally treat a recording
+        //    that's received at least one point but nothing for
+        //    [GPS_STALL_MS] as degenerate and force a resubscribe.
+        //
+        // Indoor / never-had-a-fix (`lastPointAtMs == 0L`) is NOT a
+        // stall — it's a legitimate state and Android's loop would also
+        // noop on it (the subscription is alive, just no fix yet).
+        gpsRetryJob = scope.launch {
+            while (true) {
+                delay(GPS_RETRY_INTERVAL_MS)
+                if (RecordingRepository.metrics.value.stage !=
+                    RecordingRepository.Stage.Recording) continue
+
+                val jobAlive = gpsJob?.isActive == true
+                val now = System.currentTimeMillis()
+                val silentMidRun = lastPointAtMs > 0 &&
+                    (now - lastPointAtMs) > GPS_STALL_MS
+
+                if (!jobAlive || silentMidRun) {
+                    subscribeToGps()
+                    // Reset the staleness window so we don't thrash if
+                    // the fresh subscription also takes a few seconds
+                    // to start emitting.
+                    if (silentMidRun) lastPointAtMs = now
                 }
             }
         }
@@ -166,6 +249,16 @@ class RunRecordingService : Service() {
                     val avg = bpmSum.toDouble() / bpmCount
                     RecordingRepository.update { it.copy(bpm = bpm, avgBpm = avg) }
                 }
+            }
+        }
+        // Pedometer — subscribed regardless of HR flag because it has
+        // no emulator-synthesis worry. `Pedometer.stream()` closes
+        // silently on devices without `TYPE_STEP_COUNTER`, so this is
+        // a no-op on hardware that doesn't support it.
+        stepsJob = scope.launch {
+            pedometer.stream().collect { stepsThisRun ->
+                if (isPaused()) return@collect
+                RecordingRepository.update { it.copy(steps = stepsThisRun) }
             }
         }
         tickerJob = scope.launch {
@@ -219,9 +312,15 @@ class RunRecordingService : Service() {
 
     private fun stopRecording() {
         gpsJob?.cancel(); gpsJob = null
+        gpsRetryJob?.cancel(); gpsRetryJob = null
         hrJob?.cancel(); hrJob = null
+        stepsJob?.cancel(); stepsJob = null
         tickerJob?.cancel(); tickerJob = null
         checkpointJob?.cancel(); checkpointJob = null
+
+        val distanceAtFinish = RecordingRepository.metrics.value.distanceM
+        val durationAtFinish = (activeElapsedMs() / 1000).toInt()
+        tts?.announceFinish(distanceAtFinish, durationAtFinish)
 
         if (pausedSinceMs > 0) {
             pausedAccumulatedMs += System.currentTimeMillis() - pausedSinceMs
@@ -266,7 +365,25 @@ class RunRecordingService : Service() {
 
     // ----- GPS handler -----
 
+    /// (Re)subscribe to the GPS stream. Cancels any existing subscription
+    /// first so we don't double-stream. Called from `startRecording` and
+    /// from the self-heal watchdog.
+    private fun subscribeToGps() {
+        gpsJob?.cancel()
+        gpsJob = scope.launch {
+            gps.stream().collect { event ->
+                when (event) {
+                    is GpsEvent.Point -> if (!isPaused()) onGps(event.point)
+                    is GpsEvent.Availability -> RecordingRepository.update {
+                        it.copy(locationAvailable = event.available)
+                    }
+                }
+            }
+        }
+    }
+
     private fun onGps(p: GpsPoint) {
+        lastPointAtMs = System.currentTimeMillis()
         trackWriter?.append(p)
         val asLoc = Location("").apply {
             latitude = p.lat; longitude = p.lng; time = p.epochMs
@@ -281,13 +398,79 @@ class RunRecordingService : Service() {
         lastLocation = asLoc
         val elapsedS = activeElapsedMs() / 1000.0
         val pace = if (newDistance >= 50.0 && elapsedS > 0) elapsedS / newDistance * 1000.0 else null
+        val posLL = RouteMath.LatLng(p.lat, p.lng)
+        val offRoute = if (routeWaypoints.isNotEmpty())
+            RouteMath.offRouteDistanceM(posLL, routeWaypoints) else null
+        val remaining = if (routeWaypoints.isNotEmpty())
+            RouteMath.routeRemainingM(posLL, routeWaypoints) else null
         RecordingRepository.update {
             it.copy(
                 distanceM = newDistance,
                 paceSecPerKm = pace,
                 latestPoint = p,
                 trackPointCount = trackWriter?.pointCount ?: 0,
+                offRouteDistanceM = offRoute,
+                routeRemainingM = remaining,
             )
+        }
+
+        // TTS split: announce once per completed kilometre. Runs on the
+        // service's Default-dispatcher scope already — the TTS engine
+        // is thread-safe and a Flush-queued speak() replaces any
+        // in-flight utterance, so if two splits land in quick
+        // succession (shouldn't happen at running pace, but) only the
+        // more recent is spoken.
+        val currentKm = (newDistance / 1000.0).toInt()
+        if (currentKm > lastAnnouncedKm) {
+            lastAnnouncedKm = currentKm
+            tts?.announceSplit(currentKm, pace)
+        }
+
+        // Pace-drift alert. Only fires when:
+        //  - a target pace is set for this run
+        //  - pace has stabilised (need at least 50 m of distance — same
+        //    gate used for computing `pace` above)
+        //  - the runner is currently moving (activity not paused is
+        //    already implicit — onGps skips when paused)
+        //  - the drift is >30 s/km in either direction
+        //  - we haven't already fired an alert in the last 30 s
+        val target = targetPaceSecPerKm
+        if (target != null && target > 0 && pace != null) {
+            val diff = pace - target
+            val nowMs = System.currentTimeMillis()
+            if (kotlin.math.abs(diff) > 30 && nowMs - lastPaceAlertAtMs > 30_000) {
+                lastPaceAlertAtMs = nowMs
+                firePaceAlert(tooSlow = diff > 0)
+            }
+        }
+    }
+
+    /// Parse the JSON array emitted by `RunViewModel.start()` (format:
+    /// `[{"lat":.., "lng":..}, ...]`). Quietly returns empty on any
+    /// parse failure — an empty list disables the `RouteMath` calls in
+    /// `onGps` so the run proceeds as a no-route recording.
+    private fun parseRouteWaypoints(
+        json: String?,
+    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> {
+        if (json.isNullOrEmpty()) return emptyList()
+        return try {
+            val parser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            val arr = parser.parseToJsonElement(json) as? kotlinx.serialization.json.JsonArray
+                ?: return emptyList()
+            arr.mapNotNull { el ->
+                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                val lat = obj["lat"]
+                    ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+                    ?.content?.toDoubleOrNull()
+                    ?: return@mapNotNull null
+                val lng = obj["lng"]
+                    ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+                    ?.content?.toDoubleOrNull()
+                    ?: return@mapNotNull null
+                RouteMath.LatLng(lat, lng)
+            }
+        } catch (_: Throwable) {
+            emptyList()
         }
     }
 
@@ -308,6 +491,37 @@ class RunRecordingService : Service() {
                 laps = laps.map { CheckpointLap(it.number, it.atMs, it.distanceM) },
             )
         )
+    }
+
+    /// Fire the pace-drift alert: a Vibrator pulse pattern + TTS.
+    ///
+    /// Matches Android's `HapticFeedback.heavyImpact()` pattern from
+    /// `apps/mobile_android/lib/screens/run_screen.dart` — two pulses
+    /// for "speed up" (tooSlow=true), one for "slow down" (tooSlow=false).
+    /// The direction is distinguishable by feel alone, so runners
+    /// notice even with TTS muted or headphones paused.
+    @Suppress("DEPRECATION")
+    private fun firePaceAlert(tooSlow: Boolean) {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            getSystemService(VIBRATOR_SERVICE) as Vibrator
+        }
+        val effect = if (tooSlow) {
+            // Two ~180 ms pulses with a ~180 ms gap, matching the
+            // "speed up" cue on Android. `timings` is [off, on, off, on].
+            VibrationEffect.createWaveform(
+                longArrayOf(0, 180, 180, 180),
+                intArrayOf(0, 255, 0, 255),
+                -1,
+            )
+        } else {
+            VibrationEffect.createOneShot(220, VibrationEffect.DEFAULT_AMPLITUDE)
+        }
+        try {
+            vibrator.vibrate(effect)
+        } catch (_: Throwable) { /* watch without a vibrator — rare */ }
+        tts?.announcePaceAlert(tooSlow)
     }
 
     private fun haversineM(aLat: Double, aLng: Double, bLat: Double, bLng: Double): Double {
@@ -424,6 +638,12 @@ class RunRecordingService : Service() {
         const val ACTION_LAP = "com.runapp.watchwear.action.MARK_LAP"
         const val EXTRA_RUN_ID = "run_id"
         const val EXTRA_ACTIVITY_TYPE = "activity_type"
+        /// JSON array of `{"lat": .., "lng": ..}` objects — the picked
+        /// route's waypoints. Optional; absent means "no route overlay".
+        const val EXTRA_ROUTE_WAYPOINTS_JSON = "route_waypoints_json"
+        /// Integer seconds-per-km target. `0` (default) means "no target";
+        /// the service's pace-alert branch stays silent.
+        const val EXTRA_TARGET_PACE_SEC_PER_KM = "target_pace_sec_per_km"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "run_recording"
@@ -433,12 +653,31 @@ class RunRecordingService : Service() {
         // every Nth tick to avoid hammering NotificationManager over a
         // 10-hour run (72,000 → 7,200 refreshes).
         private const val NOTIFICATION_THROTTLE_TICKS = 10
+        // GPS self-heal retry loop — mirrors the Android run_recorder.
+        // [GPS_RETRY_INTERVAL_MS] is how often to poll; [GPS_STALL_MS]
+        // is the Wear-specific "subscription alive but silent" threshold
+        // — set well above the 1 s request cadence so a normal hiccup
+        // doesn't retrigger a fresh subscription.
+        private const val GPS_RETRY_INTERVAL_MS = 10_000L
+        private const val GPS_STALL_MS = 30_000L
 
-        fun start(context: Context, runId: String, activityType: String) {
+        fun start(
+            context: Context,
+            runId: String,
+            activityType: String,
+            routeWaypointsJson: String? = null,
+            targetPaceSecPerKm: Int? = null,
+        ) {
             val intent = Intent(context, RunRecordingService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_RUN_ID, runId)
                 putExtra(EXTRA_ACTIVITY_TYPE, activityType)
+                if (!routeWaypointsJson.isNullOrEmpty()) {
+                    putExtra(EXTRA_ROUTE_WAYPOINTS_JSON, routeWaypointsJson)
+                }
+                if (targetPaceSecPerKm != null && targetPaceSecPerKm > 0) {
+                    putExtra(EXTRA_TARGET_PACE_SEC_PER_KM, targetPaceSecPerKm)
+                }
             }
             context.startForegroundService(intent)
         }

@@ -43,7 +43,9 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **142 tests across 10 files** — 107 Dart unit tests in mobile_android (8 test files), 14 in run_recorder, and 21 TypeScript unit tests in the web app. No widget tests, no integration tests, no golden tests yet.
+Total: **at least 474 unique Dart mobile tests across 72 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 38 tests in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. Both mobile apps run the same 72 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~950 mobile test runs. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+
+Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
 ### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
 
@@ -99,7 +101,7 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 
 **Not covered (require mocking `GeolocatorPlatform.instance`):** typed errors thrown from `prepare()`, the `_gpsRetryTimer` retry loop, position-stream `onError` cleanup, `stop`/`dispose` cancelling the retry timer.
 
-### `apps/mobile_android/test/local_run_store_test.dart` — 16 tests
+### `apps/mobile_android/test/local_run_store_test.dart` — 17 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
 
@@ -195,7 +197,52 @@ Dart mirror of `apps/web/src/lib/training.test.ts`. The Dart engine (`lib/traini
 - `phaseFor`: 2 tests (phase splits, final week)
 - `generatePlan`: 7 tests (week count, day distribution, taper volume, race week, intervals, no-input fallback, stepback)
 
-### `apps/web/src/lib/training.test.ts` — 21 tests
+### `apps/mobile_android/test/training_load_test.dart` — 10 tests
+
+Dart mirror of `apps/web/src/lib/training_load.test.ts`. The Dart engine (`lib/training_load.dart`) must produce the same Fitness / Fatigue / Form curves as the TypeScript engine for the same inputs. Covers `computeStress` (distance fallback ~50 for an easy 5k, TRIMP path lights up with `avg_bpm` + resting + max, zero-input → 0), `aggregateDailyStress` (sums same-day runs), `computeTrainingLoadSeries` (emits exactly `windowDays` entries, TSB rises during a 14-day taper, all-zero with no runs), and `hasTrimpSignal` (no `avg_bpm` / has `avg_bpm` + prefs / prefs missing).
+
+### `apps/mobile_android/test/segments_test.dart` — 8 tests
+
+Dart mirror of `apps/web/src/lib/segments.test.ts`. Pure tests for the segment-effort walker in `lib/segments.dart#computeEffortFromTrack`. Same `straightTrack` synthetic helper (meridian-aligned, constant pace) so haversine cumulative distance is predictable. Covers a clean segment, run shorter than segment end, sub-2-point tracks, zero / negative segment windows, sparse-sampling guard (median step > segLen / 5), missing timestamps in the interpolation bracket, mid-segment interpolation, and sample-aligned endpoints.
+
+### `apps/mobile_android/test/privacy_test.dart` — 8 tests
+
+Dart mirror of `apps/web/src/lib/privacy.test.ts`. Pure tests for `lib/privacy.dart`. Covers `isInAnyZone` (empty zones, centre, far point) and `clipPointsToZones` (empty zones returns input, drops leading + trailing in-zone, keeps interior, every-point-in-zone returns empty, multi-zone union).
+
+### `apps/mobile_android/test/run_photos_helpers_test.dart` — 9 tests
+
+Pure-function tests for two top-level helpers in `lib/widgets/run_photos.dart` extracted so the Storage-extension and content-type logic could be exercised without a `WidgetTester`. `extensionForFilename` covers the normal lowercase return, the `jpeg → jpg` and `heif → heic` collapses, the no-extension default, the leading-dot dotfile case, and the multi-dot trailing-extension case. `contentTypeForExtension` covers the explicit `image/png|webp|heic` branches and the `image/jpeg` fallback (jpg + unknown).
+
+### `apps/mobile_android/test/coach_screen_helpers_test.dart` — 19 tests
+
+Pure-function tests for the three top-level helpers in `lib/screens/coach_screen.dart`: `coachTitleFromMessage` (verbatim under 48 chars, whitespace collapse, leading/trailing trim, ellipsis past the cap, exact-48 vs 49 boundary), `coachArchiveLabel` ("Today" same day, "Yesterday" 1 day, "N days ago" 2..6, `YYYY-MM-DD` past a week, zero-padded month and day), and `parseCoachSseEvent` (event + data block parsing for `meta` / `token` / `done`, null when the block has no data line, null on invalid JSON, null on non-Map JSON, default `event: 'message'` when no event line, multi-line `data:` concatenation, `done` block with `cache` usage stats).
+
+### Screen + widget smoke tests — 27 files, ~70 tests
+
+After the April 2026 mobile-codebase unification, every screen and most user-facing widgets gained a smoke test. Each one verifies the *initial render* surface — app-bar title, primary action visibility, loading-spinner-vs-error fork — without exercising the post-fetch state, since none of these tests have a mockable Supabase backend. Tests that need a real `ApiClient` use a `setUpAll` helper that calls `Supabase.initialize(url: 'http://127.0.0.1:54321', anonKey: 'eyJ.local.test')` plus `SharedPreferences.setMockInitialValues({})` — the fake URL is never reached because each screen catches the connection failure into an ErrorState.
+
+- **Screens (19 files):** plans_screen (not-signed-in path), clubs_screen (segmented tabs + FAB), routes_screen (cloud_off icon hidden when api null), feed_screen (loading spinner), profile_screen (3 tabs for non-self, 4 for self), public_run_screen / public_route_screen (loading + fallback titles), explore_routes_screen (Featured chip), devices_screen, onboarding_screen (page advance + final-page CTA swap), plan_new_screen (wizard structure incl. scrolled bottom buttons), plan_detail_screen / workout_detail_screen / club_detail_screen / event_detail_screen (loading-only Scaffold), live_spectator_screen, privacy_zones_screen (Save action), period_summary_screen (week/month title swap + empty state), run_screen (idle-state ChoiceChip row + 4 activity labels), coach_screen (title + plan dropdown gate; pumps 100ms after the assertion to drain the screen's 50ms streaming timer).
+- **Widgets (4 files):** training_load_chart (heading, empty hint, hasHr subtitle copy, legend keys), run_segment_efforts (loading hint), run_social_section (loading spinner), segments_panel (heading + canCreate gate).
+- **Form sheets (2 files):** showClubFormSheet + showEventFormSheet — open the sheet from a launcher widget at `600x1200` test viewport (default `600x800` clips the bottom of the modal column).
+
+### Pure-helper extractions — 4 files, ~55 tests
+
+Several private formatters were extracted from stateful classes into top-level pure functions so they can be tested without booting their host (TTS, queue IO, importer ZIP path). The original private static methods are kept as one-line delegates so the runtime call paths are unchanged.
+
+- **`preferences_helpers_test.dart` (21 tests):** `UnitFormat.distance` / `distanceValue` / `distanceLabel`, `pace` / `paceLabel`, `distanceTicks`, `activityTicks`, `speed` / `speedLabel`; `ActivityType.label` / `usesSpeed` / `kcalPerKgPerKm` / `splitIntervalMetres` / `gpsDistanceFilter`.
+- **`audio_cues_helpers_test.dart` (15 tests):** `formatSpeedUtterance`, `formatPaceUtterance`, `formatSpokenDistance`, `formatWorkoutStepUtterance` — covers the km / mi forks, the empty-string fallback for null pace, integer-vs-fractional km wording, and the rep / warmup / recovery / steady / cooldown intros.
+- **`strava_importer_helpers_test.dart` (9 tests):** `parseStravaDate` — ISO 8601 fast path, `"Apr 9, 2026, 7:30:00 AM"` canonical Strava format, AM/PM noon and midnight edges, case-insensitive month, long month names, null fallback for unparseable input.
+- **`watch_ingest_queue_helpers_test.dart` (10 tests):** `runFromWatchPayload` + `parseRunSource` — required-fields happy path, missing id / source defaults, optional track waypoints with elevation + timestamp, non-Map track entries skipped, avg_bpm + activity_type promoted into Run.metadata, metadata stays null when neither is set, non-numeric avg_bpm ignored, unknown source falls back to RunSource.watch.
+
+### `apps/mobile_ios/test/` — same 72 files, byte-for-byte
+
+After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
+
+### `packages/core_models/test/run_source_test.dart` — 2 tests
+
+Regression for the `RunSource.watch` enum-map regen. Constructs a `Run` with `source: RunSource.watch`, asserts `toJson()['source'] == 'watch'` and `fromJson({'source': 'watch'}).source == RunSource.watch`. Existed to catch the crash that would otherwise hit `_$RunSourceEnumMap[instance.source]!` on any serialisation of a watch-originated run.
+
+### `apps/web/src/lib/training.test.ts` — 29 tests
 
 TypeScript unit tests for the training plan engine, written against Node's `node:test` API (no test runner dependency). Run with `npx tsx --test src/lib/training.test.ts` from `apps/web`.
 
@@ -213,9 +260,10 @@ TypeScript unit tests for the training plan engine, written against Node's `node
 - Zones ordered slow to fast
 - 4:00/km goal yields easy pace in the 4:30-5:15 band
 
-**`resolveTrainingPaces` (2 tests):**
+**`resolveTrainingPaces` (3 tests):**
 - Recent 5k beats goal time as pace anchor
 - Fall-back without race data produces valid paces
+- Marathon-only goal time yields a valid pace set
 
 **`phaseFor` (2 tests):**
 - 16-week plan splits ~30/40/20/10 base/build/peak/taper
@@ -233,6 +281,76 @@ TypeScript unit tests for the training plan engine, written against Node's `node
 
 **`GOAL_DISTANCES_M` (1 test):**
 - Half marathon constant is within 1m of 21.0975km
+
+**`formatISO` (3 tests):**
+- Returns local-tz components, not UTC
+- Zero-pads single-digit month and day
+- `shiftPeriod` by 7 days lands on the same weekday
+
+**`isWorkoutCompleted` (4 tests):**
+- False when neither flag set
+- True when a run is linked
+- True when manually marked
+- True when both set
+
+### `apps/web/src/lib/segments.test.ts` — 8 tests
+
+TypeScript unit tests for the pure segment-effort compute (`lib/segments.ts`, decisions §37). Run with `npx tsx --test src/lib/segments.test.ts` from `apps/web`. Covers `computeEffortFromTrack`:
+
+- Computes elapsed time over a clean segment (5 m/s straight-line track, 500m segment ≈ 100s).
+- Returns null when the run is shorter than the segment end.
+- Returns null on tracks shorter than two points.
+- Returns null on zero or negative-length segment windows.
+- Rejects sparse sampling (median step > segment / 5 — the §37 trade-off-2 guard).
+- Returns null when adjacent track points lack timestamps in the bracket.
+- Interpolates start and end timestamps mid-segment.
+- Handles tracks where segment endpoints align with sample crossings.
+
+The synthetic `straightTrack` helper builds a meridian-aligned sequence of `(lat, lng, ts)` so haversine cumulative distance matches `(i * stepM)` to within ~0.5m.
+
+### `apps/web/src/lib/privacy.test.ts` — 8 tests
+
+TypeScript unit tests for the pure privacy-zone clipper (`lib/privacy.ts`, decisions §33). Run with `npx tsx --test src/lib/privacy.test.ts` from `apps/web`.
+
+**`isInAnyZone` (3 tests):**
+- Empty zones returns false
+- A point at a zone's centre is inside
+- A far-away point is not
+
+**`clipPointsToZones` (5 tests):**
+- Empty zones returns input unchanged
+- Drops a leading prefix and a trailing suffix that are entirely inside zones
+- Keeps interior in-zone segments (v1 only clips the ends — see source comment)
+- Every point in a zone returns empty
+- Multiple zones — clips against the union
+
+The pure-JS clipper drives owner-side previews; non-owner viewers go through the `clip_track_for_user` SECURITY DEFINER RPC so zones never leave the database.
+
+### `apps/web/src/lib/training_load.test.ts` — 10 tests
+
+TypeScript unit tests for the training-load curves (`lib/training_load.ts`, decisions §34). Run with `npx tsx --test src/lib/training_load.test.ts` from `apps/web`.
+
+**`computeStress` (3 tests):**
+- Distance-fallback path gives ~50 for an easy 5K
+- TRIMP path lights up when avg_bpm + resting + max are all set
+- Zero distance + zero duration gives 0
+
+**`aggregateDailyStress` (1 test):**
+- Sums same-day runs into one daily bucket
+
+**`computeTrainingLoadSeries` (3 tests):**
+- Emits exactly `windowDays` entries
+- TSB rises during a taper (no runs after a heavy build)
+- Series is all-zero when there are no runs
+
+**`hasTrimpSignal` (3 tests):**
+- False when no run has avg_bpm
+- True when at least one run has avg_bpm and prefs are set
+- False when prefs are missing
+
+The TrainingLoadChart component on `/dashboard` renders the three series; `hasTrimpSignal` flips the chart's "TRIMP / distance proxy" subtitle.
+
+**Test-runner constraint:** `tsx --test` runs raw TypeScript through the Node loader and does not understand Svelte runes. That means `*.svelte.ts` modules (`units.svelte.ts`, `stores/auth.svelte.ts`, `stores/toast.svelte.ts`) cannot be imported — the `$state(...)` call at module load fails with `ReferenceError: $state is not defined`. Keep test-targeted modules (`training.ts`, `fitness.ts`, etc.) free of imports from `.svelte.ts` files. The unit-aware formatters `fmtKm` / `fmtPace` live in `units.svelte.ts` for that reason; UI code imports them from `$lib/units.svelte` directly. Adding vitest with the Svelte plugin would lift this restriction — not done yet.
 
 ---
 
@@ -443,7 +561,7 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 ## What's *not* covered (honest)
 
-- **Widget tests.** `RunScreen`, `LiveRunMap`, `CollapsiblePanel`, the finished-run view, the stats panels, hold-to-stop gesture — all rendered UI is uncovered. `apps/mobile_android/test/widget_test.dart` used to be a `flutter create` stub; it's been deleted. Widget tests using `WidgetTester.pumpWidget` + `find.byType` would be the right level.
+- **Widget tests (key remaining gaps).** `RunScreen` and `LiveRunMap` have no widget tests; those require platform-channel mocks (geolocator, pedometer) to exercise the recording path. All other screens and the majority of widgets now have widget tests (109 `testWidgets` calls across 22 files). The original four — `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, `WorkoutReviewSection` — have been joined by `HomeScreen`, `DashboardScreen`, `ImportScreen`, and many more.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
 - **`RunRecorder._calculatePace`, `_routeRemaining`, `_offRouteDistance`.** The pace calculation and route helpers have no direct tests. Their logic is exercised via `_emitSnapshot` but only through the tests that assert on `distanceMetres` and `track`. Dedicated tests would be a good follow-up.
 - **`ApiClient`, `SyncService`, `LocalRouteStore`.** Nothing on the sync path, the routes store, or the Supabase client has tests. Most of these would want a fake HTTP client or a tempDir override.

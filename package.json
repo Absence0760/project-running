@@ -12,5 +12,8 @@
     "check:web": "npm run check --workspace=apps/web",
     "gen:types": "npm run gen:types --workspace=apps/backend",
     "gen:types:check": "npm run gen:types:check --workspace=apps/backend"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13"
   }
 }

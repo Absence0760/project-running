@@ -53,14 +53,14 @@ The primary differentiator. Users export a KML from Google My Maps or any other 
 Track position, pace, distance, and elapsed time using device GPS. Runs saved to local storage first — no backend required at this stage.
 
 - [x] Background location tracking (Android — geolocator foreground service)
-- [ ] Background location tracking (iOS)
+- [x] Background location tracking (iOS — CLLocationManager background mode via run_recorder; Info.plist UIBackgroundModes:location + NSLocationAlwaysAndWhenInUseUsageDescription; verified on simulator)
 - [x] Real-time pace and distance display (Android)
 - [x] ~~Auto-pause on stop detection~~ (Android) — *removed*: replaced by moving time derived from the GPS track at summary time. See [decisions.md § 4](decisions.md).
 - [x] Manual pause/resume (Android)
 - [x] Lap markers (Android)
 - [x] Wakelock during run (Android)
 - [x] Activity types — run, walk, cycle, hike — with per-type pace/speed display, calorie multipliers, split intervals, and GPS filters (Android)
-- [x] Audio cues for splits and pace alerts via TTS (Android)
+- [x] Audio cues for splits and pace alerts via TTS (Android) — pace alerts also fire `HapticFeedback.heavyImpact()` (double pulse for "speed up", single for "slow down") so the cue lands with headphones paused
 - [x] Step count and cadence via pedometer (Android)
 - [x] Live HTTP tile cache so revisited tiles work without network (Android)
 - [x] GPS self-heal retry loop — recorder re-subscribes automatically when location services / permission come back mid-run (Android)
@@ -96,20 +96,20 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] History date filter — today, this week (default), last 30 days, this year, all time (Android)
 - [x] Personal Bests on dashboard — longest run, fastest pace, fastest 5k (Android)
 - [x] Weekly distance goal with progress bar (Android)
-- [x] Multi-goal dashboard — distance / time / avg-pace / run-count, weekly or monthly, with per-goal progress feedback (Android)
+- [x] Multi-goal dashboard — distance / time / avg-pace / run-count, weekly or monthly, with per-goal progress feedback (Android, web)
 - [x] Browsable weekly/monthly summary — navigate to previous periods from dashboard, share as text or screenshot (Android)
 
 ### Cloud sync + auth
 
 - [x] Supabase Auth with email/password sign-in and sign-up
-- [x] Google and Apple OAuth scaffolded (needs provider credentials to enable)
+- [x] Google and Apple OAuth scaffolded (needs provider credentials to enable); iOS: Apple Sign-In scaffolded behind _kAppleSignInEnabled = false pending Services ID setup
 - [x] Auth callback route for OAuth redirect
 - [x] Onboarding flow on first launch with location permission request (Android)
 - [x] Offline-only mode — runs work without backend or auth (Android)
 - [x] UUID run IDs to avoid sync collisions across devices
 - [x] Pull remote runs from Supabase, merge with local store (Android)
 - [x] Bulk sync button for unsynced runs (Android)
-- [x] Backup all runs as JSON via system share sheet (Android)
+- [x] Backup all runs as JSON via system share sheet (Android, web)
 - [x] Auto-sync on connectivity change and app foreground (Android — via
       `connectivity_plus` + lifecycle observer)
 - [x] Conflict resolution: newer-wins by `last_modified_at` timestamp (Android)
@@ -149,9 +149,9 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 
 ### Apple Watch standalone GPS recording
 
-- [ ] Standalone workout session (no phone required)
+- [x] Standalone workout session (no phone required)
 - [x] Heart rate via HealthKit sensor (live BPM in `RunningView`, `avg_bpm` forwarded in run metadata)
-- [ ] Haptic pace alerts (above / below target)
+- [x] Haptic pace alerts (above / below target)
 - [ ] Syncs run data via Watch Connectivity framework
 
 ### Wear OS standalone GPS recording
@@ -161,13 +161,24 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] HR recording via Health Services (`MeasureClient` in `HeartRateMonitor.kt`, average pushed to `run.metadata.avg_bpm`)
 - [x] Ultra-length (10h+) recording: streaming on-disk track writer, rolling-HR aggregation, checkpoint-by-reference, throttled notification refresh, streamed gzip upload, low-battery pre-run warning
 - [x] Live race mode: server-authoritative Arm/GO/End + per-runner pings feeding a spectator leaderboard, auto-submitted `event_results` rows, optional organiser approval gating
+- [x] Recording UX parity with Android — pre-run activity picker (run / walk / hike / cycle cycles via a CompactChip), 3-second start countdown (`CountdownOverlay`), pause / resume, lap button + splits table on PostRun, 800 ms hold-to-stop with circular progress ring, haptic confirmations on lap / pause / resume (`LocalHapticFeedback`)
+- [x] TTS audio cues (`recording/TtsAnnouncer.kt`) — "Run started", per-km splits, pace-drift nudges, "Run complete". Gated on `BuildConfig.ENABLE_TTS`; phrasing mirrors `apps/mobile_android/lib/audio_cues.dart`.
+- [x] Target-pace picker + haptic pace alerts — pre-run **Pace** chip cycles off / 4:00 / 4:30 / 5:00 / 5:30 / 6:00 / 6:30 / 7:00 per km; `RunRecordingService.firePaceAlert` vibrates (double pulse for "speed up", single for "slow down") + TTS nudge when live pace drifts >30 s, rate-limited to 1/30 s.
+- [x] Pedometer + `metadata.steps` — `Pedometer.kt` via `Sensor.TYPE_STEP_COUNTER` with per-run baseline; live "N steps" readout on RunningScreen; writes `run.metadata.steps` when the sensor produced samples. Requires `ACTIVITY_RECOGNITION` (added to `permissionLauncher`).
+- [x] GPS self-heal — 10 s watchdog in `RunRecordingService` re-subscribes to the Fused provider when the stream stalls for 30 s despite `locationAvailable=true`
+- [x] Indoor / no-GPS mode — clock + `TrackWriter` handle zero-fix runs; RunningScreen banner distinguishes "No GPS — time only" (never had a fix) from "GPS lost" (lost mid-run)
 - [ ] Auto-sync on reconnect (today `drainQueue` fires on app start + after stop; connectivity-change listener is a TODO)
 
 ### Route navigation on watch
 
-- [ ] Route preview on watch face before starting
-- [ ] Live position on mini-map during run
-- [ ] Off-route haptic + "recalculating" indicator
+Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported to Kotlin as `watch_wear:recording/RouteMath.kt` with a 17-test mirror suite against the Dart twin. Route data syncs to the watch via `SupabaseClient.fetchRoutes` + `LocalRouteStore`. The pre-run Route chip + picker wire a selection into the recording loop, and `RunningScreen` renders the off-route banner (with hysteresis + haptic) and the "X to go" badge. What's left: rendering the route *visually* during a run, which requires a live map on the watch.
+
+- [x] Route sync to the watch (`SupabaseClient.fetchRoutes` + `LocalRouteStore` DataStore cache; drains on picker open)
+- [x] Pre-run Route chip + picker screen (`Stage.RoutePicker` with "None" + per-route chips)
+- [x] Off-route haptic + banner on `RunningScreen` (threshold 40 m on / 20 m off, double `HapticFeedback.LongPress` on entry)
+- [x] "X.XX km to go" badge on `RunningScreen` under the distance readout
+- [ ] Route preview on watch face before starting (needs a renderer)
+- [ ] Live position on mini-map during run (needs a renderer; "Live position marker on planned route" cell in parity.md stays ✗ until this lands)
 
 ### Glanceable tiles and complications
 
@@ -191,7 +202,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
   - [ ] Token refresh worker (moved from Edge Function)
   - [ ] Data export worker (moved from Edge Function)
 - [ ] Set up Upstash Redis for live position streams
-- [ ] Add `personal_records` summary table with insert trigger
+- [x] Add `personal_records` summary table with insert trigger (migration `20260508_001_personal_records_cache.sql` — table, `refresh_personal_records_for_user(uid)` helper, insert / update / delete triggers, backfill; `security definer` writes, reads scoped to owner)
 - [ ] Add `jobs` table for Go worker queue
 - [ ] Migrate Strava webhook, token refresh, data export from Edge Functions to Go service
 
@@ -314,6 +325,8 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Explore Routes screen — search public routes by name (full-text), filter by distance range and surface type, save to library, paginated results (Android)
 - [x] "Popular near me" discovery feed — PostGIS `ST_DWithin` queries via `nearby_routes` RPC, `start_point geography(Point)` column with auto-populate trigger, "Near Me" tab on Android explore screen (geolocator) and web explore page (browser Geolocation API)
 - [x] Route ratings and comments — `route_reviews` table (1-5 stars + optional comment, one per user per route), reviews section on route detail screen, avg rating in stats row, submit/edit review dialog
+- [ ] **Club-owned routes** — `routes.club_id` (nullable FK) so a club can own a course independent of the original uploader; club admins edit, club members read regardless of `is_public`. EventEditor route picker shows "My routes" + "This club's routes" optgroups. New Routes tab on `/clubs/[slug]` lists club-owned routes with admin transfer/create. See decisions.md § 30.
+- [ ] **Save-to-library is a reference, not a clone** — `saved_routes (user_id, route_id)` join table replaces RouteExplorer's INSERT-a-private-copy behaviour. `/routes` "My routes" UNIONs personal routes with saved ones. Bookmarks accumulate `run_count` on the canonical row instead of fragmenting it across duplicates. See decisions.md § 30.
 - [ ] Share to social (image card with map + stats)
 - [ ] SEO-indexed public route pages
 
@@ -324,8 +337,9 @@ Phased rollout so the schema doesn't sprawl. MVP is club-owned events only, enum
 - [x] **Phase 1 — MVP (web only):** `clubs` / `club_members` / `events` / `event_attendees` / `club_posts` tables with RLS; browse/create/view clubs, create one-off events, RSVP, owner/admin text updates. No recurrence, no invites, no notifications. Web routes: `/clubs`, `/clubs/new`, `/clubs/[slug]`, `/clubs/[slug]/events/new`, `/clubs/[slug]/events/[id]`.
 - [x] **Phase 2 — recurrence + invites:** Enum recurrence (`weekly` / `biweekly` / `monthly` + `byday[]` + `until_date`) with instance expansion on the client; per-instance RSVPs (`event_attendees` pkey extended with `instance_start`); join policies (`open` / `request` / `invite`) with a pending-requests admin panel; shareable invite tokens on clubs + `/clubs/join/[token]` landing route; one-level threaded replies on posts. Migration: `20260417_001_phase2_social.sql`.
 - [x] **Phase 3 — Android mirror:** `clubs_screen.dart` (Browse + My clubs), `club_detail_screen.dart` (feed / events / members tabs with threaded post replies and member post composer), `event_detail_screen.dart` (per-instance RSVP + admin update composer), `upcoming_event_card.dart` replaces the Last-Run card on the Run tab when the user has RSVP'd `going` to an event within 48h. Clubs added as a 6th bottom-nav tab. Recurrence is ported to Dart (`recurrence.dart`) so instance expansion stays consistent with web. Club/event creation is deliberately not on Android — admins still use the web app for those.
-- [x] **Phase 4a — realtime (web + Android):** Supabase Realtime is enabled on `club_posts`, `event_attendees`, and `club_members` (migration `20260418_001_social_realtime.sql`). Web club / event detail pages and Android `ClubDetailScreen` / `EventDetailScreen` subscribe via `postgres_changes` and debounce reloads at 250ms. Payloads are ignored in favour of a fresh enriched fetch so RLS stays authoritative.
-- [ ] **Phase 4b — push (FCM / APNs):** Event-day reminders (scheduled), admin-update fan-out, and a `device_tokens` table. Blocked on user-supplied Firebase project + service account credentials; not started.
+- [x] **Phase 4a — realtime (web + Android):** Supabase Realtime is enabled on `club_posts`, `event_attendees`, `club_members`, and `race_sessions` (migrations `20260418_001_social_realtime.sql` + `20260425_001_race_sessions.sql`). Web club / event detail pages and Android `ClubDetailScreen` / `EventDetailScreen` subscribe via `postgres_changes` and debounce reloads at 250ms. Payloads are ignored in favour of a fresh enriched fetch so RLS stays authoritative.
+- [x] **Race organiser controls on Android (Arm / Fire Go / End).** `SocialService.armRace` / `startRace` / `endRace` mirror `apps/web/src/lib/data.ts`. `event_detail_screen.dart` renders a race-control card — visible to owners / admins / race directors (`ClubView.isRaceDirector`) — with the state machine `idle/finished/cancelled → Arm (+ auto-approve toggle) → armed → Fire Go / Cancel → running → End / Cancel race`. Realtime updates flow through the existing `subscribeToEvent` channel extended to include `race_sessions` filtered by `event_id`.
+- [ ] **Phase 4b — push (FCM / APNs):** Event-day reminders (scheduled), admin-update fan-out. `device_tokens` table is shipped (migration `20260506_001_device_tokens.sql` — platform-checked `token` rows, `notifications_enabled` per-device toggle, partial index on active tokens, self-scoped RLS, trigger on `updated_at`); the sender + client-side token registration are blocked on user-supplied Firebase / APNs credentials.
 
 ### External platform sync
 
@@ -347,16 +361,35 @@ Claude-powered training advisor embedded in the web app. Reviews the runner's pl
 - [x] Daily usage limit of 10 messages per user (`user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
 - [x] Personality tones — `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) fed into the system prompt
 - [x] User preferences (date of birth, HR zones, resting/max HR, weekly mileage goal) fed into context for personalised advice
+- [x] Top-level `/coach` page with plan switcher (`?plan=<id>`), graceful plan-less fallback, and dashboard "Ask the coach" deep-link card
+- [x] "Grounded in:" context strip showing the plan, run count, HR-zone status, and weekly goal that the model has loaded — sourced from the same data as `buildContext()` so it reflects what's actually sent
+- [x] Configurable runs window — UI selector (10 / 20 / 50 / 100) → `recent_runs_limit` request param, server-clamped to `[1, 100]`
+- [x] OpenAI-compatible provider option (`COACH_PROVIDER=openai`) for local-Ollama / llama.cpp / vLLM dev iteration without burning Anthropic tokens
+- [x] Cross-device chat history — `coach_messages` table, RLS owner-only, scoped per (user × plan); replaces the prior localStorage persistence with one-time client migration on first read
+- [x] Server-Sent Events streaming so tokens render as they arrive; placeholder bouncing-dot indicator until the first token; persists across reload mid-stream via realtime subscription
+- [x] Markdown rendering for assistant replies (`marked` + `DOMPurify`) — paragraphs, lists, **bold**, code blocks, inline links to specific runs (`[Apr 25 long run](/runs/<id>)`)
+- [x] Conversation archive + sidebar history list with auto-derived titles (first user message, truncated). "Start new" flips `archived_at` rather than deleting; per-archive view (read-only) and delete
+- [x] Inline bubble actions on hover — copy, regenerate (assistant), edit-and-resend (user), thumbs-up / thumbs-down (assistant). Reactions persisted via column-level UPDATE on `coach_messages.reaction`
+- [x] Server `mode` (`send` / `regenerate` / `edit`) + `anchor_message_id` truncate-and-rerun support so regenerate / edit don't duplicate user messages
 
-### Funding and donations (free-with-donations pivot)
+### Monetisation — Pro tier + one-off donations
 
-- [x] All features free — `isLocked()` always returns `false` (see `decisions.md #18`)
-- [x] Transparent funding page at `/settings/upgrade` with real cost breakdown and progress bars
-- [x] `monthly_funding` table for donation tracking
+The original free-with-donations pivot (`decisions.md #18`) was superseded by the Pro-tier revival (`decisions.md #23`). Infrastructure from the donations era is kept: no features are hidden behind the paywall today; Pro changes behaviour inside two features (coach cap, processing priority) rather than gating screens.
+
+- [x] Core gate infrastructure — `isLocked()` still returns `false` for every registered key (see `decisions.md #18` for why we retained the scaffolding)
+- [x] `/settings/upgrade` page rewritten as a two-card layout: Pro plan ($9.99 / mo) + one-off Donate button (see `decisions.md #23`)
+- [x] `/api/coach/+server.ts` skips the 10 / day rate limit for users where `is_pro()` is true
+- [x] `features.ts` — `isPro()` helper + `priority_processing` feature-registry entry
+- [x] `monthly_funding` table retained but no longer read by the UI
 - [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)
 - [x] `ToastContainer.svelte` + `toast.svelte.ts` for transient success/error/info feedback
+- [ ] RevenueCat web SDK wired behind the "Get Pro" button (`Purchases.configure` + checkout flow)
+- [ ] `purchases_flutter` wired on mobile — "Get Pro" flow on Android + iOS
+- [ ] Tier-aware rate-limiting on Edge Functions / Go service so the *priority processing* bullet has concrete enforcement beyond the coach-cap bypass
 
-### Premium tier — training and coaching (deferred, see decisions.md #18)
+### Premium tier — training and coaching (deferred, see decisions.md #18 and #23)
+
+This section predates the Pro-tier revival and tracks features that were *originally* premium-gated (structured workout runner, plan generator, VO2 max, race predictor, recovery advisor). Under the current model (`decisions.md #23`) Pro unlocks **unlimited coach + priority processing** rather than gating whole features — so the items below are roadmap work, not paywall work, until product direction says otherwise.
 
 **Structured training plan runner (workout execution):**
 
@@ -415,6 +448,19 @@ The foundation under both the generator and any hand-built plan: a data model fo
 - [ ] Rest/easy/hard session recommendation
 - [ ] Days until next recommended hard session
 
+### Competitor-parity backlog (unphased)
+
+Surfaces that other running apps ship as table stakes and we don't. Each one is "the canonical answer is well-known, copy it." Order is rough leverage-per-effort, not strict dependency. See `docs/decisions.md § 30` for the precedent (club-owned routes) and individual decision entries for the specs as they're written.
+
+- [x] **Following graph + activity feed** — `user_follows (follower_id, followee_id, followed_at)` join table; `/feed` route showing recent public runs from people you follow, server-side time-windowed to the last `FEED_WINDOW_DAYS` (14) days so the feed reads as "what's new" rather than a backlog dump. Full-width responsive card grid (`repeat(auto-fill, minmax(22rem, 1fr))` matching `/runs`); per-entry track-preview map; toolbar with activity-segmented control + author **searchable combobox** (typeahead over the followee list, ↑/↓/Enter/Esc keyboard nav) + a "Last 14 days" hint pill. Tapping an entry opens `RunShareView` in a wide Modal so the feed stays put. Public-by-default user profile pages at `/u/[id]` showing display_name, avatar, recent public runs, follow button — runs open the same modal. Strava's core engagement loop. Spec: `decisions.md § 31`.
+- [x] **Kudos + comments on runs** — `run_kudos (user_id, run_id)` join + `run_comments (id, run_id, author_id, body, parent_comment_id, …)` with one-level threading. RLS gates visibility through an EXISTS subquery on `runs` so engagement on a private run is invisible to anyone but the owner. RunSocial component mounts on `/share/run/[id]`, `/runs/[id]`, and as compact kudos/comment chips on each `/feed` entry. Spec: `decisions.md § 32`.
+- [x] **Privacy zones** — `user_settings.prefs.privacy_zones: [{lat, lng, radius_m}]` plus a `clip_track_for_user` SECURITY DEFINER RPC that reads zones server-side and returns only the clipped middle (so zones never reach the client). Settings UI on `/settings/preferences` with a MapLibre map picker. `/share/run/[id]` and `/share/route/[id]` both call the RPC; owner views are unclipped. v2 follow-up: snap `routes.start_point` to first non-zone waypoint via the existing `routes_set_start_point` trigger so nearby-routes search doesn't leak. Spec: `decisions.md § 33`.
+- [x] **Training load curves (Fitness / Fatigue / Form)** — `lib/training_load.ts` (TRIMP when HR data is available, distance proxy fallback) + `TrainingLoadChart` three-line SVG over 90 days of daily-aggregated stress. Mounts on `/dashboard` below the existing fitness numeric card. Server-side recompute job is still pending (parity.md), but the live client computation matches what the job will eventually produce. Spec: `decisions.md § 34`.
+- [x] **Plan templates (coach-managed plans)** — `training_plans.is_template + parent_template_id + club_id` (decisions §35). `clone_plan_template(template_id, start_date)` SECURITY DEFINER RPC duplicates template + weeks + workouts into a user-owned active plan, anchored at the chosen start date. `/clubs/[slug]` gains a Templates tab; `/plans/new` shows a "Start from a club template" picker; `/plans/[id]` exposes Publish-as-template (owner-only when they admin a club) plus a parent-template chip on cloned instances. Clone-not-subscribe — template edits don't propagate to existing instances.
+- [x] **Photos on runs** — `run_photos (id, run_id, owner_id, storage_path, caption, position_idx)` table backed by a public-read `run-photos` Storage bucket; bytes live at `{owner_id}/{photo_id}.{ext}` with per-user-folder INSERT/DELETE policies. Visibility tracks the parent run via EXISTS-on-runs (same shape as kudos/comments). RunPhotos.svelte gallery mounts on `/runs/[id]` (full owner UI: upload + caption + delete) and `/share/run/[id]` (read-only). Migration `20260525_001_run_photos.sql`; spec: `decisions.md § 36`. Deferred: server-side thumbnail generation, EXIF stripping, club-photo features.
+- [x] **Segments + leaderboards (route-anchored, v1)** — `segments (route_id, name, start_distance_m, end_distance_m, length_m generated, created_by)` + `segment_efforts (segment_id, run_id, user_id, time_seconds, started_at)` with `unique(segment_id, run_id)` so reimports don't double-count. RLS visibility on both tables tracks the parent route via EXISTS. Auto-effort generation is **client-side** (decisions §37): `lib/segments.ts#computeEffortFromTrack` walks the track once, accumulates haversine distance, and interpolates timestamps at the start/end crossings. SegmentsPanel on `/routes/[id]` (create-from-distance-range + expandable leaderboard); RunSegmentEfforts on `/runs/[id]` (rank pills with gold/silver/bronze for top-10). v2: arbitrary-geometry segments (Hidden Markov / Hausdorff matching), KOM/QOM tiered leaderboards, real-time effort during a run.
+- [x] **Notifications inbox** — `notifications (user_id, actor_id, kind, run_id, comment_id, read_at, …)` populated by SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows` so kudos / comments / replies / follows are written in the same transaction as the source. Sidebar bell with unread badge + popover; the full inbox lives under the Notifications tab on `/u/[me]` (own profile only) with all / unread sub-filters. Refresh on auth-ready and on window focus (no polling). v2: batch / collapse ("Alice and 4 others gave kudos…"), realtime push, mobile fan-out worker. Spec: `decisions.md § 38`.
+
 ### Elevation and pace analysis (post-run)
 
 - [x] Elevation profile with chart
@@ -434,7 +480,7 @@ The foundation under both the generator and any hand-built plan: a data model fo
 - [ ] Enable PostGIS extension in Supabase
 - [ ] Add `geom geography(LineString, 4326)` column to `routes` with spatial index
 - [ ] Add `training_plans` table for generated plans
-- [ ] Add `fitness_snapshots` table for VO2 max and training load history
+- [x] Add `fitness_snapshots` table for VO2 max and training load history (migration `20260507_001_fitness_snapshots.sql` — `vdot`, `vo2_max`, ATL / CTL / TSB columns, `qualifying_run_count`, `source` check, `latest_fitness_snapshot()` RPC. Server-side recompute job + advisor UI still pending.)
 - [ ] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles`
 - [ ] Apply for Garmin Connect developer program
 
@@ -502,9 +548,9 @@ The database schema is the single source of truth. Today, each client hand-write
 
 A single markdown table that lists every user-visible feature with a checkmark per platform. Reviewed during every PR that adds or changes a feature.
 
-- [ ] New section in `docs/features.md` (or a new `docs/parity.md`) with a table: **Feature × [Android, iOS, Web, Wear OS, Apple Watch]**, each cell `✓` / `✗` / `Partial` / `N/A`.
-- [ ] Link from each feature's "Phase X" entry in `docs/features.md` to its row in the matrix.
-- [ ] PR template checkbox: "Updated the feature parity matrix if this PR adds or changes a user-visible feature."
+- [x] New section in `docs/features.md` (or a new `docs/parity.md`) with a table: **Feature × [Android, iOS, Web, Wear OS, Apple Watch]**, each cell `✓` / `✗` / `Partial` / `N/A`. Shipped as [`docs/parity.md`](parity.md).
+- [x] Link from each feature's "Phase X" entry in `docs/features.md` to its row in the matrix. Each feature's spec now has a `**Parity:** [see matrix](parity.md#...)` line immediately under its header.
+- [x] PR template checkbox: "Updated the feature parity matrix if this PR adds or changes a user-visible feature." Lives in [`.github/pull_request_template.md`](../.github/pull_request_template.md) under *Docs checklist*.
 - [ ] Periodically audit: grep the matrix for rows with mismatched ticks, confirm each asymmetry is intentional (e.g. Android has a pedometer, web can't have one — that's a permanent `✗`), and open follow-up tickets for unintentional gaps.
 
 **Expected effect**: the `activity_type` / `surface` / `moving_time` drift we spent hours hunting becomes visible on page load. Asymmetries are either documented-as-intentional or immediately visible as bugs.

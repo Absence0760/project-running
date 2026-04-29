@@ -7,7 +7,7 @@
 	let error = $state('');
 
 	onMount(async () => {
-		// Supabase redirects here with auth code in the URL hash
+		// Supabase PKCE flow: auth code arrives in the query string (?code=…), not the hash.
 		const { error: authError } = await supabase.auth.exchangeCodeForSession(
 			window.location.search.substring(1)
 		);

@@ -3,7 +3,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 
 serve(async (req: Request) => {
-  const { athleteNumber } = await req.json();
+  // Authenticate before parsing the body. Malformed JSON from an
+  // unauthenticated caller would otherwise produce a 500 distinguishable
+  // from a 401, and any future code added between the parse and the
+  // auth check would run unauthenticated.
   const authHeader = req.headers.get('Authorization')!;
 
   const supabase = createClient(
@@ -14,6 +17,8 @@ serve(async (req: Request) => {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+
+  const { athleteNumber } = await req.json();
 
   // Validate athlete number format
   if (!/^A\d+$/.test(athleteNumber)) {

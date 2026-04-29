@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,8 +24,11 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,6 +38,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -73,15 +79,26 @@ import com.runapp.watchwear.RunViewModel
 import com.runapp.watchwear.Stage
 import com.runapp.watchwear.system.BatteryOptimization
 import android.app.Activity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 
 @Composable
 fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false) {
     val state by vm.state.collectAsStateWithLifecycle()
+    // Brief 3-2-1 overlay between permission grant and the ViewModel's
+    // `start()` call. UI-only — the recording service isn't live during
+    // the countdown. Mirrors the user-visible behaviour on Android.
+    var showCountdown by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
         if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-            vm.start()
+            showCountdown = true
         }
     }
 
@@ -117,16 +134,25 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
                             activityType = state.activityType,
                             activeRace = state.activeRace,
+                            selectedRouteName = state.selectedRoute?.name,
+                            targetPaceSecPerKm = state.targetPaceSecPerKm,
                             onCycleActivity = {
                                 val order = listOf("run", "walk", "hike", "cycle")
                                 val next = order[(order.indexOf(state.activityType) + 1) % order.size]
                                 vm.setActivityType(next)
                             },
+                            onCyclePace = vm::cycleTargetPace,
+                            onOpenRoutePicker = vm::openRoutePicker,
                             onStart = {
                                 permissionLauncher.launch(
                                     arrayOf(
                                         Manifest.permission.ACCESS_FINE_LOCATION,
                                         Manifest.permission.BODY_SENSORS,
+                                        // Needed for `TYPE_STEP_COUNTER` on
+                                        // API 29+. Granting is not blocking
+                                        // — the step flow is silent if the
+                                        // user denies.
+                                        Manifest.permission.ACTIVITY_RECOGNITION,
                                     )
                                 )
                             },
@@ -149,9 +175,18 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     distanceM = state.distanceM,
                     paceSecPerKm = state.paceSecPerKm,
                     bpm = state.bpm,
+                    steps = state.steps,
                     lapCount = state.lapCount,
                     paused = state.stage == Stage.Paused,
                     locationAvailable = state.locationAvailable,
+                    // `distanceM == 0.0` is the poor man's "no point yet"
+                    // check — the recorder only moves the counter when
+                    // GPS has delivered its first usable fix. Combined
+                    // with `locationAvailable=false` it tells us the run
+                    // is indoor / no-GPS rather than mid-run signal loss.
+                    noGpsYet = state.distanceM == 0.0,
+                    offRouteDistanceM = state.offRouteDistanceM,
+                    routeRemainingM = state.routeRemainingM,
                     ambient = isAmbient,
                     onPause = vm::pause,
                     onResume = vm::resume,
@@ -167,8 +202,59 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     onStartNext = vm::startNextRun,
                     onDiscard = vm::discard,
                 )
+                Stage.RoutePicker -> RoutePickerScreen(
+                    routes = state.routes,
+                    selectedId = state.selectedRoute?.id,
+                    loading = state.routesLoading,
+                    onPick = vm::selectRoute,
+                    onClear = vm::clearSelectedRoute,
+                    onCancel = vm::closeRoutePicker,
+                )
+            }
+
+            if (showCountdown) {
+                CountdownOverlay(
+                    onComplete = {
+                        showCountdown = false
+                        vm.start()
+                    },
+                    onCancel = { showCountdown = false },
+                )
             }
         }
+    }
+}
+
+/// Full-screen 3-2-1 countdown shown between permission grant and the
+/// ViewModel's `start()`. A tap anywhere cancels and returns to PreRun,
+/// matching the Android pattern.
+@Composable
+private fun CountdownOverlay(
+    onComplete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    var count by remember { mutableIntStateOf(3) }
+    LaunchedEffect(Unit) {
+        // 3 → 2 → 1, one second each, then fire `onComplete`.
+        for (n in 3 downTo 1) {
+            count = n
+            delay(1000L)
+        }
+        onComplete()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .clickable(onClick = onCancel),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.display1,
+            color = DuskPalette.parchment,
+            fontSize = 84.sp,
+        )
     }
 }
 
@@ -209,7 +295,7 @@ private fun BatteryInstructions(
         }
         item {
             Text(
-                "On phone: open Wear OS / Galaxy Wearable → Better Runner → Battery → Unrestricted.",
+                "On phone: open Wear OS / Galaxy Wearable → Run Onward → Battery → Unrestricted.",
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.parchment,
                 textAlign = TextAlign.Start,
@@ -218,7 +304,7 @@ private fun BatteryInstructions(
         }
         item {
             Text(
-                "Or on watch: Settings → Apps → Better Runner → Battery → Unrestricted (if shown).",
+                "Or on watch: Settings → Apps → Run Onward → Battery → Unrestricted (if shown).",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.haze,
                 textAlign = TextAlign.Start,
@@ -260,7 +346,11 @@ private fun PreRunScreen(
     activeRace: com.runapp.watchwear.ActiveRaceState?,
     pendingRecoveryDistance: Double?,
     activityType: String,
+    selectedRouteName: String?,
+    targetPaceSecPerKm: Int?,
     onCycleActivity: () -> Unit,
+    onCyclePace: () -> Unit,
+    onOpenRoutePicker: () -> Unit,
     onStart: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
@@ -377,6 +467,39 @@ private fun PreRunScreen(
                 label = {
                     Text(
                         activityType.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = ChipDefaults.secondaryChipColors(),
+            )
+            Spacer(Modifier.height(4.dp))
+            // Route chip — tap opens the picker. Only shown when signed
+            // in since routes require a network fetch. Label shows the
+            // selected route name or "Pick route" when none is chosen.
+            if (authed) {
+                CompactChip(
+                    onClick = onOpenRoutePicker,
+                    label = {
+                        Text(
+                            selectedRouteName ?: "Pick route",
+                            style = MaterialTheme.typography.caption2,
+                            maxLines = 1,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                )
+                Spacer(Modifier.height(4.dp))
+            }
+            // Pace-target chip — tap cycles off / 4:00 / 4:30 / … / 7:00.
+            // When non-null, the service fires a double-pulse vibration
+            // + TTS nudge whenever the live pace drifts >30 s from the
+            // target (rate-limited to one alert per 30 s).
+            CompactChip(
+                onClick = onCyclePace,
+                label = {
+                    Text(
+                        if (targetPaceSecPerKm == null) "Pace: off"
+                        else "Pace ${formatPace(targetPaceSecPerKm.toDouble())}/km",
                         style = MaterialTheme.typography.caption2,
                     )
                 },
@@ -681,15 +804,38 @@ private fun RunningScreen(
     distanceM: Double,
     paceSecPerKm: Double?,
     bpm: Int?,
+    steps: Int?,
     lapCount: Int,
     paused: Boolean,
     locationAvailable: Boolean,
+    noGpsYet: Boolean,
+    offRouteDistanceM: Double?,
+    routeRemainingM: Double?,
     ambient: Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onLap: () -> Unit,
     onStop: () -> Unit,
 ) {
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // Off-route hysteresis: alert above 40 m, clear below 20 m. Single
+    // haptic pulse when the state flips to "off" — drivers an alert
+    // without the pulsing-every-tick spam a flat threshold would cause
+    // at the boundary.
+    var wasOffRoute by remember { mutableStateOf(false) }
+    val currentlyOffRoute = offRouteDistanceM != null && offRouteDistanceM > 40
+    val backOnRoute = offRouteDistanceM != null && offRouteDistanceM < 20
+    LaunchedEffect(currentlyOffRoute, backOnRoute) {
+        if (currentlyOffRoute && !wasOffRoute) {
+            wasOffRoute = true
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            delay(180)
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        } else if (backOnRoute && wasOffRoute) {
+            wasOffRoute = false
+        }
+    }
     // Ambient mode: OEM burn-in protection rules apply — pure-black
     // background, thin outlined text, no solid fills, and the content
     // shifts a few dp each minute (handled by the system if we use the
@@ -735,7 +881,20 @@ private fun RunningScreen(
     ) {
         if (!locationAvailable) {
             Text(
-                "GPS lost",
+                // "No GPS — time only" when we've never had a fix
+                // (indoor / treadmill); "GPS lost" once we've had at
+                // least one point and then lost it, so the user knows
+                // this is a recoverable mid-run drop vs. the intended
+                // indoor mode.
+                if (noGpsYet) "No GPS — time only" else "GPS lost",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.warning,
+            )
+            Spacer(Modifier.height(2.dp))
+        }
+        if (wasOffRoute && offRouteDistanceM != null) {
+            Text(
+                "Off route · ${offRouteDistanceM.toInt()} m",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.warning,
             )
@@ -751,6 +910,13 @@ private fun RunningScreen(
             "%.2f km".format(distanceM / 1000.0),
             style = MaterialTheme.typography.body2,
         )
+        if (routeRemainingM != null && routeRemainingM > 1.0) {
+            Text(
+                "%.2f km to go".format(routeRemainingM / 1000.0),
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.lilac,
+            )
+        }
         if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
             Text(
                 "${formatPace(paceSecPerKm)} /km",
@@ -763,6 +929,13 @@ private fun RunningScreen(
                 "$bpm bpm",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.coral,
+            )
+        }
+        if (steps != null && steps > 0) {
+            Text(
+                "$steps steps",
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.haze,
             )
         }
         if (lapCount > 0) {
@@ -778,14 +951,20 @@ private fun RunningScreen(
         ) {
             if (paused) {
                 Button(
-                    onClick = onResume,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onResume()
+                    },
                     modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
                 ) {
                     Text("Go")
                 }
             } else {
                 Button(
-                    onClick = onPause,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onPause()
+                    },
                     modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
                     colors = ButtonDefaults.secondaryButtonColors(),
                 ) {
@@ -793,19 +972,182 @@ private fun RunningScreen(
                 }
             }
             Button(
-                onClick = onLap,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLap()
+                },
                 modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
                 colors = ButtonDefaults.secondaryButtonColors(),
             ) {
                 Text("Lap", style = MaterialTheme.typography.caption2)
             }
-            Button(
-                onClick = onStop,
-                modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
-                colors = ButtonDefaults.primaryButtonColors(),
-            ) {
-                Text("Stop")
+            HoldToStopButton(onStop = onStop)
+        }
+    }
+}
+
+/// Pre-run route picker. Compact list of the user's saved routes; tap
+/// to select, "None" to clear the current selection, "Cancel" to back
+/// out without changing it. Refreshing the list happens in the
+/// ViewModel (`refreshRoutes`) when the stage flips to RoutePicker —
+/// the UI here only renders what's in `state.routes`.
+@Composable
+private fun RoutePickerScreen(
+    routes: List<com.runapp.watchwear.SavedRoute>,
+    selectedId: String?,
+    loading: Boolean,
+    onPick: (com.runapp.watchwear.SavedRoute) -> Unit,
+    onClear: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val listState = rememberScalingLazyListState()
+    ScalingLazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        autoCentering = AutoCenteringParams(itemIndex = 0),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 24.dp),
+    ) {
+        item {
+            Text(
+                "Route",
+                style = MaterialTheme.typography.title3,
+            )
+        }
+        if (loading && routes.isEmpty()) {
+            item {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.height(16.dp),
+                )
             }
+        }
+        item {
+            Chip(
+                onClick = onClear,
+                label = {
+                    Text(
+                        "None",
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = if (selectedId == null)
+                    ChipDefaults.primaryChipColors()
+                else ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        items(routes.size) { i ->
+            val r = routes[i]
+            val isSelected = r.id == selectedId
+            Chip(
+                onClick = { onPick(r) },
+                label = {
+                    Column {
+                        Text(
+                            r.name,
+                            style = MaterialTheme.typography.caption2,
+                            maxLines = 1,
+                        )
+                        Text(
+                            "%.2f km".format(r.distanceM / 1000.0),
+                            style = MaterialTheme.typography.caption3,
+                            color = DuskPalette.haze,
+                        )
+                    }
+                },
+                colors = if (isSelected)
+                    ChipDefaults.primaryChipColors()
+                else ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (routes.isEmpty() && !loading) {
+            item {
+                Text(
+                    "No saved routes. Build a route on the phone or web first.",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.haze,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                )
+            }
+        }
+        item {
+            Chip(
+                onClick = onCancel,
+                label = { Text("Cancel") },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/// Stop button that requires an ~800 ms press before firing `onStop`.
+/// A circular progress ring fills around the button during the hold;
+/// releasing early cancels. Prevents a single accidental tap from ending
+/// a long run — the single most damaging mis-tap a runner can make.
+@Composable
+private fun HoldToStopButton(onStop: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var progress by remember { mutableFloatStateOf(0f) }
+    var holdJob by remember { mutableStateOf<Job?>(null) }
+    val holdDurationMs = 800L
+
+    Box(
+        modifier = Modifier
+            .size(ButtonDefaults.DefaultButtonSize)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    holdJob?.cancel()
+                    holdJob = scope.launch {
+                        val startMs = System.currentTimeMillis()
+                        while (isActive) {
+                            val elapsed = System.currentTimeMillis() - startMs
+                            progress = (elapsed.toFloat() / holdDurationMs)
+                                .coerceAtMost(1f)
+                            if (elapsed >= holdDurationMs) {
+                                onStop()
+                                progress = 0f
+                                break
+                            }
+                            delay(16)
+                        }
+                    }
+                    waitForUpOrCancellation()
+                    holdJob?.cancel()
+                    holdJob = null
+                    progress = 0f
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        // Ring fills from 0 → 1 during the hold. Only drawn while held so
+        // it doesn't compete visually with the Pause / Lap buttons when
+        // the runner is just looking at their stats.
+        if (progress > 0f) {
+            CircularProgressIndicator(
+                progress = progress,
+                modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
+                strokeWidth = 3.dp,
+                indicatorColor = MaterialTheme.colors.onPrimary,
+                trackColor = Color.Transparent,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(ButtonDefaults.DefaultButtonSize - 6.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colors.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Stop",
+                style = MaterialTheme.typography.caption2,
+                color = MaterialTheme.colors.onPrimary,
+            )
         }
     }
 }

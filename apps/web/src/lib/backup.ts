@@ -239,7 +239,7 @@ export async function restoreBackup(
 					const { error } = await supabase.storage
 						.from('runs')
 						.upload(path, bytes, {
-							contentType: 'application/json',
+							contentType: 'application/gzip',
 							upsert: true,
 							cacheControl: '0',
 						});

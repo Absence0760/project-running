@@ -4,8 +4,14 @@ import com.runapp.watchwear.generated.RunRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -148,6 +154,45 @@ class SupabaseClient(
     /// Base URL + anon key exposed for the ViewModel to pack into a
     /// [StoredSession] after a direct watch sign-in.
     val environment: Pair<String, String> get() = baseUrl to anonKey
+
+    /// Fetch the signed-in user's saved routes. Returns an empty list
+    /// when the API is unreachable or the response can't be parsed —
+    /// the picker gracefully shows "no routes" rather than the caller
+    /// having to catch here. Caller decides whether to cache on success.
+    ///
+    /// Pulls `id`, `name`, `waypoints`, and `distance_m`; everything
+    /// else stays on the phone / web. `waypoints` is a jsonb array of
+    /// `{lat, lng, ...}` — we extract lat/lng only.
+    suspend fun fetchRoutes(): List<SavedRoute> {
+        val token = accessToken ?: return emptyList()
+        val req = Request.Builder()
+            .url("$baseUrl/rest/v1/routes?select=id,name,waypoints,distance_m&order=updated_at.desc")
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer $token")
+            .get()
+            .build()
+        val body = try {
+            execute(req)
+        } catch (_: Throwable) {
+            return emptyList()
+        }
+        val rows = (json.parseToJsonElement(body) as? JsonArray) ?: return emptyList()
+        return rows.mapNotNull { row ->
+            val obj = row as? JsonObject ?: return@mapNotNull null
+            val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: "Unnamed route"
+            val distanceM = obj["distance_m"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            val wpArr = obj["waypoints"] as? JsonArray ?: return@mapNotNull null
+            val waypoints = wpArr.mapNotNull { el ->
+                val wp = el as? JsonObject ?: return@mapNotNull null
+                val lat = wp["lat"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                val lng = wp["lng"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                SavedRoute.Waypoint(lat = lat, lng = lng)
+            }
+            if (waypoints.size < 2) return@mapNotNull null
+            SavedRoute(id = id, name = name, distanceM = distanceM, waypoints = waypoints)
+        }
+    }
 
     /// Upload a run: gzip the track file into the `runs` bucket at
     /// `{userId}/{runId}.json.gz`, then insert the row.

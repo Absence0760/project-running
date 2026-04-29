@@ -81,6 +81,10 @@ const _tables = <String>{
   'race_pings',
   'user_coach_usage',
   'monthly_funding',
+  'device_tokens',
+  'fitness_snapshots',
+  'personal_records',
+  'coach_messages',
 };
 
 class _Column {

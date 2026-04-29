@@ -2,12 +2,13 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags } from '$lib/data';
-	import { supabase } from '$lib/supabase';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import SplitPane from '$lib/components/SplitPane.svelte';
+	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -113,14 +114,49 @@
 
 	async function handleShare() {
 		if (!route) return;
-		// Make route public if it isn't already
+		// Share requires the route to be publicly reachable. If the
+		// owner hasn't flipped the visibility yet, flip it for them and
+		// tell them what happened. Mirrors the one-tap Share-on-Android
+		// flow, but we no longer silently conflate the two — a separate
+		// public/private toggle below lets the owner revert.
 		if (!route.is_public) {
-			await supabase.from('routes').update({ is_public: true }).eq('id', route.id);
-			route.is_public = true;
+			try {
+				await setRoutePublic(route.id, true);
+				route = { ...route, is_public: true };
+				showToast('Route is now public so the link works.', 'info');
+			} catch (e) {
+				showToast(`Couldn't make public: ${e}`, 'error');
+				return;
+			}
 		}
 		shareLink = `${window.location.origin}/share/route/${route.id}`;
 		shareCopied = false;
 	}
+
+	/// Bidirectional public/private toggle. Owner-only. Optimistic
+	/// update with rollback on error — keeps the click snappy on a
+	/// slow network while still being honest when the RLS write fails.
+	async function togglePublic() {
+		if (!route) return;
+		const next = !route.is_public;
+		// Optimistic flip so the icon changes immediately.
+		route = { ...route, is_public: next };
+		try {
+			await setRoutePublic(route.id, next);
+			showToast(next ? 'Route is now public.' : 'Route is private again.', 'success');
+			// If we just made it private, clearing any prior share link
+			// below the button avoids surfacing a dead URL.
+			if (!next) {
+				shareLink = '';
+				shareCopied = false;
+			}
+		} catch (e) {
+			// Roll back on failure so the UI matches reality.
+			route = { ...route, is_public: !next };
+			showToast(`Couldn't update visibility: ${e}`, 'error');
+		}
+	}
+
 
 	async function copyShareLink() {
 		await navigator.clipboard.writeText(shareLink);
@@ -129,162 +165,328 @@
 	}
 
 	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+	// Hide the elevation profile when waypoints have no real elevation
+	// data (community routes imported without per-waypoint ele still
+	// have a stored total gain in route.elevation_m). Without this guard
+	// the chart renders as a flat line at zero, which looks broken next
+	// to the non-zero "X m elevation gain" label.
+	let hasElevationData = $derived(elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations));
+
+	/// Per-waypoint elevation rollup. Walks once: total gain (sum of
+	/// positive deltas), total loss (sum of negative deltas), and the
+	/// min / max altitude. Used by the elevation summary tile above
+	/// the chart.
+	let elevationStats = $derived.by(() => {
+		const eles = elevations;
+		if (eles.length < 2 || !hasElevationData) {
+			return { gain: 0, loss: 0, min: 0, max: 0 };
+		}
+		let gain = 0;
+		let loss = 0;
+		let min = eles[0];
+		let max = eles[0];
+		for (let i = 1; i < eles.length; i++) {
+			const d = eles[i] - eles[i - 1];
+			if (d > 0) gain += d;
+			else loss += -d;
+			if (eles[i] < min) min = eles[i];
+			if (eles[i] > max) max = eles[i];
+		}
+		return {
+			gain: Math.round(gain),
+			loss: Math.round(loss),
+			min: Math.round(min),
+			max: Math.round(max),
+		};
+	});
+
+	// Send the back link wherever the user came from. Defaults to /routes
+	// (the owner's list); switches to the Explore tab when arriving from
+	// community discovery so the trip back is one click, not two. Prefer
+	// the explicit ?from=explore query param (set by RouteExplorer)
+	// because document.referrer is unreliable across browsers and gets
+	// stripped by some Referrer-Policy configurations.
+	let backHref = $state('/routes');
+	let backLabel = $state('Routes');
+	onMount(() => {
+		const fromParam = new URLSearchParams(window.location.search).get('from');
+		const ref = typeof document !== 'undefined' ? document.referrer : '';
+		const fromExplore =
+			fromParam === 'explore' ||
+			(ref && new URL(ref, window.location.origin).pathname.startsWith('/explore')) ||
+			(ref && new URL(ref, window.location.origin).search.includes('tab=explore'));
+		if (fromExplore) {
+			backHref = '/routes?tab=explore';
+			backLabel = 'Explore';
+		}
+	});
 </script>
 
 {#if loading}
-	<div class="page"><p class="loading">&nbsp;</p></div>
+	<div class="route-detail"><p class="loading">&nbsp;</p></div>
 {:else if route}
-	<div class="page">
-		<a href="/routes" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			Routes
-		</a>
+<div class="route-detail">
+	<a href={backHref} class="back-link page-back">
+		<span class="material-symbols">arrow_back</span>
+		{backLabel}
+	</a>
+	<div class="route-detail-body">
+	<SplitPane storageKey="route-detail-split" min={300} initialFraction={0.6}>
+		{#snippet left()}
+			{#if route}
+			<main class="map-panel">
+				{#if route.waypoints.length > 0}
+					<RunMap track={route.waypoints} totalDistanceM={route.distance_m} />
+				{:else}
+					<div class="map-placeholder">
+						<span class="material-symbols">map</span>
+						<p>No waypoint data available</p>
+					</div>
+				{/if}
+			</main>
+			{/if}
+		{/snippet}
 
-		<header class="detail-header">
-			<div>
-				<h1>{route.name}</h1>
-				<div class="route-meta">
-					<span>{formatDistance(route.distance_m)}</span>
-					{#if route.elevation_m}
+		{#snippet right()}
+		{#if route}
+		<aside class="stats-panel">
+			<header class="detail-header">
+				<div>
+					<h1>{route.name}</h1>
+					<div class="route-meta">
+						<span>{formatDistance(route.distance_m)}</span>
+						{#if route.elevation_m}
+							<span class="meta-sep">&middot;</span>
+							<span>{route.elevation_m} m elevation gain</span>
+						{/if}
 						<span class="meta-sep">&middot;</span>
-						<span>{route.elevation_m} m elevation gain</span>
-					{/if}
-					<span class="meta-sep">&middot;</span>
-					<span class="surface-tag">{route.surface}</span>
-					{#if route.run_count > 0}
-						<span class="meta-sep">&middot;</span>
-						<span>run {route.run_count} {route.run_count === 1 ? 'time' : 'times'}</span>
-					{/if}
-					{#if route.featured}
-						<span class="featured-pill">★ Featured</span>
-					{/if}
-				</div>
-				{#if (route.tags && route.tags.length > 0) || isOwner}
-					<div class="tags-row">
-						{#each route.tags ?? [] as t (t)}
-							<span class="tag-chip">
-								{t}
-								{#if isOwner}
-									<button type="button" class="tag-x" aria-label="Remove tag {t}" onclick={() => removeTag(t)}>×</button>
-								{/if}
-							</span>
-						{/each}
-						{#if isOwner}
-							<form class="tag-add" onsubmit={(e) => { e.preventDefault(); addTag(); }}>
-								<input
-									type="text"
-									bind:value={tagDraft}
-									placeholder="add tag"
-									maxlength="24"
-									disabled={tagsSaving}
-								/>
-							</form>
+						<span class="surface-tag">{route.surface}</span>
+						{#if route.run_count > 0}
+							<span class="meta-sep">&middot;</span>
+							<span>run {route.run_count} {route.run_count === 1 ? 'time' : 'times'}</span>
+						{/if}
+						{#if route.featured}
+							<span class="featured-pill">★ Featured</span>
 						{/if}
 					</div>
-				{/if}
-			</div>
-			<div class="actions">
-				<button class="btn btn-outline" onclick={handleExportGpx}>GPX</button>
-				<button class="btn btn-outline" onclick={handleExportKml}>KML</button>
-				<button class="btn btn-primary" onclick={handleShare}>Share</button>
-			</div>
-		</header>
-
-		{#if shareLink}
-			<div class="share-bar">
-				<input type="text" readonly value={shareLink} />
-				<button class="btn btn-outline" onclick={copyShareLink}>
-					{shareCopied ? 'Copied!' : 'Copy'}
-				</button>
-			</div>
-		{/if}
-
-		{#if route.waypoints.length > 0}
-			<div class="map-container">
-				<RunMap track={route.waypoints} />
-			</div>
-
-			<section class="card">
-				<h2>Elevation Profile</h2>
-				<ElevationProfile {elevations} totalDistance={route.distance_m} />
-			</section>
-		{:else}
-			<div class="map-container">
-				<div class="map-placeholder">
-					<span class="material-symbols">map</span>
-					<p>No waypoint data available</p>
-				</div>
-			</div>
-		{/if}
-
-		<!-- Reviews -->
-		<section class="card reviews-section">
-			<div class="reviews-header">
-				<h2>
-					Reviews
-					{#if avgRating}
-						<span class="avg-rating">({avgRating} / 5)</span>
-					{/if}
-				</h2>
-				{#if auth.loggedIn}
-					<button class="btn btn-outline btn-sm" onclick={() => showReviewForm = !showReviewForm}>
-						{showReviewForm ? 'Cancel' : 'Rate'}
-					</button>
-				{/if}
-			</div>
-
-			{#if showReviewForm}
-				<div class="review-form">
-					<div class="star-row">
-						{#each [1, 2, 3, 4, 5] as star}
-							<button
-								class="star-btn"
-								class:filled={star <= reviewRating}
-								onclick={() => reviewRating = star}
-							>
-								<span class="material-symbols">{star <= reviewRating ? 'star' : 'star_border'}</span>
-							</button>
-						{/each}
-					</div>
-					<textarea
-						bind:value={reviewComment}
-						placeholder="Comment (optional)"
-						class="review-textarea"
-						rows="2"
-					></textarea>
-					<button class="btn btn-primary btn-sm" onclick={submitReview}>Submit</button>
-				</div>
-			{/if}
-
-			{#if reviews.length === 0}
-				<p class="no-reviews">No reviews yet</p>
-			{:else}
-				{#each reviews as review}
-					<div class="review-card">
-						<div class="review-stars">
-							{#each [1, 2, 3, 4, 5] as star}
-								<span class="material-symbols star-display" class:filled={star <= review.rating}>
-									{star <= review.rating ? 'star' : 'star_border'}
+					{#if (route.tags && route.tags.length > 0) || isOwner}
+						<div class="tags-row">
+							{#each route.tags ?? [] as t (t)}
+								<span class="tag-chip">
+									{t}
+									{#if isOwner}
+										<button type="button" class="tag-x" aria-label="Remove tag {t}" onclick={() => removeTag(t)}>×</button>
+									{/if}
 								</span>
 							{/each}
-							{#if review.created_at}
-								<span class="review-date">{new Date(review.created_at).toLocaleDateString()}</span>
+							{#if isOwner}
+								<form class="tag-add" onsubmit={(e) => { e.preventDefault(); addTag(); }}>
+									<input
+										type="text"
+										bind:value={tagDraft}
+										placeholder="add tag"
+										maxlength="24"
+										disabled={tagsSaving}
+									/>
+								</form>
 							{/if}
 						</div>
-						{#if review.comment}
-							<p class="review-comment">{review.comment}</p>
+					{/if}
+				</div>
+				<div class="actions">
+					<button class="btn btn-outline btn-sm" onclick={handleExportGpx}>GPX</button>
+					<button class="btn btn-outline btn-sm" onclick={handleExportKml}>KML</button>
+					{#if isOwner}
+						<button
+							class="btn btn-outline btn-sm"
+							onclick={togglePublic}
+							title={route.is_public
+								? 'Public — tap to make private'
+								: 'Private — tap to make public'}
+						>
+							<span class="material-symbols">
+								{route.is_public ? 'public' : 'public_off'}
+							</span>
+							{route.is_public ? 'Public' : 'Private'}
+						</button>
+					{/if}
+					<button class="btn btn-primary btn-sm" onclick={handleShare}>Share</button>
+				</div>
+			</header>
+
+			{#if shareLink}
+				<div class="share-bar">
+					<input type="text" readonly value={shareLink} />
+					<button class="btn btn-outline btn-sm" onclick={copyShareLink}>
+						{shareCopied ? 'Copied!' : 'Copy'}
+					</button>
+				</div>
+			{/if}
+
+			<!-- Elevation summary — always rendered when the route stores
+			     a non-zero gain. Per-waypoint min/max/loss are derived
+			     from the elevations array; routes without per-point
+			     elevation data fall back to the stored gain only. -->
+			{#if route.elevation_m != null && route.elevation_m > 0}
+				<section class="section">
+					<h2>Elevation</h2>
+					<div class="elev-grid">
+						<div class="elev-tile">
+							<span class="elev-label">
+								<span class="material-symbols">trending_up</span>
+								Gain
+							</span>
+							<span class="elev-value">
+								{(hasElevationData ? elevationStats.gain : route.elevation_m)} m
+							</span>
+						</div>
+						{#if hasElevationData}
+							<div class="elev-tile">
+								<span class="elev-label">
+									<span class="material-symbols">trending_down</span>
+									Loss
+								</span>
+								<span class="elev-value">{elevationStats.loss} m</span>
+							</div>
+							<div class="elev-tile">
+								<span class="elev-label">
+									<span class="material-symbols">terrain</span>
+									Max
+								</span>
+								<span class="elev-value">{elevationStats.max} m</span>
+							</div>
+							<div class="elev-tile">
+								<span class="elev-label">
+									<span class="material-symbols">vertical_align_bottom</span>
+									Min
+								</span>
+								<span class="elev-value">{elevationStats.min} m</span>
+							</div>
 						{/if}
 					</div>
-				{/each}
+					{#if hasElevationData}
+						<div class="elev-chart">
+							<ElevationProfile {elevations} totalDistance={route.distance_m} />
+						</div>
+					{/if}
+				</section>
 			{/if}
-		</section>
+
+			<section class="section">
+				<SegmentsPanel
+					routeId={route.id}
+					routeDistanceM={route.distance_m}
+					canCreate={auth.loggedIn}
+				/>
+			</section>
+
+			<!-- Reviews -->
+			<section class="section">
+				<div class="reviews-header">
+					<h2>
+						Reviews
+						{#if avgRating}
+							<span class="avg-rating">({avgRating} / 5)</span>
+						{/if}
+					</h2>
+					{#if auth.loggedIn}
+						<button class="btn btn-outline btn-sm" onclick={() => showReviewForm = !showReviewForm}>
+							{showReviewForm ? 'Cancel' : 'Rate'}
+						</button>
+					{/if}
+				</div>
+
+				{#if showReviewForm}
+					<div class="review-form">
+						<div class="star-row">
+							{#each [1, 2, 3, 4, 5] as star}
+								<button
+									class="star-btn"
+									class:filled={star <= reviewRating}
+									onclick={() => reviewRating = star}
+								>
+									<span class="material-symbols">{star <= reviewRating ? 'star' : 'star_border'}</span>
+								</button>
+							{/each}
+						</div>
+						<textarea
+							bind:value={reviewComment}
+							placeholder="Comment (optional)"
+							class="review-textarea"
+							rows="2"
+						></textarea>
+						<button class="btn btn-primary btn-sm" onclick={submitReview}>Submit</button>
+					</div>
+				{/if}
+
+				{#if reviews.length === 0}
+					<p class="no-reviews">No reviews yet</p>
+				{:else}
+					{#each reviews as review}
+						<div class="review-card">
+							<div class="review-stars">
+								{#each [1, 2, 3, 4, 5] as star}
+									<span class="material-symbols star-display" class:filled={star <= review.rating}>
+										{star <= review.rating ? 'star' : 'star_border'}
+									</span>
+								{/each}
+								{#if review.created_at}
+									<span class="review-date">{new Date(review.created_at).toLocaleDateString()}</span>
+								{/if}
+							</div>
+							{#if review.comment}
+								<p class="review-comment">{review.comment}</p>
+							{/if}
+						</div>
+					{/each}
+				{/if}
+			</section>
+		</aside>
+		{/if}
+		{/snippet}
+	</SplitPane>
 	</div>
+</div>
 {/if}
 
 <style>
-	.page {
-		padding: var(--space-xl) var(--space-2xl);
-		max-width: 56rem;
+	.route-detail {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+	}
+
+	.route-detail-body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.page-back {
+		padding: 0.6rem var(--space-lg);
+		font-size: 0.9rem;
+		font-weight: 500;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+	.page-back .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
+	}
+
+	.map-panel {
+		flex: 1;
+		min-height: 0;
+		background: var(--color-bg-tertiary);
+		min-width: 0;
+	}
+
+	.stats-panel {
+		flex: 1;
+		min-height: 0;
+		padding: var(--space-xl);
+		overflow-y: auto;
+		background: var(--color-surface);
 	}
 
 	.loading {
@@ -297,9 +499,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-xs);
-		font-size: 0.85rem;
 		color: var(--color-text-secondary);
-		margin-bottom: var(--space-lg);
 		transition: color var(--transition-fast);
 	}
 
@@ -311,22 +511,27 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: var(--space-md);
 		margin-bottom: var(--space-xl);
 	}
 
 	h1 {
-		font-size: 1.5rem;
+		font-size: 1.25rem;
 		font-weight: 700;
 		margin-bottom: var(--space-xs);
 	}
 
 	h2 {
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		margin-bottom: var(--space-md);
 		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+	}
+
+	.section {
+		margin-top: var(--space-xl);
 	}
 
 	.route-meta {
@@ -347,38 +552,11 @@
 
 	.actions {
 		display: flex;
-		gap: var(--space-sm);
+		gap: var(--space-xs);
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 
-	.btn {
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.85rem;
-		transition: all var(--transition-fast);
-		cursor: pointer;
-	}
-
-	.btn-outline {
-		background: transparent;
-		border: 1.5px solid var(--color-border);
-		color: var(--color-text);
-	}
-
-	.btn-outline:hover {
-		border-color: var(--color-primary);
-		color: var(--color-primary);
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-		border: none;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-primary-hover);
-	}
 
 	.share-bar {
 		display: flex;
@@ -399,13 +577,6 @@
 		font-family: 'SF Mono', 'Menlo', monospace;
 	}
 
-	.map-container {
-		margin-bottom: var(--space-xl);
-		height: 24rem;
-		border-radius: var(--radius-lg);
-		overflow: hidden;
-	}
-
 	.map-placeholder {
 		display: flex;
 		flex-direction: column;
@@ -421,17 +592,6 @@
 		font-size: 3rem;
 	}
 
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-	}
-
-	.reviews-section {
-		margin-top: var(--space-xl);
-	}
-
 	.reviews-header {
 		display: flex;
 		justify-content: space-between;
@@ -444,11 +604,6 @@
 		color: var(--color-text-tertiary);
 		text-transform: none;
 		letter-spacing: 0;
-	}
-
-	.btn-sm {
-		padding: var(--space-xs) var(--space-md);
-		font-size: 0.8rem;
 	}
 
 	.review-form {
@@ -570,5 +725,43 @@
 		border-radius: 9999px;
 		font-size: 0.78rem;
 		background: transparent;
+	}
+
+	.elev-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+	}
+	.elev-tile {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.6rem 0.8rem;
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+	.elev-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.elev-label .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 0.95rem;
+	}
+	.elev-value {
+		font-size: 1.05rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text);
+	}
+	.elev-chart {
+		margin-top: var(--space-sm);
 	}
 </style>

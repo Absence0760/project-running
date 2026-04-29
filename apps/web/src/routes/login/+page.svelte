@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
 
@@ -8,11 +9,16 @@
 	let loading = $state(false);
 	let email = $state('');
 	let password = $state('');
-	let isSignUp = $state(false);
+	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
+
+	function safeReturnTo(): string {
+		const raw = $page.url.searchParams.get('return_to');
+		return raw && raw.startsWith('/') ? raw : '/dashboard';
+	}
 
 	$effect(() => {
 		if (browser && !auth.loading && auth.loggedIn) {
-			goto('/dashboard', { replaceState: true });
+			goto(safeReturnTo(), { replaceState: true });
 		}
 	});
 
@@ -28,15 +34,11 @@
 		}
 	}
 
-	async function handleAppleSignIn() {
-		error = '';
-		loading = true;
-		try {
-			await auth.signInWithApple();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Sign in failed';
-			loading = false;
-		}
+	function handleAppleSignIn() {
+		// Apple OAuth isn't wired up on the Supabase side yet — calling
+		// signInWithApple just surfaces an opaque provider error. Tell
+		// the user clearly instead and point them at the working options.
+		error = 'Sign in with Apple is coming soon. For now, please use Google or email.';
 	}
 
 	async function handleEmailSubmit(e: Event) {
@@ -53,7 +55,7 @@
 			}
 			// Wait for onAuthStateChange to set loggedIn, then navigate
 			await auth.refreshSession();
-			goto('/dashboard');
+			goto(safeReturnTo());
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Authentication failed';
 			loading = false;
@@ -64,7 +66,7 @@
 <div class="login-page">
 	<div class="login-card">
 		<a href="/" class="logo">
-			<span class="logo-icon">&#9654;</span> Run
+			Run Onward
 		</a>
 
 		<h1>{isSignUp ? 'Create an account' : 'Sign in to your account'}</h1>
@@ -90,6 +92,7 @@
 					<path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
 				</svg>
 				Continue with Apple
+				<span class="soon-pill">Soon</span>
 			</button>
 		</div>
 
@@ -267,10 +270,23 @@
 		background: #000;
 		border: 1.5px solid #000;
 		color: white;
+		position: relative;
 	}
 
 	.btn-apple:hover:not(:disabled) {
 		background: #1a1a1a;
+	}
+
+	.soon-pill {
+		font-size: 0.65rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		padding: 0.1rem 0.45rem;
+		border-radius: 9999px;
+		background: rgba(255, 255, 255, 0.18);
+		color: rgba(255, 255, 255, 0.9);
+		margin-left: 0.4rem;
 	}
 
 	@media (prefers-color-scheme: dark) {
@@ -313,7 +329,19 @@
 		border-radius: var(--radius-md);
 		font-size: 0.9rem;
 		font-family: inherit;
-		background: var(--color-bg);
+		/* `input` doesn't inherit color from the parent in most user-agent
+		   stylesheets — set both background and text colour explicitly so
+		   the field is legible against the white login card in light mode
+		   and the dark card in dark mode. */
+		background: white;
+		color: #0F172A;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		input {
+			background: #1E293B;
+			color: #F1F5F9;
+		}
 	}
 
 	input:focus {

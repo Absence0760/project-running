@@ -50,6 +50,7 @@ function makeRoute(overrides: Partial<Route> & { name: string; distance_m: numbe
 		featured: false,
 		featured_at: null,
 		run_count: 0,
+		club_id: null,
 		created_at: '2026-03-01T00:00:00Z',
 		updated_at: '2026-03-01T00:00:00Z',
 		...overrides,
@@ -98,18 +99,10 @@ export function formatDuration(seconds: number): string {
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function formatPace(seconds: number, metres: number): string {
-	if (metres === 0) return '--:--';
-	const paceSecondsPerKm = seconds / (metres / 1000);
-	const m = Math.floor(paceSecondsPerKm / 60);
-	const s = Math.round(paceSecondsPerKm % 60);
-	return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-export function formatDistance(metres: number): string {
-	if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
-	return `${Math.round(metres)} m`;
-}
+// Formatters were moved to `lib/units.svelte.ts` so they can honor the
+// user's `preferred_unit` setting reactively. Re-exported here to avoid
+// breaking the many existing importers from `$lib/mock-data`.
+export { formatPace, formatDistance, formatPaceNoSuffix } from './units.svelte';
 
 export function formatDate(iso: string): string {
 	return new Date(iso).toLocaleDateString('en-GB', {
@@ -129,6 +122,7 @@ export function formatDateShort(iso: string): string {
 export function sourceLabel(source: RunSource): string {
 	const labels: Record<RunSource, string> = {
 		app: 'Recorded',
+		watch: 'Watch',
 		healthkit: 'HealthKit',
 		healthconnect: 'Health Connect',
 		strava: 'Strava',
@@ -142,6 +136,7 @@ export function sourceLabel(source: RunSource): string {
 export function sourceColor(source: RunSource): string {
 	const colors: Record<RunSource, string> = {
 		app: '#1E88E5',
+		watch: '#0EA5E9',
 		healthkit: '#E91E63',
 		healthconnect: '#4CAF50',
 		strava: '#FC4C02',

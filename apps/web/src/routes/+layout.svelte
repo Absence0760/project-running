@@ -1,18 +1,67 @@
 <script lang="ts">
 	import '../app.css';
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { initTheme } from '$lib/theme';
+	import { setMapStyle, type MapStyle } from '$lib/map-style.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import NotificationBell from '$lib/components/NotificationBell.svelte';
+	import { notificationStore } from '$lib/stores/notifications.svelte';
+
+	// Apply the persisted theme on first client mount. Users with a
+	// saved non-auto preference may see a brief flash on first paint —
+	// that's the cost of not using a blocking script tag in app.html;
+	// acceptable for now.
+	onMount(() => {
+		initTheme();
+	});
+
+	// Hydrate the map-style signal once the user is known so the
+	// preview on /runs/[id] matches the user's saved preference without
+	// needing the preferences page to be visited first this session.
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!browser || !uid) return;
+		(async () => {
+			try {
+				const { loadSettings, effective } = await import('$lib/settings');
+				const settings = await loadSettings(uid);
+				const ms = effective<MapStyle>(settings, 'map_style');
+				setMapStyle(ms);
+			} catch (_) {
+				/* silent — falls back to default */
+			}
+		})();
+	});
+
+	// Notification bell — refresh unread count on auth-ready and on
+	// window focus. No polling timer; the focus handler covers the
+	// "left tab open, came back later" case while keeping the UI
+	// silent in the background.
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!browser || !uid) {
+			notificationStore.clear();
+			return;
+		}
+		notificationStore.refresh();
+		const onFocus = () => notificationStore.refresh();
+		window.addEventListener('focus', onFocus);
+		return () => window.removeEventListener('focus', onFocus);
+	});
 
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
+		{ href: '/feed', label: 'Feed', icon: 'rss_feed', accent: '#E89C5A' },
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
+		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
-		{ href: '/explore', label: 'Explore', icon: 'explore', accent: '#7FB3C2' },
+		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];
 
 	const publicPaths = ['/', '/login', '/auth/callback'];
@@ -35,6 +84,28 @@
 
 	let showLogoutModal = $state(false);
 
+	/// Sidebar collapsed state. Persisted in localStorage so the user's
+	/// preference survives reloads. Initial value is read on first mount —
+	/// before that the app renders expanded (matches SSR / GitHub Pages).
+	let sidebarCollapsed = $state(false);
+
+	onMount(() => {
+		try {
+			sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === '1';
+		} catch (_) {
+			/* localStorage may be unavailable — leave default */
+		}
+	});
+
+	function toggleSidebar() {
+		sidebarCollapsed = !sidebarCollapsed;
+		try {
+			localStorage.setItem('sidebar_collapsed', sidebarCollapsed ? '1' : '0');
+		} catch (_) {
+			/* silent */
+		}
+	}
+
 	async function handleLogout() {
 		showLogoutModal = false;
 		await auth.logout();
@@ -53,12 +124,13 @@
 	</div>
 {:else if auth.loggedIn}
 	<!-- Authenticated app shell -->
-	<div class="app-shell">
-		<nav class="sidebar">
-			<a href="/dashboard" class="logo">
-				<span class="logo-icon">&#9654;</span>
-				<span class="logo-text">Run</span>
-			</a>
+	<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>
+		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
+			<div class="sidebar-head">
+				<a href="/dashboard" class="logo" aria-label="Run Onward">
+					<span class="logo-text">Run Onward</span>
+				</a>
+			</div>
 
 			<ul class="nav-list">
 				{#each navItems as item}
@@ -68,6 +140,7 @@
 							class="nav-link"
 							class:active={isActive(item.href, $page.url.pathname)}
 							style="--accent: {item.accent};"
+							title={sidebarCollapsed ? item.label : undefined}
 						>
 							<span class="nav-icon-wrap">
 								<span class="nav-icon material-symbols">{item.icon}</span>
@@ -80,7 +153,11 @@
 
 			<div class="sidebar-footer">
 				{#if auth.user}
-					<button class="profile-btn" onclick={() => (showLogoutModal = true)}>
+					<button
+						class="profile-btn"
+						onclick={() => (showLogoutModal = true)}
+						title={sidebarCollapsed ? auth.user.display_name ?? auth.user.email : undefined}
+					>
 						<div class="user-avatar">
 							{auth.user.display_name?.[0]?.toUpperCase() ?? '?'}
 						</div>
@@ -90,6 +167,17 @@
 						</div>
 					</button>
 				{/if}
+				<NotificationBell />
+				<button
+					class="collapse-toggle"
+					type="button"
+					aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					aria-expanded={!sidebarCollapsed}
+					title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					onclick={toggleSidebar}
+				>
+					<span class="material-symbols">{sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
+				</button>
 			</div>
 		</nav>
 
@@ -111,10 +199,25 @@
 				</div>
 			</div>
 			<div class="popover-divider"></div>
-			<a href="/settings/account" class="popover-item" onclick={() => (showLogoutModal = false)}>
-				<span class="material-symbols">settings</span>
-				Settings
-			</a>
+			{#if auth.user}
+				<a
+					class="popover-item"
+					href="/u/{auth.user.id}"
+					onclick={() => (showLogoutModal = false)}
+				>
+					<span class="material-symbols">person</span>
+					View profile
+				</a>
+				<a
+					class="popover-item"
+					href="/settings"
+					onclick={() => (showLogoutModal = false)}
+				>
+					<span class="material-symbols">settings</span>
+					Settings
+				</a>
+				<div class="popover-divider"></div>
+			{/if}
 			<button class="popover-item popover-danger" onclick={handleLogout}>
 				<span class="material-symbols">logout</span>
 				Sign out
@@ -127,13 +230,6 @@
 	.app-shell {
 		display: flex;
 		min-height: 100vh;
-
-		--sidebar-text: #F7F3EC;
-		--sidebar-text-muted: #B5ADC3;
-		--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
-		--sidebar-active-bg: rgba(58, 46, 92, 0.55);
-		--sidebar-active-text: #F7F3EC;
-		--sidebar-border: rgba(247, 243, 236, 0.08);
 	}
 
 	.sidebar {
@@ -147,6 +243,42 @@
 		left: 0;
 		bottom: 0;
 		z-index: 10;
+		transition: width var(--transition-base);
+	}
+
+	.sidebar.collapsed {
+		width: var(--sidebar-collapsed-width, 4.5rem);
+	}
+
+	.sidebar-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-lg);
+	}
+
+	.collapse-toggle {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border: none;
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--sidebar-text-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition:
+			background var(--transition-fast),
+			color var(--transition-fast);
+	}
+	.collapse-toggle:hover {
+		background: var(--sidebar-hover-bg);
+		color: var(--sidebar-text);
+	}
+	.collapse-toggle .material-symbols {
+		font-size: 1.25rem;
 	}
 
 	.logo {
@@ -154,18 +286,9 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		margin-bottom: var(--space-lg);
 		font-weight: 700;
 		font-size: 1.25rem;
-		color: #ffffff;
-	}
-
-	.logo-icon {
-		font-size: 1rem;
-		background: var(--gradient-primary);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
+		color: var(--sidebar-logo);
 	}
 
 	.nav-list {
@@ -284,7 +407,8 @@
 		border-top: 1px solid var(--sidebar-border);
 		padding-top: var(--space-md);
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
+		align-items: center;
 		gap: var(--space-sm);
 	}
 
@@ -293,7 +417,8 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		border: none;
 		background: none;
 		border-radius: var(--radius-md);
@@ -437,6 +562,38 @@
 		flex: 1;
 		margin-left: var(--sidebar-width);
 		min-height: 100vh;
+		transition: margin-left var(--transition-base);
+	}
+
+	.app-shell.sidebar-collapsed .main-content {
+		margin-left: var(--sidebar-collapsed-width, 4.5rem);
+	}
+
+	/* Hide labels and trim spacing when collapsed. Icons keep their
+	   layout so the rail stays visually consistent. */
+	.sidebar.collapsed .nav-label,
+	.sidebar.collapsed .user-details {
+		opacity: 0;
+		visibility: hidden;
+		width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+	.sidebar.collapsed .nav-link,
+	.sidebar.collapsed .profile-btn {
+		justify-content: center;
+		gap: 0;
+		padding-left: 0;
+		padding-right: 0;
+	}
+	/* When collapsed, the logo would crowd a 4.5rem rail — hide it.
+	   The collapse-toggle in the footer is the user's way back. */
+	.sidebar.collapsed .logo {
+		display: none;
+	}
+	/* Stack profile + toggle vertically on the narrow rail. */
+	.sidebar.collapsed .sidebar-footer {
+		flex-direction: column;
 	}
 
 	.loading-screen {

@@ -1,18 +1,22 @@
 :root {
 	font-family: 'Inter', system-ui, -apple-system, sans-serif;
 
-	/* Colors — Dusk */
-	--color-primary: #3A2E5C;
-	--color-primary-hover: #2C2247;
-	--color-primary-light: rgba(58, 46, 92, 0.08);
+	/* Colors — Cream + petrol + terracotta. Light-mode palette swaps the
+	   old purple primary for a deep teal that complements the cream
+	   background and the warm secondary accent. */
+	--color-primary: #2C5F6E;
+	--color-primary-hover: #1F4854;
+	--color-primary-light: rgba(44, 95, 110, 0.10);
 	--color-secondary: #D97A54;
 	--color-secondary-hover: #C26642;
-	--color-danger: #D8594C;
-	--color-danger-light: rgba(216, 89, 76, 0.08);
+	--color-danger: #C84D3F;
+	--color-danger-light: rgba(200, 77, 63, 0.08);
 	--color-warning: #E6A96B;
+	--color-success: #4A9F5A;
+	--color-success-light: rgba(74, 159, 90, 0.10);
 
 	--color-accent-orange: #F2A07B;
-	--color-accent-pink: #B9A7E8;
+	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
 
 	--color-bg: #F7F3EC;
@@ -20,14 +24,23 @@
 	--color-bg-tertiary: #EBE5D8;
 	--color-surface: #FFFFFF;
 	--color-border: #DDD5C5;
-	--color-text: #1B1628;
-	--color-text-secondary: #5C556B;
-	--color-text-tertiary: #8A8298;
+	--color-text: #1F2328;
+	--color-text-secondary: #56616B;
+	--color-text-tertiary: #8A8E93;
 
 	/* Gradients */
-	--gradient-primary: linear-gradient(135deg, #3A2E5C 0%, #6B4C8A 50%, #F2A07B 100%);
-	--gradient-surface: linear-gradient(135deg, rgba(58, 46, 92, 0.04) 0%, rgba(242, 160, 123, 0.04) 100%);
-	--gradient-sidebar: linear-gradient(180deg, #120D22 0%, #241B3D 100%);
+	--gradient-primary: linear-gradient(135deg, #2C5F6E 0%, #4F8090 50%, #F2A07B 100%);
+	--gradient-surface: linear-gradient(135deg, rgba(44, 95, 110, 0.04) 0%, rgba(242, 160, 123, 0.04) 100%);
+	--gradient-sidebar: linear-gradient(180deg, #FFFFFF 0%, #F1ECE0 100%);
+
+	/* Sidebar palette — overridden in dark mode below. */
+	--sidebar-text: #1F2328;
+	--sidebar-text-muted: #56616B;
+	--sidebar-hover-bg: rgba(31, 35, 40, 0.06);
+	--sidebar-active-bg: var(--color-primary-light);
+	--sidebar-active-text: var(--color-primary);
+	--sidebar-border: var(--color-border);
+	--sidebar-logo: #1F2328;
 
 	/* Spacing */
 	--space-xs: 0.25rem;
@@ -44,10 +57,10 @@
 	--radius-xl: 1rem;
 
 	/* Shadows */
-	--shadow-sm: 0 1px 2px rgba(27, 22, 40, 0.05);
-	--shadow-md: 0 4px 12px rgba(27, 22, 40, 0.07), 0 1px 3px rgba(27, 22, 40, 0.04);
-	--shadow-lg: 0 12px 24px rgba(27, 22, 40, 0.10), 0 4px 8px rgba(27, 22, 40, 0.05);
-	--shadow-glow: 0 0 20px rgba(58, 46, 92, 0.18);
+	--shadow-sm: 0 1px 2px rgba(31, 35, 40, 0.05);
+	--shadow-md: 0 4px 12px rgba(31, 35, 40, 0.07), 0 1px 3px rgba(31, 35, 40, 0.04);
+	--shadow-lg: 0 12px 24px rgba(31, 35, 40, 0.10), 0 4px 8px rgba(31, 35, 40, 0.05);
+	--shadow-glow: 0 0 20px rgba(44, 95, 110, 0.18);
 
 	/* Transitions */
 	--transition-fast: 150ms ease;
@@ -58,8 +71,15 @@
 	--sidebar-width: 15rem;
 }
 
+/* Dark theme — applied three ways, listed in increasing specificity so
+   the explicit toggle below always wins:
+     1. `@media (prefers-color-scheme: dark)` when no explicit theme set
+     2. Explicit `data-theme="dark"` on the <html> element
+   CSS vars are identical in both branches — just the selector differs.
+   See `apps/web/src/lib/theme.ts` for the Theme = light | dark | auto
+   toggle that writes `html[data-theme]`. */
 @media (prefers-color-scheme: dark) {
-	:root {
+	:root[data-theme="auto"], :root:not([data-theme]) {
 		--color-primary: #F2A07B;
 		--color-primary-hover: #D97A54;
 		--color-primary-light: rgba(242, 160, 123, 0.14);
@@ -68,6 +88,8 @@
 		--color-danger: #E07468;
 		--color-danger-light: rgba(224, 116, 104, 0.14);
 		--color-warning: #E6A96B;
+		--color-success: #6BC07A;
+		--color-success-light: rgba(107, 192, 122, 0.16);
 
 		--color-accent-orange: #F2A07B;
 		--color-accent-pink: #B9A7E8;
@@ -86,11 +108,63 @@
 		--gradient-surface: linear-gradient(135deg, rgba(242, 160, 123, 0.06) 0%, rgba(185, 167, 232, 0.06) 100%);
 		--gradient-sidebar: linear-gradient(180deg, #0C0818 0%, #1B1232 100%);
 
+		--sidebar-text: #F7F3EC;
+		--sidebar-text-muted: #B5ADC3;
+		--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
+		--sidebar-active-bg: rgba(58, 46, 92, 0.55);
+		--sidebar-active-text: #F7F3EC;
+		--sidebar-border: rgba(247, 243, 236, 0.08);
+		--sidebar-logo: #FFFFFF;
+
 		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
 		--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
 		--shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
 		--shadow-glow: 0 0 20px rgba(242, 160, 123, 0.22);
 	}
+}
+
+/* Explicit dark-mode override (wins over the light media query). */
+:root[data-theme="dark"] {
+	--color-primary: #F2A07B;
+	--color-primary-hover: #D97A54;
+	--color-primary-light: rgba(242, 160, 123, 0.14);
+	--color-secondary: #B9A7E8;
+	--color-secondary-hover: #9F89D4;
+	--color-danger: #E07468;
+	--color-danger-light: rgba(224, 116, 104, 0.14);
+	--color-warning: #E6A96B;
+	--color-success: #6BC07A;
+	--color-success-light: rgba(107, 192, 122, 0.16);
+
+	--color-accent-orange: #F2A07B;
+	--color-accent-pink: #B9A7E8;
+	--color-accent-cyan: #8FB8C7;
+
+	--color-bg: #120D22;
+	--color-bg-secondary: #0C0818;
+	--color-bg-tertiary: #241B3D;
+	--color-surface: #241B3D;
+	--color-border: #3A2E5C;
+	--color-text: #F7F3EC;
+	--color-text-secondary: #B5ADC3;
+	--color-text-tertiary: #7E7692;
+
+	--gradient-primary: linear-gradient(135deg, #F2A07B 0%, #B9A7E8 50%, #6B4C8A 100%);
+	--gradient-surface: linear-gradient(135deg, rgba(242, 160, 123, 0.06) 0%, rgba(185, 167, 232, 0.06) 100%);
+	--gradient-sidebar: linear-gradient(180deg, #0C0818 0%, #1B1232 100%);
+
+	--sidebar-text: #F7F3EC;
+	--sidebar-text-muted: #B5ADC3;
+	--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
+	--sidebar-active-bg: rgba(58, 46, 92, 0.55);
+	--sidebar-active-text: #F7F3EC;
+	--sidebar-border: rgba(247, 243, 236, 0.08);
+	--sidebar-logo: #FFFFFF;
+
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
+	--shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
+	--shadow-glow: 0 0 20px rgba(242, 160, 123, 0.22);
 }
 
 *,
@@ -150,4 +224,174 @@ img {
 	overflow: hidden;
 	clip: rect(0, 0, 0, 0);
 	white-space: nowrap;
+}
+
+/* Canonical button styles. Used app-wide via any of the variant
+   classes — `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-outline`,
+   `.btn-danger`. The shared selector below means each variant works
+   standalone (`class="btn-primary"`) or with the base class
+   (`class="btn btn-primary"`). Page-specific variants — `.btn-google`,
+   `.btn-apple`, `.btn-save`, `.btn-icon` — extend these and live in
+   their owning component. Local copies of these base rules are
+   forbidden: they drift over time and the buttons stop matching across
+   pages. */
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-outline,
+.btn-danger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-sm);
+	padding: var(--space-sm) var(--space-lg);
+	border-radius: var(--radius-md);
+	font-size: 0.875rem;
+	font-weight: 600;
+	line-height: 1.2;
+	border: 1.5px solid transparent;
+	background: none;
+	color: inherit;
+	text-decoration: none;
+	cursor: pointer;
+	transition: all var(--transition-fast);
+	white-space: nowrap;
+}
+.btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-outline:disabled,
+.btn-danger:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+.btn-primary {
+	background: var(--color-primary);
+	color: #FFFFFF;
+}
+.btn-primary:hover:not(:disabled) {
+	background: var(--color-primary-hover);
+}
+.btn-secondary {
+	background: var(--color-bg-tertiary);
+	color: var(--color-text);
+	border-color: var(--color-border);
+}
+.btn-secondary:hover:not(:disabled) {
+	background: var(--color-border);
+}
+.btn-outline {
+	background: transparent;
+	border-color: var(--color-border);
+	color: var(--color-text);
+}
+.btn-outline:hover:not(:disabled) {
+	border-color: var(--color-primary);
+	color: var(--color-primary);
+}
+.btn-danger {
+	background: transparent;
+	border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+	color: var(--color-danger);
+}
+.btn-danger:hover:not(:disabled) {
+	background: var(--color-danger-light);
+}
+.btn-sm {
+	padding: var(--space-xs) var(--space-md);
+	font-size: 0.8rem;
+}
+
+/*
+ * Canonical modal pattern. Every create / edit dialog in the app
+ * should use this shape — backdrop + centered card + header bar with
+ * close button + scrollable body. Defined globally so individual
+ * pages don't duplicate the styles (and don't drift apart).
+ *
+ * Markup contract:
+ *   {#if show}
+ *     <div class="modal-backdrop" onclick={close} role="presentation"></div>
+ *     <div class="modal" role="dialog" aria-modal="true" aria-label="...">
+ *       <header class="modal-header">
+ *         <h2>Title</h2>
+ *         <button class="modal-close" onclick={close} aria-label="Close">
+ *           <span class="material-symbols">close</span>
+ *         </button>
+ *       </header>
+ *       <div class="modal-body">…form / content…</div>
+ *     </div>
+ *   {/if}
+ *
+ * `.modal-wide` widens to 56rem for plan / route / multi-column forms;
+ * `.modal-narrow` shrinks to 24rem for confirmation-style dialogs.
+ */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 200;
+}
+.modal {
+	/*
+	 * Anchor the top edge — not the centre — to a fixed offset. If we
+	 * vertically-centred the modal (`top: 50%; translate(-50%, -50%)`)
+	 * any content-height change inside (tab switch, list grow / shrink)
+	 * would shift the whole card visibly because its centre stays pinned
+	 * but its top edge moves. Anchoring the top means the card grows
+	 * downwards without the header jumping.
+	 */
+	position: fixed;
+	top: 4rem;
+	left: 50%;
+	transform: translateX(-50%);
+	width: min(38rem, calc(100vw - 2rem));
+	max-height: calc(100vh - 6rem);
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-lg);
+	z-index: 201;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.modal-wide {
+	/* Plan editor renders the form + live preview side-by-side. */
+	width: min(64rem, calc(100vw - 2rem));
+}
+.modal-narrow {
+	width: min(24rem, calc(100vw - 2rem));
+}
+.modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--space-md) var(--space-lg);
+	border-bottom: 1px solid var(--color-border);
+	flex-shrink: 0;
+}
+.modal-header h2 {
+	font-size: 1.05rem;
+	font-weight: 700;
+	margin: 0;
+}
+.modal-close {
+	background: none;
+	border: none;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.3rem;
+	border-radius: var(--radius-sm);
+	transition: background var(--transition-fast);
+}
+.modal-close:hover {
+	background: var(--color-bg-tertiary);
+	color: var(--color-text);
+}
+.modal-body {
+	padding: var(--space-lg);
+	overflow-y: auto;
 }

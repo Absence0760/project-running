@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import 'audio_cues.dart';
@@ -21,6 +25,7 @@ import 'sync_service.dart';
 import 'ble_heart_rate.dart';
 import 'tile_cache.dart';
 import 'training_service.dart';
+import 'watch_ingest_queue.dart';
 import 'wear_auth_bridge.dart';
 
 void main() async {
@@ -63,8 +68,39 @@ void main() async {
   }
 
   // `dotenv` must resolve first because the Supabase URL/key come from it,
-  // and Supabase.initialize is one of the parallel tasks below.
-  await dotenv.load(fileName: '.env.local');
+  // and Supabase.initialize is one of the parallel tasks below. Android
+  // ships `.env.local` as an asset; iOS uses `--dart-define-from-file=
+  // dart_defines.json` and we bridge the same keys into dotenv so the
+  // verbatim libraries that read `dotenv.env['X']` keep working
+  // unchanged. See [docs/decisions.md § 13].
+  if (Platform.isIOS) {
+    const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
+    const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
+    const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
+    const supabaseUrlDef = String.fromEnvironment('SUPABASE_URL');
+    const supabaseAnonKeyDef = String.fromEnvironment('SUPABASE_ANON_KEY');
+    const devEmailDef = String.fromEnvironment('DEV_USER_EMAIL');
+    const devPasswordDef = String.fromEnvironment('DEV_USER_PASSWORD');
+    dotenv.loadFromString(
+      envString: [
+        if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
+        if (supabaseAnonKeyDef.isNotEmpty) 'SUPABASE_ANON_KEY=$supabaseAnonKeyDef',
+        if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
+        if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
+        if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
+        if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
+        if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
+      ].join('\n'),
+      isOptional: true,
+    );
+    // Best-effort .env.local load too, so a contributor who created one
+    // for parity with Android still gets it.
+    try {
+      await dotenv.load(fileName: '.env.local', mergeWith: dotenv.env);
+    } catch (_) {}
+  } else {
+    await dotenv.load(fileName: '.env.local');
+  }
 
   // Construct stores synchronously so we can kick off their `init()`s in
   // parallel with the other independent launch tasks. Nothing here
@@ -73,6 +109,7 @@ void main() async {
   final store = LocalRunStore();
   final routeStore = LocalRouteStore();
   final prefs = Preferences();
+  final watchQueue = WatchIngestQueue();
 
   final supabaseUrl = dotenv.env['SUPABASE_URL'];
   final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
@@ -89,6 +126,7 @@ void main() async {
     store.init(),
     routeStore.init(),
     prefs.init(),
+    watchQueue.init(),
     if (hasSupabase)
       ApiClient.initialize(url: supabaseUrl, anonKey: anonKey)
           .catchError((Object e) {
@@ -170,6 +208,16 @@ void main() async {
   // no-op and the run records without HR.
   unawaited(heartRate.connectCached());
 
+  // Apple Watch ingest path. The native iOS bridge
+  // (`Runner/WatchIngestBridge.swift`) forwards `WCSession` payloads via
+  // the `run_app/watch_ingest` MethodChannel. On Android the channel
+  // isn't registered, so `WatchIngest.attach` fires `MissingPluginException`
+  // (caught) and the no-op is invisible — keeps the bootstrap identical
+  // across both apps.
+  if (api != null && api.userId != null) {
+    WatchIngest.attach(api, watchQueue);
+  }
+
   // Everything below here runs AFTER the first frame paints:
   //
   //  - WorkManager background-sync registration (plugin channel work the
@@ -177,6 +225,8 @@ void main() async {
   //  - Dev-only auto sign-in (network round-trip)
   //  - SettingsSync cloud fetch (network round-trip)
   //  - WearAuthBridge attach (method channel)
+  //  - Auth-state subscription (reactive sign-in plumbing —
+  //    settingsSync.onSignedIn must not appear on the critical path)
   //
   // Previously these all awaited before runApp and held the splash screen
   // open for hundreds of ms on slow connections. None of them change the
@@ -185,6 +235,22 @@ void main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     registerBackgroundSync();
     if (!hasSupabase || api == null) return;
+    final apiNonNull = api;
+    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      if (event.event == AuthChangeEvent.signedIn) {
+        WatchIngest.attach(apiNonNull, watchQueue);
+        try {
+          watchQueue.drain(apiNonNull).catchError((Object e) {
+            debugPrint('Watch ingest queue drain failed: $e');
+          });
+        } catch (e) {
+          debugPrint('Watch ingest queue drain error: $e');
+        }
+        settingsSync?.onSignedIn().catchError((Object e) {
+          debugPrint('Settings sync on signedIn failed: $e');
+        });
+      }
+    });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
     final devEmail = dotenv.env['DEV_USER_EMAIL'];
     final devPassword = dotenv.env['DEV_USER_PASSWORD'];
@@ -304,7 +370,7 @@ class _RunAppState extends State<RunApp> {
       valueListenable: themeModeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Better Runner',
+          title: 'Run Onward',
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
@@ -329,5 +395,119 @@ class _RunAppState extends State<RunApp> {
         );
       },
     );
+  }
+}
+
+/// Receives runs from the paired Apple Watch via a method channel owned
+/// by `Runner/AppDelegate.swift` + `Runner/WatchIngestBridge.swift` on
+/// iOS. Android doesn't register the channel, so the `setMethodCallHandler`
+/// installation is a harmless no-op and the bridge never fires.
+///
+/// Each call carries: `{id, started_at, duration_s, distance_m, source,
+/// avg_bpm?, track: [{lat, lng, ele?, ts?}]}`. We construct a
+/// `core_models.Run` and upload via `ApiClient.saveRun` — same path
+/// any other recording source uses, so web sees it identically.
+///
+/// When the user is not authenticated, the payload is persisted to the
+/// [WatchIngestQueue] on disk and replayed on the next sign-in.
+class WatchIngest {
+  static const _channel = MethodChannel('run_app/watch_ingest');
+
+  static void attach(ApiClient api, WatchIngestQueue queue) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method != 'run') return null;
+      final args = call.arguments as Map<Object?, Object?>?;
+      if (args == null) return false;
+
+      if (api.userId == null) {
+        try {
+          final payload = Map<String, dynamic>.fromEntries(
+            args.entries
+                .where((e) => e.key is String)
+                .map((e) => MapEntry(e.key as String, e.value)),
+          );
+          await queue.enqueue(payload);
+        } catch (e) {
+          debugPrint('Watch ingest queue write failed: $e');
+        }
+        return false;
+      }
+
+      try {
+        final run = _runFromArgs(args);
+        await api.saveRun(run);
+        return true;
+      } catch (e) {
+        debugPrint('Watch ingest failed: $e');
+        return false;
+      }
+    });
+  }
+
+  static cm.Run _runFromArgs(Map<Object?, Object?> raw) {
+    final id = raw['id'] as String? ?? '';
+    final startedAt = DateTime.parse(raw['started_at'] as String);
+    final durationS = (raw['duration_s'] as num).toInt();
+    final distanceM = (raw['distance_m'] as num).toDouble();
+    // This channel only carries payloads from the Apple Watch
+    // (see `Runner/WatchIngestBridge.swift`), so a missing `source`
+    // means watch — never web/mobile-app. The fallback in
+    // `_parseSource` matches.
+    final source = raw['source'] as String? ?? 'watch';
+    final trackRaw = raw['track'];
+    final track = <cm.Waypoint>[];
+    if (trackRaw is List) {
+      for (final p in trackRaw) {
+        if (p is Map) {
+          track.add(cm.Waypoint(
+            lat: (p['lat'] as num).toDouble(),
+            lng: (p['lng'] as num).toDouble(),
+            elevationMetres: (p['ele'] as num?)?.toDouble(),
+            timestamp: (p['ts'] as String?) != null
+                ? DateTime.tryParse(p['ts'] as String)
+                : null,
+          ));
+        }
+      }
+    } else if (trackRaw is String) {
+      final decoded = jsonDecode(trackRaw);
+      if (decoded is List) {
+        for (final p in decoded) {
+          if (p is Map) {
+            track.add(cm.Waypoint(
+              lat: (p['lat'] as num).toDouble(),
+              lng: (p['lng'] as num).toDouble(),
+              elevationMetres: (p['ele'] as num?)?.toDouble(),
+              timestamp: (p['ts'] as String?) != null
+                  ? DateTime.tryParse(p['ts'] as String)
+                  : null,
+            ));
+          }
+        }
+      }
+    }
+
+    final metadata = <String, dynamic>{};
+    final avgBpm = raw['avg_bpm'];
+    if (avgBpm is num) metadata['avg_bpm'] = avgBpm.toDouble();
+    final activity = raw['activity_type'];
+    if (activity is String) metadata['activity_type'] = activity;
+
+    return cm.Run(
+      id: id,
+      startedAt: startedAt,
+      duration: Duration(seconds: durationS),
+      distanceMetres: distanceM,
+      track: track,
+      source: _parseSource(source),
+      metadata: metadata.isEmpty ? null : metadata,
+    );
+  }
+
+  static cm.RunSource _parseSource(String raw) {
+    for (final s in cm.RunSource.values) {
+      if (s.name == raw) return s;
+    }
+    return cm.RunSource.watch;
   }
 }

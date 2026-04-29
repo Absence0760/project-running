@@ -1,11 +1,14 @@
 import Foundation
 import CoreLocation
+import WatchKit
 
 /// Manages run recording: timer, GPS tracking, distance and pace calculation.
 class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     enum State {
         case idle
+        case recovering
         case recording
+        case paused
         case finished
     }
 
@@ -17,14 +20,25 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// Raw GPS track recorded during the run.
     @Published var track: [CLLocation] = []
 
-    /// The completed run data, available after stop().
-    private(set) var finishedRun: FinishedRun?
+    /// The completed run data, available after stop() or recovery.
+    var finishedRun: FinishedRun?
 
     let healthKit = HealthKitManager()
 
+    var targetPaceSecondsPerKm: Double? = nil
+    let paceToleranceSeconds: Double = 15
+
     private let locationManager = CLLocationManager()
     private var timer: Timer?
+    private var checkpointTimer: Timer?
     private var startDate: Date?
+    private var pausedAt: Date?
+    private var totalPausedInterval: TimeInterval = 0
+    private var lastTooFastHaptic: Date? = nil
+    private var lastTooSlowHaptic: Date? = nil
+    private var currentRunId: String?
+    private var checkpointStore: CheckpointStore?
+    private var writtenPointCount: Int = 0
 
     struct FinishedRun {
         let id: String
@@ -60,36 +74,83 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
+        locationManager.allowsBackgroundLocationUpdates = true
     }
 
     // MARK: - Controls
 
+    func checkForPendingRecovery() {
+        guard CheckpointStore.peekCheckpoint() != nil else { return }
+        state = .recovering
+    }
+
     func start() {
+        let runId = UUID().uuidString.lowercased()
+        currentRunId = runId
         track = []
         distanceMetres = 0
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
+        pausedAt = nil
+        totalPausedInterval = 0
+        writtenPointCount = 0
+        lastTooFastHaptic = nil
+        lastTooSlowHaptic = nil
         healthKit.reset()
+
+        let store = CheckpointStore(runId: runId)
+        checkpointStore = store
 
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
         healthKit.startWorkout()
 
-        startDate = Date()
+        let start = Date()
+        startDate = start
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self, let startDate = self.startDate else { return }
-            self.elapsedSeconds = Date().timeIntervalSince(startDate)
+            guard self.state == .recording else { return }
+            self.elapsedSeconds = Date().timeIntervalSince(startDate) - self.totalPausedInterval
+        }
+
+        checkpointTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            self?.writeCheckpoint()
         }
 
         state = .recording
     }
 
+    func pause() {
+        guard state == .recording else { return }
+        pausedAt = Date()
+        locationManager.stopUpdatingLocation()
+        healthKit.pauseSession()
+        state = .paused
+    }
+
+    func resume() {
+        guard state == .paused, let pausedAt else { return }
+        totalPausedInterval += Date().timeIntervalSince(pausedAt)
+        self.pausedAt = nil
+        locationManager.startUpdatingLocation()
+        healthKit.resumeSession()
+        state = .recording
+    }
+
     func stop() {
+        if state == .paused, let pausedAt {
+            totalPausedInterval += Date().timeIntervalSince(pausedAt)
+            self.pausedAt = nil
+        }
+        checkpointTimer?.invalidate()
+        checkpointTimer = nil
         timer?.invalidate()
         timer = nil
         locationManager.stopUpdatingLocation()
         healthKit.stopWorkout()
+        checkpointStore?.clear()
+        checkpointStore = nil
 
         let duration = Int(elapsedSeconds)
         let trackPoints = track.map { loc in
@@ -114,11 +175,20 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func reset() {
+        checkpointTimer?.invalidate()
+        checkpointTimer = nil
         track = []
         distanceMetres = 0
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
+        pausedAt = nil
+        totalPausedInterval = 0
+        writtenPointCount = 0
+        lastTooFastHaptic = nil
+        lastTooSlowHaptic = nil
+        checkpointStore = nil
+        currentRunId = nil
         state = .idle
     }
 
@@ -148,23 +218,68 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - CLLocationManagerDelegate
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        var newPoints: [TrackPointRecord] = []
         for location in locations {
-            // Filter out inaccurate readings
             guard location.horizontalAccuracy >= 0, location.horizontalAccuracy < 30 else { continue }
 
             if let last = track.last {
                 let delta = location.distance(from: last)
-                // Ignore tiny movements (GPS jitter) and implausible jumps
                 if delta > 2 && delta < 100 {
                     distanceMetres += delta
                 }
             }
 
             track.append(location)
+            newPoints.append(TrackPointRecord(
+                lat: location.coordinate.latitude,
+                lng: location.coordinate.longitude,
+                ele: location.altitude > -999 ? location.altitude : nil,
+                ts: ISO8601DateFormatter().string(from: location.timestamp)
+            ))
         }
 
-        // Calculate current pace (seconds per km) from last ~200m
+        if !newPoints.isEmpty {
+            checkpointStore?.appendTrackPoints(newPoints)
+        }
+
         updatePace()
+    }
+
+    private func writeCheckpoint() {
+        guard let store = checkpointStore,
+              let runId = currentRunId,
+              let start = startDate else { return }
+        let cp = RunCheckpoint(
+            id: runId,
+            startedAt: start,
+            distanceMetres: distanceMetres,
+            activeDurationSeconds: elapsedSeconds,
+            pausedIntervalSeconds: totalPausedInterval,
+            trackPointCount: track.count,
+            cacheFileURL: store.trackFileURL
+        )
+        store.write(checkpoint: cp)
+    }
+
+    func recoverRun() -> FinishedRun? {
+        guard let cp = CheckpointStore.peekCheckpoint() else { return nil }
+        let store = CheckpointStore(runId: cp.id)
+        let pts = store.loadTrackPoints()
+        let trackPoints = pts.map { p in
+            TrackPoint(lat: p.lat, lng: p.lng, ele: p.ele, ts: p.ts)
+        }
+        return FinishedRun(
+            id: cp.id,
+            startedAt: cp.startedAt,
+            durationSeconds: Int(cp.activeDurationSeconds),
+            distanceMetres: cp.distanceMetres,
+            track: trackPoints,
+            averageBPM: nil
+        )
+    }
+
+    func clearRecovery() {
+        CheckpointStore.clearStatic()
     }
 
     private func updatePace() {
@@ -186,6 +301,25 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard segmentTime > 0 else { return }
 
         // seconds per km
-        currentPace = (segmentTime / segmentDistance) * 1000
+        let pace = (segmentTime / segmentDistance) * 1000
+        currentPace = pace
+        checkPaceAlert(pace: pace)
+    }
+
+    private func checkPaceAlert(pace: Double) {
+        guard let target = targetPaceSecondsPerKm, distanceMetres > 200 else { return }
+        let now = Date()
+        let debounce: TimeInterval = 30
+        if pace < target - paceToleranceSeconds {
+            if lastTooFastHaptic.map({ now.timeIntervalSince($0) > debounce }) ?? true {
+                WKInterfaceDevice.current().play(.notification)
+                lastTooFastHaptic = now
+            }
+        } else if pace > target + paceToleranceSeconds {
+            if lastTooSlowHaptic.map({ now.timeIntervalSince($0) > debounce }) ?? true {
+                WKInterfaceDevice.current().play(.notification)
+                lastTooSlowHaptic = now
+            }
+        }
     }
 }

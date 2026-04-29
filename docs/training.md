@@ -26,7 +26,7 @@ A Claude-powered second-opinion chat embedded below the week grid on the plan de
 - Server endpoint `POST /api/coach` — runs per-request (`prerender = false`), reads the caller's Supabase JWT to scope context pulls via RLS.
 - Context = user profile + active (or specified) plan + `plan_weeks` + `plan_workouts` + last 20 runs, serialised as JSON.
 - **Prompt caching at two breakpoints**: (1) coach system prompt, (2) first user message carrying the context dump. Subsequent chat turns hit the cache for ~95% of input tokens. `cache_control: { type: 'ephemeral' }` on both blocks. The UI surfaces `cache_read` / `cache_creation` / `input` / `output` token counts below the composer for verification.
-- Model: `claude-sonnet-4-5`, 1024 output tokens.
+- Model: `claude-sonnet-4-5`. Output tokens: 768 (free tier) / 2048 (Pro tier). Context window: 30 runs (free) / 200 runs (Pro).
 
 **Deploy requirement**: the endpoint needs a server adapter. Under the default `adapter-static` the route returns 404 and the UI shows a helpful message pointing at `adapter-vercel` (already a dep). Set `ANTHROPIC_API_KEY` in the server env — missing key returns 503.
 
@@ -48,7 +48,7 @@ Plan + event creation flows intentionally stay on mobile (unlike clubs, where we
 |---|---|
 | `/plans` | Lists the user's plans, highlights the active one, supports abandon/delete. |
 | `/plans/new` | Wizard: goal race + goal time + recent 5K + days/week. Live pace + week-outline preview before save. |
-| `/plans/[id]` | Plan detail. Progress ring, today's workout card, full week grid with per-workout tiles. |
+| `/plans/[id]` | Plan detail. Progress ring, today's workout card, month-by-month calendar (`PlanCalendar.svelte`) projecting workouts onto real dates with completion shading, plus the full week grid below for sequential reading. |
 | `/plans/[id]/workouts/[wid]` | Workout detail: target distance / pace / tolerance, structured intervals laid out step-by-step, tailored "how to run it" advice per kind. |
 | `/dashboard` | Hosts the "Today's workout" card (or a promo card if no active plan). |
 
@@ -73,7 +73,7 @@ Migration: `apps/backend/supabase/migrations/20260419_001_training_plans.sql`. T
 
 - `training_plans` — one per user-plan; `vdot`, `goal_distance_m`, `goal_time_seconds`, `status`, `current_5k_seconds`. Partial unique index enforces **one active plan per user**; `createTrainingPlan` auto-completes the previous active plan on insert.
 - `plan_weeks` — 8–16 rows per plan; `phase`, `target_volume_m`, `notes`, `week_index`.
-- `plan_workouts` — ~4–6 rows per week; `kind`, target distance / duration / pace / tolerance, free-form `structure jsonb` for intervals, `completed_run_id` set by the auto-matcher.
+- `plan_workouts` — ~4–6 rows per week; `kind`, target distance / duration / pace / tolerance, free-form `structure jsonb` for intervals. Completion is encoded by **two** fields: `completed_run_id` (set by the auto-matcher when a tracked run lands) and `manually_completed` (boolean, set by the calendar editor's "Mark as done" when the user ran without recording). Read sites should treat the workout as done if either is truthy — the shared helper is `isWorkoutCompleted(wo)` in `apps/web/src/lib/training.ts`.
 
 ### `plan_workouts.structure` shape
 
@@ -94,15 +94,18 @@ Migration: `apps/backend/supabase/migrations/20260419_001_training_plans.sql`. T
 
 Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will grow the schema (lap markers, HR targets, rep numbering cues) and a migration per revision is overkill for a v1 shape that's still settling.
 
-## Auto-match on run save
+## Marking a workout as done
 
-`autoMatchRunToPlanWorkout(runId, runIsoDate, runDistanceM)` links a run to the same-day plan workout whose target distance is within ±25% of the recorded distance. Wrong matches are manually clearable via the "Unlink" control on the workout-detail page. Not called automatically by `ApiClient.saveRun` yet — the wiring is on the roadmap once we've validated the matching logic in the wild.
+Two paths land in the same UI state (the green check on the calendar, the progress-ring counter ticking up):
+
+1. **Auto-match from a tracked run.** `autoMatchRunToPlanWorkout(runId, runIsoDate, runDistanceM)` links a run to the same-day plan workout whose target distance is within ±25% of the recorded distance. Wrong matches are manually clearable via the "Unlink" control on the workout-detail page. Not called automatically by `ApiClient.saveRun` yet — the wiring is on the roadmap once we've validated the matching logic in the wild.
+2. **Manual mark from the calendar editor.** The "Mark as done" button in `WorkoutEditor.svelte` calls `markWorkoutCompleted(id, null, { manual: true })`, which sets `manually_completed = true` and stamps `completed_at`. The same button toggles back to "Mark not done" — clearing both flags — when the workout is already completed via the manual path. If a workout already has a linked run, the button is disabled with a tooltip pointing the user at the workout-detail page's Unlink flow so the run/workout link is severed deliberately.
 
 ## Deferred
 
 - **Live execution loop** in the run screen (interval state machine, live rep count, cooldown-on-completion) — Phase 2 of this feature. **Specced in [workout_execution.md](workout_execution.md)**, not yet built. `plan_workouts.structure` already stores everything the runner needs; the remaining work is the `WorkoutRunner` state machine (in `packages/run_recorder`), the execution-band widget, and run-screen wiring. Rough sizing ~4 dev-days. Read the spec before picking this up.
 - **Plan generator v2** with adaptive weekly rescheduling driven by adherence.
-- **Plan library / sharing** — publish a plan, clone into your own account. Deferred until the clubs/social layer is the natural home for it.
+- ~~**Plan library / sharing** — publish a plan, clone into your own account. Deferred until the clubs/social layer is the natural home for it.~~ **Shipped** as **club-owned plan templates** (decisions §35) in `20260524_001_plan_templates.sql`. `training_plans.is_template + parent_template_id + club_id`; `clone_plan_template(template_id, start_date)` RPC. UI on `/clubs/[slug]` Templates tab, `/plans/new` template picker, `/plans/[id]` Publish-as-template flow. Clone-not-subscribe — template edits don't propagate to existing instances.
 - **Structured-interval execution on the Android run screen** — specced in [workout_execution.md](workout_execution.md), no code yet; `plan_workouts.structure` is the handoff.
 - **Paste-a-template import** — markdown table → weeks/workouts.
 - **Export as markdown / JSON** — round-trips through the paste path above.

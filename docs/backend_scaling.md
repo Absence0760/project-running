@@ -142,9 +142,20 @@ create unique index mv_weekly_mileage_idx on mv_weekly_mileage (user_id, week_st
 -- Refresh every 5 minutes
 select cron.schedule('refresh-weekly-mileage', '*/5 * * * *',
   'refresh materialized view concurrently mv_weekly_mileage');
+
+-- IMPORTANT: matviews can't have RLS in PostgreSQL. Supabase's default
+-- grants on the public schema cover them, so leaving the matview
+-- world-readable would publish every user's mileage history to anon.
+-- Always pair the matview with a revoke + a wrapped function that
+-- gates by auth.uid(). See migration 20260517_001_revoke_mv_weekly_mileage.
+revoke select on mv_weekly_mileage from anon, authenticated;
 ```
 
-**When:** Before web dashboard launch (Phase 2b).
+**When:** Before web dashboard launch (Phase 2b). Status: matview was
+created in `20260407_001_performance.sql`; public read was revoked in
+`20260517_001_revoke_mv_weekly_mileage.sql` after the data-isolation
+audit. The matview is currently provisioned but has no callers — the
+canonical client read path remains the `weekly_mileage()` SQL function.
 
 ### 5. OAuth tokens stored in plaintext
 
@@ -443,8 +454,8 @@ Aligned with the existing product roadmap.
 **Migrate from Edge Functions:** Strava webhook, token refresh, data export. Only parkrun import remains as an Edge Function (simple, infrequent).
 
 **Database:**
-- [ ] Add `personal_records` summary table with trigger
-- [ ] Create `mv_weekly_mileage` materialized view with pg_cron refresh
+- [x] Add `personal_records` summary table with trigger (`20260508_001`)
+- [x] Create `mv_weekly_mileage` materialized view (`20260407_001`) — pg_cron refresh + read-path wrapper still TODO; revoked from public read in `20260517_001`
 - [ ] Add `jobs` table for Go worker queue
 
 ### Phase 2b — web app

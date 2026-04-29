@@ -5,10 +5,17 @@ created on web restores on Android and vice versa.
 
 ## Why a dedicated format
 
-The existing CSV export (Settings → Data Export → Export All Runs) is a
+The existing CSV export (Settings → Data Export → Export All Runs (CSV)) is a
 human-readable summary. It has no GPS traces, no per-run metadata (activity
 type, lap markers, avg HR), and no route library. It's useful for spreadsheet
 analysis but not for re-hydrating an account.
+
+The same Data Export card also offers **Export All Runs (JSON)** — a single
+`runs-{ts}.json` file with every Run row, `user_id` stripped, in the exact
+shape used by the `runs.json` entry inside a Full backup ZIP (so scripts that
+consume one consume the other). It carries the full per-run metadata bag but
+no GPS traces — for a lossless copy with tracks, use the Full backup ZIP
+defined below.
 
 The backup format defined here captures everything the client needs to
 reconstruct the user's run history on a fresh Supabase project, a new
