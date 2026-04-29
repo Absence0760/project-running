@@ -141,8 +141,14 @@ List<DateTime> expandInstances(
     )) {
       continue;
     }
-    if (e.until != null && d.isAfter(e.until!)) break;
-    if (d.isAfter(to)) break;
+    // Early break — `d` is the candidate day at midnight-local, the
+    // actual instance is `stamped` (at startsAt's time-of-day) up to a
+    // day later in absolute time. Once `d` is more than a day past the
+    // boundary, no future `stamped` can fall before it.
+    if (e.until != null && d.isAfter(e.until!.add(const Duration(days: 1)))) {
+      break;
+    }
+    if (d.isAfter(to.add(const Duration(days: 1)))) break;
 
     final weekIndex = dayOffset ~/ 7;
     if (weekIndex % (stepDays ~/ 7) != 0) continue;
@@ -156,6 +162,13 @@ List<DateTime> expandInstances(
       localStart.minute,
       localStart.second,
     );
+    // Precise boundary checks against the absolute instance time.
+    // Comparing `d` directly against `until` was zone-dependent: a UTC
+    // host saw `d == until` so the loop didn't break, then stamped at
+    // startsAt's hour-of-day landed past until; an EDT host saw `d`
+    // already after until and broke a day early. Compare stamped.
+    if (e.until != null && stamped.isAfter(e.until!)) continue;
+    if (stamped.isAfter(to)) continue;
     if (stamped.isBefore(e.startsAt)) continue;
     if (!stamped.isBefore(from)) {
       results.add(stamped);
