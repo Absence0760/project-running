@@ -155,9 +155,18 @@ class RaceController extends ChangeNotifier {
     }
   }
 
-  final Map<String, String?> _titleCache = {};
+  // LinkedHashMap-style cache with a simple LRU cap. Was unbounded —
+  // a user attending many events over an app session would accumulate
+  // titles indefinitely.
+  static const _titleCacheMax = 32;
+  final Map<String, String?> _titleCache = <String, String?>{};
   Future<String?> _eventTitle(String eventId) async {
-    if (_titleCache.containsKey(eventId)) return _titleCache[eventId];
+    if (_titleCache.containsKey(eventId)) {
+      // Bump to most-recent by re-inserting.
+      final v = _titleCache.remove(eventId);
+      _titleCache[eventId] = v;
+      return v;
+    }
     final row = await _c
         .from('events')
         .select('title')
@@ -165,6 +174,9 @@ class RaceController extends ChangeNotifier {
         .maybeSingle();
     final title = (row as Map?)?['title'] as String?;
     _titleCache[eventId] = title;
+    if (_titleCache.length > _titleCacheMax) {
+      _titleCache.remove(_titleCache.keys.first);
+    }
     return title;
   }
 
