@@ -449,7 +449,11 @@ class WatchIngest {
     final startedAt = DateTime.parse(raw['started_at'] as String);
     final durationS = (raw['duration_s'] as num).toInt();
     final distanceM = (raw['distance_m'] as num).toDouble();
-    final source = raw['source'] as String? ?? 'app';
+    // This channel only carries payloads from the Apple Watch
+    // (see `Runner/WatchIngestBridge.swift`), so a missing `source`
+    // means watch — never web/mobile-app. The fallback in
+    // `_parseSource` matches.
+    final source = raw['source'] as String? ?? 'watch';
     final trackRaw = raw['track'];
     final track = <cm.Waypoint>[];
     if (trackRaw is List) {
@@ -504,6 +508,6 @@ class WatchIngest {
     for (final s in cm.RunSource.values) {
       if (s.name == raw) return s;
     }
-    return cm.RunSource.app;
+    return cm.RunSource.watch;
   }
 }
