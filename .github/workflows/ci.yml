@@ -19,6 +19,10 @@ jobs:
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.local
+      # Warm Flutter's engine cache once before the parallel `melos exec`
+      # below: two `flutter test` processes racing on `bin/cache/engine.stamp`
+      # produces a malformed `flutter//engine_stamp.json` 404.
+      - run: flutter precache
       - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
       - run: melos exec -- dart analyze
 
