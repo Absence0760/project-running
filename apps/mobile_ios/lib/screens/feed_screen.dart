@@ -630,7 +630,14 @@ class _MiniAvatar extends StatelessWidget {
         color: theme.colorScheme.primary,
         image: avatarUrl != null && avatarUrl!.isNotEmpty
             ? DecorationImage(
-                image: NetworkImage(avatarUrl!),
+                // ResizeImage decodes the avatar at ~3× the rendered
+                // 32 dp circle instead of full source resolution — big
+                // memory win when scrolling a feed full of cards.
+                image: ResizeImage(
+                  NetworkImage(avatarUrl!),
+                  width: 96,
+                  height: 96,
+                ),
                 fit: BoxFit.cover,
               )
             : null,

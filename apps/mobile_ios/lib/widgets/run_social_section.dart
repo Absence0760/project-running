@@ -481,7 +481,14 @@ class _MiniAvatar extends StatelessWidget {
         color: theme.colorScheme.primary,
         image: avatarUrl != null && avatarUrl!.isNotEmpty
             ? DecorationImage(
-                image: NetworkImage(avatarUrl!),
+                // Decode at ~3× the rendered 32 dp circle — comments can
+                // stack into a long list, so a 1024² JPEG decoded in full
+                // for each thumbnail is wasted memory.
+                image: ResizeImage(
+                  NetworkImage(avatarUrl!),
+                  width: 96,
+                  height: 96,
+                ),
                 fit: BoxFit.cover,
               )
             : null,

@@ -542,7 +542,13 @@ class _Avatar extends StatelessWidget {
         color: theme.colorScheme.primary,
         image: avatarUrl != null && avatarUrl!.isNotEmpty
             ? DecorationImage(
-                image: NetworkImage(avatarUrl!),
+                // Decode at ~3× the rendered size rather than full
+                // source resolution — saves memory in long lists.
+                image: ResizeImage(
+                  NetworkImage(avatarUrl!),
+                  width: (size * 3).round(),
+                  height: (size * 3).round(),
+                ),
                 fit: BoxFit.cover,
               )
             : null,

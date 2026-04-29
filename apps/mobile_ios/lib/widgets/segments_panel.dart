@@ -528,7 +528,13 @@ class _MiniAvatar extends StatelessWidget {
         color: theme.colorScheme.primary,
         image: avatarUrl != null && avatarUrl!.isNotEmpty
             ? DecorationImage(
-                image: NetworkImage(avatarUrl!),
+                // Avatar renders at 24 dp; decode at ~3× to keep
+                // memory bounded in segment leaderboards.
+                image: ResizeImage(
+                  NetworkImage(avatarUrl!),
+                  width: 72,
+                  height: 72,
+                ),
                 fit: BoxFit.cover,
               )
             : null,
