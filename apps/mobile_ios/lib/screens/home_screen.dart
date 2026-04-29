@@ -74,9 +74,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _rebuildPages() {
+    // Each page is wrapped in `_LazyKeepAliveTab`, which only constructs
+    // its heavy child on the first `build` call. PageView lazily builds
+    // its children (only the visible page + cacheExtent neighbours) so
+    // tabs the user hasn't touched stay un-initialised — saving their
+    // initState `_load()` network calls and listener registrations
+    // until the user actually swipes there.
     _pages = [
-      _KeepAlive(
-        child: DashboardScreen(
+      _LazyKeepAliveTab(
+        builder: () => DashboardScreen(
           key: const PageStorageKey('dashboard'),
           apiClient: widget.apiClient,
           training: widget.training,
@@ -86,8 +92,8 @@ class _HomeScreenState extends State<HomeScreen> {
           settingsSync: widget.settingsSync,
         ),
       ),
-      _KeepAlive(
-        child: RunScreen(
+      _LazyKeepAliveTab(
+        builder: () => RunScreen(
           key: const PageStorageKey('run'),
           apiClient: widget.apiClient,
           runStore: widget.runStore,
@@ -101,8 +107,8 @@ class _HomeScreenState extends State<HomeScreen> {
           initialRoute: _preselectedRoute,
         ),
       ),
-      _KeepAlive(
-        child: RunsScreen(
+      _LazyKeepAliveTab(
+        builder: () => RunsScreen(
           key: const PageStorageKey('runs'),
           apiClient: widget.apiClient,
           runStore: widget.runStore,
@@ -111,8 +117,8 @@ class _HomeScreenState extends State<HomeScreen> {
           settingsSync: widget.settingsSync,
         ),
       ),
-      _KeepAlive(
-        child: RoutesScreen(
+      _LazyKeepAliveTab(
+        builder: () => RoutesScreen(
           key: const PageStorageKey('routes'),
           apiClient: widget.apiClient,
           routeStore: widget.routeStore,
@@ -120,15 +126,15 @@ class _HomeScreenState extends State<HomeScreen> {
           onStartRun: _startRunWithRoute,
         ),
       ),
-      _KeepAlive(
-        child: ClubsScreen(
+      _LazyKeepAliveTab(
+        builder: () => ClubsScreen(
           key: const PageStorageKey('clubs'),
           social: widget.social,
           training: widget.training,
         ),
       ),
-      _KeepAlive(
-        child: SettingsScreen(
+      _LazyKeepAliveTab(
+        builder: () => SettingsScreen(
           key: const PageStorageKey('settings'),
           apiClient: widget.apiClient,
           preferences: widget.preferences,
@@ -203,27 +209,34 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Wraps a child in `AutomaticKeepAliveClientMixin` so a `PageView` that
-/// holds it doesn't dispose the state when the page scrolls off-screen.
-/// This is the missing piece when converting an `IndexedStack`-based tab
-/// host to a swipeable one — without it, swiping away from the recording
-/// tab would kill the live recorder.
-class _KeepAlive extends StatefulWidget {
-  final Widget child;
-  const _KeepAlive({required this.child});
+/// Lazy + keep-alive tab wrapper. Combines two roles:
+///
+///  1. `AutomaticKeepAliveClientMixin` — preserves the child's State once
+///     it has been built (the page survives swiping off-screen, which is
+///     the contract we used to get from `IndexedStack`).
+///  2. Lazy construction — the child widget itself (and its heavy
+///     `initState` chain: network loads, listener registrations) is only
+///     instantiated on the first `build` call. PageView's lazy delegate
+///     means tabs the user hasn't visited stay un-built, which keeps
+///     cold-start work scoped to the initial page.
+class _LazyKeepAliveTab extends StatefulWidget {
+  final Widget Function() builder;
+  const _LazyKeepAliveTab({required this.builder});
 
   @override
-  State<_KeepAlive> createState() => _KeepAliveState();
+  State<_LazyKeepAliveTab> createState() => _LazyKeepAliveTabState();
 }
 
-class _KeepAliveState extends State<_KeepAlive>
+class _LazyKeepAliveTabState extends State<_LazyKeepAliveTab>
     with AutomaticKeepAliveClientMixin {
+  Widget? _child;
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return widget.child;
+    return _child ??= widget.builder();
   }
 }
