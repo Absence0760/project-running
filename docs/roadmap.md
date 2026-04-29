@@ -134,7 +134,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
       plan instead of needing the Team tier.
 - [ ] Encrypt OAuth tokens in `integrations` table with `pgcrypto`
 - [ ] Add rate limiting to Edge Function endpoints
-- [ ] Validate Strava webhook signatures
+- [x] Validate Strava webhook receivers — Strava doesn't sign POST payloads (their model is "the callback URL is secret"). The function requires `STRAVA_WEBHOOK_SECRET` in the URL query string, validates it with a `timingSafeEqual` constant-time compare, and additionally checks `hub.verify_token` on the GET handshake. Fails closed when the env var is missing. See `apps/backend/supabase/functions/strava-webhook/index.ts`.
 - [ ] Set up MapTiler API usage monitoring
 
 ### Milestone: internal TestFlight / Play Store internal track release
@@ -479,7 +479,7 @@ Surfaces that other running apps ship as table stakes and we don't. Each one is 
   - [ ] Gate all by `subscription_tier = 'premium'`
 - [ ] Enable PostGIS extension in Supabase
 - [ ] Add `geom geography(LineString, 4326)` column to `routes` with spatial index
-- [ ] Add `training_plans` table for generated plans
+- [x] Add `training_plans` table for generated plans — shipped in migration `20260419_001_training_plans.sql` along with `plan_weeks` and `plan_workouts`. Hardening pass in `20260421_001_plan_hardening.sql`; editor / template surfaces in `20260420_001` and `20260524_001`.
 - [x] Add `fitness_snapshots` table for VO2 max and training load history (migration `20260507_001_fitness_snapshots.sql` — `vdot`, `vo2_max`, ATL / CTL / TSB columns, `qualifying_run_count`, `source` check, `latest_fitness_snapshot()` RPC. Server-side recompute job + advisor UI still pending.)
 - [ ] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles`
 - [ ] Apply for Garmin Connect developer program
