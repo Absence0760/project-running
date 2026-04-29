@@ -26,6 +26,7 @@ import type {
 	ActivePlanOverview,
 	PlanStatus
 } from './types';
+import { parseRunSource } from './types';
 import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
@@ -58,7 +59,16 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	}
 	const { data, error } = await q;
 	if (error || !data) return [];
-	return data.map((r: any) => ({ ...r, track: null }));
+	// Defensive narrow on read: the DB CHECK constraint stops bad
+	// `source` values at write time, but historical rows imported before
+	// the constraint or rows from a future client whose new value
+	// hasn't propagated to this build need a fallback. parseRunSource
+	// coerces unknowns to 'app'.
+	return data.map((r: any) => ({
+		...r,
+		source: parseRunSource(r.source),
+		track: null,
+	}));
 }
 
 export async function fetchRunById(id: string): Promise<Run | null> {
@@ -82,7 +92,7 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 			console.warn('Failed to fetch track', e);
 		}
 	}
-	return { ...data, track };
+	return { ...data, source: parseRunSource(data.source), track };
 }
 
 /**

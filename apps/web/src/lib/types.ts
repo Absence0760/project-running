@@ -55,10 +55,13 @@ export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_
 	subscription_tier: SubscriptionTier | null;
 };
 
-// The string columns below have no CHECK constraint in the database, so the
-// generated types see them as plain `string`. Narrow to the values the clients
-// actually write. If the schema ever gains a CHECK constraint or enum, delete
-// these unions and let the generated types flow through.
+// The string columns below ARE enforced by CHECK constraints in the database
+// (see apps/backend/supabase/migrations/20260505_001_narrow_union_check_constraints.sql
+// and 20260429_001_subscription_paywall.sql), so postgres rejects any value
+// outside these unions at write time. The generated types still see them as
+// plain `string` because Supabase's gen-types pass doesn't read CHECK
+// constraints; we narrow here so callers get autocomplete / exhaustiveness
+// checks. The TS union and the SQL CHECK must stay in lockstep.
 export type RunSource =
 	| 'app'
 	| 'watch'
@@ -68,6 +71,31 @@ export type RunSource =
 	| 'garmin'
 	| 'parkrun'
 	| 'race';
+
+/// Defensive narrow on read. The DB rejects bad values via a CHECK
+/// constraint, but a stale TS union (added later than a new DB value) or a
+/// row imported during a migration could still surface a string outside
+/// the union. Returning `'app'` for unknowns matches the Dart-side
+/// `parseRunSource` fallback semantics in
+/// `apps/mobile_android/lib/watch_ingest_queue.dart` (defaults to
+/// `RunSource.watch` there because that file is the watch-ingest path;
+/// for the web we default to `'app'` since web never originates a watch
+/// run). Callers that want stricter handling can compare equality.
+export function parseRunSource(raw: string | null | undefined): RunSource {
+	switch (raw) {
+		case 'app':
+		case 'watch':
+		case 'healthkit':
+		case 'healthconnect':
+		case 'strava':
+		case 'garmin':
+		case 'parkrun':
+		case 'race':
+			return raw;
+		default:
+			return 'app';
+	}
+}
 
 export type RouteSurface = 'road' | 'trail' | 'mixed';
 export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';

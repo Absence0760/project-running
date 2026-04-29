@@ -122,6 +122,7 @@ export function formatDateShort(iso: string): string {
 export function sourceLabel(source: RunSource): string {
 	const labels: Record<RunSource, string> = {
 		app: 'Recorded',
+		watch: 'Watch',
 		healthkit: 'HealthKit',
 		healthconnect: 'Health Connect',
 		strava: 'Strava',
@@ -135,6 +136,7 @@ export function sourceLabel(source: RunSource): string {
 export function sourceColor(source: RunSource): string {
 	const colors: Record<RunSource, string> = {
 		app: '#1E88E5',
+		watch: '#0EA5E9',
 		healthkit: '#E91E63',
 		healthconnect: '#4CAF50',
 		strava: '#FC4C02',
