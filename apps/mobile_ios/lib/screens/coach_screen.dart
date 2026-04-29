@@ -10,6 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../backend_timeout.dart';
 import '../training_service.dart';
 
 /// Truncate a coach message to a sidebar-thread title. Strips repeated
@@ -137,6 +138,10 @@ class _CoachScreenState extends State<CoachScreen> {
   final _scrollCtrl = ScrollController();
   final _draftCtrl = TextEditingController();
   final _editCtrl = TextEditingController();
+  // Generation counter for _loadContext. A plan switch refires the
+  // load while a previous one may still be in flight; a stale response
+  // landing after the user moved on shouldn't clobber the fresh result.
+  int _ctxGen = 0;
 
   List<TrainingPlanRow> _plans = const [];
   String? _planId;
@@ -234,6 +239,7 @@ class _CoachScreenState extends State<CoachScreen> {
     final api = widget.api;
     final viewerId = api.userId;
     if (viewerId == null) return;
+    final gen = ++_ctxGen;
     String? planName;
     int? planWeeks;
     int runCount = 0;
@@ -262,7 +268,10 @@ class _CoachScreenState extends State<CoachScreen> {
         );
         if (p.id == _planId) {
           planName = p.name;
-          final detail = await widget.training.fetchPlan(_planId!);
+          final detail = await widget.training
+              .fetchPlan(_planId!)
+              .timeout(kBackendLoadTimeout);
+          if (gen != _ctxGen) return;
           planWeeks = detail.weeks.length;
         }
       }
@@ -271,13 +280,17 @@ class _CoachScreenState extends State<CoachScreen> {
           .from('runs')
           .select('id')
           .eq('user_id', viewerId)
-          .limit(_runsLimit);
+          .limit(_runsLimit)
+          .timeout(kBackendLoadTimeout);
+      if (gen != _ctxGen) return;
       runCount = (runRows as List).length;
       final settings = await supa
           .from('user_settings')
           .select('prefs')
           .eq('user_id', viewerId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(kBackendLoadTimeout);
+      if (gen != _ctxGen) return;
       final prefs = (settings?['prefs'] as Map?) ?? const {};
       final zones = prefs['hr_zones'] as Map?;
       if (zones != null) {
@@ -287,8 +300,11 @@ class _CoachScreenState extends State<CoachScreen> {
       }
       final goal = prefs['weekly_mileage_goal_m'];
       if (goal is num && goal > 0) weeklyGoalMetres = goal.toInt();
-    } catch (_) {}
-    if (!mounted) return;
+    } catch (_) {
+      // Fall through with whatever we managed to gather. Hitting the
+      // timeout (or any error) leaves the caught fields at their defaults.
+    }
+    if (!mounted || gen != _ctxGen) return;
     setState(() {
       _ctx = _ContextSummary(
         planName: planName,
