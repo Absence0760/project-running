@@ -189,7 +189,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 
 - [x] `/live/{run_id}` spectator page with MapLibre map (simulated runner)
 - [x] Live position dot, trace line, pace/distance/elapsed stats
-- [ ] Runner shares a live tracking link before starting
+- [x] Runner shares a live tracking link before starting — pre-start "Share live link" button on `run_screen.dart` pre-mints the run id so the URL is stable across the "share now → tap GO later" gap; URL points at `/live/{run_id}` on the configured web host (`WEB_BASE_URL`).
 - [ ] WebSocket connection to Go service (replace simulation)
 - [ ] Positions stored ephemerally in Redis (TTL 24h) for late joiners
 
