@@ -51,9 +51,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   Route? _linkedRoute;
 
   /// Animation state for the "replay" feature. `null` index = not
-  /// replaying. Non-null = the current step into `run.track`.
+  /// replaying. Non-null = the current step into `run.track`. Held in a
+  /// ValueNotifier so the 60 Hz controller tick only rebuilds the map
+  /// subtree (wrapped in ValueListenableBuilder below) instead of the
+  /// whole ListView and its O(n) splits / best-efforts / HR-zone math.
   AnimationController? _replayController;
-  int? _replayIndex;
+  final ValueNotifier<int?> _replayIndex = ValueNotifier<int?>(null);
 
   @override
   void initState() {
@@ -65,6 +68,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   @override
   void dispose() {
     _replayController?.dispose();
+    _replayIndex.dispose();
     super.dispose();
   }
 
@@ -83,18 +87,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       c.addListener(() {
         final len = run.track.length;
         final idx = (c.value * (len - 1)).floor().clamp(0, len - 1);
-        if (idx != _replayIndex) {
-          setState(() => _replayIndex = idx);
+        if (idx != _replayIndex.value) {
+          _replayIndex.value = idx;
         }
       });
       c.addStatusListener((s) {
         if (s == AnimationStatus.completed) {
-          setState(() => _replayIndex = null);
+          _replayIndex.value = null;
         }
       });
       _replayController = c;
       c.forward(from: 0);
-      setState(() => _replayIndex = 0);
+      _replayIndex.value = 0;
       return;
     }
     if (ctl.isAnimating) {
@@ -378,16 +382,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               height: 280,
               child: Stack(
                 children: [
-                  LiveRunMap(
-                    track: run.track,
-                    plannedRoute:
-                        run.track.isEmpty ? _linkedRoute?.waypoints : null,
-                    followRunner: false,
-                    activity: run.track.isNotEmpty ? _activityType : null,
-                    currentPosition: _replayIndex != null &&
-                            _replayIndex! < run.track.length
-                        ? run.track[_replayIndex!]
-                        : null,
+                  ValueListenableBuilder<int?>(
+                    valueListenable: _replayIndex,
+                    builder: (context, replayIndex, _) => LiveRunMap(
+                      track: run.track,
+                      plannedRoute:
+                          run.track.isEmpty ? _linkedRoute?.waypoints : null,
+                      followRunner: false,
+                      activity:
+                          run.track.isNotEmpty ? _activityType : null,
+                      currentPosition: replayIndex != null &&
+                              replayIndex < run.track.length
+                          ? run.track[replayIndex]
+                          : null,
+                    ),
                   ),
                   if (run.track.length >= 2)
                     Positioned(
