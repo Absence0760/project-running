@@ -1474,6 +1474,10 @@ export type Database = {
       }
     }
     Functions: {
+      _run_comment_parent_is_top_level: {
+        Args: { parent_id: string }
+        Returns: boolean
+      }
       approve_event_result: {
         Args: {
           p_approve: boolean
