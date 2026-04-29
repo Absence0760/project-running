@@ -205,6 +205,10 @@ class StravaImporter {
       externalId: 'strava:$stravaId',
       metadata: {
         'title': name.isEmpty ? 'Strava import' : name,
+        // Match the web importer's derivation in apps/web/src/lib/
+        // strava-zip.ts so a Strava ZIP imported on either platform
+        // produces the same activity_type. Fallback is 'run'.
+        'activity_type': _activityTypeFromStrava(stravaType),
         'imported_from': 'strava',
         'strava_activity_type': stravaType,
         'imported_at': DateTime.now().toIso8601String(),
@@ -213,6 +217,13 @@ class StravaImporter {
   }
 
   static DateTime? _parseStravaDate(String raw) => parseStravaDate(raw);
+
+  static String _activityTypeFromStrava(String raw) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('walk')) return 'walk';
+    if (lower.contains('hike')) return 'hike';
+    return 'run';
+  }
 }
 
 class StravaImportResult {

@@ -256,12 +256,23 @@ export async function restoreBackup(
 					? r.event_id
 					: null;
 
+			// Older backups (pre-Apr 2026) may lack metadata.activity_type.
+			// The DB CHECK trigger requires it on insert, so coalesce to
+			// 'run' on restore. The user can still edit it afterwards.
+			const restoredMeta = (r.metadata && typeof r.metadata === 'object'
+				? { ...(r.metadata as Record<string, unknown>) }
+				: {}) as Record<string, unknown>;
+			if (typeof restoredMeta.activity_type !== 'string') {
+				restoredMeta.activity_type = 'run';
+			}
+
 			const row = {
 				...r,
 				id: newId,
 				user_id: userId,
 				event_id: eventId,
 				track_url: trackUrl,
+				metadata: restoredMeta,
 			};
 
 			try {

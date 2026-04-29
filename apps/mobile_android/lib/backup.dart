@@ -351,9 +351,17 @@ class BackupService {
                 orElse: () => cm.RunSource.app,
               ),
               externalId: r['external_id'] as String?,
-              metadata: r['metadata'] is Map
-                  ? Map<String, dynamic>.from(r['metadata'] as Map)
-                  : null,
+              // Older backups (pre-Apr 2026) may lack
+              // metadata.activity_type. The DB CHECK trigger
+              // requires it on insert, so coalesce to 'run' on
+              // restore. The user can still edit it afterwards.
+              metadata: () {
+                final m = r['metadata'] is Map
+                    ? Map<String, dynamic>.from(r['metadata'] as Map)
+                    : <String, dynamic>{};
+                m['activity_type'] ??= 'run';
+                return m;
+              }(),
               createdAt: r['created_at'] != null
                   ? DateTime.tryParse(r['created_at'] as String)
                   : null,

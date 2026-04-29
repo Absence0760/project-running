@@ -51,6 +51,8 @@ serve(async (req: Request) => {
       source: 'parkrun',
       external_id: `parkrun:${event}:${date}`,
       metadata: {
+        // parkrun is always 5K running — no walking-only events.
+        activity_type: 'run',
         event,
         position: parseInt($(cells[4]).text().trim()),
         age_grade: $(cells[5]).text().trim(),
