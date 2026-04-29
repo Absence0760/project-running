@@ -29,9 +29,10 @@
   },
 
   "expectedMetadata": {
-    "_doc": "The jsonb keys on runs.metadata after a watch run lands. Lap shape is canonical per docs/metadata.md § laps — `index` is 1-based (matches lap.number on both platforms), `start_offset_s` is the cumulative duration BEFORE this lap (so the first lap has 0), and `distance_m` + `duration_s` are per-lap deltas.",
+    "_doc": "The jsonb keys on runs.metadata after a watch run lands. Lap shape is canonical per docs/metadata.md § laps — `index` is 1-based (matches lap.number on both platforms), `start_offset_s` is the cumulative duration BEFORE this lap (so the first lap has 0), and `distance_m` + `duration_s` are per-lap deltas. `last_modified_at` is the ISO 8601 stamp the Wear OS encoder writes so mobile's delta-fetch path picks the row up; the Apple-Watch-via-WCSession path acquires it from LocalRunStore.save() instead, so the Flutter ingest test does not assert on this key.",
     "activity_type": "run",
     "avg_bpm": 152,
+    "last_modified_at": "2026-04-15T07:30:30Z",
     "laps": [
       { "index": 1, "start_offset_s": 0, "distance_m": 1000, "duration_s": 320 },
       { "index": 2, "start_offset_s": 320, "distance_m": 1000, "duration_s": 335 }

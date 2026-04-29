@@ -813,6 +813,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             avgBpm = run.avgBpm,
             steps = run.steps,
             laps = run.laps,
+            lastModifiedAtIso = Instant.now().toString(),
         )
         val trackFile = File(run.trackFilePath)
         supabase.saveRun(

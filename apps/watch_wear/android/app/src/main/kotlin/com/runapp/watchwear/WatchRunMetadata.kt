@@ -25,10 +25,16 @@ fun buildRunMetadata(
     avgBpm: Double?,
     steps: Int?,
     laps: List<QueuedLap>,
+    lastModifiedAtIso: String,
 ): JsonObject = buildJsonObject {
     put("activity_type", activityType)
     if (avgBpm != null) put("avg_bpm", avgBpm)
     if (steps != null && steps > 0) put("steps", steps)
+    // Mobile's delta-fetch path (`runs_screen._fetchRemote`) filters
+    // on `metadata->>'last_modified_at' > since`. Without this stamp
+    // the row is invisible to every refresh after the first full
+    // pull. See docs/metadata.md § last_modified_at.
+    put("last_modified_at", lastModifiedAtIso)
     if (laps.isNotEmpty()) {
         put("laps", buildJsonArray {
             var prevMs = 0L

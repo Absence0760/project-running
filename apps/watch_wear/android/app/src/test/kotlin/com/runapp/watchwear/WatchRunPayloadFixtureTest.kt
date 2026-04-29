@@ -63,6 +63,7 @@ class WatchRunPayloadFixtureTest {
             avgBpm = expected["avg_bpm"]!!.jsonPrimitive.double,
             steps = null,
             laps = laps,
+            lastModifiedAtIso = expected["last_modified_at"]!!.jsonPrimitive.content,
         )
 
         assertEquals(
@@ -73,6 +74,10 @@ class WatchRunPayloadFixtureTest {
             expected["avg_bpm"]!!.jsonPrimitive.double,
             metadata["avg_bpm"]!!.jsonPrimitive.double,
             0.0,
+        )
+        assertEquals(
+            expected["last_modified_at"]!!.jsonPrimitive.content,
+            metadata["last_modified_at"]!!.jsonPrimitive.content,
         )
 
         val producedLaps = metadata["laps"]!!.jsonArray
