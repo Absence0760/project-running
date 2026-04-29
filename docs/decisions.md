@@ -802,6 +802,35 @@ The social loop (kudos, comments, replies, follows) was discoverable only by vis
 
 ---
 
+## 40. Watch ingest is asymmetric: Apple Watch goes through the phone, Wear OS uploads directly
+
+**Decided:** April 2026 · captured during the cross-client data-consistency audit.
+
+The two watch platforms reach Supabase by completely different routes:
+
+- **Apple Watch.** `apps/watch_ios` records the run, writes the GPS trace to a local JSON file, and hands it off via `WCSession.transferFile(_:metadata:)`. On the phone, `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` is a `WCSessionDelegate` that picks the file up, packs metadata + track string into a `[String: Any]`, and invokes `run_app/watch_ingest#run` on the Flutter `MethodChannel`. The Dart handler in `apps/mobile_*/lib/main.dart` (`WatchIngest._runFromArgs`) builds a `core_models.Run` and hands it to `ApiClient.saveRun` — i.e. the run goes to Supabase via the *phone's* signed-in Dart client.
+- **Wear OS.** `apps/watch_wear/.../SupabaseClient.kt` talks to Supabase REST + Storage directly from the watch over Wi-Fi or watch-cellular. There is no method channel, no `WatchIngestBridge` on Android (the `run_app/watch_ingest` channel is registered by Dart but has no native counterpart — calls hit `MissingPluginException`, which is fine because no native code ever invokes it on Android).
+
+This is intentional, not technical debt.
+
+**Why the asymmetry:**
+
+- *Wear OS has independent network access* on-wrist for the vast majority of users (Wi-Fi-direct + LTE on cellular models; Bluetooth proxy through the phone otherwise). Forcing every Wear OS run through the phone would mean (a) the user must have the Flutter app running in the foreground or background when the watch finishes, and (b) we'd need a Wearable Data Layer message handler on the Android phone plus idempotency on top — strictly more code, strictly less reliable. Today Wear OS users can run a 10K with the phone left at home and the run lands.
+- *Apple Watch (non-cellular)* has no comparable independent path. Apple ships `WCSession.transferFile` as the "queue-on-disk-and-retry-when-phone-is-reachable" primitive, and writing a custom direct-to-Supabase upload from `watch_ios` would re-implement that queue worse. The phone bridge is the simplest reliable path *because* Apple's framework already does the queueing.
+
+**What that means in practice:**
+
+1. **Two ingest entrypoints on the backend, one row shape.** Both paths land rows in `runs` via Supabase RLS, so the schema is enforced server-side regardless of route. The April 2026 audit fixed the last places where the two paths drifted (laps shape, per-point `bpm`, `activity_type`, default `source` value) so that a row produced by either platform looks identical.
+2. **Wear OS keeps its own generated row types.** `apps/watch_wear/.../generated/DbRows.kt` is regenerated from the same migrations as the Dart and TS row types. CI's `parity-types` check covers Dart + TS but not Kotlin yet — keep an eye on the Wear OS file when migrations land.
+3. **`apps/mobile_android/lib/main.dart`'s `WatchIngest` block is dead code on Android.** `WatchIngest.attach` runs at launch but the `run_app/watch_ingest` channel never fires because nothing native posts to it. Leaving it in keeps the file byte-identical with `apps/mobile_ios/lib/main.dart` per §39.
+4. **Activity type is hardcoded "run" on both watches** until either grows an activity picker. The Apple Watch hardcode is in `apps/watch_ios/WatchApp/ContentView.swift#syncRun()`; the Wear OS hardcode is in `RunViewModel.kt`. Track this together when adding the picker — they need to ship in lockstep so cross-platform parity holds.
+
+**Trade-off:** two upload paths instead of one, two sets of HTTP/auth code (Dart `ApiClient` vs Kotlin `SupabaseClient`), and a parity audit needs to check both. The alternative (force Wear OS through the phone too) would be one path on paper but require a paired Android phone with the Flutter app live for any watch run to reach the backend — strictly worse for the user, and the "two paths in code" cost is a one-time write, not an ongoing tax.
+
+**Don't re-litigate unless:** Apple Watch ships reliable independent networking that doesn't need WCSession (then `watch_ios` can mirror Wear OS's direct path), or Wear OS removes independent network APIs (then we'd be forced to bridge through the phone). Either is hypothetical today.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
