@@ -8,6 +8,40 @@ import 'package:csv/csv.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:uuid/uuid.dart';
 
+/// Parse a Strava-formatted activity date string into a [DateTime].
+///
+/// Strava CSVs use `"Apr 9, 2026, 7:30:00 AM"` (with optional comma after
+/// the year and optional 12-hour AM/PM marker), or sometimes ISO 8601.
+/// Returns null when the input matches neither shape — callers fall back
+/// to the per-track-file timestamp.
+DateTime? parseStravaDate(String raw) {
+  // ISO first.
+  final iso = DateTime.tryParse(raw);
+  if (iso != null) return iso;
+
+  // Try a few common formats by hand. We don't bring in intl just for this.
+  const months = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+  };
+  final m = RegExp(
+          r'(\w+)\s+(\d{1,2}),?\s+(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})\s*([AP]M)?',
+          caseSensitive: false)
+      .firstMatch(raw);
+  if (m == null) return null;
+  final month = months[m.group(1)!.toLowerCase().substring(0, 3)];
+  if (month == null) return null;
+  final day = int.parse(m.group(2)!);
+  final year = int.parse(m.group(3)!);
+  var hour = int.parse(m.group(4)!);
+  final minute = int.parse(m.group(5)!);
+  final second = int.parse(m.group(6)!);
+  final ampm = m.group(7)?.toUpperCase();
+  if (ampm == 'PM' && hour < 12) hour += 12;
+  if (ampm == 'AM' && hour == 12) hour = 0;
+  return DateTime(year, month, day, hour, minute, second);
+}
+
 /// Imports a Strava data export ZIP into [Run] objects.
 ///
 /// Strava exports look like:
@@ -178,33 +212,7 @@ class StravaImporter {
     );
   }
 
-  static DateTime? _parseStravaDate(String raw) {
-    // Strava format: "Apr 9, 2026, 7:30:00 AM" or ISO. Try ISO first.
-    final iso = DateTime.tryParse(raw);
-    if (iso != null) return iso;
-
-    // Try a few common formats by hand. We don't bring in intl just for this.
-    final months = {
-      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
-    };
-    final m = RegExp(
-            r'(\w+)\s+(\d{1,2}),?\s+(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})\s*([AP]M)?',
-            caseSensitive: false)
-        .firstMatch(raw);
-    if (m == null) return null;
-    final month = months[m.group(1)!.toLowerCase().substring(0, 3)];
-    if (month == null) return null;
-    final day = int.parse(m.group(2)!);
-    final year = int.parse(m.group(3)!);
-    var hour = int.parse(m.group(4)!);
-    final minute = int.parse(m.group(5)!);
-    final second = int.parse(m.group(6)!);
-    final ampm = m.group(7)?.toUpperCase();
-    if (ampm == 'PM' && hour < 12) hour += 12;
-    if (ampm == 'AM' && hour == 12) hour = 0;
-    return DateTime(year, month, day, hour, minute, second);
-  }
+  static DateTime? _parseStravaDate(String raw) => parseStravaDate(raw);
 }
 
 class StravaImportResult {
