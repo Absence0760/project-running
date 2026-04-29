@@ -34,6 +34,10 @@ class _RunSocialSectionState extends State<RunSocialSection> {
   );
   List<RunCommentWithAuthor> _comments = const [];
 
+  // Cached viewer profile so optimistic comment append can render with
+  // the right display name + avatar instead of a synthesized fallback.
+  PublicProfile? _viewerProfile;
+
   String? _replyTo;
 
   final _draftCtrl = TextEditingController();
@@ -58,13 +62,18 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
+      final viewerId = _viewerId;
       final results = await Future.wait<dynamic>([
         widget.api.fetchEngagementSummaries([widget.runId]),
         widget.api.fetchRunCommentsWithAuthors(widget.runId),
+        viewerId == null
+            ? Future.value(null)
+            : widget.api.fetchProfileSummary(viewerId),
       ]);
       final engMap = results[0]
           as Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>;
       final cs = results[1] as List<RunCommentWithAuthor>;
+      final viewer = results[2] as ProfileSummary?;
       final entry = engMap[widget.runId];
       if (!mounted) return;
       setState(() {
@@ -80,6 +89,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
                 commentCount: entry.commentCount,
               );
         _comments = cs;
+        _viewerProfile = viewer;
         _loading = false;
       });
     } catch (_) {
@@ -126,17 +136,34 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     if (body.isEmpty || _viewerId == null) return;
     setState(() => _posting = true);
     try {
-      await widget.api.addRunComment(
+      final inserted = await widget.api.addRunComment(
         runId: widget.runId,
         body: body,
         parentCommentId: parentId,
       );
       ctrl.clear();
       if (!mounted) return;
-      if (parentId != null) {
-        setState(() => _replyTo = null);
-      }
-      await _load();
+      // Optimistically append the new comment. Was: re-fetch the whole
+      // engagement + comments list — a 200-comment thread paid for the
+      // round-trip + the parent ListView rebuild on every reply.
+      final author = _viewerProfile ??
+          PublicProfile(
+            id: _viewerId!,
+            displayName: null,
+            avatarUrl: null,
+          );
+      setState(() {
+        if (parentId != null) _replyTo = null;
+        _comments = [
+          ..._comments,
+          RunCommentWithAuthor(comment: inserted, author: author),
+        ];
+        _eng = EngagementSummary(
+          kudosCount: _eng.kudosCount,
+          viewerHasKudos: _eng.viewerHasKudos,
+          commentCount: _eng.commentCount + 1,
+        );
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
