@@ -488,16 +488,37 @@ class _PulsingDot extends StatelessWidget {
   final Animation<double> animation;
   const _PulsingDot({required this.animation});
 
+  // Static inner dot. Moved out of the AnimatedBuilder so the 60 Hz
+  // pulse rebuild only touches the outer ring instead of reallocating
+  // the inner Container + BoxDecoration + BoxShadow tree on every frame.
+  static final _innerDot = Container(
+    width: 14,
+    height: 14,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: const Color(0xFF818CF8),
+      border: Border.all(color: Colors.white, width: 2.5),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x66818CF8),
+          blurRadius: 8,
+          spreadRadius: 2,
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: animation,
+      child: _innerDot,
       builder: (context, child) {
         return Center(
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Outer pulse ring
+              // Outer pulse ring — only this rebuilds at 60 Hz.
               Container(
                 width: 48 * (0.5 + animation.value),
                 height: 48 * (0.5 + animation.value),
@@ -506,23 +527,7 @@ class _PulsingDot extends StatelessWidget {
                   color: const Color(0xFF818CF8).withValues(alpha: animation.value),
                 ),
               ),
-              // Inner dot
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF818CF8),
-                  border: Border.all(color: Colors.white, width: 2.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF818CF8).withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-              ),
+              if (child != null) child,
             ],
           ),
         );
