@@ -36,6 +36,8 @@ jobs:
         run: |
           echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
           echo "Run 'npm run gen:types' locally and commit the result."
+      - name: CHECK constraints vs TS unions
+        run: npm run check:check-constraints --workspace=apps/web
 
   build-watch-wear:
     name: Build Wear OS app (Kotlin)

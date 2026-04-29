@@ -8,7 +8,8 @@
 		"build": "vite build",
 		"preview": "vite preview --port 8888",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"check:check-constraints": "node scripts/check_constraint_unions.mjs"
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "1.1.89",
