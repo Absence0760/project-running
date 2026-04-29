@@ -33,7 +33,6 @@ class _FeedScreenState extends State<FeedScreen> {
   List<FeedEntry> _entries = const [];
   Map<String, EngagementSummary> _engagement = const {};
   List<UserProfileRow> _followees = const [];
-  Set<String> _kudosBusy = {};
 
   String _authorFilter = 'all';
   String _activityFilter = 'all';
@@ -134,52 +133,6 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  Future<void> _toggleKudos(String runId) async {
-    if (_kudosBusy.contains(runId)) return;
-    final current = _engagement[runId] ??
-        const EngagementSummary(
-          kudosCount: 0,
-          viewerHasKudos: false,
-          commentCount: 0,
-        );
-    setState(() {
-      _kudosBusy = {..._kudosBusy, runId};
-      _engagement = {
-        ..._engagement,
-        runId: EngagementSummary(
-          kudosCount: current.viewerHasKudos
-              ? (current.kudosCount - 1).clamp(0, 1 << 30)
-              : current.kudosCount + 1,
-          viewerHasKudos: !current.viewerHasKudos,
-          commentCount: current.commentCount,
-        ),
-      };
-    });
-    try {
-      if (current.viewerHasKudos) {
-        await widget.api.rescindKudos(runId);
-      } else {
-        await widget.api.giveKudos(runId);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _engagement = {..._engagement, runId: current};
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update kudos: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          final next = {..._kudosBusy};
-          next.remove(runId);
-          _kudosBusy = next;
-        });
-      }
-    }
-  }
-
   void _setActivity(String value) {
     if (value == _activityFilter) return;
     setState(() => _activityFilter = value);
@@ -244,12 +197,11 @@ class _FeedScreenState extends State<FeedScreen> {
                                       );
                                     }
                                     return _EntryCard(
+                                      key: ValueKey(_entries[i].run.id),
+                                      api: widget.api,
                                       entry: _entries[i],
-                                      engagement: _engagement[_entries[i].run.id],
-                                      kudosBusy:
-                                          _kudosBusy.contains(_entries[i].run.id),
-                                      onToggleKudos: () =>
-                                          _toggleKudos(_entries[i].run.id),
+                                      initialEngagement:
+                                          _engagement[_entries[i].run.id],
                                       onAuthorTap: () => Navigator.push(
                                         context,
                                         MaterialPageRoute(
@@ -390,18 +342,17 @@ class _ActivityOption {
 }
 
 class _EntryCard extends StatelessWidget {
+  final ApiClient api;
   final FeedEntry entry;
-  final EngagementSummary? engagement;
-  final bool kudosBusy;
-  final VoidCallback onToggleKudos;
+  final EngagementSummary? initialEngagement;
   final VoidCallback onAuthorTap;
   final VoidCallback onCardTap;
 
   const _EntryCard({
+    super.key,
+    required this.api,
     required this.entry,
-    required this.engagement,
-    required this.kudosBusy,
-    required this.onToggleKudos,
+    required this.initialEngagement,
     required this.onAuthorTap,
     required this.onCardTap,
   });
@@ -409,12 +360,6 @@ class _EntryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final eng = engagement ??
-        const EngagementSummary(
-          kudosCount: 0,
-          viewerHasKudos: false,
-          commentCount: 0,
-        );
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
@@ -477,41 +422,14 @@ class _EntryCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          // Footer — kudos + comment chips
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: kudosBusy ? null : onToggleKudos,
-                  icon: Icon(
-                    eng.viewerHasKudos
-                        ? Icons.favorite
-                        : Icons.favorite_border,
-                    color: eng.viewerHasKudos
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurfaceVariant,
-                    size: 18,
-                  ),
-                  label: Text(
-                    '${eng.kudosCount}',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: onAuthorTap,
-                  icon: Icon(
-                    Icons.chat_bubble_outline,
-                    size: 18,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  label: Text(
-                    '${eng.commentCount}',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
+          // Kudos / comment chips. Stateful so toggling kudos rebuilds
+          // only this footer instead of the parent FeedScreen and every
+          // other visible card.
+          _EngagementFooter(
+            api: api,
+            runId: entry.run.id,
+            initialEngagement: initialEngagement,
+            onCommentTap: onAuthorTap,
           ),
         ],
       ),
@@ -547,6 +465,122 @@ class _EntryCard extends StatelessWidget {
     final days = hrs ~/ 24;
     if (days < 30) return '${days}d ago';
     return '${started.day}/${started.month}/${started.year}';
+  }
+}
+
+class _EngagementFooter extends StatefulWidget {
+  final ApiClient api;
+  final String runId;
+  final EngagementSummary? initialEngagement;
+  final VoidCallback? onCommentTap;
+
+  const _EngagementFooter({
+    required this.api,
+    required this.runId,
+    required this.initialEngagement,
+    this.onCommentTap,
+  });
+
+  @override
+  State<_EngagementFooter> createState() => _EngagementFooterState();
+}
+
+class _EngagementFooterState extends State<_EngagementFooter> {
+  static const _empty = EngagementSummary(
+    kudosCount: 0,
+    viewerHasKudos: false,
+    commentCount: 0,
+  );
+
+  late EngagementSummary _eng;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _eng = widget.initialEngagement ?? _empty;
+  }
+
+  @override
+  void didUpdateWidget(_EngagementFooter old) {
+    super.didUpdateWidget(old);
+    // Pick up a fresher engagement value pushed by the parent (e.g. when
+    // the feed reloads) — but only if the user hasn't toggled locally
+    // since, in which case our optimistic state is the truth.
+    final fresh = widget.initialEngagement;
+    if (!_busy && fresh != null && fresh != old.initialEngagement) {
+      _eng = fresh;
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_busy) return;
+    final prev = _eng;
+    setState(() {
+      _busy = true;
+      _eng = EngagementSummary(
+        kudosCount: prev.viewerHasKudos
+            ? (prev.kudosCount - 1).clamp(0, 1 << 30)
+            : prev.kudosCount + 1,
+        viewerHasKudos: !prev.viewerHasKudos,
+        commentCount: prev.commentCount,
+      );
+    });
+    try {
+      if (prev.viewerHasKudos) {
+        await widget.api.rescindKudos(widget.runId);
+      } else {
+        await widget.api.giveKudos(widget.runId);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _eng = prev);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update kudos: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      child: Row(
+        children: [
+          TextButton.icon(
+            onPressed: _busy ? null : _toggle,
+            icon: Icon(
+              _eng.viewerHasKudos
+                  ? Icons.favorite
+                  : Icons.favorite_border,
+              color: _eng.viewerHasKudos
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              size: 18,
+            ),
+            label: Text(
+              '${_eng.kudosCount}',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          TextButton.icon(
+            onPressed: widget.onCommentTap,
+            icon: Icon(
+              Icons.chat_bubble_outline,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            label: Text(
+              '${_eng.commentCount}',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
