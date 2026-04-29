@@ -808,12 +808,18 @@ class _RunHeatmap extends StatelessWidget {
     final weekStart = weekStartLocal(now);
     final gridStart = weekStart.subtract(Duration(days: 7 * (weeks - 1)));
 
-    // Build count-per-day map keyed by `YYYY-MM-DD`. One pass over runs
-    // plus O(1) lookup per cell keeps the render cheap even at 10k+ runs.
-    final counts = <String, int>{};
+    // Build count-per-day map keyed by epoch-day (millisecondsSinceEpoch
+    // truncated to local-day boundary). int keys avoid the per-run +
+    // per-cell `'$year-$month-$day'` string allocation, which adds up
+    // at 10k+ runs × 140 cells.
+    int epochDay(DateTime d) {
+      final local = DateTime(d.year, d.month, d.day);
+      return local.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+    }
+
+    final counts = <int, int>{};
     for (final r in runs) {
-      final d = r.startedAt.toLocal();
-      final key = '${d.year}-${d.month}-${d.day}';
+      final key = epochDay(r.startedAt.toLocal());
       counts[key] = (counts[key] ?? 0) + 1;
     }
 
@@ -851,7 +857,7 @@ class _RunHeatmap extends StatelessWidget {
                         final isFuture = day.isAfter(today);
                         final count = isFuture
                             ? 0
-                            : counts['${day.year}-${day.month}-${day.day}'] ?? 0;
+                            : counts[epochDay(day)] ?? 0;
                         return Container(
                           width: cellSize,
                           height: cellSize,
