@@ -514,98 +514,23 @@ class _RunsScreenState extends State<RunsScreen> {
       itemCount: _visible.length + 1 + (emptyAfterFilter ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == 0) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(_rangeLabel(_range), style: theme.textTheme.titleMedium),
-                  Text(
-                    '${_visible.length} run${_visible.length == 1 ? '' : 's'}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    FilterChip(
-                      label: const Text('All'),
-                      selected: _activityFilter == null,
-                      onSelected: (_) {
-                        setState(() {
-                          _activityFilter = null;
-                          _recompute();
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    for (final type in ActivityType.values) ...[
-                      FilterChip(
-                        avatar: Icon(type.icon, size: 18),
-                        label: Text(type.label),
-                        selected: _activityFilter == type,
-                        onSelected: (_) {
-                          setState(() {
-                            _activityFilter = type;
-                            _recompute();
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Source filter — matches the web's dashboard chip row so
-              // a runner filtering by "Strava-imported only" on both
-              // surfaces sees the same subset. `null` = all sources.
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    FilterChip(
-                      label: const Text('All sources'),
-                      selected: _sourceFilter == null,
-                      onSelected: (_) {
-                        setState(() {
-                          _sourceFilter = null;
-                          _recompute();
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    for (final entry in const [
-                      (RunSource.app, 'Recorded'),
-                      (RunSource.watch, 'Watch'),
-                      (RunSource.strava, 'Strava'),
-                      (RunSource.parkrun, 'parkrun'),
-                      (RunSource.healthkit, 'HealthKit'),
-                      (RunSource.healthconnect, 'Health Connect'),
-                    ]) ...[
-                      FilterChip(
-                        label: Text(entry.$2),
-                        selected: _sourceFilter == entry.$1,
-                        onSelected: (_) {
-                          setState(() {
-                            _sourceFilter = entry.$1;
-                            _recompute();
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
+          return _RunsFilterHeader(
+            rangeLabel: _rangeLabel(_range),
+            visibleCount: _visible.length,
+            activityFilter: _activityFilter,
+            sourceFilter: _sourceFilter,
+            onActivityChanged: (v) {
+              setState(() {
+                _activityFilter = v;
+                _recompute();
+              });
+            },
+            onSourceChanged: (v) {
+              setState(() {
+                _sourceFilter = v;
+                _recompute();
+              });
+            },
           );
         }
         if (emptyAfterFilter && index == 1) {
@@ -790,6 +715,109 @@ class _EmptyRuns extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Header row + activity / source filter chips for [RunsScreen]. Pulled
+/// out of the inline ListView builder so each chip tap doesn't re-run
+/// the full builder closure for the header subtree on every setState —
+/// the parent supplies new selections + callbacks, but the widget tree
+/// itself is contained.
+class _RunsFilterHeader extends StatelessWidget {
+  final String rangeLabel;
+  final int visibleCount;
+  final ActivityType? activityFilter;
+  final RunSource? sourceFilter;
+  final ValueChanged<ActivityType?> onActivityChanged;
+  final ValueChanged<RunSource?> onSourceChanged;
+
+  const _RunsFilterHeader({
+    required this.rangeLabel,
+    required this.visibleCount,
+    required this.activityFilter,
+    required this.sourceFilter,
+    required this.onActivityChanged,
+    required this.onSourceChanged,
+  });
+
+  static const _sourceChips = <(RunSource, String)>[
+    (RunSource.app, 'Recorded'),
+    (RunSource.watch, 'Watch'),
+    (RunSource.strava, 'Strava'),
+    (RunSource.parkrun, 'parkrun'),
+    (RunSource.healthkit, 'HealthKit'),
+    (RunSource.healthconnect, 'Health Connect'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(rangeLabel, style: theme.textTheme.titleMedium),
+            Text(
+              '$visibleCount run${visibleCount == 1 ? '' : 's'}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              FilterChip(
+                label: const Text('All'),
+                selected: activityFilter == null,
+                onSelected: (_) => onActivityChanged(null),
+              ),
+              const SizedBox(width: 8),
+              for (final type in ActivityType.values) ...[
+                FilterChip(
+                  avatar: Icon(type.icon, size: 18),
+                  label: Text(type.label),
+                  selected: activityFilter == type,
+                  onSelected: (_) => onActivityChanged(type),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Source filter — matches the web's dashboard chip row so a
+        // runner filtering by "Strava-imported only" on both surfaces
+        // sees the same subset. `null` = all sources.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              FilterChip(
+                label: const Text('All sources'),
+                selected: sourceFilter == null,
+                onSelected: (_) => onSourceChanged(null),
+              ),
+              const SizedBox(width: 8),
+              for (final entry in _sourceChips) ...[
+                FilterChip(
+                  label: Text(entry.$2),
+                  selected: sourceFilter == entry.$1,
+                  onSelected: (_) => onSourceChanged(entry.$1),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
