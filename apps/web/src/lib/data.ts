@@ -381,7 +381,7 @@ export async function saveRun(input: {
 	metadata: Record<string, unknown> | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
 	title?: string | null;
-}): Promise<{ id: string }> {
+}): Promise<{ id: string; trackUploaded: boolean; trackError?: string }> {
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
 	if (!userId) throw new Error('Not authenticated');
@@ -409,6 +409,15 @@ export async function saveRun(input: {
 	if (error) throw error;
 	const runId = data.id as string;
 
+	// Track upload runs as a separate transaction (no DB-level FK between
+	// the row and the storage object). When it fails the scalar run row
+	// is still valid — the readers (web, mobile) treat a null
+	// `track_url` as "no track" and render fine. We surface the failure
+	// to the caller so importers can report "X imported with tracks,
+	// Y scalar-only" and interactive callers can show a toast +
+	// retry button instead of silently shipping a GPS-less run.
+	let trackUploaded = false;
+	let trackError: string | undefined;
 	if (input.track && input.track.length >= 2) {
 		try {
 			const path = `${userId}/${runId}.json.gz`;
@@ -420,15 +429,25 @@ export async function saveRun(input: {
 					contentType: 'application/gzip',
 					upsert: true,
 				});
-			if (!upErr) {
-				await supabase.from('runs').update({ track_url: path }).eq('id', runId);
+			if (upErr) {
+				trackError = upErr.message;
+			} else {
+				const { error: linkErr } = await supabase
+					.from('runs')
+					.update({ track_url: path })
+					.eq('id', runId);
+				if (linkErr) {
+					trackError = linkErr.message;
+				} else {
+					trackUploaded = true;
+				}
 			}
-		} catch (_) {
-			// Track upload is best-effort — the scalar row is still valid.
+		} catch (e) {
+			trackError = e instanceof Error ? e.message : String(e);
 		}
 	}
 
-	return { id: runId };
+	return { id: runId, trackUploaded, trackError };
 }
 
 async function gzipBytes(data: Uint8Array): Promise<Uint8Array> {
