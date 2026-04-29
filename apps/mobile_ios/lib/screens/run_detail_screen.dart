@@ -684,18 +684,25 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   List<Widget> _buildLaps(ThemeData theme, DistanceUnit unit) {
+    // Canonical per-lap shape (`docs/metadata.md` § laps):
+    //   { index, start_offset_s, distance_m, duration_s }
+    // `distance_m` and `duration_s` are the *per-lap* deltas, not the
+    // cumulative totals — display each lap's own work, not running totals.
     return _laps.map((lap) {
-      final number = lap['number'] as int;
-      final dist = (lap['cumulative_distance_m'] as num).toDouble();
-      final dur = Duration(seconds: (lap['cumulative_duration_s'] as num).toInt());
+      final number = (lap['index'] as num).toInt();
+      final distM = (lap['distance_m'] as num).toDouble();
+      final durS = (lap['duration_s'] as num).toInt();
       return ListTile(
         leading: CircleAvatar(
           backgroundColor: theme.colorScheme.tertiaryContainer,
           child: Icon(Icons.flag, size: 18, color: theme.colorScheme.tertiary),
         ),
         title: Text('Lap $number'),
-        subtitle: Text(UnitFormat.distance(dist, unit)),
-        trailing: Text(_formatDuration(dur), style: theme.textTheme.titleMedium),
+        subtitle: Text(UnitFormat.distance(distM, unit)),
+        trailing: Text(
+          _formatDuration(Duration(seconds: durS)),
+          style: theme.textTheme.titleMedium,
+        ),
       );
     }).toList();
   }

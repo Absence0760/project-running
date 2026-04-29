@@ -109,5 +109,43 @@ void main() {
       final run = runFromWatchPayload(raw);
       expect(run.source, RunSource.watch);
     });
+
+    test('forwards a laps array verbatim into metadata', () {
+      // Reason: per docs/metadata.md § laps the canonical shape is
+      // { index, start_offset_s, distance_m, duration_s }. Wear OS
+      // already writes this shape; the watch ingest path must preserve
+      // it byte-for-byte so a future watch sender that pipes through
+      // the phone (instead of uploading direct) doesn't lose the
+      // user's mid-run lap markers.
+      final raw = _basePayload()
+        ..['laps'] = [
+          {
+            'index': 1,
+            'start_offset_s': 0,
+            'distance_m': 1000.0,
+            'duration_s': 300,
+          },
+          {
+            'index': 2,
+            'start_offset_s': 300,
+            'distance_m': 1200.0,
+            'duration_s': 360,
+          },
+        ];
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata, isNotNull);
+      expect(run.metadata!['laps'], hasLength(2));
+      expect(run.metadata!['laps'][0]['index'], 1);
+      expect(run.metadata!['laps'][1]['distance_m'], 1200.0);
+    });
+
+    test('a non-list laps payload is ignored (no metadata.laps key)', () {
+      // Defensive: if the watch ever ships laps as a Map (or anything
+      // else) by mistake, drop it rather than crashing the decoder.
+      final raw = _basePayload()..['laps'] = {'oops': 'wrong shape'};
+      final run = runFromWatchPayload(raw);
+      // metadata stays null because no other field was set either.
+      expect(run.metadata, isNull);
+    });
   });
 }

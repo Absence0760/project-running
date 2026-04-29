@@ -29,7 +29,10 @@ class LocationPermissionDeniedError extends Error {
 }
 
 /// A single lap split marked mid-run. Captures the cumulative distance and
-/// duration at the moment the user tapped the lap button.
+/// duration at the moment the user tapped the lap button. Cumulative values
+/// are convenient for the recorder loop (no previous-lap bookkeeping); the
+/// canonical wire shape (per-lap deltas) is computed at serialisation time
+/// by [lapsToCanonicalJson].
 class LapSplit {
   final int number;
   final DateTime timestamp;
@@ -42,13 +45,38 @@ class LapSplit {
     required this.cumulativeDistanceMetres,
     required this.cumulativeDuration,
   });
+}
 
-  Map<String, dynamic> toJson() => {
-        'number': number,
-        'timestamp': timestamp.toIso8601String(),
-        'cumulative_distance_m': cumulativeDistanceMetres,
-        'cumulative_duration_s': cumulativeDuration.inSeconds,
-      };
+/// Serialise a list of in-memory [LapSplit]s into the canonical JSON shape
+/// documented in `docs/metadata.md` § laps:
+/// `[{ index: int, start_offset_s: int, distance_m: double, duration_s: int }]`.
+///
+/// `start_offset_s` is the cumulative duration **up to the start of this
+/// lap** (i.e. the previous lap's cumulative duration, 0 for the first
+/// lap). `distance_m` and `duration_s` are this lap's deltas, not the
+/// cumulative totals — pure per-lap values, matching the Wear OS sender
+/// at `apps/watch_wear/.../RunViewModel.kt`. Negative deltas (which can
+/// only result from a clock skew between laps) are clamped to 0.
+List<Map<String, dynamic>> lapsToCanonicalJson(List<LapSplit> laps) {
+  final out = <Map<String, dynamic>>[];
+  var prevDist = 0.0;
+  var prevDuration = Duration.zero;
+  for (final lap in laps) {
+    final distM =
+        (lap.cumulativeDistanceMetres - prevDist).clamp(0.0, double.infinity);
+    final durDelta = lap.cumulativeDuration - prevDuration;
+    final durS =
+        durDelta.inSeconds < 0 ? 0 : durDelta.inSeconds;
+    out.add(<String, dynamic>{
+      'index': lap.number,
+      'start_offset_s': prevDuration.inSeconds,
+      'distance_m': distM,
+      'duration_s': durS,
+    });
+    prevDist = lap.cumulativeDistanceMetres;
+    prevDuration = lap.cumulativeDuration;
+  }
+  return out;
 }
 
 /// Manages a live GPS recording session: opens the position stream, filters
@@ -701,7 +729,7 @@ class RunRecorder {
       source: RunSource.app,
       metadata: _laps.isEmpty
           ? null
-          : {'laps': _laps.map((l) => l.toJson()).toList()},
+          : {'laps': lapsToCanonicalJson(_laps)},
     );
   }
 

@@ -116,6 +116,17 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
   if (avgBpm is num) metadata['avg_bpm'] = avgBpm.toDouble();
   final activity = raw['activity_type'];
   if (activity is String) metadata['activity_type'] = activity;
+  // Lap splits: registered shape per `docs/metadata.md` § laps —
+  // `[{ index, start_offset_s, distance_m, duration_s }]`. Forward
+  // verbatim so a watch sender that follows the registry survives a
+  // round-trip through the queue without losing the user's mid-run
+  // lap markers.
+  final laps = raw['laps'];
+  if (laps is List) {
+    metadata['laps'] = List<Map<String, dynamic>>.from(
+      laps.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+    );
+  }
 
   return cm.Run(
     id: id,
