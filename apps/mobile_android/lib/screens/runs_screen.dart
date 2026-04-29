@@ -96,19 +96,29 @@ class _RunsScreenState extends State<RunsScreen> {
     RunSource? sourceFilter,
   ) {
     final cutoff = _rangeCutoff(range);
-    var filtered = cutoff == null
-        ? List<Run>.from(all)
-        : all.where((r) => !r.startedAt.isBefore(cutoff)).toList();
+    // Pipe filters through Iterable.where so we materialise a List
+    // exactly once. When no filter applies and the requested sort
+    // matches the store's natural newest-first order, we can return
+    // the input directly (zero-alloc fast path) since the store hands
+    // us an unmodifiable view that the caller only reads.
+    Iterable<Run> stream = all;
+    if (cutoff != null) {
+      stream = stream.where((r) => !r.startedAt.isBefore(cutoff));
+    }
     if (activityFilter != null) {
-      filtered = filtered.where((r) {
+      stream = stream.where((r) {
         final type = ActivityType.fromName(
             r.metadata?['activity_type'] as String?);
         return type == activityFilter;
-      }).toList();
+      });
     }
     if (sourceFilter != null) {
-      filtered = filtered.where((r) => r.source == sourceFilter).toList();
+      stream = stream.where((r) => r.source == sourceFilter);
     }
+    final noFilters = identical(stream, all);
+    if (noFilters && sort == _RunsSort.newest) return all;
+    final filtered =
+        noFilters ? List<Run>.from(all) : stream.toList();
     switch (sort) {
       case _RunsSort.newest:
         filtered.sort((a, b) => b.startedAt.compareTo(a.startedAt));
