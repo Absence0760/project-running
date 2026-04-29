@@ -273,7 +273,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Account settings page (display name, preferred units)
 - [x] Enter parkrun athlete number
 - [x] Download all data as CSV (GDPR compliance)
-- [ ] Manage premium subscription
+- [x] Manage premium subscription — `/settings/upgrade` shows tier-aware copy and a Manage subscription button that redirects to the RevenueCat-supplied `managementURL` for web purchases (mobile users are routed to App Store / Play Store with explanatory toast).
 
 ### Public route and run pages
 
@@ -383,7 +383,7 @@ The original free-with-donations pivot (`decisions.md #18`) was superseded by th
 - [x] `monthly_funding` table retained but no longer read by the UI
 - [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)
 - [x] `ToastContainer.svelte` + `toast.svelte.ts` for transient success/error/info feedback
-- [ ] RevenueCat web SDK wired behind the "Get Pro" button (`Purchases.configure` + checkout flow)
+- [x] RevenueCat web SDK wired behind the "Get Pro" button — `lib/revenuecat.ts` calls `Purchases.configure(PUBLIC_REVENUECAT_WEB_API_KEY, userId)` and `/settings/upgrade` invokes `startProCheckout(userId)`. Falls back to a "Pro checkout is not configured on this build" toast when the env key is missing so dev/preview builds stay usable.
 - [ ] `purchases_flutter` wired on mobile — "Get Pro" flow on Android + iOS
 - [ ] Tier-aware rate-limiting on Edge Functions / Go service so the *priority processing* bullet has concrete enforcement beyond the coach-cap bypass
 
@@ -481,7 +481,7 @@ Surfaces that other running apps ship as table stakes and we don't. Each one is 
 - [ ] Add `geom geography(LineString, 4326)` column to `routes` with spatial index
 - [x] Add `training_plans` table for generated plans — shipped in migration `20260419_001_training_plans.sql` along with `plan_weeks` and `plan_workouts`. Hardening pass in `20260421_001_plan_hardening.sql`; editor / template surfaces in `20260420_001` and `20260524_001`.
 - [x] Add `fitness_snapshots` table for VO2 max and training load history (migration `20260507_001_fitness_snapshots.sql` — `vdot`, `vo2_max`, ATL / CTL / TSB columns, `qualifying_run_count`, `source` check, `latest_fitness_snapshot()` RPC. Server-side recompute job + advisor UI still pending.)
-- [ ] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles`
+- [x] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles` — Edge Function `revenuecat-webhook` (HMAC-verified via `REVENUECAT_WEBHOOK_SECRET`) handles INITIAL_PURCHASE / RENEWAL / CANCELLATION / EXPIRATION, maps lifetime SKUs to the `lifetime` tier, and updates `user_profiles.subscription_tier` with a guard that lifetime never gets downgraded.
 - [ ] Apply for Garmin Connect developer program
 
 ### Milestone: App Store + Play Store general availability
