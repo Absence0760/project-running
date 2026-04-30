@@ -546,14 +546,23 @@ private fun PreRunScreen(
             }
         }
 
-        // Centre: BIG primary action, dead centre. The bottom chips
-        // are positioned independently along the inscribed curve
-        // so there's no chip rail row competing for centre-band
-        // pixels — Start can anchor the screen geometrically.
+        // Primary action. Position is route-dependent:
+        //   * No route ⇒ dead centre, anchoring the otherwise-empty
+        //     midnight screen.
+        //   * Route picked ⇒ shifted down so the route preview map
+        //     above the button is unobstructed. Without this the
+        //     60-dp Start button covers a chunk of the polyline
+        //     right where the runner wants to confirm the shape.
+        // Re-evaluates whenever a route is picked/cleared, so the
+        // button "comes back" to centre naturally on clear.
+        val routeSelected = authed && selectedRouteWaypoints.isNotEmpty()
+        val startAlign = if (routeSelected) Alignment.BottomCenter else Alignment.Center
+        val startBottomPadding = if (routeSelected) 58.dp else 0.dp
         Button(
             onClick = onStart,
             modifier = Modifier
-                .align(Alignment.Center)
+                .align(startAlign)
+                .padding(bottom = startBottomPadding)
                 .size(ButtonDefaults.LargeButtonSize),
         ) {
             Text(
