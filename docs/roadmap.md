@@ -327,7 +327,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Route ratings and comments — `route_reviews` table (1-5 stars + optional comment, one per user per route), reviews section on route detail screen, avg rating in stats row, submit/edit review dialog
 - [x] **Club-owned routes** — `routes.club_id` (nullable FK) shipped in migration `20260520_001_club_owned_routes.sql`; data layer (`getClubRoutes`, `transferRouteToClub`), EventEditor optgroups, and the `/clubs/[slug]` Routes tab with admin transfer/create are wired. See decisions.md § 30.
 - [x] **Save-to-library is a reference, not a clone** — `saved_routes (user_id, route_id)` join table shipped in the same migration; `getMyRoutes` UNIONs personal + saved, `bookmarkRoute` / `unbookmarkRoute` insert into the join table instead of cloning, and the canonical row accumulates `run_count`. See decisions.md § 30.
-- [ ] Share to social (image card with map + stats)
+- [x] Share to social (image card with map + stats) — `widgets/route_share_card.dart` mirrors the existing `run_share_card` pattern: portrait `RepaintBoundary` with the route polyline + name + distance + climb + surface, captured via `boundary.toImage(pixelRatio: 3.0)` and handed to `share_plus`. Wired into `route_detail_screen` Share popup as "Share as image" alongside the existing GPX / KML options. Mirrored byte-identically to mobile_ios.
 - [ ] SEO-indexed public route pages
 
 ### Clubs and events — social layer

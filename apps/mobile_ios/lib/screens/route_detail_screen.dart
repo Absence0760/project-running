@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
 
 class RouteDetailScreen extends StatefulWidget {
@@ -248,6 +249,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             tooltip: 'Share',
             onSelected: (fmt) => _shareAs(context, fmt),
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'image', child: Text('Share as image')),
               PopupMenuItem(value: 'gpx', child: Text('Share as GPX')),
               PopupMenuItem(value: 'kml', child: Text('Share as KML')),
             ],
@@ -479,6 +481,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   Future<void> _shareAs(BuildContext context, String format) async {
     final route = widget.route;
+    if (format == 'image') {
+      await showRouteShareSheet(
+        context,
+        route: route,
+        preferences: widget.preferences,
+      );
+      return;
+    }
     try {
       final tmp = await getTemporaryDirectory();
       final safe = route.name
