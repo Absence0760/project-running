@@ -170,9 +170,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     await widget.routeStore.save(buildRoute(newValue));
     try {
       await api.setRouteStar(r.id, newValue);
-    } catch (_) {
+    } catch (e) {
       if (mounted) setState(() => _isStarred = !newValue);
       await widget.routeStore.save(buildRoute(!newValue));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update star: $e')),
+        );
+      }
     }
   }
 
