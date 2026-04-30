@@ -522,12 +522,17 @@ private fun PreRunScreen(
         // so they hug the inscribed circle's curve, matching the
         // running screen's Pause / Lap / Stop pattern. Centre chip
         // (Route, or Sign-in when unauthed) sits at the lowest
-        // point; Activity and Pace sit on the sides slightly higher
-        // so their corners don't get clipped by the bezel. widthIn
-        // caps each chip — long route names ellipsis-truncate but
-        // can't push into the side chips.
+        // point; Activity and Pace sit on the sides higher up
+        // (~36 dp from the bottom edge) where the chord is wide
+        // enough that their rounded corners aren't clipped by the
+        // bezel — at the very bottom, the chord narrows to ~140 dp
+        // and a 60-dp chip with 8 dp side padding falls outside it.
+        // Backdrop is white-alpha-0.15 instead of black-alpha-0.55
+        // so the chips remain visible against the midnight
+        // background (no-route case) AND against street tiles
+        // (route-selected case) — frosted-glass on either.
         val translucentChip = ChipDefaults.secondaryChipColors(
-            backgroundColor = Color.Black.copy(alpha = 0.55f),
+            backgroundColor = Color.White.copy(alpha = 0.15f),
             contentColor = DuskPalette.parchment,
         )
         CompactChip(
@@ -543,8 +548,8 @@ private fun PreRunScreen(
             colors = translucentChip,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 8.dp, bottom = 30.dp)
-                .widthIn(max = 60.dp),
+                .padding(start = 22.dp, bottom = 36.dp)
+                .widthIn(max = 56.dp),
         )
         if (authed) {
             CompactChip(
@@ -560,7 +565,7 @@ private fun PreRunScreen(
                 colors = translucentChip,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 14.dp)
                     .widthIn(max = 100.dp),
             )
         } else {
@@ -579,7 +584,7 @@ private fun PreRunScreen(
                 colors = translucentChip,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 14.dp),
             )
         }
         CompactChip(
@@ -596,8 +601,8 @@ private fun PreRunScreen(
             colors = translucentChip,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 8.dp, bottom = 30.dp)
-                .widthIn(max = 60.dp),
+                .padding(end = 22.dp, bottom = 36.dp)
+                .widthIn(max = 56.dp),
         )
 
         // Top-corner icon buttons. Sign-out at TopEnd, "fix battery
