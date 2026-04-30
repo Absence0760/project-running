@@ -21,7 +21,7 @@ IMAGE      := osrm/osrm-backend:latest
 # running tracks — using `car.lua` would discard half the parks +
 # trails the runners actually care about.
 
-.PHONY: download build clean serve stop logs ps
+.PHONY: download build clean serve stop logs ps smoke
 
 download: $(PBF)
 
@@ -61,3 +61,13 @@ ps:
 clean:
 	rm -f data/region.osrm*
 	@echo "✓ Cleared extracted graph; PBF preserved. Run 'make build' to regenerate."
+
+# End-to-end smoke test: queue a Melbourne run through the live stack
+# and assert run_matched_tracks goes status=matched. Requires:
+#   - this OSRM container up on $$OSRM_URL (default 127.0.0.1:5000)
+#   - the local Supabase stack up (apps/backend)
+#   - the worker running with OSRM_URL set, in another terminal
+# Tunables live at the top of smoke.sh — OSRM_URL, WAIT_S,
+# SEED_USER_ID, PG_CONTAINER.
+smoke:
+	@./smoke.sh

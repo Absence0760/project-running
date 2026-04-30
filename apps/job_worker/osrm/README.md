@@ -76,6 +76,58 @@ Without `OSRM_URL`, the worker stays on `PassthroughMatcher` (raw
 track in, raw track out) so the rest of the pipeline can be exercised
 without a running OSRM stack.
 
+## Smoke test
+
+Once OSRM is up, the local Supabase stack is running, and the worker
+is draining with `OSRM_URL` set, `make smoke` runs an end-to-end check:
+
+```bash
+# Terminal 1: OSRM
+cd apps/job_worker/osrm && docker compose up -d
+
+# Terminal 2: worker
+cd apps/job_worker
+eval "$(cd ../backend && supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
+SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+  OSRM_URL=http://127.0.0.1:5000 go run .
+
+# Terminal 3: smoke test
+cd apps/job_worker/osrm
+make smoke
+```
+
+What `make smoke` does, in order:
+
+1. Probes OSRM `/health` and a Melbourne-region `/match` call to
+   confirm the right PBF is loaded.
+2. Pulls `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from
+   `supabase status -o env` if they aren't in the environment.
+3. Uploads a 6-point Royal Botanic Gardens track to Storage as
+   `runs/<seed user>/<new run id>.json.gz`.
+4. Inserts a `runs` row, which fires the trigger that queues a
+   `kind='map_match'` job.
+5. Polls `run_matched_tracks` for up to `WAIT_S` (default 15) seconds,
+   waiting for `status='matched'`.
+6. Pretty-prints the first three points of the raw and matched
+   tracks side-by-side. If OSRM is wired correctly the coordinates
+   are different — that's the snap.
+
+Tunables (set them before `make smoke`):
+
+| Variable | Default | When to change |
+|---|---|---|
+| `OSRM_URL` | `http://127.0.0.1:5000` | Different host/port. |
+| `WAIT_S` | `15` | Slow laptop or sub-2 s `PollInterval` retune on the worker. |
+| `SEED_USER_ID` | the seed `runner@test.com` UUID | If you replaced the seed. |
+| `PG_CONTAINER` | `supabase_db_backend` | If your local Supabase isn't using the default container name. |
+
+Failure modes the script reports clearly:
+
+- OSRM unreachable → "is `docker compose up -d` running?"
+- OSRM returns `code != "Ok"` for the Melbourne probe → "wrong region for the loaded PBF"
+- `run_matched_tracks.status` never leaves `pending` → "is the worker running?"
+- `status='matched'` but raw and matched coords identical → matcher is on `PassthroughMatcher`; `OSRM_URL` wasn't picked up by the worker
+
 ## Troubleshooting
 
 - **`Could not access /data/region.osrm`** — `make build` didn't run

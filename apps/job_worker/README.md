@@ -36,8 +36,14 @@ shuts down between jobs.
 
 ## End-to-end smoke test
 
-To prove the pipeline works against the local stack, upload a test
-track + insert a run, then watch the worker drain it:
+For the OSRM-engine path, the easiest way is `make smoke` in
+[`./osrm/`](osrm/) — it stands up the run row, polls
+`run_matched_tracks` until the worker writes `status='matched'`, and
+prints raw vs matched coordinates side-by-side. See
+[`./osrm/README.md` § Smoke test](osrm/README.md#smoke-test).
+
+For the passthrough engine (no OSRM running), the bare-hands recipe
+below uploads a tiny track, inserts the run, and checks the row:
 
 ```bash
 eval "$(cd ../backend && supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
