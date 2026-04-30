@@ -866,7 +866,9 @@ This is intentional, not technical debt.
 
 **Trade-off:** every limited request now does an extra round-trip to Postgres. Negligible against the network calls these EFs already make (Strava, parkrun.org, etc.), and the rate-limit table grows slowly enough that an hourly `pg_cron` sweep keeps it under control.
 
-**Don't re-litigate unless:** an EF needs sub-50 ms latency and the round-trip becomes the bottleneck (move that one to Deno KV with a documented per-instance fan-out caveat), or a tier-aware limit lands that wants different ceilings for free vs Pro (pass `max` from the caller — the function already takes it as a parameter, so no schema change needed).
+**Tier-aware extension** (migration `20260605_001_rate_limits_tiered.sql`): a sibling function `check_rate_limit_tiered(user, bucket, free_max, pro_max, window)` resolves `user_profiles.subscription_tier` and the window check in one transaction so paywalled endpoints can pass two ceilings without a separate tier-lookup round-trip. Lifetime is treated as pro; unknown / missing tier defaults to free as the conservative fallback.
+
+**Don't re-litigate unless:** an EF needs sub-50 ms latency and the round-trip becomes the bottleneck (move that one to Deno KV with a documented per-instance fan-out caveat), or the limit needs to vary by something other than user tier (then `check_rate_limit` taking `max` as a parameter is already the right primitive — wrap it differently).
 
 ---
 

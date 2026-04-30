@@ -56,3 +56,62 @@ export async function checkRateLimit(
     },
   );
 }
+
+/// Tier-aware variant. Picks between `freeMax` and `proMax` based on
+/// the caller's `user_profiles.subscription_tier`. Single SQL round
+/// trip — the function does the tier lookup + the window check in
+/// one transaction (migration 20260605_001).
+///
+///   const denied = await checkRateLimitTiered(supabase, user.id,
+///     'strava-import:sync', /* free */ 4, /* pro */ 16, 3600);
+///   if (denied) return denied;
+///
+/// On allow returns null. On deny returns 429 with Retry-After.
+/// Pro / lifetime users get the higher ceiling; everyone else
+/// (including missing-profile rows) gets the free ceiling — the
+/// conservative default if the RevenueCat sync drifts.
+export async function checkRateLimitTiered(
+  supabase: SupabaseClient,
+  userId: string,
+  bucket: string,
+  freeMax: number,
+  proMax: number,
+  windowSeconds: number,
+): Promise<Response | null> {
+  const { data, error } = await supabase.rpc('check_rate_limit_tiered', {
+    p_user_id: userId,
+    p_bucket: bucket,
+    p_free_max: freeMax,
+    p_pro_max: proMax,
+    p_window_seconds: windowSeconds,
+  });
+
+  if (error || !Array.isArray(data) || data.length === 0) {
+    console.warn('check_rate_limit_tiered RPC failed; allowing request:', error);
+    return null;
+  }
+
+  const row = data[0] as {
+    allowed: boolean;
+    retry_after_seconds: number;
+    tier: string;
+  };
+  if (row.allowed) return null;
+
+  const retryAfter = Math.max(1, row.retry_after_seconds | 0);
+  return new Response(
+    JSON.stringify({
+      error: 'rate_limit_exceeded',
+      bucket,
+      tier: row.tier,
+      retry_after_seconds: retryAfter,
+    }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': String(retryAfter),
+      },
+    },
+  );
+}

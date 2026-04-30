@@ -1542,6 +1542,20 @@ export type Database = {
           retry_after_seconds: number
         }[]
       }
+      check_rate_limit_tiered: {
+        Args: {
+          p_bucket: string
+          p_free_max: number
+          p_pro_max: number
+          p_user_id: string
+          p_window_seconds: number
+        }
+        Returns: {
+          allowed: boolean
+          retry_after_seconds: number
+          tier: string
+        }[]
+      }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       clip_track_for_user: {

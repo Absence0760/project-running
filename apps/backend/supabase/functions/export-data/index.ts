@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { checkRateLimit } from '../_shared/rate_limit.ts';
+import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 
 serve(async (req: Request) => {
   // Authenticate before parsing the body. Otherwise a malformed-JSON
@@ -18,10 +18,11 @@ serve(async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  // 2/hour. Even when implemented this is a heavy operation
-  // (zip-and-ship of every run + track) — once-an-hour is more than
-  // enough cadence and protects against accidental scripted retries.
-  const denied = await checkRateLimit(supabase, user.id, 'export-data', 2, 3600);
+  // Free 2/h, pro 8/h. Heavy operation (zip-and-ship of every run +
+  // track) so even Pro doesn't get unlimited; the higher Pro ceiling
+  // accommodates "I'm migrating off the platform / making backups
+  // for several reasons today" without the 1/2-hour wait.
+  const denied = await checkRateLimitTiered(supabase, user.id, 'export-data', 2, 8, 3600);
   if (denied) return denied;
 
   // The function is a stub (TODO: fetch runs, convert to GPX/CSV,

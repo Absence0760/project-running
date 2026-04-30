@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
-import { checkRateLimit } from '../_shared/rate_limit.ts';
+import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 
 serve(async (req: Request) => {
   // Authenticate before parsing the body. Malformed JSON from an
@@ -19,10 +19,12 @@ serve(async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  // Per-user limit: 4 imports/hour. parkrun.org doesn't publish a
-  // crawl rate; this errs on the side of polite scraping while still
-  // letting a user retry a few times after a glitch.
-  const denied = await checkRateLimit(supabase, user.id, 'parkrun-import', 4, 3600);
+  // Per-user limit: free 4/h, pro 16/h. parkrun.org doesn't publish
+  // a crawl rate; the free ceiling errs on polite scraping while
+  // still letting a user retry after a glitch. The pro multiplier is
+  // 4× — enough that a Pro user importing across multiple historic
+  // athlete numbers in one sitting doesn't hit the wall.
+  const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import', 4, 16, 3600);
   if (denied) return denied;
 
   const { athleteNumber } = await req.json();

@@ -652,6 +652,73 @@ BEGIN
   DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
 END $$;
 
+-- ───────── check_rate_limit_tiered (migration 20260605_001) ─────────
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  test_bucket text := 'tiered_test';
+  v_allowed boolean;
+  v_tier text;
+  v_initial_tier text;
+BEGIN
+  -- Snapshot the seed user's tier so we can restore it; the seed
+  -- defaults to 'free' but we don't want this test to silently
+  -- depend on that.
+  SELECT subscription_tier INTO v_initial_tier FROM user_profiles WHERE id = test_user;
+  DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
+
+  -- Ensure free tier first.
+  UPDATE user_profiles SET subscription_tier = 'free' WHERE id = test_user;
+
+  -- Free user: limit (free=2, pro=10) — 3rd call denies.
+  SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'tiered: free 1st call should allow'; END IF;
+  SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'tiered: free 2nd call should allow'; END IF;
+  SELECT allowed, tier INTO v_allowed, v_tier
+    FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
+  IF v_allowed THEN RAISE EXCEPTION 'tiered: free 3rd call should deny'; END IF;
+  IF v_tier <> 'free' THEN RAISE EXCEPTION 'tiered: free user tier echo wrong, got %', v_tier; END IF;
+
+  DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
+
+  -- Pro user: same params, 11th call denies.
+  UPDATE user_profiles SET subscription_tier = 'pro' WHERE id = test_user;
+  FOR i IN 1..10 LOOP
+    SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
+    IF NOT v_allowed THEN RAISE EXCEPTION 'tiered: pro call % should allow', i; END IF;
+  END LOOP;
+  SELECT allowed, tier INTO v_allowed, v_tier
+    FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
+  IF v_allowed THEN RAISE EXCEPTION 'tiered: pro 11th call should deny'; END IF;
+  IF v_tier <> 'pro' THEN RAISE EXCEPTION 'tiered: pro user tier echo wrong, got %', v_tier; END IF;
+
+  DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
+
+  -- Lifetime treated identically to pro (gets the higher ceiling).
+  UPDATE user_profiles SET subscription_tier = 'lifetime' WHERE id = test_user;
+  FOR i IN 1..10 LOOP
+    SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
+    IF NOT v_allowed THEN RAISE EXCEPTION 'tiered: lifetime call % should allow (treated as pro)', i; END IF;
+  END LOOP;
+
+  DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
+
+  -- Input validation: any non-positive arg raises.
+  BEGIN
+    PERFORM check_rate_limit_tiered(test_user, test_bucket, 0, 10, 3600);
+    RAISE EXCEPTION 'tiered: free_max=0 should have raised';
+  EXCEPTION
+    WHEN raise_exception THEN
+      IF SQLERRM NOT LIKE '%must be positive%' THEN
+        RAISE EXCEPTION 'tiered: free_max=0 raised wrong error: %', SQLERRM;
+      END IF;
+  END;
+
+  -- Restore the seed-time tier so downstream tests don't see drift.
+  UPDATE user_profiles SET subscription_tier = v_initial_tier WHERE id = test_user;
+END $$;
+
 -- ───────── integrations vault (migration 20260603_001) ─────────
 -- Uses runner@test.com + provider='runsignup' (a valid value per the
 -- 20260505_001 CHECK constraint that the seed doesn't exercise) so

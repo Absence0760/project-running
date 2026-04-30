@@ -152,6 +152,15 @@ if (denied) return denied; // 429 with Retry-After header
 
 Backed by `rate_limits (user_id, bucket, window_start, count)` (migration `20260604_001`) with fixed-window bucketing — `floor(epoch / window) * window` keys all hits in the same wall-clock window to the same row. `check_rate_limit` is SECURITY DEFINER so EFs only need the function grant, not direct table access. Cron job `cleanup-stale-rate-limits` sweeps rows >24 h old hourly.
 
+For paywalled paths use the tiered variant (migration `20260605_001`):
+
+```ts
+const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import',
+  /* free */ 4, /* pro */ 16, 3600);
+```
+
+The SQL function reads `user_profiles.subscription_tier` and the rate-limit row in one transaction, so EF latency stays constant. Lifetime is treated as pro; missing or unknown tier values fall back to free as the conservative default.
+
 The helper fails open on RPC error — a transient DB blip won't manifest as a wave of 429s — and only emits 429 on a real deny.
 
 Don't apply this to `refresh-tokens` (cron, no user.id), `revenuecat-webhook` (HMAC-validated, RC-side), or `strava-webhook` (Strava-side, URL-secret guarded).

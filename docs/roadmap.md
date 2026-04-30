@@ -385,7 +385,7 @@ The original free-with-donations pivot (`decisions.md #18`) was superseded by th
 - [x] `ToastContainer.svelte` + `toast.svelte.ts` for transient success/error/info feedback
 - [x] RevenueCat web SDK wired behind the "Get Pro" button — `lib/revenuecat.ts` calls `Purchases.configure(PUBLIC_REVENUECAT_WEB_API_KEY, userId)` and `/settings/upgrade` invokes `startProCheckout(userId)`. Falls back to a "Pro checkout is not configured on this build" toast when the env key is missing so dev/preview builds stay usable.
 - [ ] `purchases_flutter` wired on mobile — "Get Pro" flow on Android + iOS
-- [ ] Tier-aware rate-limiting on Edge Functions / Go service so the *priority processing* bullet has concrete enforcement beyond the coach-cap bypass
+- [x] Tier-aware rate-limiting on Edge Functions — migration `20260605_001_rate_limits_tiered.sql` adds `check_rate_limit_tiered(user, bucket, free_max, pro_max, window)` which resolves `user_profiles.subscription_tier` and the window check in one round trip. Wired into the heavy paths: `parkrun-import` 4/h → 16/h, `strava-import:sync` 4/h → 16/h, `export-data` 2/h → 8/h. `delete-account` stays at 3/h regardless of tier (destructive action, tier shouldn't loosen it). Lifetime treated as pro. Free-tier fallback is conservative — missing-profile rows get the lower ceiling.
 
 ### Premium tier — training and coaching (deferred, see decisions.md #18 and #23)
 
