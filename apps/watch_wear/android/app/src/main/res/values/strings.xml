@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown in the watch face's tile picker UI (Add tile → list).
+         Keep short enough to fit a Wear OS row chip. -->
+    <string name="tile_active_run_label">Active run</string>
+</resources>

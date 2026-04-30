@@ -141,6 +141,17 @@ dependencies {
     // AmbientLifecycleObserver + AmbientAware lives here.
     implementation("androidx.wear:wear:1.3.0")
 
+    // Tiles + ProtoLayout for the active-run tile. ProtoLayout is the
+    // modern layout dialect (replaces the older `wear-tiles-material`
+    // builders); the `tooling-preview` artefact is the side-loadable
+    // tile preview Studio uses, kept off the release classpath via
+    // `debugImplementation`.
+    implementation("androidx.wear.tiles:tiles:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+    implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
+    implementation("androidx.wear.protolayout:protolayout-expression:1.2.1")
+    debugImplementation("androidx.wear.tiles:tiles-renderer:1.4.1")
+
     // Health Services (live HR). 1.1.0-rc01 is the latest pre-stable; 1.0.0
     // is the last stable tag but lacks the flow helpers we want. Move to
     // 1.1.0 stable when it ships.

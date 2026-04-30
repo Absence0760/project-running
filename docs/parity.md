@@ -126,6 +126,14 @@ See [features § Route overlay during run](features.md#route-overlay-during-run)
 | Off-route detection and alert | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: the pre-run Route chip opens a picker; the selected route's waypoints flow through `ACTION_START` into `RunRecordingService`, which calls `RouteMath.offRouteDistanceM` per GPS sample. `RunningScreen` shows an "Off route · N m" banner above the distance readout; entering the off-route state fires a double `HapticFeedback.LongPress`. Hysteresis (alert >40 m, clear <20 m) prevents boundary chatter. |
 | Distance remaining to end of route | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: `RouteMath.routeRemainingM` runs alongside off-route per GPS sample; `RunningScreen` renders "X.XX km to go" under the elapsed-distance line whenever a route is loaded. Hidden when `selectedRoute` is null. |
 
+## Glanceable tiles and complications
+
+See [roadmap § Glanceable tiles and complications](roadmap.md#glanceable-tiles-and-complications).
+
+| Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
+|---|---|---|---|---|---|---|
+| Active-run tile / complication (elapsed · distance · pace) | N/A | N/A | N/A | ✓ | Partial | Wear OS: `apps/watch_wear/.../tiles/ActiveRunTileService.kt` renders an idle "Tap to start" layout and an active 3-line stat layout (elapsed time, distance, pace) via ProtoLayout. `RunRecordingService` calls `requestUpdate` on every stage transition. 7 formatter tests + a wiring guard (≥4 `requestUpdate` call-sites pinned). Apple Watch: source for the WidgetKit complication ships under `apps/watch_ios/Complications/` (TimelineProvider + four widgetFamily views + an App-Group-backed bridge); `WorkoutManager.publishComplicationSnapshot` is called on every state transition. Partial because the Widget Extension target itself is a one-time Xcode add — see `apps/watch_ios/Complications/README.md`. |
+
 ## Run history and analytics
 
 See [features § Run history](features.md#run-history), [features § Analytics dashboard (web)](features.md#analytics-dashboard-web), and [features § Deep run analysis (web)](features.md#deep-run-analysis-web).

@@ -188,8 +188,8 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 
 ### Glanceable tiles and complications
 
-- [ ] watchOS complication: pace + distance
-- [ ] Wear OS tile: active run summary
+- [ ] watchOS complication: pace + distance — Swift source + provider + four `widgetFamily` views (Circular / Corner / Inline / Rectangular) ship in `apps/watch_ios/Complications/`. `WorkoutManager` writes an active-run snapshot to an App-Group `UserDefaults` on every state transition (`publishComplicationSnapshot`) and nudges `WidgetCenter.reloadTimelines`. **Checkbox stays unticked until the Widget Extension target is added in Xcode** — see [`apps/watch_ios/Complications/README.md`](../apps/watch_ios/Complications/README.md) for the one-time wiring step.
+- [x] Wear OS tile: active run summary — `apps/watch_wear/.../tiles/ActiveRunTileService.kt` renders idle ("Tap to start") and active (elapsed time + distance + pace) layouts via ProtoLayout. `RunRecordingService` calls `requestUpdate` on every stage transition (start / pause / resume / stop) so the tile content always matches the live recording state. Manifest entry guards the service with `BIND_TILE_PROVIDER`; preview drawable shown in the watch face's tile picker. Pure formatter unit tests + a source-level wiring guard pin the contract.
 
 ### Live spectator tracking
 

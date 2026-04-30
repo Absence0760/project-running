@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static preview shown in the Wear OS tile picker. The dynamic tile
+  re-renders at bind time via ActiveRunTileService; this asset only
+  needs to give the user a sense of what they're adding. Sized for
+  the standard 192×192 dp tile preview.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+
+    <!-- Midnight background matching DuskPalette.midnight -->
+    <path
+        android:fillColor="#0E1622"
+        android:pathData="M0,0 L192,0 L192,192 L0,192 Z" />
+
+    <!-- Coral accent line at the bottom suggests an active state -->
+    <path
+        android:fillColor="#D97A54"
+        android:pathData="M16,160 L176,160 L176,168 L16,168 Z" />
+
+    <!-- Simplified runner glyph: head + torso + leg sweep -->
+    <path
+        android:fillColor="#F5DDC8"
+        android:pathData="M104,52 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
+    <path
+        android:fillColor="#F5DDC8"
+        android:pathData="M96,72 L116,72 L122,108 L132,140 L122,144 L112,114 L102,144 L92,140 L100,110 L88,90 L72,98 L70,90 L88,80 Z" />
+</vector>

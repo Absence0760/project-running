@@ -52,5 +52,24 @@
             android:name=".recording.RunRecordingService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Active-run glanceable tile. The BIND_TILE_PROVIDER permission
+             is enforced by the platform: only the Wear OS Tiles host can
+             bind to the service, so `exported=true` is safe (and required
+             — the host process is not us). The PREVIEW meta-data points
+             at the static drawable shown in the watch face's tile picker;
+             the live tile renders dynamically at request time. -->
+        <service
+            android:name=".tiles.ActiveRunTileService"
+            android:exported="true"
+            android:label="@string/tile_active_run_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_active_run_preview" />
+        </service>
     </application>
 </manifest>

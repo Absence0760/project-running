@@ -252,6 +252,29 @@ class RouteMiniMapWiringTest {
     }
 
     @Test
+    fun `RunRecordingService pushes tile updates on every stage transition`() {
+        // Why: the active-run tile is rendered from
+        // RecordingRepository.metrics.value at TileService.onTileRequest
+        // time. Without an explicit `requestUpdate` on each stage flip,
+        // the tile content is whatever the platform last cached — a
+        // runner who pauses and swipes to the tile would still see
+        // "RUNNING", and the post-stop tile would still show stats from
+        // the just-finished run. Each transition (start, pause, resume,
+        // stop) must call ActiveRunTileService.requestUpdate so the
+        // platform re-binds and re-renders.
+        val src = read("recording/RunRecordingService.kt")
+        // Match `ActiveRunTileService.requestUpdate(this)` (FQN or
+        // import-resolved short form). The regex tolerates either.
+        val pattern = Regex("""ActiveRunTileService\.requestUpdate\s*\(""")
+        val hits = pattern.findAll(src).count()
+        assertTrue(
+            "RunRecordingService must call ActiveRunTileService.requestUpdate at " +
+                "≥4 stage transitions (start / pause / resume / stop); found $hits",
+            hits >= 4,
+        )
+    }
+
+    @Test
     fun `SupabaseClient_fetchRoutes filters starred-first with a recent fallback`() {
         // Why: the watch picker is gated server-side on `is_starred =
         // true` so a user with 200 saved routes doesn't have to scroll

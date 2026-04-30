@@ -268,11 +268,23 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).
-- **Watch face tile / complication.**
 - **End-to-end soak test on a real device.** All of the above ships in
   this session as compiles-cleanly code; verifying it actually
   records 60+ minutes without dropping samples requires putting it on a
   watch and going for a real run.
+
+## Active-run tile
+
+`tiles/ActiveRunTileService.kt` is a `TileService` (Wear Tiles + ProtoLayout) that renders a glanceable summary of the live run on the watch face's tile carousel. Two states:
+
+- **Idle** — single "Tap to start" prompt that launches `MainActivity` (deliberate: a one-tap "this starts a run NOW" tile would be a foot-gun for a casual swipe).
+- **Active** (Recording or Paused) — three-line layout: status pip ("RUNNING" / "PAUSED"), elapsed time as the headline (`mm:ss` under an hour, `h:mm:ss` over), and a stats row "5.12 km · 5:30/km".
+
+Pure formatters (`formatElapsed`, `formatStatRow`, `formatPaceSecPerKm`) are the only testable surface — the layouts themselves can't be unit-tested without Robolectric. 7 tests in `test/.../tiles/ActiveRunTileFormattersTest.kt` cover the boundary cases (zero-elapsed, sub-/over-hour crossover, negative-clamp, distance decimals at the 10 km cutoff, null/non-finite/non-positive pace).
+
+Updates flow from `RunRecordingService`: every stage transition (`startRecording`, `pauseRecording`, `resumeRecording`, `stopRecording`) calls `ActiveRunTileService.requestUpdate(this)`. The platform debounces multiple rapid calls; we deliberately don't push per-second ticks because Wear OS throttles tile refreshes. The `freshnessIntervalMillis = 30_000L` on the active-state Tile lets the platform re-bind every 30 s when the user swipes to it mid-run, which catches up the elapsed display without us needing per-tick wake-ups. The wiring guard in `RouteMiniMapWiringTest` pins ≥4 `requestUpdate` call sites in `RunRecordingService`.
+
+Manifest: `<service android:name=".tiles.ActiveRunTileService">` with `permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER"` (only the Wear OS Tiles host can bind; `exported=true` is required because the host is a separate process). Preview drawable `res/drawable/tile_active_run_preview.xml` is what the watch face's tile picker shows when the user adds the tile; the live tile re-renders dynamically at request time. `res/values/strings.xml`'s `tile_active_run_label` is the picker chip text.
 
 ## Recording UX — what's shipped on the Running screen
 

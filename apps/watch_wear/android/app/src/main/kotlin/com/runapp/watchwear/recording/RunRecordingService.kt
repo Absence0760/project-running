@@ -207,6 +207,7 @@ class RunRecordingService : Service() {
                 routeWaypoints = routeWaypoints,
             )
         }
+        com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
 
         subscribeToGps()
         // Self-healing GPS retry loop. Mirrors Android's
@@ -308,6 +309,7 @@ class RunRecordingService : Service() {
         RecordingRepository.update { it.copy(stage = RecordingRepository.Stage.Paused) }
         val elapsed = activeElapsedMs()
         refreshNotification(elapsed, RecordingRepository.metrics.value.distanceM, paused = true)
+        com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
     }
 
     private fun resumeRecording() {
@@ -318,6 +320,7 @@ class RunRecordingService : Service() {
         }
         lastLocation = null
         RecordingRepository.update { it.copy(stage = RecordingRepository.Stage.Recording) }
+        com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
     }
 
     private fun stopRecording() {
@@ -360,6 +363,7 @@ class RunRecordingService : Service() {
 
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
+        com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
         stopSelf()
     }
 

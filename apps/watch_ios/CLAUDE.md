@@ -55,6 +55,7 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 - `RouteNavigator.swift` — route preview and off-route detection on the watch (stub — no logic yet)
 - `HealthKitManager.swift` — `HKWorkoutSession` + `HKLiveWorkoutBuilder` wrapper that publishes live heart rate from the watch's sensor
 - `SupabaseService.swift` — DEBUG-only direct Supabase REST calls from the watch (no shared Dart/JS code)
+- `ActiveRunBridge.swift` — App-Group-backed `UserDefaults` write/read shared with the active-run complication target. `WorkoutManager.publishComplicationSnapshot()` writes here on every workout state transition. See `apps/watch_ios/Complications/README.md` for the one-time Xcode wiring
 
 ## What's real vs stubbed
 
@@ -69,7 +70,7 @@ Per [`roadmap.md` § Phase 2](../../docs/roadmap.md), the current checkbox statu
 - [ ] Route preview on watch face before starting
 - [ ] Live position on mini-map during run
 - [ ] Off-route haptic + "recalculating" indicator
-- [ ] watchOS complication: pace + distance
+- [ ] watchOS complication: pace + distance — Swift source (provider + four `widgetFamily` views) ships in `apps/watch_ios/Complications/`. `WorkoutManager.publishComplicationSnapshot` writes the active-run state to an App-Group `UserDefaults` on every transition (start / pause / resume / stop / reset) and nudges `WidgetCenter.shared.reloadTimelines`. Checkbox stays `[ ]` until the Widget Extension target is added in Xcode — see `apps/watch_ios/Complications/README.md`
 
 `WorkoutManager.State` now has five cases: `idle`, `recovering`, `recording`, `paused`, `finished`.
 

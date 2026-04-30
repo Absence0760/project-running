@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import WatchKit
+import WidgetKit
 
 /// Manages run recording: timer, GPS tracking, distance and pace calculation.
 class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -119,6 +120,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
 
         state = .recording
+        publishComplicationSnapshot()
     }
 
     func pause() {
@@ -127,6 +129,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.stopUpdatingLocation()
         healthKit.pauseSession()
         state = .paused
+        publishComplicationSnapshot()
     }
 
     func resume() {
@@ -136,6 +139,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.startUpdatingLocation()
         healthKit.resumeSession()
         state = .recording
+        publishComplicationSnapshot()
     }
 
     func stop() {
@@ -172,6 +176,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         )
 
         state = .finished
+        publishComplicationSnapshot()
     }
 
     func reset() {
@@ -190,6 +195,30 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         checkpointStore = nil
         currentRunId = nil
         state = .idle
+        publishComplicationSnapshot()
+    }
+
+    /// Push the active-run snapshot to the App-Group container that
+    /// the complication widget extension reads from. The widget
+    /// extension lives in its own process and can't observe
+    /// `@Published` properties directly, so this is the handoff
+    /// point. After writing we also nudge `WidgetCenter` so the
+    /// platform replaces the previous timeline immediately rather
+    /// than waiting up to ~30 minutes for the next natural refresh.
+    /// Called on every state transition (start / pause / resume /
+    /// stop / reset) — see ActiveRunComplicationBundle for the
+    /// reader side.
+    private func publishComplicationSnapshot() {
+        let isActive = state == .recording || state == .paused
+        let snapshot = ActiveRunSnapshot(
+            isActive: isActive,
+            elapsedSeconds: Int(elapsedSeconds),
+            distanceMeters: distanceMetres,
+            paceSecPerKm: currentPace,
+            lastUpdatedEpoch: Date().timeIntervalSince1970,
+        )
+        ActiveRunBridge.write(snapshot)
+        WidgetCenter.shared.reloadTimelines(ofKind: "ActiveRunComplication")
     }
 
     // MARK: - Formatting
