@@ -387,17 +387,19 @@ create table routes (
 );
 
 create table integrations (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid references auth.users not null,
-  provider      text not null,  -- 'strava' | 'garmin' | 'parkrun'
-  access_token  text,
-  refresh_token text,
-  token_expiry  timestamptz,
-  external_id   text,           -- athlete ID on the provider
-  created_at    timestamptz default now(),
+  id                       uuid primary key default gen_random_uuid(),
+  user_id                  uuid references auth.users not null,
+  provider                 text not null,  -- 'strava' | 'garmin' | 'parkrun' | 'runsignup'
+  access_token_secret_id   uuid references vault.secrets(id) on delete set null,
+  refresh_token_secret_id  uuid references vault.secrets(id) on delete set null,
+  token_expiry             timestamptz,
+  external_id              text,           -- athlete ID on the provider
+  created_at               timestamptz default now(),
   unique (user_id, provider)
 );
 ```
+
+OAuth tokens themselves live in `vault.secrets` (Supabase Vault, libsodium-encrypted with a project-managed master key). The `integrations` row carries only UUID references; reads/writes go through SECURITY DEFINER helpers `get_integration_tokens` / `set_integration_tokens`. See [decisions.md § 41](decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns).
 
 ### Row-level security
 
@@ -423,6 +425,8 @@ Thin TypeScript functions deployed to Supabase Edge Functions (Deno runtime).
 | `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation |
 | `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) |
 
+User-facing functions (`parkrun-import`, `strava-import`, `export-data`, `delete-account`) gate on a per-user fixed-window rate limit via `check_rate_limit` and the shared `_shared/rate_limit.ts` helper — denials return 429 with `Retry-After`. Skipped on `refresh-tokens` (cron, no user.id), `revenuecat-webhook` (HMAC-validated server-to-server), and `strava-webhook` (URL-secret guarded server-to-server). See [decisions.md § 42](decisions.md#42-edge-function-rate-limits-live-in-a-postgres-counter-not-deno-kv-or-in-memory) and [api_database.md § rate_limits](api_database.md).
+
 ---
 
 ## External integrations
@@ -435,7 +439,8 @@ User taps "Connect Strava"
   → User authorises
   → Strava redirects with auth code
   → Edge Function exchanges code for tokens
-  → Tokens stored in integrations table
+  → Tokens written to vault.secrets via set_integration_tokens
+    (integrations row gets only the secret_id references)
   → Strava webhook registered
   → Future activities push automatically
 ```

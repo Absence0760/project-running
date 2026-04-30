@@ -852,6 +852,45 @@ This is intentional, not technical debt.
 
 ---
 
+## 42. Edge Function rate limits live in a Postgres counter, not Deno KV or in-memory
+
+**Decided:** Per-user rate limiting on user-facing Edge Functions (`parkrun-import`, `strava-import`, `delete-account`, `export-data`) goes through `check_rate_limit(user, bucket, max, window)` — a SECURITY DEFINER function that does an atomic upsert-and-check on `rate_limits (user_id, bucket, window_start, count)`. Migration `20260604_001_rate_limits.sql`. Shared helper `apps/backend/supabase/functions/_shared/rate_limit.ts` turns denials into a 429 with `Retry-After`.
+
+**Why Postgres rather than the alternatives:**
+
+- **Deno KV** is sub-ms but per-EF-deployment. State doesn't survive cold starts or share between functions, so a "10 per hour" budget in EF instance A and another in instance B add up to 20+. For per-user durable budgets you'd end up bucketing by EF deploy, which leaks the limit.
+- **In-memory leaky-bucket** is fastest but resets on every cold start and doesn't share state at all. Useful for sub-second burst-suppression, useless for "max N per hour."
+- **Postgres counter** durable, shared across every EF instance, ~5 ms per check, and the SECURITY DEFINER pattern means EFs only need a function grant — no direct table access.
+
+**Window strategy: fixed-window, not sliding.** Each call computes `floor(epoch / window) * window` and keys all hits in that wall-clock window to one row. Sliding windows would double the write rate (one row per request rather than per window) and we don't need that precision. Even denied calls increment, so a user who hits ceiling stays at ceiling+N until the window rolls — no extra punishment, but no way to reset by hammering, either.
+
+**Trade-off:** every limited request now does an extra round-trip to Postgres. Negligible against the network calls these EFs already make (Strava, parkrun.org, etc.), and the rate-limit table grows slowly enough that an hourly `pg_cron` sweep keeps it under control.
+
+**Don't re-litigate unless:** an EF needs sub-50 ms latency and the round-trip becomes the bottleneck (move that one to Deno KV with a documented per-instance fan-out caveat), or a tier-aware limit lands that wants different ceilings for free vs Pro (pass `max` from the caller — the function already takes it as a parameter, so no schema change needed).
+
+---
+
+## 43. Cross-route signalling on mobile uses a top-level `ValueNotifier`, not a nav stack handoff
+
+**Decided:** When a deep screen needs to trigger an action on a different tab (e.g. `plan_detail_screen` → "Start workout" → run-tab structured runner), it sets a top-level `ValueNotifier` declared in `main.dart` and pops back to root. The destination tab listens, drains, and clears. Live example: `pendingStartWorkout` in `apps/mobile_*/lib/main.dart`.
+
+**Why not pass the workout through nav routes:** the entry path is `Run tab → plans button → plans_screen → plan_detail → calendar → workout_detail → "Start workout"` — that's 5+ widget constructors deep, with multiple call sites for `plan_detail_screen` (run_screen, plans_screen, plan_new_screen, club_detail_screen). Threading a `PlanWorkoutRow?` as a typed `MaterialPageRoute<PlanWorkoutRow?>` would force every intermediate screen to forward the result, and the lazy `PageView` keep-alive means the `RunScreen` State may not even exist when the signal fires.
+
+**Implementation contract:**
+
+1. Declare the notifier at top level in `main.dart` with a clear name (`pendingStartWorkout`), nullable type, and docstring.
+2. Source screen sets `notifier.value = payload`, then `Navigator.of(context).popUntil((r) => r.isFirst)`.
+3. `HomeScreen` listens and switches the relevant tab.
+4. The tab's `State` listens too **and drains in `addPostFrameCallback`** during `initState` so a signal that fires before the tab was lazily constructed isn't dropped on the floor.
+5. Drain by reading the value, clearing it (`notifier.value = null`), and acting.
+6. `removeListener` in `dispose`.
+
+**Trade-off:** global mutable state, which we generally avoid. Justified here because the alternative is threading typed return values through routes that have multiple unrelated callers, and adding a state-management framework (Provider / Riverpod / Bloc) would be a much larger change for one cross-tab signal. Keep this pattern bounded — one notifier per genuinely cross-tab handoff, named for the action, not the data.
+
+**Don't re-litigate unless:** the count of cross-route notifiers grows beyond ~3 (then a small message bus is justified), or we adopt a state-management framework for other reasons (then route the signals through it).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
