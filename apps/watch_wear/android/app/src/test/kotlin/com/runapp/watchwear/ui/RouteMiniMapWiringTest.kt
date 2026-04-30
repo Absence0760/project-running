@@ -106,6 +106,21 @@ class RouteMiniMapWiringTest {
     }
 
     @Test
+    fun `PreRunScreen mounts RouteMiniMap when a route is selected`() {
+        // Why: pre-run preview lets the runner see the route shape
+        // before tapping GO. Mounted conditional on
+        // selectedRouteWaypoints non-empty (free-form runs render
+        // nothing). If the conditional gets dropped, the preview
+        // either always renders an empty box or never renders at all.
+        val src = read("ui/RunWatchApp.kt")
+        assertTrue(
+            "PreRunScreen must gate RouteMiniMap on selectedRouteWaypoints.isNotEmpty()",
+            Regex("""selectedRouteWaypoints\.isNotEmpty\(\)\s*\)\s*\{[^}]*RouteMiniMap""", RegexOption.DOT_MATCHES_ALL)
+                .containsMatchIn(src),
+        )
+    }
+
+    @Test
     fun `RouteMiniMap caches bounds via remember to avoid per-tick recomputation`() {
         // Why: `current` updates on every GPS sample (sub-1 Hz today).
         // Without `remember(route, current)` the bounding-box scan

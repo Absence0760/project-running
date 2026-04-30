@@ -135,6 +135,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             activityType = state.activityType,
                             activeRace = state.activeRace,
                             selectedRouteName = state.selectedRoute?.name,
+                            selectedRouteWaypoints = state.selectedRoute?.toLatLngs() ?: emptyList(),
                             targetPaceSecPerKm = state.targetPaceSecPerKm,
                             onCycleActivity = {
                                 val order = listOf("run", "walk", "hike", "cycle")
@@ -349,6 +350,7 @@ private fun PreRunScreen(
     pendingRecoveryDistance: Double?,
     activityType: String,
     selectedRouteName: String?,
+    selectedRouteWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
     targetPaceSecPerKm: Int?,
     onCycleActivity: () -> Unit,
     onCyclePace: () -> Unit,
@@ -490,6 +492,24 @@ private fun PreRunScreen(
                     },
                     colors = ChipDefaults.secondaryChipColors(),
                 )
+                if (selectedRouteWaypoints.isNotEmpty()) {
+                    // Pre-run preview of the picked route. Same canvas
+                    // component as the in-run mini-map but larger
+                    // (80 dp vs 56 dp) since pre-run isn't squeezed
+                    // for vertical space, and with no `current`
+                    // because GPS hasn't been started yet — the
+                    // viewport just frames the polyline. Tapping the
+                    // preview re-opens the picker so the user can
+                    // change their mind.
+                    Spacer(Modifier.height(4.dp))
+                    Box(modifier = Modifier.clickable(onClick = onOpenRoutePicker)) {
+                        RouteMiniMap(
+                            route = selectedRouteWaypoints,
+                            current = null,
+                            modifier = Modifier.size(80.dp),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
             }
             // Pace-target chip — tap cycles off / 4:00 / 4:30 / … / 7:00.
