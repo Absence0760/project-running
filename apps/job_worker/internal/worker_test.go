@@ -28,6 +28,14 @@ type fakeBackend struct {
 	// trackURL at start, then re-reads before writing, and the
 	// second read returns the new URL.
 	trackURLs []string
+	// Auto-link inputs
+	autoLinkInfo    RunLinkInfo
+	autoLinkInfoErr error
+	routeCandidates []RouteMatchCandidate
+	findRoutesErr   error
+	linkErr         error
+	// Auto-link outputs
+	links []linkCall
 
 	// Errors to inject — return on the next call to that method.
 	claimErr      error
@@ -61,6 +69,11 @@ type deferCall struct {
 type rowSet struct {
 	RunID string
 	Row   MatchedTrackRow
+}
+
+type linkCall struct {
+	RunID   string
+	RouteID string
 }
 
 func newFakeBackend() *fakeBackend {
@@ -146,6 +159,42 @@ func (f *fakeBackend) UpdateMatchedTrackRow(_ context.Context, runID string, row
 		return err
 	}
 	f.rowSets = append(f.rowSets, rowSet{RunID: runID, Row: row})
+	return nil
+}
+
+func (f *fakeBackend) ReadRunForAutoLink(_ context.Context, _ string) (RunLinkInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.autoLinkInfoErr != nil {
+		err := f.autoLinkInfoErr
+		f.autoLinkInfoErr = nil
+		return RunLinkInfo{}, err
+	}
+	return f.autoLinkInfo, nil
+}
+
+func (f *fakeBackend) FindMatchingRoutes(
+	_ context.Context, _ string, _ []TrackPoint, _ float64, _ int,
+) ([]RouteMatchCandidate, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.findRoutesErr != nil {
+		err := f.findRoutesErr
+		f.findRoutesErr = nil
+		return nil, err
+	}
+	return f.routeCandidates, nil
+}
+
+func (f *fakeBackend) LinkRunToRoute(_ context.Context, runID, routeID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.linkErr != nil {
+		err := f.linkErr
+		f.linkErr = nil
+		return err
+	}
+	f.links = append(f.links, linkCall{RunID: runID, RouteID: routeID})
 	return nil
 }
 
@@ -413,6 +462,169 @@ func TestWorker_UnknownKindFails(t *testing.T) {
 	}
 	if be.finished[0].ErrorMsg == nil || !strings.Contains(*be.finished[0].ErrorMsg, "unknown job kind") {
 		t.Errorf("expected error mentioning unknown kind, got %v", be.finished[0].ErrorMsg)
+	}
+}
+
+// ---- auto-link --------------------------------------------------------
+
+// Confident match: endpoints close, length ratio under 20%. The
+// worker should PATCH runs.route_id and the auto-link write happens
+// once.
+func TestWorker_AutoLinksWhenConfident(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 51.5074, Lng: -0.1278},
+		{Lat: 51.5165, Lng: -0.1278},
+	}
+	be.autoLinkInfo = RunLinkInfo{RouteID: "", DistanceM: 1000}
+	be.routeCandidates = []RouteMatchCandidate{{
+		ID:           "route-1",
+		Name:         "morning loop",
+		DistanceM:    1010, // 1% off the run's stored distance
+		StartOffsetM: 5,
+		EndOffsetM:   5,
+	}}
+	be.jobs = []*Job{{
+		ID: 31, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.links) != 1 {
+		t.Fatalf("links=%d, want 1", len(be.links))
+	}
+	if be.links[0].RunID != "run-1" || be.links[0].RouteID != "route-1" {
+		t.Errorf("link=%+v, want run-1->route-1", be.links[0])
+	}
+	if len(be.finished) != 1 || be.finished[0].Status != "done" {
+		t.Errorf("finish=%+v, want done", be.finished)
+	}
+}
+
+// Already-linked: route_id is non-empty, so the worker must NOT call
+// FindMatchingRoutes / LinkRunToRoute. Idempotent on re-runs.
+func TestWorker_NoAutoLinkWhenAlreadyLinked(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001}, {Lat: 1.002, Lng: 2.002},
+	}
+	be.autoLinkInfo = RunLinkInfo{RouteID: "already-linked", DistanceM: 1000}
+	// Even if a candidate is on the table, we shouldn't query for it.
+	be.routeCandidates = []RouteMatchCandidate{{
+		ID: "ignored", StartOffsetM: 0, EndOffsetM: 0, DistanceM: 100,
+	}}
+	be.jobs = []*Job{{
+		ID: 33, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.links) != 0 {
+		t.Errorf("links=%+v, want 0 (already linked)", be.links)
+	}
+}
+
+// Length mismatch: candidate's distance is 50% off the track length.
+// Even though endpoints are spot-on, the worker must NOT auto-link —
+// this is the "run was a sub-section / superset" case the
+// length-ratio check exists to catch.
+func TestWorker_NoAutoLinkOnLengthMismatch(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 51.5074, Lng: -0.1278},
+		{Lat: 51.5165, Lng: -0.1278},
+	}
+	be.autoLinkInfo = RunLinkInfo{RouteID: "", DistanceM: 1000}
+	be.routeCandidates = []RouteMatchCandidate{{
+		ID:           "route-2",
+		Name:         "5k loop",
+		DistanceM:    5000, // 5x the run's distance — sub-section case
+		StartOffsetM: 0,
+		EndOffsetM:   0,
+	}}
+	be.jobs = []*Job{{
+		ID: 35, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.links) != 0 {
+		t.Errorf("links=%+v, want 0 (length mismatch)", be.links)
+	}
+}
+
+// Endpoint mismatch: lengths match but the start/end of the run is
+// 500 m from the route's endpoints. Same neighbourhood, different
+// run.
+func TestWorker_NoAutoLinkOnEndpointMismatch(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 51.5074, Lng: -0.1278},
+		{Lat: 51.5165, Lng: -0.1278},
+	}
+	be.autoLinkInfo = RunLinkInfo{RouteID: "", DistanceM: 1000}
+	be.routeCandidates = []RouteMatchCandidate{{
+		ID:           "route-3",
+		DistanceM:    1010,
+		StartOffsetM: 250,
+		EndOffsetM:   300, // sum = 550, > 200 m threshold
+	}}
+	be.jobs = []*Job{{
+		ID: 37, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.links) != 0 {
+		t.Errorf("links=%+v, want 0 (endpoints too far)", be.links)
+	}
+}
+
+// Auto-link failure must NOT fail the job — the match itself
+// succeeded, the auto-link is best-effort. Worker logs and returns.
+func TestWorker_AutoLinkFailureDoesNotFailJob(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001}, {Lat: 1.002, Lng: 2.002},
+	}
+	be.autoLinkInfo = RunLinkInfo{RouteID: "", DistanceM: 1000}
+	be.findRoutesErr = errors.New("rpc unavailable")
+	be.jobs = []*Job{{
+		ID: 39, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.finished) != 1 || be.finished[0].Status != "done" {
+		t.Errorf("finish=%+v, want done despite auto-link failure", be.finished)
+	}
+	if len(be.rowSets) != 1 || be.rowSets[0].Row.Status != "matched" {
+		t.Errorf("rowSets=%+v, want one matched", be.rowSets)
 	}
 }
 

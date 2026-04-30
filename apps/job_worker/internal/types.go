@@ -53,3 +53,15 @@ type MatchedTrackRow struct {
 	AlgorithmVersion  string     `json:"algorithm_version"`
 	ErrorMessage      *string    `json:"error_message"`
 }
+
+// RouteMatchCandidate is a row returned by the
+// routes_intersecting_track RPC (migration 20260610_001). Same shape
+// as the Dart core_models class — keeping the names in sync helps
+// when the worker logs hint at a client-side discrepancy.
+type RouteMatchCandidate struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	DistanceM     float64 `json:"distance_m"`
+	StartOffsetM  float64 `json:"start_offset_m"`
+	EndOffsetM    float64 `json:"end_offset_m"`
+}

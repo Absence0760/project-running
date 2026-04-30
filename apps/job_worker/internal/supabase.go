@@ -250,3 +250,97 @@ func (c *SupabaseClient) ReadRunTrackURL(ctx context.Context, runID string) (str
 	}
 	return *rows[0].TrackURL, nil
 }
+
+// RunLinkInfo bundles the columns the auto-link path needs to decide
+// "should I link this run, and to what?". Single round-trip is
+// cheaper than two narrow reads.
+type RunLinkInfo struct {
+	RouteID   string
+	DistanceM float64
+}
+
+// ReadRunForAutoLink fetches the columns the auto-link decision needs:
+// route_id (skip if already linked) + distance_m (length-similarity
+// half of the scoring policy). Distance comparison uses the stored
+// run.distance_m rather than a haversine recomputation over the
+// track because that's what web/mobile compare against — the
+// canonical run distance comes from the recorder, not a worker-side
+// re-derivation.
+func (c *SupabaseClient) ReadRunForAutoLink(
+	ctx context.Context, runID string,
+) (RunLinkInfo, error) {
+	url := c.BaseURL + "/rest/v1/runs?id=eq." + runID + "&select=route_id,distance_m"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return RunLinkInfo{}, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return RunLinkInfo{}, err
+	}
+	var rows []struct {
+		RouteID   *string `json:"route_id"`
+		DistanceM float64 `json:"distance_m"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return RunLinkInfo{}, err
+	}
+	if len(rows) == 0 {
+		return RunLinkInfo{}, errors.New("run not found")
+	}
+	out := RunLinkInfo{DistanceM: rows[0].DistanceM}
+	if rows[0].RouteID != nil {
+		out.RouteID = *rows[0].RouteID
+	}
+	return out, nil
+}
+
+// FindMatchingRoutes calls the routes_intersecting_track RPC (migration
+// 20260610_001). The RPC pre-filters with ST_DWithin against the
+// routes.geom GIST index, so this stays cheap even for users with
+// many saved routes.
+func (c *SupabaseClient) FindMatchingRoutes(
+	ctx context.Context, userID string, track []TrackPoint, toleranceM float64, maxResults int,
+) ([]RouteMatchCandidate, error) {
+	if len(track) < 2 {
+		return nil, nil
+	}
+	coords := make([][2]float64, len(track))
+	for i, p := range track {
+		coords[i] = [2]float64{p.Lng, p.Lat}
+	}
+	params := map[string]any{
+		"caller_user_id": userID,
+		"track_geojson": map[string]any{
+			"type":        "LineString",
+			"coordinates": coords,
+		},
+		"tolerance_m": toleranceM,
+		"max_results": maxResults,
+	}
+	var out []RouteMatchCandidate
+	if err := c.rpc(ctx, "routes_intersecting_track", params, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LinkRunToRoute PATCHes runs.route_id. Idempotent — re-linking to the
+// same id is a no-op (PostgREST UPDATE with the same value writes the
+// row but doesn't change observable state). Service role bypasses
+// RLS, so the worker can write without the runner's session.
+func (c *SupabaseClient) LinkRunToRoute(ctx context.Context, runID, routeID string) error {
+	body, err := json.Marshal(map[string]any{"route_id": routeID})
+	if err != nil {
+		return err
+	}
+	url := c.BaseURL + "/rest/v1/runs?id=eq." + runID
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}

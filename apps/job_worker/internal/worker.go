@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 )
@@ -21,6 +22,9 @@ type Backend interface {
 	UploadMatchedTrack(ctx context.Context, path string, points []TrackPoint) error
 	UpdateMatchedTrackRow(ctx context.Context, runID string, row MatchedTrackRow) error
 	ReadRunTrackURL(ctx context.Context, runID string) (string, error)
+	ReadRunForAutoLink(ctx context.Context, runID string) (RunLinkInfo, error)
+	FindMatchingRoutes(ctx context.Context, userID string, track []TrackPoint, toleranceM float64, maxResults int) ([]RouteMatchCandidate, error)
+	LinkRunToRoute(ctx context.Context, runID, routeID string) error
 }
 
 // Config bundles tunables. Defaults are conservative — short poll
@@ -203,27 +207,103 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 	// floor was too high. The status update lets the client tell
 	// "matcher decided no" apart from "matcher hasn't run yet".
 	if len(matched) < 2 {
-		return w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, MatchedTrackRow{
+		if err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, MatchedTrackRow{
 			Status:           "skipped",
 			MatchedTrackURL:  "",
 			Algorithm:        w.Matcher.Algorithm(),
 			AlgorithmVersion: w.Matcher.Version(),
-		})
+		}); err != nil {
+			return err
+		}
+	} else {
+		matchedPath := fmt.Sprintf("%s/%s.matched.json.gz", p.UserID, p.RunID)
+		if err := w.Backend.UploadMatchedTrack(ctx, matchedPath, matched); err != nil {
+			return fmt.Errorf("upload matched: %w", err)
+		}
+		now := time.Now().UTC()
+		if err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, MatchedTrackRow{
+			Status:           "matched",
+			MatchedTrackURL:  matchedPath,
+			MatchedAt:        &now,
+			Algorithm:        w.Matcher.Algorithm(),
+			AlgorithmVersion: w.Matcher.Version(),
+		}); err != nil {
+			return err
+		}
 	}
 
-	matchedPath := fmt.Sprintf("%s/%s.matched.json.gz", p.UserID, p.RunID)
-	if err := w.Backend.UploadMatchedTrack(ctx, matchedPath, matched); err != nil {
-		return fmt.Errorf("upload matched: %w", err)
+	// Auto-link is best-effort and independent of match status. Fires
+	// for skipped runs too — the spatial overlap question doesn't
+	// depend on the matcher's output. A failure here cannot fail the
+	// job because the match is already persisted; log and move on.
+	if err := w.maybeAutoLinkRoute(ctx, p, raw); err != nil {
+		w.Log.Warn("auto-link skipped",
+			"run_id", p.RunID,
+			"err", err,
+		)
 	}
+	return nil
+}
 
-	now := time.Now().UTC()
-	return w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, MatchedTrackRow{
-		Status:           "matched",
-		MatchedTrackURL:  matchedPath,
-		MatchedAt:        &now,
-		Algorithm:        w.Matcher.Algorithm(),
-		AlgorithmVersion: w.Matcher.Version(),
-	})
+// maybeAutoLinkRoute looks for a saved route the run's track lies on
+// and PATCHes runs.route_id when one passes the confidence threshold.
+// Same scoring policy as web/mobile: combined endpoint offset under
+// 200 m AND length ratio under 0.20. Either dimension alone produces
+// false positives — a run that shares one endpoint with a route, or a
+// run that's a sub-section of a longer route. The conjunction is
+// trustworthy.
+//
+// Length comparison uses runs.distance_m (the canonical recorder
+// figure) rather than a worker-side haversine of the track. The
+// recorder applies movement-quality filters (sub-2m / >100m deltas
+// dropped) that the worker can't replay; the stored value is closer
+// to truth and matches what web/mobile use.
+//
+// No-ops when run.route_id is already set (the runner picked one
+// at start, or a previous match auto-linked it).
+func (w *Worker) maybeAutoLinkRoute(
+	ctx context.Context, p MapMatchPayload, raw []TrackPoint,
+) error {
+	if len(raw) < 2 {
+		return nil
+	}
+	info, err := w.Backend.ReadRunForAutoLink(ctx, p.RunID)
+	if err != nil {
+		return fmt.Errorf("read run for auto-link: %w", err)
+	}
+	if info.RouteID != "" {
+		return nil
+	}
+	if info.DistanceM <= 0 {
+		// Manual-entry run with no recorded distance, or a pathological
+		// row. Nothing to compare against — bail rather than guess.
+		return nil
+	}
+	candidates, err := w.Backend.FindMatchingRoutes(ctx, p.UserID, raw, 100, 5)
+	if err != nil {
+		return fmt.Errorf("find matching routes: %w", err)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	best := candidates[0]
+	lengthRatio := math.Abs(best.DistanceM-info.DistanceM) / info.DistanceM
+	if best.StartOffsetM+best.EndOffsetM >= 200 || lengthRatio >= 0.20 {
+		return nil
+	}
+	if err := w.Backend.LinkRunToRoute(ctx, p.RunID, best.ID); err != nil {
+		return fmt.Errorf("link run to route: %w", err)
+	}
+	w.Log.Info(
+		"auto-linked run to route",
+		"run_id", p.RunID,
+		"route_id", best.ID,
+		"route_name", best.Name,
+		"start_offset_m", best.StartOffsetM,
+		"end_offset_m", best.EndOffsetM,
+		"length_ratio", lengthRatio,
+	)
+	return nil
 }
 
 // isTransient classifies an error as worth-retrying. Network blips,
