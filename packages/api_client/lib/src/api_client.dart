@@ -434,6 +434,51 @@ class ApiClient {
         bpm: (m['bpm'] as num?)?.toInt(),
       );
 
+  /// Auto-link helper: ask the DB which of the user's saved routes
+  /// overlap a recorded run's track. Backed by the
+  /// `routes_intersecting_track` RPC (migration 20260610_001), which
+  /// uses the `routes.geom` GIST index to pre-filter candidates.
+  ///
+  /// Caller decides the final ranking. The combination "endpoints
+  /// close" (`startOffsetM + endOffsetM` under ~2× tolerance) AND
+  /// "lengths similar" (`(distanceM - track length)/track length` <
+  /// 0.20) is the strong "definitely the same route" signal; either
+  /// dimension alone is too noisy. See the matching policy comment in
+  /// `apps/web/src/routes/runs/[id]/+page.svelte:suggestRoute`.
+  Future<List<RouteMatchCandidate>> fetchRoutesIntersectingTrack(
+    List<Waypoint> track, {
+    double toleranceMetres = 100,
+    int maxResults = 10,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null || track.length < 2) return const [];
+    final rows = await _client.rpc(
+      'routes_intersecting_track',
+      params: <String, dynamic>{
+        'caller_user_id': userId,
+        'track_geojson': <String, dynamic>{
+          'type': 'LineString',
+          'coordinates': track.map((w) => [w.lng, w.lat]).toList(),
+        },
+        'tolerance_m': toleranceMetres,
+        'max_results': maxResults,
+      },
+    );
+    if (rows is! List) return const [];
+    return rows.cast<Map<String, dynamic>>().map(RouteMatchCandidate.fromJson).toList();
+  }
+
+  /// Persist `runs.route_id`. Used by the mobile auto-link suggestion
+  /// on RunDetailScreen and by any future flow that needs to back-link
+  /// a run to a saved route. Idempotent — re-linking to the same id
+  /// is a no-op.
+  Future<void> linkRunToRoute(String runId, String routeId) async {
+    await _client
+        .from(RunRow.table)
+        .update(<String, dynamic>{RunRow.colRouteId: routeId})
+        .eq(RunRow.colId, runId);
+  }
+
   /// Saves a [Route] to the backend.
   Future<void> saveRoute(Route route) async {
     final userId = _client.auth.currentUser?.id;

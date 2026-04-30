@@ -55,6 +55,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// switches to it when present. A failure here cannot break the
   /// page.
   RunMatchInfo? _matchInfo;
+  /// Auto-link suggestion: when run.routeId is null AND the track
+  /// confidently overlaps one of the runner's saved routes, surface
+  /// a one-tap "Looks like you ran X — link?" banner. Stays null
+  /// (and the banner doesn't render) until that confidence test
+  /// passes; same conservative thresholds as the web version.
+  RouteMatchCandidate? _suggestedRoute;
+  bool _linkingRoute = false;
 
   /// Animation state for the "replay" feature. `null` index = not
   /// replaying. Non-null = the current step into `run.track`. Held in a
@@ -104,6 +111,71 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     _loadLinkedRoute();
     _maybeFetchTrack();
     _maybeFetchMatchedTrack();
+    _maybeSuggestRoute();
+  }
+
+  /// Auto-link discovery. Skips the round-trip when we already have a
+  /// route_id (nothing to suggest) or no usable track (nothing to
+  /// match against). Conservative scoring: needs both the
+  /// start+end-offset check AND the length-similarity check to pass
+  /// before showing the banner — false positives would teach the
+  /// runner to ignore the prompt.
+  Future<void> _maybeSuggestRoute() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    if (run.routeId != null) return;
+    if (run.track.length < 2) return;
+    try {
+      final candidates = await api.fetchRoutesIntersectingTrack(run.track);
+      if (candidates.isEmpty) return;
+      final best = candidates.first;
+      final lengthRatio = (best.distanceM - run.distanceMetres).abs() /
+          math.max(run.distanceMetres, 1);
+      if (best.startOffsetM + best.endOffsetM < 200 && lengthRatio < 0.2) {
+        if (mounted) setState(() => _suggestedRoute = best);
+      }
+    } catch (e) {
+      debugPrint('route-suggest fetch failed for ${run.id}: $e');
+    }
+  }
+
+  Future<void> _acceptSuggestedRoute() async {
+    final candidate = _suggestedRoute;
+    final api = widget.apiClient;
+    if (candidate == null || api == null) return;
+    setState(() => _linkingRoute = true);
+    try {
+      await api.linkRunToRoute(run.id, candidate.id);
+      if (!mounted) return;
+      setState(() {
+        run = Run(
+          id: run.id,
+          startedAt: run.startedAt,
+          duration: run.duration,
+          distanceMetres: run.distanceMetres,
+          track: run.track,
+          routeId: candidate.id,
+          source: run.source,
+          externalId: run.externalId,
+          metadata: run.metadata,
+          createdAt: run.createdAt,
+        );
+        _suggestedRoute = null;
+      });
+      _loadLinkedRoute();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Linked to ${candidate.name}')),
+      );
+    } catch (e) {
+      debugPrint('linkRunToRoute failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not link route')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _linkingRoute = false);
+    }
   }
 
   /// Background fetch of `run_matched_tracks` + the matched gz when
@@ -534,6 +606,19 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       ),
                     ),
                 ],
+              ),
+            ),
+
+          // Auto-link suggestion: only renders when run.routeId is null
+          // AND the track confidently overlaps a saved route. Same
+          // policy as web: dismissable, one-tap link.
+          if (_suggestedRoute != null && run.routeId == null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: _RouteSuggestBanner(
+                routeName: _suggestedRoute!.name,
+                onLink: _linkingRoute ? null : _acceptSuggestedRoute,
+                onDismiss: () => setState(() => _suggestedRoute = null),
               ),
             ),
 
@@ -1896,6 +1981,70 @@ class _ElevationPacePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ElevationPacePainter old) =>
       old.track != track || old.touchFraction != touchFraction;
+}
+
+/// Auto-link prompt: "Looks like you ran *X*". Mirrors the web
+/// `.route-suggest-banner` on `/runs/[id]`. Inline (not a snackbar)
+/// because the user may want to compare the suggestion with the map
+/// before acting; a transient toast forces a hasty decision.
+class _RouteSuggestBanner extends StatelessWidget {
+  final String routeName;
+  final VoidCallback? onLink;
+  final VoidCallback onDismiss;
+
+  const _RouteSuggestBanner({
+    required this.routeName,
+    required this.onLink,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.link, color: theme.colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(children: [
+                    const TextSpan(text: 'Looks like you ran '),
+                    TextSpan(
+                      text: routeName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ]),
+                  style: theme.textTheme.bodyMedium,
+                ),
+                Text(
+                  'Link this run to that route?',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
+          const SizedBox(width: 4),
+          FilledButton(
+            onPressed: onLink,
+            child: const Text('Link'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Small frosted-glass pill that surfaces the map-match status when
