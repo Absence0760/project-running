@@ -976,6 +976,24 @@ select * from nearby_routes(51.5074, -0.1278, 50000, 50);
 
 ---
 
+### `routes_within_box(min_lat, min_lng, max_lat, max_lng, max_results)`
+
+Viewport-shaped companion to `nearby_routes`. Returns public routes whose **full polyline** (`routes.geom`) intersects the bounding box, sorted by distance from the box centre. Requires the LineString geography column from migration `20260607_001_routes_geom_linestring.sql`.
+
+```sql
+select * from routes_within_box(-37.83, 144.94, -37.78, 144.99, 50);
+```
+
+**Parameters:**
+- `min_lat` / `min_lng` / `max_lat` / `max_lng` — bbox corners (WGS84 degrees). Convention is south-west to north-east.
+- `max_results` — maximum rows returned (default 50).
+
+**Returns:** same columns as `routes` table, ordered by distance from the box centre.
+
+**When to pick which:** `nearby_routes` answers "what's near me", `routes_within_box` answers "what's in this map viewport". A route whose start sits outside the visible viewport but whose body crosses it appears in the bbox query and *not* in the radius query — that's the whole reason both exist.
+
+---
+
 ## Supabase Storage
 
 Used for GPX file storage and data exports.

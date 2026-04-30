@@ -1677,6 +1677,42 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      routes_within_box: {
+        Args: {
+          max_lat: number
+          max_lng: number
+          max_results?: number
+          min_lat: number
+          min_lng: number
+        }
+        Returns: {
+          club_id: string | null
+          created_at: string | null
+          distance_m: number
+          elevation_m: number | null
+          featured: boolean
+          featured_at: string | null
+          geom: unknown
+          id: string
+          is_public: boolean | null
+          is_starred: boolean
+          name: string
+          run_count: number
+          slug: string | null
+          start_point: unknown
+          surface: string | null
+          tags: string[]
+          updated_at: string | null
+          user_id: string
+          waypoints: Json
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "routes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       search_public_routes: {
         Args: {
           p_featured_only?: boolean
