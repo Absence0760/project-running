@@ -48,6 +48,8 @@ fun RouteMiniMap(
     routeColor: Color = Color(0xFFE5C158),  // DuskPalette.amber-ish
     currentColor: Color = Color.White,
     trackColor: Color = Color(0xFF818CF8),  // indigo, faded behind route
+    startColor: Color = Color(0xFF34D399),  // emerald — "go"
+    endColor: Color = Color(0xFFF87171),    // coral — "finish"
     backgroundColor: Color = Color(0xFF120D22),  // DuskPalette.midnight
     // Default RoundedCornerShape(8.dp) gives the small inline mini-map
     // its card-like look. When the map is used as a full-screen
@@ -142,6 +144,30 @@ fun RouteMiniMap(
                         color = routeColor,
                         style = Stroke(width = 2.dp.toPx()),
                     )
+
+                    // Start + end markers. Most planned routes are loops
+                    // (first ≈ last waypoint), so detect that case and
+                    // draw a single emerald "start/finish" dot rather
+                    // than stacking two indistinguishable circles. The
+                    // ~12 m threshold matches the GPS sample-spacing
+                    // floor used elsewhere in the recorder, so a route
+                    // imported from a real GPX with sub-metre wobble
+                    // between start/end still reads as a loop.
+                    fun drawRouteMarker(at: Offset, color: Color) {
+                        drawCircle(
+                            color = color.copy(alpha = 0.35f),
+                            radius = 5.dp.toPx(),
+                            center = at,
+                        )
+                        drawCircle(color = color, radius = 3.dp.toPx(), center = at)
+                    }
+                    val start = route.first()
+                    val end = route.last()
+                    val isLoop = RouteMath.haversineM(
+                        start.lat, start.lng, end.lat, end.lng,
+                    ) < 12.0
+                    drawRouteMarker(project(start), startColor)
+                    if (!isLoop) drawRouteMarker(project(end), endColor)
                 }
 
                 if (current != null) {
