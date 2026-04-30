@@ -519,15 +519,17 @@ private fun PreRunScreen(
             )
         }
 
-        // Bottom arc: settings chip rail + auxiliary chips. Three
-        // chips share the row via weight(1f) so labels truncate to
-        // ellipsis instead of clipping mid-character ("Richmo").
-        // Translucent backgrounds let the route preview show
-        // through behind them.
+        // Bottom arc: settings chip rail. Three chips share the row
+        // via weight(1f) so labels truncate to ellipsis instead of
+        // clipping mid-character ("Richmo"). Translucent backgrounds
+        // let the route preview show through behind them. The
+        // battery-optimisation warning was previously a fourth chip
+        // here, but it pushed the rail up into Start; it now lives
+        // as a small icon at TopStart.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 14.dp, start = 12.dp, end = 12.dp),
+                .padding(bottom = 18.dp, start = 14.dp, end = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             val translucentChip = ChipDefaults.secondaryChipColors(
@@ -589,36 +591,44 @@ private fun PreRunScreen(
                     colors = translucentChip,
                 )
             }
-            if (batteryOptimised) {
-                Spacer(Modifier.height(4.dp))
-                CompactChip(
-                    onClick = onFixBattery,
-                    label = {
-                        Text(
-                            "Allow background",
-                            style = MaterialTheme.typography.caption3,
-                            maxLines = 1,
-                        )
-                    },
-                    colors = translucentChip,
+        }
+
+        // Top-corner icon buttons. Sign-out at TopEnd, "fix battery
+        // optimisation" warning at TopStart — both get the same
+        // translucent treatment so they don't blot out the route
+        // map underneath. The battery warning used to be a wide
+        // chip stuffed into the bottom rail, where it pushed the
+        // chip rail up into the Start button. As an icon it stays
+        // visible without crowding the primary action.
+        val cornerIconColors = ButtonDefaults.secondaryButtonColors(
+            backgroundColor = Color.Black.copy(alpha = 0.55f),
+            contentColor = DuskPalette.parchment,
+        )
+        if (batteryOptimised) {
+            CompactButton(
+                onClick = onFixBattery,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 26.dp, start = 26.dp),
+                colors = ButtonDefaults.secondaryButtonColors(
+                    backgroundColor = Color.Black.copy(alpha = 0.55f),
+                    contentColor = DuskPalette.warning,
+                ),
+            ) {
+                Text(
+                    "!",
+                    style = MaterialTheme.typography.caption1,
+                    color = DuskPalette.warning,
                 )
             }
         }
-
-        // Sign-out icon at ~2 o'clock. The round bezel cuts off
-        // the bounding-box corner — TopEnd with 8dp padding ends
-        // up outside the visible circle. ~24dp pulls it well
-        // inside the inscribed rectangle on a typical round face.
         if (authed) {
             CompactButton(
                 onClick = onSignOut,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 26.dp, end = 26.dp),
-                colors = ButtonDefaults.secondaryButtonColors(
-                    backgroundColor = Color.Black.copy(alpha = 0.55f),
-                    contentColor = DuskPalette.parchment,
-                ),
+                colors = cornerIconColors,
             ) {
                 Icon(
                     imageVector = Icons.Filled.ExitToApp,
@@ -1343,6 +1353,21 @@ private fun PostRunScreen(
             contentPadding = PaddingValues(horizontal = 12.dp),
         ) {
             if (summary != null) {
+                // Route preview thumbnail at the top of the column —
+                // the actual shape the runner just ran. Renders
+                // tiles + the recorded track polyline; no `current`
+                // because the run is over. Hidden for indoor runs
+                // where the track has fewer than 2 points.
+                if (summary.trackLatLngs.size >= 2) {
+                    item {
+                        RouteMiniMap(
+                            route = emptyList(),
+                            current = null,
+                            track = summary.trackLatLngs,
+                            modifier = Modifier.size(96.dp),
+                        )
+                    }
+                }
                 item {
                     Text(
                         "%.2f km".format(summary.distanceM / 1000.0),

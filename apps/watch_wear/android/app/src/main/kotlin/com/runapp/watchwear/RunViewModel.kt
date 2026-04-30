@@ -101,6 +101,11 @@ data class FinishedSummary(
     val lapCount: Int = 0,
     val activityType: String = "run",
     val laps: List<FinishedLap> = emptyList(),
+    /// Lat/lng samples from the recorded track. Populated by reading
+    /// the on-disk track JSON in `handleFinishedRun`. Used by
+    /// `PostRunScreen` to render a thumbnail of the actual shape the
+    /// runner ran. Empty when the run had no GPS fixes (indoor).
+    val trackLatLngs: List<com.runapp.watchwear.recording.RouteMath.LatLng> = emptyList(),
 )
 
 data class FinishedLap(
@@ -658,6 +663,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val race = _state.value.activeRace
             ?.takeIf { it.isRunning }
         val laps = buildFinishedLaps(m, durationS)
+        // Parse the on-disk track JSON to lat/lng pairs so the post-run
+        // screen can preview the shape the runner ran. Falls back to
+        // an empty list if the file is missing or malformed (indoor
+        // mode produces a `[]` stub via TrackWriter.close).
+        val trackPoints = readTrackForPreview(trackPath)
         val summary = FinishedSummary(
             distanceM = m.distanceM,
             durationS = durationS,
@@ -665,6 +675,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             lapCount = m.laps.size,
             activityType = m.activityType,
             laps = laps,
+            trackLatLngs = trackPoints,
         )
         _state.value = _state.value.copy(
             stage = Stage.PostRun,
@@ -918,6 +929,37 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /// Turn the service's raw lap list (cumulative marks) into split-per-lap
+    /// Read the just-finished track JSON off disk so the post-run
+    /// screen can render a preview thumbnail. Decimates to ≤ 256
+    /// points (geometric every-other halving, same shape-preserving
+    /// strategy as the in-run track overlay) so a 4-hour run with
+    /// thousands of points still draws cheaply on a 96 dp canvas.
+    /// Returns empty on any failure — caller treats that as
+    /// "indoor / no track to preview".
+    private fun readTrackForPreview(
+        path: String,
+    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> {
+        return try {
+            val raw = File(path).takeIf { it.exists() }?.readText() ?: return emptyList()
+            val arr = (kotlinx.serialization.json.Json.parseToJsonElement(raw)
+                as? kotlinx.serialization.json.JsonArray) ?: return emptyList()
+            val all = arr.mapNotNull { el ->
+                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                val lat = (obj["lat"] as? kotlinx.serialization.json.JsonPrimitive)
+                    ?.content?.toDoubleOrNull() ?: return@mapNotNull null
+                val lng = (obj["lng"] as? kotlinx.serialization.json.JsonPrimitive)
+                    ?.content?.toDoubleOrNull() ?: return@mapNotNull null
+                com.runapp.watchwear.recording.RouteMath.LatLng(lat, lng)
+            }.toMutableList()
+            while (all.size > 256) {
+                com.runapp.watchwear.recording.TrackOverlayBuffer.halveIfOverflowing(all, 256)
+            }
+            all
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
     /// rows suitable for the post-run table. The final "bonus" row is the
     /// partial between the last lap mark and the stop — only included when
     /// it's non-trivial (≥ 1s and ≥ 1m).
