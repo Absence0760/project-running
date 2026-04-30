@@ -208,6 +208,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     routeRemainingM = state.routeRemainingM,
                     routeWaypoints = state.routeWaypoints,
                     latestPoint = state.latestPoint,
+                    fallbackLatLng = state.lastKnownLatLng,
                     trackOverlayPoints = state.trackOverlayPoints,
                     ambient = isAmbient,
                     onPause = vm::pause,
@@ -948,6 +949,13 @@ private fun RunningScreen(
     routeRemainingM: Double?,
     routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
     latestPoint: com.runapp.watchwear.GpsPoint?,
+    /// Last-known location captured during the start countdown.
+    /// Used as a fallback when `latestPoint` is null — the live
+    /// GPS stream takes 0.5–2 s to produce its first fix after the
+    /// service starts, and without this fallback the screen would
+    /// blank out the map between countdown end and first stream
+    /// fix. Once `latestPoint` lands the real value takes over.
+    fallbackLatLng: com.runapp.watchwear.recording.RouteMath.LatLng?,
     trackOverlayPoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
     ambient: Boolean,
     onPause: () -> Unit,
@@ -1019,9 +1027,16 @@ private fun RunningScreen(
     // unobstructed view of the route. Tap anywhere on the map to
     // bring the buttons back. While paused, controls stay visible
     // so the runner can resume without a hidden tap.
+    // Effective position: prefer the live stream once it's flowing,
+    // fall back to the countdown's last-known fix while the recorder
+    // is still warming up. Bridges the 0.5–2 s gap where `latestPoint`
+    // is null but we already know roughly where the runner is.
+    val effectiveCurrent: com.runapp.watchwear.recording.RouteMath.LatLng? = latestPoint?.let {
+        com.runapp.watchwear.recording.RouteMath.LatLng(it.lat, it.lng)
+    } ?: fallbackLatLng
     val showMiniMap = routeWaypoints.isNotEmpty() ||
         trackOverlayPoints.size >= 2 ||
-        latestPoint != null
+        effectiveCurrent != null
 
     var controlsVisible by remember { mutableStateOf(true) }
     // Bumped on every interaction (tap or button press) to restart the
@@ -1060,9 +1075,7 @@ private fun RunningScreen(
         if (showMiniMap) {
             RouteMiniMap(
                 route = routeWaypoints,
-                current = latestPoint?.let {
-                    com.runapp.watchwear.recording.RouteMath.LatLng(it.lat, it.lng)
-                },
+                current = effectiveCurrent,
                 track = trackOverlayPoints,
                 modifier = Modifier.fillMaxSize(),
                 clipShape = androidx.compose.ui.graphics.RectangleShape,
