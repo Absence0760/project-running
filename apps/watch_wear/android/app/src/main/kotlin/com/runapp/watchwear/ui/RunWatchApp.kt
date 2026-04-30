@@ -503,9 +503,15 @@ private fun PreRunScreen(
                 // and wants their run synced *now* (e.g., to check it
                 // on the phone), waiting for a network event is the
                 // wrong feel. While the drain is in flight we replace
-                // the label with a small spinner; offline keeps the
-                // chip disabled because retrying is guaranteed to fail
-                // until the network comes back.
+                // the label with a small spinner; offline / unauthed
+                // keep the chip disabled because retrying is guaranteed
+                // to fail until the network or session comes back —
+                // CompactChip dims it visually so the user can tell.
+                //
+                // Visual styling matches the Activity / Route / Pace
+                // chips at the bottom arc: same `translucentChip`
+                // colours (white-alpha-0.15 + parchment) and `caption3`
+                // typography so the four chips read as one family.
                 CompactChip(
                     onClick = onSync,
                     enabled = online && authed && !syncing,
@@ -514,11 +520,11 @@ private fun PreRunScreen(
                             CircularProgressIndicator(
                                 strokeWidth = 1.5.dp,
                                 modifier = Modifier.size(12.dp),
+                                indicatorColor = DuskPalette.parchment,
                             )
                         } else {
-                            val suffix = if (online) "" else " · offline"
                             Text(
-                                "Sync $queuedCount run${if (queuedCount == 1) "" else "s"}$suffix",
+                                "Sync $queuedCount",
                                 style = MaterialTheme.typography.caption3,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -527,9 +533,9 @@ private fun PreRunScreen(
                     },
                     colors = ChipDefaults.secondaryChipColors(
                         backgroundColor = Color.White.copy(alpha = 0.15f),
-                        contentColor = if (online) DuskPalette.haze else DuskPalette.warning,
+                        contentColor = DuskPalette.parchment,
                     ),
-                    modifier = Modifier.widthIn(max = 130.dp),
+                    modifier = Modifier.widthIn(max = 100.dp),
                 )
             } else if (!online && authed) {
                 Text(
