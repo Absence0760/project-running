@@ -867,6 +867,27 @@ export type Database = {
           },
         ]
       }
+      rate_limits: {
+        Row: {
+          bucket: string
+          count: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       route_reviews: {
         Row: {
           comment: string | null
@@ -1509,7 +1530,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      check_rate_limit: {
+        Args: {
+          p_bucket: string
+          p_max: number
+          p_user_id: string
+          p_window_seconds: number
+        }
+        Returns: {
+          allowed: boolean
+          retry_after_seconds: number
+        }[]
+      }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
+      cleanup_stale_rate_limits: { Args: never; Returns: number }
       clip_track_for_user: {
         Args: { points: Json; target_user_id: string }
         Returns: Json

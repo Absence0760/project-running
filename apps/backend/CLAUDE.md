@@ -139,6 +139,23 @@ Five functions live under `supabase/functions/`. Two are wired up and shippable;
 
 All seven are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers.
 
+### Rate limiting
+
+User-facing functions guard with `check_rate_limit` via the shared helper:
+
+```ts
+import { checkRateLimit } from '../_shared/rate_limit.ts';
+// ...after auth.getUser():
+const denied = await checkRateLimit(supabase, user.id, 'parkrun-import', 4, 3600);
+if (denied) return denied; // 429 with Retry-After header
+```
+
+Backed by `rate_limits (user_id, bucket, window_start, count)` (migration `20260604_001`) with fixed-window bucketing — `floor(epoch / window) * window` keys all hits in the same wall-clock window to the same row. `check_rate_limit` is SECURITY DEFINER so EFs only need the function grant, not direct table access. Cron job `cleanup-stale-rate-limits` sweeps rows >24 h old hourly.
+
+The helper fails open on RPC error — a transient DB blip won't manifest as a wave of 429s — and only emits 429 on a real deny.
+
+Don't apply this to `refresh-tokens` (cron, no user.id), `revenuecat-webhook` (HMAC-validated, RC-side), or `strava-webhook` (Strava-side, URL-secret guarded).
+
 ### Common shape
 
 Every function that takes a user request follows the same pattern:

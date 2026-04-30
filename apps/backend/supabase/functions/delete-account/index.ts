@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rate_limit.ts';
 
 serve(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -15,6 +16,12 @@ serve(async (req: Request) => {
 
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+
+  // 3/hour. Destructive endpoint, but we want a typo or double-tap
+  // to fail fast rather than panic-spam-cancelling. Once a delete
+  // succeeds the user's auth row is gone, so subsequent calls 401.
+  const denied = await checkRateLimit(userClient, user.id, 'delete-account', 3, 3600);
+  if (denied) return denied;
 
   const adminClient = createClient(
     Deno.env.get('SUPABASE_URL')!,

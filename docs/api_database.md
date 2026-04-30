@@ -172,6 +172,24 @@ To read or write tokens, call the SECURITY DEFINER helpers:
 
 ---
 
+### `rate_limits`
+
+Per-user fixed-window counters that gate Edge Function endpoints. Read/written exclusively through the `check_rate_limit` SECURITY DEFINER function — never direct SELECT/INSERT.
+
+```sql
+create table rate_limits (
+  user_id        uuid not null,
+  bucket         text not null,           -- e.g. 'parkrun-import'
+  window_start   timestamptz not null,    -- floor(epoch / window) * window
+  count          integer not null default 0,
+  primary key (user_id, bucket, window_start)
+);
+```
+
+`check_rate_limit(p_user_id, p_bucket, p_max, p_window_seconds) returns table(allowed bool, retry_after_seconds int)` — atomic increment-and-check; even denied calls increment, but the user just stays at ceiling+N until the window rolls (no extra punishment). Cron job `cleanup-stale-rate-limits` deletes rows older than 24 h hourly. RLS is enabled with no policies so direct REST access returns zero rows; the EF helper bypasses RLS via the SECURITY DEFINER grant.
+
+---
+
 ### `route_reviews`
 
 User ratings and comments on public routes. One review per user per route.

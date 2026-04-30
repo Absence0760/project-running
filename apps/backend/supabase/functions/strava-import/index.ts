@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rate_limit.ts';
 
 // `strava-import` handles two modes, selected by the `action` field:
 //
@@ -61,6 +62,18 @@ serve(async (req: Request) => {
 
 	const body = await req.json().catch(() => ({}));
 	const action = body.action ?? (body.code ? 'connect' : 'sync');
+
+	// Per-user, per-action limits. Connect is one-shot for a given
+	// user (re-running it just rotates tokens) so 10/hour is generous.
+	// Sync is the heavy path; Strava's own per-user budget is 100
+	// requests / 15 min, and our backfill walks ~20 pages per call —
+	// 4/hour keeps us well within their ceiling and the user well
+	// within sensible UX (no need to refresh more than once/15 min).
+	const limit = action === 'connect'
+		? { max: 10, window: 3600 }
+		: { max: 4, window: 3600 };
+	const denied = await checkRateLimit(supabase, user.id, `strava-import:${action}`, limit.max, limit.window);
+	if (denied) return denied;
 
 	if (action === 'connect') {
 		return handleConnect(supabase, user.id, body.code, body.scope);
