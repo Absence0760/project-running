@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -395,9 +397,19 @@ private fun PreRunScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Pre-run is rotary-scrollable: variable banners (queued count,
+        // battery warning, race state, auth error) plus a 56 dp route
+        // preview can stack past the 200-dp-ish viewport on a 46 mm
+        // watch. With `Arrangement.Center` and a non-scrolling column,
+        // the Start button gets pushed off the bottom of the screen
+        // when a route is selected — verticalScroll keeps it reachable
+        // via the rotary crown. The center arrangement still applies
+        // for the small case (no route, no banners) so the Start
+        // button visually anchors the screen by default.
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -495,19 +507,20 @@ private fun PreRunScreen(
                 )
                 if (selectedRouteWaypoints.isNotEmpty()) {
                     // Pre-run preview of the picked route. Same canvas
-                    // component as the in-run mini-map but larger
-                    // (80 dp vs 56 dp) since pre-run isn't squeezed
-                    // for vertical space, and with no `current`
-                    // because GPS hasn't been started yet — the
-                    // viewport just frames the polyline. Tapping the
-                    // preview re-opens the picker so the user can
-                    // change their mind.
+                    // component as the in-run mini-map and same 56 dp
+                    // size — was 80 dp until the Start button got
+                    // pushed off the bottom of 46 mm screens with the
+                    // route preview + chips + battery banner stacked.
+                    // No `current` because GPS hasn't been started
+                    // yet — the viewport just frames the polyline.
+                    // Tapping the preview re-opens the picker so the
+                    // user can change their mind.
                     Spacer(Modifier.height(4.dp))
                     Box(modifier = Modifier.clickable(onClick = onOpenRoutePicker)) {
                         RouteMiniMap(
                             route = selectedRouteWaypoints,
                             current = null,
-                            modifier = Modifier.size(80.dp),
+                            modifier = Modifier.size(56.dp),
                         )
                     }
                 }
@@ -943,15 +956,19 @@ private fun RunningScreen(
                 color = DuskPalette.lilac,
             )
         }
-        if (routeWaypoints.isNotEmpty()) {
-            // Mini-map. Renders the planned route polyline + the runner's
-            // latest GPS fix so the runner can read their position on the
-            // route at a glance. No tile layer underneath in v1 — at 56 dp
-            // square on a 46 mm screen, raster tiles would be sub-legible
-            // anyway, and skipping them keeps power + storage costs to
-            // zero. The off-route banner above already handles the
-            // "did I drift?" feedback; this is the "where am I along the
-            // course?" view.
+        // Mini-map. Renders whenever we have *anything* to show — a
+        // planned route, the runner's track-so-far, or just a current
+        // GPS fix. With a route loaded it's the "where am I along the
+        // course?" view; without a route it's a free-form GPS trace
+        // that lets the runner see the shape of the run they've done.
+        // Hidden until the first GPS fix lands so an empty box doesn't
+        // sit on screen during indoor / no-GPS mode. No tile layer in
+        // v1 — at 56 dp on a 46 mm screen raster tiles aren't legible
+        // anyway, and skipping them keeps power + storage at zero.
+        val showMiniMap = routeWaypoints.isNotEmpty() ||
+            trackOverlayPoints.size >= 2 ||
+            latestPoint != null
+        if (showMiniMap) {
             Spacer(Modifier.height(4.dp))
             RouteMiniMap(
                 route = routeWaypoints,

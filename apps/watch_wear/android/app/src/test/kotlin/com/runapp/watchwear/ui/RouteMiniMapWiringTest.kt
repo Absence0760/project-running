@@ -91,17 +91,21 @@ class RouteMiniMapWiringTest {
     }
 
     @Test
-    fun `RunningScreen mounts RouteMiniMap conditional on routeWaypoints non-empty`() {
-        // Why: mounting unconditionally would render an empty box for
-        // free-form runs; mounting always-on would also fail when the
-        // bounds collapse (single-point bounds work, but it's not the
-        // contract we want — the map is for routes). This conditional
-        // is the contract.
+    fun `RunningScreen gates the mini-map on having anything to draw`() {
+        // Why: the mini-map renders for both planned-route and free-form
+        // runs, but it must stay hidden during indoor / no-GPS mode
+        // when there's no route, no track, and no current fix — an
+        // empty Canvas sitting on screen is a visual bug. The gate
+        // composes route OR track OR current; dropping any branch
+        // either hides the map for a valid case or shows an empty
+        // box for an invalid one.
         val src = read("ui/RunWatchApp.kt")
         assertTrue(
-            "RunningScreen must gate RouteMiniMap on routeWaypoints.isNotEmpty()",
-            Regex("""routeWaypoints\.isNotEmpty\(\)\s*\)\s*\{[^}]*RouteMiniMap""", RegexOption.DOT_MATCHES_ALL)
-                .containsMatchIn(src),
+            "RunningScreen must gate the mini-map on route OR track OR current",
+            Regex(
+                """routeWaypoints\.isNotEmpty\(\)\s*\|\|\s*trackOverlayPoints\.size\s*>=\s*2\s*\|\|\s*latestPoint\s*!=\s*null""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
         )
     }
 
