@@ -252,6 +252,27 @@ class RouteMiniMapWiringTest {
     }
 
     @Test
+    fun `SupabaseClient_fetchRoutes filters starred-first with a recent fallback`() {
+        // Why: the watch picker is gated server-side on `is_starred =
+        // true` so a user with 200 saved routes doesn't have to scroll
+        // a 1.4-inch screen. But a user who hasn't curated yet would
+        // see an empty picker — so when the starred query returns
+        // nothing, fetchRoutes falls back to the 10 most-recently-
+        // updated owned routes. Either branch alone is a regression:
+        // dropping the starred filter floods the picker on power
+        // users; dropping the fallback empties it on first launch.
+        val src = File("src/main/kotlin/com/runapp/watchwear/SupabaseClient.kt").readText()
+        assertTrue(
+            "SupabaseClient.fetchRoutes must request is_starred=eq.true with a 30-row cap",
+            Regex("""is_starred=eq\.true[^"]*limit=30""").containsMatchIn(src),
+        )
+        assertTrue(
+            "SupabaseClient.fetchRoutes must fall back to a recent-only query (no is_starred filter, limit=10)",
+            Regex("""order=updated_at\.desc&limit=10""").containsMatchIn(src),
+        )
+    }
+
+    @Test
     fun `RunViewModel pre-fetches tiles during the start countdown`() {
         // Why: the countdown overlay rides the 3-second wait between
         // permission grant and recording start. Calling
