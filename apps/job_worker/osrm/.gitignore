@@ -1,0 +1,5 @@
+# OSM extracts and the OSRM-processed graph are huge (the PBF is ~100 MB
+# even for a small region; the .osrm.* files together can hit several GB
+# for a city-scale build) and reproducible from `make download` + `make
+# build`. Never commit them.
+data/

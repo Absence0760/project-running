@@ -1,0 +1,39 @@
+# Local-only OSRM map-matching server for running development.
+#
+# This file provisions a single `osrm-routed` container against a
+# pre-extracted OSM dataset. The extract + extract-pipeline targets
+# live in the Makefile because they're one-time per region (and the
+# multi-GB intermediate files don't belong in `docker compose up`).
+#
+# Workflow:
+#   1.  cd apps/job_worker/osrm
+#   2.  make download      # fetches the OSM PBF (~50-200 MB)
+#   3.  make build         # extracts + partitions + customizes (~5-15 min)
+#   4.  docker compose up  # starts the server on :5000
+#
+# Re-run `make build` after a fresh `make download` to refresh the road
+# graph; the routed container hot-loads the new files when restarted.
+
+services:
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: job_worker_osrm
+    restart: unless-stopped
+    ports:
+      # Exposed only on localhost — no auth on this surface, never
+      # publish it. The Go worker connects via OSRM_URL=http://127.0.0.1:5000
+      # in dev; production would talk to a private endpoint.
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./data:/data
+    # MLD (Multi-Level Dijkstra) is the modern algorithm. CH (Contraction
+    # Hierarchies) is faster on routing but slower to build and weaker
+    # at handling live edge weights — irrelevant for matching, but MLD
+    # is the well-trodden path.
+    command: ["osrm-routed", "--algorithm", "mld", "/data/region.osrm"]
+    healthcheck:
+      # OSRM's /health endpoint returns 200 with a small JSON status.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
