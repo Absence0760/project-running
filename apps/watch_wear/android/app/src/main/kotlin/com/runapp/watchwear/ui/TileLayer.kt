@@ -34,14 +34,27 @@ fun TileLayer(
         MercatorTiles.visibleTiles(centre, viewportPx)
     }
 
-    // Map of "z/x/y" → ImageBitmap. SnapshotStateMap so puts trigger
-    // recomposition automatically — no manual flag-flipping needed.
-    val bitmaps: SnapshotStateMap<String, ImageBitmap> = remember { mutableStateMapOf() }
+    // Map of "z/x/y" → ImageBitmap. Re-created whenever `tiles`
+    // changes AND seeded synchronously from the TileSource singleton's
+    // memory cache. This is what makes a freshly-mounted RouteMiniMap
+    // skip the midnight-flash while LaunchedEffect would otherwise
+    // re-fetch each tile: if a previous composable already decoded
+    // the tile, it lives in `tileSource.peekMemory(...)` and lands
+    // in `bitmaps` during composition, so the first frame draws it.
+    val bitmaps: SnapshotStateMap<String, ImageBitmap> = remember(tiles, tileSource) {
+        mutableStateMapOf<String, ImageBitmap>().apply {
+            tiles.forEach { tile ->
+                tileSource.peekMemory(tile)?.let {
+                    put("${tile.z}/${tile.x}/${tile.y}", it)
+                }
+            }
+        }
+    }
 
-    // Kick off fetches for any visible tile that's not yet in-memory.
-    // Re-keyed on `tiles` so a re-fit (zoom change) launches the new
-    // set of fetches; the old entries stay in the map so they'll
-    // appear instantly if the centre re-converges later.
+    // Async fetch the tiles that weren't already in the memory cache.
+    // Successful fetches mutate `bitmaps` (which is a SnapshotStateMap
+    // so the Canvas recomposes) AND the singleton's memoryCache, so
+    // future composable instances seed from it on first composition.
     LaunchedEffect(tiles) {
         tiles.forEach { tile ->
             val key = "${tile.z}/${tile.x}/${tile.y}"

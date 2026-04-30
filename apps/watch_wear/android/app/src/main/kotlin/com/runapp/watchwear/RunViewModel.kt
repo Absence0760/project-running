@@ -133,14 +133,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val routeStore = LocalRouteStore(application)
     private val checkpoints = CheckpointStore(application)
     private val networkWatcher = NetworkWatcher(application)
-    /// MapTiler tile source — lazy so the OkHttp client + 50 MB disk
-    /// cache aren't allocated until the runner actually picks a route.
-    /// Used both by the route picker (eager pre-fetch on select) and
-    /// by `RouteMiniMap` (on-demand fetch as tiles enter the viewport).
-    /// Both code paths share OkHttp's disk cache, so a tile fetched
-    /// during pre-fetch hits cache when the running screen draws it.
+    /// MapTiler tile source — process-wide singleton shared with
+    /// every `RouteMiniMap` composable. Decoded `ImageBitmap`s sit
+    /// in the singleton's LRU so a freshly-mounted RouteMiniMap
+    /// (e.g., the running screen mounting after the countdown
+    /// unmounts) doesn't flash midnight while it re-decodes from
+    /// disk.
     private val tileSource by lazy {
-        com.runapp.watchwear.ui.TileSource(application)
+        com.runapp.watchwear.ui.TileSource.get(application)
     }
     /// One-shot GPS reader, used by the countdown overlay to fetch
     /// tiles around the runner's last-known location during the

@@ -27,10 +27,21 @@ import java.util.concurrent.TimeUnit
 ///    MapTiler's `Cache-Control: max-age=86400` and serves locally.
 /// 3. Decoding the response body into a Bitmap and caching in memory.
 ///
+/// **Process-wide singleton.** Use `TileSource.get(context)` — never
+/// `TileSource(...)` directly. Each `RouteMiniMap` composable
+/// instance is a separate Compose subtree with its own `bitmaps`
+/// SnapshotStateMap; if those instances each owned a separate
+/// `TileSource` they'd each have a separate `memoryCache`, and a
+/// freshly-mounted instance (e.g., the running screen mounting
+/// after the countdown unmounts) would re-decode every tile from
+/// disk, flashing midnight for a frame or two before the bitmaps
+/// land. With the singleton, decoded `ImageBitmap`s survive across
+/// composable instances.
+///
 /// Failures are silent — the tile layer falls back to the midnight
 /// background, which is the same fallback as no-key mode. A flaky
 /// network mid-run shouldn't draw scary error UI on the wrist.
-class TileSource(context: Context) {
+class TileSource private constructor(context: Context) {
 
     /// Whether tile rendering is configured at all. Cheap caller check
     /// so the tile layer can be omitted entirely when there's no key.
@@ -58,6 +69,18 @@ class TileSource(context: Context) {
     // overshoot tiles, with headroom for the next-zoom tier when the
     // runner pans.
     private val memoryCache = LruCache<String, ImageBitmap>(64)
+
+    /// Synchronous in-memory peek. Returns the decoded bitmap if it's
+    /// still in the LRU, or null if it'd require a disk hit. Used by
+    /// `TileLayer` during composition to seed its bitmaps map so the
+    /// first frame after a tile-list change already has cached
+    /// tiles drawn — without this, every new composable instance
+    /// would flash midnight while LaunchedEffect re-decodes from
+    /// disk, even though OkHttp's HTTP cache hits.
+    fun peekMemory(tile: MercatorTiles.Tile): ImageBitmap? {
+        if (!enabled) return null
+        return memoryCache.get("${tile.z}/${tile.x}/${tile.y}")
+    }
 
     /// Fetch (or cache-hit) a tile. Returns null on any failure path
     /// — caller should treat null as "keep midnight background".
@@ -129,6 +152,20 @@ class TileSource(context: Context) {
         coroutineScope {
             needed.forEach { (x, y) ->
                 launch { load(MercatorTiles.Tile(zoom, x, y, 0f, 0f)) }
+            }
+        }
+    }
+
+    companion object {
+        @Volatile private var instance: TileSource? = null
+
+        /// Process-wide singleton. Always pass any context — internally
+        /// we anchor on `applicationContext` so the instance outlives
+        /// any Activity / ViewModel that asks for it.
+        fun get(context: Context): TileSource {
+            val app = context.applicationContext
+            return instance ?: synchronized(this) {
+                instance ?: TileSource(app).also { instance = it }
             }
         }
     }

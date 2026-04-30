@@ -98,7 +98,7 @@ fun RouteMiniMap(
             // skips entirely (and is cheap) if PUBLIC_MAPTILER_KEY is
             // unset — TileSource.enabled gates the network path.
             val ctx = LocalContext.current
-            val tileSource = remember(ctx) { TileSource(ctx) }
+            val tileSource = remember(ctx) { TileSource.get(ctx) }
             if (tileSource.enabled) {
                 TileLayer(
                     centre = centre,
