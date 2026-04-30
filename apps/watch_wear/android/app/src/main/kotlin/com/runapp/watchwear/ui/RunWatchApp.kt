@@ -487,13 +487,17 @@ private fun PreRunScreen(
         }
 
         // Top arc: thin status captions. Padding clears the system
-        // `TimeText` (rendered by the parent Scaffold) — without
-        // this padding the queued-count line lands in the same
-        // pixels as the clock and goes unreadable.
+        // `TimeText` (rendered by the parent Scaffold) AND the
+        // top-corner CompactButtons (battery `!` at TopStart,
+        // sign-out at TopEnd, both at top=26.dp + ~24 dp button
+        // height). Without that clearance the centred pills /
+        // captions in this column run behind the corner icons at
+        // the narrow upper chord — most visibly the route-name
+        // pill once a route is picked.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 30.dp, start = 16.dp, end = 16.dp),
+                .padding(top = 58.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (queuedCount > 0) {
