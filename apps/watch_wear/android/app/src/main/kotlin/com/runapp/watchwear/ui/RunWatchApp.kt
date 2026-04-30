@@ -487,17 +487,16 @@ private fun PreRunScreen(
         }
 
         // Top arc: thin status captions. Padding clears the system
-        // `TimeText` (rendered by the parent Scaffold) AND the
-        // top-corner CompactButtons (battery `!` at TopStart,
-        // sign-out at TopEnd, both at top=26.dp + ~24 dp button
-        // height). Without that clearance the centred pills /
-        // captions in this column run behind the corner icons at
-        // the narrow upper chord — most visibly the route-name
-        // pill once a route is picked.
+        // `TimeText` (rendered by the parent Scaffold) — without
+        // this padding the queued-count line lands in the same
+        // pixels as the clock and goes unreadable. The battery `!`
+        // and sign-out icon buttons live further down on the chord
+        // curve (top=50.dp), so the centred pills here don't have
+        // to dodge them at the narrow upper chord.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 58.dp, start = 16.dp, end = 16.dp),
+                .padding(top = 30.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (queuedCount > 0) {
@@ -741,13 +740,15 @@ private fun PreRunScreen(
                 .widthIn(max = 56.dp),
         )
 
-        // Top-corner icon buttons. Sign-out at TopEnd, "fix battery
-        // optimisation" warning at TopStart — both get the same
-        // translucent treatment so they don't blot out the route
-        // map underneath. The battery warning used to be a wide
-        // chip stuffed into the bottom rail, where it pushed the
-        // chip rail up into the Start button. As an icon it stays
-        // visible without crowding the primary action.
+        // Top side icon buttons, mirroring the bottom Activity / Pace
+        // chip arrangement: sign-out on the right, "fix battery
+        // optimisation" warning on the left, both pulled down to
+        // top=50.dp + start/end=22.dp so they sit on the chord
+        // curve instead of jamming into the round bezel corners.
+        // That keeps the time-text and the centred route-name
+        // pill clear at the very top of the face. Translucent
+        // backgrounds so they don't blot out the route map
+        // underneath.
         val cornerIconColors = ButtonDefaults.secondaryButtonColors(
             backgroundColor = Color.Black.copy(alpha = 0.55f),
             contentColor = DuskPalette.parchment,
@@ -757,7 +758,7 @@ private fun PreRunScreen(
                 onClick = onFixBattery,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 26.dp, start = 26.dp),
+                    .padding(top = 50.dp, start = 22.dp),
                 colors = ButtonDefaults.secondaryButtonColors(
                     backgroundColor = Color.Black.copy(alpha = 0.55f),
                     contentColor = DuskPalette.warning,
@@ -775,7 +776,7 @@ private fun PreRunScreen(
                 onClick = onSignOut,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 26.dp, end = 26.dp),
+                    .padding(top = 50.dp, end = 22.dp),
                 colors = cornerIconColors,
             ) {
                 Icon(
