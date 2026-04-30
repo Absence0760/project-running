@@ -541,11 +541,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     /// Pull saved routes from Supabase and overwrite the local cache.
     /// Called when the user opens the picker; failures leave the
-    /// cached list intact so the UI doesn't blank out.
-    /// Result is re-ordered so routes the user has tapped recently
-    /// on this watch float to the top — Supabase already returns
-    /// the 30-most-recently-updated, but "recently updated on the
-    /// web" is a poor proxy for "what I run weekly".
+    /// cached list intact so the UI doesn't blank out. The wire
+    /// query is starred-first (`is_starred=eq.true`, limit 30) with
+    /// a recent-10 fallback for un-curated users — see
+    /// `SupabaseClient.fetchRoutes`. Result is re-ordered so routes
+    /// the user has tapped recently on this watch float to the top:
+    /// "starred + recently-tapped-here" is a stronger signal than
+    /// either dimension alone.
     fun refreshRoutes() {
         if (!authReady.value) return
         _state.value = _state.value.copy(routesLoading = true)
