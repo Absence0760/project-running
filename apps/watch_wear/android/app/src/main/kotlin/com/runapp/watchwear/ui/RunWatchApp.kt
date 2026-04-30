@@ -402,53 +402,66 @@ private fun PreRunScreen(
         return
     }
 
+    // Pre-run layout matches the running screen's edge-anchored
+    // pattern: route preview fills the watch face as a background,
+    // status banners hug the top arc, Start lives at dead centre,
+    // and the settings chip rail + auxiliary chips cluster at the
+    // bottom edge. Aligned via Box.align() so each region is
+    // independently positioned — content overflow in one region
+    // can't push another out of frame, which was the bug that
+    // shoved Start into the system TimeText when a route was
+    // selected.
+    val captionShadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 0.5f), 3f)
     Box(modifier = Modifier.fillMaxSize()) {
-        // Pre-run layout: Start is the visual anchor at centre; the
-        // activity / route / pace controls cluster as a horizontal
-        // chip rail directly under it; status banners sit above; rare
-        // auxiliary actions (sign in, allow-background, route preview)
-        // tuck below. The whole column is rotary-scrollable in case
-        // multiple banners stack on a 46 mm face — but the contract
-        // is that Start lands above the fold for the common case
-        // (one banner or none). That used to fail because chips
-        // stacked vertically *above* Start; grouping them horizontally
-        // beneath Start frees the centre band for the primary action.
+        // Background: full-screen route preview when one's picked
+        // (same canvas as the in-run map, with `current = null` so
+        // it fits-bounds and frames the whole polyline). Without a
+        // route, the watch background shows through unchanged.
+        if (authed && selectedRouteWaypoints.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().clickable(onClick = onOpenRoutePicker)) {
+                RouteMiniMap(
+                    route = selectedRouteWaypoints,
+                    current = null,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = androidx.compose.ui.graphics.RectangleShape,
+                )
+            }
+        }
+
+        // Top arc: thin status captions. Padding clears the system
+        // `TimeText` (rendered by the parent Scaffold) — without
+        // this padding the queued-count line lands in the same
+        // pixels as the clock and goes unreadable.
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .align(Alignment.TopCenter)
+                .padding(top = 30.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            // --- Status banners (top) ---
-            // Compact captions over the Start button. Each is
-            // conditional; the column shrinks to nothing when none
-            // apply, leaving Start centred on the watch face.
             if (queuedCount > 0) {
                 val suffix = if (online) "" else " · offline"
                 Text(
                     "$queuedCount run${if (queuedCount == 1) "" else "s"} to sync$suffix",
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = if (online) DuskPalette.haze else DuskPalette.warning,
                 )
             } else if (!online && authed) {
                 Text(
                     "Offline",
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
             }
             if (!authed) {
                 Text(
                     "Offline",
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
                 if (authError != null) {
                     Text(
                         authError,
-                        style = MaterialTheme.typography.caption3,
+                        style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.error,
                         textAlign = TextAlign.Center,
                     )
@@ -458,7 +471,7 @@ private fun PreRunScreen(
                 batteryPercent < com.runapp.watchwear.system.BatteryStatus.LOW_THRESHOLD_PERCENT) {
                 Text(
                     "Battery $batteryPercent% · consider charging",
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                     textAlign = TextAlign.Center,
                 )
@@ -466,41 +479,48 @@ private fun PreRunScreen(
             if (activeRace != null) {
                 Text(
                     if (activeRace.isArmed) "RACE ARMED" else "RACE LIVE",
-                    style = MaterialTheme.typography.caption2,
+                    style = MaterialTheme.typography.caption2.copy(shadow = captionShadow),
                     color = MaterialTheme.colors.primary,
                 )
                 val title = activeRace.eventTitle ?: "Event"
                 Text(
                     if (activeRace.isArmed) "$title · wait for GO" else "$title · tap Start",
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.parchment,
                     textAlign = TextAlign.Center,
                 )
             }
+        }
 
-            // --- Primary action (centre) ---
-            // Start lives above the chip rail so it always falls in
-            // the upper-middle band on a round face — never below the
-            // fold. Slightly smaller than before (LargeButtonSize, no
-            // +20) to leave room for the chip rail underneath.
-            Spacer(Modifier.height(6.dp))
-            Button(
-                onClick = onStart,
-                modifier = Modifier.size(ButtonDefaults.LargeButtonSize),
-            ) {
-                Text(
-                    "Start",
-                    style = MaterialTheme.typography.title3,
-                )
-            }
+        // Centre: BIG primary action. Sized so it visually anchors
+        // the screen without crowding the chip rail below.
+        Button(
+            onClick = onStart,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(ButtonDefaults.LargeButtonSize + 12.dp),
+        ) {
+            Text(
+                "Start",
+                style = MaterialTheme.typography.title3,
+            )
+        }
 
-            // --- Settings rail (below Start) ---
-            // Three CompactChips share the row width via `weight(1f)`,
-            // so they always fit edge-to-edge regardless of label
-            // length. Labels are kept terse — the route preview map
-            // below confirms the route name visually for long names
-            // that get truncated in the chip.
-            Spacer(Modifier.height(8.dp))
+        // Bottom arc: settings chip rail + auxiliary chips. Three
+        // chips share the row via weight(1f) so labels truncate to
+        // ellipsis instead of clipping mid-character ("Richmo").
+        // Translucent backgrounds let the route preview show
+        // through behind them.
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 14.dp, start = 12.dp, end = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val translucentChip = ChipDefaults.secondaryChipColors(
+                backgroundColor = Color.Black.copy(alpha = 0.55f),
+                contentColor = DuskPalette.parchment,
+            )
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -512,9 +532,10 @@ private fun PreRunScreen(
                             activityType.replaceFirstChar { it.uppercase() },
                             style = MaterialTheme.typography.caption3,
                             maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                     },
-                    colors = ChipDefaults.secondaryChipColors(),
+                    colors = translucentChip,
                     modifier = Modifier.weight(1f),
                 )
                 if (authed) {
@@ -525,9 +546,10 @@ private fun PreRunScreen(
                                 selectedRouteName ?: "Route",
                                 style = MaterialTheme.typography.caption3,
                                 maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
                         },
-                        colors = ChipDefaults.secondaryChipColors(),
+                        colors = translucentChip,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -539,34 +561,19 @@ private fun PreRunScreen(
                             else formatPace(targetPaceSecPerKm.toDouble()),
                             style = MaterialTheme.typography.caption3,
                             maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                     },
-                    colors = ChipDefaults.secondaryChipColors(),
+                    colors = translucentChip,
                     modifier = Modifier.weight(1f),
                 )
             }
-
-            // --- Auxiliary (rare, below the rail) ---
-            // Route preview confirms the long-form name the chip rail
-            // had to truncate. Sign-in / battery-fix only show when
-            // their state demands it — they sit below the preview so
-            // they don't push Start down on the common-case render.
-            if (authed && selectedRouteWaypoints.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Box(modifier = Modifier.clickable(onClick = onOpenRoutePicker)) {
-                    RouteMiniMap(
-                        route = selectedRouteWaypoints,
-                        current = null,
-                        modifier = Modifier.size(56.dp),
-                    )
-                }
-            }
             if (!authed) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 CompactChip(
                     onClick = onSignIn,
                     label = { Text("Sign in", style = MaterialTheme.typography.caption2) },
-                    colors = ChipDefaults.secondaryChipColors(),
+                    colors = translucentChip,
                 )
             }
             if (batteryOptimised) {
@@ -575,26 +582,30 @@ private fun PreRunScreen(
                     onClick = onFixBattery,
                     label = {
                         Text(
-                            "Allow background activity",
+                            "Allow background",
                             style = MaterialTheme.typography.caption3,
+                            maxLines = 1,
                         )
                     },
-                    colors = ChipDefaults.secondaryChipColors(),
+                    colors = translucentChip,
                 )
             }
         }
 
-        // Small exit-icon button at ~2 o'clock. The round bezel cuts off
-        // the bounding-box corner — TopEnd with 8dp padding ends up outside
-        // the visible circle. ~24dp pulls it well inside the inscribed
-        // rectangle on a typical round face.
+        // Sign-out icon at ~2 o'clock. The round bezel cuts off
+        // the bounding-box corner — TopEnd with 8dp padding ends
+        // up outside the visible circle. ~24dp pulls it well
+        // inside the inscribed rectangle on a typical round face.
         if (authed) {
             CompactButton(
                 onClick = onSignOut,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 24.dp, end = 24.dp),
-                colors = ButtonDefaults.secondaryButtonColors(),
+                    .padding(top = 26.dp, end = 26.dp),
+                colors = ButtonDefaults.secondaryButtonColors(
+                    backgroundColor = Color.Black.copy(alpha = 0.55f),
+                    contentColor = DuskPalette.parchment,
+                ),
             ) {
                 Icon(
                     imageVector = Icons.Filled.ExitToApp,
