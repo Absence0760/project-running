@@ -369,6 +369,27 @@ Kotlin/JUnit slice of the same cross-platform fixture contract. Exercises `build
 
 Regression guard for the post-stop "unauthorized" sync error. `SupabaseClient.execute` throws a typed `HttpException(code, message)` whose message is the body's `msg` / `error_description` / `error` / `message` field (in priority order), falling back to `"HTTP $code"` only when the body has none of them. The first half of the suite pins that field-precedence so a future refactor can't quietly regress it; the second half asserts `classifyDrainError` branches on `HttpException.code`, not the (often-prose) message. Includes the exact PostgREST shape that originally defeated the pre-existing `msg.contains("HTTP 401")` substring match in `drainQueue` — `{"message":"JWT expired","code":"PGRST301"}` now correctly routes to `RetryAfterRefresh`.
 
+### `apps/job_worker/internal/*_test.go` — Go unit tests
+
+Run with `go test ./...` from `apps/job_worker`. No network or Postgres dependency — the worker tests use a fake `Backend`, the matcher tests use `httptest.Server` to stand in for OSRM. Files:
+
+- **`worker_test.go`** — table-driven coverage of the claim → handle → finish loop. Pins the transient/permanent classifier (`isTransient` branches on `HTTPError.StatusCode`, falls back to message sniffing for dial errors), the re-upload race (`TestWorker_ReuploadDuringMatchDiscardsResult` for the pre-write recheck path; `TestWorker_StaleSourceTrackURLDiscardsResult` for the `source_track_url` CAS path), and the auto-link scoring policy (`TestWorker_AutoLinksWhenConfident` — must satisfy both endpoint-offset < 200 m AND |distance ratio| < 0.20 against `runs.distance_m`).
+- **`matcher_test.go`** — pins `PassthroughMatcher` contract: input not aliased into output, empty in → nil out, stable algorithm/version strings.
+- **`matcher_osrm_test.go`** — 10 tests covering `OSRMMatcher`: chunking (250 points → 3 calls, stitched), tail-of-1 passthrough, NoMatch translation (`code != "Ok"` → nil, downstream `'skipped'`), HTTP error surfacing (`*HTTPError` for 5xx), malformed-JSON wrapping, trailing-slash normalisation. The real engine isn't reachable from a unit test (multi-GB pre-extracted graph), so the tests stand up an `httptest.Server` that returns canned `/match` JSON.
+
+#### End-to-end smoke test (manual)
+
+Unit tests don't exercise the real OSRM engine. The `apps/job_worker/osrm/` directory ships a `make smoke` target that does:
+
+1. Stand up OSRM (`make download && make build && docker compose up -d` once per region).
+2. Stand up local Supabase (`cd apps/backend && supabase start`).
+3. Run the worker with `OSRM_URL=http://127.0.0.1:5000` set.
+4. From `apps/job_worker/osrm/`: `make smoke`.
+
+The script uploads a Melbourne-region track, inserts a run (firing the trigger that queues a `map_match` job), polls `run_matched_tracks` until `status='matched'`, and prints raw vs matched coordinates side-by-side so a passthrough fallback is visible. Failure modes (OSRM unreachable, wrong region, worker not running, identical raw/matched coords) are reported with actionable messages. See [`apps/job_worker/osrm/README.md` § Smoke test](../apps/job_worker/osrm/README.md#smoke-test) for the full recipe and tunables.
+
+This is **not** wired into CI — both the OSM extract download and the OSRM build are too heavy for the GitHub runner. It's a developer-machine sanity check before shipping a matcher change.
+
 ---
 
 ## Patterns
