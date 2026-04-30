@@ -594,3 +594,158 @@ INSERT INTO user_follows (follower_id, followee_id) VALUES
   ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
   ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
 ON CONFLICT DO NOTHING;
+
+-- ─────────────────────── Regression tests ───────────────────────
+--
+-- Inline assertions that fire on every `supabase db reset`. These
+-- exercise the SECURITY DEFINER + crypto-sensitive paths that Edge
+-- Function CI doesn't cover. A failure here means a migration that
+-- landed (or modified) one of these functions changed its contract —
+-- catch it before any caller does.
+--
+-- Lives in seed.sql rather than a migration so the assertions don't
+-- run in production deploys. seed.sql only fires on local
+-- `db reset`; production migrations skip it entirely.
+
+-- ───────── check_rate_limit (migration 20260604_001) ─────────
+DO $$
+DECLARE
+  test_user uuid := '99999999-9999-9999-9999-999999999991';
+  test_user2 uuid := '99999999-9999-9999-9999-999999999992';
+  v_allowed boolean;
+  v_retry integer;
+BEGIN
+  DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
+
+  -- 1st + 2nd within max → allow.
+  SELECT allowed INTO v_allowed FROM check_rate_limit(test_user, 'test_rl', 2, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: 1st call should allow'; END IF;
+  SELECT allowed INTO v_allowed FROM check_rate_limit(test_user, 'test_rl', 2, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: 2nd call should allow'; END IF;
+
+  -- 3rd exceeds → deny with retry_after > 0.
+  SELECT allowed, retry_after_seconds INTO v_allowed, v_retry
+    FROM check_rate_limit(test_user, 'test_rl', 2, 3600);
+  IF v_allowed OR v_retry <= 0 THEN
+    RAISE EXCEPTION 'check_rate_limit: 3rd call should deny w/ retry_after>0, got allowed=% retry=%', v_allowed, v_retry;
+  END IF;
+
+  -- Per-user isolation — test_user2 starts fresh.
+  SELECT allowed INTO v_allowed FROM check_rate_limit(test_user2, 'test_rl', 2, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: per-user counter leaked'; END IF;
+
+  -- Per-bucket isolation — same user, different bucket starts fresh.
+  SELECT allowed INTO v_allowed FROM check_rate_limit(test_user, 'test_rl_other', 2, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: per-bucket counter leaked'; END IF;
+
+  -- Input validation: max=0 raises.
+  BEGIN
+    PERFORM check_rate_limit(test_user, 'test_rl', 0, 3600);
+    RAISE EXCEPTION 'check_rate_limit: max=0 should have raised';
+  EXCEPTION
+    WHEN raise_exception THEN
+      IF SQLERRM NOT LIKE '%must be positive%' THEN
+        RAISE EXCEPTION 'check_rate_limit raised wrong error: %', SQLERRM;
+      END IF;
+  END;
+
+  DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
+END $$;
+
+-- ───────── integrations vault (migration 20260603_001) ─────────
+-- Uses runner@test.com + provider='runsignup' (a valid value per the
+-- 20260505_001 CHECK constraint that the seed doesn't exercise) so
+-- the test row doesn't collide with the seeded parkrun / strava
+-- integrations and cleans up at the end. integrations.user_id
+-- references auth.users so we have to use an existing seeded user.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  test_provider text := 'runsignup';
+  v_access text;
+  v_refresh text;
+  v_id_before uuid;
+  v_id_after uuid;
+BEGIN
+  -- Service role bypasses the SECURITY DEFINER owner check.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+
+  DELETE FROM integrations WHERE user_id = test_user AND provider = test_provider;
+
+  -- Round-trip on first insert.
+  PERFORM set_integration_tokens(
+    test_user, test_provider, 'access_v1', 'refresh_v1',
+    now() + interval '6 hours'
+  );
+  SELECT access_token, refresh_token INTO v_access, v_refresh
+    FROM get_integration_tokens(test_user, test_provider);
+  IF v_access IS DISTINCT FROM 'access_v1' OR v_refresh IS DISTINCT FROM 'refresh_v1' THEN
+    RAISE EXCEPTION 'integrations vault: expected (access_v1, refresh_v1), got (%, %)', v_access, v_refresh;
+  END IF;
+
+  -- secret_id stays stable across rotation. The setter calls
+  -- vault.update_secret in place rather than create_secret so any
+  -- caller cached-reference still resolves after a token refresh.
+  SELECT access_token_secret_id INTO v_id_before
+    FROM integrations WHERE user_id = test_user AND provider = test_provider;
+  IF v_id_before IS NULL THEN RAISE EXCEPTION 'secret_id should populate'; END IF;
+
+  PERFORM set_integration_tokens(test_user, test_provider, 'access_v2', 'refresh_v2', NULL);
+  SELECT access_token_secret_id INTO v_id_after
+    FROM integrations WHERE user_id = test_user AND provider = test_provider;
+  IF v_id_after IS DISTINCT FROM v_id_before THEN
+    RAISE EXCEPTION 'integrations vault: secret_id should stay stable across rotation, was % now %', v_id_before, v_id_after;
+  END IF;
+
+  SELECT access_token, refresh_token INTO v_access, v_refresh
+    FROM get_integration_tokens(test_user, test_provider);
+  IF v_access IS DISTINCT FROM 'access_v2' OR v_refresh IS DISTINCT FROM 'refresh_v2' THEN
+    RAISE EXCEPTION 'integrations vault rotation: expected (access_v2, refresh_v2), got (%, %)', v_access, v_refresh;
+  END IF;
+
+  -- Structural check: the row carries vault refs, not plaintext.
+  PERFORM 1 FROM integrations
+    WHERE user_id = test_user AND provider = test_provider
+      AND access_token_secret_id IS NOT NULL
+      AND refresh_token_secret_id IS NOT NULL;
+  IF NOT FOUND THEN RAISE EXCEPTION 'integrations row missing vault refs after set'; END IF;
+
+  DELETE FROM integrations WHERE user_id = test_user AND provider = test_provider;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+END $$;
+
+-- ───────── cross-user auth gate ─────────
+DO $$
+DECLARE
+  victim_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  v_text text;
+BEGIN
+  -- Simulate an authenticated non-owner. auth.uid() reads from
+  -- request.jwt.claim.sub; setting it to a different UUID makes the
+  -- SECURITY DEFINER function see "caller != owner".
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000000', true);
+
+  BEGIN
+    SELECT access_token INTO v_text FROM get_integration_tokens(victim_user, 'strava');
+    RAISE EXCEPTION 'cross-user get_integration_tokens should have raised';
+  EXCEPTION
+    WHEN raise_exception THEN
+      IF SQLERRM NOT LIKE '%forbidden%' THEN
+        RAISE EXCEPTION 'cross-user read raised wrong error: %', SQLERRM;
+      END IF;
+  END;
+
+  BEGIN
+    PERFORM set_integration_tokens(victim_user, 'strava', 'a', 'b', NULL);
+    RAISE EXCEPTION 'cross-user set_integration_tokens should have raised';
+  EXCEPTION
+    WHEN raise_exception THEN
+      IF SQLERRM NOT LIKE '%forbidden%' THEN
+        RAISE EXCEPTION 'cross-user write raised wrong error: %', SQLERRM;
+      END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
