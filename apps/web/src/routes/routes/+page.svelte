@@ -4,6 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { formatDistance } from '$lib/mock-data';
 	import { fetchRoutesWithError, setRouteStar } from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import TrackPreview from '$lib/components/TrackPreview.svelte';
@@ -58,7 +60,7 @@
 			await setRouteStar(routeId, next);
 		} catch (e) {
 			routes = routes.map((r) => (r.id === routeId ? { ...r, is_starred: !next } : r));
-			console.error('star toggle failed', e);
+			showToast(`Could not ${next ? 'star' : 'unstar'} route: ${e}`, 'error');
 		}
 	}
 
@@ -128,16 +130,18 @@
 							{:else}
 								<span class="material-symbols">route</span>
 							{/if}
-							<button
-								type="button"
-								class="star-btn"
-								class:starred={route.is_starred}
-								title={route.is_starred ? 'Unstar route' : 'Star route (shows on watch)'}
-								aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
-								onclick={(e) => toggleStar(e, route.id)}
-							>
-								<span class="material-symbols">star</span>
-							</button>
+							{#if auth.user?.id === route.user_id}
+								<button
+									type="button"
+									class="star-btn"
+									class:starred={route.is_starred}
+									title={route.is_starred ? 'Unstar route' : 'Star route (shows on watch)'}
+									aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
+									onclick={(e) => toggleStar(e, route.id)}
+								>
+									<span class="material-symbols">star</span>
+								</button>
+							{/if}
 						</div>
 						<div class="route-info">
 							<h3>{route.name}</h3>
