@@ -605,7 +605,12 @@ private fun PreRunScreen(
                         backgroundColor = Color.White.copy(alpha = 0.15f),
                         contentColor = DuskPalette.parchment,
                     ),
-                    modifier = Modifier.widthIn(max = 130.dp),
+                    // 90 dp leaves clear horizontal space on each
+                    // side for the TopStart/TopEnd corner icons that
+                    // share this vertical band — wider pills (e.g.
+                    // 130 dp) bump into the sign-out icon on names
+                    // like "Battersea Park Out & Back".
+                    modifier = Modifier.widthIn(max = 90.dp),
                 )
             }
         }
@@ -742,13 +747,15 @@ private fun PreRunScreen(
 
         // Top side icon buttons, mirroring the bottom Activity / Pace
         // chip arrangement: sign-out on the right, "fix battery
-        // optimisation" warning on the left, both pulled down to
-        // top=50.dp + start/end=22.dp so they sit on the chord
-        // curve instead of jamming into the round bezel corners.
-        // That keeps the time-text and the centred route-name
-        // pill clear at the very top of the face. Translucent
-        // backgrounds so they don't blot out the route map
-        // underneath.
+        // optimisation" warning on the left. Padding (top=36.dp,
+        // start/end=22.dp) matches the bottom row's 36 dp distance
+        // from the bezel — the previous 50.dp left a visible gap
+        // above the icons that the bottom row didn't have, so the
+        // face read as bottom-heavy. The centred route-name pill is
+        // capped at 90 dp width so it never collides horizontally
+        // with the corner icons even though they share a vertical
+        // band. Translucent backgrounds so the icons don't blot
+        // out the route map underneath.
         val cornerIconColors = ButtonDefaults.secondaryButtonColors(
             backgroundColor = Color.Black.copy(alpha = 0.55f),
             contentColor = DuskPalette.parchment,
@@ -758,7 +765,7 @@ private fun PreRunScreen(
                 onClick = onFixBattery,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 50.dp, start = 22.dp),
+                    .padding(top = 36.dp, start = 22.dp),
                 colors = ButtonDefaults.secondaryButtonColors(
                     backgroundColor = Color.Black.copy(alpha = 0.55f),
                     contentColor = DuskPalette.warning,
@@ -776,7 +783,7 @@ private fun PreRunScreen(
                 onClick = onSignOut,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 50.dp, end = 22.dp),
+                    .padding(top = 36.dp, end = 22.dp),
                 colors = cornerIconColors,
             ) {
                 Icon(
