@@ -236,6 +236,8 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
 
             if (showCountdown) {
                 CountdownOverlay(
+                    routeWaypoints = state.selectedRoute?.toLatLngs() ?: emptyList(),
+                    previewLatLng = state.lastKnownLatLng,
                     onComplete = {
                         showCountdown = false
                         vm.start()
@@ -248,10 +250,17 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
 }
 
 /// Full-screen 3-2-1 countdown shown between permission grant and the
-/// ViewModel's `start()`. A tap anywhere cancels and returns to PreRun,
-/// matching the Android pattern.
+/// ViewModel's `start()`. A tap anywhere cancels and returns to PreRun.
+///
+/// Doubles as a pre-warm window for the running screen: the map
+/// renders full-screen *behind* the digit, populated from
+/// `lastKnownLatLng` (kicked off by `prefetchTilesForRunStart`). By
+/// the time the count hits 1 and `start()` flips the stage, tiles
+/// are decoded and on-screen — no flash-to-midnight transition.
 @Composable
 private fun CountdownOverlay(
+    routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
+    previewLatLng: com.runapp.watchwear.recording.RouteMath.LatLng?,
     onComplete: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -267,13 +276,47 @@ private fun CountdownOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
             .clickable(onClick = onCancel),
         contentAlignment = Alignment.Center,
     ) {
+        // Map underlay: route polyline + tiles centred on the
+        // last-known fix so the runner sees the streets they're
+        // about to run while the digit plays. When neither a route
+        // nor a fix exists yet (cold launch indoor / no GPS), the
+        // mini-map's own midnight background takes over — same as
+        // the in-run no-fix branch.
+        if (routeWaypoints.isNotEmpty() || previewLatLng != null) {
+            RouteMiniMap(
+                route = routeWaypoints,
+                current = previewLatLng,
+                modifier = Modifier.fillMaxSize(),
+                clipShape = androidx.compose.ui.graphics.RectangleShape,
+            )
+        } else {
+            // Fall back to the old solid-black backdrop so the digit
+            // pops on watches with no last-known location yet.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.92f)),
+            )
+        }
+        // Soft scrim only behind the digit so the map stays visible
+        // around the edges. 0.45 alpha is enough that the digit's
+        // strokes don't have to fight tile contrast, much less than
+        // the old 0.92 that hid the map entirely.
+        if (routeWaypoints.isNotEmpty() || previewLatLng != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+            )
+        }
         Text(
             count.toString(),
-            style = MaterialTheme.typography.display1,
+            style = MaterialTheme.typography.display1.copy(
+                shadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 2f), 8f),
+            ),
             color = DuskPalette.parchment,
             fontSize = 84.sp,
         )

@@ -81,6 +81,12 @@ data class UiState(
     /// Live step count for the current run from the pedometer. Null
     /// when the device has no step sensor or no samples have arrived.
     val steps: Int? = null,
+    /// Last-known GPS fix from `FusedLocationProviderClient.lastLocation`,
+    /// captured during the start countdown so the countdown screen
+    /// can render a preview of the running-screen map under the
+    /// digit. By the time `start()` flips the stage to Running, the
+    /// map's already drawn — no flash of empty midnight.
+    val lastKnownLatLng: com.runapp.watchwear.recording.RouteMath.LatLng? = null,
 )
 
 data class ActiveRaceState(
@@ -585,13 +591,19 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// fix is available (indoor, GPS off) or when a planned route is
     /// already selected (its tiles were prefetched on selectRoute).
     fun prefetchTilesForRunStart() {
-        if (_state.value.selectedRoute != null) return
         viewModelScope.launch {
             try {
                 val fix = gpsForPrefetch.lastLocation() ?: return@launch
-                tileSource.prefetch(
-                    listOf(com.runapp.watchwear.recording.RouteMath.LatLng(fix.lat, fix.lng)),
-                )
+                val latLng = com.runapp.watchwear.recording.RouteMath.LatLng(fix.lat, fix.lng)
+                // Publish the fix so the countdown screen can render
+                // a preview of the running-screen map under the digit
+                // — instant transition to Running with no map flash.
+                _state.value = _state.value.copy(lastKnownLatLng = latLng)
+                // Skip the radial prefetch when a route is already
+                // selected — its tiles were prefetched on selectRoute.
+                if (_state.value.selectedRoute == null) {
+                    tileSource.prefetch(listOf(latLng))
+                }
             } catch (e: Exception) {
                 android.util.Log.w("RunViewModel", "countdown tile prefetch failed", e)
             }
