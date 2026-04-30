@@ -22,6 +22,12 @@ type fakeBackend struct {
 	jobs        []*Job // queued in order; ClaimNextJob pops from the front
 	trackByPath map[string][]TrackPoint
 	trackURL    string
+	// Optional override: when non-nil, ReadRunTrackURL returns
+	// trackURLs[i] on the i-th call (clamped to the last entry).
+	// Lets tests simulate a re-upload mid-match — the worker reads
+	// trackURL at start, then re-reads before writing, and the
+	// second read returns the new URL.
+	trackURLs []string
 
 	// Errors to inject — return on the next call to that method.
 	claimErr      error
@@ -151,6 +157,16 @@ func (f *fakeBackend) ReadRunTrackURL(_ context.Context, _ string) (string, erro
 		f.readURLErr = nil
 		return "", err
 	}
+	if len(f.trackURLs) > 0 {
+		// Return the next scripted URL, sticking on the last entry
+		// once the script runs out (extra reads behave like the
+		// final state).
+		url := f.trackURLs[0]
+		if len(f.trackURLs) > 1 {
+			f.trackURLs = f.trackURLs[1:]
+		}
+		return url, nil
+	}
 	return f.trackURL, nil
 }
 
@@ -266,6 +282,42 @@ func TestWorker_SkipsTooFewPoints(t *testing.T) {
 	}
 	if len(be.finished) != 1 || be.finished[0].Status != "done" {
 		t.Errorf("finish=%+v, want done", be.finished)
+	}
+}
+
+// ---- re-upload race ---------------------------------------------------
+
+// If track_url changes between the start of the match and the write
+// back, the worker should discard its result and finish_job(done) so
+// the OLD job exits cleanly. The trigger has already enqueued a new
+// job for the fresh track; that one will produce the right result.
+func TestWorker_ReuploadDuringMatchDiscardsResult(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURLs = []string{
+		"user-1/run-1.json.gz",      // first read (download)
+		"user-1/run-1.v2.json.gz",   // second read (recheck): re-upload landed
+	}
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001}, {Lat: 1.002, Lng: 2.002},
+	}
+	be.jobs = []*Job{{
+		ID: 21, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.uploaded); got != 0 {
+		t.Errorf("uploaded count=%d, want 0 (stale result discarded)", got)
+	}
+	if got := len(be.rowSets); got != 0 {
+		t.Errorf("row writes=%d, want 0 (stale result discarded)", got)
+	}
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
+		t.Errorf("finish=%+v, want one done", be.finished)
 	}
 }
 

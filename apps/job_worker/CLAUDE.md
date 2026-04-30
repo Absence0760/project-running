@@ -84,13 +84,25 @@ markers — same shape as the watch's drain classifier in
 
 If a runner re-uploads a track while a previous match is in flight,
 the `runs_enqueue_match_job_trigger` resets the `run_matched_tracks`
-row to `pending`. The in-flight worker is unaware and will write its
-result against the *old* track when it finishes. **The worker is
-responsible for an attempts-CAS at write time** — read the
-`attempts` value that was visible when the job was claimed, and on
-update, fail if `attempts` has changed since. This is currently a
-caveat (worker just writes); when a real engine lands and
-re-uploads become more common, implement the CAS.
+row to `pending`. Without the recheck below, the in-flight worker
+would persist its `matched` state tagged against the *old* track over
+the trigger's reset.
+
+**Mitigation**: `handleMapMatch` reads `runs.track_url` once at the
+start of the job (the URL the matcher operates against) and re-reads
+it just before the write. If the URL changed, the worker logs and
+returns nil — the OLD job ends cleanly via `finish_job(done)` and
+the NEW job already queued by the trigger produces the fresh
+result. Pinned by `TestWorker_ReuploadDuringMatchDiscardsResult`.
+
+**Residual window**: the recheck shrinks the race from O(match
+duration) to O(network round-trip between recheck and PATCH). To
+fully close it, add a `source_track_url text` column to
+`run_matched_tracks`, have the trigger set it on every reset, and
+have the worker PATCH conditionally on
+`?source_track_url=eq.<value-it-matched-against>`. That's the
+upgrade path when a real engine lands; the recheck is enough while
+the matcher is the deterministic passthrough.
 
 ## Local dev
 

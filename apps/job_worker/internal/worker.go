@@ -143,6 +143,18 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 // path is matched against the freshest data — the trigger's reset of
 // run_matched_tracks pairs with this read so the worker never persists
 // a result tagged against a stale track.
+//
+// Re-upload race handling: between reading track_url and writing the
+// result, a runner can re-upload (replacing track_url). Without a
+// recheck, the worker would persist a 'matched' state tagged against
+// the OLD url over the trigger's pending reset. We re-read the url
+// just before the write and discard the result if it changed — the
+// newer job already queued by the trigger will produce the right one.
+// A small TOCTOU window remains between recheck and PATCH; closing it
+// fully needs a server-side CAS (e.g. a `source_track_url` column on
+// run_matched_tracks), which is the upgrade path when a real engine
+// lands. The recheck shrinks the race from O(match duration) to
+// O(network round-trip), good enough for the stub matcher.
 func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 	var p MapMatchPayload
 	if err := json.Unmarshal(job.Payload, &p); err != nil {
@@ -165,6 +177,25 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 	matched, err := w.Matcher.Match(raw)
 	if err != nil {
 		return fmt.Errorf("match: %w", err)
+	}
+
+	// Pre-write recheck. If track_url changed since the start of
+	// this job, the runner re-uploaded mid-match — our matched
+	// output is stale. Discard cleanly: no error (the OLD job
+	// completed without crashing), no write (the trigger already
+	// queued a fresh job for the NEW track).
+	currentURL, err := w.Backend.ReadRunTrackURL(ctx, p.RunID)
+	if err != nil {
+		return fmt.Errorf("recheck track_url: %w", err)
+	}
+	if currentURL != trackURL {
+		w.Log.Info(
+			"track_url changed mid-match; discarding stale result",
+			"run_id", p.RunID,
+			"matched_against", trackURL,
+			"current", currentURL,
+		)
+		return nil
 	}
 
 	// "Skipped" is a deliberate non-failure outcome — too few points
