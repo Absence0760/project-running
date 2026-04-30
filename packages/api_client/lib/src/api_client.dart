@@ -304,6 +304,44 @@ class ApiClient {
     return _downloadTrack(path);
   }
 
+  /// Fetch the map-match state + matched track for a run. Returns null
+  /// when the row doesn't exist or is unreadable (RLS gates non-owners
+  /// to no-row, so `null` covers both cases). Track download is
+  /// best-effort: a row with `status='matched'` whose gz fails to
+  /// fetch returns the row state with `track=null` so the caller can
+  /// still surface the status badge while falling back to the raw
+  /// track on the map.
+  Future<RunMatchInfo?> fetchRunMatchedTrack(String runId) async {
+    final rows = await _client
+        .from('run_matched_tracks')
+        .select(
+          'status, matched_track_url, algorithm, algorithm_version, matched_at',
+        )
+        .eq('run_id', runId)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    final status = MatchStatus.fromName(row['status'] as String);
+    final url = row['matched_track_url'] as String?;
+    List<Waypoint>? track;
+    if (status == MatchStatus.matched && url != null && url.isNotEmpty) {
+      try {
+        track = await _downloadTrack(url);
+      } catch (_) {
+        track = null;
+      }
+    }
+    return RunMatchInfo(
+      status: status,
+      algorithm: row['algorithm'] as String?,
+      algorithmVersion: row['algorithm_version'] as String?,
+      matchedAt: row['matched_at'] == null
+          ? null
+          : DateTime.tryParse(row['matched_at'] as String),
+      track: track,
+    );
+  }
+
   /// Download the raw gzipped track bytes from Storage without decoding.
   /// Used by the backup flow which wants to archive the gzipped blob
   /// verbatim so restore is a byte-for-byte upload.

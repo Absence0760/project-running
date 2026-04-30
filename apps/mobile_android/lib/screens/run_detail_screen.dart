@@ -49,6 +49,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   bool _loadingTrack = false;
   bool _trackFetchFailed = false;
   Route? _linkedRoute;
+  /// Map-match metadata + matched track. L4 per docs/conventions.md
+  /// § Layered resilience — the raw `run.track` keeps rendering on
+  /// first paint; this lands in the background and the map widget
+  /// switches to it when present. A failure here cannot break the
+  /// page.
+  RunMatchInfo? _matchInfo;
 
   /// Animation state for the "replay" feature. `null` index = not
   /// replaying. Non-null = the current step into `run.track`. Held in a
@@ -97,6 +103,23 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     super.initState();
     _loadLinkedRoute();
     _maybeFetchTrack();
+    _maybeFetchMatchedTrack();
+  }
+
+  /// Background fetch of `run_matched_tracks` + the matched gz when
+  /// status='matched'. Owner-read RLS hides the row from non-owners,
+  /// so a non-null result means the runner is viewing their own run
+  /// AND the worker has touched it. Silent on every failure path —
+  /// the page renders the raw track without it.
+  Future<void> _maybeFetchMatchedTrack() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final info = await api.fetchRunMatchedTrack(run.id);
+      if (mounted) setState(() => _matchInfo = info);
+    } catch (e) {
+      debugPrint('matched-track fetch failed for ${run.id}: $e');
+    }
   }
 
   @override
@@ -418,19 +441,38 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 children: [
                   ValueListenableBuilder<int?>(
                     valueListenable: _replayIndex,
-                    builder: (context, replayIndex, _) => LiveRunMap(
-                      track: run.track,
-                      plannedRoute:
-                          run.track.isEmpty ? _linkedRoute?.waypoints : null,
-                      followRunner: false,
-                      activity:
-                          run.track.isNotEmpty ? _activityType : null,
-                      currentPosition: replayIndex != null &&
-                              replayIndex < run.track.length
-                          ? run.track[replayIndex]
-                          : null,
-                    ),
+                    builder: (context, replayIndex, _) {
+                      // Prefer the matched line when the worker has
+                      // produced one. Stats (splits, elevation, HR
+                      // zones) keep deriving from the raw `run.track`
+                      // because those are properties of what the
+                      // runner did, not how the projected line is
+                      // drawn — switching the visual layer must not
+                      // alter the numbers.
+                      final mapTrack = _matchInfo?.hasRenderableTrack == true
+                          ? _matchInfo!.track!
+                          : run.track;
+                      return LiveRunMap(
+                        track: mapTrack,
+                        plannedRoute: mapTrack.isEmpty
+                            ? _linkedRoute?.waypoints
+                            : null,
+                        followRunner: false,
+                        activity: mapTrack.isNotEmpty ? _activityType : null,
+                        currentPosition: replayIndex != null &&
+                                replayIndex < run.track.length
+                            ? run.track[replayIndex]
+                            : null,
+                      );
+                    },
                   ),
+                  if (_matchInfo != null &&
+                      _matchInfo!.status != MatchStatus.matched)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: _MatchStatusPill(status: _matchInfo!.status),
+                    ),
                   if (run.track.length >= 2)
                     Positioned(
                       bottom: 12,
@@ -1854,5 +1896,47 @@ class _ElevationPacePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ElevationPacePainter old) =>
       old.track != track || old.touchFraction != touchFraction;
+}
+
+/// Small frosted-glass pill that surfaces the map-match status when
+/// it's anything other than `matched` (the silent default — the
+/// cleaner line speaks for itself). Mirrors the shape of the web's
+/// `.match-pill` on `/runs/[id]`.
+class _MatchStatusPill extends StatelessWidget {
+  final MatchStatus status;
+  const _MatchStatusPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, label) = switch (status) {
+      MatchStatus.pending => (Icons.hourglass_top, 'Snapping to roads…'),
+      MatchStatus.skipped => (Icons.block, 'Not snapped (too few points)'),
+      MatchStatus.failed => (Icons.error_outline, 'Snap failed — showing raw track'),
+      MatchStatus.matched => (Icons.check_circle, 'Snapped'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white70),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
