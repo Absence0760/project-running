@@ -46,6 +46,7 @@ function makeRoute(overrides: Partial<Route> & { name: string; distance_m: numbe
 		is_public: false,
 		slug: null,
 		start_point: null,
+		geom: null,
 		tags: [],
 		featured: false,
 		featured_at: null,

@@ -484,8 +484,8 @@ Surfaces that other running apps ship as table stakes and we don't. Each one is 
   - [ ] `GET /race-predictor` — predict finish times (Riegel formula)
   - [ ] `GET /recovery` — training load and recovery recommendation
   - [ ] Gate all by `subscription_tier = 'premium'`
-- [ ] Enable PostGIS extension in Supabase
-- [ ] Add `geom geography(LineString, 4326)` column to `routes` with spatial index
+- [x] Enable PostGIS extension in Supabase — shipped in migration `20260415_001_postgis_nearby_routes.sql` (extension + `routes.start_point` + GiST index + `nearby_routes` RPC + sync trigger).
+- [x] Add `geom geography(LineString, 4326)` column to `routes` with spatial index — shipped in migration `20260607_001_routes_geom_linestring.sql`. Column + `routes_geom_gist` GiST index + `routes_set_geom` trigger keep the full polyline in sync with `waypoints`. Backfill rebuilds existing rows with ≥2 valid waypoints. Both client codegens treat the column as opaque; queries against it live server-side.
 - [x] Add `training_plans` table for generated plans — shipped in migration `20260419_001_training_plans.sql` along with `plan_weeks` and `plan_workouts`. Hardening pass in `20260421_001_plan_hardening.sql`; editor / template surfaces in `20260420_001` and `20260524_001`.
 - [x] Add `fitness_snapshots` table for VO2 max and training load history (migration `20260507_001_fitness_snapshots.sql` — `vdot`, `vo2_max`, ATL / CTL / TSB columns, `qualifying_run_count`, `source` check, `latest_fitness_snapshot()` RPC. Server-side recompute job + advisor UI still pending.)
 - [x] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles` — Edge Function `revenuecat-webhook` (HMAC-verified via `REVENUECAT_WEBHOOK_SECRET`) handles INITIAL_PURCHASE / RENEWAL / CANCELLATION / EXPIRATION, maps lifetime SKUs to the `lifetime` tier, and updates `user_profiles.subscription_tier` with a guard that lifetime never gets downgraded.

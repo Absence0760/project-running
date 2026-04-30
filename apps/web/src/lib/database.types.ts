@@ -934,6 +934,7 @@ export type Database = {
           elevation_m: number | null
           featured: boolean
           featured_at: string | null
+          geom: unknown
           id: string
           is_public: boolean | null
           is_starred: boolean
@@ -954,6 +955,7 @@ export type Database = {
           elevation_m?: number | null
           featured?: boolean
           featured_at?: string | null
+          geom?: unknown
           id?: string
           is_public?: boolean | null
           is_starred?: boolean
@@ -974,6 +976,7 @@ export type Database = {
           elevation_m?: number | null
           featured?: boolean
           featured_at?: string | null
+          geom?: unknown
           id?: string
           is_public?: boolean | null
           is_starred?: boolean
@@ -1622,6 +1625,7 @@ export type Database = {
           elevation_m: number | null
           featured: boolean
           featured_at: string | null
+          geom: unknown
           id: string
           is_public: boolean | null
           is_starred: boolean
@@ -1692,6 +1696,7 @@ export type Database = {
           elevation_m: number | null
           featured: boolean
           featured_at: string | null
+          geom: unknown
           id: string
           is_public: boolean | null
           is_starred: boolean

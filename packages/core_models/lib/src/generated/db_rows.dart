@@ -1176,6 +1176,7 @@ class RouteRow {
   static const String colRunCount = 'run_count';
   static const String colClubId = 'club_id';
   static const String colIsStarred = 'is_starred';
+  static const String colGeom = 'geom';
 
   final String id;
   final String userId;
@@ -1195,6 +1196,7 @@ class RouteRow {
   final int runCount;
   final String? clubId;
   final bool isStarred;
+  final dynamic geom;
 
   const RouteRow({
     required this.id,
@@ -1215,6 +1217,7 @@ class RouteRow {
     required this.runCount,
     this.clubId,
     required this.isStarred,
+    this.geom,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -1236,6 +1239,7 @@ class RouteRow {
     runCount: (json['run_count'] as num).toInt(),
     clubId: json['club_id'] as String?,
     isStarred: json['is_starred'] as bool,
+    geom: json['geom'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1257,6 +1261,7 @@ class RouteRow {
     colRunCount: runCount,
     colClubId: clubId,
     colIsStarred: isStarred,
+    colGeom: geom,
   };
 }
 
