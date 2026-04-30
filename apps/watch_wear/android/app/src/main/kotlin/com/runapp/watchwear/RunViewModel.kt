@@ -26,6 +26,42 @@ import java.util.UUID
 
 enum class Stage { PreRun, Running, Paused, PostRun, SignIn, RoutePicker }
 
+/// What `drainQueue` should do with a single failed run.
+internal sealed class DrainAction {
+    /// 401 — refresh access token, then retry this run once.
+    data object RetryAfterRefresh : DrainAction()
+    /// 409 — already in the DB (idempotent upload). Drop and move on.
+    data object DropAndContinue : DrainAction()
+    /// 5xx / network drop / timeout. Bail out of the loop; let the next
+    /// drain signal retry the whole queue.
+    data object StopAndRetryLater : DrainAction()
+    /// 400 / 404 / 422 / unknown 4xx — leave queued, skip to next run.
+    data object SkipAndContinue : DrainAction()
+}
+
+/// Classify a drain failure by its type, not its stringified message.
+/// 401s previously fell into `SkipAndContinue` because the substring
+/// match in `drainQueue` was looking for `"HTTP 401"` while
+/// `SupabaseClient` was throwing the body's `msg` field instead — so
+/// the refresh-and-retry path never fired. With `HttpException` carrying
+/// the status code, we can branch correctly.
+internal fun classifyDrainError(e: Throwable): DrainAction {
+    if (e is HttpException) {
+        return when {
+            e.code == 401 -> DrainAction.RetryAfterRefresh
+            e.code == 409 -> DrainAction.DropAndContinue
+            e.code in 500..599 -> DrainAction.StopAndRetryLater
+            e.code == 400 || e.code == 404 || e.code == 422 -> DrainAction.SkipAndContinue
+            else -> DrainAction.SkipAndContinue
+        }
+    }
+    val msg = e.message.orEmpty()
+    val transient = msg.contains("timeout", ignoreCase = true) ||
+        msg.contains("Unable to resolve", ignoreCase = true) ||
+        msg.contains("Software caused", ignoreCase = true)
+    return if (transient) DrainAction.StopAndRetryLater else DrainAction.SkipAndContinue
+}
+
 data class UiState(
     val stage: Stage = Stage.PreRun,
     val elapsedMs: Long = 0,
@@ -846,72 +882,54 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         if (!awaitAuth()) return
         val snapshot = store.queue.first()
         var lastError: String? = null
-        var anyAuthFailure = false
         for (run in snapshot) {
             try {
                 pushRun(run)
                 store.remove(run.id)
                 lastError = null
             } catch (e: Throwable) {
-                val msg = e.message.orEmpty()
-                // Permanent-ish errors: 400/404/409/422 — the run is
-                // malformed or already exists. Leave it queued (the user
-                // can Discard from the UI if they want) but move on.
-                // 409 is now safe to remove: every run carries external_id so
-                // a 409 means the row is already in the DB (idempotent upload).
-                val alreadyPersisted = msg.contains("HTTP 409")
-                val permanent = Regex("HTTP 4(00|04|22)").containsMatchIn(msg)
-                // Transient: timeouts, 5xx, network loss. Stop iterating
-                // so we don't hammer the backend, but keep the queue
-                // intact. Next drain trigger (network-back-online,
-                // manual sync) retries.
-                val transient = Regex("HTTP 5\\d\\d").containsMatchIn(msg) ||
-                    msg.contains("timeout", ignoreCase = true) ||
-                    msg.contains("Unable to resolve", ignoreCase = true) ||
-                    msg.contains("Software caused", ignoreCase = true)
-
-                if (msg.contains("HTTP 401")) {
-                    anyAuthFailure = true
-                    // One 401 retry: refresh token + try this run again.
-                    try {
-                        val refreshed = supabase.refreshAccessToken()
-                        val cached = sessionStore.current()
-                        if (cached != null) {
-                            sessionStore.save(
-                                cached.copy(
-                                    accessToken = refreshed.accessToken,
-                                    refreshToken = refreshed.refreshToken,
-                                    expiresAtMs = refreshed.expiresAtMs,
+                lastError = e.message ?: e.javaClass.simpleName
+                when (classifyDrainError(e)) {
+                    DrainAction.RetryAfterRefresh -> {
+                        // One 401 retry: refresh token + try this run again.
+                        try {
+                            val refreshed = supabase.refreshAccessToken()
+                            val cached = sessionStore.current()
+                            if (cached != null) {
+                                sessionStore.save(
+                                    cached.copy(
+                                        accessToken = refreshed.accessToken,
+                                        refreshToken = refreshed.refreshToken,
+                                        expiresAtMs = refreshed.expiresAtMs,
+                                    )
                                 )
-                            )
+                            }
+                            pushRun(run)
+                            store.remove(run.id)
+                            lastError = null
+                        } catch (inner: Throwable) {
+                            lastError = inner.message ?: lastError
+                            break  // refresh failed → stop, next auth signal retries
                         }
-                        pushRun(run)
+                    }
+                    DrainAction.DropAndContinue -> {
+                        // 409 is safe to remove: every run carries external_id
+                        // so a 409 means the row is already in the DB
+                        // (idempotent upload).
                         store.remove(run.id)
                         lastError = null
-                        continue
-                    } catch (inner: Throwable) {
-                        lastError = inner.message ?: msg
-                        break  // refresh failed → stop, next auth signal retries
                     }
-                }
-
-                when {
-                    alreadyPersisted -> {
-                        store.remove(run.id)
-                        lastError = null
-                        continue
+                    DrainAction.StopAndRetryLater -> {
+                        // Transient: timeouts, 5xx, network loss. Stop
+                        // iterating so we don't hammer the backend, but keep
+                        // the queue intact. Next drain trigger
+                        // (network-back-online, manual sync) retries.
+                        break
                     }
-                    transient -> {
-                        lastError = msg
-                        break  // try again later; don't thrash
-                    }
-                    permanent -> {
-                        lastError = msg
-                        continue  // skip to next; this one is stuck
-                    }
-                    else -> {
-                        lastError = msg
-                        continue  // unknown — optimistically try next
+                    DrainAction.SkipAndContinue -> {
+                        // Permanent-ish (400/404/422) or unknown — skip
+                        // to next; this one is stuck. The user can
+                        // Discard from the UI if they want.
                     }
                 }
             }
