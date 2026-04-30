@@ -151,26 +151,28 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
     final newValue = !_isStarred;
+    final r = widget.route;
+    cm.Route buildRoute(bool starred) => cm.Route(
+          id: r.id,
+          name: r.name,
+          waypoints: r.waypoints,
+          distanceMetres: r.distanceMetres,
+          elevationGainMetres: r.elevationGainMetres,
+          isPublic: _isPublic,
+          createdAt: r.createdAt,
+          surface: r.surface,
+          tags: _tags,
+          featured: r.featured,
+          runCount: r.runCount,
+          isStarred: starred,
+        );
     setState(() => _isStarred = newValue);
+    await widget.routeStore.save(buildRoute(newValue));
     try {
-      await api.setRouteStar(widget.route.id, newValue);
-      final r = widget.route;
-      await widget.routeStore.save(cm.Route(
-        id: r.id,
-        name: r.name,
-        waypoints: r.waypoints,
-        distanceMetres: r.distanceMetres,
-        elevationGainMetres: r.elevationGainMetres,
-        isPublic: _isPublic,
-        createdAt: r.createdAt,
-        surface: r.surface,
-        tags: _tags,
-        featured: r.featured,
-        runCount: r.runCount,
-        isStarred: newValue,
-      ));
+      await api.setRouteStar(r.id, newValue);
     } catch (_) {
       if (mounted) setState(() => _isStarred = !newValue);
+      await widget.routeStore.save(buildRoute(!newValue));
     }
   }
 
