@@ -87,6 +87,12 @@ object MapProjection {
         val pad = paddingFrac.coerceIn(0.0, 0.49)
         val ax = pad + nx * (1.0 - 2 * pad)
         val ay = pad + (1.0 - ny) * (1.0 - 2 * pad)  // flip y
-        return Pair(ax, ay)
+        // Clamp to the padded canvas. Floating-point drift on points
+        // sitting exactly at the bounding-box corner can otherwise
+        // produce values like 1.0000000000000004, which would draw a
+        // pixel off-canvas on the Compose Canvas.
+        val lo = pad
+        val hi = 1.0 - pad
+        return Pair(ax.coerceIn(lo, hi), ay.coerceIn(lo, hi))
     }
 }

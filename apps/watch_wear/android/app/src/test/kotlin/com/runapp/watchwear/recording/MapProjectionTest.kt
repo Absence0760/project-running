@@ -115,4 +115,62 @@ class MapProjectionTest {
         // With pad=0.49: ax = 0.49 + 0 * (1 - 0.98) = 0.49.
         assertEquals(0.49, x, tol)
     }
+
+    @Test
+    fun `single-point route projects to canvas centre`() {
+        val pts = listOf(ll(40.0, -120.0))
+        val b = MapProjection.computeBounds(pts, null)!!
+        // Bounds collapse to a single point — both spans → 0, coerced
+        // to 1e-9, so projection sits exactly at the midpoint.
+        val (x, y) = MapProjection.project(ll(40.0, -120.0), b)
+        assertEquals(0.5, x, tol)
+        assertEquals(0.5, y, tol)
+    }
+
+    @Test
+    fun `identical-waypoint route does not produce NaN or infinity`() {
+        // Pathological input — a five-point route where every point is
+        // the exact same lat/lng. Real GPX files occasionally have this
+        // (idle pre-start). Don't blow up on divide-by-zero.
+        val pts = (1..5).map { ll(51.5074, -0.1278) }
+        val b = MapProjection.computeBounds(pts, null)!!
+        for (p in pts) {
+            val (x, y) = MapProjection.project(p, b)
+            assertTrue("x finite for $p: $x", x.isFinite())
+            assertTrue("y finite for $p: $y", y.isFinite())
+            assertEquals(0.5, x, tol)
+            assertEquals(0.5, y, tol)
+        }
+    }
+
+    @Test
+    fun `current-outside-route projects within canvas after bounds expansion`() {
+        val pts = listOf(ll(51.5, -0.1), ll(51.51, -0.09))
+        val cur = ll(51.49, -0.11)  // SW of every route point
+        val b = MapProjection.computeBounds(pts, cur)!!
+        // Both route endpoints should now sit within the canvas, not
+        // off-canvas, because bounds were extended to include `cur`.
+        for (p in pts + cur) {
+            val (x, y) = MapProjection.project(p, b, paddingFrac = 0.0)
+            assertTrue("x in [0,1] for $p: $x", x in 0.0..1.0)
+            assertTrue("y in [0,1] for $p: $y", y in 0.0..1.0)
+        }
+    }
+
+    @Test
+    fun `negative coordinates project the same shape as positive`() {
+        // Sanity check that hemisphere doesn't change the shape of the
+        // projection — a route from (0,0)→(1,1) and one from (-1,-1)→(0,0)
+        // should both occupy the canvas identically.
+        val north = listOf(ll(0.0, 0.0), ll(1.0, 1.0))
+        val south = listOf(ll(-1.0, -1.0), ll(0.0, 0.0))
+        val bN = MapProjection.computeBounds(north, null)!!
+        val bS = MapProjection.computeBounds(south, null)!!
+        val (xN0, yN0) = MapProjection.project(north[0], bN, paddingFrac = 0.0)
+        val (xS0, yS0) = MapProjection.project(south[0], bS, paddingFrac = 0.0)
+        // Both first points are the SW corner of their respective bounds
+        // → both should project to (0.0, 1.0) (x=0 west; y=1 south).
+        assertEquals(xN0, xS0, tol)
+        assertEquals(yN0, yS0, tol)
+    }
 }
