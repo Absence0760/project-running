@@ -22,6 +22,34 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.util.zip.GZIPOutputStream
 
+/// Thrown by [SupabaseClient.execute] when the response is not 2xx.
+///
+/// The HTTP status survives on `code` so callers can branch on it
+/// (e.g., 401 → refresh + retry, 409 → idempotent skip) without
+/// substring-matching the human-readable `message`. Carrying the body's
+/// `msg` / `error_description` / `error` / `message` field through as
+/// the exception message keeps the UI-surfaced text user-readable.
+class HttpException(val code: Int, message: String) : RuntimeException(message)
+
+private val errorBodyJson = Json { ignoreUnknownKeys = true }
+
+/// Pull the most user-readable string out of a Supabase / PostgREST /
+/// GoTrue / Storage error body. Different surfaces use different field
+/// names — try the well-known ones in priority order, fall back to
+/// `"HTTP $code"` when the body isn't JSON or has none of them.
+///
+/// Internal so the unit test can pin the field-precedence behaviour.
+internal fun humanErrorMessage(code: Int, body: String): String {
+    return try {
+        val obj = errorBodyJson.parseToJsonElement(body) as? JsonObject
+            ?: return "HTTP $code"
+        val msg = obj["msg"] ?: obj["error_description"] ?: obj["error"] ?: obj["message"]
+        if (msg != null) msg.toString().trim('"') else "HTTP $code"
+    } catch (_: Throwable) {
+        "HTTP $code"
+    }
+}
+
 /// Minimal Supabase REST client for the Wear OS app.
 ///
 /// Talks directly to `${baseUrl}/rest/v1`, `/auth/v1`, and `/storage/v1`.
@@ -289,24 +317,9 @@ class SupabaseClient(
         http.newCall(req).execute().use { resp ->
             val body = resp.body.string()
             if (!resp.isSuccessful) {
-                throw RuntimeException(humanErrorMessage(resp.code, body))
+                throw HttpException(resp.code, humanErrorMessage(resp.code, body))
             }
             body
-        }
-    }
-
-    /// Supabase errors come back as `{"code":400,"error_code":"...","msg":"..."}`
-    /// or `{"error":"...","error_description":"..."}` depending on the endpoint.
-    /// Pick the most user-readable field; fall back to the raw body if
-    /// nothing parses.
-    private fun humanErrorMessage(code: Int, body: String): String {
-        return try {
-            val obj = json.parseToJsonElement(body) as? JsonObject
-                ?: return "HTTP $code"
-            val msg = obj["msg"] ?: obj["error_description"] ?: obj["error"] ?: obj["message"]
-            if (msg != null) msg.toString().trim('"') else "HTTP $code"
-        } catch (_: Throwable) {
-            "HTTP $code"
         }
     }
 
