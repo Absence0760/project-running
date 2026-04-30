@@ -135,6 +135,50 @@ export async function fetchTrackByPath(path: string) {
 	return fetchTrack(path);
 }
 
+export type MatchStatus = 'pending' | 'matched' | 'failed' | 'skipped';
+
+export type RunMatchInfo = {
+	status: MatchStatus;
+	algorithm: string | null;
+	algorithmVersion: string | null;
+	matchedAt: string | null;
+	track: import('$lib/types').TrackPoint[] | null;
+};
+
+/// Fetch the run_matched_tracks row for a run + lazily download the
+/// matched track when status='matched'. The owner-read RLS policy
+/// gates this — non-owners get an empty result and the caller falls
+/// back to the raw track. L4 per docs/conventions.md § Layered
+/// resilience: the matched track is an enhancement on top of the
+/// raw track that already renders; a failure here must NOT break
+/// the run-detail page.
+export async function fetchRunMatchedTrack(
+	runId: string,
+): Promise<RunMatchInfo | null> {
+	const { data, error } = await supabase
+		.from('run_matched_tracks')
+		.select('status, matched_track_url, algorithm, algorithm_version, matched_at')
+		.eq('run_id', runId)
+		.maybeSingle();
+	if (error || !data) return null;
+
+	let track: import('$lib/types').TrackPoint[] | null = null;
+	if (data.status === 'matched' && data.matched_track_url) {
+		try {
+			track = (await fetchTrack(data.matched_track_url)) as import('$lib/types').TrackPoint[];
+		} catch (e) {
+			console.warn('Failed to fetch matched track', e);
+		}
+	}
+	return {
+		status: data.status as MatchStatus,
+		algorithm: data.algorithm,
+		algorithmVersion: data.algorithm_version,
+		matchedAt: data.matched_at,
+		track,
+	};
+}
+
 /** Decompress a gzipped ArrayBuffer using the browser's DecompressionStream. */
 async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 	const ds = new (globalThis as any).DecompressionStream('gzip');

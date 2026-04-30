@@ -15,7 +15,7 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute, fetchWorkout } from '$lib/data';
+	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute, fetchWorkout, fetchRunMatchedTrack, type RunMatchInfo } from '$lib/data';
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/run_stats';
@@ -40,10 +40,21 @@
 	let editNotes = $state('');
 	let showDeleteConfirm = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
+	/// Map-matched track + status from run_matched_tracks. Populated on
+	/// mount in parallel with the main run fetch. Failure here is L4
+	/// (auxiliary) per docs/conventions.md § Layered resilience — the
+	/// raw track keeps rendering so the page always works.
+	let matchInfo = $state<RunMatchInfo | null>(null);
 
 	onMount(async () => {
 		run = await fetchRunById(pageData.id);
 		loading = false;
+		// Best-effort matched-track fetch in the background. The map
+		// will swap to the matched line once it lands; until then it
+		// shows the raw track.
+		fetchRunMatchedTrack(pageData.id)
+			.then((info) => { matchInfo = info; })
+			.catch((e) => { console.warn('matched-track fetch failed', e); });
 		// If the recorder linked this run to a structured workout, pull
 		// the planned workout row so the review section can show its
 		// title alongside the per-step planned/actual table.
@@ -470,7 +481,20 @@
 		return `${sec}s`;
 	}
 
-	let baseTrack = $derived(run ? (run.track ?? generateMockTrack(run.distance_m)) : []);
+	/// Map track. Prefer the matched line when the worker has produced
+	/// one (status='matched' AND non-empty payload); fall back to the
+	/// raw recorded track; last resort is the mock circle so the page
+	/// still has something to render. Stats below the map continue to
+	/// derive from `run.track` (raw) — distance, splits, elevation,
+	/// pace zones are all attributes of what the runner actually did,
+	/// independent of how it's projected for display.
+	let baseTrack = $derived(
+		matchInfo?.track && matchInfo.track.length >= 2
+			? matchInfo.track
+			: run
+			? (run.track ?? generateMockTrack(run.distance_m))
+			: [],
+	);
 	let elevations = $derived(baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30));
 
 	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
@@ -511,6 +535,26 @@
 			animatable
 			onSegmentSelect={(seg) => (selectedSegment = seg)}
 		/>
+		<!-- Map-match status pill. Only renders when we have a status
+		     to communicate — pending / failed / skipped are the
+		     informational cases ("the worker hasn't produced a
+		     matched line yet" / "the engine couldn't"). The matched
+		     case is silent because the cleaner display speaks for
+		     itself. -->
+		{#if matchInfo && matchInfo.status !== 'matched'}
+			<aside class="match-pill match-pill-{matchInfo.status}" title="Map matching">
+				{#if matchInfo.status === 'pending'}
+					<span class="material-symbols">hourglass_top</span>
+					Snapping to roads…
+				{:else if matchInfo.status === 'skipped'}
+					<span class="material-symbols">block</span>
+					Not snapped (too few points)
+				{:else if matchInfo.status === 'failed'}
+					<span class="material-symbols">error</span>
+					Snap failed — showing raw track
+				{/if}
+			</aside>
+		{/if}
 		<!-- Nike-style segment-detail card. Click any point on the trace
 		     to drop a pin and see ±150 m of stats around that location:
 		     distance covered, elapsed time (when the track has per-point
@@ -962,6 +1006,30 @@
 		background: var(--color-bg-tertiary);
 		position: relative;
 	}
+
+	.match-pill {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.35rem 0.7rem;
+		border-radius: 999px;
+		background: rgba(20, 22, 38, 0.78);
+		color: var(--color-text-secondary);
+		font-size: 0.75rem;
+		line-height: 1;
+		border: 1px solid var(--color-border);
+		backdrop-filter: blur(6px);
+		z-index: 5;
+		pointer-events: none;
+	}
+	.match-pill .material-symbols {
+		font-size: 0.95rem;
+	}
+	.match-pill-failed { color: var(--color-text-primary); }
+	.match-pill-skipped { color: var(--color-text-tertiary); }
 
 	.segment-card {
 		position: absolute;

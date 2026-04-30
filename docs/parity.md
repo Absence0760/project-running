@@ -379,7 +379,8 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Server-side HMM map matching | N/A | N/A | N/A | N/A | N/A | Server-side feature — runs in an Edge Function (or future Go service), every client picks up the snapped trace uniformly. Tracked under [roadmap § Future — Map matching](roadmap.md), not the per-platform matrix. |
+| Server-side HMM map matching | N/A | N/A | N/A | N/A | N/A | Server-side feature — every client picks up the snapped trace uniformly. Schema + auto-enqueue trigger + Go worker (`apps/job_worker/`) shipped; the engine itself is still a `PassthroughMatcher` shim until Valhalla / OSRM / GraphHopper is selected. Tracked under [roadmap § Future — Map matching](roadmap.md). |
+| Display matched track on run detail | ✗ | ✗ | ✓ | N/A | N/A | Web: `/runs/[id]` fetches `run_matched_tracks` on mount via `fetchRunMatchedTrack`; when `status='matched'` the matched line replaces the raw track on `RunMap`. Stats below the map (distance, splits, elevation, pace zones) continue to derive from the raw track — those are properties of what the runner actually did, independent of how the line is projected. A `match-pill` overlay surfaces `pending` / `failed` / `skipped` so users know whether the worker has run yet. Mobile not yet wired. |
 
 ---
 
