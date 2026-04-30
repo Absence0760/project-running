@@ -165,16 +165,32 @@ class SupabaseClient(
     /// `{lat, lng, ...}` — we extract lat/lng only.
     suspend fun fetchRoutes(): List<SavedRoute> {
         val token = accessToken ?: return emptyList()
-        // Starred-only fetch. The runner curates "what I actually
-        // run" via the star toggle on the web / mobile app — a
-        // much stronger signal than "30 most-recently-updated"
-        // for a 1.4-inch picker. The DB index
-        // `idx_routes_user_starred` (user_id, updated_at desc) WHERE
-        // is_starred makes this an O(starred) read instead of a
-        // table scan. Cap at 30 for the rare power user with
-        // dozens of stars.
+        // Starred-only fetch first. The runner curates "what I
+        // actually run" via the star toggle on the web / mobile app —
+        // a much stronger signal than "most-recently-updated" for a
+        // 1.4-inch picker. The DB index `idx_routes_user_starred`
+        // (user_id, updated_at desc) WHERE is_starred makes this an
+        // O(starred) read. Cap at 30 for the rare power user.
+        val starred = fetchRoutesQuery(
+            token,
+            "select=id,name,waypoints,distance_m&is_starred=eq.true&order=updated_at.desc&limit=30",
+        )
+        if (starred.isNotEmpty()) return starred
+        // First-launch fallback: a user who has never starred a
+        // route still wants *something* in the picker. Pull the 10
+        // most-recently-updated owned routes so the watch isn't
+        // useless before they've curated. Capped tighter than the
+        // starred path because this is undirected — we'd rather
+        // show too few than fill the picker with stale GPX imports.
+        return fetchRoutesQuery(
+            token,
+            "select=id,name,waypoints,distance_m&order=updated_at.desc&limit=10",
+        )
+    }
+
+    private suspend fun fetchRoutesQuery(token: String, query: String): List<SavedRoute> {
         val req = Request.Builder()
-            .url("$baseUrl/rest/v1/routes?select=id,name,waypoints,distance_m&is_starred=eq.true&order=updated_at.desc&limit=30")
+            .url("$baseUrl/rest/v1/routes?$query")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $token")
             .get()

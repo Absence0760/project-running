@@ -904,9 +904,9 @@ This is intentional, not technical debt.
 
 **Schema:** `routes.is_starred boolean not null default false` plus a partial index `idx_routes_user_starred (user_id, updated_at desc) WHERE is_starred` so the watch fetch stays index-only as the table grows. Migration `20260606_001_routes_is_starred.sql`.
 
-**Trade-off:** users who never star anything see an empty watch picker. Acceptable — the watch falls back to "no routes" state. We could auto-star the user's most-run routes on a cron, but the false-positive blast radius (e.g. starring a route they ran once on a business trip) outweighs the convenience.
+**Trade-off:** users who never star anything would otherwise see an empty watch picker. To soften the first-launch experience the watch falls back to **the 10 most-recently-updated owned routes** when the starred fetch returns nothing — capped tighter than the 30-route starred path because this is undirected and we'd rather show too few than fill the picker with stale GPX imports. Once the runner stars anything, the fallback stops engaging. We considered auto-starring top-N by `run_count` on a cron, but the false-positive blast radius (e.g. starring a route they ran once on a business trip) outweighed the convenience.
 
-**Don't re-litigate unless:** telemetry shows ≥40 % of watch users have zero starred routes after 30 days of app install (then auto-star top-3 by `run_count` as a one-time hint), or the cap of 30 is hit by power users (raise the cap and add server-side pagination — the partial index already supports it).
+**Don't re-litigate unless:** telemetry shows the recent-routes fallback is doing all the work (then either prompt the user to curate, or revisit auto-star), or the cap of 30 starred routes is hit by power users (raise the cap and add server-side pagination — the partial index already supports it).
 
 ---
 
