@@ -397,15 +397,16 @@ private fun PreRunScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Pre-run is rotary-scrollable: variable banners (queued count,
-        // battery warning, race state, auth error) plus a 56 dp route
-        // preview can stack past the 200-dp-ish viewport on a 46 mm
-        // watch. With `Arrangement.Center` and a non-scrolling column,
-        // the Start button gets pushed off the bottom of the screen
-        // when a route is selected — verticalScroll keeps it reachable
-        // via the rotary crown. The center arrangement still applies
-        // for the small case (no route, no banners) so the Start
-        // button visually anchors the screen by default.
+        // Pre-run layout: Start is the visual anchor at centre; the
+        // activity / route / pace controls cluster as a horizontal
+        // chip rail directly under it; status banners sit above; rare
+        // auxiliary actions (sign in, allow-background, route preview)
+        // tuck below. The whole column is rotary-scrollable in case
+        // multiple banners stack on a 46 mm face — but the contract
+        // is that Start lands above the fold for the common case
+        // (one banner or none). That used to fail because chips
+        // stacked vertically *above* Start; grouping them horizontally
+        // beneath Start frees the centre band for the primary action.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -414,11 +415,10 @@ private fun PreRunScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            // Status caption above the Start button. Order: queued count
-            // first (most relevant), then any auth-error detail. The
-            // "Ready to Run" heading was dropped — the big Start button
-            // is self-explanatory and removing the heading frees the
-            // top-right area for the sign-out icon to live alone.
+            // --- Status banners (top) ---
+            // Compact captions over the Start button. Each is
+            // conditional; the column shrinks to nothing when none
+            // apply, leaving Start centred on the watch face.
             if (queuedCount > 0) {
                 val suffix = if (online) "" else " · offline"
                 Text(
@@ -426,14 +426,12 @@ private fun PreRunScreen(
                     style = MaterialTheme.typography.caption3,
                     color = if (online) DuskPalette.haze else DuskPalette.warning,
                 )
-                Spacer(Modifier.height(4.dp))
             } else if (!online && authed) {
                 Text(
                     "Offline",
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.warning,
                 )
-                Spacer(Modifier.height(4.dp))
             }
             if (!authed) {
                 Text(
@@ -449,7 +447,6 @@ private fun PreRunScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
             }
             if (batteryPercent != null &&
                 batteryPercent < com.runapp.watchwear.system.BatteryStatus.LOW_THRESHOLD_PERCENT) {
@@ -459,7 +456,6 @@ private fun PreRunScreen(
                     color = DuskPalette.warning,
                     textAlign = TextAlign.Center,
                 )
-                Spacer(Modifier.height(4.dp))
             }
             if (activeRace != null) {
                 Text(
@@ -474,85 +470,93 @@ private fun PreRunScreen(
                     color = DuskPalette.parchment,
                     textAlign = TextAlign.Center,
                 )
-                Spacer(Modifier.height(4.dp))
             }
-            // Activity chip — tap cycles through run / walk / hike / cycle.
-            // Gets stamped into `metadata.activity_type` at save so the
-            // web and phone detail views can show the correct icon.
-            CompactChip(
-                onClick = onCycleActivity,
-                label = {
-                    Text(
-                        activityType.replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.caption2,
-                    )
-                },
-                colors = ChipDefaults.secondaryChipColors(),
-            )
-            Spacer(Modifier.height(4.dp))
-            // Route chip — tap opens the picker. Only shown when signed
-            // in since routes require a network fetch. Label shows the
-            // selected route name or "Pick route" when none is chosen.
-            if (authed) {
-                CompactChip(
-                    onClick = onOpenRoutePicker,
-                    label = {
-                        Text(
-                            selectedRouteName ?: "Pick route",
-                            style = MaterialTheme.typography.caption2,
-                            maxLines = 1,
-                        )
-                    },
-                    colors = ChipDefaults.secondaryChipColors(),
-                )
-                if (selectedRouteWaypoints.isNotEmpty()) {
-                    // Pre-run preview of the picked route. Same canvas
-                    // component as the in-run mini-map and same 56 dp
-                    // size — was 80 dp until the Start button got
-                    // pushed off the bottom of 46 mm screens with the
-                    // route preview + chips + battery banner stacked.
-                    // No `current` because GPS hasn't been started
-                    // yet — the viewport just frames the polyline.
-                    // Tapping the preview re-opens the picker so the
-                    // user can change their mind.
-                    Spacer(Modifier.height(4.dp))
-                    Box(modifier = Modifier.clickable(onClick = onOpenRoutePicker)) {
-                        RouteMiniMap(
-                            route = selectedRouteWaypoints,
-                            current = null,
-                            modifier = Modifier.size(56.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-            }
-            // Pace-target chip — tap cycles off / 4:00 / 4:30 / … / 7:00.
-            // When non-null, the service fires a double-pulse vibration
-            // + TTS nudge whenever the live pace drifts >30 s from the
-            // target (rate-limited to one alert per 30 s).
-            CompactChip(
-                onClick = onCyclePace,
-                label = {
-                    Text(
-                        if (targetPaceSecPerKm == null) "Pace: off"
-                        else "Pace ${formatPace(targetPaceSecPerKm.toDouble())}/km",
-                        style = MaterialTheme.typography.caption2,
-                    )
-                },
-                colors = ChipDefaults.secondaryChipColors(),
-            )
+
+            // --- Primary action (centre) ---
+            // Start lives above the chip rail so it always falls in
+            // the upper-middle band on a round face — never below the
+            // fold. Slightly smaller than before (LargeButtonSize, no
+            // +20) to leave room for the chip rail underneath.
             Spacer(Modifier.height(6.dp))
             Button(
                 onClick = onStart,
-                modifier = Modifier.size(ButtonDefaults.LargeButtonSize + 20.dp),
+                modifier = Modifier.size(ButtonDefaults.LargeButtonSize),
             ) {
                 Text(
                     "Start",
                     style = MaterialTheme.typography.title3,
                 )
             }
+
+            // --- Settings rail (below Start) ---
+            // Three CompactChips share the row width via `weight(1f)`,
+            // so they always fit edge-to-edge regardless of label
+            // length. Labels are kept terse — the route preview map
+            // below confirms the route name visually for long names
+            // that get truncated in the chip.
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                CompactChip(
+                    onClick = onCycleActivity,
+                    label = {
+                        Text(
+                            activityType.replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.caption3,
+                            maxLines = 1,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.weight(1f),
+                )
+                if (authed) {
+                    CompactChip(
+                        onClick = onOpenRoutePicker,
+                        label = {
+                            Text(
+                                selectedRouteName ?: "Route",
+                                style = MaterialTheme.typography.caption3,
+                                maxLines = 1,
+                            )
+                        },
+                        colors = ChipDefaults.secondaryChipColors(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                CompactChip(
+                    onClick = onCyclePace,
+                    label = {
+                        Text(
+                            if (targetPaceSecPerKm == null) "Pace"
+                            else formatPace(targetPaceSecPerKm.toDouble()),
+                            style = MaterialTheme.typography.caption3,
+                            maxLines = 1,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            // --- Auxiliary (rare, below the rail) ---
+            // Route preview confirms the long-form name the chip rail
+            // had to truncate. Sign-in / battery-fix only show when
+            // their state demands it — they sit below the preview so
+            // they don't push Start down on the common-case render.
+            if (authed && selectedRouteWaypoints.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Box(modifier = Modifier.clickable(onClick = onOpenRoutePicker)) {
+                    RouteMiniMap(
+                        route = selectedRouteWaypoints,
+                        current = null,
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
+            }
             if (!authed) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 CompactChip(
                     onClick = onSignIn,
                     label = { Text("Sign in", style = MaterialTheme.typography.caption2) },
