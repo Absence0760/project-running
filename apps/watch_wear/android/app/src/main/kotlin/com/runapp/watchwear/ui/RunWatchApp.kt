@@ -110,6 +110,14 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
             showCountdown = true
         }
     }
+    // Warm-fetch tiles around the runner's last-known location while
+    // the 3-second countdown plays. Riding the countdown means the
+    // running screen's first frame already has tiles in cache —
+    // otherwise it would draw the polyline + position dot on the
+    // midnight background until the first HTTP fetch lands.
+    LaunchedEffect(showCountdown) {
+        if (showCountdown) vm.prefetchTilesForRunStart()
+    }
 
     DuskTheme {
         Scaffold(

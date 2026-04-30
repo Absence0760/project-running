@@ -14,6 +14,8 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 data class GpsPoint(val lat: Double, val lng: Double, val ele: Double?, val epochMs: Long)
 
@@ -28,6 +30,32 @@ sealed class GpsEvent {
 class GpsRecorder(context: Context) {
     private val client: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
+
+    /// One-shot read of the device's last cached location. Returns
+    /// null if no fix is available or the call fails. Used by the
+    /// countdown overlay to warm-fetch tiles before recording starts
+    /// — letting tile downloads ride the 3-second countdown instead
+    /// of stalling the running screen's first frame on HTTP latency.
+    @SuppressLint("MissingPermission")
+    suspend fun lastLocation(): GpsPoint? = suspendCancellableCoroutine { cont ->
+        try {
+            client.lastLocation
+                .addOnSuccessListener { loc: Location? ->
+                    cont.resume(loc?.let {
+                        GpsPoint(
+                            lat = it.latitude,
+                            lng = it.longitude,
+                            ele = if (it.hasAltitude()) it.altitude else null,
+                            epochMs = it.time,
+                        )
+                    })
+                }
+                .addOnFailureListener { cont.resume(null) }
+                .addOnCanceledListener { cont.resume(null) }
+        } catch (_: Throwable) {
+            cont.resume(null)
+        }
+    }
 
     /// Open a position stream at high accuracy with a 1-second update target.
     /// Emits [GpsEvent.Availability] when the provider's usable-signal state

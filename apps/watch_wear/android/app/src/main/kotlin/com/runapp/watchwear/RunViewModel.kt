@@ -131,6 +131,12 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val tileSource by lazy {
         com.runapp.watchwear.ui.TileSource(application)
     }
+    /// One-shot GPS reader, used by the countdown overlay to fetch
+    /// tiles around the runner's last-known location during the
+    /// 3-second start countdown. The recording service runs its own
+    /// `GpsRecorder` for the streaming case; this is a separate
+    /// instance scoped to the foreground ViewModel.
+    private val gpsForPrefetch by lazy { GpsRecorder(application) }
     private val raceClient = RaceSessionClient(
         baseUrl = BuildConfig.SUPABASE_URL,
         anonKey = BuildConfig.SUPABASE_ANON_KEY,
@@ -525,6 +531,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// Pull saved routes from Supabase and overwrite the local cache.
     /// Called when the user opens the picker; failures leave the
     /// cached list intact so the UI doesn't blank out.
+    /// Result is re-ordered so routes the user has tapped recently
+    /// on this watch float to the top — Supabase already returns
+    /// the 30-most-recently-updated, but "recently updated on the
+    /// web" is a poor proxy for "what I run weekly".
     fun refreshRoutes() {
         if (!authReady.value) return
         _state.value = _state.value.copy(routesLoading = true)
@@ -532,16 +542,55 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val fresh = supabase.fetchRoutes()
                 routeStore.save(fresh)
-                _state.value = _state.value.copy(routes = fresh, routesLoading = false)
+                _state.value = _state.value.copy(
+                    routes = sortByRecency(fresh, routeStore.recentIds.first()),
+                    routesLoading = false,
+                )
             } catch (_: Throwable) {
                 _state.value = _state.value.copy(routesLoading = false)
             }
         }
     }
 
+    /// Stable-sort: routes whose IDs appear in `recentIds` first,
+    /// in LRU order; everything else preserves its incoming
+    /// (`updated_at desc`) order. Pure helper so it's testable
+    /// without booting the ViewModel.
+    private fun sortByRecency(
+        routes: List<SavedRoute>,
+        recentIds: List<String>,
+    ): List<SavedRoute> {
+        if (recentIds.isEmpty()) return routes
+        val byId = routes.associateBy { it.id }
+        val recents = recentIds.mapNotNull { byId[it] }
+        val recentSet = recents.map { it.id }.toSet()
+        val rest = routes.filter { it.id !in recentSet }
+        return recents + rest
+    }
+
     fun openRoutePicker() {
         _state.value = _state.value.copy(stage = Stage.RoutePicker)
         refreshRoutes()
+    }
+
+    /// Warm-fetch tiles around the device's last-known GPS location.
+    /// Invoked from the UI when the 3-second start countdown begins
+    /// so tile downloads ride the countdown instead of stalling the
+    /// running screen's first frame on HTTP latency. No-op when no
+    /// fix is available (indoor, GPS off) or when a planned route is
+    /// already selected (its tiles were prefetched on selectRoute).
+    fun prefetchTilesForRunStart() {
+        if (_state.value.selectedRoute != null) return
+        viewModelScope.launch {
+            try {
+                val fix = gpsForPrefetch.lastLocation() ?: return@launch
+                tileSource.prefetch(
+                    listOf(com.runapp.watchwear.recording.RouteMath.LatLng(fix.lat, fix.lng)),
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("RunViewModel", "countdown tile prefetch failed", e)
+            }
+        }
     }
 
     fun closeRoutePicker() {
@@ -554,13 +603,12 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             selectedRoute = route,
             stage = Stage.PreRun,
         )
-        // Eagerly download street-zoom tiles along the route while
-        // we still have connectivity (paired phone, wifi). The
-        // running screen follows the runner at zoom 17, so we
-        // prefetch at zoom 17 — matches what the screen actually
-        // renders at run time, instead of the wide fit-bounds tiles
-        // the runner would never see.
         viewModelScope.launch {
+            // Bump LRU so the next picker open puts this route at
+            // the top regardless of `updated_at` on the server.
+            try { routeStore.pushRecent(route.id) } catch (_: Throwable) { }
+            // Eagerly download street-zoom tiles along the route
+            // while we still have connectivity (paired phone, wifi).
             try {
                 tileSource.prefetch(route.toLatLngs())
             } catch (e: Exception) {

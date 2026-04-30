@@ -165,8 +165,15 @@ class SupabaseClient(
     /// `{lat, lng, ...}` — we extract lat/lng only.
     suspend fun fetchRoutes(): List<SavedRoute> {
         val token = accessToken ?: return emptyList()
+        // Server-side cap. Users with hundreds of saved routes don't
+        // want to scroll through the full archive on a 1.4-inch
+        // screen, and the picker's local LRU surfaces frequently-
+        // used routes to the top regardless. 30 covers typical
+        // training rotations comfortably; users with deeper archives
+        // can still find a route via "search on phone, push to
+        // watch" once that surface ships.
         val req = Request.Builder()
-            .url("$baseUrl/rest/v1/routes?select=id,name,waypoints,distance_m&order=updated_at.desc")
+            .url("$baseUrl/rest/v1/routes?select=id,name,waypoints,distance_m&order=updated_at.desc&limit=30")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $token")
             .get()

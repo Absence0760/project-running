@@ -235,14 +235,36 @@ class RouteMiniMapWiringTest {
         // off-grid mid-run". Dropping the prefetch call would compile
         // and ship a feature that silently doesn't work — the failure
         // mode only surfaces in the field, when the runner is already
-        // on the course.
+        // on the course. Look for the call within ~800 chars of the
+        // function declaration (negated-class can't span the body's
+        // nested try/catch braces).
         val src = File("src/main/kotlin/com/runapp/watchwear/RunViewModel.kt").readText()
         assertTrue(
             "RunViewModel.selectRoute must call tileSource.prefetch(...)",
             Regex(
-                """fun\s+selectRoute[^}]*tileSource\.prefetch\s*\(""",
+                """fun\s+selectRoute[\s\S]{0,800}tileSource\.prefetch\s*\(""",
                 RegexOption.DOT_MATCHES_ALL,
             ).containsMatchIn(src),
+        )
+    }
+
+    @Test
+    fun `RunViewModel pre-fetches tiles during the start countdown`() {
+        // Why: the countdown overlay rides the 3-second wait between
+        // permission grant and recording start. Calling
+        // prefetchTilesForRunStart() during that window means the
+        // first running-screen frame already has tiles in cache, so
+        // free-form runs (no planned route) don't show midnight +
+        // polyline before the first HTTP fetch lands.
+        val viewModelSrc = File("src/main/kotlin/com/runapp/watchwear/RunViewModel.kt").readText()
+        assertTrue(
+            "RunViewModel must expose prefetchTilesForRunStart()",
+            Regex("""fun\s+prefetchTilesForRunStart\s*\(""").containsMatchIn(viewModelSrc),
+        )
+        val uiSrc = File("src/main/kotlin/com/runapp/watchwear/ui/RunWatchApp.kt").readText()
+        assertTrue(
+            "RunWatchApp must invoke prefetchTilesForRunStart() when the countdown begins",
+            Regex("""prefetchTilesForRunStart\s*\(\s*\)""").containsMatchIn(uiSrc),
         )
     }
 }
