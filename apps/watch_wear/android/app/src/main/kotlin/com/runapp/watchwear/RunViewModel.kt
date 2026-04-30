@@ -70,6 +70,10 @@ data class UiState(
     /// mini-map gates on this being non-empty; free-form runs render
     /// no map.
     val routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng> = emptyList(),
+    /// Downsampled rolling buffer of recent GPS points for the
+    /// "where I've been" overlay on the in-run mini-map. Bounded so
+    /// memory is O(cap) regardless of run length.
+    val trackOverlayPoints: List<com.runapp.watchwear.recording.RouteMath.LatLng> = emptyList(),
     /// User-picked target pace for this run, in seconds per kilometre.
     /// Null means "no target — don't fire pace alerts". Set via the
     /// pre-run Pace chip; flows through `ACTION_START` to the service.
@@ -171,6 +175,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             routeRemainingM = m.routeRemainingM,
                             latestPoint = m.latestPoint,
                             routeWaypoints = m.routeWaypoints,
+                            trackOverlayPoints = m.trackOverlayPoints,
                             steps = m.steps,
                         )
                         maybePushRacePing(m)

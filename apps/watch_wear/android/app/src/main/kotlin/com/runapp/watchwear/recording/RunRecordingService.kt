@@ -93,6 +93,14 @@ class RunRecordingService : Service() {
     /// `RouteMath` helpers below skip when this is empty.
     private var routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng> =
         emptyList()
+    /// Downsampled rolling buffer of recent GPS points for the on-watch
+    /// mini-map's "where I've been" overlay. Capped at
+    /// `MAX_TRACK_OVERLAY_POINTS` — when we'd overflow, drop every
+    /// other point so density halves and the buffer is geometrically
+    /// uniform across the whole run. Memory is therefore O(cap)
+    /// regardless of run length, which is what makes this safe to
+    /// hold in memory alongside the disk-backed full track.
+    private val trackOverlay = mutableListOf<com.runapp.watchwear.recording.RouteMath.LatLng>()
     /// Seconds-per-km target set via the pre-run pace chip. Null means
     /// no target; the pace-alert branch in `onGps` is a no-op in that
     /// case. Non-null values fire a haptic + TTS alert whenever the
@@ -173,6 +181,7 @@ class RunRecordingService : Service() {
         laps.clear()
         lastLocation = null
         lastPointAtMs = 0L
+        trackOverlay.clear()
         bpmSum = 0
         bpmCount = 0
         tickIndex = 0
@@ -404,6 +413,12 @@ class RunRecordingService : Service() {
             RouteMath.offRouteDistanceM(posLL, routeWaypoints) else null
         val remaining = if (routeWaypoints.isNotEmpty())
             RouteMath.routeRemainingM(posLL, routeWaypoints) else null
+        // Append to the rolling overlay buffer; halve density on
+        // overflow so memory stays O(cap) regardless of run length.
+        // The disk-backed full track via TrackWriter is the source of
+        // truth for stats; this buffer is presentation-only.
+        trackOverlay.add(posLL)
+        TrackOverlayBuffer.halveIfOverflowing(trackOverlay, MAX_TRACK_OVERLAY_POINTS)
         RecordingRepository.update {
             it.copy(
                 distanceM = newDistance,
@@ -412,6 +427,7 @@ class RunRecordingService : Service() {
                 trackPointCount = trackWriter?.pointCount ?: 0,
                 offRouteDistanceM = offRoute,
                 routeRemainingM = remaining,
+                trackOverlayPoints = trackOverlay.toList(),
             )
         }
 
@@ -632,6 +648,13 @@ class RunRecordingService : Service() {
     }
 
     companion object {
+        /// Cap on the rolling track-overlay buffer. 256 points is enough
+        /// for a recognisable polyline at the mini-map's 56 dp size on
+        /// any watch hardware; with halve-on-overflow downsampling the
+        /// buffer covers the whole run regardless of duration. ~4 KiB
+        /// of memory per run.
+        const val MAX_TRACK_OVERLAY_POINTS = 256
+
         const val ACTION_START = "com.runapp.watchwear.action.START_RECORDING"
         const val ACTION_STOP = "com.runapp.watchwear.action.STOP_RECORDING"
         const val ACTION_PAUSE = "com.runapp.watchwear.action.PAUSE_RECORDING"

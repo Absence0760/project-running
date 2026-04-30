@@ -123,14 +123,70 @@ class RouteMiniMapWiringTest {
     @Test
     fun `RouteMiniMap caches bounds via remember to avoid per-tick recomputation`() {
         // Why: `current` updates on every GPS sample (sub-1 Hz today).
-        // Without `remember(route, current)` the bounding-box scan
-        // would walk the polyline on every recomposition. For a
-        // 200-point route that's not free.
+        // Without `remember(route, current, track)` the bounding-box
+        // scan would walk both polylines on every recomposition. For
+        // a 200-point route plus a 256-point track that's not free.
         val src = File("src/main/kotlin/com/runapp/watchwear/ui/RouteMiniMap.kt").readText()
         assertTrue(
-            "RouteMiniMap must wrap computeBounds in remember(route, current)",
-            Regex("""remember\s*\(\s*route\s*,\s*current\s*\)\s*\{[^}]*computeBounds""", RegexOption.DOT_MATCHES_ALL)
+            "RouteMiniMap must wrap computeBounds in remember(route, current, track)",
+            Regex("""remember\s*\(\s*route\s*,\s*current\s*,\s*track\s*\)\s*\{[^}]*computeBounds""", RegexOption.DOT_MATCHES_ALL)
                 .containsMatchIn(src),
+        )
+    }
+
+    @Test
+    fun `Metrics carries trackOverlayPoints and service halves on overflow`() {
+        // Why: the track-so-far overlay grows by one point per GPS
+        // sample. Without the rolling-buffer cap a 4-hour run would
+        // queue ~14k points behind the polyline render. The service
+        // appends to a private mutable list and republishes a snapshot
+        // every tick — losing either side of that contract drops the
+        // feature without a compile error.
+        val repoSrc = read("recording/RecordingRepository.kt")
+        assertTrue(
+            "Metrics.trackOverlayPoints field missing",
+            Regex("""val\s+trackOverlayPoints:\s*List<RouteMath\.LatLng>""").containsMatchIn(repoSrc),
+        )
+        val svcSrc = read("recording/RunRecordingService.kt")
+        assertTrue(
+            "RunRecordingService must call TrackOverlayBuffer.halveIfOverflowing on the rolling buffer",
+            Regex("""TrackOverlayBuffer\.halveIfOverflowing\s*\(\s*trackOverlay""")
+                .containsMatchIn(svcSrc),
+        )
+        assertTrue(
+            "RunRecordingService must publish trackOverlayPoints into Metrics",
+            Regex("""trackOverlayPoints\s*=\s*trackOverlay\.toList\(\)""").containsMatchIn(svcSrc),
+        )
+    }
+
+    @Test
+    fun `RunViewModel_UiState exposes trackOverlayPoints and collector copies it`() {
+        // Why: the propagation chain Metrics.trackOverlayPoints →
+        // UiState.trackOverlayPoints → RunningScreen → RouteMiniMap.track
+        // is what makes the overlay actually render. Cleanups that
+        // remove the copy line freeze the field at its initial empty
+        // list — the polyline silently disappears.
+        val src = read("RunViewModel.kt")
+        assertTrue(
+            "UiState.trackOverlayPoints field missing",
+            Regex("""val\s+trackOverlayPoints:\s*List<.*RouteMath\.LatLng>""").containsMatchIn(src),
+        )
+        assertTrue(
+            "RunViewModel must copy m.trackOverlayPoints into _state",
+            Regex("""trackOverlayPoints\s*=\s*m\.trackOverlayPoints""").containsMatchIn(src),
+        )
+    }
+
+    @Test
+    fun `RunningScreen forwards trackOverlayPoints into RouteMiniMap_track`() {
+        // Why: the mini-map's `track` parameter defaults to
+        // emptyList(), so a missing call-site argument compiles but
+        // hides the overlay. Locking the named-arg form makes the
+        // omission a test failure instead of a runtime regression.
+        val src = read("ui/RunWatchApp.kt")
+        assertTrue(
+            "RunningScreen must pass track = trackOverlayPoints into RouteMiniMap",
+            Regex("""track\s*=\s*[a-zA-Z.]*trackOverlayPoints""").containsMatchIn(src),
         )
     }
 }

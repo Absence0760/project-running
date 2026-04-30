@@ -190,6 +190,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     routeRemainingM = state.routeRemainingM,
                     routeWaypoints = state.routeWaypoints,
                     latestPoint = state.latestPoint,
+                    trackOverlayPoints = state.trackOverlayPoints,
                     ambient = isAmbient,
                     onPause = vm::pause,
                     onResume = vm::resume,
@@ -835,6 +836,7 @@ private fun RunningScreen(
     routeRemainingM: Double?,
     routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
     latestPoint: com.runapp.watchwear.GpsPoint?,
+    trackOverlayPoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
     ambient: Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -956,6 +958,7 @@ private fun RunningScreen(
                 current = latestPoint?.let {
                     com.runapp.watchwear.recording.RouteMath.LatLng(it.lat, it.lng)
                 },
+                track = trackOverlayPoints,
                 modifier = Modifier.size(56.dp),
             )
         }

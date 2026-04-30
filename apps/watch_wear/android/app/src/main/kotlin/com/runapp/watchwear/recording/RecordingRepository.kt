@@ -52,6 +52,15 @@ object RecordingRepository {
         /// the off-route / remaining math doesn't depend on what's
         /// stored here (the service holds its own copy).
         val routeWaypoints: List<RouteMath.LatLng> = emptyList(),
+        /// Bounded rolling buffer of GPS samples for the on-watch
+        /// mini-map's "where I've been" overlay. Capped at
+        /// `RunRecordingService.MAX_TRACK_OVERLAY_POINTS`; the service
+        /// halves the list on overflow so density stays
+        /// geometrically uniform across the whole run regardless of
+        /// duration. Don't use this for distance / pace math — that
+        /// flows from `latestPoint` + `distanceM`. The full,
+        /// undownsampled track is on disk via `TrackWriter`.
+        val trackOverlayPoints: List<RouteMath.LatLng> = emptyList(),
         /// Cumulative step count since this run started. Null when the
         /// device has no pedometer (or before the first sensor sample).
         /// Writes to `metadata.steps` on save when non-null.

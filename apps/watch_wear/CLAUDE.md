@@ -63,7 +63,8 @@ apps/watch_wear/
             │   ├── HeartRateMonitor.kt    # Health Services MeasureClient
             │   ├── LocalRunStore.kt       # DataStore-backed retry queue
             │   ├── ui/RunWatchApp.kt      # Compose-for-Wear screens
-            │   ├── ui/RouteMiniMap.kt     # 56 dp polyline + position-dot canvas
+            │   ├── ui/RouteMiniMap.kt     # 56 dp polyline + position-dot + track-so-far canvas
+            │   ├── recording/TrackOverlayBuffer.kt  # Rolling-buffer geometric halving
             │   ├── recording/MapProjection.kt  # Pure lat/lng → unit-square projection
             │   └── generated/DbRows.kt    # GENERATED — do not edit
             └── res/mipmap-*/ic_launcher.png
@@ -319,8 +320,16 @@ What the UI exposes during a recording, for quick reference when reading
   `RouteMath.offRouteDistanceM` + `routeRemainingM` per GPS sample.
   `RunningScreen` renders the "Off route · N m" banner (with hysteresis
   at 40 m / 20 m and a double-haptic on entry) and a "X.XX km to go"
-  badge under the distance readout. The *visual* position marker on a
-  rendered route is still deferred — no live map yet.
+  badge under the distance readout. `ui/RouteMiniMap.kt` draws the
+  route polyline + a runner-position dot on a 56 dp canvas; the
+  track-so-far is overlaid as a faded indigo polyline behind the
+  route. The track is fed by a rolling buffer the recording service
+  appends to per GPS sample; once it grows past 256 points
+  `recording/TrackOverlayBuffer.halveIfOverflowing` halves it in
+  place by keeping every other index — geometric (not FIFO) so the
+  start of the run stays anchored on the polyline regardless of run
+  length. Tile background is still deferred (see "What's still
+  deferred" above).
 - **TTS audio cues.** `recording/TtsAnnouncer.kt` wraps
   `android.speech.tts.TextToSpeech` with an async init + flush-queued
   speak. `RunRecordingService` announces "Run started" on begin,

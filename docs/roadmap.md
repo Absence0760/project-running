@@ -179,6 +179,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] "X.XX km to go" badge on `RunningScreen` under the distance readout
 - [x] Route preview on watch face before starting — `PreRunScreen` mounts `RouteMiniMap` (80 dp) under the Route chip when a route is selected. Reuses the same projection helper as the in-run mini-map; `current = null` because GPS hasn't started, so the viewport just frames the polyline. Tap the preview to re-open the picker.
 - [x] Live position on mini-map during run — `ui/RouteMiniMap.kt` renders the planned-route polyline + a position-dot on `RunningScreen` whenever a route is loaded. Pure projection helper `recording/MapProjection.kt` (10 unit tests) handles the lat/lng → unit-square math with auto-fit bounds + padding. Tile background deferred to v2 — at 56 dp on a 46 mm screen raster tiles aren't legible anyway, and skipping them keeps power + storage costs at zero.
+- [x] Track-so-far overlay on the mini-map — the polyline of where the runner has actually been is drawn behind the planned route (faded indigo, alpha 0.55) so they can see drift at a glance. Service appends one point per GPS sample to a rolling buffer capped at 256 points; `recording/TrackOverlayBuffer.halveIfOverflowing` does geometric (every-other) downsampling in place when the cap is exceeded — preserves the run start and the latest fix, converges in `ceil(log2(n/cap))` iterations. 7 unit tests on the buffer, 3 source-level wiring guards on the propagation chain.
 
 ### Glanceable tiles and complications
 

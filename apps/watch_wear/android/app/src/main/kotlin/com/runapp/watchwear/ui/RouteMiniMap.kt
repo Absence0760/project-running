@@ -32,16 +32,20 @@ fun RouteMiniMap(
     route: List<RouteMath.LatLng>,
     current: RouteMath.LatLng?,
     modifier: Modifier = Modifier,
+    track: List<RouteMath.LatLng> = emptyList(),
     routeColor: Color = Color(0xFFE5C158),  // DuskPalette.amber-ish
     currentColor: Color = Color.White,
+    trackColor: Color = Color(0xFF818CF8),  // indigo, faded behind route
     backgroundColor: Color = Color(0xFF120D22),  // DuskPalette.midnight
 ) {
-    // Caching the bounds across recompositions matters: route is
-    // constant for the duration of a run, and `current` only changes
-    // on each GPS sample (sub-1 Hz). Without `remember(route, current)`
-    // we'd recompute the bounding box on every UI tick.
-    val bounds = remember(route, current) {
-        MapProjection.computeBounds(route, current)
+    // Bounds expand to include both the planned route and the actual
+    // track so a runner who's drifted off-course still sees their
+    // marker on the canvas. Caching across recompositions matters:
+    // `current` ticks per GPS sample and `track` grows by one point
+    // per sample (or shrinks on overflow downsample). Without
+    // `remember`, we'd walk the polyline on every tick.
+    val bounds = remember(route, current, track) {
+        MapProjection.computeBounds(route + track, current)
     } ?: return
 
     Canvas(
@@ -51,12 +55,31 @@ fun RouteMiniMap(
     ) {
         val w = size.width
         val h = size.height
-        // Square inner area: route projection assumes equal aspect.
-        // If the host modifier isn't square we centre within the
-        // shorter side so the projection doesn't distort.
+        // Square inner area: projection assumes equal aspect. If the
+        // host modifier isn't square, centre within the shorter side
+        // so the projection doesn't distort.
         val side = minOf(w, h)
         val originX = (w - side) / 2f
         val originY = (h - side) / 2f
+
+        // Track-so-far behind everything else, faded — context, not
+        // primary signal. The route line + position dot are the
+        // primary readouts; the track is "where you came from" and
+        // shouldn't compete visually.
+        if (track.size >= 2) {
+            val path = Path()
+            for ((i, p) in track.withIndex()) {
+                val (nx, ny) = MapProjection.project(p, bounds)
+                val px = originX + nx.toFloat() * side
+                val py = originY + ny.toFloat() * side
+                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            drawPath(
+                path = path,
+                color = trackColor.copy(alpha = 0.55f),
+                style = Stroke(width = 1.5.dp.toPx()),
+            )
+        }
 
         if (route.size >= 2) {
             val path = Path()
