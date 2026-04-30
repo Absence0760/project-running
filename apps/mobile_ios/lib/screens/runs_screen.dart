@@ -314,9 +314,13 @@ class _RunsScreenState extends State<RunsScreen> {
     }
     // Only delete locally the runs whose remote delete succeeded.
     // Runs whose remote delete failed are kept locally so they don't
-    // silently resurface on the next sync.
-    // TODO: queue failed deletes for retry — see data-sync audit P0-1.
+    // silently resurface on the next sync, and queued for SyncService
+    // to retry on its usual triggers (foreground, connectivity-on,
+    // startup) — see data-sync audit P0-1.
     await widget.runStore.deleteMany(ids.difference(failedIds));
+    if (failedIds.isNotEmpty) {
+      await widget.runStore.markManyPendingRemoteDelete(failedIds);
+    }
     if (!mounted) return;
     setState(() {
       _selecting = false;
@@ -327,7 +331,7 @@ class _RunsScreenState extends State<RunsScreen> {
         SnackBar(
           content: Text(
             '${ids.length - failedIds.length} deleted; '
-            '${failedIds.length} could not be removed from the cloud.',
+            '${failedIds.length} queued — will retry when back online.',
           ),
         ),
       );

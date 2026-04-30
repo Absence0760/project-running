@@ -213,6 +213,86 @@ void main() {
       expect(store.unsyncedCount, 0);
     });
 
+    test('markPendingRemoteDelete persists across reload and is idempotent', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('run-a');
+      await store.markPendingRemoteDelete('run-b');
+      // Idempotent — re-marking the same id shouldn't duplicate.
+      await store.markPendingRemoteDelete('run-a');
+      expect(store.pendingRemoteDeleteIds, {'run-a', 'run-b'});
+
+      // Sidecar should round-trip on a fresh instance.
+      final store2 = LocalRunStore();
+      await store2.init(overrideDirectory: tempDir);
+      expect(store2.pendingRemoteDeleteIds, {'run-a', 'run-b'});
+    });
+
+    test('markManyPendingRemoteDelete folds N adds into one notify',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      var notifyCount = 0;
+      store.addListener(() => notifyCount++);
+      await store.markManyPendingRemoteDelete(['a', 'b', 'c']);
+      expect(notifyCount, 1);
+      expect(store.pendingRemoteDeleteIds, {'a', 'b', 'c'});
+    });
+
+    test(
+        'markManyPendingRemoteDelete with no new ids is a no-op (no notify, no write)',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('a');
+      var notifyCount = 0;
+      store.addListener(() => notifyCount++);
+      // Already-queued ids should not trigger a notify or sidecar write.
+      await store.markManyPendingRemoteDelete(['a']);
+      expect(notifyCount, 0);
+    });
+
+    test('clearPendingRemoteDelete removes a single id and persists', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markManyPendingRemoteDelete(['a', 'b']);
+      await store.clearPendingRemoteDelete('a');
+      expect(store.pendingRemoteDeleteIds, {'b'});
+
+      final store2 = LocalRunStore();
+      await store2.init(overrideDirectory: tempDir);
+      expect(store2.pendingRemoteDeleteIds, {'b'});
+    });
+
+    test('clearing the last pending id deletes the sidecar', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('only');
+      expect(File('${tempDir.path}/pending_remote_deletes.json').existsSync(),
+          true);
+      await store.clearPendingRemoteDelete('only');
+      expect(File('${tempDir.path}/pending_remote_deletes.json').existsSync(),
+          false);
+    });
+
+    test('pending_remote_deletes.json is excluded from the run-file glob',
+        () async {
+      // A pending-deletes sidecar plus a real run file: only the run
+      // should show up in `runs`, and the sidecar should be honoured.
+      File('${tempDir.path}/pending_remote_deletes.json')
+          .writeAsStringSync('{"ids":["queued-1"]}');
+      final realRun = {
+        'run': makeRun(id: 'real').toJson(),
+        'synced': false,
+      };
+      File('${tempDir.path}/real.json').writeAsStringSync(jsonEncode(realRun));
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.runs.map((r) => r.id).toList(), ['real']);
+      expect(store.pendingRemoteDeleteIds, {'queued-1'});
+    });
+
     test('init loads multiple runs sorted newest-first', () async {
       // Seed two valid run files directly, with different startedAt.
       final older = {

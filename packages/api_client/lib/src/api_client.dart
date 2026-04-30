@@ -233,6 +233,18 @@ class ApiClient {
     await _client.from(RunRow.table).delete().eq(RunRow.colId, run.id);
   }
 
+  /// Delete a run from the backend by id only — used by the SyncService
+  /// retry path for runs the user already removed locally (so the full
+  /// `Run` object is no longer available). Skips the Storage cleanup
+  /// because the track url isn't known here; an orphan track file is a
+  /// far smaller blast-radius than a phantom row that re-appears on
+  /// next sync.
+  Future<void> deleteRunById(String runId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    await _client.from(RunRow.table).delete().eq(RunRow.colId, runId);
+  }
+
   /// Fetch the user's runs, newest first.
   ///
   /// Returned runs have an empty `track`. Use [fetchTrack] to download the

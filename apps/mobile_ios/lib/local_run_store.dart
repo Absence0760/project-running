@@ -17,6 +17,12 @@ class LocalRunStore extends ChangeNotifier {
   late Directory _dir;
   List<Run> _runs = [];
   final Set<String> _syncedIds = {};
+  // Run ids whose cloud-side delete failed on the first attempt. The
+  // local copy was kept so the UI stays consistent with the cloud; the
+  // SyncService drains this queue on its usual triggers (foreground,
+  // connectivity-on, startup) and removes ids on success. Persisted to
+  // its own sidecar so a crash mid-retry doesn't lose the work item.
+  final Set<String> _pendingRemoteDeleteIds = {};
 
   static const _inProgressFilename = 'in_progress.json';
   // Sidecar file listing the ids of runs that have synced to the cloud.
@@ -26,9 +32,12 @@ class LocalRunStore extends ChangeNotifier {
   // through the filesystem + JSON codec. The sidecar is a few kilobytes,
   // written once per markSynced call (or once per batch).
   static const _syncedIdsFilename = 'synced_ids.json';
+  static const _pendingRemoteDeletesFilename = 'pending_remote_deletes.json';
 
   File get _inProgressFile => File('${_dir.path}/$_inProgressFilename');
   File get _syncedIdsFile => File('${_dir.path}/$_syncedIdsFilename');
+  File get _pendingRemoteDeletesFile =>
+      File('${_dir.path}/$_pendingRemoteDeletesFilename');
 
   List<Run> get runs => List.unmodifiable(_runs);
 
@@ -36,6 +45,14 @@ class LocalRunStore extends ChangeNotifier {
       _runs.where((r) => !_syncedIds.contains(r.id)).toList();
 
   int get unsyncedCount => unsyncedRuns.length;
+
+  /// Run ids that the user asked to delete but whose remote-side
+  /// `api.deleteRun` failed (network error, RLS, transient 5xx). The
+  /// SyncService retries these on the next sync trigger. Surfaced as
+  /// an unmodifiable view so callers can't mutate the set directly —
+  /// use [markPendingRemoteDelete] / [clearPendingRemoteDelete].
+  Set<String> get pendingRemoteDeleteIds =>
+      Set<String>.unmodifiable(_pendingRemoteDeleteIds);
 
   /// Call once at startup. Pass [overrideDirectory] in tests to avoid the
   /// `path_provider` plugin channel — the store will write runs to the
@@ -322,9 +339,73 @@ class LocalRunStore extends ChangeNotifier {
     }
   }
 
+  /// Record that a run's remote-side delete failed and should be retried
+  /// by the SyncService on the next sync trigger. Idempotent — repeated
+  /// calls don't grow the queue. Notifies listeners so any visible
+  /// "pending delete" badge can update without a separate channel.
+  Future<void> markPendingRemoteDelete(String runId) async {
+    if (_pendingRemoteDeleteIds.add(runId)) {
+      await _persistPendingRemoteDeletes();
+      notifyListeners();
+    }
+  }
+
+  /// Bulk variant for the runs_screen batch-delete path — folds N
+  /// failures into a single sidecar write + single notify.
+  Future<void> markManyPendingRemoteDelete(Iterable<String> runIds) async {
+    var changed = false;
+    for (final id in runIds) {
+      if (_pendingRemoteDeleteIds.add(id)) changed = true;
+    }
+    if (!changed) return;
+    await _persistPendingRemoteDeletes();
+    notifyListeners();
+  }
+
+  /// Drop a run id from the retry queue. Called by the SyncService
+  /// after a successful retry, or by the user if they purge the
+  /// orphan locally.
+  Future<void> clearPendingRemoteDelete(String runId) async {
+    if (_pendingRemoteDeleteIds.remove(runId)) {
+      await _persistPendingRemoteDeletes();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _persistPendingRemoteDeletes() async {
+    try {
+      if (_pendingRemoteDeleteIds.isEmpty &&
+          _pendingRemoteDeletesFile.existsSync()) {
+        await _pendingRemoteDeletesFile.delete();
+        return;
+      }
+      await _pendingRemoteDeletesFile.writeAsString(jsonEncode({
+        'ids': _pendingRemoteDeleteIds.toList(),
+      }));
+    } catch (e) {
+      debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
+    }
+  }
+
+  Future<Set<String>?> _readPendingRemoteDeletes() async {
+    final file = _pendingRemoteDeletesFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      return (data['ids'] as List).cast<String>().toSet();
+    } catch (e) {
+      debugPrint('Failed to read pending_remote_deletes sidecar: $e');
+      return null;
+    }
+  }
+
   Future<void> _loadAll() async {
     _runs = [];
     _syncedIds.clear();
+    _pendingRemoteDeleteIds.clear();
+
+    final pendingDeletes = await _readPendingRemoteDeletes();
+    if (pendingDeletes != null) _pendingRemoteDeleteIds.addAll(pendingDeletes);
 
     final files = _dir
         .listSync()
@@ -332,6 +413,7 @@ class LocalRunStore extends ChangeNotifier {
         .where((f) => f.path.endsWith('.json'))
         .where((f) => !f.path.endsWith(_inProgressFilename))
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
+        .where((f) => !f.path.endsWith(_pendingRemoteDeletesFilename))
         .toList();
 
     // Read the sidecar first. If present, it's the authoritative source

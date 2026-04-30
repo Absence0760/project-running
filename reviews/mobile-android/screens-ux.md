@@ -43,23 +43,16 @@ Several minor but concrete issues exist: a swallowed delete-error in `runs_scree
 
 ### P0 — bugs / data loss / security
 
-**P0-1: `runs_screen.dart` silently swallows individual remote-delete errors, leaving the UI inconsistent**
+**P0-1 ✅ RESOLVED — `runs_screen.dart` silently swallows individual remote-delete errors, leaving the UI inconsistent**
 
-- `apps/mobile_android/lib/screens/runs_screen.dart:287-291`
+Original report: the batch-delete path called `api.deleteRun(run)` with `catch (_) {}` and then deleted everything locally regardless of outcome — runs survived in the cloud and re-appeared on next sync.
 
-The batch-delete path calls `api.deleteRun(run)` inside `for (final run in runsToDelete)` with `catch (_) {}`. If the remote delete fails (network error, RLS rejection, stale auth), the loop continues: the local store then deletes the run via `widget.runStore.deleteMany(ids)` at line 293. The run is gone locally but still exists in the cloud. On the next `_fetchRemote` call it re-appears in the user's list. No error is surfaced; no diagnostic is logged.
+Resolved across two passes:
 
-```dart
-      for (final run in runsToDelete) {
-        try {
-          await api.deleteRun(run);
-        } catch (_) {}   // <- silent swallow, no debugPrint, no error state
-      }
-    }
-    await widget.runStore.deleteMany(ids);
-```
+1. First pass (already shipped before this audit doc was re-read): the catch now logs (`debugPrint('deleteRun failed for ${run.id}: $e')`) and tracks `failedIds`. Local deletes are scoped to `ids.difference(failedIds)`, and the snackbar reports the partial-success count. Strategy (a)+(b) from the original recommendation.
+2. Second pass: failed ids are now persisted to a `pending_remote_deletes.json` sidecar via `LocalRunStore.markManyPendingRemoteDelete`, and `SyncService._drainPendingDeletes` retries them on every sync trigger (foreground / connectivity-on / startup). On retry success, the local copy is also dropped. Snackbar copy updated to "queued — will retry when back online" so the user understands the retry is automatic.
 
-Replace with `catch (e) { debugPrint('deleteRun failed for ${run.id}: $e'); }` at minimum, and either (a) skip the local delete for that run so the store stays consistent with the remote, or (b) record it in a list and show a snackbar after the loop if any remote delete failed. Silently deleting locally while the remote survives is data-inconsistency, not "best effort".
+Tests: 6 unit tests in `apps/mobile_android/test/local_run_store_test.dart` covering persistence round-trip, idempotent inserts, single-id clear, sidecar deletion when the queue empties, and run-file-glob exclusion.
 
 ---
 
