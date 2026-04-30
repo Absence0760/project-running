@@ -98,12 +98,15 @@ class RouteMiniMapWiringTest {
         // empty Canvas sitting on screen is a visual bug. The gate
         // composes route OR track OR current; dropping any branch
         // either hides the map for a valid case or shows an empty
-        // box for an invalid one.
+        // box for an invalid one. The "current" expression accepts
+        // either `latestPoint` directly or the `effectiveCurrent`
+        // bridge (latestPoint OR fallbackLatLng) used to kill the
+        // countdown→running flash — both preserve the contract.
         val src = read("ui/RunWatchApp.kt")
         assertTrue(
             "RunningScreen must gate the mini-map on route OR track OR current",
             Regex(
-                """routeWaypoints\.isNotEmpty\(\)\s*\|\|\s*trackOverlayPoints\.size\s*>=\s*2\s*\|\|\s*latestPoint\s*!=\s*null""",
+                """routeWaypoints\.isNotEmpty\(\)\s*\|\|\s*trackOverlayPoints\.size\s*>=\s*2\s*\|\|\s*(?:latestPoint|effectiveCurrent)\s*!=\s*null""",
                 RegexOption.DOT_MATCHES_ALL,
             ).containsMatchIn(src),
         )
