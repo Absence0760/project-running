@@ -276,9 +276,7 @@
 								aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
 								onclick={toggleStar}
 							>
-								<span class="material-symbols">
-									{route.is_starred ? 'star' : 'star_outline'}
-								</span>
+								<span class="material-symbols">star</span>
 							</button>
 						{/if}
 					</div>
@@ -572,12 +570,18 @@
 	}
 
 	.star-btn.starred {
-		color: var(--color-warning, #fbbf24);
+		color: #fbbf24;
 	}
 
 	.star-btn .material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.4rem;
+		font-variation-settings: 'FILL' 0;
+		transition: font-variation-settings var(--transition-fast);
+	}
+
+	.star-btn.starred .material-symbols {
+		font-variation-settings: 'FILL' 1;
 	}
 
 	h1 {

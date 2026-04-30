@@ -252,8 +252,8 @@ class _RoutesScreenState extends State<RoutesScreen> {
                             icon: Icon(
                               route.isStarred ? Icons.star : Icons.star_border,
                               color: route.isStarred
-                                  ? Colors.amber
-                                  : theme.colorScheme.outline,
+                                  ? const Color(0xFFFBBF24)
+                                  : theme.colorScheme.onSurfaceVariant,
                             ),
                             tooltip: route.isStarred
                                 ? 'Unstar route'

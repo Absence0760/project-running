@@ -136,9 +136,7 @@
 								aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
 								onclick={(e) => toggleStar(e, route.id)}
 							>
-								<span class="material-symbols">
-									{route.is_starred ? 'star' : 'star_outline'}
-								</span>
+								<span class="material-symbols">star</span>
 							</button>
 						</div>
 						<div class="route-info">
@@ -316,11 +314,18 @@
 	}
 
 	.star-btn.starred {
-		color: var(--color-warning, #fbbf24);
+		background: rgba(0, 0, 0, 0.65);
+		color: #fbbf24;
 	}
 
 	.star-btn .material-symbols {
 		font-size: 1.25rem;
+		font-variation-settings: 'FILL' 0;
+		transition: font-variation-settings var(--transition-fast);
+	}
+
+	.star-btn.starred .material-symbols {
+		font-variation-settings: 'FILL' 1;
 	}
 
 	.route-map-placeholder .material-symbols {

@@ -286,7 +286,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             IconButton(
               icon: Icon(
                 _isStarred ? Icons.star : Icons.star_border,
-                color: _isStarred ? Colors.amber : null,
+                color: _isStarred
+                    ? const Color(0xFFFBBF24)
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               tooltip: _isStarred ? 'Unstar route' : 'Star to show on watch',
               onPressed: _toggleStar,
