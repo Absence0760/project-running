@@ -121,9 +121,11 @@ on a 46mm screen is awful; the docs say so explicitly. Use it only when
 you don't have a paired Android phone.
 
 Offline runs persist in `LocalRunStore` (DataStore, `watch_wear` prefs,
-key `queued_runs_v1`). `RunViewModel.drainQueue()` fires on app start after
-auth succeeds and after every run stops. A connectivity-change auto-retry is
-a TODO — today the queue drains opportunistically.
+key `queued_runs_v2`). `RunViewModel.drainQueue()` fires on app start after
+auth succeeds, after every run stops, on every offline→online edge from
+`system/NetworkWatcher.kt`, and on user tap of the "Sync N runs"
+`CompactChip` at the top of `PreRunScreen` (which calls `vm.sync()` —
+same drain path with a `syncing` UI flag for the spinner).
 
 ## Heart rate
 

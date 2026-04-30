@@ -168,6 +168,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] GPS self-heal — 10 s watchdog in `RunRecordingService` re-subscribes to the Fused provider when the stream stalls for 30 s despite `locationAvailable=true`
 - [x] Indoor / no-GPS mode — clock + `TrackWriter` handle zero-fix runs; RunningScreen banner distinguishes "No GPS — time only" (never had a fix) from "GPS lost" (lost mid-run)
 - [x] Auto-sync on reconnect — `system/NetworkWatcher.kt` exposes a `ConnectivityManager.NetworkCallback` flow; `RunViewModel.observeConnectivity()` fires `drainQueue()` on every offline→online transition (seeds first emission to skip the cold-start case).
+- [x] Manual sync chip on `PreRunScreen` — the "N runs to sync" caption at the top of the home screen is now a tappable `CompactChip` that calls `vm.sync()` (which wraps `drainQueue()` with a `syncing` UI flag). Disabled when offline or already syncing; spinner replaces the label while a drain is in flight. Complements the auto-drain triggers (connectivity edge, app cold-start, post-run) for the "I just got home and want my run synced now" case.
 
 ### Route navigation on watch
 

@@ -144,6 +144,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     } else {
                         PreRunScreen(
                             queuedCount = state.queuedCount,
+                            syncing = state.syncing,
                             authed = state.authed,
                             authError = state.authError,
                             online = state.online,
@@ -180,6 +181,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             onFixBattery = { batteryHelp = true },
                             onRecover = vm::recoverCheckpoint,
                             onDiscardRecovery = vm::discardCheckpoint,
+                            onSync = vm::sync,
                         )
                     }
                 }
@@ -404,6 +406,7 @@ private fun BatteryInstructions(
 @Composable
 private fun PreRunScreen(
     queuedCount: Int,
+    syncing: Boolean,
     authed: Boolean,
     authError: String?,
     online: Boolean,
@@ -424,6 +427,7 @@ private fun PreRunScreen(
     onFixBattery: () -> Unit,
     onRecover: () -> Unit,
     onDiscardRecovery: () -> Unit,
+    onSync: () -> Unit,
 ) {
     // Recovery prompt takes precedence — user has unsaved-run state from
     // a previous app kill. Show that exclusively until they decide.
@@ -493,11 +497,39 @@ private fun PreRunScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (queuedCount > 0) {
-                val suffix = if (online) "" else " · offline"
-                Text(
-                    "$queuedCount run${if (queuedCount == 1) "" else "s"} to sync$suffix",
-                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
-                    color = if (online) DuskPalette.haze else DuskPalette.warning,
+                // Tappable so the runner can force a retry — the queue
+                // also drains automatically on every connectivity edge
+                // and on app cold-start, but if the user just got home
+                // and wants their run synced *now* (e.g., to check it
+                // on the phone), waiting for a network event is the
+                // wrong feel. While the drain is in flight we replace
+                // the label with a small spinner; offline keeps the
+                // chip disabled because retrying is guaranteed to fail
+                // until the network comes back.
+                CompactChip(
+                    onClick = onSync,
+                    enabled = online && authed && !syncing,
+                    label = {
+                        if (syncing) {
+                            CircularProgressIndicator(
+                                strokeWidth = 1.5.dp,
+                                modifier = Modifier.size(12.dp),
+                            )
+                        } else {
+                            val suffix = if (online) "" else " · offline"
+                            Text(
+                                "Sync $queuedCount run${if (queuedCount == 1) "" else "s"}$suffix",
+                                style = MaterialTheme.typography.caption3,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                    },
+                    colors = ChipDefaults.secondaryChipColors(
+                        backgroundColor = Color.White.copy(alpha = 0.15f),
+                        contentColor = if (online) DuskPalette.haze else DuskPalette.warning,
+                    ),
+                    modifier = Modifier.widthIn(max = 130.dp),
                 )
             } else if (!online && authed) {
                 Text(
