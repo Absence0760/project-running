@@ -31,6 +31,12 @@ class Route {
   /// trigger, read-only from the client's perspective.
   final int runCount;
 
+  /// User-curated "what I actually run" flag. Drives the watch's
+  /// route picker (starred-only) so the runner doesn't scroll
+  /// through every saved route on a 1.4-inch screen. Owner-editable
+  /// from web / mobile; read-only on the watch.
+  final bool isStarred;
+
   const Route({
     required this.id,
     required this.name,
@@ -43,6 +49,7 @@ class Route {
     this.tags = const [],
     this.featured = false,
     this.runCount = 0,
+    this.isStarred = false,
   });
 
   factory Route.fromJson(Map<String, dynamic> json) => _$RouteFromJson(json);

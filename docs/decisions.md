@@ -893,6 +893,23 @@ This is intentional, not technical debt.
 
 ---
 
+## 44. Watch route picker is gated by an owner-curated `is_starred` flag, not "recents" or "all routes"
+
+**Decided:** The Wear OS app fetches routes with `?is_starred=eq.true&order=updated_at.desc&limit=30`. The owner stars / unstars routes from web (`/routes` cards + detail header) or mobile (routes list + detail). The watch is read-only — there's no "star this route" affordance on the watch.
+
+**Why a curated flag, not "recently used" or "all owned":**
+- *All owned* doesn't scale. A serious runner has 50–200 saved routes (parkrun courses, hill loops, GPX imports, holiday-week routes). A 1.4-inch round screen can't usefully list that.
+- *Recents* would be opaque — the user can't pre-load the watch with "the routes I'm taking on holiday next week" without first running them on the watch, which is circular.
+- *Curated star* is one tap, persists across devices, and matches existing UX patterns (Spotify Liked Songs, GitHub Stars).
+
+**Schema:** `routes.is_starred boolean not null default false` plus a partial index `idx_routes_user_starred (user_id, updated_at desc) WHERE is_starred` so the watch fetch stays index-only as the table grows. Migration `20260606_001_routes_is_starred.sql`.
+
+**Trade-off:** users who never star anything see an empty watch picker. Acceptable — the watch falls back to "no routes" state. We could auto-star the user's most-run routes on a cron, but the false-positive blast radius (e.g. starring a route they ran once on a business trip) outweighs the convenience.
+
+**Don't re-litigate unless:** telemetry shows ≥40 % of watch users have zero starred routes after 30 days of app install (then auto-star top-3 by `run_count` as a one-time hint), or the cap of 30 is hit by power users (raise the cap and add server-side pagination — the partial index already supports it).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

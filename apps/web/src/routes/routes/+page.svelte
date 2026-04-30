@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { formatDistance } from '$lib/mock-data';
-	import { fetchRoutesWithError } from '$lib/data';
+	import { fetchRoutesWithError, setRouteStar } from '$lib/data';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import TrackPreview from '$lib/components/TrackPreview.svelte';
@@ -41,6 +41,26 @@
 		// the snapshot block below.
 		if (routes.length === 0 && loading) load();
 	});
+
+	async function toggleStar(event: MouseEvent, routeId: string) {
+		// Stop the parent <a> from navigating to the detail page when
+		// the star button is clicked. The star is a sub-action; the
+		// rest of the card still goes to the detail.
+		event.preventDefault();
+		event.stopPropagation();
+		const i = routes.findIndex((r) => r.id === routeId);
+		if (i < 0) return;
+		const next = !routes[i].is_starred;
+		// Optimistic update — the toggle should feel instant. If the
+		// network call fails we revert and surface the error.
+		routes = routes.map((r) => (r.id === routeId ? { ...r, is_starred: next } : r));
+		try {
+			await setRouteStar(routeId, next);
+		} catch (e) {
+			routes = routes.map((r) => (r.id === routeId ? { ...r, is_starred: !next } : r));
+			console.error('star toggle failed', e);
+		}
+	}
 
 	export const snapshot: Snapshot<{ routes: Route[]; tab: 'mine' | 'explore' }> = {
 		capture: () => ({ routes, tab }),
@@ -108,6 +128,18 @@
 							{:else}
 								<span class="material-symbols">route</span>
 							{/if}
+							<button
+								type="button"
+								class="star-btn"
+								class:starred={route.is_starred}
+								title={route.is_starred ? 'Unstar route' : 'Star route (shows on watch)'}
+								aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
+								onclick={(e) => toggleStar(e, route.id)}
+							>
+								<span class="material-symbols">
+									{route.is_starred ? 'star' : 'star_outline'}
+								</span>
+							</button>
 						</div>
 						<div class="route-info">
 							<h3>{route.name}</h3>
@@ -243,6 +275,7 @@
 	}
 
 	.route-map-placeholder {
+		position: relative;
 		height: 8rem;
 		background: linear-gradient(
 			135deg,
@@ -254,6 +287,40 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.star-btn {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		width: 2.25rem;
+		height: 2.25rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		background: rgba(0, 0, 0, 0.45);
+		border: none;
+		border-radius: 50%;
+		color: rgba(255, 255, 255, 0.7);
+		cursor: pointer;
+		transition:
+			background var(--transition-fast),
+			color var(--transition-fast),
+			transform var(--transition-fast);
+	}
+
+	.star-btn:hover {
+		background: rgba(0, 0, 0, 0.65);
+		transform: scale(1.05);
+	}
+
+	.star-btn.starred {
+		color: var(--color-warning, #fbbf24);
+	}
+
+	.star-btn .material-symbols {
+		font-size: 1.25rem;
 	}
 
 	.route-map-placeholder .material-symbols {

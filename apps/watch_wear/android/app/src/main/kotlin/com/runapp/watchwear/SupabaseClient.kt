@@ -165,15 +165,16 @@ class SupabaseClient(
     /// `{lat, lng, ...}` — we extract lat/lng only.
     suspend fun fetchRoutes(): List<SavedRoute> {
         val token = accessToken ?: return emptyList()
-        // Server-side cap. Users with hundreds of saved routes don't
-        // want to scroll through the full archive on a 1.4-inch
-        // screen, and the picker's local LRU surfaces frequently-
-        // used routes to the top regardless. 30 covers typical
-        // training rotations comfortably; users with deeper archives
-        // can still find a route via "search on phone, push to
-        // watch" once that surface ships.
+        // Starred-only fetch. The runner curates "what I actually
+        // run" via the star toggle on the web / mobile app — a
+        // much stronger signal than "30 most-recently-updated"
+        // for a 1.4-inch picker. The DB index
+        // `idx_routes_user_starred` (user_id, updated_at desc) WHERE
+        // is_starred makes this an O(starred) read instead of a
+        // table scan. Cap at 30 for the rare power user with
+        // dozens of stars.
         val req = Request.Builder()
-            .url("$baseUrl/rest/v1/routes?select=id,name,waypoints,distance_m&order=updated_at.desc&limit=30")
+            .url("$baseUrl/rest/v1/routes?select=id,name,waypoints,distance_m&is_starred=eq.true&order=updated_at.desc&limit=30")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $token")
             .get()

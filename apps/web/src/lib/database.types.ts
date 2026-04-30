@@ -936,6 +936,7 @@ export type Database = {
           featured_at: string | null
           id: string
           is_public: boolean | null
+          is_starred: boolean
           name: string
           run_count: number
           slug: string | null
@@ -955,6 +956,7 @@ export type Database = {
           featured_at?: string | null
           id?: string
           is_public?: boolean | null
+          is_starred?: boolean
           name: string
           run_count?: number
           slug?: string | null
@@ -974,6 +976,7 @@ export type Database = {
           featured_at?: string | null
           id?: string
           is_public?: boolean | null
+          is_starred?: boolean
           name?: string
           run_count?: number
           slug?: string | null
@@ -1621,6 +1624,7 @@ export type Database = {
           featured_at: string | null
           id: string
           is_public: boolean | null
+          is_starred: boolean
           name: string
           run_count: number
           slug: string | null
@@ -1690,6 +1694,7 @@ export type Database = {
           featured_at: string | null
           id: string
           is_public: boolean | null
+          is_starred: boolean
           name: string
           run_count: number
           slug: string | null

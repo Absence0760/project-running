@@ -1175,6 +1175,7 @@ class RouteRow {
   static const String colFeaturedAt = 'featured_at';
   static const String colRunCount = 'run_count';
   static const String colClubId = 'club_id';
+  static const String colIsStarred = 'is_starred';
 
   final String id;
   final String userId;
@@ -1193,6 +1194,7 @@ class RouteRow {
   final DateTime? featuredAt;
   final int runCount;
   final String? clubId;
+  final bool isStarred;
 
   const RouteRow({
     required this.id,
@@ -1212,6 +1214,7 @@ class RouteRow {
     this.featuredAt,
     required this.runCount,
     this.clubId,
+    required this.isStarred,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -1232,6 +1235,7 @@ class RouteRow {
     featuredAt: json['featured_at'] == null ? null : DateTime.parse(json['featured_at'] as String),
     runCount: (json['run_count'] as num).toInt(),
     clubId: json['club_id'] as String?,
+    isStarred: json['is_starred'] as bool,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1252,6 +1256,7 @@ class RouteRow {
     colFeaturedAt: featuredAt?.toIso8601String(),
     colRunCount: runCount,
     colClubId: clubId,
+    colIsStarred: isStarred,
   };
 }
 

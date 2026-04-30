@@ -70,8 +70,8 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `add_run_screen.dart` — manual-entry form: date/time + duration + distance + optional saved route
 - `run_detail_screen.dart` — single run map + stats (primary + secondary) + interactive elevation/pace chart + best efforts + pace-bar splits + laps
 - `import_screen.dart` — GPX / KML / KMZ / GeoJSON / TCX file picker
-- `routes_screen.dart` — saved routes list
-- `route_detail_screen.dart` — route map + metadata + reviews + public/private toggle
+- `routes_screen.dart` — saved routes list with per-row star toggle (owner-only) that drives the watch's starred-only route picker (see `docs/decisions.md § 44`)
+- `route_detail_screen.dart` — route map + metadata + reviews + public/private toggle + star-for-watch toggle (owner-only)
 - `period_summary_screen.dart` — browsable weekly/monthly summary with stats, run list, and share (text or screenshot)
 - `explore_routes_screen.dart` — search and browse public routes with filters (distance, surface), save to library
 - `settings_screen.dart` — preferences, integrations (Strava connect/sync/disconnect via `url_launcher` hand-off + native sync via Edge Function; parkrun athlete-number import), data export

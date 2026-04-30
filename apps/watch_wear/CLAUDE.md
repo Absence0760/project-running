@@ -318,6 +318,13 @@ What the UI exposes during a recording, for quick reference when reading
   after a mid-run drop, so the runner can tell the two apart.
 - **Route overlay (no map).** Pre-run Route chip → `Stage.RoutePicker`
   (backed by `LocalRouteStore` + `SupabaseClient.fetchRoutes`).
+  The fetch is filtered server-side to **starred routes only**
+  (`is_starred=eq.true&order=updated_at.desc&limit=30`) so a runner
+  with 200 saved routes doesn't have to scroll a 1.4-inch screen.
+  Starring is done from web (`/routes` cards + `/routes/[id]` header)
+  or mobile (`routes_screen.dart` trailing star, `route_detail_screen`
+  AppBar star) — the watch is read-only on this flag. See
+  `docs/decisions.md § 44`.
   Selected waypoints flow via `ACTION_START` extras into
   `RunRecordingService.parseRouteWaypoints`, which calls
   `RouteMath.offRouteDistanceM` + `routeRemainingM` per GPS sample.

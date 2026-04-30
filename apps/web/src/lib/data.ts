@@ -639,6 +639,18 @@ export async function updateRouteTags(routeId: string, tags: string[]): Promise<
 	if (error) throw error;
 }
 
+/// Toggle the star/favorite flag on a route. Starred routes are what
+/// the watch fetches at run prep time — curating here surfaces the
+/// runner's training rotation on a 1.4-inch picker that can't show
+/// 30+ entries comfortably.
+export async function setRouteStar(routeId: string, starred: boolean): Promise<void> {
+	const { error } = await supabase
+		.from('routes')
+		.update({ is_starred: starred, updated_at: new Date().toISOString() })
+		.eq('id', routeId);
+	if (error) throw error;
+}
+
 export async function fetchRoutes(): Promise<Route[]> {
 	const result = await fetchRoutesWithError();
 	return result.routes;

@@ -49,6 +49,7 @@ function makeRoute(overrides: Partial<Route> & { name: string; distance_m: numbe
 		tags: [],
 		featured: false,
 		featured_at: null,
+		is_starred: false,
 		run_count: 0,
 		club_id: null,
 		created_at: '2026-03-01T00:00:00Z',

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic } from '$lib/data';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -91,6 +91,19 @@
 			showToast(`Could not remove tag: ${e}`, 'error');
 		} finally {
 			tagsSaving = false;
+		}
+	}
+
+	async function toggleStar() {
+		if (!route || !isOwner) return;
+		const next = !route.is_starred;
+		// Optimistic — feels instant. Revert + toast on failure.
+		route.is_starred = next;
+		try {
+			await setRouteStar(route.id, next);
+		} catch (e) {
+			route.is_starred = !next;
+			showToast(`Could not ${next ? 'star' : 'unstar'} route: ${e}`, 'error');
 		}
 	}
 
@@ -252,7 +265,23 @@
 		<aside class="stats-panel">
 			<header class="detail-header">
 				<div>
-					<h1>{route.name}</h1>
+					<div class="title-row">
+						<h1>{route.name}</h1>
+						{#if isOwner}
+							<button
+								type="button"
+								class="star-btn"
+								class:starred={route.is_starred}
+								title={route.is_starred ? 'Unstar route' : 'Star route — shows on watch'}
+								aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
+								onclick={toggleStar}
+							>
+								<span class="material-symbols">
+									{route.is_starred ? 'star' : 'star_outline'}
+								</span>
+							</button>
+						{/if}
+					</div>
 					<div class="route-meta">
 						<span>{formatDistance(route.distance_m)}</span>
 						{#if route.elevation_m}
@@ -513,6 +542,42 @@
 		align-items: flex-start;
 		gap: var(--space-md);
 		margin-bottom: var(--space-xl);
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+
+	.star-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		background: transparent;
+		border: none;
+		border-radius: 50%;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		transition:
+			background var(--transition-fast),
+			color var(--transition-fast);
+	}
+
+	.star-btn:hover {
+		background: var(--color-bg-tertiary);
+	}
+
+	.star-btn.starred {
+		color: var(--color-warning, #fbbf24);
+	}
+
+	.star-btn .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.4rem;
 	}
 
 	h1 {

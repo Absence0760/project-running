@@ -95,6 +95,15 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
   '[{"lat":-37.8180,"lng":144.9550,"ele":10},{"lat":-37.8170,"lng":144.9575,"ele":14},{"lat":-37.8160,"lng":144.9600,"ele":20},{"lat":-37.8150,"lng":144.9620,"ele":27},{"lat":-37.8140,"lng":144.9640,"ele":35},{"lat":-37.8130,"lng":144.9655,"ele":40},{"lat":-37.8125,"lng":144.9665,"ele":38},{"lat":-37.8118,"lng":144.9675,"ele":42},{"lat":-37.8112,"lng":144.9685,"ele":45},{"lat":-37.8108,"lng":144.9692,"ele":42},{"lat":-37.8105,"lng":144.9697,"ele":40},{"lat":-37.8100,"lng":144.9700,"ele":38}]',
   6400, 35, 'road', false);
 
+-- Star three of the seeded routes so the watch picker shows a
+-- realistic "what I run weekly" rotation out of the box. Without
+-- this, the watch's starred-only fetch returns empty and a fresh
+-- dev install looks broken until the user manually stars something.
+UPDATE routes
+SET is_starred = true
+WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+  AND name IN ('Richmond Park Loop', 'Thames Path 5K', 'Sunday Long Run');
+
 -- 4. Runs (spanning ~6 weeks of realistic training, anchored on 2026-04-26
 -- as "today"). Metadata carries activity_type + HR + perceived effort so
 -- the coach has signal to talk about effort drift, zone splits, and easy /

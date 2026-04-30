@@ -85,6 +85,37 @@ class _RoutesScreenState extends State<RoutesScreen> {
     }
   }
 
+  Future<void> _toggleStar(cm.Route route) async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    final next = !route.isStarred;
+    final updated = cm.Route(
+      id: route.id,
+      name: route.name,
+      waypoints: route.waypoints,
+      distanceMetres: route.distanceMetres,
+      elevationGainMetres: route.elevationGainMetres,
+      isPublic: route.isPublic,
+      createdAt: route.createdAt,
+      surface: route.surface,
+      tags: route.tags,
+      featured: route.featured,
+      runCount: route.runCount,
+      isStarred: next,
+    );
+    await widget.routeStore.save(updated);
+    try {
+      await api.setRouteStar(route.id, next);
+    } catch (e) {
+      await widget.routeStore.save(route);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update star: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _importFile() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -213,7 +244,25 @@ class _RoutesScreenState extends State<RoutesScreen> {
                       '  •  ${route.elevationGainMetres.round()}m gain'
                       '${isOwned ? '' : '  •  Saved'}',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isOwned)
+                          IconButton(
+                            icon: Icon(
+                              route.isStarred ? Icons.star : Icons.star_border,
+                              color: route.isStarred
+                                  ? Colors.amber
+                                  : theme.colorScheme.outline,
+                            ),
+                            tooltip: route.isStarred
+                                ? 'Unstar route'
+                                : 'Star to show on watch',
+                            onPressed: () => _toggleStar(route),
+                          ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
                     onTap: () async {
                       final picked = await Navigator.push<cm.Route?>(
                         context,

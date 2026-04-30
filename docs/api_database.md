@@ -97,6 +97,7 @@ create table routes (
   surface         text default 'road',      -- 'road' | 'trail' | 'mixed'
   is_public       boolean default false,
   slug            text unique,              -- for shareable URLs
+  is_starred      boolean not null default false,  -- owner-curated "show on watch"
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );
@@ -104,11 +105,14 @@ create table routes (
 create index routes_user_id on routes (user_id, created_at desc);
 create index routes_public on routes (is_public, created_at desc) where is_public = true;
 create index routes_club_id on routes (club_id, created_at desc) where club_id is not null;
+create index idx_routes_user_starred on routes (user_id, updated_at desc) where is_starred;
 ```
 
 **`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
 
 **`club_id`** makes a route club-owned: any club admin can edit it, any member can read it regardless of `is_public`. Two RLS policies layer on top of the existing user-owned + public-readable policies — `"club members read club routes"` (SELECT where `club_id is not null and is_club_member(club_id)`) and `"club admins write club routes"` (ALL where `club_id is not null and is_club_admin(club_id)`). See `docs/decisions.md § 30` and `docs/clubs.md § Club-owned routes`.
+
+**`is_starred`** is the owner's "what I actually run" flag. The watch's route picker fetches `is_starred=eq.true&order=updated_at.desc&limit=30` so a 1.4-inch round screen never has to scroll through every saved route. Toggleable from web (`/routes` cards + `/routes/[id]` header) and mobile (routes list + detail screen); read-only from the watch. Backed by a partial index keyed on `(user_id, updated_at desc)` so the watch fetch is index-only.
 
 ---
 

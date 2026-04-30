@@ -36,6 +36,7 @@ class RouteDetailScreen extends StatefulWidget {
 
 class _RouteDetailScreenState extends State<RouteDetailScreen> {
   late bool _isPublic = widget.route.isPublic;
+  late bool _isStarred = widget.route.isStarred;
   late List<String> _tags = List.from(widget.route.tags);
   List<cm.RouteReviewRow> _reviews = [];
   bool _loadingReviews = false;
@@ -143,6 +144,33 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       await api.setRoutePublic(widget.route.id, newValue);
     } catch (_) {
       if (mounted) setState(() => _isPublic = !newValue);
+    }
+  }
+
+  Future<void> _toggleStar() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    final newValue = !_isStarred;
+    setState(() => _isStarred = newValue);
+    try {
+      await api.setRouteStar(widget.route.id, newValue);
+      final r = widget.route;
+      await widget.routeStore.save(cm.Route(
+        id: r.id,
+        name: r.name,
+        waypoints: r.waypoints,
+        distanceMetres: r.distanceMetres,
+        elevationGainMetres: r.elevationGainMetres,
+        isPublic: _isPublic,
+        createdAt: r.createdAt,
+        surface: r.surface,
+        tags: _tags,
+        featured: r.featured,
+        runCount: r.runCount,
+        isStarred: newValue,
+      ));
+    } catch (_) {
+      if (mounted) setState(() => _isStarred = !newValue);
     }
   }
 
@@ -254,6 +282,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               PopupMenuItem(value: 'kml', child: Text('Share as KML')),
             ],
           ),
+          if (_isOwner)
+            IconButton(
+              icon: Icon(
+                _isStarred ? Icons.star : Icons.star_border,
+                color: _isStarred ? Colors.amber : null,
+              ),
+              tooltip: _isStarred ? 'Unstar route' : 'Star to show on watch',
+              onPressed: _toggleStar,
+            ),
           if (_isOwner)
             IconButton(
               icon: Icon(_isPublic ? Icons.public : Icons.public_off),

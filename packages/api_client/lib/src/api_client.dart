@@ -407,6 +407,7 @@ class ApiClient {
       tags: route.tags,
       featured: route.featured,
       runCount: route.runCount,
+      isStarred: route.isStarred,
     );
     // Drop null / server-default columns so Postgres fills them in.
     final body = Map<String, dynamic>.from(row.toJson())
@@ -638,6 +639,19 @@ class ApiClient {
         .eq(RunRow.colId, runId)
         .maybeSingle();
     return row == null ? null : RunRow.fromJson(row);
+  }
+
+  /// Toggle the owner's `is_starred` flag on a route. Drives the
+  /// watch's starred-only route picker (see watch_wear/SupabaseClient).
+  /// RLS restricts updates to the owner.
+  Future<void> setRouteStar(String routeId, bool starred) async {
+    await _client
+        .from(RouteRow.table)
+        .update({
+          RouteRow.colIsStarred: starred,
+          RouteRow.colUpdatedAt: DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq(RouteRow.colId, routeId);
   }
 
   /// Fetch a single route by id. RLS gates: owners see their own
@@ -2082,6 +2096,7 @@ class ApiClient {
       tags: (row['tags'] as List?)?.cast<String>() ?? const [],
       featured: row['featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
+      isStarred: row['is_starred'] == true,
     );
   }
 
