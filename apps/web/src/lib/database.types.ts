@@ -1789,6 +1789,21 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      routes_intersecting_track: {
+        Args: {
+          caller_user_id: string
+          max_results?: number
+          tolerance_m?: number
+          track_geojson: Json
+        }
+        Returns: {
+          distance_m: number
+          end_offset_m: number
+          id: string
+          name: string
+          start_offset_m: number
+        }[]
+      }
       routes_within_box: {
         Args: {
           max_lat: number

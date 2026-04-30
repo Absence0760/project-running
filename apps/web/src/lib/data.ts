@@ -135,6 +135,65 @@ export async function fetchTrackByPath(path: string) {
 	return fetchTrack(path);
 }
 
+export type RouteMatchCandidate = {
+	id: string;
+	name: string;
+	distanceM: number;
+	startOffsetM: number;
+	endOffsetM: number;
+};
+
+/// Auto-link helper: given a recorded run's track, ask the DB which
+/// of the user's saved routes it overlaps. Backed by the
+/// routes_intersecting_track RPC (migration 20260610_001) which
+/// uses the routes.geom GIST index to pre-filter candidates.
+///
+/// Caller decides the final ranking. The combination
+/// (start_offset + end_offset < 2 * tolerance) AND
+/// (|distance_m - track_length| / track_length < 0.20) is a strong
+/// "definitely the same route" signal. A single low-offset candidate
+/// with that distance match is auto-link-worthy; multiple candidates
+/// or a length mismatch should defer to user confirmation.
+export async function fetchRoutesIntersectingTrack(
+	track: import('$lib/types').TrackPoint[],
+	toleranceM = 100,
+	maxResults = 10,
+): Promise<RouteMatchCandidate[]> {
+	const userId = auth.user?.id;
+	if (!userId || track.length < 2) return [];
+	const geojson = {
+		type: 'LineString' as const,
+		coordinates: track.map((p) => [p.lng, p.lat]),
+	};
+	const { data, error } = await supabase.rpc('routes_intersecting_track', {
+		caller_user_id: userId,
+		track_geojson: geojson,
+		tolerance_m: toleranceM,
+		max_results: maxResults,
+	});
+	if (error || !data) return [];
+	return (data as Array<{
+		id: string;
+		name: string;
+		distance_m: number;
+		start_offset_m: number;
+		end_offset_m: number;
+	}>).map((r) => ({
+		id: r.id,
+		name: r.name,
+		distanceM: Number(r.distance_m),
+		startOffsetM: Number(r.start_offset_m),
+		endOffsetM: Number(r.end_offset_m),
+	}));
+}
+
+/// Persist runs.route_id. Used by the auto-link suggestion on
+/// /runs/[id] and by any future "save as route" flow that wants
+/// to back-link the run to its source.
+export async function linkRunToRoute(runId: string, routeId: string): Promise<void> {
+	await supabase.from('runs').update({ route_id: routeId }).eq('id', runId);
+}
+
 export type MatchStatus = 'pending' | 'matched' | 'failed' | 'skipped';
 
 export type RunMatchInfo = {

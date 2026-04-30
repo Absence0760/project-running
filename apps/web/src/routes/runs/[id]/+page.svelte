@@ -15,7 +15,19 @@
 		sourceLabel,
 		sourceColor,
 	} from '$lib/mock-data';
-	import { fetchRunById, deleteRun, makeRunPublic, updateRunMetadata, saveRunAsRoute, fetchWorkout, fetchRunMatchedTrack, type RunMatchInfo } from '$lib/data';
+	import {
+		fetchRunById,
+		deleteRun,
+		makeRunPublic,
+		updateRunMetadata,
+		saveRunAsRoute,
+		fetchWorkout,
+		fetchRunMatchedTrack,
+		fetchRoutesIntersectingTrack,
+		linkRunToRoute,
+		type RunMatchInfo,
+		type RouteMatchCandidate,
+	} from '$lib/data';
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/run_stats';
@@ -45,6 +57,12 @@
 	/// (auxiliary) per docs/conventions.md § Layered resilience — the
 	/// raw track keeps rendering so the page always works.
 	let matchInfo = $state<RunMatchInfo | null>(null);
+	/// Auto-link candidates surfaced when run.route_id is null and
+	/// the track overlaps a saved route. Picks the single best
+	/// candidate (lowest combined start+end offset + plausible
+	/// length match); if no candidate clears the bar this stays
+	/// null and no UI renders.
+	let suggestedRoute = $state<RouteMatchCandidate | null>(null);
 
 	onMount(async () => {
 		run = await fetchRunById(pageData.id);
@@ -55,6 +73,12 @@
 		fetchRunMatchedTrack(pageData.id)
 			.then((info) => { matchInfo = info; })
 			.catch((e) => { console.warn('matched-track fetch failed', e); });
+		// Background route-suggestion. Only kicks in for runs that
+		// aren't already linked to a route AND have a usable track —
+		// silent on empty / failure paths.
+		if (run && !run.route_id && run.track && run.track.length >= 2) {
+			void suggestRoute(run.track, run.distance_m);
+		}
 		// If the recorder linked this run to a structured workout, pull
 		// the planned workout row so the review section can show its
 		// title alongside the per-step planned/actual table.
@@ -88,6 +112,45 @@
 			/* noop */
 		}
 	});
+
+	/// Decide whether any of the spatial candidates is a close-enough
+	/// match to surface as a one-click suggestion. Two thresholds:
+	/// combined endpoint offset under 2× the RPC tolerance (so start
+	/// + end are both close to the route's start + end) AND distance
+	/// within 20% of the track length (otherwise we're a sub-section
+	/// or a superset, not the same route). Conservative on purpose
+	/// — false positives would teach the runner to ignore the prompt.
+	async function suggestRoute(
+		track: { lat: number; lng: number }[],
+		runDistanceM: number,
+	) {
+		try {
+			const candidates = await fetchRoutesIntersectingTrack(track, 100, 5);
+			if (candidates.length === 0) return;
+			const best = candidates[0];
+			const lengthRatio =
+				Math.abs(best.distanceM - runDistanceM) / Math.max(runDistanceM, 1);
+			if (best.startOffsetM + best.endOffsetM < 200 && lengthRatio < 0.2) {
+				suggestedRoute = best;
+			}
+		} catch (e) {
+			console.warn('suggestRoute failed', e);
+		}
+	}
+
+	async function acceptSuggestedRoute() {
+		const candidate = suggestedRoute;
+		if (!run || !candidate) return;
+		try {
+			await linkRunToRoute(run.id, candidate.id);
+			run = { ...run, route_id: candidate.id };
+			suggestedRoute = null;
+			showToast(`Linked to ${candidate.name}`, 'success');
+		} catch (e) {
+			console.error(e);
+			showToast('Could not link route', 'error');
+		}
+	}
 
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
 	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
@@ -679,6 +742,25 @@
 			</div>
 		</header>
 
+		<!-- Auto-link suggestion: when the run isn't linked to a route
+		     but its track overlaps one of the runner's saved routes,
+		     surface a one-tap link prompt. The suggestion is computed
+		     in the background after mount; renders nothing until a
+		     confident match lands. -->
+		{#if suggestedRoute && !run.route_id}
+			<div class="route-suggest-banner">
+				<span class="material-symbols">link</span>
+				<div class="route-suggest-body">
+					<div class="route-suggest-text">Looks like you ran <strong>{suggestedRoute.name}</strong></div>
+					<div class="route-suggest-sub">Link this run to that route?</div>
+				</div>
+				<div class="route-suggest-actions">
+					<button class="btn-sm btn-outline-sm" onclick={() => (suggestedRoute = null)}>Dismiss</button>
+					<button class="btn-sm btn-primary-sm" onclick={acceptSuggestedRoute}>Link</button>
+				</div>
+			</div>
+		{/if}
+
 		{#if editing}
 			<div class="edit-form">
 				<input type="text" bind:value={editTitle} placeholder="Run title" class="edit-input" />
@@ -1005,6 +1087,32 @@
 		min-height: 0;
 		background: var(--color-bg-tertiary);
 		position: relative;
+	}
+
+	.route-suggest-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.7rem 0.9rem;
+		margin: 0.6rem 0 1rem;
+		border-radius: var(--radius-lg);
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+	}
+	.route-suggest-banner > .material-symbols {
+		font-size: 1.4rem;
+		color: var(--color-primary);
+	}
+	.route-suggest-body { flex: 1; }
+	.route-suggest-text { font-size: 0.9rem; }
+	.route-suggest-sub {
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+		margin-top: 0.15rem;
+	}
+	.route-suggest-actions {
+		display: flex;
+		gap: 0.4rem;
 	}
 
 	.match-pill {

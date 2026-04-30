@@ -1071,6 +1071,29 @@ select * from routes_within_box(-37.83, 144.94, -37.78, 144.99, 50);
 
 ---
 
+### `routes_intersecting_track(caller_user_id, track_geojson, tolerance_m, max_results)`
+
+Auto-link helper for the run-detail flow. Given a recorded run's track (as a GeoJSON `LineString`), returns the user's saved routes whose `routes.geom` lies within `tolerance_m` of the track. Used on `/runs/[id]` to surface the "Looks like you ran *Richmond Park Loop*?" prompt when a fresh run isn't linked to a route yet.
+
+```sql
+select * from routes_intersecting_track(
+  caller_user_id := auth.uid(),
+  track_geojson := '{"type":"LineString","coordinates":[[lng,lat],...]}'::jsonb,
+  tolerance_m := 100,
+  max_results := 10
+);
+```
+
+**Parameters:**
+- `caller_user_id` — must equal `auth.uid()` for non-empty results. The function is `SECURITY INVOKER`, so the existing `select_own_routes` RLS policy gates non-owners to no rows even if a malicious client passes a different uuid.
+- `track_geojson` — `{ "type": "LineString", "coordinates": [[lng, lat], ...] }`. Matches PostGIS's `ST_GeomFromGeoJSON` input.
+- `tolerance_m` — pre-filter buffer (default 100). Drives the `ST_DWithin` that anchors the GIST scan; bigger values widen the candidate net but cost more in the planner.
+- `max_results` — defaults to 10.
+
+**Returns:** `(id, name, distance_m, start_offset_m, end_offset_m)` sorted by `start_offset_m + end_offset_m` ascending. The caller does the final ranking — combining the endpoint offsets with `|distance_m − track_length| / track_length` is a strong "definitely the same route" signal; either dimension alone is too noisy.
+
+---
+
 ### `claim_next_job(worker_id, kind_filter)`
 
 SECURITY DEFINER. Atomically marks the next ready job as `running`, increments its `attempts`, and returns the row. Used by the Go service (and any future worker) to drain the [`jobs`](#jobs) queue. PUBLIC EXECUTE is revoked; granted to `service_role` only.
