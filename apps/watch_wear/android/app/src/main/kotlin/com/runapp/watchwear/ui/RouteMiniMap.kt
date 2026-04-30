@@ -20,6 +20,12 @@ import androidx.compose.foundation.background
 import com.runapp.watchwear.recording.MercatorTiles
 import com.runapp.watchwear.recording.RouteMath
 
+/// Street-level zoom for the follow-current mode. At zoom 17 a 256-px
+/// tile spans roughly 300 m on the ground at mid-latitudes, so a
+/// ~200 dp watch face shows a few blocks around the runner — close
+/// enough to read which side of the road they're on.
+private const val FOLLOW_ZOOM = 17
+
 /// Wear-side mini-map: optional raster tiles + route polyline +
 /// track-so-far + runner-position dot. v2 of "live position on planned
 /// route" — v1 was polyline-only (`MapProjection` equirectangular).
@@ -68,13 +74,23 @@ fun RouteMiniMap(
         val originX = with(density) { ((maxWidth - sideDp) / 2).toPx() }
         val originY = with(density) { ((maxHeight - sideDp) / 2).toPx() }
 
-        // Centre + zoom is cached across recompositions; without it
-        // we'd recompute on every GPS tick. Track grows incrementally
-        // but the bounds rarely change after the first few fixes — so
-        // even when the cache invalidates, the result is stable.
+        // Two projection modes:
+        //   * Follow-current at street zoom (17). When `current` is
+        //     non-null (RunningScreen has a GPS fix) we centre on the
+        //     runner so they see streets close-up — fit-bounds on a
+        //     full 5 km route would render their position as a
+        //     single pixel against a tiny polyline. Garmin / Apple
+        //     Watch defaults to this.
+        //   * Fit-bounds. When there's no current fix (PreRun route
+        //     preview, indoor mode) we frame the whole polyline so
+        //     the runner can see the route shape before they start.
         val centre = remember(route, current, track, sidePx) {
-            val all = route + track + listOfNotNull(current)
-            MercatorTiles.fitBounds(all, sidePx)
+            if (current != null) {
+                MercatorTiles.Centre(current.lat, current.lng, FOLLOW_ZOOM)
+            } else {
+                val all = route + track
+                MercatorTiles.fitBounds(all, sidePx)
+            }
         }
 
         if (centre != null) {

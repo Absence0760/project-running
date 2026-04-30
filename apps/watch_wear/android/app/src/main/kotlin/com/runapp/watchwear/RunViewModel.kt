@@ -554,15 +554,15 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             selectedRoute = route,
             stage = Stage.PreRun,
         )
-        // Eagerly download the tiles for this route while we still
-        // have connectivity (paired phone, wifi). If the runner heads
-        // off-grid mid-run, the route + position dot still render on
-        // actual streets instead of midnight + polyline. 400 px target
-        // matches the running-screen viewport on a 46 mm watch — the
-        // 56 dp pre-run preview tiles are a strict subset.
+        // Eagerly download street-zoom tiles along the route while
+        // we still have connectivity (paired phone, wifi). The
+        // running screen follows the runner at zoom 17, so we
+        // prefetch at zoom 17 — matches what the screen actually
+        // renders at run time, instead of the wide fit-bounds tiles
+        // the runner would never see.
         viewModelScope.launch {
             try {
-                tileSource.prefetch(route.toLatLngs(), viewportPx = 400f)
+                tileSource.prefetch(route.toLatLngs())
             } catch (e: Exception) {
                 // Pre-fetch is L3 best-effort. A failure here just means
                 // the running screen falls back to on-demand fetching,

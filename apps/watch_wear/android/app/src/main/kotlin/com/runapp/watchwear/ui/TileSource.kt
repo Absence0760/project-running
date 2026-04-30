@@ -92,24 +92,43 @@ class TileSource(context: Context) {
         }
     }
 
-    /// Eagerly download all tiles covering `points` at the zoom that
-    /// `MercatorTiles.fitBounds` would pick for a `viewportPx` viewport.
-    /// Designed for the route-selection moment: while the runner has
-    /// connectivity (paired phone, wifi), we pull the tiles they'll
-    /// need at run time so a cellular drop mid-run still leaves the
-    /// route + their position visible on actual streets.
+    /// Eagerly download every street-zoom tile that the route passes
+    /// through, plus a one-tile buffer on each side. Designed for the
+    /// route-selection moment: while the runner has connectivity
+    /// (paired phone, wifi), we pull the *follow-current* tiles
+    /// they'll see at run time — not the wide fit-bounds tiles, which
+    /// the running screen never actually displays.
     ///
-    /// Fans out concurrently — the OkHttp dispatcher caps at 64
-    /// in-flight by default, plenty for the ~30 tiles a typical
-    /// route covers. Failures are silent (per `load`); a partially-
+    /// Tile count is roughly `route_km / 0.3` at zoom 17 (≈300 m per
+    /// tile at mid-latitudes), plus the 8-tile ring around each
+    /// covered tile. A 5 km route ⇒ ~50 tiles ⇒ ~1.5 MB. A marathon
+    /// route ⇒ ~400 tiles ⇒ ~12 MB. Both fit comfortably in the 50 MB
+    /// disk cache.
+    ///
+    /// Fans out concurrently — OkHttp's dispatcher caps in-flight
+    /// requests at 64. Failures are silent (per `load`); a partially-
     /// fetched cache is still better than nothing.
-    suspend fun prefetch(points: List<RouteMath.LatLng>, viewportPx: Float) {
+    suspend fun prefetch(points: List<RouteMath.LatLng>, zoom: Int = 17) {
         if (!enabled || points.isEmpty()) return
-        val centre = MercatorTiles.fitBounds(points, viewportPx) ?: return
-        val tiles = MercatorTiles.visibleTiles(centre, viewportPx)
+        val needed = mutableSetOf<Pair<Int, Int>>()
+        val n = 1 shl zoom
+        for (p in points) {
+            val rad = p.lat * Math.PI / 180.0
+            val tx = ((p.lng + 180.0) / 360.0 * n).toInt().coerceIn(0, n - 1)
+            val ty = ((1.0 - kotlin.math.ln(kotlin.math.tan(rad) + 1.0 / kotlin.math.cos(rad)) / Math.PI) / 2.0 * n)
+                .toInt().coerceIn(0, n - 1)
+            // 3x3 ring around the tile that contains the waypoint.
+            for (dx in -1..1) for (dy in -1..1) {
+                val nx = tx + dx
+                val ny = ty + dy
+                if (nx in 0 until n && ny in 0 until n) {
+                    needed.add(nx to ny)
+                }
+            }
+        }
         coroutineScope {
-            tiles.forEach { tile ->
-                launch { load(tile) }
+            needed.forEach { (x, y) ->
+                launch { load(MercatorTiles.Tile(zoom, x, y, 0f, 0f)) }
             }
         }
     }

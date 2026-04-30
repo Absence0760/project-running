@@ -980,13 +980,17 @@ private fun RunningScreen(
             )
         }
 
-        // Centre metrics column. Lives behind the buttons (in a Box
-        // sense — z is top-to-bottom in declaration order). No tap
-        // handler so taps pass through to the background `pointerInput`.
+        // Top metrics: time + distance + (status banners). Anchored
+        // to the top of the round face so the centre band stays
+        // clear for the runner's position dot — runners need to see
+        // *where they are* on the map without text overlapping the
+        // dot. Status banners (GPS lost, off-route) sit above the
+        // time so they never compete with primary metrics.
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 24.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
             if (!locationAvailable) {
                 Text(
@@ -994,7 +998,6 @@ private fun RunningScreen(
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
-                Spacer(Modifier.height(2.dp))
             }
             if (wasOffRoute && offRouteDistanceM != null) {
                 Text(
@@ -1002,18 +1005,37 @@ private fun RunningScreen(
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
-                Spacer(Modifier.height(2.dp))
             }
             Text(
                 formatElapsed(elapsedMs),
                 style = timeStyle,
                 color = if (paused) DuskPalette.haze else DuskPalette.parchment,
             )
-            Spacer(Modifier.height(2.dp))
             Text(
                 "%.2f km".format(distanceM / 1000.0),
                 style = MaterialTheme.typography.body2.copy(shadow = captionShadow),
             )
+        }
+
+        // Bottom secondary metrics + button cluster. Anchored to the
+        // bottom arc so the runner can glance down for pace / BPM /
+        // steps / laps without anything overlapping the centre dot.
+        // Pace gets its own line (it's the headline secondary
+        // metric); bpm + steps + lap collapse into a single dot-
+        // separated caption to keep the bottom stack short.
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp, start = 12.dp, end = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
+                Text(
+                    "${formatPace(paceSecPerKm)} /km",
+                    style = MaterialTheme.typography.caption2.copy(shadow = captionShadow),
+                    color = DuskPalette.parchment,
+                )
+            }
             if (routeRemainingM != null && routeRemainingM > 1.0) {
                 Text(
                     "%.2f km to go".format(routeRemainingM / 1000.0),
@@ -1021,49 +1043,29 @@ private fun RunningScreen(
                     color = DuskPalette.lilac,
                 )
             }
-            if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
+            // BPM · steps · lap on a single line. Each segment is
+            // optional — the joiner skips nulls so an empty stat
+            // doesn't leave a stray separator.
+            val secondary = listOfNotNull(
+                bpm?.let { "$it bpm" },
+                steps?.takeIf { it > 0 }?.let { "$it steps" },
+                lapCount.takeIf { it > 0 }?.let { "Lap $it" },
+            )
+            if (secondary.isNotEmpty()) {
                 Text(
-                    "${formatPace(paceSecPerKm)} /km",
+                    secondary.joinToString(" · "),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.haze,
                 )
             }
-            if (bpm != null) {
-                Text(
-                    "$bpm bpm",
-                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
-                    color = DuskPalette.coral,
-                )
-            }
-            if (steps != null && steps > 0) {
-                Text(
-                    "$steps steps",
-                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
-                    color = DuskPalette.haze,
-                )
-            }
-            if (lapCount > 0) {
-                Text(
-                    "Lap $lapCount",
-                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
-                    color = DuskPalette.lilac,
-                )
-            }
-        }
-
-        // Edge-anchored translucent button cluster. Animates in/out
-        // so the runner gets a clean view of the route once they've
-        // confirmed their pace. `align(BottomCenter)` puts the row
-        // against the inscribed circle's bottom chord; padding
-        // pushes them inside the round bezel on a typical 46 mm face.
-        AnimatedVisibility(
-            visible = controlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 18.dp),
-        ) {
+            // Spacer so the controls don't crowd the secondary
+            // metrics when they're visible.
+            if (controlsVisible) Spacer(Modifier.height(4.dp))
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
             // Translucent backgrounds: dark glass over the tile layer.
             // Alpha is high enough that the icon stays legible, low
             // enough that the route is visible through the buttons —
@@ -1113,6 +1115,7 @@ private fun RunningScreen(
                 }
                 HoldToStopButton(onStop = onStop)
             }
+        }
         }
     }
 }

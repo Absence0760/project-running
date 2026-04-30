@@ -125,19 +125,29 @@ class RouteMiniMapWiringTest {
     }
 
     @Test
-    fun `RouteMiniMap caches centre + zoom via remember to avoid per-tick recomputation`() {
-        // Why: `current` updates on every GPS sample (sub-1 Hz today).
-        // Without `remember(...)` around `MercatorTiles.fitBounds(...)`
-        // the bounds scan would walk both polylines on every
-        // recomposition — and on every recompose we'd also re-pick a
-        // zoom level, which would flicker the tile layer.
+    fun `RouteMiniMap centre is keyed on current and follows it at street zoom`() {
+        // Why: two contracts here:
+        //   1) The centre must be a `remember(...)` with `current` as a
+        //      key, so it re-fits when GPS lands or the runner moves to
+        //      a new tile. Drop `current` from the keys and the map
+        //      freezes on the initial fix.
+        //   2) When `current` is non-null we must follow it at street
+        //      zoom (Centre construction) — fitting the whole route
+        //      makes the runner's position a single pixel at running
+        //      pace. When `current` is null we fall back to fitBounds
+        //      so the pre-run preview frames the whole polyline.
         val src = File("src/main/kotlin/com/runapp/watchwear/ui/RouteMiniMap.kt").readText()
         assertTrue(
-            "RouteMiniMap must wrap MercatorTiles.fitBounds in a keyed remember(...)",
-            Regex(
-                """remember\s*\([^)]*\)\s*\{[^}]*MercatorTiles\.fitBounds""",
-                RegexOption.DOT_MATCHES_ALL,
-            ).containsMatchIn(src),
+            "RouteMiniMap must wrap centre derivation in a remember(...) keyed on `current`",
+            Regex("""remember\s*\([^)]*current[^)]*\)""").containsMatchIn(src),
+        )
+        assertTrue(
+            "Follow-current branch must construct MercatorTiles.Centre at FOLLOW_ZOOM",
+            Regex("""MercatorTiles\.Centre\s*\(""").containsMatchIn(src),
+        )
+        assertTrue(
+            "Pre-run / no-fix fallback must call MercatorTiles.fitBounds",
+            Regex("""MercatorTiles\.fitBounds\s*\(""").containsMatchIn(src),
         )
     }
 
