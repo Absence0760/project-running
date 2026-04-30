@@ -195,6 +195,7 @@ class RunRecordingService : Service() {
                 elapsedMs = 0L,
                 activityType = activityType,
                 trackFilePath = file.absolutePath,
+                routeWaypoints = routeWaypoints,
             )
         }
 

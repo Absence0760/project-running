@@ -63,6 +63,13 @@ data class UiState(
     val offRouteDistanceM: Double? = null,
     /// Live "distance to end of route" in metres. Null when no route.
     val routeRemainingM: Double? = null,
+    /// Latest GPS fix during this run, or null until the first fix
+    /// lands. Drives the runner-position dot on the on-watch mini-map.
+    val latestPoint: GpsPoint? = null,
+    /// Route polyline currently loaded into the recording service. The
+    /// mini-map gates on this being non-empty; free-form runs render
+    /// no map.
+    val routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng> = emptyList(),
     /// User-picked target pace for this run, in seconds per kilometre.
     /// Null means "no target — don't fire pace alerts". Set via the
     /// pre-run Pace chip; flows through `ACTION_START` to the service.
@@ -162,6 +169,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             lapCount = m.laps.size,
                             offRouteDistanceM = m.offRouteDistanceM,
                             routeRemainingM = m.routeRemainingM,
+                            latestPoint = m.latestPoint,
+                            routeWaypoints = m.routeWaypoints,
                             steps = m.steps,
                         )
                         maybePushRacePing(m)

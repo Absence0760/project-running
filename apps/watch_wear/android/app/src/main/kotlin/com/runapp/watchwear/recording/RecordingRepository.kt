@@ -46,6 +46,12 @@ object RecordingRepository {
         /// loaded for this run.
         val offRouteDistanceM: Double? = null,
         val routeRemainingM: Double? = null,
+        /// The full route polyline parsed from the start-action intent.
+        /// Set once on `startRecording`, cleared on stop. Drives the
+        /// on-watch mini-map; otherwise it's read-only display data and
+        /// the off-route / remaining math doesn't depend on what's
+        /// stored here (the service holds its own copy).
+        val routeWaypoints: List<RouteMath.LatLng> = emptyList(),
         /// Cumulative step count since this run started. Null when the
         /// device has no pedometer (or before the first sensor sample).
         /// Writes to `metadata.steps` on save when non-null.

@@ -63,6 +63,8 @@ apps/watch_wear/
             │   ├── HeartRateMonitor.kt    # Health Services MeasureClient
             │   ├── LocalRunStore.kt       # DataStore-backed retry queue
             │   ├── ui/RunWatchApp.kt      # Compose-for-Wear screens
+            │   ├── ui/RouteMiniMap.kt     # 56 dp polyline + position-dot canvas
+            │   ├── recording/MapProjection.kt  # Pure lat/lng → unit-square projection
             │   └── generated/DbRows.kt    # GENERATED — do not edit
             └── res/mipmap-*/ic_launcher.png
 ```
@@ -257,14 +259,8 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   UI doesn't yet have a low-color "ambient" branch. Wire
   `AmbientLifecycleObserver` + a dimmed Compose render path. (Glanceable
   watch face complication is a separate, larger item.)
-- **Live map during recording / live position marker on a route.** The
-  RunningScreen is still pure stats. The off-route banner + "X to go"
-  badge ship without a map (the math runs per GPS sample); the
-  *visual* position marker on the planned route is blocked on adding
-  a tile renderer, which is a multi-day platform project in its own
-  right. Not started.
-- **Live HTTP tile cache.** Blocked on the live map above;
-  pre-downloaded tiles are still the only path.
+- **Tile-backed map during recording.** v1 of "live position on planned route" shipped without tiles — `ui/RouteMiniMap.kt` renders the polyline + position dot on a midnight-coloured background. At 56 dp on a 46 mm screen raster tiles aren't legible, so the v2 tile renderer is parked behind a "we have a larger screen surface to render on" trigger (route preview on a watch face, full-screen pre-run preview, etc.) rather than the RunningScreen mini-map.
+- **Live HTTP tile cache.** Blocked on the tile renderer above; pre-downloaded tiles are still the only path.
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).

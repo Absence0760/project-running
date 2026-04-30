@@ -121,7 +121,7 @@ See [features § Route overlay during run](features.md#route-overlay-during-run)
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Live position marker on planned route | ✓ | ✗ | N/A | ✗ | Partial | Apple Watch has `RouteNavigator` scaffolded; not wired to a planned route yet. Wear OS still has no live map during recording — the marker row is blocked behind the live-map initiative, which is genuinely multi-day work and intentionally not in scope yet. |
+| Live position marker on planned route | ✓ | ✗ | N/A | ✓ | Partial | Wear OS renders a 56 dp polyline + position-dot mini-map on `RunningScreen` when a route is loaded (`ui/RouteMiniMap.kt`, projection helper `recording/MapProjection.kt`, 10 unit tests). Tile background is deliberately deferred — at this size raster tiles would be sub-legible and add fetch / cache / battery cost for no information gain. Apple Watch has `RouteNavigator` scaffolded but not yet wired. |
 | Off-route detection and alert | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: the pre-run Route chip opens a picker; the selected route's waypoints flow through `ACTION_START` into `RunRecordingService`, which calls `RouteMath.offRouteDistanceM` per GPS sample. `RunningScreen` shows an "Off route · N m" banner above the distance readout; entering the off-route state fires a double `HapticFeedback.LongPress`. Hysteresis (alert >40 m, clear <20 m) prevents boundary chatter. |
 | Distance remaining to end of route | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS: `RouteMath.routeRemainingM` runs alongside off-route per GPS sample; `RunningScreen` renders "X.XX km to go" under the elapsed-distance line whenever a route is loaded. Hidden when `selectedRoute` is null. |
 

@@ -178,7 +178,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Off-route haptic + banner on `RunningScreen` (threshold 40 m on / 20 m off, double `HapticFeedback.LongPress` on entry)
 - [x] "X.XX km to go" badge on `RunningScreen` under the distance readout
 - [ ] Route preview on watch face before starting (needs a renderer)
-- [ ] Live position on mini-map during run (needs a renderer; "Live position marker on planned route" cell in parity.md stays ✗ until this lands)
+- [x] Live position on mini-map during run — `ui/RouteMiniMap.kt` renders the planned-route polyline + a position-dot on `RunningScreen` whenever a route is loaded. Pure projection helper `recording/MapProjection.kt` (10 unit tests) handles the lat/lng → unit-square math with auto-fit bounds + padding. Tile background deferred to v2 — at 56 dp on a 46 mm screen raster tiles aren't legible anyway, and skipping them keeps power + storage costs at zero.
 
 ### Glanceable tiles and complications
 

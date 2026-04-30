@@ -187,6 +187,8 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     noGpsYet = state.distanceM == 0.0,
                     offRouteDistanceM = state.offRouteDistanceM,
                     routeRemainingM = state.routeRemainingM,
+                    routeWaypoints = state.routeWaypoints,
+                    latestPoint = state.latestPoint,
                     ambient = isAmbient,
                     onPause = vm::pause,
                     onResume = vm::resume,
@@ -811,6 +813,8 @@ private fun RunningScreen(
     noGpsYet: Boolean,
     offRouteDistanceM: Double?,
     routeRemainingM: Double?,
+    routeWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
+    latestPoint: com.runapp.watchwear.GpsPoint?,
     ambient: Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -915,6 +919,24 @@ private fun RunningScreen(
                 "%.2f km to go".format(routeRemainingM / 1000.0),
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.lilac,
+            )
+        }
+        if (routeWaypoints.isNotEmpty()) {
+            // Mini-map. Renders the planned route polyline + the runner's
+            // latest GPS fix so the runner can read their position on the
+            // route at a glance. No tile layer underneath in v1 — at 56 dp
+            // square on a 46 mm screen, raster tiles would be sub-legible
+            // anyway, and skipping them keeps power + storage costs to
+            // zero. The off-route banner above already handles the
+            // "did I drift?" feedback; this is the "where am I along the
+            // course?" view.
+            Spacer(Modifier.height(4.dp))
+            RouteMiniMap(
+                route = routeWaypoints,
+                current = latestPoint?.let {
+                    com.runapp.watchwear.recording.RouteMath.LatLng(it.lat, it.lng)
+                },
+                modifier = Modifier.size(56.dp),
             )
         }
         if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
