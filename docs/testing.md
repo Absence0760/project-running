@@ -365,6 +365,10 @@ Cross-platform contract test against `fixtures/watch_run_payload.json`. The same
 
 Kotlin/JUnit slice of the same cross-platform fixture contract. Exercises `buildRunMetadata` (the pure helper extracted from `RunViewModel.pushRun`) by feeding it cumulative-form `QueuedLap` inputs derived from the fixture's expected per-lap-delta shape and asserting it produces matching JSON. Also asserts the payload source and per-point bpm round-trip.
 
+### `apps/watch_wear/.../SupabaseErrorClassificationTest.kt` — 16 tests
+
+Regression guard for the post-stop "unauthorized" sync error. `SupabaseClient.execute` throws a typed `HttpException(code, message)` whose message is the body's `msg` / `error_description` / `error` / `message` field (in priority order), falling back to `"HTTP $code"` only when the body has none of them. The first half of the suite pins that field-precedence so a future refactor can't quietly regress it; the second half asserts `classifyDrainError` branches on `HttpException.code`, not the (often-prose) message. Includes the exact PostgREST shape that originally defeated the pre-existing `msg.contains("HTTP 401")` substring match in `drainQueue` — `{"message":"JWT expired","code":"PGRST301"}` now correctly routes to `RetryAfterRefresh`.
+
 ---
 
 ## Patterns
