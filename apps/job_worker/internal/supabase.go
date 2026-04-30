@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -206,23 +207,64 @@ func (c *SupabaseClient) UploadMatchedTrack(ctx context.Context, path string, po
 	return err
 }
 
+// ErrStaleSourceTrackURL is returned by UpdateMatchedTrackRow when the
+// conditional PATCH found zero rows — meaning a re-upload trigger
+// reset the row's source_track_url between the worker reading it and
+// writing the result. Caller treats this as "discard cleanly": the
+// match the worker just produced is for an old track, and a fresh
+// job already queued by the trigger will produce the right answer.
+var ErrStaleSourceTrackURL = errors.New("source_track_url changed during match")
+
 // UpdateMatchedTrackRow PATCHes the run_matched_tracks row with the
-// match output. Service role bypasses RLS so the standard PostgREST
-// surface works without going through a definer function.
-func (c *SupabaseClient) UpdateMatchedTrackRow(ctx context.Context, runID string, row MatchedTrackRow) error {
+// match output. When `expectedSourceTrackURL` is non-empty, the PATCH
+// is conditional on `source_track_url = <value>` — closing the
+// re-upload race at the DB level via CAS. Service role bypasses RLS
+// so the standard PostgREST surface works without going through a
+// definer function.
+//
+// Returns ErrStaleSourceTrackURL when the CAS matched 0 rows. Pass
+// the empty string to skip the CAS for callers that don't care
+// (none today; left as an escape hatch).
+func (c *SupabaseClient) UpdateMatchedTrackRow(
+	ctx context.Context,
+	runID string,
+	expectedSourceTrackURL string,
+	row MatchedTrackRow,
+) error {
 	payload, err := json.Marshal(row)
 	if err != nil {
 		return err
 	}
-	url := c.BaseURL + "/rest/v1/run_matched_tracks?run_id=eq." + runID
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(payload))
+	q := "run_id=eq." + runID
+	if expectedSourceTrackURL != "" {
+		q += "&source_track_url=eq." + url.QueryEscape(expectedSourceTrackURL)
+	}
+	endpoint := c.BaseURL + "/rest/v1/run_matched_tracks?" + q
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Prefer", "return=minimal")
-	_, err = c.do(ctx, req)
-	return err
+	// Prefer=return=representation makes PostgREST return the
+	// updated rows in the response body — that's how we count
+	// affected rows for the CAS check. With return=minimal we'd
+	// just get a 204 and have no idea whether the conditional
+	// matched.
+	req.Header.Set("Prefer", "return=representation")
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return err
+	}
+	if expectedSourceTrackURL != "" {
+		var rows []json.RawMessage
+		if err := json.Unmarshal(body, &rows); err != nil {
+			return fmt.Errorf("decode update response: %w", err)
+		}
+		if len(rows) == 0 {
+			return ErrStaleSourceTrackURL
+		}
+	}
+	return nil
 }
 
 // ReadRunTrackURL fetches just the runs.track_url for a given id. The

@@ -1361,6 +1361,7 @@ class RunMatchedTrackRow {
   static const String colErrorMessage = 'error_message';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colSourceTrackUrl = 'source_track_url';
 
   final String runId;
   final String status;
@@ -1372,6 +1373,7 @@ class RunMatchedTrackRow {
   final String? errorMessage;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? sourceTrackUrl;
 
   const RunMatchedTrackRow({
     required this.runId,
@@ -1384,6 +1386,7 @@ class RunMatchedTrackRow {
     this.errorMessage,
     required this.createdAt,
     required this.updatedAt,
+    this.sourceTrackUrl,
   });
 
   factory RunMatchedTrackRow.fromJson(Map<String, dynamic> json) => RunMatchedTrackRow(
@@ -1397,6 +1400,7 @@ class RunMatchedTrackRow {
     errorMessage: json['error_message'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    sourceTrackUrl: json['source_track_url'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1410,6 +1414,7 @@ class RunMatchedTrackRow {
     colErrorMessage: errorMessage,
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colSourceTrackUrl: sourceTrackUrl,
   };
 }
 

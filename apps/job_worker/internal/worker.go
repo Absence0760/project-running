@@ -20,7 +20,7 @@ type Backend interface {
 	DeferJob(ctx context.Context, jobID int64, delaySeconds int, errMsg *string) error
 	DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error)
 	UploadMatchedTrack(ctx context.Context, path string, points []TrackPoint) error
-	UpdateMatchedTrackRow(ctx context.Context, runID string, row MatchedTrackRow) error
+	UpdateMatchedTrackRow(ctx context.Context, runID string, expectedSourceTrackURL string, row MatchedTrackRow) error
 	ReadRunTrackURL(ctx context.Context, runID string) (string, error)
 	ReadRunForAutoLink(ctx context.Context, runID string) (RunLinkInfo, error)
 	FindMatchingRoutes(ctx context.Context, userID string, track []TrackPoint, toleranceM float64, maxResults int) ([]RouteMatchCandidate, error)
@@ -183,11 +183,11 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 		return fmt.Errorf("match: %w", err)
 	}
 
-	// Pre-write recheck. If track_url changed since the start of
-	// this job, the runner re-uploaded mid-match — our matched
-	// output is stale. Discard cleanly: no error (the OLD job
-	// completed without crashing), no write (the trigger already
-	// queued a fresh job for the NEW track).
+	// Pre-write recheck. Skips the upload + PATCH when we already
+	// know track_url has changed — saves wasted Storage writes.
+	// Doesn't replace the source_track_url CAS below; the CAS is
+	// what closes the residual TOCTOU window (re-upload between
+	// recheck and PATCH).
 	currentURL, err := w.Backend.ReadRunTrackURL(ctx, p.RunID)
 	if err != nil {
 		return fmt.Errorf("recheck track_url: %w", err)
@@ -206,13 +206,25 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 	// to align (indoor / no-GPS), or the matcher decided the noise
 	// floor was too high. The status update lets the client tell
 	// "matcher decided no" apart from "matcher hasn't run yet".
+	//
+	// Both write paths PATCH conditionally on source_track_url; an
+	// ErrStaleSourceTrackURL means the trigger reset the row out
+	// from under us between recheck and PATCH (the residual
+	// TOCTOU window). Discard cleanly — the trigger already queued
+	// a fresh job, no need to fail the current one.
 	if len(matched) < 2 {
-		if err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, MatchedTrackRow{
+		err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, trackURL, MatchedTrackRow{
 			Status:           "skipped",
 			MatchedTrackURL:  "",
 			Algorithm:        w.Matcher.Algorithm(),
 			AlgorithmVersion: w.Matcher.Version(),
-		}); err != nil {
+		})
+		if errors.Is(err, ErrStaleSourceTrackURL) {
+			w.Log.Info("source_track_url changed before PATCH; discarding stale skip",
+				"run_id", p.RunID)
+			return nil
+		}
+		if err != nil {
 			return err
 		}
 	} else {
@@ -221,13 +233,20 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 			return fmt.Errorf("upload matched: %w", err)
 		}
 		now := time.Now().UTC()
-		if err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, MatchedTrackRow{
+		err := w.Backend.UpdateMatchedTrackRow(ctx, p.RunID, trackURL, MatchedTrackRow{
 			Status:           "matched",
 			MatchedTrackURL:  matchedPath,
 			MatchedAt:        &now,
 			Algorithm:        w.Matcher.Algorithm(),
 			AlgorithmVersion: w.Matcher.Version(),
-		}); err != nil {
+		})
+		if errors.Is(err, ErrStaleSourceTrackURL) {
+			w.Log.Info("source_track_url changed before PATCH; discarding stale match",
+				"run_id", p.RunID,
+				"orphaned_storage_path", matchedPath)
+			return nil
+		}
+		if err != nil {
 			return err
 		}
 	}

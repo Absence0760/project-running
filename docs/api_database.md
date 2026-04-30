@@ -663,8 +663,8 @@ create index run_matched_tracks_pending
 
 - **`status`**: narrow union `pending | matched | failed | skipped`. Trigger inserts `pending`; the worker writes `matched` / `failed`. `skipped` is reserved for runs the worker decides not to match (too short, too noisy).
 - **RLS**: owner read only — owner of the parent run can SELECT, nobody can INSERT / UPDATE / DELETE through the API. The Go matching worker authenticates with the service role key and bypasses RLS.
-- **Reset on re-upload**: when `runs.track_url` is updated to a different value, the trigger resets the row back to `pending` (clears `matched_track_url`, `attempts`, `matched_at`, `error_message`, `algorithm` / `algorithm_version`) so the matcher re-processes against the fresh data.
-- **Caveat**: if a re-upload lands while a previous match is in flight, the trigger's reset races the worker's finish. The worker is expected to do an attempts-CAS at finish time (write only when `attempts` is the value it claimed at) — without that, the worker can clobber the reset. The Go service implementation owns this contract.
+- **Reset on re-upload**: when `runs.track_url` is updated to a different value, the trigger resets the row back to `pending` (clears `matched_track_url`, `attempts`, `matched_at`, `error_message`, `algorithm` / `algorithm_version`) and stamps `source_track_url` with `NEW.track_url` so the matcher re-processes against the fresh data.
+- **`source_track_url`** (added in migration `20260611_001`): the `runs.track_url` value the row's match output is tagged against. Set by the trigger on every insert and every reset. The Go worker reads this at job start, runs the matcher, then PATCHes the row conditionally on `?source_track_url=eq.<value>`. A re-upload landing between read and write changes `source_track_url`, the conditional PATCH affects 0 rows, the worker discards its stale result and the fresh job (already queued by the trigger) produces the right answer. Closes the re-upload race at the DB level — no application-side attempts-CAS needed.
 
 ### `jobs`
 

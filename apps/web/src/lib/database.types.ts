@@ -1129,6 +1129,7 @@ export type Database = {
           matched_at: string | null
           matched_track_url: string | null
           run_id: string
+          source_track_url: string | null
           status: string
           updated_at: string
         }
@@ -1141,6 +1142,7 @@ export type Database = {
           matched_at?: string | null
           matched_track_url?: string | null
           run_id: string
+          source_track_url?: string | null
           status?: string
           updated_at?: string
         }
@@ -1153,6 +1155,7 @@ export type Database = {
           matched_at?: string | null
           matched_track_url?: string | null
           run_id?: string
+          source_track_url?: string | null
           status?: string
           updated_at?: string
         }

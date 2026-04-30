@@ -82,27 +82,34 @@ markers — same shape as the watch's drain classifier in
 
 ## Re-upload race
 
-If a runner re-uploads a track while a previous match is in flight,
-the `runs_enqueue_match_job_trigger` resets the `run_matched_tracks`
-row to `pending`. Without the recheck below, the in-flight worker
-would persist its `matched` state tagged against the *old* track over
-the trigger's reset.
+Closed at the DB level via a `source_track_url` CAS (migration
+`20260611_001_run_matched_tracks_cas.sql`). The trigger writes
+`NEW.track_url` into `run_matched_tracks.source_track_url` on every
+insert and every reset; the worker captures `runs.track_url` at job
+start and PATCHes the row conditionally on
+`?source_track_url=eq.<value>` via `Prefer: return=representation`.
+A re-upload that lands between the worker's read and write changes
+`source_track_url`, the conditional PATCH affects 0 rows, the worker
+client returns `ErrStaleSourceTrackURL`, and the worker logs +
+returns `nil` — the OLD job ends cleanly via `finish_job(done)`,
+the NEW job already queued by the trigger produces the right
+result.
 
-**Mitigation**: `handleMapMatch` reads `runs.track_url` once at the
-start of the job (the URL the matcher operates against) and re-reads
-it just before the write. If the URL changed, the worker logs and
-returns nil — the OLD job ends cleanly via `finish_job(done)` and
-the NEW job already queued by the trigger produces the fresh
-result. Pinned by `TestWorker_ReuploadDuringMatchDiscardsResult`.
+The pre-write `track_url` recheck is kept as a fast path: it skips
+the upload + PATCH entirely when the change is already visible at
+read time, saving a wasted Storage write. Defence in depth — the
+CAS is what closes the actual race; the recheck is for niceness.
 
-**Residual window**: the recheck shrinks the race from O(match
-duration) to O(network round-trip between recheck and PATCH). To
-fully close it, add a `source_track_url text` column to
-`run_matched_tracks`, have the trigger set it on every reset, and
-have the worker PATCH conditionally on
-`?source_track_url=eq.<value-it-matched-against>`. That's the
-upgrade path when a real engine lands; the recheck is enough while
-the matcher is the deterministic passthrough.
+Pinned by:
+- `TestWorker_ReuploadDuringMatchDiscardsResult` — recheck path.
+- `TestWorker_StaleSourceTrackURLDiscardsResult` — CAS path
+  (recheck would have passed but the row was reset under the
+  worker's feet between recheck and PATCH).
+
+If the matched gz was uploaded before the CAS rejected the PATCH,
+the file is now an orphan in Storage. The worker logs the path so
+an operator can sweep these later; an automated cleanup job would
+be the natural follow-up.
 
 ## Local dev
 

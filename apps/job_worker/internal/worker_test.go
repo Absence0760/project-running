@@ -36,6 +36,11 @@ type fakeBackend struct {
 	linkErr         error
 	// Auto-link outputs
 	links []linkCall
+	// CAS: when non-empty, UpdateMatchedTrackRow returns
+	// ErrStaleSourceTrackURL whenever the worker's
+	// expectedSourceTrackURL doesn't equal this value. Lets a test
+	// model "trigger reset the row between recheck and PATCH".
+	casExpected string
 
 	// Errors to inject — return on the next call to that method.
 	claimErr      error
@@ -150,13 +155,22 @@ func (f *fakeBackend) UploadMatchedTrack(_ context.Context, path string, pts []T
 	return nil
 }
 
-func (f *fakeBackend) UpdateMatchedTrackRow(_ context.Context, runID string, row MatchedTrackRow) error {
+func (f *fakeBackend) UpdateMatchedTrackRow(
+	_ context.Context, runID string, expectedSourceTrackURL string, row MatchedTrackRow,
+) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.updateRowErr != nil {
 		err := f.updateRowErr
 		f.updateRowErr = nil
 		return err
+	}
+	// CAS: the test sets `casExpected` to whatever the row's
+	// source_track_url is "currently". Mismatch surfaces the same
+	// sentinel the production client returns.
+	if expectedSourceTrackURL != "" && f.casExpected != "" &&
+		expectedSourceTrackURL != f.casExpected {
+		return ErrStaleSourceTrackURL
 	}
 	f.rowSets = append(f.rowSets, rowSet{RunID: runID, Row: row})
 	return nil
@@ -367,6 +381,42 @@ func TestWorker_ReuploadDuringMatchDiscardsResult(t *testing.T) {
 	}
 	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
 		t.Errorf("finish=%+v, want one done", be.finished)
+	}
+}
+
+// ---- CAS race ----------------------------------------------------------
+
+// Source-track-url CAS: when the trigger has reset the row's
+// source_track_url between the worker's recheck and its PATCH, the
+// PATCH targets zero rows and the worker discards cleanly. Same
+// "OLD job exits done, NEW job already queued by trigger produces
+// the right result" outcome as the recheck path — this closes the
+// residual TOCTOU window that the recheck alone couldn't.
+func TestWorker_StaleSourceTrackURLDiscardsResult(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001}, {Lat: 1.002, Lng: 2.002},
+	}
+	// Recheck would pass (URL matches). But the row's
+	// source_track_url has already changed under the worker's
+	// feet — UpdateMatchedTrackRow's CAS catches it.
+	be.casExpected = "user-1/run-1.v2.json.gz"
+	be.jobs = []*Job{{
+		ID: 41, Kind: "map_match",
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.rowSets); got != 0 {
+		t.Errorf("rowSets=%d, want 0 (CAS discarded the write)", got)
+	}
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
+		t.Errorf("finish=%+v, want done despite CAS miss", be.finished)
 	}
 }
 
