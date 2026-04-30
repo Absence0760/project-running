@@ -196,4 +196,43 @@ class RouteMiniMapWiringTest {
             Regex("""track\s*=\s*[a-zA-Z.]*trackOverlayPoints""").containsMatchIn(src),
         )
     }
+
+    @Test
+    fun `RunningScreen controls auto-hide unless paused`() {
+        // Why: the running-mode UX hides the pause / lap / stop cluster
+        // 5 s after the last interaction so the route takes the
+        // foreground. While paused, controls stay visible so the
+        // runner doesn't hunt for "Resume" with a hidden tap. If
+        // either side of this contract regresses (timer dropped, or
+        // paused branch reversed) the screen becomes either always-
+        // cluttered or always-empty — both bad.
+        val src = read("ui/RunWatchApp.kt")
+        assertTrue(
+            "RunningScreen must wrap controls in AnimatedVisibility(visible = controlsVisible, ...)",
+            Regex("""AnimatedVisibility[^)]*visible\s*=\s*controlsVisible""", RegexOption.DOT_MATCHES_ALL)
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "RunningScreen must keep controls visible while paused (paused short-circuit on the auto-hide effect)",
+            Regex("""if\s*\(paused\)\s*return@LaunchedEffect""").containsMatchIn(src),
+        )
+    }
+
+    @Test
+    fun `RunViewModel pre-fetches tiles when a route is selected`() {
+        // Why: the whole point of the pre-fetch is "user picks a route
+        // while connected → tiles available even if the watch goes
+        // off-grid mid-run". Dropping the prefetch call would compile
+        // and ship a feature that silently doesn't work — the failure
+        // mode only surfaces in the field, when the runner is already
+        // on the course.
+        val src = File("src/main/kotlin/com/runapp/watchwear/RunViewModel.kt").readText()
+        assertTrue(
+            "RunViewModel.selectRoute must call tileSource.prefetch(...)",
+            Regex(
+                """fun\s+selectRoute[^}]*tileSource\.prefetch\s*\(""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
+        )
+    }
 }

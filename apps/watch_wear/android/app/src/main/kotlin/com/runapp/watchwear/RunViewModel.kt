@@ -122,6 +122,15 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val routeStore = LocalRouteStore(application)
     private val checkpoints = CheckpointStore(application)
     private val networkWatcher = NetworkWatcher(application)
+    /// MapTiler tile source — lazy so the OkHttp client + 50 MB disk
+    /// cache aren't allocated until the runner actually picks a route.
+    /// Used both by the route picker (eager pre-fetch on select) and
+    /// by `RouteMiniMap` (on-demand fetch as tiles enter the viewport).
+    /// Both code paths share OkHttp's disk cache, so a tile fetched
+    /// during pre-fetch hits cache when the running screen draws it.
+    private val tileSource by lazy {
+        com.runapp.watchwear.ui.TileSource(application)
+    }
     private val raceClient = RaceSessionClient(
         baseUrl = BuildConfig.SUPABASE_URL,
         anonKey = BuildConfig.SUPABASE_ANON_KEY,
@@ -545,6 +554,22 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             selectedRoute = route,
             stage = Stage.PreRun,
         )
+        // Eagerly download the tiles for this route while we still
+        // have connectivity (paired phone, wifi). If the runner heads
+        // off-grid mid-run, the route + position dot still render on
+        // actual streets instead of midnight + polyline. 400 px target
+        // matches the running-screen viewport on a 46 mm watch — the
+        // 56 dp pre-run preview tiles are a strict subset.
+        viewModelScope.launch {
+            try {
+                tileSource.prefetch(route.toLatLngs(), viewportPx = 400f)
+            } catch (e: Exception) {
+                // Pre-fetch is L3 best-effort. A failure here just means
+                // the running screen falls back to on-demand fetching,
+                // which still works as long as connectivity holds.
+                android.util.Log.w("RunViewModel", "tile prefetch failed", e)
+            }
+        }
     }
 
     fun clearSelectedRoute() {

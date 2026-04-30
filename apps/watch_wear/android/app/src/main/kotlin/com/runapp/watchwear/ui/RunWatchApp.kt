@@ -85,9 +85,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 
 @Composable
 fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false) {
@@ -917,18 +923,51 @@ private fun RunningScreen(
         return
     }
 
-    // Map fills the whole watch face as a background; text + buttons
-    // overlay on top. Renders whenever there's anything to draw — a
-    // planned route, the runner's track-so-far, or just a current GPS
-    // fix. Hidden until the first signal lands so an empty Canvas
-    // doesn't sit behind the metrics during indoor / no-GPS mode. The
-    // round screen mask handles corner rounding, so we pass
-    // `RectangleShape` to suppress the inner 8 dp clip the inline
-    // version uses.
+    // Map fills the whole watch face as a background. Metrics overlay
+    // in the centre; pause / lap / stop buttons cluster against the
+    // bottom edge of the round face. The button cluster auto-hides
+    // 5 s after the last interaction so the runner gets an
+    // unobstructed view of the route. Tap anywhere on the map to
+    // bring the buttons back. While paused, controls stay visible
+    // so the runner can resume without a hidden tap.
     val showMiniMap = routeWaypoints.isNotEmpty() ||
         trackOverlayPoints.size >= 2 ||
         latestPoint != null
-    Box(modifier = Modifier.fillMaxSize()) {
+
+    var controlsVisible by remember { mutableStateOf(true) }
+    // Bumped on every interaction (tap or button press) to restart the
+    // auto-hide delay. Each new value re-keys the LaunchedEffect, which
+    // cancels the old delay coroutine and starts a fresh 5 s countdown.
+    var revealTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(revealTick, paused) {
+        if (paused) return@LaunchedEffect
+        delay(5_000)
+        controlsVisible = false
+    }
+    val reveal: () -> Unit = {
+        controlsVisible = true
+        revealTick++
+    }
+
+    // Glanceable text styles bake a subtle shadow into the time +
+    // distance so they pop against street tiles. Without it, white
+    // parchment on a busy `streets-v2-dark` tile (say, over a road
+    // label) loses contrast at running pace.
+    val timeStyle = MaterialTheme.typography.display2.copy(
+        shadow = Shadow(Color.Black.copy(alpha = 0.7f), Offset(0f, 1f), 6f),
+    )
+    val captionShadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 0.5f), 3f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                // Detect taps on the map background. Any composable
+                // above (like the buttons in the AnimatedVisibility
+                // block) consumes its own clicks before this fires.
+                detectTapGestures { reveal() }
+            },
+    ) {
         if (showMiniMap) {
             RouteMiniMap(
                 route = routeWaypoints,
@@ -940,115 +979,140 @@ private fun RunningScreen(
                 clipShape = androidx.compose.ui.graphics.RectangleShape,
             )
         }
+
+        // Centre metrics column. Lives behind the buttons (in a Box
+        // sense — z is top-to-bottom in declaration order). No tap
+        // handler so taps pass through to the background `pointerInput`.
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-        if (!locationAvailable) {
+            if (!locationAvailable) {
+                Text(
+                    if (noGpsYet) "No GPS — time only" else "GPS lost",
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.warning,
+                )
+                Spacer(Modifier.height(2.dp))
+            }
+            if (wasOffRoute && offRouteDistanceM != null) {
+                Text(
+                    "Off route · ${offRouteDistanceM.toInt()} m",
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.warning,
+                )
+                Spacer(Modifier.height(2.dp))
+            }
             Text(
-                // "No GPS — time only" when we've never had a fix
-                // (indoor / treadmill); "GPS lost" once we've had at
-                // least one point and then lost it, so the user knows
-                // this is a recoverable mid-run drop vs. the intended
-                // indoor mode.
-                if (noGpsYet) "No GPS — time only" else "GPS lost",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.warning,
+                formatElapsed(elapsedMs),
+                style = timeStyle,
+                color = if (paused) DuskPalette.haze else DuskPalette.parchment,
             )
             Spacer(Modifier.height(2.dp))
-        }
-        if (wasOffRoute && offRouteDistanceM != null) {
             Text(
-                "Off route · ${offRouteDistanceM.toInt()} m",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.warning,
+                "%.2f km".format(distanceM / 1000.0),
+                style = MaterialTheme.typography.body2.copy(shadow = captionShadow),
             )
-            Spacer(Modifier.height(2.dp))
+            if (routeRemainingM != null && routeRemainingM > 1.0) {
+                Text(
+                    "%.2f km to go".format(routeRemainingM / 1000.0),
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.lilac,
+                )
+            }
+            if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
+                Text(
+                    "${formatPace(paceSecPerKm)} /km",
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.haze,
+                )
+            }
+            if (bpm != null) {
+                Text(
+                    "$bpm bpm",
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.coral,
+                )
+            }
+            if (steps != null && steps > 0) {
+                Text(
+                    "$steps steps",
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.haze,
+                )
+            }
+            if (lapCount > 0) {
+                Text(
+                    "Lap $lapCount",
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.lilac,
+                )
+            }
         }
-        Text(
-            formatElapsed(elapsedMs),
-            style = MaterialTheme.typography.display2,
-            color = if (paused) DuskPalette.haze else DuskPalette.parchment,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            "%.2f km".format(distanceM / 1000.0),
-            style = MaterialTheme.typography.body2,
-        )
-        if (routeRemainingM != null && routeRemainingM > 1.0) {
-            Text(
-                "%.2f km to go".format(routeRemainingM / 1000.0),
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.lilac,
-            )
-        }
-        if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
-            Text(
-                "${formatPace(paceSecPerKm)} /km",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.haze,
-            )
-        }
-        if (bpm != null) {
-            Text(
-                "$bpm bpm",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.coral,
-            )
-        }
-        if (steps != null && steps > 0) {
-            Text(
-                "$steps steps",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.haze,
-            )
-        }
-        if (lapCount > 0) {
-            Text(
-                "Lap $lapCount",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.lilac,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        androidx.compose.foundation.layout.Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+
+        // Edge-anchored translucent button cluster. Animates in/out
+        // so the runner gets a clean view of the route once they've
+        // confirmed their pace. `align(BottomCenter)` puts the row
+        // against the inscribed circle's bottom chord; padding
+        // pushes them inside the round bezel on a typical 46 mm face.
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 18.dp),
         ) {
-            if (paused) {
-                Button(
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onResume()
-                    },
-                    modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
-                ) {
-                    Text("Go")
-                }
-            } else {
-                Button(
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPause()
-                    },
-                    modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
-                    colors = ButtonDefaults.secondaryButtonColors(),
-                ) {
-                    Text("||")
-                }
-            }
-            Button(
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onLap()
-                },
-                modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
-                colors = ButtonDefaults.secondaryButtonColors(),
+            // Translucent backgrounds: dark glass over the tile layer.
+            // Alpha is high enough that the icon stays legible, low
+            // enough that the route is visible through the buttons —
+            // the runner can still see they're on course while
+            // glancing at the controls.
+            val translucent = ButtonDefaults.secondaryButtonColors(
+                backgroundColor = Color.Black.copy(alpha = 0.55f),
+                contentColor = DuskPalette.parchment,
+            )
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text("Lap", style = MaterialTheme.typography.caption2)
+                if (paused) {
+                    Button(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            reveal()
+                            onResume()
+                        },
+                        modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
+                    ) {
+                        Text("Go", style = MaterialTheme.typography.caption2)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            reveal()
+                            onPause()
+                        },
+                        modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
+                        colors = translucent,
+                    ) {
+                        Text("||")
+                    }
+                }
+                Button(
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        reveal()
+                        onLap()
+                    },
+                    modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
+                    colors = translucent,
+                ) {
+                    Text("Lap", style = MaterialTheme.typography.caption3)
+                }
+                HoldToStopButton(onStop = onStop)
             }
-            HoldToStopButton(onStop = onStop)
-        }
         }
     }
 }

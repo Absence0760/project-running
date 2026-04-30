@@ -7,7 +7,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.runapp.watchwear.BuildConfig
 import com.runapp.watchwear.recording.MercatorTiles
+import com.runapp.watchwear.recording.RouteMath
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Cache
 import okhttp3.OkHttpClient
@@ -85,6 +88,28 @@ class TileSource(context: Context) {
                 // run-recording path. Caller draws the polyline + dot
                 // on midnight regardless.
                 null
+            }
+        }
+    }
+
+    /// Eagerly download all tiles covering `points` at the zoom that
+    /// `MercatorTiles.fitBounds` would pick for a `viewportPx` viewport.
+    /// Designed for the route-selection moment: while the runner has
+    /// connectivity (paired phone, wifi), we pull the tiles they'll
+    /// need at run time so a cellular drop mid-run still leaves the
+    /// route + their position visible on actual streets.
+    ///
+    /// Fans out concurrently — the OkHttp dispatcher caps at 64
+    /// in-flight by default, plenty for the ~30 tiles a typical
+    /// route covers. Failures are silent (per `load`); a partially-
+    /// fetched cache is still better than nothing.
+    suspend fun prefetch(points: List<RouteMath.LatLng>, viewportPx: Float) {
+        if (!enabled || points.isEmpty()) return
+        val centre = MercatorTiles.fitBounds(points, viewportPx) ?: return
+        val tiles = MercatorTiles.visibleTiles(centre, viewportPx)
+        coroutineScope {
+            tiles.forEach { tile ->
+                launch { load(tile) }
             }
         }
     }
