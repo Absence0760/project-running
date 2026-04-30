@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -501,16 +502,14 @@ private fun PreRunScreen(
             }
         }
 
-        // Centre: BIG primary action. Lifted ~14 dp above geometric
-        // centre so it doesn't kiss the chip rail at the bottom —
-        // the rail can grow to two rows when "Allow background" or
-        // "Sign in" auxiliary chips appear, and a dead-centre Start
-        // would get overlaid by them on those branches.
+        // Centre: BIG primary action, dead centre. The bottom chips
+        // are positioned independently along the inscribed curve
+        // so there's no chip rail row competing for centre-band
+        // pixels — Start can anchor the screen geometrically.
         Button(
             onClick = onStart,
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = (-14).dp)
                 .size(ButtonDefaults.LargeButtonSize),
         ) {
             Text(
@@ -519,79 +518,87 @@ private fun PreRunScreen(
             )
         }
 
-        // Bottom arc: settings chip rail. Three chips share the row
-        // via weight(1f) so labels truncate to ellipsis instead of
-        // clipping mid-character ("Richmo"). Translucent backgrounds
-        // let the route preview show through behind them. The
-        // battery-optimisation warning was previously a fourth chip
-        // here, but it pushed the rail up into Start; it now lives
-        // as a small icon at TopStart.
-        Column(
+        // Bottom arc: three settings chips positioned independently
+        // so they hug the inscribed circle's curve, matching the
+        // running screen's Pause / Lap / Stop pattern. Centre chip
+        // (Route, or Sign-in when unauthed) sits at the lowest
+        // point; Activity and Pace sit on the sides slightly higher
+        // so their corners don't get clipped by the bezel. widthIn
+        // caps each chip — long route names ellipsis-truncate but
+        // can't push into the side chips.
+        val translucentChip = ChipDefaults.secondaryChipColors(
+            backgroundColor = Color.Black.copy(alpha = 0.55f),
+            contentColor = DuskPalette.parchment,
+        )
+        CompactChip(
+            onClick = onCycleActivity,
+            label = {
+                Text(
+                    activityType.replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.caption3,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            },
+            colors = translucentChip,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 18.dp, start = 14.dp, end = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val translucentChip = ChipDefaults.secondaryChipColors(
-                backgroundColor = Color.Black.copy(alpha = 0.55f),
-                contentColor = DuskPalette.parchment,
-            )
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                CompactChip(
-                    onClick = onCycleActivity,
-                    label = {
-                        Text(
-                            activityType.replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.caption3,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        )
-                    },
-                    colors = translucentChip,
-                    modifier = Modifier.weight(1f),
-                )
-                if (authed) {
-                    CompactChip(
-                        onClick = onOpenRoutePicker,
-                        label = {
-                            Text(
-                                selectedRouteName ?: "Route",
-                                style = MaterialTheme.typography.caption3,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        },
-                        colors = translucentChip,
-                        modifier = Modifier.weight(1f),
+                .align(Alignment.BottomStart)
+                .padding(start = 8.dp, bottom = 30.dp)
+                .widthIn(max = 60.dp),
+        )
+        if (authed) {
+            CompactChip(
+                onClick = onOpenRoutePicker,
+                label = {
+                    Text(
+                        selectedRouteName ?: "Route",
+                        style = MaterialTheme.typography.caption3,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
-                }
-                CompactChip(
-                    onClick = onCyclePace,
-                    label = {
-                        Text(
-                            if (targetPaceSecPerKm == null) "Pace"
-                            else formatPace(targetPaceSecPerKm.toDouble()),
-                            style = MaterialTheme.typography.caption3,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        )
-                    },
-                    colors = translucentChip,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            if (!authed) {
-                Spacer(Modifier.height(4.dp))
-                CompactChip(
-                    onClick = onSignIn,
-                    label = { Text("Sign in", style = MaterialTheme.typography.caption2) },
-                    colors = translucentChip,
-                )
-            }
+                },
+                colors = translucentChip,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp)
+                    .widthIn(max = 100.dp),
+            )
+        } else {
+            // Replaces the Route chip with Sign-in when unauthed.
+            // Same position so the curve looks identical regardless
+            // of auth state.
+            CompactChip(
+                onClick = onSignIn,
+                label = {
+                    Text(
+                        "Sign in",
+                        style = MaterialTheme.typography.caption3,
+                        maxLines = 1,
+                    )
+                },
+                colors = translucentChip,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp),
+            )
         }
+        CompactChip(
+            onClick = onCyclePace,
+            label = {
+                Text(
+                    if (targetPaceSecPerKm == null) "Pace"
+                    else formatPace(targetPaceSecPerKm.toDouble()),
+                    style = MaterialTheme.typography.caption3,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            },
+            colors = translucentChip,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 8.dp, bottom = 30.dp)
+                .widthIn(max = 60.dp),
+        )
 
         // Top-corner icon buttons. Sign-out at TopEnd, "fix battery
         // optimisation" warning at TopStart — both get the same
