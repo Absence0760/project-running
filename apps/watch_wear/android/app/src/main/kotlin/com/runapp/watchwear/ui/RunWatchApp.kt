@@ -544,30 +544,67 @@ private fun PreRunScreen(
                     textAlign = TextAlign.Center,
                 )
             }
+            // Route name pill at the top arc — only when a route is
+            // picked. Replaces the centre Route chip in the bottom
+            // cluster so Start can take the centre-bottom slot. Tap
+            // re-opens the picker, same as the bottom chip would.
+            if (authed && selectedRouteWaypoints.isNotEmpty() && selectedRouteName != null) {
+                Spacer(Modifier.height(2.dp))
+                CompactChip(
+                    onClick = onOpenRoutePicker,
+                    label = {
+                        Text(
+                            selectedRouteName,
+                            style = MaterialTheme.typography.caption3,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(
+                        backgroundColor = Color.White.copy(alpha = 0.15f),
+                        contentColor = DuskPalette.parchment,
+                    ),
+                    modifier = Modifier.widthIn(max = 130.dp),
+                )
+            }
         }
 
-        // Primary action. Position is route-dependent:
-        //   * No route ⇒ dead centre, anchoring the otherwise-empty
-        //     midnight screen.
-        //   * Route picked ⇒ shifted down so the route preview map
-        //     above the button is unobstructed. Without this the
-        //     60-dp Start button covers a chunk of the polyline
-        //     right where the runner wants to confirm the shape.
-        // Re-evaluates whenever a route is picked/cleared, so the
-        // button "comes back" to centre naturally on clear.
+        // Primary action. Two distinct shapes depending on context:
+        //   * No route ⇒ BIG circular Button dead centre, anchoring
+        //     the otherwise-empty midnight screen.
+        //   * Route picked ⇒ small CompactChip at the bottom-centre
+        //     of the curved cluster, alongside Activity / Pace.
+        //     Same chip size as its neighbours so the four-button
+        //     arc reads as a uniform row, and the route preview
+        //     above the cluster stays unobstructed. Route name is
+        //     surfaced as a tappable pill in the top status area.
         val routeSelected = authed && selectedRouteWaypoints.isNotEmpty()
-        val startAlign = if (routeSelected) Alignment.BottomCenter else Alignment.Center
-        val startBottomPadding = if (routeSelected) 58.dp else 0.dp
-        Button(
-            onClick = onStart,
-            modifier = Modifier
-                .align(startAlign)
-                .padding(bottom = startBottomPadding)
-                .size(ButtonDefaults.LargeButtonSize),
-        ) {
-            Text(
-                "Start",
-                style = MaterialTheme.typography.title3,
+        if (!routeSelected) {
+            Button(
+                onClick = onStart,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(ButtonDefaults.LargeButtonSize),
+            ) {
+                Text(
+                    "Start",
+                    style = MaterialTheme.typography.title3,
+                )
+            }
+        } else {
+            CompactChip(
+                onClick = onStart,
+                label = {
+                    Text(
+                        "Start",
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = ChipDefaults.primaryChipColors(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 14.dp)
+                    .widthIn(max = 100.dp),
             )
         }
 
@@ -604,12 +641,16 @@ private fun PreRunScreen(
                 .padding(start = 22.dp, bottom = 36.dp)
                 .widthIn(max = 56.dp),
         )
-        if (authed) {
+        if (authed && !routeSelected) {
+            // Bottom-centre Route picker chip — only when no route
+            // is picked yet. When a route IS picked, Start takes
+            // this slot in the curve and the route name pill
+            // appears at the top arc.
             CompactChip(
                 onClick = onOpenRoutePicker,
                 label = {
                     Text(
-                        selectedRouteName ?: "Route",
+                        "Route",
                         style = MaterialTheme.typography.caption3,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -621,7 +662,7 @@ private fun PreRunScreen(
                     .padding(bottom = 14.dp)
                     .widthIn(max = 100.dp),
             )
-        } else {
+        } else if (!authed) {
             // Replaces the Route chip with Sign-in when unauthed.
             // Same position so the curve looks identical regardless
             // of auth state.
