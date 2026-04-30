@@ -380,7 +380,7 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Server-side HMM map matching | N/A | N/A | N/A | N/A | N/A | Server-side feature — every client picks up the snapped trace uniformly. Schema + auto-enqueue trigger + Go worker (`apps/job_worker/`) shipped; the engine itself is still a `PassthroughMatcher` shim until Valhalla / OSRM / GraphHopper is selected. Tracked under [roadmap § Future — Map matching](roadmap.md). |
+| Server-side HMM map matching | N/A | N/A | N/A | N/A | N/A | Server-side feature — every client picks up the snapped trace uniformly. Schema + auto-enqueue trigger + Go worker (`apps/job_worker/`) shipped. Engine pick is **OSRM** (`/match/v1/foot`) — `OSRMMatcher` in `apps/job_worker/internal/matcher_osrm.go` is selected when `OSRM_URL` is set; otherwise the worker stays on the passthrough shim so the rest of the pipeline can be exercised without the engine. Local dev stack at `apps/job_worker/osrm/`. Production deploy of the engine still pending. Tracked under [roadmap § Future — Map matching](roadmap.md). |
 | Display matched track on run detail | ✗ | ✗ | ✓ | N/A | N/A | Web: `/runs/[id]` fetches `run_matched_tracks` on mount via `fetchRunMatchedTrack`; when `status='matched'` the matched line replaces the raw track on `RunMap`. Stats below the map (distance, splits, elevation, pace zones) continue to derive from the raw track — those are properties of what the runner actually did, independent of how the line is projected. A `match-pill` overlay surfaces `pending` / `failed` / `skipped` so users know whether the worker has run yet. Mobile not yet wired. |
 
 ---

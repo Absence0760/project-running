@@ -910,6 +910,22 @@ This is intentional, not technical debt.
 
 ---
 
+## 45. Server-side map matching uses OSRM, not Valhalla Meili or GraphHopper
+
+**Decided:** The first real `Matcher` in `apps/job_worker/` is `OSRMMatcher` (`apps/job_worker/internal/matcher_osrm.go`), calling a self-hosted OSRM instance's `/match/v1/foot` endpoint. The worker selects it when `OSRM_URL` is set; otherwise the `PassthroughMatcher` shim stays in place so the rest of the pipeline (claim → download → match → upload → finish) is exercisable without an engine running. Local dev stack lives at `apps/job_worker/osrm/` (Geofabrik PBF + `osrm-extract` / `osrm-partition` / `osrm-customize` Makefile + `docker compose` running `osrm-routed --algorithm mld`).
+
+**Why OSRM, not Valhalla or GraphHopper:**
+- *Operational footprint.* OSRM is one Go-friendly Docker container (`osrm/osrm-backend`); the entire build is `make download && make build && docker compose up`. Valhalla bundles Meili plus a routing stack we don't use; GraphHopper is a JVM service with the heap-tuning carrying-cost that comes with that. Single-purpose binary wins.
+- *API ergonomics.* OSRM's `/match` is one HTTP call: send the trace as `lng,lat;lng,lat;…`, get a snapped GeoJSON LineString back. Valhalla's Meili speaks a richer JSON schema (per-point time / accuracy / search radius) — useful eventually, overkill for v1. GraphHopper's match endpoint returns gpx-style structures we'd have to translate.
+- *Profile fit.* The bundled `foot.lua` profile preserves parks, trails, and unpaved paths — exactly the network running tracks live on. `car.lua` would discard half of them. Valhalla and GraphHopper have pedestrian profiles too, but OSRM's profile config is one Lua file in the same image, no separate config tree.
+- *Re-match cost.* Every matched track is keyed on `(algorithm, algorithm_version)` so swapping engines later is a re-match, not a schema change. The cost of getting the v1 pick "wrong" is bounded by re-running the queue against a different `Matcher` — cheap. So we optimised for shippability over engine purity.
+
+**Trade-off:** OSRM's HMM is less tunable than Valhalla's Meili (no per-point GPS-noise input; no segment-confidence threshold knobs). For a 5 km urban run that's fine; for a 100 km ultra with hours of weak signal it'll occasionally produce a NoMatch where Meili would still snap. Worker handles that as `status='skipped'`, not `failed`, so the run is preserved and re-matchable when we have a better engine to point it at. Also: OSRM's URL-only `/match` GET caps coordinate count by URL length; chunking is in `OSRMMatcher.Match` (default 100 points per call, stitched back together).
+
+**Don't re-litigate unless:** we see a sustained skip rate above ~5% on real user tracks (then re-evaluate Meili — its richer per-point metadata is what would help); we hit the chunking ceiling on multi-hour ultras (might want a single `POST /match` against a different engine instead of splitting); or we want offline / on-device matching, which is its own multi-week effort tracked under roadmap §531.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
