@@ -1353,174 +1353,146 @@ private fun PostRunScreen(
     onStartNext: () -> Unit,
     onDiscard: () -> Unit,
 ) {
-    val listState = rememberScalingLazyListState()
-    Box(modifier = Modifier.fillMaxSize()) {
-        ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            // Auto-center the first item so the distance stat lands in the
-            // middle of the round face instead of colliding with TimeText.
-            autoCentering = AutoCenteringParams(itemIndex = 0),
-            contentPadding = PaddingValues(horizontal = 12.dp),
-        ) {
-            if (summary != null) {
-                // Route preview thumbnail at the top of the column —
-                // the actual shape the runner just ran. Renders
-                // tiles + the recorded track polyline; no `current`
-                // because the run is over. Hidden for indoor runs
-                // where the track has fewer than 2 points.
-                if (summary.trackLatLngs.size >= 2) {
-                    item {
-                        RouteMiniMap(
-                            route = emptyList(),
-                            current = null,
-                            track = summary.trackLatLngs,
-                            modifier = Modifier.size(96.dp),
-                        )
-                    }
-                }
-                item {
-                    Text(
-                        "%.2f km".format(summary.distanceM / 1000.0),
-                        style = MaterialTheme.typography.title2,
-                    )
-                }
-                item {
-                    Text(
-                        formatDuration(summary.durationS),
-                        style = MaterialTheme.typography.caption2,
-                        color = DuskPalette.haze,
-                    )
-                }
-                if (summary.avgBpm != null) {
-                    item {
-                        Text(
-                            "${summary.avgBpm.toInt()} bpm avg",
-                            style = MaterialTheme.typography.caption3,
-                            color = DuskPalette.error,
-                        )
-                    }
-                }
-            }
-            if (syncError != null) {
-                item {
-                    Text(
-                        syncError,
-                        style = MaterialTheme.typography.caption3,
-                        color = DuskPalette.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
+    // Same edge-anchored Box pattern as PreRun + Running. The recorded
+    // track fills the watch face as a background; headline stats hug
+    // the top arc; small curved buttons live at the bottom arc; the
+    // destructive Discard sits in the top-end corner. Splits aren't
+    // rendered on-watch — the phone / web run-detail view shows them
+    // in a much more readable layout, and dropping them here keeps
+    // the route preview unobstructed (which the runner just asked
+    // for). One run-only summary plus the route shape.
+    val captionShadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 0.5f), 3f)
+    val titleShadow = Shadow(Color.Black.copy(alpha = 0.7f), Offset(0f, 1f), 6f)
 
-            // Splits table — one row per lap. Rendered compactly with
-            // the lap number, pace for that split, and cumulative
-            // distance. Hides entirely when the user didn't tap Lap.
-            if (summary != null && summary.laps.isNotEmpty()) {
-                item {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Background: the actual recorded track. Hidden for indoor
+        // runs (no GPS fixes) — the screen falls back to the midnight
+        // background, which still reads cleanly with stats on top.
+        if (summary != null && summary.trackLatLngs.size >= 2) {
+            RouteMiniMap(
+                route = emptyList(),
+                current = null,
+                track = summary.trackLatLngs,
+                modifier = Modifier.fillMaxSize(),
+                clipShape = androidx.compose.ui.graphics.RectangleShape,
+            )
+        }
+
+        // Top stats: distance + duration + (avg bpm). Same vertical
+        // anchor as the running screen's time + distance so the
+        // pre→run→post visual rhythm is consistent.
+        if (summary != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 28.dp, start = 16.dp, end = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "%.2f km".format(summary.distanceM / 1000.0),
+                    style = MaterialTheme.typography.title2.copy(shadow = titleShadow),
+                    color = DuskPalette.parchment,
+                )
+                Text(
+                    formatDuration(summary.durationS),
+                    style = MaterialTheme.typography.caption2.copy(shadow = captionShadow),
+                    color = DuskPalette.haze,
+                )
+                if (summary.avgBpm != null) {
                     Text(
-                        "Splits",
-                        style = MaterialTheme.typography.caption2,
-                        color = DuskPalette.lilac,
-                        modifier = Modifier.padding(top = 6.dp),
+                        "${summary.avgBpm.toInt()} bpm avg",
+                        style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                        color = DuskPalette.coral,
                     )
                 }
-                items(summary.laps.size) { i ->
-                    val lap = summary.laps[i]
-                    androidx.compose.foundation.layout.Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            "Lap ${lap.number}",
-                            style = MaterialTheme.typography.caption3,
-                            color = DuskPalette.haze,
-                        )
-                        Text(
-                            formatLapSplit(lap),
-                            style = MaterialTheme.typography.caption3,
-                            color = DuskPalette.parchment,
-                        )
-                    }
-                }
-            }
-            if (synced) {
-                item {
+                if (synced) {
                     Text(
                         "Synced",
-                        style = MaterialTheme.typography.caption2,
+                        style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.success,
-                        modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
-                item {
-                    Chip(
-                        onClick = onStartNext,
-                        label = { Text("Done") },
-                        colors = ChipDefaults.primaryChipColors(),
-                        // 0.78f instead of fillMaxWidth(): the chip
-                        // sits in the bottom arc of the round face
-                        // where the bezel curves inward, so a full-
-                        // width chip gets its end caps clipped. 78 %
-                        // matches the chord width about 28 dp from
-                        // the bottom edge.
-                        modifier = Modifier.fillMaxWidth(0.78f),
-                    )
-                }
-            } else {
-                item {
-                    Chip(
-                        onClick = onSync,
-                        enabled = !syncing,
-                        label = {
-                            if (syncing) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.height(16.dp),
-                                )
-                            } else {
-                                Text("Sync")
-                            }
-                        },
-                        colors = ChipDefaults.primaryChipColors(),
-                        // 0.78f instead of fillMaxWidth(): the chip
-                        // sits in the bottom arc of the round face
-                        // where the bezel curves inward, so a full-
-                        // width chip gets its end caps clipped. 78 %
-                        // matches the chord width about 28 dp from
-                        // the bottom edge.
-                        modifier = Modifier.fillMaxWidth(0.78f),
-                    )
-                }
-                item {
-                    Chip(
-                        onClick = onStartNext,
-                        label = { Text("Start next run") },
-                        colors = ChipDefaults.secondaryChipColors(),
-                        modifier = Modifier.fillMaxWidth(0.78f),
+                if (syncError != null) {
+                    Text(
+                        syncError,
+                        style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                        color = DuskPalette.error,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
         }
 
-        // Small destructive action at ~2 o'clock — same offset as the
-        // PreRun sign-out icon so it lands inside the round-bezel inscribed
-        // rectangle. Only shows before the run is synced.
+        // Frosted-glass button colour — matches PreRun chips and
+        // running-screen Pause/Lap buttons so the pre→run→post
+        // surface vocabulary is consistent.
+        val translucent = ButtonDefaults.secondaryButtonColors(
+            backgroundColor = Color.White.copy(alpha = 0.15f),
+            contentColor = DuskPalette.parchment,
+        )
+
+        // Bottom-centre: primary action. Sync until the run lands;
+        // Done after. Sized to SmallButtonSize like the running
+        // screen's Lap / Stop buttons — the previous full-width chip
+        // dwarfed the route preview.
+        Button(
+            onClick = if (synced) onStartNext else onSync,
+            enabled = !syncing,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 14.dp)
+                .size(ButtonDefaults.SmallButtonSize),
+        ) {
+            when {
+                syncing -> CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp),
+                )
+                synced -> Text(
+                    "Done",
+                    style = MaterialTheme.typography.caption3,
+                )
+                else -> Text(
+                    "Sync",
+                    style = MaterialTheme.typography.caption3,
+                )
+            }
+        }
+
+        // Bottom-start: "Start next run" — only meaningful while the
+        // current run is not yet synced (post-sync the centre button
+        // already routes to Next). Sits at the curve like Pause on
+        // the running screen.
         if (!synced && summary != null) {
-            CompactButton(
+            Button(
+                onClick = onStartNext,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 22.dp, bottom = 36.dp)
+                    .size(ButtonDefaults.SmallButtonSize),
+                colors = translucent,
+            ) {
+                Text("Next", style = MaterialTheme.typography.caption3)
+            }
+        }
+
+        // Bottom-end: discard. Mirror of Stop on the running screen
+        // — destructive action positioned where the runner's hand
+        // already expects it. Single tap (no hold) is fine here:
+        // the run isn't running, just unsaved, and a Discard tap
+        // can be re-triggered if dismissed by mistake.
+        if (!synced && summary != null) {
+            Button(
                 onClick = onDiscard,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 24.dp, end = 24.dp),
-                colors = ButtonDefaults.secondaryButtonColors(),
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 22.dp, bottom = 36.dp)
+                    .size(ButtonDefaults.SmallButtonSize),
+                colors = translucent,
             ) {
                 Text(
                     "×",
-                    style = MaterialTheme.typography.body1,
+                    style = MaterialTheme.typography.body2,
                 )
             }
         }
