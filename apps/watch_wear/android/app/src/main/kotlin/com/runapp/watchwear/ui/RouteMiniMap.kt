@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
@@ -37,6 +38,13 @@ fun RouteMiniMap(
     currentColor: Color = Color.White,
     trackColor: Color = Color(0xFF818CF8),  // indigo, faded behind route
     backgroundColor: Color = Color(0xFF120D22),  // DuskPalette.midnight
+    // Default RoundedCornerShape(8.dp) gives the small inline mini-map
+    // its card-like look. When the map is used as a full-screen
+    // background on a round Wear OS device, pass `RectangleShape` so
+    // the device's hardware mask handles the rounding — the inner
+    // 8 dp clip would otherwise leave faint straight edges visible
+    // in the corners that the screen background can't fill.
+    clipShape: Shape = RoundedCornerShape(8.dp),
 ) {
     // Bounds expand to include both the planned route and the actual
     // track so a runner who's drifted off-course still sees their
@@ -50,7 +58,7 @@ fun RouteMiniMap(
 
     Canvas(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(clipShape)
             .background(backgroundColor),
     ) {
         val w = size.width

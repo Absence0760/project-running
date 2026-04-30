@@ -913,11 +913,34 @@ private fun RunningScreen(
         return
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
+    // Map fills the whole watch face as a background; text + buttons
+    // overlay on top. Renders whenever there's anything to draw — a
+    // planned route, the runner's track-so-far, or just a current GPS
+    // fix. Hidden until the first signal lands so an empty Canvas
+    // doesn't sit behind the metrics during indoor / no-GPS mode. The
+    // round screen mask handles corner rounding, so we pass
+    // `RectangleShape` to suppress the inner 8 dp clip the inline
+    // version uses.
+    val showMiniMap = routeWaypoints.isNotEmpty() ||
+        trackOverlayPoints.size >= 2 ||
+        latestPoint != null
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (showMiniMap) {
+            RouteMiniMap(
+                route = routeWaypoints,
+                current = latestPoint?.let {
+                    com.runapp.watchwear.recording.RouteMath.LatLng(it.lat, it.lng)
+                },
+                track = trackOverlayPoints,
+                modifier = Modifier.fillMaxSize(),
+                clipShape = androidx.compose.ui.graphics.RectangleShape,
+            )
+        }
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
         if (!locationAvailable) {
             Text(
                 // "No GPS — time only" when we've never had a fix
@@ -954,29 +977,6 @@ private fun RunningScreen(
                 "%.2f km to go".format(routeRemainingM / 1000.0),
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.lilac,
-            )
-        }
-        // Mini-map. Renders whenever we have *anything* to show — a
-        // planned route, the runner's track-so-far, or just a current
-        // GPS fix. With a route loaded it's the "where am I along the
-        // course?" view; without a route it's a free-form GPS trace
-        // that lets the runner see the shape of the run they've done.
-        // Hidden until the first GPS fix lands so an empty box doesn't
-        // sit on screen during indoor / no-GPS mode. No tile layer in
-        // v1 — at 56 dp on a 46 mm screen raster tiles aren't legible
-        // anyway, and skipping them keeps power + storage at zero.
-        val showMiniMap = routeWaypoints.isNotEmpty() ||
-            trackOverlayPoints.size >= 2 ||
-            latestPoint != null
-        if (showMiniMap) {
-            Spacer(Modifier.height(4.dp))
-            RouteMiniMap(
-                route = routeWaypoints,
-                current = latestPoint?.let {
-                    com.runapp.watchwear.recording.RouteMath.LatLng(it.lat, it.lng)
-                },
-                track = trackOverlayPoints,
-                modifier = Modifier.size(56.dp),
             )
         }
         if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
@@ -1044,6 +1044,7 @@ private fun RunningScreen(
                 Text("Lap", style = MaterialTheme.typography.caption2)
             }
             HoldToStopButton(onStop = onStop)
+        }
         }
     }
 }
