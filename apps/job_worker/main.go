@@ -28,10 +28,23 @@ func main() {
 		workerID = host
 	}
 
+	// OSRM_URL is the dev / prod hook that swaps the passthrough
+	// shim for the real /match-based engine. Empty → passthrough,
+	// which is enough for end-to-end smoke tests of the rest of the
+	// pipeline. See apps/job_worker/osrm/README.md for the local
+	// stack.
+	var matcher internal.Matcher = internal.PassthroughMatcher{}
+	if osrmURL := os.Getenv("OSRM_URL"); osrmURL != "" {
+		matcher = internal.NewOSRMMatcher(osrmURL)
+		logger.Info("matcher selected", "engine", "osrm", "url", osrmURL)
+	} else {
+		logger.Info("matcher selected", "engine", "passthrough")
+	}
+
 	client := internal.NewSupabaseClient(baseURL, serviceKey)
 	worker := &internal.Worker{
 		Backend: client,
-		Matcher: internal.PassthroughMatcher{},
+		Matcher: matcher,
 		Config: internal.Config{
 			WorkerID:       workerID,
 			PollInterval:   2 * time.Second,

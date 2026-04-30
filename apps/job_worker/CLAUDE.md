@@ -17,10 +17,13 @@ role key.
 
 **Build here:**
 
-- New `Matcher` implementations (OSRM / Valhalla / GraphHopper) — see
-  the interface in [`internal/matcher.go`](internal/matcher.go). The
-  current `PassthroughMatcher` is a stub for end-to-end wiring; swap
-  it in `main.go` when the engine choice is made.
+- New `Matcher` implementations — see the interface in
+  [`internal/matcher.go`](internal/matcher.go). `PassthroughMatcher`
+  is the smoke-test default; `OSRMMatcher` (in
+  [`internal/matcher_osrm.go`](internal/matcher_osrm.go)) is the
+  first real engine and is selected in `main.go` when `OSRM_URL` is
+  set. Valhalla / GraphHopper would each be a sibling file plus
+  another env-driven branch.
 - Additional job kinds — extend the switch in `Worker.dispatch` and
   add the matching trigger / migration in `apps/backend/`.
 - Operational concerns — backoff tuning, Prometheus metrics, leader
@@ -49,8 +52,11 @@ apps/job_worker/
 │   ├── supabase.go          # PostgREST + Storage REST client (service role)
 │   ├── matcher.go           # Matcher interface + PassthroughMatcher stub
 │   ├── matcher_test.go
+│   ├── matcher_osrm.go      # OSRMMatcher — /match/v1/foot, chunked
+│   ├── matcher_osrm_test.go
 │   ├── worker.go            # claim → handle → finish loop
 │   └── worker_test.go       # table-driven test using a fake Backend
+├── osrm/                    # local OSRM dev stack (compose + Makefile)
 ├── Dockerfile               # multi-stage; final image is distroless
 ├── README.md                # local-run instructions
 └── CLAUDE.md                # this file

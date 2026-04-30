@@ -12,6 +12,7 @@ into `internal/worker.go`'s dispatch switch.
 | `SUPABASE_URL` | Base URL, e.g. `http://127.0.0.1:54321` for local dev or your project URL in prod. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role JWT. The worker uses this for every call so it bypasses RLS on `jobs` + `run_matched_tracks`. **Never put this on a client.** |
 | `WORKER_ID` | Optional. Stamped on the `jobs.locked_by` column for stuck-job debugging. Defaults to the hostname. |
+| `OSRM_URL` | Optional. When set (e.g. `http://127.0.0.1:5000`), the worker uses the OSRM `/match` endpoint instead of the passthrough shim. Local OSRM stack lives at [`./osrm/`](osrm/). |
 
 ## Run locally
 
@@ -84,11 +85,32 @@ docker run --rm \
 
 Deployment target is Fly.io per [`../../docs/roadmap.md`](../../docs/roadmap.md) §205. Sized for a single 256 MB VM in v1; horizontal-scale by replicating the same image — the SQL `for update skip locked` in `claim_next_job` makes that safe.
 
-## What's not done
+## Map-matching engine
 
-The shipped `Matcher` is a passthrough that returns the input track
-unchanged. The roadmap calls for evaluating Valhalla Meili / OSRM /
-GraphHopper before committing to a real engine
-([`../../docs/roadmap.md`](../../docs/roadmap.md) §515-531). Swap the
-implementation in `main.go` when chosen; the `Matcher` interface
-shouldn't need to change.
+The default `Matcher` is a passthrough that returns the input track
+unchanged — useful for exercising the rest of the pipeline without a
+running engine.
+
+The first real engine wired in is **OSRM** (`/match/v1/foot`). To use
+it, stand up the local stack and point the worker at it:
+
+```bash
+# Terminal 1: bring up OSRM (one-time setup; see ./osrm/README.md).
+cd osrm
+make download && make build && docker compose up -d
+
+# Terminal 2: run the worker with OSRM_URL set.
+cd ..
+eval "$(cd ../backend && supabase status -o env | grep -E '^(SERVICE_ROLE_KEY|API_URL)=')"
+SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+  OSRM_URL=http://127.0.0.1:5000 \
+  go run .
+```
+
+When `OSRM_URL` is unset the worker falls back to the passthrough.
+
+Roadmap-tracked engine evaluation (Valhalla Meili / GraphHopper) lives
+at [`../../docs/roadmap.md`](../../docs/roadmap.md) §515-531. The
+`Matcher` interface is stable; adding a new engine means adding a
+sibling to `internal/matcher_osrm.go` and another env-driven branch in
+`main.go`.
