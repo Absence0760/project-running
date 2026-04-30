@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -492,13 +493,17 @@ private fun PreRunScreen(
             }
         }
 
-        // Centre: BIG primary action. Sized so it visually anchors
-        // the screen without crowding the chip rail below.
+        // Centre: BIG primary action. Lifted ~14 dp above geometric
+        // centre so it doesn't kiss the chip rail at the bottom —
+        // the rail can grow to two rows when "Allow background" or
+        // "Sign in" auxiliary chips appear, and a dead-centre Start
+        // would get overlaid by them on those branches.
         Button(
             onClick = onStart,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(ButtonDefaults.LargeButtonSize + 12.dp),
+                .offset(y = (-14).dp)
+                .size(ButtonDefaults.LargeButtonSize),
         ) {
             Text(
                 "Start",
@@ -1028,16 +1033,14 @@ private fun RunningScreen(
             )
         }
 
-        // Bottom secondary metrics + button cluster. Anchored to the
-        // bottom arc so the runner can glance down for pace / BPM /
-        // steps / laps without anything overlapping the centre dot.
-        // Pace gets its own line (it's the headline secondary
-        // metric); bpm + steps + lap collapse into a single dot-
-        // separated caption to keep the bottom stack short.
+        // Bottom secondary metrics. Anchored above where the curved
+        // button cluster will sit so the two regions don't crowd
+        // each other. Bottom padding ~62dp clears the
+        // ~28dp-from-bottom outer buttons + spacing.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp, start = 12.dp, end = 12.dp),
+                .padding(bottom = 62.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
@@ -1054,9 +1057,6 @@ private fun RunningScreen(
                     color = DuskPalette.lilac,
                 )
             }
-            // BPM · steps · lap on a single line. Each segment is
-            // optional — the joiner skips nulls so an empty stat
-            // doesn't leave a stray separator.
             val secondary = listOfNotNull(
                 bpm?.let { "$it bpm" },
                 steps?.takeIf { it > 0 }?.let { "$it steps" },
@@ -1069,26 +1069,26 @@ private fun RunningScreen(
                     color = DuskPalette.haze,
                 )
             }
-            // Spacer so the controls don't crowd the secondary
-            // metrics when they're visible.
-            if (controlsVisible) Spacer(Modifier.height(4.dp))
-            AnimatedVisibility(
-                visible = controlsVisible,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-            // Translucent backgrounds: dark glass over the tile layer.
-            // Alpha is high enough that the icon stays legible, low
-            // enough that the route is visible through the buttons —
-            // the runner can still see they're on course while
-            // glancing at the controls.
+        }
+
+        // Curved button cluster around the bottom arc. Three buttons
+        // positioned independently so they can hug the bezel — a
+        // single horizontal Row at the very bottom edge gets clipped
+        // at the corners on a round face. Lap sits at the lowest
+        // point (BottomCenter, 12 dp inset); Pause and Stop sit on
+        // the sides slightly higher (28 dp inset) so they follow
+        // the inscribed circle inward.
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
             val translucent = ButtonDefaults.secondaryButtonColors(
                 backgroundColor = Color.Black.copy(alpha = 0.55f),
                 contentColor = DuskPalette.parchment,
             )
-            androidx.compose.foundation.layout.Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 if (paused) {
                     Button(
                         onClick = {
@@ -1096,9 +1096,12 @@ private fun RunningScreen(
                             reveal()
                             onResume()
                         },
-                        modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 28.dp, bottom = 32.dp)
+                            .size(ButtonDefaults.SmallButtonSize),
                     ) {
-                        Text("Go", style = MaterialTheme.typography.caption2)
+                        Text("Go", style = MaterialTheme.typography.caption3)
                     }
                 } else {
                     Button(
@@ -1107,7 +1110,10 @@ private fun RunningScreen(
                             reveal()
                             onPause()
                         },
-                        modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 28.dp, bottom = 32.dp)
+                            .size(ButtonDefaults.SmallButtonSize),
                         colors = translucent,
                     ) {
                         Text("||")
@@ -1119,14 +1125,21 @@ private fun RunningScreen(
                         reveal()
                         onLap()
                     },
-                    modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp)
+                        .size(ButtonDefaults.SmallButtonSize),
                     colors = translucent,
                 ) {
                     Text("Lap", style = MaterialTheme.typography.caption3)
                 }
-                HoldToStopButton(onStop = onStop)
+                HoldToStopButton(
+                    onStop = onStop,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 28.dp, bottom = 32.dp),
+                )
             }
-        }
         }
     }
 }
@@ -1234,15 +1247,18 @@ private fun RoutePickerScreen(
 /// releasing early cancels. Prevents a single accidental tap from ending
 /// a long run — the single most damaging mis-tap a runner can make.
 @Composable
-private fun HoldToStopButton(onStop: () -> Unit) {
+private fun HoldToStopButton(
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val scope = rememberCoroutineScope()
     var progress by remember { mutableFloatStateOf(0f) }
     var holdJob by remember { mutableStateOf<Job?>(null) }
     val holdDurationMs = 800L
 
     Box(
-        modifier = Modifier
-            .size(ButtonDefaults.DefaultButtonSize)
+        modifier = modifier
+            .size(ButtonDefaults.SmallButtonSize)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -1275,7 +1291,7 @@ private fun HoldToStopButton(onStop: () -> Unit) {
         if (progress > 0f) {
             CircularProgressIndicator(
                 progress = progress,
-                modifier = Modifier.size(ButtonDefaults.DefaultButtonSize),
+                modifier = Modifier.size(ButtonDefaults.SmallButtonSize),
                 strokeWidth = 3.dp,
                 indicatorColor = MaterialTheme.colors.onPrimary,
                 trackColor = Color.Transparent,
@@ -1283,7 +1299,7 @@ private fun HoldToStopButton(onStop: () -> Unit) {
         }
         Box(
             modifier = Modifier
-                .size(ButtonDefaults.DefaultButtonSize - 6.dp)
+                .size(ButtonDefaults.SmallButtonSize - 6.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colors.primary),
             contentAlignment = Alignment.Center,
@@ -1401,7 +1417,13 @@ private fun PostRunScreen(
                         onClick = onStartNext,
                         label = { Text("Done") },
                         colors = ChipDefaults.primaryChipColors(),
-                        modifier = Modifier.fillMaxWidth(),
+                        // 0.78f instead of fillMaxWidth(): the chip
+                        // sits in the bottom arc of the round face
+                        // where the bezel curves inward, so a full-
+                        // width chip gets its end caps clipped. 78 %
+                        // matches the chord width about 28 dp from
+                        // the bottom edge.
+                        modifier = Modifier.fillMaxWidth(0.78f),
                     )
                 }
             } else {
@@ -1420,7 +1442,13 @@ private fun PostRunScreen(
                             }
                         },
                         colors = ChipDefaults.primaryChipColors(),
-                        modifier = Modifier.fillMaxWidth(),
+                        // 0.78f instead of fillMaxWidth(): the chip
+                        // sits in the bottom arc of the round face
+                        // where the bezel curves inward, so a full-
+                        // width chip gets its end caps clipped. 78 %
+                        // matches the chord width about 28 dp from
+                        // the bottom edge.
+                        modifier = Modifier.fillMaxWidth(0.78f),
                     )
                 }
                 item {
@@ -1428,7 +1456,7 @@ private fun PostRunScreen(
                         onClick = onStartNext,
                         label = { Text("Start next run") },
                         colors = ChipDefaults.secondaryChipColors(),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(0.78f),
                     )
                 }
             }
