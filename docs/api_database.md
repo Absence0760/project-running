@@ -636,6 +636,83 @@ create table live_run_pings (
 
 ---
 
+### `run_matched_tracks`
+
+Per-run map-match output state. One row per run, populated by a trigger when `runs.track_url` lands or changes.
+
+```sql
+create table run_matched_tracks (
+  run_id uuid primary key references runs(id) on delete cascade,
+  status text not null default 'pending',
+  matched_track_url text,
+  attempts smallint not null default 0,
+  matched_at timestamptz,
+  algorithm text,
+  algorithm_version text,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint run_matched_tracks_status_check
+    check (status in ('pending', 'matched', 'failed', 'skipped'))
+);
+
+create index run_matched_tracks_pending
+  on run_matched_tracks (created_at)
+  where status = 'pending';
+```
+
+- **`status`**: narrow union `pending | matched | failed | skipped`. Trigger inserts `pending`; the worker writes `matched` / `failed`. `skipped` is reserved for runs the worker decides not to match (too short, too noisy).
+- **RLS**: owner read only — owner of the parent run can SELECT, nobody can INSERT / UPDATE / DELETE through the API. The Go matching worker authenticates with the service role key and bypasses RLS.
+- **Reset on re-upload**: when `runs.track_url` is updated to a different value, the trigger resets the row back to `pending` (clears `matched_track_url`, `attempts`, `matched_at`, `error_message`, `algorithm` / `algorithm_version`) so the matcher re-processes against the fresh data.
+- **Caveat**: if a re-upload lands while a previous match is in flight, the trigger's reset races the worker's finish. The worker is expected to do an attempts-CAS at finish time (write only when `attempts` is the value it claimed at) — without that, the worker can clobber the reset. The Go service implementation owns this contract.
+
+### `jobs`
+
+Generic Postgres-backed job queue. First tenant is map matching (`kind = 'map_match'`) but the same table will host the strava-webhook / token-refresh / data-export workers when those move off Edge Functions per `roadmap.md §214`.
+
+```sql
+create table jobs (
+  id bigint generated always as identity primary key,
+  kind text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'queued',
+  attempts smallint not null default 0,
+  max_attempts smallint not null default 5,
+  scheduled_at timestamptz not null default now(),
+  locked_at timestamptz,
+  locked_by text,
+  finished_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint jobs_status_check
+    check (status in ('queued', 'running', 'done', 'failed', 'cancelled')),
+  constraint jobs_attempts_nonneg check (attempts >= 0),
+  constraint jobs_max_attempts_pos check (max_attempts > 0)
+);
+
+create index jobs_queued
+  on jobs (scheduled_at, kind)
+  where status = 'queued';
+
+create index jobs_running
+  on jobs (locked_at)
+  where status = 'running';
+
+-- Idempotency: while a previous map_match for the same run_id is still
+-- queued or running, a re-enqueue is a no-op via ON CONFLICT.
+create unique index jobs_dedupe_map_match
+  on jobs (kind, ((payload->>'run_id')::uuid))
+  where kind = 'map_match' and status in ('queued', 'running');
+```
+
+- **RLS**: deny everything — no policies, anon/authenticated cannot touch the table. Service role bypasses RLS for direct queries; the SECURITY DEFINER functions below are the typed surface for everything else.
+- **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. PUBLIC EXECUTE is revoked; only `service_role` is granted. See [§ Database functions](#database-functions-rpcs).
+- **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
+- **Partial indexes**: the `jobs_queued` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
+
+---
+
 ## Row-level security
 
 RLS is enabled on every table. Policies ensure users can only access their own data, with a specific carve-out for public routes.
@@ -991,6 +1068,34 @@ select * from routes_within_box(-37.83, 144.94, -37.78, 144.99, 50);
 **Returns:** same columns as `routes` table, ordered by distance from the box centre.
 
 **When to pick which:** `nearby_routes` answers "what's near me", `routes_within_box` answers "what's in this map viewport". A route whose start sits outside the visible viewport but whose body crosses it appears in the bbox query and *not* in the radius query — that's the whole reason both exist.
+
+---
+
+### `claim_next_job(worker_id, kind_filter)`
+
+SECURITY DEFINER. Atomically marks the next ready job as `running`, increments its `attempts`, and returns the row. Used by the Go service (and any future worker) to drain the [`jobs`](#jobs) queue. PUBLIC EXECUTE is revoked; granted to `service_role` only.
+
+```sql
+-- Drain the next map_match job:
+select * from claim_next_job('worker-1', 'map_match');
+
+-- Or any kind:
+select * from claim_next_job('worker-1', null);
+```
+
+**Parameters:**
+- `worker_id` — opaque identifier persisted on the row as `locked_by`. Useful for stuck-job debugging.
+- `kind_filter` — restrict the claim to one job type, or `null` for any.
+
+**Returns:** zero or one row with `(id, kind, payload, attempts)`. Empty result means the queue is dry; the worker should sleep + retry. The claim uses `for update skip locked` so concurrent workers each get a distinct row instead of contending.
+
+### `finish_job(job_id, result_status, err)`
+
+SECURITY DEFINER. Marks a claimed job as `done` / `failed` / `cancelled`, sets `finished_at = now()`, and stores `err` as `last_error` (worker-supplied diagnostic on the failure path). Bad `result_status` raises `22023`.
+
+### `defer_job(job_id, delay_seconds, err)`
+
+SECURITY DEFINER. Pushes a claimed job back into the queue with a delay — the row's `status` reverts to `queued`, `scheduled_at` is set to `now() + delay_seconds`, and the `locked_at` / `locked_by` are cleared. Use when a transient upstream (the matching engine, a third-party API) is unavailable. `attempts` is NOT decremented — the increment from the original `claim_next_job` stands, so the per-job `max_attempts` ceiling still applies.
 
 ---
 

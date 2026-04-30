@@ -521,6 +521,54 @@ export type Database = {
         }
         Relationships: []
       }
+      jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          finished_at: string | null
+          id: number
+          kind: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          payload: Json
+          scheduled_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: never
+          kind: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          payload?: Json
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: never
+          kind?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          payload?: Json
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       live_run_pings: {
         Row: {
           at: string
@@ -1071,6 +1119,53 @@ export type Database = {
           },
         ]
       }
+      run_matched_tracks: {
+        Row: {
+          algorithm: string | null
+          algorithm_version: string | null
+          attempts: number
+          created_at: string
+          error_message: string | null
+          matched_at: string | null
+          matched_track_url: string | null
+          run_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          algorithm?: string | null
+          algorithm_version?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          matched_at?: string | null
+          matched_track_url?: string | null
+          run_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          algorithm?: string | null
+          algorithm_version?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          matched_at?: string | null
+          matched_track_url?: string | null
+          run_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_matched_tracks_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       run_photos: {
         Row: {
           caption: string | null
@@ -1562,6 +1657,15 @@ export type Database = {
           tier: string
         }[]
       }
+      claim_next_job: {
+        Args: { kind_filter?: string; worker_id: string }
+        Returns: {
+          attempts: number
+          id: number
+          kind: string
+          payload: Json
+        }[]
+      }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       clip_track_for_user: {
@@ -1571,6 +1675,14 @@ export type Database = {
       clone_plan_template: {
         Args: { new_start_date: string; template_id: string }
         Returns: string
+      }
+      defer_job: {
+        Args: { delay_seconds: number; err?: string; job_id: number }
+        Returns: undefined
+      }
+      finish_job: {
+        Args: { err?: string; job_id: number; result_status: string }
+        Returns: undefined
       }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
       get_integration_tokens: {

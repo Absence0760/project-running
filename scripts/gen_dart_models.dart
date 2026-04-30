@@ -93,6 +93,7 @@ const _tables = <String>{
   'segments',
   'segment_efforts',
   'notifications',
+  'run_matched_tracks',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule

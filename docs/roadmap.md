@@ -210,7 +210,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
   - [ ] Data export worker (moved from Edge Function)
 - [ ] Set up Upstash Redis for live position streams
 - [x] Add `personal_records` summary table with insert trigger (migration `20260508_001_personal_records_cache.sql` — table, `refresh_personal_records_for_user(uid)` helper, insert / update / delete triggers, backfill; `security definer` writes, reads scoped to owner)
-- [ ] Add `jobs` table for Go worker queue
+- [x] Add `jobs` table for Go worker queue (migration `20260609_001_run_match_pipeline.sql` — generic `(id, kind, payload jsonb, status, attempts, scheduled_at, locked_at, locked_by)` queue with River-style `claim_next_job` / `finish_job` / `defer_job` SECURITY DEFINER API. `for update skip locked` for safe concurrent drain; partial indexes on `(scheduled_at, kind) where status='queued'` keep the worker scan O(active set); RLS deny-by-default + revoke EXECUTE from public + grant to service_role for the worker functions. First tenant is `kind='map_match'`; strava-webhook / token-refresh / data-export will follow the same shape.)
 - [ ] Migrate Strava webhook, token refresh, data export from Edge Functions to Go service
 
 ### Milestone: App Store + Play Store public beta
@@ -518,9 +518,9 @@ The target is **professional-grade Hidden Markov Model map matching**, the same 
   - [ ] OSM extract refresh pipeline (monthly diffs from Geofabrik)
   - [ ] Expose as an authenticated endpoint (`POST /runs/:id/match`)
 - [ ] Wire up sync path:
-  - [ ] `ApiClient.saveRun` triggers matching on the backend after upload
-  - [ ] Store both the raw and matched tracks (so future re-matching with better data/algorithms is possible)
-  - [ ] Return the matched geometry to the client for display
+  - [x] `ApiClient.saveRun` triggers matching on the backend after upload — implicit via the `runs_enqueue_match_job_trigger` (migration `20260609_001_run_match_pipeline.sql`), so every successful track upload auto-creates a `pending` `run_matched_tracks` row + a `kind='map_match'` job. Re-uploads (UPDATE OF track_url) reset state and re-enqueue idempotently.
+  - [x] Store both the raw and matched tracks (so future re-matching with better data/algorithms is possible) — `run_matched_tracks (run_id PK, status, matched_track_url, attempts, matched_at, algorithm, algorithm_version, error_message)` carries the matched-side state in a side table; `runs.track_url` stays the canonical raw track. Side-table shape leaves the rarely-read state out of the hot list-query path and lets the worker write under service-role without widening RLS on `runs`.
+  - [ ] Return the matched geometry to the client for display — needs the Go worker to actually compute + upload a matched gz blob; the read path is RLS-ready (owner SELECT policy on `run_matched_tracks`).
 - [ ] Client display:
   - [ ] `run_detail_screen` prefers the matched track when available, falls back to raw
   - [ ] `live_run_map` during recording still shows the raw track (live matching is out of scope — it's too slow and too expensive per fix)

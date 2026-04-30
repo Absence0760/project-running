@@ -1347,6 +1347,72 @@ class RunKudosRow {
   };
 }
 
+/// Row shape for the `run_matched_tracks` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RunMatchedTrackRow {
+  static const String table = 'run_matched_tracks';
+  static const String colRunId = 'run_id';
+  static const String colStatus = 'status';
+  static const String colMatchedTrackUrl = 'matched_track_url';
+  static const String colAttempts = 'attempts';
+  static const String colMatchedAt = 'matched_at';
+  static const String colAlgorithm = 'algorithm';
+  static const String colAlgorithmVersion = 'algorithm_version';
+  static const String colErrorMessage = 'error_message';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String runId;
+  final String status;
+  final String? matchedTrackUrl;
+  final int attempts;
+  final DateTime? matchedAt;
+  final String? algorithm;
+  final String? algorithmVersion;
+  final String? errorMessage;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const RunMatchedTrackRow({
+    required this.runId,
+    required this.status,
+    this.matchedTrackUrl,
+    required this.attempts,
+    this.matchedAt,
+    this.algorithm,
+    this.algorithmVersion,
+    this.errorMessage,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory RunMatchedTrackRow.fromJson(Map<String, dynamic> json) => RunMatchedTrackRow(
+    runId: json['run_id'] as String,
+    status: json['status'] as String,
+    matchedTrackUrl: json['matched_track_url'] as String?,
+    attempts: (json['attempts'] as num).toInt(),
+    matchedAt: json['matched_at'] == null ? null : DateTime.parse(json['matched_at'] as String),
+    algorithm: json['algorithm'] as String?,
+    algorithmVersion: json['algorithm_version'] as String?,
+    errorMessage: json['error_message'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colRunId: runId,
+    colStatus: status,
+    colMatchedTrackUrl: matchedTrackUrl,
+    colAttempts: attempts,
+    colMatchedAt: matchedAt?.toIso8601String(),
+    colAlgorithm: algorithm,
+    colAlgorithmVersion: algorithmVersion,
+    colErrorMessage: errorMessage,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `run_photos` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RunPhotoRow {
