@@ -63,7 +63,10 @@ apps/watch_wear/
             │   ├── HeartRateMonitor.kt    # Health Services MeasureClient
             │   ├── LocalRunStore.kt       # DataStore-backed retry queue
             │   ├── ui/RunWatchApp.kt      # Compose-for-Wear screens
-            │   ├── ui/RouteMiniMap.kt     # 56 dp polyline + position-dot + track-so-far canvas
+            │   ├── ui/RouteMiniMap.kt     # Polyline + position-dot + track-so-far + raster tiles
+            │   ├── ui/TileSource.kt        # MapTiler raster tile fetcher (OkHttp + LRU)
+            │   ├── ui/TileLayer.kt         # Compose composable that draws tile bitmaps
+            │   ├── recording/MercatorTiles.kt       # Web Mercator projection + tile coords
             │   ├── recording/TrackOverlayBuffer.kt  # Rolling-buffer geometric halving
             │   ├── recording/MapProjection.kt  # Pure lat/lng → unit-square projection
             │   └── generated/DbRows.kt    # GENERATED — do not edit
@@ -164,6 +167,7 @@ time and emitted as `BuildConfig` constants; changes require a rebuild
 |---|---|---|
 | `BYPASS_LOGIN` | `false` | On app start, if no cached session and no phone handoff, auto-sign-in as `runner@test.com` / `testtest`. Skips the sign-in screen. Use only against local/dev Supabase. **Not a sign-out switch**: flipping to `false` won't sign out a user whose session is already cached — tap the "Sign out" chip on PreRun or `./gradlew uninstallDebug && ./gradlew installDebug` to get a clean slate. |
 | `ENABLE_HR` | `false` | Start the Health Services `MeasureClient` during a run and write `avg_bpm` into run metadata. Default off because the Wear OS emulator produces synthetic HR samples that look like real readings — leaving it off by default keeps fake data out of the runs table. Turn on when building for a real device with a real sensor. |
+| `PUBLIC_MAPTILER_KEY` | `""` | MapTiler raster tile API key. When set, `ui/RouteMiniMap.kt` fetches `streets-v2-dark` tiles via `ui/TileSource.kt` and draws them under the polyline using the same Web Mercator projection (`recording/MercatorTiles.kt`). Empty ⇒ map falls back to polyline + position dot on a midnight background — same behaviour as v1. The env-var name matches the web app's so a single key can be shared across web and watch. |
 
 The UI tracks the flags: with `ENABLE_HR` off, the BPM row on the Running
 screen and the "N bpm avg" line on PostRun both disappear rather than
@@ -260,8 +264,7 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   UI doesn't yet have a low-color "ambient" branch. Wire
   `AmbientLifecycleObserver` + a dimmed Compose render path. (Glanceable
   watch face complication is a separate, larger item.)
-- **Tile-backed map during recording.** v1 of "live position on planned route" shipped without tiles — `ui/RouteMiniMap.kt` renders the polyline + position dot on a midnight-coloured background. At 56 dp on a 46 mm screen raster tiles aren't legible, so the v2 tile renderer is parked behind a "we have a larger screen surface to render on" trigger (route preview on a watch face, full-screen pre-run preview, etc.) rather than the RunningScreen mini-map.
-- **Live HTTP tile cache.** Blocked on the tile renderer above; pre-downloaded tiles are still the only path.
+- **Pre-fetching tiles for a route on selection.** Tile rendering is opportunistic — tiles fetch on-demand as they enter the viewport. A network drop mid-run leaves new viewport areas un-tiled (polyline + midnight background still render). Pre-downloading the bounding-box tiles on route selection (or run start) would make the map robust against cellular drops, at the cost of an upfront fetch + a couple of MB of disk per route.
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).

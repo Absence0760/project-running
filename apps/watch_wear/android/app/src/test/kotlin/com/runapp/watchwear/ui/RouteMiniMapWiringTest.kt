@@ -125,16 +125,19 @@ class RouteMiniMapWiringTest {
     }
 
     @Test
-    fun `RouteMiniMap caches bounds via remember to avoid per-tick recomputation`() {
+    fun `RouteMiniMap caches centre + zoom via remember to avoid per-tick recomputation`() {
         // Why: `current` updates on every GPS sample (sub-1 Hz today).
-        // Without `remember(route, current, track)` the bounding-box
-        // scan would walk both polylines on every recomposition. For
-        // a 200-point route plus a 256-point track that's not free.
+        // Without `remember(...)` around `MercatorTiles.fitBounds(...)`
+        // the bounds scan would walk both polylines on every
+        // recomposition — and on every recompose we'd also re-pick a
+        // zoom level, which would flicker the tile layer.
         val src = File("src/main/kotlin/com/runapp/watchwear/ui/RouteMiniMap.kt").readText()
         assertTrue(
-            "RouteMiniMap must wrap computeBounds in remember(route, current, track)",
-            Regex("""remember\s*\(\s*route\s*,\s*current\s*,\s*track\s*\)\s*\{[^}]*computeBounds""", RegexOption.DOT_MATCHES_ALL)
-                .containsMatchIn(src),
+            "RouteMiniMap must wrap MercatorTiles.fitBounds in a keyed remember(...)",
+            Regex(
+                """remember\s*\([^)]*\)\s*\{[^}]*MercatorTiles\.fitBounds""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
         )
     }
 

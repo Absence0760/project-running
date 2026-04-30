@@ -19,6 +19,10 @@ fun envFlag(key: String, default: Boolean = false): Boolean {
     val raw = envProps.getProperty(key) ?: project.findProperty(key) as? String
     return raw?.trim()?.lowercase() == "true"
 }
+fun envString(key: String, default: String = ""): String {
+    val raw = envProps.getProperty(key) ?: project.findProperty(key) as? String
+    return raw?.trim() ?: default
+}
 
 kotlin {
     compilerOptions {
@@ -67,6 +71,15 @@ android {
         buildConfigField(
             "boolean", "ENABLE_TTS",
             (!envFlag("DISABLE_TTS")).toString(),
+        )
+        // MapTiler raster tile API key. Empty string ⇒ tile rendering
+        // disabled and the mini-map falls back to polyline-only on the
+        // midnight background. Same env-var name the web app uses
+        // (`PUBLIC_MAPTILER_KEY`) for consistency. Set in
+        // `apps/watch_wear/android/.env.local`.
+        buildConfigField(
+            "String", "PUBLIC_MAPTILER_KEY",
+            "\"${envString("PUBLIC_MAPTILER_KEY")}\"",
         )
     }
 
