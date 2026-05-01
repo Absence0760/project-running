@@ -305,7 +305,7 @@
 	}
 
 	let generatingImage = $state(false);
-	let shareCardEl: HTMLElement | undefined;
+	let shareCardEl: HTMLElement | undefined = $state();
 
 	/// Render the off-screen `.share-card` DOM node to a 1080×1080 PNG
 	/// via `html-to-image`, then either invoke the Web Share API (with

@@ -214,7 +214,9 @@
 
 	// --- Map ---
 
-	let mapContainer: HTMLDivElement;
+	// $state because Svelte 5 routes bind:this through the reactivity
+	// graph; without it, mapContainer reads as the initial undefined.
+	let mapContainer: HTMLDivElement | undefined = $state();
 	let map: maplibregl.Map | null = null;
 	let mapReady = $state(false);
 	let didFitBounds = false;

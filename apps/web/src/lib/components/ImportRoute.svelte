@@ -123,10 +123,14 @@
 		{/if}
 
 		{#if parsed.length === 0}
-			<!-- Drop zone -->
+			<!-- Drop zone — role=region + aria-label so screen-reader users
+			     know what's here; keyboard users use the inner Browse
+			     button (the drag/drop is a mouse-only convenience). -->
 			<div
 				class="drop-zone"
 				class:dragging
+				role="region"
+				aria-label="Route file drop zone"
 				ondragover={handleDragOver}
 				ondragleave={handleDragLeave}
 				ondrop={handleDrop}
