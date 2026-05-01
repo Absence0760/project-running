@@ -48,7 +48,7 @@ Routes are stored locally in JSON files (mobile Android via `path_provider` + `d
 
 ### Live GPS run recording
 
-**Phase:** 1 | **Platform:** Android (shipped); iOS (not yet implemented — scaffold only) | **Parity:** [see matrix](parity.md#run-recording)
+**Phase:** 1 | **Platform:** Android (shipped), iOS (code-equivalent via byte-identical twin per [decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — pending Mac-build runtime verification), Wear OS (shipped, native Kotlin), Apple Watch (shipped, native Swift / `HKWorkoutSession` + `CLLocationManager`) | **Parity:** [see matrix](parity.md#run-recording)
 
 **Why:** The core product function. Without this nothing else matters.
 

@@ -70,8 +70,8 @@ See [features § Full-screen route builder](features.md#full-screen-route-builde
 | Full-screen click-to-place route builder | ✗ | ✗ | ✓ | N/A | N/A | Mobile builder is Phase 3, not started. Wrist screens too small by design. |
 | Snap-to-road / trail (OSRM) | ✗ | ✗ | ✓ | N/A | N/A | |
 | Elevation preview while drawing | ✗ | ✗ | ✓ | N/A | N/A | |
-| Route library (list saved routes) | ✓ | Partial | ✓ | ✗ | ✗ | iOS: screen exists with mock data; no API fetch. |
-| Route detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | iOS: scaffold only. |
+| Route library (list saved routes) | ✓ | Partial | ✓ | ✗ | ✗ | iOS code is identical to Android per [decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — `Partial` reflects "Mac-build runtime parity not yet verified end-to-end" rather than "screen is mock". |
+| Route detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | Same shape as the row above — code-equivalent, awaiting Mac-runtime verification. |
 | Public / private toggle per route | ✓ | ✗ | ✓ | N/A | N/A | Bidirectional on both: Android's globe icon on `route_detail_screen.dart`; web's owner-only `Public` / `Private` button on `/routes/[id]` (added in parallel with the explicit Share button; `setRoutePublic(id, bool)` in `data.ts` with optimistic UI + rollback). |
 | Shareable route link | ✓ | ✗ | ✓ | N/A | N/A | Web makes the route public and copies the link in one action. |
 | Export route as GPX | ✓ | ✗ | ✓ | N/A | N/A | Android: share button on `route_detail_screen.dart` writes the route's waypoints to a temp `.gpx` and hands it to the system share sheet. |
@@ -96,7 +96,7 @@ See [features § Live GPS run recording](features.md#live-gps-run-recording), [f
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Live GPS recording | ✓ | Partial | N/A | ✓ | ✓ | iOS: `RunScreen` scaffolded but `RunRecorder` not wired. Web: browsers cannot record a run reliably — reviewing only. |
+| Live GPS recording | ✓ | Partial | N/A | ✓ | ✓ | iOS: identical Dart to Android via the byte-identical twin — `RunScreen` and `RunRecorder` are the same files. `Partial` reflects pending Mac-build runtime verification (Info.plist `UIBackgroundModes:location`, location entitlements, real-device soak), not missing wiring. Web: browsers cannot record a run reliably — reviewing only. |
 | Background location tracking | ✓ | Partial | N/A | ✓ | ✓ | iOS recorder has background mode wired in Info.plist but recording loop not end-to-end. |
 | 3-second start countdown | ✓ | ✗ | N/A | ✓ | ✗ | Wear OS shows a full-screen 3-2-1 overlay between permission grant and `vm.start()` (tap to cancel). Apple Watch still starts immediately. |
 | Manual pause / resume | ✓ | ✗ | N/A | ✓ | ✓ | |
@@ -140,7 +140,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Run list | ✓ | Partial | ✓ | ✗ | ✗ | iOS: screen exists with mock data; no API fetch. |
+| Run list | ✓ | Partial | ✓ | ✗ | ✗ | iOS shares the Dart code; `Partial` is pending Mac-runtime verification per the byte-identical twin convention. |
 | Run detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | |
 | Elevation chart on run detail | ✓ | ✗ | ✓ | ✗ | ✗ | |
 | Lap splits table | ✓ | ✗ | ✓ | ✗ | ✗ | |
@@ -186,7 +186,7 @@ See [features § External platform sync (OAuth)](features.md#external-platform-s
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Connect / disconnect integrations UI | ✓ | Partial | ✓ | N/A | N/A | iOS: settings screen present; flows mocked. |
+| Connect / disconnect integrations UI | ✓ | Partial | ✓ | N/A | N/A | iOS Settings screen is the same Dart file as Android; `Partial` is pending real-device verification of the OAuth callback round-trip on iOS Safari / native browser. |
 | Strava OAuth live sync | Partial | ✗ | ✓ | N/A | N/A | Shipped on web: connect button on `/settings/integrations` redirects to Strava's `/oauth/authorize`, the callback POSTs the code to the `strava-import` Edge Function, and the function exchanges it for tokens + backfills the last 90 days of run/walk/hike activities (GPS streams included). A "Sync now" button re-triggers the backfill. Webhook-driven realtime sync (`strava-webhook`) still needs the activity-detail branch wired; manual sync is the current path. Android: Strava tile in Settings → Integrations shows connected status + last-sync; "Connect Strava" hands the user off to the web `/settings/integrations` page via `url_launcher` (web handles OAuth, the integrations row syncs back). Once connected, "Sync now" calls the `strava-import` Edge Function directly via `ApiClient.syncStrava`; "Disconnect" deletes the integration row. Native in-app OAuth (would need `webview_flutter` + a deep-link callback) is the Partial gap. |
 | parkrun athlete-number import | ✓ | ✗ | ✓ | N/A | N/A | Web: "Pull latest parkrun results" button on `/settings/account` shows once the athlete number is set. Calls the existing `parkrun-import` Edge Function, surfaces an imported-count toast. Android: "parkrun" tile in Settings → Integrations opens a dialog pre-filled from `user_profiles.parkrun_number`; on confirm, `ApiClient.setParkrunAthleteNumber` stores the number and `ApiClient.importParkrunResults` invokes the same Edge Function. Reports the imported count via SnackBar. |
 | HealthKit (iOS / Apple Watch) | ✗ | ✗ | N/A | N/A | ✓ | Apple Watch reads HR and forwards `avg_bpm`. Phone HealthKit importer not started. |

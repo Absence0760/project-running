@@ -48,7 +48,7 @@ run-app/                          # Monorepo root
 │   │   │   │   └── settings/     # Integrations + account
 │   │   │   └── lib/              # Supabase client, API helpers, components
 │   │   └── package.json
-│   └── backend/                  # Supabase Edge Functions (Node.js / TypeScript)
+│   └── backend/                  # Supabase Edge Functions (Deno / TypeScript) + migrations + seed
 ├── packages/
 │   ├── core_models/              # Shared Dart: Run, Route, Waypoint types
 │   ├── gpx_parser/               # GPX, KML, KMZ, GeoJSON parsing
@@ -554,7 +554,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | Maps (mobile) | flutter_map + MapLibre | Route display, live position |
 | GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
 | Health sync | `health` pub.dev package | Abstracts HealthKit + Health Connect |
-| Local storage | JSON files via `path_provider` + `dart:convert` | Offline-first run storage on mobile Android (iOS not yet implemented) |
+| Local storage | JSON files via `path_provider` + `dart:convert` | Offline-first run storage on both Flutter targets (the same `LocalRunStore` runs on Android + iOS via the byte-identical `lib/`, [decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)) |
 | Backend | Supabase | Postgres + Auth + Storage + Edge Functions |
 | Auth | Supabase Auth | Apple Sign-In + Google Sign-In |
 | CI/CD | GitHub Actions | Per-app matrix jobs |
