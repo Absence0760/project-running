@@ -9,6 +9,31 @@ import '../preferences.dart' show ActivityType;
 import '../tile_cache.dart';
 import 'pace_segments.dart';
 
+/// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
+/// shows as a smoother line instead of a visible zig-zag. The first two
+/// and last two points are preserved unchanged. Display-only — the stored
+/// run keeps the raw waypoints.
+///
+/// This reduces noise but cannot correct systematic offset from the road
+/// (i.e. when GPS reports you 5 m off the centreline). The real fix is
+/// backend map matching — see docs/roadmap.md.
+List<LatLng> smoothTrack(List<LatLng> points) {
+  if (points.length < 5) return points;
+  final out = List<LatLng>.from(points);
+  for (int i = 2; i < points.length - 2; i++) {
+    final a = points[i - 2];
+    final b = points[i - 1];
+    final c = points[i];
+    final d = points[i + 1];
+    final e = points[i + 2];
+    out[i] = LatLng(
+      (a.latitude + b.latitude * 2 + c.latitude * 3 + d.latitude * 2 + e.latitude) / 9,
+      (a.longitude + b.longitude * 2 + c.longitude * 3 + d.longitude * 2 + e.longitude) / 9,
+    );
+  }
+  return out;
+}
+
 /// Live map shown during a run, displaying the GPS track and current position.
 ///
 /// Inspired by Nike Run Club: dark map, bright route line, pulsing blue dot.
@@ -153,7 +178,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       return _cachedSmoothedTrack!;
     }
     final raw = track.map((w) => LatLng(w.lat, w.lng)).toList();
-    final smoothed = _smoothTrack(_smoothTrack(raw));
+    final smoothed = smoothTrack(smoothTrack(raw));
     _cachedSmoothedTrack = smoothed;
     _cachedSmoothedForLength = track.length;
     return smoothed;
@@ -212,31 +237,6 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     ];
     _cachedHaloPolylines = out;
     _cachedHaloForLength = rendered.length;
-    return out;
-  }
-
-  /// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
-  /// shows as a smoother line instead of a visible zig-zag. The first two
-  /// and last two points are preserved unchanged. Display-only — the stored
-  /// run keeps the raw waypoints.
-  ///
-  /// This reduces noise but cannot correct systematic offset from the road
-  /// (i.e. when GPS reports you 5 m off the centreline). The real fix is
-  /// backend map matching — see docs/roadmap.md.
-  static List<LatLng> _smoothTrack(List<LatLng> points) {
-    if (points.length < 5) return points;
-    final out = List<LatLng>.from(points);
-    for (int i = 2; i < points.length - 2; i++) {
-      final a = points[i - 2];
-      final b = points[i - 1];
-      final c = points[i];
-      final d = points[i + 1];
-      final e = points[i + 2];
-      out[i] = LatLng(
-        (a.latitude + b.latitude * 2 + c.latitude * 3 + d.latitude * 2 + e.latitude) / 9,
-        (a.longitude + b.longitude * 2 + c.longitude * 3 + d.longitude * 2 + e.longitude) / 9,
-      );
-    }
     return out;
   }
 
