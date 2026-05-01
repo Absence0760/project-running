@@ -673,46 +673,31 @@ class _RunsScreenState extends State<RunsScreen> {
     );
   }
 
-  /// Two sequential `showDatePicker` dialogs — From, then To — so the
-  /// custom-range flow uses the same compact Material calendar dialog
-  /// as every other date pick in the app (`add_run_screen`,
-  /// `plan_new_screen`, `event_form_sheet`, `settings_screen`). Bounds
-  /// snap to start-of-day / end-of-day so the `_filterAndSort`
-  /// comparators include both endpoints inclusively. Cancelling either
-  /// step aborts the whole flow — no partial commit, no persisted
-  /// change.
+  /// Opens an airline-style bottom-sheet calendar (see
+  /// `_RangeCalendarSheet`): scrollable month grid, two-tap selection
+  /// with range highlighting, sticky Start / End chips, Apply at the
+  /// bottom. The sheet snaps the picked range to start-of-day /
+  /// end-of-day so `_filterAndSort` comparators include both endpoints
+  /// inclusively. Dismiss without applying is a no-op.
   Future<void> _pickCustomRange() async {
-    final now = DateTime.now();
-    final firstAllowed = DateTime(now.year - 10);
-    final lastAllowed = DateTime(now.year + 1, 12, 31);
-    final fromInitial = _customFrom ??
-        DateTime(now.year, now.month, now.day)
-            .subtract(const Duration(days: 7));
-    final fromPick = await showDatePicker(
+    final result = await showModalBottomSheet<DateTimeRange>(
       context: context,
-      initialDate: fromInitial,
-      firstDate: firstAllowed,
-      lastDate: lastAllowed,
-      helpText: 'Select start date',
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _RangeCalendarSheet(
+        initialFrom: _customFrom,
+        initialTo: _customTo,
+      ),
     );
-    if (fromPick == null || !mounted) return;
-    final from =
-        DateTime(fromPick.year, fromPick.month, fromPick.day);
-    // To defaults to today (or whatever was previously picked, if it's
-    // still not before `from`); the picker is bounded below by `from`
-    // so the user can't accidentally invert the range.
-    final toInitialCandidate = _customTo ?? DateTime(now.year, now.month, now.day);
-    final toInitial = toInitialCandidate.isBefore(from) ? from : toInitialCandidate;
-    final toPick = await showDatePicker(
-      context: context,
-      initialDate: toInitial,
-      firstDate: from,
-      lastDate: lastAllowed,
-      helpText: 'Select end date',
-    );
-    if (toPick == null || !mounted) return;
+    if (result == null || !mounted) return;
+    final from = DateTime(
+        result.start.year, result.start.month, result.start.day);
     final to = DateTime(
-        toPick.year, toPick.month, toPick.day, 23, 59, 59, 999);
+        result.end.year, result.end.month, result.end.day, 23, 59, 59, 999);
     setState(() {
       _range = _RunsRange.custom;
       _customFrom = from;
@@ -1243,5 +1228,472 @@ class _RunsFilterHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Airline-style date-range bottom sheet (Expedia / Delta / United
+/// pattern). Vertically scrollable list of month grids, two-tap
+/// selection with the in-between range highlighted, sticky Start / End
+/// chips at the top, and a sticky Apply / Clear footer. Dismissing
+/// without Apply discards the pending selection.
+///
+/// The sheet manages its own pending state and only commits to the
+/// caller (via `Navigator.pop(DateTimeRange)`) when Apply is tapped
+/// with both endpoints set. This keeps the screen-level filter from
+/// thrashing while the user picks.
+class _RangeCalendarSheet extends StatefulWidget {
+  final DateTime? initialFrom;
+  final DateTime? initialTo;
+
+  const _RangeCalendarSheet({this.initialFrom, this.initialTo});
+
+  @override
+  State<_RangeCalendarSheet> createState() => _RangeCalendarSheetState();
+}
+
+class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
+  static const List<String> _kMonthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  static const List<String> _kDowLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  /// Lower bound of the scrollable month list. 2 years back covers the
+  /// vast majority of running history searches; older runs are reachable
+  /// through the All-time preset.
+  late final DateTime _firstMonth;
+
+  /// Upper bound — current month + 1 year, so a user planning a future
+  /// trip can still select dates ahead.
+  late final DateTime _lastMonth;
+
+  /// Total number of months between `_firstMonth` and `_lastMonth`,
+  /// inclusive. Drives the ListView itemCount.
+  late final int _monthCount;
+
+  DateTime? _pendingFrom;
+  DateTime? _pendingTo;
+
+  /// Tracks where the user is in the two-tap flow so the chips can
+  /// reflect the next required action ("Tap a date" → start vs end).
+  bool get _selectingEnd => _pendingFrom != null && _pendingTo == null;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _firstMonth = DateTime(now.year - 2, now.month);
+    _lastMonth = DateTime(now.year + 1, now.month);
+    _monthCount = (_lastMonth.year - _firstMonth.year) * 12 +
+        (_lastMonth.month - _firstMonth.month) +
+        1;
+    _pendingFrom = _normalize(widget.initialFrom);
+    _pendingTo = _normalize(widget.initialTo);
+  }
+
+  static DateTime? _normalize(DateTime? d) =>
+      d == null ? null : DateTime(d.year, d.month, d.day);
+
+  void _onTapDate(DateTime d) {
+    final tapped = _normalize(d)!;
+    setState(() {
+      // Both already set → restart with `tapped` as the new start.
+      if (_pendingFrom != null && _pendingTo != null) {
+        _pendingFrom = tapped;
+        _pendingTo = null;
+        return;
+      }
+      // No start yet → first tap.
+      if (_pendingFrom == null) {
+        _pendingFrom = tapped;
+        return;
+      }
+      // Start is set, picking the end. If the new tap is before start,
+      // swap rather than reject — feels more forgiving than ignoring.
+      if (tapped.isBefore(_pendingFrom!)) {
+        _pendingTo = _pendingFrom;
+        _pendingFrom = tapped;
+      } else {
+        _pendingTo = tapped;
+      }
+    });
+  }
+
+  void _clear() {
+    setState(() {
+      _pendingFrom = null;
+      _pendingTo = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final canApply = _pendingFrom != null && _pendingTo != null;
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header: title + close.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+              child: Row(
+                children: [
+                  Text('Select dates', style: theme.textTheme.titleMedium),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Cancel',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            // Start / End chips. Tapping one focuses that endpoint —
+            // useful when the user wants to revise just the start.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _EndpointChip(
+                      label: 'Start',
+                      date: _pendingFrom,
+                      active: _pendingFrom == null || !_selectingEnd,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _EndpointChip(
+                      label: 'End',
+                      date: _pendingTo,
+                      active: _selectingEnd,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Day-of-week header row (sticky above the scrollable months).
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  for (final dow in _kDowLabels)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          dow,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Scrollable list of month grids.
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: _monthCount,
+                itemBuilder: (context, index) {
+                  final month = _monthAtOffset(index);
+                  return _MonthGrid(
+                    month: month,
+                    pendingFrom: _pendingFrom,
+                    pendingTo: _pendingTo,
+                    onTapDate: _onTapDate,
+                  );
+                },
+              ),
+            ),
+            // Sticky footer: Clear (left) + Apply (right). Apply is
+            // disabled until both endpoints are set so the caller never
+            // gets a half-finished range.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed:
+                        (_pendingFrom == null && _pendingTo == null) ? null : _clear,
+                    child: const Text('Clear'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: canApply
+                        ? () => Navigator.of(context).pop(
+                              DateTimeRange(
+                                start: _pendingFrom!,
+                                end: _pendingTo!,
+                              ),
+                            )
+                        : null,
+                    child: const Text('Apply'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  DateTime _monthAtOffset(int i) {
+    final yr = _firstMonth.year + ((_firstMonth.month - 1 + i) ~/ 12);
+    final mo = ((_firstMonth.month - 1 + i) % 12) + 1;
+    return DateTime(yr, mo);
+  }
+}
+
+/// Pill chip that shows one endpoint of the pending range. The active
+/// chip is the one the next tap will populate (or replace) — driven
+/// from `_selectingEnd` in the sheet's state.
+class _EndpointChip extends StatelessWidget {
+  final String label;
+  final DateTime? date;
+  final bool active;
+
+  const _EndpointChip({
+    required this.label,
+    required this.date,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bg = active ? cs.primaryContainer : cs.surfaceContainerHighest;
+    final fg = active ? cs.onPrimaryContainer : cs.onSurface;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: active ? cs.primary : cs.outlineVariant,
+          width: active ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: fg.withAlpha(180),
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            date == null ? 'Tap a date' : _formatChip(date!),
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatChip(DateTime d) {
+    const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final now = DateTime.now();
+    final base = '${dows[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
+    return d.year == now.year ? base : '$base, ${d.year}';
+  }
+}
+
+/// One month's grid of day cells. Renders the month name + year header,
+/// then a 7-column grid of cells aligned to a Monday-first week. Cells
+/// outside the month show as blank spacers so adjacent months in the
+/// scroll don't visually overlap.
+class _MonthGrid extends StatelessWidget {
+  final DateTime month;
+  final DateTime? pendingFrom;
+  final DateTime? pendingTo;
+  final ValueChanged<DateTime> onTapDate;
+
+  const _MonthGrid({
+    required this.month,
+    required this.pendingFrom,
+    required this.pendingTo,
+    required this.onTapDate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final firstOfMonth = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    // Monday-first leading offset: weekday is 1=Mon..7=Sun in Dart.
+    final leading = firstOfMonth.weekday - 1;
+    final cells = leading + daysInMonth;
+    final rows = (cells / 7).ceil();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+            child: Text(
+              '${_RangeCalendarSheetState._kMonthNames[month.month - 1]} '
+              '${month.year}',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          for (int row = 0; row < rows; row++)
+            Row(
+              children: [
+                for (int col = 0; col < 7; col++)
+                  Expanded(
+                    child: _buildCell(context, row * 7 + col, leading,
+                        daysInMonth, firstOfMonth),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCell(BuildContext context, int idx, int leading,
+      int daysInMonth, DateTime firstOfMonth) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    if (idx < leading || idx >= leading + daysInMonth) {
+      return const AspectRatio(aspectRatio: 1, child: SizedBox());
+    }
+    final day = idx - leading + 1;
+    final date = DateTime(firstOfMonth.year, firstOfMonth.month, day);
+    final isStart =
+        pendingFrom != null && _sameDay(date, pendingFrom!);
+    final isEnd = pendingTo != null && _sameDay(date, pendingTo!);
+    final inRange = pendingFrom != null &&
+        pendingTo != null &&
+        date.isAfter(pendingFrom!) &&
+        date.isBefore(pendingTo!);
+    final isToday = _sameDay(date, DateTime.now());
+
+    // Cell decoration. The range fill is a rectangle that touches the
+    // sides of the cell so adjacent in-range cells form a continuous
+    // bar; the start / end caps are circles on top.
+    final cellChildren = <Widget>[];
+    if (inRange || isStart || isEnd) {
+      // Pill-fill background. Round the leading edge for the start
+      // cap and the trailing edge for the end cap so the bar terminates
+      // cleanly at both ends.
+      final radiusLeft = isStart ? 999.0 : 0.0;
+      final radiusRight = isEnd ? 999.0 : 0.0;
+      cellChildren.add(
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(radiusLeft),
+                  bottomLeft: Radius.circular(radiusLeft),
+                  topRight: Radius.circular(radiusRight),
+                  bottomRight: Radius.circular(radiusRight),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    // Endpoint cap: filled circle in the primary colour.
+    if (isStart || isEnd) {
+      cellChildren.add(
+        Center(
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$day',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else {
+      // Plain day cell. Today gets an outlined circle when not selected.
+      cellChildren.add(
+        Center(
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: isToday
+                ? BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: cs.primary, width: 1.4),
+                  )
+                : null,
+            alignment: Alignment.center,
+            child: Text(
+              '$day',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: inRange ? cs.onPrimaryContainer : cs.onSurface,
+                fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkResponse(
+          onTap: () => onTapDate(date),
+          radius: 28,
+          child: Stack(children: cellChildren),
+        ),
+      ),
+    );
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
