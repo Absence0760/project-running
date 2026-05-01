@@ -149,6 +149,20 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/backup_test.dart` — 20 tests
+
+Covers `BackupService.restore` on the offline path (no Supabase session — runs hydrate into `LocalRunStore` and `LocalRouteStore`, ready for `SyncService` to push once the user signs in). Builds synthetic backup zips in-memory using `package:archive` so the tests don't need a real backup file on disk. Initialises Supabase with the same fake-URL pattern the screen tests use (`http://127.0.0.1:54321`) so `BackupService(api: _OfflineApi())` can construct without hitting the network.
+
+**Manifest validation (4 tests):** missing manifest throws, mismatched `format` throws, version-too-new throws (forward-compat guard), current version is accepted.
+
+**Offline restore — runs (9 tests):** empty `runs.json` is a no-op, single run preserves id, missing `activity_type` defaults to `'run'` (matches the DB CHECK), explicit `activity_type` is preserved, gzipped track decodes onto `Run.track` with elevation + UTC timestamps intact, unknown `source` falls back to `RunSource.app`, `generateNewIds` actually replaces ids, non-Map entries are silently skipped, malformed rows surface in `result.warnings` without poisoning the rest.
+
+**Offline restore — routes (4 tests):** waypoints preserved with elevation, null `name` falls back to `'Route'`, `generateNewIds` replaces route ids, non-Map waypoint entries inside a route are silently skipped.
+
+**Guards + progress (3 tests):** offline restore with neither store supplied throws; supplying only `routeStore` leaves a warning that the run branch was skipped; the `onProgress` callback emits `reading → … → done` stages.
+
+The online path (`api.fetchRunRowsRaw` + Storage uploads) still needs a fake `SupabaseClient` to test, same constraint as the rest of `ApiClient`'s wire-level methods.
+
 ### `apps/mobile_android/test/sync_service_test.dart` — 10 tests
 
 Covers the `_trySync` loop on `SyncService` via the new `@visibleForTesting debugTrySync` hook. A `_FakeApiClient` subclasses `ApiClient` and overrides `userId`, `saveRunsBatch`, and `deleteRunById`; `LocalRunStore` runs against a real `tempDir` (same pattern as `local_run_store_test.dart`).
