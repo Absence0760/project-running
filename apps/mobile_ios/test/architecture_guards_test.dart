@@ -208,6 +208,24 @@ void main() {
       );
     });
 
+    test('_loadAll uses async directory listing, not listSync', () {
+      // Reason: listSync() blocks the UI thread while the OS walks every
+      // file in the runs directory. For a user with 1000+ runs this is
+      // a visible cold-start freeze masked only by the splash screen.
+      // _dir.list() is the streaming async equivalent — same result, no
+      // blocking.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _loadAll\(\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        isNot(contains('listSync')),
+        reason: '_loadAll must not call listSync() — use async _dir.list() '
+            'so the UI thread stays free during cold start.',
+      );
+    });
+
     test('save() stamps metadata.last_modified_at', () {
       // Reason: sync uses `metadata.last_modified_at` for newer-wins
       // conflict resolution (see saveFromRemote). A local save that
@@ -341,6 +359,74 @@ void main() {
         contains('Future.wait'),
         reason: 'routeStore._loadAll must use Future.wait — mirrors '
             'the same optimization applied to runStore.',
+      );
+      expect(
+        body,
+        isNot(contains('listSync')),
+        reason: 'routeStore._loadAll must use async _dir.list() — '
+            'mirrors the runStore freeze fix.',
+      );
+    });
+  });
+
+  group('heavy parsers run in compute() isolates', () {
+    test('StravaImporter.importFromZip dispatches to compute()', () {
+      // Reason: a 5-year Strava export contains hundreds of activities,
+      // each requiring GZip decode + XML / FIT parse. Doing that on the
+      // UI thread freezes the foreground for tens of seconds. The whole
+      // sync-parse body must run inside compute() so the import progress
+      // dialog can keep rendering.
+      final src = File('lib/strava_importer.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        src,
+        r'static Future<StravaImportResult> importFromZip\([^)]*\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('compute('),
+        reason: 'importFromZip must dispatch ZipDecoder + per-file parse '
+            'into compute() — the parsers run synchronously and would '
+            'otherwise block the UI for tens of seconds on a large export.',
+      );
+    });
+
+    test('BackupService zip encode runs in a background isolate', () {
+      // Reason: ZipEncoder().encode(archive) on a multi-MB backup
+      // (thousands of runs + tracks) blocks the UI for seconds. The
+      // _encodeArchiveInIsolate helper extracts entries on the main
+      // isolate and pushes the encoder into compute().
+      final src = File('lib/backup.dart').readAsStringSync();
+      expect(
+        src,
+        contains('_encodeArchiveInIsolate'),
+        reason: 'backup.dart must keep the _encodeArchiveInIsolate helper '
+            '— inlining ZipEncoder().encode(archive) on the main isolate '
+            'reintroduces a multi-second UI freeze on a large backup.',
+      );
+      expect(
+        src,
+        contains('_decodeArchiveInIsolate'),
+        reason: 'backup.dart must keep the _decodeArchiveInIsolate helper '
+            '— inlining ZipDecoder().decodeBytes(bytes) on the main isolate '
+            'reintroduces a multi-second UI freeze when restoring.',
+      );
+    });
+
+    test('Single-file route import dispatches to compute()', () {
+      // Reason: a 5MB GPX file (long ride exported as a route) parses on
+      // a single XmlDocument call that takes hundreds of ms on a phone.
+      // The routes-screen import must wrap the parse in compute() so the
+      // user-tap → save flow doesn't lock up.
+      final src = File('lib/screens/routes_screen.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        src,
+        r'Future<void> _importFile\(\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('compute('),
+        reason: '_importFile must run RouteParser.fromGpx / fromKml inside '
+            'compute() so a large file does not freeze the routes screen.',
       );
     });
   });
