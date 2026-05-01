@@ -1,6 +1,12 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import {
+	type StravaActivity,
+	type StravaTokens,
+	ingestActivity,
+	refreshStravaToken,
+} from '../_shared/strava.ts';
 
 // `strava-import` handles two modes, selected by the `action` field:
 //
@@ -16,31 +22,9 @@ import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
 //   (stored in `metadata.strava_id`). Skips activities already ingested
 //   so repeat syncs are cheap.
 //
-// The GPS stream endpoint is called opportunistically — small runs
-// (< 200 m) are saved as a scalar row without a track. For longer
-// activities the stream is fetched, gzipped, uploaded to the `runs`
-// Storage bucket, and the row's `track_url` is set.
-
-type StravaTokens = {
-	access_token: string;
-	refresh_token: string;
-	expires_at: number;
-	athlete: { id: number };
-};
-
-type StravaActivity = {
-	id: number;
-	name: string;
-	distance: number; // m
-	moving_time: number; // s
-	elapsed_time: number; // s
-	total_elevation_gain: number; // m
-	start_date: string; // ISO
-	type: string; // "Run", "Walk", "Hike", "Ride", etc.
-	sport_type?: string;
-	average_heartrate?: number;
-	has_heartrate?: boolean;
-};
+// Per-activity ingestion (insert + GPS-stream fetch + Storage upload)
+// lives in `../_shared/strava.ts` so the `strava-webhook` EF reuses
+// the same path without drift.
 
 serve(async (req: Request) => {
 	if (req.method !== 'POST') {
@@ -175,33 +159,6 @@ async function handleSync(
 	return Response.json(result);
 }
 
-async function refreshStravaToken(
-	supabase: ReturnType<typeof createClient>,
-	userId: string,
-	refreshToken: string,
-): Promise<string | null> {
-	const resp = await fetch('https://www.strava.com/oauth/token', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			client_id: Deno.env.get('STRAVA_CLIENT_ID'),
-			client_secret: Deno.env.get('STRAVA_CLIENT_SECRET'),
-			refresh_token: refreshToken,
-			grant_type: 'refresh_token',
-		}),
-	});
-	if (!resp.ok) return null;
-	const tokens = (await resp.json()) as StravaTokens;
-	await supabase.rpc('set_integration_tokens', {
-		p_user_id: userId,
-		p_provider: 'strava',
-		p_access_token: tokens.access_token,
-		p_refresh_token: tokens.refresh_token,
-		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
-	});
-	return tokens.access_token;
-}
-
 async function backfill(
 	supabase: ReturnType<typeof createClient>,
 	userId: string,
@@ -269,141 +226,4 @@ async function backfill(
 		.eq('provider', 'strava');
 
 	return { imported, skipped, failed };
-}
-
-async function ingestActivity(
-	supabase: ReturnType<typeof createClient>,
-	userId: string,
-	accessToken: string,
-	act: StravaActivity,
-): Promise<void> {
-	// Start with scalar fields. The track is attached separately via
-	// Storage upload; the DB row holds the URL not the payload.
-	const activityType = (act.sport_type ?? act.type ?? 'Run').toLowerCase().includes('walk')
-		? 'walk'
-		: (act.sport_type ?? act.type ?? '').toLowerCase().includes('hike')
-			? 'hike'
-			: 'run';
-
-	const metadata: Record<string, unknown> = {
-		strava_id: act.id,
-		activity_type: activityType,
-		imported_from: 'strava',
-		imported_at: new Date().toISOString(),
-		strava_activity_type: act.type,
-	};
-	if (act.average_heartrate) metadata.avg_bpm = Math.round(act.average_heartrate);
-	if (act.name) metadata.title = act.name;
-	if (act.total_elevation_gain != null) metadata.elevation_m = Math.round(act.total_elevation_gain);
-
-	// Insert the run first so we have its id for the Storage path.
-	// Note: `runs` has no `title` or `elevation_m` columns — both live on
-	// `metadata` per docs/metadata.md (matches the apps/web/src/lib/data.ts
-	// saveRun writer used by the Strava + Garmin ZIP importers).
-	const { data: inserted, error } = await supabase
-		.from('runs')
-		.insert({
-			user_id: userId,
-			started_at: act.start_date,
-			distance_m: Math.round(act.distance),
-			duration_s: act.moving_time || act.elapsed_time,
-			source: 'strava',
-			metadata,
-		})
-		.select('id')
-		.single();
-
-	if (error || !inserted) throw error ?? new Error('Insert failed');
-
-	const runId = inserted.id as string;
-
-	// Best-effort GPS stream fetch. Short / indoor activities have no
-	// stream and Strava returns 404 — don't treat that as a failure.
-	if (act.distance >= 200) {
-		try {
-			const streamResp = await fetch(
-				`https://www.strava.com/api/v3/activities/${act.id}/streams?keys=latlng,altitude,time,heartrate&key_by_type=true`,
-				{ headers: { Authorization: `Bearer ${accessToken}` } },
-			);
-			if (streamResp.ok) {
-				const streams = await streamResp.json();
-				const track = buildTrackFromStreams(streams, act.start_date);
-				if (track.length >= 2) {
-					await uploadTrack(supabase, userId, runId, track);
-				}
-			}
-		} catch (_) {
-			// Swallow — the row is still valid without a track.
-		}
-	}
-}
-
-function buildTrackFromStreams(
-	streams: Record<string, { data: unknown[] }>,
-	startIso: string,
-): Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }> {
-	const latlng = streams.latlng?.data as [number, number][] | undefined;
-	if (!Array.isArray(latlng) || latlng.length === 0) return [];
-	const altitude = streams.altitude?.data as number[] | undefined;
-	const time = streams.time?.data as number[] | undefined;
-	const hr = streams.heartrate?.data as number[] | undefined;
-	const startMs = Date.parse(startIso);
-
-	const out: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }> = [];
-	for (let i = 0; i < latlng.length; i++) {
-		const pair = latlng[i];
-		if (!Array.isArray(pair) || pair.length < 2) continue;
-		const [lat, lng] = pair;
-		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-		const point: { lat: number; lng: number; ele?: number; ts?: string; bpm?: number } = {
-			lat,
-			lng,
-		};
-		if (altitude?.[i] != null) point.ele = altitude[i];
-		if (time?.[i] != null && Number.isFinite(startMs)) {
-			point.ts = new Date(startMs + time[i] * 1000).toISOString();
-		}
-		if (hr?.[i] != null && hr[i] >= 30 && hr[i] <= 230) point.bpm = hr[i];
-		out.push(point);
-	}
-	return out;
-}
-
-async function uploadTrack(
-	supabase: ReturnType<typeof createClient>,
-	userId: string,
-	runId: string,
-	track: unknown[],
-): Promise<void> {
-	const path = `${userId}/${runId}.json.gz`;
-	const json = new TextEncoder().encode(JSON.stringify(track));
-	const gzipped = await gzipBytes(json);
-	const { error: upErr } = await supabase.storage
-		.from('runs')
-		.upload(path, new Blob([gzipped], { type: 'application/gzip' }), {
-			contentType: 'application/gzip',
-			upsert: true,
-		});
-	if (upErr) throw upErr;
-	await supabase.from('runs').update({ track_url: path }).eq('id', runId);
-}
-
-async function gzipBytes(data: Uint8Array): Promise<Uint8Array> {
-	const cs = new (globalThis as any).CompressionStream('gzip');
-	const stream = new Response(data).body!.pipeThrough(cs);
-	const chunks: Uint8Array[] = [];
-	const reader = stream.getReader();
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		chunks.push(value as Uint8Array);
-	}
-	const total = chunks.reduce((a, c) => a + c.length, 0);
-	const out = new Uint8Array(total);
-	let offset = 0;
-	for (const c of chunks) {
-		out.set(c, offset);
-		offset += c.length;
-	}
-	return out;
 }

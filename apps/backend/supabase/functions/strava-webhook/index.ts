@@ -16,73 +16,162 @@
 /// Without STRAVA_WEBHOOK_SECRET set, the function refuses all POSTs
 /// (and all GETs that don't supply the secret) — the only correct
 /// behaviour for a misconfigured webhook is to fail closed.
+///
+/// Activity ingestion is delegated to `../_shared/strava.ts` so the
+/// webhook and the backfill EF (`strava-import`) write byte-identical
+/// rows. A webhook firing while a backfill is mid-run is harmless —
+/// the dedupe check on `metadata.strava_id` short-circuits.
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+	fetchStravaActivity,
+	ingestActivity,
+	isAlreadyImported,
+	refreshStravaToken,
+} from '../_shared/strava.ts';
 
 serve(async (req: Request) => {
-  const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
-  if (!webhookSecret) {
-    return new Response('Webhook not configured', { status: 503 });
-  }
+	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
+	if (!webhookSecret) {
+		return new Response('Webhook not configured', { status: 503 });
+	}
 
-  const url = new URL(req.url);
-  const suppliedSecret = url.searchParams.get('secret');
-  if (!suppliedSecret || !timingSafeEqual(suppliedSecret, webhookSecret)) {
-    return new Response('Forbidden', { status: 403 });
-  }
+	const url = new URL(req.url);
+	const suppliedSecret = url.searchParams.get('secret');
+	if (!suppliedSecret || !timingSafeEqual(suppliedSecret, webhookSecret)) {
+		return new Response('Forbidden', { status: 403 });
+	}
 
-  // GET: Strava webhook subscription handshake.
-  if (req.method === 'GET') {
-    const challenge = url.searchParams.get('hub.challenge');
-    const verifyToken = url.searchParams.get('hub.verify_token');
+	// GET: Strava webhook subscription handshake.
+	if (req.method === 'GET') {
+		const challenge = url.searchParams.get('hub.challenge');
+		const verifyToken = url.searchParams.get('hub.verify_token');
 
-    if (verifyToken !== Deno.env.get('STRAVA_VERIFY_TOKEN')) {
-      return new Response('Forbidden', { status: 403 });
-    }
+		if (verifyToken !== Deno.env.get('STRAVA_VERIFY_TOKEN')) {
+			return new Response('Forbidden', { status: 403 });
+		}
 
-    return Response.json({ 'hub.challenge': challenge });
-  }
+		return Response.json({ 'hub.challenge': challenge });
+	}
 
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
+	if (req.method !== 'POST') {
+		return new Response('Method not allowed', { status: 405 });
+	}
 
-  // POST: Activity event from Strava.
-  const { object_type, object_id: _object_id, aspect_type, owner_id } = await req.json();
+	// POST: Activity event from Strava. Payload shape:
+	//   { object_type, object_id, aspect_type, owner_id, subscription_id,
+	//     event_time, updates }
+	// We only handle 'activity' / 'create' — updates and deletes are
+	// ignored (the backfill picks up edits on the next manual sync).
+	let event: {
+		object_type?: string;
+		object_id?: number;
+		aspect_type?: string;
+		owner_id?: number;
+	};
+	try {
+		event = await req.json();
+	} catch (_) {
+		return new Response('Invalid JSON', { status: 400 });
+	}
 
-  if (object_type !== 'activity' || aspect_type !== 'create') {
-    return new Response('OK');
-  }
+	if (event.object_type !== 'activity' || event.aspect_type !== 'create') {
+		// Strava expects a 200 within 2s for any POST; logging 'OK' for
+		// non-actionable events keeps the subscription healthy without
+		// implying we did work.
+		return new Response('OK');
+	}
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  );
+	const activityId = event.object_id;
+	const ownerId = event.owner_id;
+	if (!activityId || !ownerId) {
+		return new Response('Missing object_id or owner_id', { status: 400 });
+	}
 
-  // Look up user by Strava athlete ID. The token now lives in Vault;
-  // we only need user_id from the integration row, then a follow-up
-  // RPC to decrypt when the activity-fetch TODO below is wired.
-  const { data: integration } = await supabase
-    .from('integrations')
-    .select('user_id')
-    .eq('provider', 'strava')
-    .eq('external_id', String(owner_id))
-    .single();
+	const supabase = createClient(
+		Deno.env.get('SUPABASE_URL')!,
+		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+	);
 
-  if (!integration) {
-    return new Response('User not found', { status: 404 });
-  }
+	// Look up user by Strava athlete ID.
+	const { data: integration } = await supabase
+		.from('integrations')
+		.select('user_id')
+		.eq('provider', 'strava')
+		.eq('external_id', String(ownerId))
+		.single();
 
-  // TODO: Fetch activity detail + GPS stream from Strava API
-  //   const { data: tokenRows } = await supabase.rpc('get_integration_tokens', {
-  //     p_user_id: integration.user_id,
-  //     p_provider: 'strava',
-  //   });
-  //   const accessToken = tokenRows?.[0]?.access_token;
-  // TODO: Map to Run and upsert into runs table
+	if (!integration) {
+		// User isn't connected (or disconnected since the webhook fired).
+		// Returning 200 prevents Strava from retrying a payload we can
+		// never act on; 404 would have them retry.
+		return new Response('OK');
+	}
 
-  return new Response('OK');
+	const userId = integration.user_id as string;
+
+	// Dedupe early. A backfill running concurrently may have already
+	// written this activity; no point fetching the detail again.
+	if (await isAlreadyImported(supabase, userId, activityId)) {
+		return new Response('OK');
+	}
+
+	// Pull a fresh access token from Vault. Refresh ad-hoc if it's
+	// within 5 minutes of expiry — webhooks fire whenever Strava feels
+	// like it, including hours after the user last opened the app.
+	const { data: tokenRows, error: tokenErr } = await supabase.rpc(
+		'get_integration_tokens',
+		{ p_user_id: userId, p_provider: 'strava' },
+	);
+	const tokenRow = tokenRows?.[0];
+	if (tokenErr || !tokenRow?.access_token) {
+		// User disconnected Strava but the integration row outlived the
+		// disconnect (or Vault returned nothing for another reason). We
+		// can't act on this event; ack 200 so Strava stops retrying.
+		return new Response('OK');
+	}
+
+	let accessToken = tokenRow.access_token as string;
+	if (tokenRow.token_expiry) {
+		const expiryMs = new Date(tokenRow.token_expiry as string).getTime();
+		if (Date.now() + 300_000 > expiryMs) {
+			const refreshed = await refreshStravaToken(
+				supabase,
+				userId,
+				tokenRow.refresh_token as string,
+			);
+			if (refreshed) accessToken = refreshed;
+		}
+	}
+
+	const activity = await fetchStravaActivity(accessToken, activityId);
+	if (!activity) {
+		// Activity vanished between webhook + fetch (deleted within
+		// seconds, very unusual but possible). 200 prevents retries.
+		return new Response('OK');
+	}
+
+	// Drop activities Strava records but we don't surface — rides etc.
+	// `ingestActivity` itself doesn't filter, so the gate lives here.
+	const sportLower = (activity.sport_type ?? activity.type ?? '').toLowerCase();
+	if (
+		!sportLower.includes('run') &&
+		!sportLower.includes('walk') &&
+		!sportLower.includes('hike')
+	) {
+		return new Response('OK');
+	}
+
+	try {
+		await ingestActivity(supabase, userId, accessToken, activity);
+	} catch (err) {
+		// Log but ack 200 so Strava doesn't retry — a retried import
+		// would create a duplicate before the dedupe can catch it.
+		console.error('strava-webhook ingest failed', { activityId, userId, err });
+	}
+
+	return new Response('OK');
 });
 
 /// Constant-time string compare so an attacker can't tease out the
@@ -92,10 +181,10 @@ serve(async (req: Request) => {
 /// length of the secret which is fixed and known to anyone who reads
 /// this source, not new information).
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
+	if (a.length !== b.length) return false;
+	let mismatch = 0;
+	for (let i = 0; i < a.length; i++) {
+		mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+	}
+	return mismatch === 0;
 }

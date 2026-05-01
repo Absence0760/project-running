@@ -952,7 +952,15 @@ Exports all of a user's runs as a GPX zip or CSV. GDPR data portability.
 ```
 
 **Response:**
-A signed Supabase Storage URL pointing to the generated file, valid for 10 minutes.
+```json
+{ "url": "https://<ref>.supabase.co/storage/v1/object/sign/runs/<user_id>/exports/<ts>.zip?token=...",
+  "path": "<user_id>/exports/<ts>.zip",
+  "expires_in": 600,
+  "count": 142,
+  "format": "gpx" }
+```
+
+A signed Supabase Storage URL pointing to the generated artifact, valid for 10 minutes. CSV produces a single row-per-run file. GPX produces a zip containing one `runs/<run_id>.gpx` per run that has a track plus a top-level `runs.json` manifest mirroring the CSV column set. Capped at 5000 runs per export. Rate limit: free 2/h, pro 8/h via `check_rate_limit_tiered`.
 
 ---
 
