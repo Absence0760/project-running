@@ -129,6 +129,11 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `backup.dart` — export + import of the local run / route stores (troubleshooting + device-swap path)
 - `recurrence.dart` — Dart port of `apps/web/src/lib/recurrence.ts`, keep in sync
 - `training.dart` — Dart port of `apps/web/src/lib/training.ts` (VDOT, Riegel, plan generator); keep in sync, 17-test mirror suite in `test/training_test.dart`
+- `backend_timeout.dart` — guarded `Future.timeout` wrapper for every PostgREST + Storage call so a single hung request can't lock the UI for the system default. Used by the home screen's pull-to-refresh and the sync paths.
+- `watch_ingest_queue.dart` — disk-backed buffer for incoming watch payloads. iOS only writes to it (the Android-side method channel is a no-op); replays on sign-in / connectivity return so a phone restart doesn't lose a run that landed from the watch while the user was signed out.
+- `widgets/error_state.dart` — reusable empty/error/retry surface used by every screen that fetches from Supabase. Widget-tested.
+- `widgets/route_share_card.dart` — portrait-orientation share card for routes (sibling of `widgets/run_share_card.dart`). Same `RepaintBoundary.toImage` → `share_plus` flow.
+- `fit_export.dart` — FIT-binary writer for runs, used by Settings → Export run. Sibling of `lib/gpx_export.dart`. 3 tests in `test/fit_export_test.dart`.
 
 ## Dart analyzer policy — treat `info` as noise
 

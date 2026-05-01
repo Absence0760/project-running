@@ -52,6 +52,7 @@ src/
     privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
     training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.
     segments.ts     # Pure compute for segment efforts — haversine cumulative distance + timestamp interpolation. 8 unit tests. Used by RunSegmentEfforts on /runs/[id] for client-side auto-effort generation. Decisions §37.
+    route_history.ts  # "Past efforts on this route" panel data (10 unit tests in route_history.test.ts). Mounted on /routes/[id] under the map.
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
     feed/           # Activity feed — public runs from people you follow, time-windowed to last 14 days (FEED_WINDOW_DAYS in data.ts). Cursor-paginated on (started_at, id) at 20-per-page. Full-width card grid with per-entry track preview. Toolbar: activity-segmented + author searchable combobox + window hint. Cards open RunShareView in a modal. (decisions §31)

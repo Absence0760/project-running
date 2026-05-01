@@ -247,61 +247,23 @@ Optional — only needed if you're touching the paywall flow. Without `PUBLIC_RE
 
 ## Project structure
 
-```
-apps/web/
-├── src/
-│   ├── routes/                    # SvelteKit file-based routing
-│   │   ├── +layout.svelte         # Root layout
-│   │   ├── +page.svelte           # Landing page (/)
-│   │   ├── login/                 # Auth page (email/password + Google/Apple OAuth)
-│   │   ├── auth/callback/         # OAuth redirect handler
-│   │   ├── dashboard/             # Stats, mileage chart (week/month/year), heatmap, PRs, source filter
-│   │   ├── routes/                # Route builder + library
-│   │   │   ├── new/               # Full-screen route builder
-│   │   │   └── [id]/              # Route detail with GPX/KML export + share link
-│   │   ├── runs/                  # Run history with source filtering
-│   │   │   └── [id]/              # Run detail: GPS trace with replay, elevation, splits, HR
-│   │   ├── live/[id]/             # Live spectator view (public, no auth)
-│   │   ├── share/
-│   │   │   ├── route/[id]/        # Public shared route page
-│   │   │   └── run/[id]/          # Public shared run page
-│   │   ├── coach/                 # Standalone AI coach with plan switcher + runs-limit chip
-│   │   └── settings/
-│   │       ├── integrations/      # Connect/disconnect Strava, Garmin, parkrun, HealthKit
-│   │       ├── account/           # Profile, parkrun number, sign-in methods, CSV export
-│   │       ├── preferences/       # Units, pace format, map style, HR zones, privacy, theme
-│   │       ├── devices/           # Per-device setting overrides
-│   │       └── upgrade/           # Pro-tier checkout (RevenueCat)
-│   ├── lib/
-│   │   ├── supabase.ts            # Browser Supabase client
-│   │   ├── supabase-server.ts     # Server-side Supabase client
-│   │   ├── types.ts               # TypeScript interfaces
-│   │   ├── routing.ts             # OSRM road-snapping API
-│   │   ├── elevation.ts           # Open-Meteo elevation lookups
-│   │   ├── gpx.ts                 # GPX + KML export generator
-│   │   ├── import.ts              # GPX/KML/KMZ/GeoJSON file parser
-│   │   ├── data.ts                # Supabase data access layer
-│   │   ├── stores/
-│   │   │   └── auth.svelte.ts         # Supabase auth store (OAuth + session)
-│   │   └── components/
-│   │       ├── RouteBuilder.svelte      # MapLibre map with waypoints
-│   │       ├── RunMap.svelte            # MapLibre GPS trace viewer (reactive to map_style)
-│   │       ├── ElevationProfile.svelte  # Responsive SVG elevation chart
-│   │       ├── CalendarHeatmap.svelte   # GitHub-style activity heatmap
-│   │       ├── PlanCalendar.svelte      # Plan-week calendar grid
-│   │       ├── CoachChat.svelte         # AI coach UI (provider-agnostic via /api/coach)
-│   │       ├── ImportRoute.svelte       # Drag-and-drop route file import modal
-│   │       ├── ClubEditor.svelte        # Modal-host create form for clubs
-│   │       ├── EventEditor.svelte       # Modal-host create form for club events
-│   │       ├── PlanEditor.svelte        # Modal-host create form for training plans
-│   │       └── RunEditor.svelte         # Modal-host create form for manual runs
-│   ├── app.html
-│   ├── app.css
-│   └── app.d.ts
-├── svelte.config.js
-├── vite.config.ts
-└── package.json
-```
+The route + component tree drifts fast as features ship. The canonical
+inventory now lives in [`apps/web/CLAUDE.md`](CLAUDE.md) (see its
+Folder Structure block) and stays current alongside the code.
+
+A short orientation, organised by capability rather than by folder:
+
+- **Auth + entry**: `routes/login/`, `routes/auth/callback/`, `routes/+layout.svelte` (sidebar shell with collapsible state, notification bell, profile button).
+- **Stats + history**: `routes/dashboard/`, `routes/dashboard/period/[type]/[date]/`, `routes/runs/`, `routes/runs/[id]/`, `routes/feed/`.
+- **Routes**: `routes/routes/` (tabs: My + Explore), `routes/routes/new/` (builder), `routes/routes/[id]/`, `routes/explore/` (thin redirect).
+- **Sharing (public, no auth)**: `routes/share/run/[id]/`, `routes/share/route/[id]/`, `routes/u/[id]/`, `routes/live/[id]/`, `routes/live/event/[id]/[instance]/`.
+- **Social**: `routes/clubs/`, `routes/clubs/new/`, `routes/clubs/[slug]/`, `routes/clubs/[slug]/events/new/`, `routes/clubs/[slug]/events/[id]/`, `routes/clubs/join/[token]/`.
+- **Plans + coach**: `routes/plans/`, `routes/plans/new/`, `routes/plans/[id]/`, `routes/plans/[id]/workouts/[wid]/`, `routes/coach/`, `routes/api/coach/+server.ts`.
+- **Settings**: `routes/settings/{account,preferences,integrations,devices,upgrade,licenses}/`.
+- **Manual creation**: `routes/runs/new/` (alongside the modal-hosted `RunEditor`).
+- **Lib**: `lib/data.ts` (every Supabase query), `lib/types.ts` (overlays), `lib/training.ts` (VDOT engine), `lib/training_load.ts` (TRIMP / fitness / fatigue / form), `lib/segments.ts`, `lib/privacy.ts`, `lib/route_history.ts`, `lib/strava-zip.ts`, `lib/garmin-zip.ts`, `lib/garmin-fit.ts`, `lib/push.ts`, `lib/settings.ts`, `lib/units.svelte.ts`, `lib/map-style.svelte.ts`, `lib/theme.ts`. Stores under `lib/stores/` (`auth`, `toast`, `notifications`).
+- **Components** (under `lib/components/`): `RunMap`, `RunTrackPreview`, `TrackPreview`, `ElevationProfile`, `RouteBuilder`, `RouteExplorer`, `ImportRoute`, `RunEditor`, `ClubEditor`, `EventEditor`, `PlanEditor`, `PlanMetaEditor`, `PlanCalendar`, `CalendarHeatmap`, `TrainingLoadChart`, `PeriodSummary`, `CoachChat`, `RunSocial`, `RunPhotos`, `RunSegmentEfforts`, `SegmentsPanel`, `RunShareView`, `NotificationBell`, `NotificationsList`, `PrivacyZonePicker`, `LicenseList`, `Modal`, `ConfirmDialog`, `ToastContainer`, `ProGate`, `SplitPane`, `WorkoutEditor`.
+- **Top-level files**: `src/app.html`, `src/app.css`, `src/app.d.ts`, `svelte.config.js`, `vite.config.ts`, `package.json`. The repo bootstrapped with pnpm so `apps/web/pnpm-lock.yaml` exists alongside the npm workspace; CI uses npm.
 
 ---
 
