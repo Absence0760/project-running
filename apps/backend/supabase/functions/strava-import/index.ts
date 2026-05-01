@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import { withSentry } from '../_shared/sentry.ts';
 import {
 	type StravaActivity,
 	type StravaTokens,
@@ -26,7 +27,7 @@ import {
 // lives in `../_shared/strava.ts` so the `strava-webhook` EF reuses
 // the same path without drift.
 
-serve(async (req: Request) => {
+serve(withSentry('strava-import', async (req: Request) => {
 	if (req.method !== 'POST') {
 		return new Response('Method not allowed', { status: 405 });
 	}
@@ -66,7 +67,7 @@ serve(async (req: Request) => {
 		return handleSync(supabase, user.id, body.lookbackDays ?? 90);
 	}
 	return new Response('Unknown action', { status: 400 });
-});
+}));
 
 async function handleConnect(
 	supabase: ReturnType<typeof createClient>,

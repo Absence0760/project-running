@@ -83,7 +83,9 @@ supabase secrets set --project-ref <ref> \
   STRAVA_CLIENT_SECRET="..." \
   STRAVA_VERIFY_TOKEN="$(openssl rand -hex 16)" \
   STRAVA_WEBHOOK_SECRET="$(openssl rand -hex 32)" \
-  REVENUECAT_WEBHOOK_SECRET="..."   # paste from RevenueCat dashboard
+  REVENUECAT_WEBHOOK_SECRET="..."   # paste from RevenueCat dashboard \
+  SENTRY_DSN="..."                  # backend Sentry project DSN; empty disables \
+  APP_RELEASE="backend@$(git describe --tags --abbrev=0)"
 ```
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by the platform — you don't `supabase secrets set` those.
@@ -168,7 +170,7 @@ The schema is what local `supabase db reset` builds — see [api_database.md](..
 
 **External uptime probe** (Better Stack or UptimeRobot): hit `https://api.runonward.app/rest/v1/runs?select=count&limit=0`. It's a cheap PostgREST call that returns 200 only if Postgres is up + PostgREST is up + RLS still permits the anon role to read the table count. Set the alarm threshold at 2 consecutive failures (60 s gap).
 
-**Sentry on the EF side:** the EFs don't currently call `Sentry.captureException` — adding `_shared/sentry.ts` and wiring it through `parkrun-import` / `strava-import` first would catch the cases that today only show up as a 500 in the EF log without context. Tracked as a follow-up.
+**Sentry on the EF side:** every EF wraps its `serve` handler in `withSentry('<ef-name>', ...)` from `functions/_shared/sentry.ts`. Unhandled errors are captured with the EF name as a tag, then a 500 is returned so the caller still gets a clean response. Init is gated on `SENTRY_DSN` — set it via `supabase secrets set SENTRY_DSN=... APP_RELEASE=<tag>` against the linked project; an unset DSN makes the wrapper a passthrough so local `supabase functions serve` doesn't need a Sentry account.
 
 ---
 

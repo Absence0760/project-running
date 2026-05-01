@@ -53,6 +53,10 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_markdown: ^0.7.4
   sign_in_with_apple: ^6.0.0
+  # Crash reporting + breadcrumb trail for production builds. Init in
+  # lib/main.dart's runZonedGuarded so unhandled errors land tagged with
+  # the build's versionName; off when SENTRY_DSN is unset (dev / debug).
+  sentry_flutter: ^8.0.0
 
 dev_dependencies:
   flutter_test:

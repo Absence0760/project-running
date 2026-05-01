@@ -12,8 +12,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hmac } from 'https://deno.land/x/hmac@v2.0.1/mod.ts';
+import { withSentry } from '../_shared/sentry.ts';
 
-serve(async (req: Request) => {
+serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -106,7 +107,7 @@ serve(async (req: Request) => {
   }
 
   return Response.json({ ok: true, new_tier: newTier });
-});
+}));
 
 interface RevenueCatEvent {
   type: string;

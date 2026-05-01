@@ -33,6 +33,7 @@ import {
 	ZipWriter,
 } from 'https://deno.land/x/zipjs@v2.7.45/index.js';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import { withSentry } from '../_shared/sentry.ts';
 
 const MAX_RUNS = 5000;
 const SIGNED_URL_TTL_S = 600; // 10 minutes
@@ -62,7 +63,7 @@ type TrackPoint = {
 	bpm?: number;
 };
 
-serve(async (req: Request) => {
+serve(withSentry('export-data', async (req: Request) => {
 	if (req.method !== 'POST') {
 		return new Response('Method not allowed', { status: 405 });
 	}
@@ -151,7 +152,7 @@ serve(async (req: Request) => {
 		count: runs?.length ?? 0,
 		format,
 	});
-});
+}));
 
 function buildCsv(runs: RunRow[]): string {
 	// Field set kept stable across the GDPR export so a user-owned

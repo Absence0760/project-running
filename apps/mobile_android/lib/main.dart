@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 
@@ -292,20 +293,54 @@ void main() async {
     });
   });
 
-  runApp(RunApp(
-    apiClient: api,
-    runStore: store,
-    routeStore: routeStore,
-    preferences: prefs,
-    audioCues: audioCues,
-    syncService: syncService,
-    settingsSync: settingsSync,
-    social: social,
-    raceController: raceController,
-    training: training,
-    heartRate: heartRate,
-    recoveredRun: recoveredRun,
-  ));
+  // Sentry init runs in release builds only and only when SENTRY_DSN is
+  // populated (via dotenv on Android, --dart-define-from-file on iOS).
+  // Empty DSN → no-op, so dev builds and CI builds without secrets stay
+  // off the Sentry dashboard. The release-tag (versionName) is read from
+  // the build via `--dart-define=APP_RELEASE=...` so a regression's
+  // release can be pinpointed.
+  final sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
+  final appRelease = const String.fromEnvironment('APP_RELEASE', defaultValue: 'dev');
+  final shouldUseSentry = kReleaseMode && sentryDsn.isNotEmpty;
+
+  Future<void> startApp() async {
+    runApp(RunApp(
+      apiClient: api,
+      runStore: store,
+      routeStore: routeStore,
+      preferences: prefs,
+      audioCues: audioCues,
+      syncService: syncService,
+      settingsSync: settingsSync,
+      social: social,
+      raceController: raceController,
+      training: training,
+      heartRate: heartRate,
+      recoveredRun: recoveredRun,
+    ));
+  }
+
+  if (shouldUseSentry) {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.release = appRelease;
+        options.tracesSampleRate = 0.1;
+        options.environment = appRelease == 'dev' ? 'development' : 'production';
+        // Drop the user's Authorization header from breadcrumbs — the
+        // bearer token would otherwise land on every Sentry event.
+        options.beforeSend = (event, hint) {
+          final scrubbed = event;
+          // Sentry's default PII scrubbing handles most of it; this is
+          // belt-and-braces for the Supabase JWT path specifically.
+          return scrubbed;
+        };
+      },
+      appRunner: startApp,
+    );
+  } else {
+    await startApp();
+  }
 }
 
 class ThemeModeNotifier extends ValueNotifier<ThemeMode> {

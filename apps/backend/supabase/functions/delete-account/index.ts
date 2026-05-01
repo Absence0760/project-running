@@ -1,8 +1,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
+import { withSentry } from '../_shared/sentry.ts';
 
-serve(async (req: Request) => {
+serve(withSentry('delete-account', async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -50,4 +51,4 @@ serve(async (req: Request) => {
   }
 
   return Response.json({ ok: true });
-});
+}));

@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModelProvider
 import androidx.wear.ambient.AmbientLifecycleObserver
 import com.runapp.watchwear.ui.RunWatchApp
+import io.sentry.android.core.SentryAndroid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -47,6 +48,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.SENTRY_DSN.isNotEmpty()) {
+            SentryAndroid.init(applicationContext) { options ->
+                options.dsn = BuildConfig.SENTRY_DSN
+                options.release = BuildConfig.APP_RELEASE
+                options.environment = if (BuildConfig.APP_RELEASE == "dev") "development" else "production"
+                options.tracesSampleRate = 0.1
+            }
+        }
         if (hasWearableLibrary()) {
             lifecycle.addObserver(AmbientLifecycleObserver(this, ambientCallback))
         }

@@ -2,8 +2,9 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import { withSentry } from '../_shared/sentry.ts';
 
-serve(async (req: Request) => {
+serve(withSentry('parkrun-import', async (req: Request) => {
   // Authenticate before parsing the body. Malformed JSON from an
   // unauthenticated caller would otherwise produce a 500 distinguishable
   // from a 401, and any future code added between the parse and the
@@ -74,7 +75,7 @@ serve(async (req: Request) => {
   }
 
   return Response.json({ imported: runs.length, skipped: 0 });
-});
+}));
 
 function parseParkrunDate(d: string): string {
   const [dd, mm, yyyy] = d.split('/');

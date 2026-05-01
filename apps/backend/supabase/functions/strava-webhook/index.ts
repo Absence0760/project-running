@@ -30,8 +30,9 @@ import {
 	isAlreadyImported,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
+import { withSentry } from '../_shared/sentry.ts';
 
-serve(async (req: Request) => {
+serve(withSentry('strava-webhook', async (req: Request) => {
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
 		return new Response('Webhook not configured', { status: 503 });
@@ -172,7 +173,7 @@ serve(async (req: Request) => {
 	}
 
 	return new Response('OK');
-});
+}));
 
 /// Constant-time string compare so an attacker can't tease out the
 /// secret one character at a time via response-timing differences.

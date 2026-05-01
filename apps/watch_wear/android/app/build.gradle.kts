@@ -81,6 +81,18 @@ android {
             "String", "PUBLIC_MAPTILER_KEY",
             "\"${envString("PUBLIC_MAPTILER_KEY")}\"",
         )
+        // Sentry crash reporting. Empty DSN ⇒ Sentry is a no-op
+        // (matches the dotenv-gated behaviour in the mobile_android +
+        // mobile_ios twin: production builds with a DSN report; dev
+        // builds with an empty DSN don't.). Set in `.env.local`.
+        buildConfigField(
+            "String", "SENTRY_DSN",
+            "\"${envString("SENTRY_DSN")}\"",
+        )
+        buildConfigField(
+            "String", "APP_RELEASE",
+            "\"${envString("APP_RELEASE", "dev")}\"",
+        )
     }
 
     buildFeatures {
@@ -175,4 +187,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+
+    // Sentry crash reporting. Init in MainActivity.onCreate; gated on a
+    // non-empty BuildConfig.SENTRY_DSN so dev / debug builds are
+    // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
+    // we additionally wire breadcrumbs in long-running paths via
+    // Sentry.captureException calls from coroutine catch blocks.
+    implementation("io.sentry:sentry-android:7.18.0")
 }
