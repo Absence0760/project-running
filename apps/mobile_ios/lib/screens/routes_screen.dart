@@ -12,6 +12,28 @@ import '../preferences.dart';
 import 'explore_routes_screen.dart';
 import 'route_detail_screen.dart';
 
+/// Page size for the cloud fetch + visible-list window. Same value as
+/// runs_screen — `docs/conventions.md § Pagination` makes consistency
+/// across surfaces a load-bearing rule.
+const int _kRoutesPageSize = 20;
+
+/// True when the Load-more button should render at the bottom of the
+/// routes list — either the merged local+bookmark superset has more
+/// rows beyond `visibleCount`, or the cloud might have older owned
+/// routes. Pure helper kept top-level so unit tests can assert the
+/// boundary conditions without mounting the screen. Mirrors
+/// `shouldShowRunsLoadMore` in runs_screen.dart.
+@visibleForTesting
+bool shouldShowRoutesLoadMore({
+  required int visibleCount,
+  required int totalCount,
+  required bool remoteHasMore,
+  required bool apiSignedIn,
+}) {
+  if (visibleCount < totalCount) return true;
+  return remoteHasMore && apiSignedIn;
+}
+
 /// Route library: imported and synced routes.
 class RoutesScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -34,6 +56,12 @@ class RoutesScreen extends StatefulWidget {
 class _RoutesScreenState extends State<RoutesScreen> {
   bool _syncing = false;
   List<cm.Route> _bookmarks = const [];
+
+  /// How many merged rows the list reveals. Resets only on explicit
+  /// reload — there are no inline filters on this screen, unlike runs.
+  int _visibleCount = _kRoutesPageSize;
+  bool _loadingMore = false;
+  bool _remoteHasMore = true;
 
   @override
   void initState() {
@@ -72,8 +100,13 @@ class _RoutesScreenState extends State<RoutesScreen> {
     if (api == null || api.userId == null) return;
     setState(() => _syncing = true);
     try {
-      final remote = await api.getRoutes();
+      // Initial sync pulls only the first page — older routes flow in
+      // through Load more. Cap mirrors `_kRoutesPageSize` so a returning
+      // user sees the same shape as the web `/routes` first paint.
+      final remote = await api.getRoutes(limit: _kRoutesPageSize);
       await widget.routeStore.saveBatch(remote);
+      if (!mounted) return;
+      setState(() => _remoteHasMore = remote.length == _kRoutesPageSize);
     } catch (e) {
       debugPrint('Fetch routes failed: $e');
       if (mounted) {
@@ -83,6 +116,70 @@ class _RoutesScreenState extends State<RoutesScreen> {
       }
     } finally {
       if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  /// Reveal the next page. Same two-layer shape as runs_screen: bump
+  /// the local visibility window first, only hit the cloud once we've
+  /// shown everything cached.
+  Future<void> _loadMore() async {
+    if (_loadingMore) return;
+    final owned = widget.routeStore.routes;
+    final ownedIds = {for (final r in owned) r.id};
+    final mergedCount =
+        owned.length + _bookmarks.where((b) => !ownedIds.contains(b.id)).length;
+
+    if (_visibleCount < mergedCount) {
+      setState(() => _visibleCount += _kRoutesPageSize);
+      // After revealing locally, opportunistically fetch the next cloud
+      // page if we just hit the bottom and the cloud might have more.
+      if (_visibleCount >= mergedCount && _remoteHasMore) {
+        await _fetchOlderFromRemote();
+      }
+      return;
+    }
+
+    if (_remoteHasMore) {
+      await _fetchOlderFromRemote();
+    }
+  }
+
+  Future<void> _fetchOlderFromRemote() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      if (mounted) setState(() => _remoteHasMore = false);
+      return;
+    }
+
+    setState(() => _loadingMore = true);
+    try {
+      // Cursor over the *oldest owned* route's created_at — bookmarked
+      // routes share createdAt with the original author and would
+      // produce false cursors. Owned routes are the only thing
+      // getRoutes() returns anyway.
+      final owned = widget.routeStore.routes;
+      final cursor = owned.isEmpty || owned.last.createdAt == null
+          ? DateTime.now()
+          : owned.last.createdAt!;
+      final remote = await api.getRoutes(
+        limit: _kRoutesPageSize,
+        before: cursor,
+      );
+      await widget.routeStore.saveBatch(remote);
+      if (!mounted) return;
+      setState(() {
+        _remoteHasMore = remote.length == _kRoutesPageSize;
+        _visibleCount += _kRoutesPageSize;
+      });
+    } catch (e) {
+      debugPrint('Load more routes failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load more routes')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -167,10 +264,19 @@ class _RoutesScreenState extends State<RoutesScreen> {
     final unit = widget.preferences.unit;
     final owned = widget.routeStore.routes;
     final ownedIds = {for (final r in owned) r.id};
-    final routes = <cm.Route>[
+    final allRoutes = <cm.Route>[
       ...owned,
       ..._bookmarks.where((b) => !ownedIds.contains(b.id)),
     ];
+    final routes = allRoutes.length <= _visibleCount
+        ? allRoutes
+        : allRoutes.sublist(0, _visibleCount);
+    final showLoadMore = shouldShowRoutesLoadMore(
+      visibleCount: _visibleCount,
+      totalCount: allRoutes.length,
+      remoteHasMore: _remoteHasMore,
+      apiSignedIn: widget.apiClient?.userId != null,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -236,8 +342,26 @@ class _RoutesScreenState extends State<RoutesScreen> {
             )
           : ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: routes.length,
+              itemCount: routes.length + (showLoadMore ? 1 : 0),
               itemBuilder: (context, index) {
+                if (showLoadMore && index == routes.length) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: _loadingMore
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : OutlinedButton.icon(
+                              onPressed: _loadMore,
+                              icon: const Icon(Icons.expand_more),
+                              label: const Text('Load $_kRoutesPageSize more'),
+                            ),
+                    ),
+                  );
+                }
                 final route = routes[index];
                 final isOwned = ownedIds.contains(route.id);
                 return Card(

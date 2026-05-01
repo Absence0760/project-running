@@ -1,8 +1,14 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
 import '../widgets/error_state.dart';
+
+/// Page size for the followers / following tabs. Same value as the
+/// runs + routes screens — the convention is one consistent page size
+/// across surfaces (`docs/conventions.md § Pagination`).
+const int _kFollowsPageSize = 20;
 
 /// Public profile screen — mirrors the web `/u/[id]` page (decisions §31).
 ///
@@ -41,6 +47,14 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _notifFilter = 'all'; // 'all' | 'unread'
   Set<String> _dismissedNotifIds = {};
 
+  // Pagination state for the Followers / Following tabs. Updated on
+  // initial load + each Load-more tap; the boolean flags drive the
+  // footer's visibility and the in-flight spinner.
+  bool _followersHasMore = true;
+  bool _followingHasMore = true;
+  bool _loadingMoreFollowers = false;
+  bool _loadingMoreFollowing = false;
+
   bool get _isSelf => widget.api.userId == widget.userId;
   int get _tabCount => _isSelf ? 4 : 3;
 
@@ -70,8 +84,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       final summaryF = widget.api.fetchProfileSummary(widget.userId);
       final runsF = widget.api.fetchPublicRunsByUser(widget.userId, limit: 30);
-      final followersF = widget.api.fetchFollowers(widget.userId);
-      final followingF = widget.api.fetchFollowing(widget.userId);
+      // First page only; older follows / followers come in via
+      // Load-more on the respective tab.
+      final followersF =
+          widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize);
+      final followingF =
+          widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize);
       final notifF = _isSelf
           ? widget.api.fetchNotificationViews(limit: 100)
           : Future.value(const <NotificationView>[]);
@@ -90,6 +108,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         _followers = results[2] as List<UserProfileRow>;
         _following = results[3] as List<UserProfileRow>;
         _notifications = results[4] as List<NotificationView>;
+        _followersHasMore = _followers.length == _kFollowsPageSize;
+        _followingHasMore = _following.length == _kFollowsPageSize;
         _loading = false;
       });
     } catch (e) {
@@ -98,6 +118,58 @@ class _ProfileScreenState extends State<ProfileScreen>
         _loadError = e;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreFollowers() async {
+    if (_loadingMoreFollowers || !_followersHasMore) return;
+    setState(() => _loadingMoreFollowers = true);
+    try {
+      final more = await widget.api.fetchFollowers(
+        widget.userId,
+        limit: _kFollowsPageSize,
+        offset: _followers.length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _followers = [..._followers, ...more];
+        _followersHasMore = more.length == _kFollowsPageSize;
+      });
+    } catch (e) {
+      debugPrint('Load more followers failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load more followers')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreFollowers = false);
+    }
+  }
+
+  Future<void> _loadMoreFollowing() async {
+    if (_loadingMoreFollowing || !_followingHasMore) return;
+    setState(() => _loadingMoreFollowing = true);
+    try {
+      final more = await widget.api.fetchFollowing(
+        widget.userId,
+        limit: _kFollowsPageSize,
+        offset: _following.length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _following = [..._following, ...more];
+        _followingHasMore = more.length == _kFollowsPageSize;
+      });
+    } catch (e) {
+      debugPrint('Load more following failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load more following')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreFollowing = false);
     }
   }
 
@@ -251,8 +323,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                             controller: _tabs,
                             children: [
                               _buildRunsTab(theme),
-                              _buildPeopleTab(_followers, 'No followers yet.'),
-                              _buildPeopleTab(_following, 'Not following anyone yet.'),
+                              _buildPeopleTab(
+                                _followers,
+                                'No followers yet.',
+                                hasMore: _followersHasMore,
+                                loadingMore: _loadingMoreFollowers,
+                                onLoadMore: _loadMoreFollowers,
+                              ),
+                              _buildPeopleTab(
+                                _following,
+                                'Not following anyone yet.',
+                                hasMore: _followingHasMore,
+                                loadingMore: _loadingMoreFollowing,
+                                onLoadMore: _loadMoreFollowing,
+                              ),
                               if (_isSelf) _buildNotificationsTab(theme),
                             ],
                           ),
@@ -337,7 +421,13 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildPeopleTab(List<UserProfileRow> people, String emptyMessage) {
+  Widget _buildPeopleTab(
+    List<UserProfileRow> people,
+    String emptyMessage, {
+    required bool hasMore,
+    required bool loadingMore,
+    required Future<void> Function() onLoadMore,
+  }) {
     if (people.isEmpty) {
       return Center(
         child: Padding(
@@ -350,9 +440,29 @@ class _ProfileScreenState extends State<ProfileScreen>
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: people.length,
+        // +1 row for the Load-more footer when the cloud might still
+        // have more pages (api hint is `lastPage.length == pageSize`).
+        itemCount: people.length + (hasMore ? 1 : 0),
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (_, i) {
+          if (hasMore && i == people.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: loadingMore
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: onLoadMore,
+                        icon: const Icon(Icons.expand_more),
+                        label: const Text('Load $_kFollowsPageSize more'),
+                      ),
+              ),
+            );
+          }
           final p = people[i];
           return ListTile(
             leading: _Avatar(

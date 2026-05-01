@@ -534,12 +534,25 @@ class ApiClient {
     await _client.from(RouteRow.table).insert(body);
   }
 
-  /// Fetches the user's saved routes.
-  Future<List<Route>> getRoutes() async {
-    final data = await _client
-        .from(RouteRow.table)
-        .select()
-        .order(RouteRow.colCreatedAt, ascending: false);
+  /// Fetches the user's saved routes, newest first.
+  ///
+  /// `limit` caps the number of rows returned (default 200 — kept high
+  /// to preserve the existing one-shot semantics for unbounded callers
+  /// like the routes-screen full-sync path). `before` paginates: pass
+  /// the oldest already-loaded route's `created_at` to fetch the next
+  /// page. Cursor over offset because routes are append-only-by-time
+  /// and a cursor is stable against concurrent inserts/deletes.
+  Future<List<Route>> getRoutes({
+    int limit = 200,
+    DateTime? before,
+  }) async {
+    var query = _client.from(RouteRow.table).select();
+    if (before != null) {
+      query = query.lt(RouteRow.colCreatedAt, before.toIso8601String());
+    }
+    final data = await query
+        .order(RouteRow.colCreatedAt, ascending: false)
+        .limit(limit);
 
     return data.map<Route>((row) => _routeFromRow(row)).toList();
   }
@@ -701,13 +714,14 @@ class ApiClient {
   Future<List<UserProfileRow>> fetchFollowers(
     String userId, {
     int limit = 100,
+    int offset = 0,
   }) async {
     final edges = await _client
         .from(UserFollowRow.table)
         .select(UserFollowRow.colFollowerId)
         .eq(UserFollowRow.colFolloweeId, userId)
         .order(UserFollowRow.colFollowedAt, ascending: false)
-        .limit(limit);
+        .range(offset, offset + limit - 1);
     final ids = edges
         .map<String>((e) => e[UserFollowRow.colFollowerId] as String)
         .toList();
@@ -725,13 +739,14 @@ class ApiClient {
   Future<List<UserProfileRow>> fetchFollowing(
     String userId, {
     int limit = 100,
+    int offset = 0,
   }) async {
     final edges = await _client
         .from(UserFollowRow.table)
         .select(UserFollowRow.colFolloweeId)
         .eq(UserFollowRow.colFollowerId, userId)
         .order(UserFollowRow.colFollowedAt, ascending: false)
-        .limit(limit);
+        .range(offset, offset + limit - 1);
     final ids = edges
         .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
         .toList();

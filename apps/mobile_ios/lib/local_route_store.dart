@@ -12,6 +12,17 @@ class LocalRouteStore extends ChangeNotifier {
 
   List<Route> get routes => List.unmodifiable(_routes);
 
+  /// Test-only seed that populates the in-memory list directly,
+  /// bypassing `init()` + `_loadAll()`. Mirrors `LocalRunStore.debugSeed`
+  /// — same flutter_test fake-async hazard. Production code never
+  /// touches it.
+  @visibleForTesting
+  void debugSeed(Iterable<Route> routes, {Directory? dir}) {
+    if (dir != null) _dir = dir;
+    _routes = List<Route>.from(routes);
+    notifyListeners();
+  }
+
   Future<void> init({Directory? overrideDirectory}) async {
     if (overrideDirectory != null) {
       _dir = overrideDirectory;
