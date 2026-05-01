@@ -409,6 +409,16 @@ class RunRecorder {
   @visibleForTesting
   double? get debugPaceSecondsPerKm => _calculatePace();
 
+  /// Test-only: distance from [pos] to the end of the loaded route, summed
+  /// along the remaining route segments. Null when no route is loaded.
+  @visibleForTesting
+  double? debugRouteRemaining(Waypoint pos) => _routeRemaining(pos);
+
+  /// Test-only: minimum distance from [pos] to any segment of the loaded
+  /// route. Null when no route is loaded.
+  @visibleForTesting
+  double? debugOffRouteDistance(Waypoint pos) => _offRouteDistance(pos);
+
   /// Pause the timer and stop accumulating distance until [resume] is called.
   void pause() {
     if (!_recording || _paused) return;

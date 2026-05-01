@@ -109,6 +109,10 @@ Tests for the rolling-pace helper exposed via `RunRecorder.debugPaceSecondsPerKm
 
 When the test was first written, `_currentWaypoint.timestamp` was set from `DateTime.now()`; a tight inject loop collapsed all five waypoint timestamps to the same millisecond, and `_calculatePace` returned null because `segmentTime <= 0`. The recorder was changed to `pos.timestamp` for the waypoint timestamp (matching the speed-clamp's GPS-time policy) so the function works correctly under fix-batching / CPU contention. See § Troubleshooting.
 
+### `packages/run_recorder/test/route_helpers_test.dart` — 17 tests
+
+Tests for `_routeRemaining` and `_offRouteDistance` exposed via `debugRouteRemaining` / `debugOffRouteDistance`. Routes are constructed at the equator so equirectangular projection (used for the perpendicular-distance and segment-projection math) and haversine (used to total segment lengths) align to within ~0.5 m for the 0.001°-spaced fixtures. `_routeRemaining` block (9 tests): null returns (no route, single-waypoint route), at start = full length, at segment midpoint = unwalked tail, on the boundary between segments = total minus the first leg, at end ≈ 0, past end clamps to 0, perpendicular offset projects onto the nearest segment, multi-segment route sums correctly. `_offRouteDistance` block (8 tests): null returns, on a waypoint ≈ 0, inline along the route ≈ 0, perpendicular offset returns the perpendicular distance, past the end returns distance to the last waypoint, multi-segment route picks the closest segment, degenerate zero-length waypoint pair is tolerated.
+
 ### `packages/run_recorder/test/laps_serialiser_test.dart` — 6 tests
 
 Round-trips the canonical `metadata.laps` shape through `lapsToCanonicalJson` and `parseLapsFromJson`. Pins the per-lap-delta fields (1-based `index`, `start_offset_s` cumulative-BEFORE, `distance_m` + `duration_s` per-lap deltas) so a refactor of the serialiser can't quietly regress the cross-platform contract. Ties into the watch-payload fixture test on every platform — see [§ Cross-platform fixture contract](manual_testing.md#cross-platform-fixture-contract) in the manual testing guide.
@@ -637,10 +641,9 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 - **Widget tests (key remaining gaps).** `RunScreen` and `LiveRunMap` have no widget tests; those require platform-channel mocks (geolocator, pedometer) to exercise the recording path. All other screens and the majority of widgets now have widget tests (109 `testWidgets` calls across 22 files). The original four — `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, `WorkoutReviewSection` — have been joined by `HomeScreen`, `DashboardScreen`, `ImportScreen`, and many more.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
-- **`RunRecorder._routeRemaining`, `_offRouteDistance`.** The route helpers have no direct tests. Their logic is exercised via `_emitSnapshot` but only through the tests that assert on `distanceMetres` and `track`. Dedicated tests would be a good follow-up.
 - **`ApiClient`, `SyncService`.** Nothing on the sync path or the Supabase client has tests. These would want a fake HTTP client.
 
-If you want to expand coverage, those are the best targets in priority order: `_routeRemaining` / `_offRouteDistance` → widget tests for `run_screen`'s state transitions → `ApiClient` (fake HTTP).
+If you want to expand coverage, the best targets are: widget tests for `run_screen`'s state transitions → `ApiClient` (fake HTTP).
 
 ---
 
