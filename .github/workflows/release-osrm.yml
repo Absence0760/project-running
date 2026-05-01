@@ -1,0 +1,72 @@
+name: Release OSRM
+
+# Per-app tag convention: `osrm@1.2.3`. The workflow redeploys the OSRM
+# container; it does NOT rebuild the graph. The graph lives on the Fly
+# Volume (`osrm_data` mounted at `/data`) and persists across image
+# deploys — that's deliberate, so a tag for a config tweak never costs
+# 15 min of regraph time.
+#
+# Graph rebuilds happen out of band — see apps/job_worker/deployment.md
+# § Weekly rebuild cron (proposed) for that path.
+#
+# Secret required:
+#   FLY_API_TOKEN  — same token as release-worker.yml; scoped to the
+#                    runonward org.
+
+on:
+  push:
+    tags:
+      - 'osrm@*'
+
+jobs:
+  release:
+    name: flyctl deploy (OSRM) + GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          ref="${GITHUB_REF#refs/tags/osrm@}"
+          echo "version=${ref}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${ref}"
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        # The fly.toml in apps/job_worker/osrm/ pins app=osrm,
+        # image=osrm/osrm-backend:latest, and the volume mount. A
+        # redeploy is essentially "pull the latest osrm-backend image
+        # and restart the machine"; the graph on the volume rides
+        # along untouched.
+        run: flyctl deploy --remote-only
+        working-directory: apps/job_worker/osrm
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployment
+        run: flyctl status --app osrm
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: osrm ${{ steps.version.outputs.version }}
+          body: |
+            Deployed OSRM `${{ steps.version.outputs.version }}` to Fly.io
+            (`osrm` app, `lhr` region) via `flyctl deploy --remote-only`.
+            The image is `osrm/osrm-backend:latest`; the graph on the
+            `osrm_data` Volume was NOT touched by this deploy.
+
+            See [`apps/job_worker/deployment.md`](apps/job_worker/deployment.md)
+            § OSRM app for the full deploy plan, including the weekly
+            graph rebuild path and the re-match-the-world SQL recipe
+            for engine upgrades.

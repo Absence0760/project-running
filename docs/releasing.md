@@ -31,6 +31,8 @@ watch_wear@1.2.3       → .github/workflows/release-watch-wear.yml
 watch_ios@1.2.3        → .github/workflows/release-watch.yml
 web@1.2.3              → .github/workflows/release-web.yml
 backend@1.2.3          → .github/workflows/release-backend.yml
+worker@1.2.3           → .github/workflows/release-worker.yml
+osrm@1.2.3             → .github/workflows/release-osrm.yml
 ```
 
 The glob is `<app>@*`, so any suffix works — `1.2.3`, `1.2.3-rc.1`,
@@ -66,6 +68,8 @@ success — creates a GitHub Release with the built artifact(s) attached.
 | `watch_ios@*` | macos-latest | — | — | build log |
 | `web@*` | ubuntu-latest | — | GitHub Pages | build zip |
 | `backend@*` | ubuntu-latest | — | Supabase (migrations + functions on linked project) | — |
+| `worker@*` | ubuntu-latest | — | Fly.io `job_worker` app via `flyctl deploy --remote-only` | — |
+| `osrm@*` | ubuntu-latest | — | Fly.io `osrm` app (image only — graph on the volume rides along) | — |
 
 Promoting Android + Wear from the Internal track to Beta or Production
 is done manually in the Play Console after you've smoke-tested the
@@ -139,6 +143,12 @@ when the Flutter iOS app is feature-complete (see `apps/mobile_ios/CLAUDE.md`).
 | `SUPABASE_ACCESS_TOKEN` | CLI personal access token |
 | `SUPABASE_PROJECT_REF` | target project's ref (e.g. `abcd1234xyz`) |
 | `SUPABASE_DB_PASSWORD` | Postgres password for `supabase db push` |
+
+### Worker + OSRM (Fly.io)
+
+| Secret | What |
+|---|---|
+| `FLY_API_TOKEN` | Fly.io API token scoped to the `runonward` org. Same token covers both `worker@*` and `osrm@*` workflows. |
 
 ## Rollback
 

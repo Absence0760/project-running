@@ -247,9 +247,9 @@ The worker code is the canonical knob — re-matches happen via `algorithm_versi
 
 ---
 
-## CI wiring (proposed)
+## CI wiring
 
-Two workflows to add:
+Two workflows live under `.github/workflows/`:
 
 ### `.github/workflows/release-worker.yml`
 
