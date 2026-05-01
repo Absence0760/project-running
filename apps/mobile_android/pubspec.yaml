@@ -32,6 +32,13 @@ dependencies:
   file_picker: ^11.0.0
   shared_preferences: ^2.3.0
   permission_handler: ^12.0.0
+  # Held at 12.x because share_plus 13 needs win32 ^6.0.0 but file_picker
+  # (latest 11.0.2) still constrains win32 to ^5.9.0. We don't ship a
+  # desktop build, but the workspace must resolve a single win32 — and
+  # forcing 6 with a dependency_overrides cascades into win32_registry
+  # 2.x and file_picker 11.x compile errors against win32 5 symbols
+  # (e.g. COINIT_DISABLE_OLE1DDE). Revisit once file_picker bumps to
+  # win32 6.
   share_plus: ^12.0.0
   uuid: ^4.5.0
   wakelock_plus: ^1.2.8
@@ -43,20 +50,26 @@ dependencies:
   archive: ^4.0.0
   csv: ^8.0.0
   health: ^13.0.0
-  google_sign_in: ^6.2.0
+  google_sign_in: ^7.0.0
   workmanager: ^0.9.0
   # Bluetooth LE chest-strap HR during live runs. Uses the standard BLE
   # Heart Rate Service (UUID 0x180D) + Heart Rate Measurement
   # characteristic (0x2A37). See `lib/ble_heart_rate.dart`.
-  flutter_blue_plus: ^1.32.12
+  # Held at 1.36.x because flutter_blue_plus 2.x switched from MIT to a
+  # custom license that requires every `device.connect(...)` call to pass
+  # License.free (personal/nonprofit/edu) or License.commercial (paid). For
+  # a commercial app that's a project-licensing decision the maintainer
+  # needs to make, not a silent change. Revisit if the package returns to
+  # an OSI license, or after the project chooses a path.
+  flutter_blue_plus: ^1.36.8
   image_picker: ^1.1.2
   url_launcher: ^6.3.1
   flutter_markdown: ^0.7.4
-  sign_in_with_apple: ^6.0.0
+  sign_in_with_apple: ^7.0.0
   # Crash reporting + breadcrumb trail for production builds. Init in
   # lib/main.dart's runZonedGuarded so unhandled errors land tagged with
   # the build's versionName; off when SENTRY_DSN is unset (dev / debug).
-  sentry_flutter: ^8.0.0
+  sentry_flutter: ^9.0.0
 
 dev_dependencies:
   flutter_test:

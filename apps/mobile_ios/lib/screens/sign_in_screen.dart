@@ -73,29 +73,42 @@ class _SignInScreenState extends State<SignInScreen> {
         );
       }
 
-      final googleSignIn = GoogleSignIn(serverClientId: webClientId);
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        if (mounted) setState(() => _loading = false);
-        return;
-      }
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
+      // google_sign_in 7.x: singleton + one-time initialize() before any
+      // other call. _ensureGoogleInitialized makes that idempotent so
+      // multiple sign-in attempts in one session don't trip "undefined
+      // behaviour" warnings from the plugin.
+      await _ensureGoogleInitialized(webClientId);
+      final account = await GoogleSignIn.instance.authenticate();
+      final idToken = account.authentication.idToken;
       if (idToken == null) {
         throw Exception('Google sign-in did not return an ID token');
       }
 
-      await widget.apiClient.signInWithGoogleIdToken(
-        idToken: idToken,
-        accessToken: auth.accessToken,
-      );
+      // 7.x split: idToken is on the account immediately after
+      // authenticate(), but accessToken now requires an explicit
+      // authorizationClient call. Supabase's signInWithIdToken accepts
+      // a null access token, so we skip that round-trip — the OAuth
+      // grant is verified by the idToken alone.
+      await widget.apiClient.signInWithGoogleIdToken(idToken: idToken);
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
+    } on GoogleSignInException catch (e) {
+      // User cancelled — silent return, no error toast.
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        if (mounted) setState(() => _error = e.toString());
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  static bool _googleInitialized = false;
+  static Future<void> _ensureGoogleInitialized(String serverClientId) async {
+    if (_googleInitialized) return;
+    await GoogleSignIn.instance.initialize(serverClientId: serverClientId);
+    _googleInitialized = true;
   }
 
   /// Apple Sign-In via the native flow on iOS, web fallback on Android.

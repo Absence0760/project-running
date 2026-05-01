@@ -65,29 +65,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
       }
 
-      final googleSignIn = GoogleSignIn(serverClientId: webClientId);
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        if (mounted) setState(() => _loading = false);
-        return;
-      }
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
+      // See sign_in_screen.dart for the google_sign_in 7.x notes.
+      await _ensureGoogleInitialized(webClientId);
+      final account = await GoogleSignIn.instance.authenticate();
+      final idToken = account.authentication.idToken;
       if (idToken == null) {
         throw Exception('Google sign-in did not return an ID token');
       }
 
-      await widget.apiClient.signInWithGoogleIdToken(
-        idToken: idToken,
-        accessToken: auth.accessToken,
-      );
+      await widget.apiClient.signInWithGoogleIdToken(idToken: idToken);
       if (mounted) Navigator.pop(context, true);
+    } on GoogleSignInException catch (e) {
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        debugPrint('SignUpScreen._signInWithGoogle failed: $e');
+        if (mounted) setState(() => _error = e.toString());
+      }
     } catch (e) {
       debugPrint('SignUpScreen._signInWithGoogle failed: $e');
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  static bool _googleInitialized = false;
+  static Future<void> _ensureGoogleInitialized(String serverClientId) async {
+    if (_googleInitialized) return;
+    await GoogleSignIn.instance.initialize(serverClientId: serverClientId);
+    _googleInitialized = true;
   }
 
   Future<void> _signInWithApple() async {
