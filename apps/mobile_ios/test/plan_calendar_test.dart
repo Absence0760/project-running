@@ -5,12 +5,18 @@ import '../lib/widgets/plan_calendar.dart';
 
 void main() {
   testWidgets('renders the start month with workout pills', (tester) async {
-    final start = DateTime(2026, 4, 1);
-    final end = DateTime(2026, 6, 30);
+    // Use a plan range entirely in the past so the calendar's "open
+    // to today's month if in range" heuristic falls back to month 0
+    // (the start month) regardless of when this test runs. Without
+    // that, a wall-clock date inside the range opens the calendar on
+    // the wrong month and the TEMPO pill — which lives in the start
+    // month — is off-screen on first paint.
+    final start = DateTime(2024, 4, 1);
+    final end = DateTime(2024, 6, 30);
     final wo = PlanWorkoutRow(
       id: 'wo1',
       weekId: 'wk1',
-      scheduledDate: DateTime(2026, 4, 15),
+      scheduledDate: DateTime(2024, 4, 15),
       kind: 'tempo',
       targetDistanceM: 10000,
       manuallyCompleted: false,
@@ -59,12 +65,14 @@ void main() {
   });
 
   testWidgets('shows a tick on completed workouts', (tester) async {
-    final start = DateTime(2026, 4, 1);
-    final end = DateTime(2026, 4, 30);
+    // Past-dated for the same wall-clock determinism reason as the
+    // first test — see that comment.
+    final start = DateTime(2024, 4, 1);
+    final end = DateTime(2024, 4, 30);
     final wo = PlanWorkoutRow(
       id: 'wo1',
       weekId: 'wk1',
-      scheduledDate: DateTime(2026, 4, 10),
+      scheduledDate: DateTime(2024, 4, 10),
       kind: 'long',
       targetDistanceM: 18000,
       completedRunId: 'run-1',
