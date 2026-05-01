@@ -172,6 +172,67 @@ void main() {
       );
     });
 
+    test('shouldShowLoadMore — date filter past oldest local hides cloud branch',
+        () {
+      // "Today" filter on a cache whose oldest run is yesterday: the
+      // cloud cursor only fetches strictly older than oldestLocal, so no
+      // cloud page can land inside [today, ∞). Hide instead of inviting
+      // a tap that does nothing.
+      final today = DateTime(2026, 5, 1);
+      final yesterday = DateTime(2026, 4, 30, 8, 0);
+      expect(
+        // ignore: invalid_use_of_visible_for_testing_member
+        shouldShowRunsLoadMore(
+          visibleCount: 20,
+          filteredCount: 1,
+          remoteHasMore: true,
+          apiSignedIn: true,
+          filterCutoff: today,
+          oldestLocalStartedAt: yesterday,
+        ),
+        isFalse,
+      );
+    });
+
+    test('shouldShowLoadMore — date filter inside local window keeps cloud branch',
+        () {
+      // "Year" filter, oldest local is 30 days ago, cloud has older.
+      // The cloud could still hold runs from earlier this year that we
+      // haven't pulled — keep the button.
+      final yearStart = DateTime(2026, 1, 1);
+      final thirtyDaysAgo = DateTime(2026, 4, 1);
+      expect(
+        // ignore: invalid_use_of_visible_for_testing_member
+        shouldShowRunsLoadMore(
+          visibleCount: 20,
+          filteredCount: 12,
+          remoteHasMore: true,
+          apiSignedIn: true,
+          filterCutoff: yearStart,
+          oldestLocalStartedAt: thirtyDaysAgo,
+        ),
+        isTrue,
+      );
+    });
+
+    test('shouldShowLoadMore — null filterCutoff (all-time) keeps cloud branch',
+        () {
+      // Range = "all" sets filterCutoff to null; the predicate has
+      // nothing to compare against, so it must not suppress the button.
+      expect(
+        // ignore: invalid_use_of_visible_for_testing_member
+        shouldShowRunsLoadMore(
+          visibleCount: 20,
+          filteredCount: 20,
+          remoteHasMore: true,
+          apiSignedIn: true,
+          filterCutoff: null,
+          oldestLocalStartedAt: DateTime(2026, 4, 30),
+        ),
+        isTrue,
+      );
+    });
+
     testWidgets('shows only first page of cached runs + Load more button',
         (tester) async {
       // Pre-stage 30 runs on disk before the store boots — see

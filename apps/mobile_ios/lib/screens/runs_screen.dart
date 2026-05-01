@@ -51,15 +51,30 @@ const int _kRunsPageSize = 20;
 /// `visibleCount`, or the cloud might have older runs we haven't
 /// pulled yet. Pure helper kept top-level so its boundary conditions
 /// can be unit-tested directly without mounting the screen.
+///
+/// The cloud branch is gated by [filterCutoff] / [oldestLocalStartedAt]:
+/// the cloud cursor walks strictly older than the oldest local run, so
+/// when the active range filter (today / week / month / year) has a
+/// `from` boundary that the oldest local row already predates, no cloud
+/// page can contain a match — hide the button instead of inviting a
+/// fetch that would never grow `filteredCount`.
 @visibleForTesting
 bool shouldShowRunsLoadMore({
   required int visibleCount,
   required int filteredCount,
   required bool remoteHasMore,
   required bool apiSignedIn,
+  DateTime? filterCutoff,
+  DateTime? oldestLocalStartedAt,
 }) {
   if (visibleCount < filteredCount) return true;
-  return remoteHasMore && apiSignedIn;
+  if (!(remoteHasMore && apiSignedIn)) return false;
+  if (filterCutoff != null &&
+      oldestLocalStartedAt != null &&
+      !oldestLocalStartedAt.isAfter(filterCutoff)) {
+    return false;
+  }
+  return true;
 }
 
 class _RunsScreenState extends State<RunsScreen> {
@@ -645,12 +660,20 @@ class _RunsScreenState extends State<RunsScreen> {
     // +1 for the Load-more footer row when there's potentially another
     // page (more local rows under the filter or more on the cloud).
     final emptyAfterFilter = _visible.isEmpty;
+    final allRuns = widget.runStore.runs;
+    final oldestLocal = allRuns.isEmpty
+        ? null
+        : allRuns
+            .map((r) => r.startedAt)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
     final showLoadMore = !emptyAfterFilter &&
         shouldShowRunsLoadMore(
           visibleCount: _visibleCount,
           filteredCount: _filtered.length,
           remoteHasMore: _remoteHasMore,
           apiSignedIn: widget.apiClient?.userId != null,
+          filterCutoff: _rangeCutoff(_range),
+          oldestLocalStartedAt: oldestLocal,
         );
     final loadMoreSlot = showLoadMore ? 1 : 0;
     return ListView.builder(
