@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:core_models/core_models.dart';
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:uuid/uuid.dart';
 
@@ -61,23 +62,35 @@ class StravaImporter {
   /// Read and parse a Strava export zip from disk.
   /// Returns the runs that could be successfully extracted, plus a list of
   /// any per-file errors so the UI can show "imported X of Y" messaging.
+  ///
+  /// Heavy lifting (ZipDecoder + per-file XML/FIT parsing) runs in a
+  /// background isolate via [compute] so the UI thread stays free during
+  /// large imports. A 5-year Strava export with hundreds of activities
+  /// would otherwise lock the foreground for tens of seconds.
   static Future<StravaImportResult> importFromZip(File zipFile) async {
     final bytes = await zipFile.readAsBytes();
+    return compute(_parseStravaZipBytes, bytes);
+  }
+
+  /// Pure synchronous parse — runs in a background isolate so it can't
+  /// block the UI. The argument and return are [Uint8List] / standard
+  /// Dart objects (Run, Waypoint, Duration, DateTime are all
+  /// transferable across isolates).
+  static StravaImportResult _parseStravaZipBytes(Uint8List bytes) {
     final archive = ZipDecoder().decodeBytes(bytes);
 
-    // Find activities.csv
     final csvFile = archive.files
         .where((f) => f.name.endsWith('activities.csv'))
         .firstOrNull;
     if (csvFile == null) {
-      throw const FormatException('Not a Strava export — no activities.csv found');
+      throw const FormatException(
+          'Not a Strava export — no activities.csv found');
     }
 
     final csvText = utf8.decode(csvFile.content);
     final rows = const CsvDecoder().convert(csvText);
     if (rows.isEmpty) return StravaImportResult([], []);
 
-    // First row is the header — find column indices.
     final header = rows.first.map((c) => c.toString().toLowerCase()).toList();
     final idIdx = header.indexOf('activity id');
     final dateIdx = header.indexOf('activity date');
@@ -93,7 +106,6 @@ class StravaImporter {
       throw const FormatException('Strava CSV missing expected columns');
     }
 
-    // Build a lookup from filename → archive file for fast access.
     final byPath = {for (final f in archive.files) f.name: f};
 
     final runs = <Run>[];
@@ -117,7 +129,7 @@ class StravaImporter {
             ? int.tryParse(row[elapsedIdx].toString()) ?? 0
             : 0;
 
-        final run = await _parseTrackFile(
+        final run = _parseTrackFile(
           archive: byPath,
           path: filename,
           stravaId: activityId,
@@ -136,7 +148,7 @@ class StravaImporter {
     return StravaImportResult(runs, errors);
   }
 
-  static Future<Run> _parseTrackFile({
+  static Run _parseTrackFile({
     required Map<String, ArchiveFile> archive,
     required String path,
     required String stravaId,
@@ -145,7 +157,7 @@ class StravaImporter {
     required String startedAtRaw,
     required double fallbackDistanceMetres,
     required int fallbackDurationSeconds,
-  }) async {
+  }) {
     final file = archive[path];
     if (file == null) {
       throw FormatException('Track file not found in zip: $path');
