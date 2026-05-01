@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_models/core_models.dart';
@@ -331,6 +332,103 @@ void main() {
 
       // 30 ≤ 40 (next page), apiClient is null → no further button.
       expect(find.text('Load 20 more'), findsNothing);
+    });
+  });
+
+  group('RunsScreen filter persistence', () {
+    testWidgets('hydrates custom date range from SharedPreferences on mount',
+        (tester) async {
+      // Pre-seed the mock SharedPreferences with a custom-range filter
+      // pinned to "yesterday" only. Then plant two runs — one yesterday
+      // (in window) and one today (outside) — and verify the screen's
+      // visible-count chip reflects the hydrated filter.
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final yesterdayStart = today.subtract(const Duration(days: 1));
+      final yesterdayEnd = today.subtract(const Duration(milliseconds: 1));
+
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({
+          'range': 'custom',
+          'sort': 'newest',
+          'customFromMs': yesterdayStart.millisecondsSinceEpoch,
+          'customToMs': yesterdayEnd.millisecondsSinceEpoch,
+        }),
+      });
+
+      final prefs = Preferences();
+      await prefs.init();
+
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
+      final runs = [
+        Run(
+          id: 'yesterday',
+          startedAt: yesterdayStart.add(const Duration(hours: 8)),
+          duration: const Duration(minutes: 30),
+          distanceMetres: 5000,
+          track: const [],
+          source: RunSource.app,
+        ),
+        Run(
+          id: 'today',
+          startedAt: today.add(const Duration(hours: 8)),
+          duration: const Duration(minutes: 30),
+          distanceMetres: 5000,
+          track: const [],
+          source: RunSource.app,
+        ),
+      ];
+      // ignore: invalid_use_of_visible_for_testing_member
+      final runStore = LocalRunStore()..debugSeed(runs, dir: _runsDir);
+      final routeStore = LocalRouteStore();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: routeStore,
+            preferences: prefs,
+          ),
+        ),
+      );
+      // First pump = initial paint with defaults. Second pump = post-
+      // hydration setState from _hydrateFilters resolves and the screen
+      // rebuilds with the persisted custom range applied.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Header chip reads "1 run" — the yesterday entry. The today entry
+      // is filtered out by the upper cutoff.
+      expect(find.text('1 run'), findsOneWidget);
+    });
+
+    testWidgets('ignores a malformed filter blob and keeps defaults',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': '{not valid json',
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
+      // ignore: invalid_use_of_visible_for_testing_member
+      final runStore = LocalRunStore()..debugSeed(_makeRuns(3), dir: _runsDir);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Default range = this week → all 3 seeded runs (anchored within
+      // the past 90 minutes by _makeRuns) survive.
+      expect(find.text('3 runs'), findsOneWidget);
     });
   });
 }
