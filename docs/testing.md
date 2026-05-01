@@ -45,7 +45,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **at least 474 unique Dart mobile tests across 72 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 38 tests in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. Both mobile apps run the same 72 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~950 mobile test runs. No integration tests, no golden tests yet. Run `grep -c '^\s*test\b\|^\s*testWidgets\b' apps/mobile_android/test/*.dart` for the per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **~488 unique Dart mobile tests across 73 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 44 tests in run_recorder (across 4 files), 2 in core_models, and ~77 TypeScript unit tests across 7 files in the web app. Both mobile apps run the same 73 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~975 mobile test runs. No integration tests, no golden tests yet. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -72,7 +72,7 @@ Pure-function tests for two helpers in `lib/run_stats.dart`:
 - Slow → fast → slow run → picks the fast middle 5 km
 - Regression: a 10 km in 1:14:34 does **not** surface as a 37:17 fastest 5k
 
-### `packages/run_recorder/test/run_recorder_test.dart` — 17 tests
+### `packages/run_recorder/test/run_recorder_test.dart` — 18 tests
 
 The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hooks (see below) to bypass the real geolocator stream and inject synthetic `Position` objects directly into `_onPosition`.
 
@@ -103,7 +103,19 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 
 **Not covered (require mocking `GeolocatorPlatform.instance`):** typed errors thrown from `prepare()`, the `_gpsRetryTimer` retry loop, position-stream `onError` cleanup, `stop`/`dispose` cancelling the retry timer.
 
-### `apps/mobile_android/test/local_run_store_test.dart` — 17 tests
+### `packages/run_recorder/test/laps_serialiser_test.dart` — 6 tests
+
+Round-trips the canonical `metadata.laps` shape through `lapsToCanonicalJson` and `parseLapsFromJson`. Pins the per-lap-delta fields (1-based `index`, `start_offset_s` cumulative-BEFORE, `distance_m` + `duration_s` per-lap deltas) so a refactor of the serialiser can't quietly regress the cross-platform contract. Ties into the watch-payload fixture test on every platform — see [§ Cross-platform fixture contract](manual_testing.md#cross-platform-fixture-contract) in the manual testing guide.
+
+### `packages/run_recorder/test/architecture_guards_test.dart` — 7 tests
+
+Static source-level guards on the recorder package itself: no banned imports, no `print` in production, the public-API surface stays minimal, etc. Same shape as `apps/mobile_android/test/architecture_guards_test.dart` — read the `reason:` strings before rubber-stamping a fix; failures usually mean a recent change reversed an optimisation we deliberately codified.
+
+### `packages/run_recorder/test/workout_runner_test.dart` — 13 tests
+
+The structured-workout step engine — step expansion (warmup → reps → recovery → cooldown), auto-advance, halfway / last-50 m progress signals, skip / abandon, and pace-adherence "wayBehind" classification. See [workout_execution.md](workout_execution.md) for the runner state machine + UI contract.
+
+### `apps/mobile_android/test/local_run_store_test.dart` — 23 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
 
@@ -169,6 +181,10 @@ Pure-function tests for `evaluateGoal` and `RunGoal` JSON serialisation in `lib/
 - Multi-target goal: each target evaluated independently, overall complete only when all met
 - `RunGoal.toJson` / `fromJson` round-trip, legacy single-target migration
 
+### `apps/mobile_android/test/fit_export_test.dart` — 3 tests
+
+Round-trips the `lib/fit_export.dart` writer that produces FIT files for sharing recorded runs to Garmin Connect / TrainingPeaks. Pins the binary header layout (`.FIT` magic, protocol version, profile version, data record schema) and a small synthetic-track encode → decode → equality assertion.
+
 ### `apps/mobile_android/test/route_simplify_test.dart` — 8 tests
 
 Tests for Ramer-Douglas-Peucker track simplification in `lib/route_simplify.dart`:
@@ -219,13 +235,13 @@ Pure-function tests for two top-level helpers in `lib/widgets/run_photos.dart` e
 
 Pure-function tests for the three top-level helpers in `lib/screens/coach_screen.dart`: `coachTitleFromMessage` (verbatim under 48 chars, whitespace collapse, leading/trailing trim, ellipsis past the cap, exact-48 vs 49 boundary), `coachArchiveLabel` ("Today" same day, "Yesterday" 1 day, "N days ago" 2..6, `YYYY-MM-DD` past a week, zero-padded month and day), and `parseCoachSseEvent` (event + data block parsing for `meta` / `token` / `done`, null when the block has no data line, null on invalid JSON, null on non-Map JSON, default `event: 'message'` when no event line, multi-line `data:` concatenation, `done` block with `cache` usage stats).
 
-### Screen + widget smoke tests — 27 files, ~70 tests
+### Screen + widget smoke tests — ~48 files, ~178 testWidgets calls
 
-After the April 2026 mobile-codebase unification, every screen and most user-facing widgets gained a smoke test. Each one verifies the *initial render* surface — app-bar title, primary action visibility, loading-spinner-vs-error fork — without exercising the post-fetch state, since none of these tests have a mockable Supabase backend. Tests that need a real `ApiClient` use a `setUpAll` helper that calls `Supabase.initialize(url: 'http://127.0.0.1:54321', anonKey: 'eyJ.local.test')` plus `SharedPreferences.setMockInitialValues({})` — the fake URL is never reached because each screen catches the connection failure into an ErrorState.
+After the April 2026 mobile-codebase unification, every screen and most user-facing widgets gained a smoke test (including `RunScreen` and `LiveRunMap`, which were previously the documented gaps). Each one verifies the *initial render* surface — app-bar title, primary action visibility, loading-spinner-vs-error fork — without exercising the post-fetch state, since none of these tests have a mockable Supabase backend. Tests that need a real `ApiClient` use a `setUpAll` helper that calls `Supabase.initialize(url: 'http://127.0.0.1:54321', anonKey: 'eyJ.local.test')` plus `SharedPreferences.setMockInitialValues({})` — the fake URL is never reached because each screen catches the connection failure into an ErrorState.
 
-- **Screens (19 files):** plans_screen (not-signed-in path), clubs_screen (segmented tabs + FAB), routes_screen (cloud_off icon hidden when api null), feed_screen (loading spinner), profile_screen (3 tabs for non-self, 4 for self), public_run_screen / public_route_screen (loading + fallback titles), explore_routes_screen (Featured chip), devices_screen, onboarding_screen (page advance + final-page CTA swap), plan_new_screen (wizard structure incl. scrolled bottom buttons), plan_detail_screen / workout_detail_screen / club_detail_screen / event_detail_screen (loading-only Scaffold), live_spectator_screen, privacy_zones_screen (Save action), period_summary_screen (week/month title swap + empty state), run_screen (idle-state ChoiceChip row + 4 activity labels), coach_screen (title + plan dropdown gate; pumps 100ms after the assertion to drain the screen's 50ms streaming timer).
-- **Widgets (4 files):** training_load_chart (heading, empty hint, hasHr subtitle copy, legend keys), run_segment_efforts (loading hint), run_social_section (loading spinner), segments_panel (heading + canCreate gate).
-- **Form sheets (2 files):** showClubFormSheet + showEventFormSheet — open the sheet from a launcher widget at `600x1200` test viewport (default `600x800` clips the bottom of the modal column).
+The widget-test files outgrew the original "(4 files)" headline as we mirrored web features back into mobile. The current canonical list — easier to keep accurate than to maintain by hand — is `for f in apps/mobile_android/test/*_test.dart; do c=$(grep -cE '^\s*testWidgets\(' "$f"); [ "$c" -gt 0 ] && printf "%4d  %s\n" "$c" "$(basename $f)"; done | sort -rn`. As of this edit there are ~19 screen-test files and ~19 widget-test files. Notable widget tests added since the original group: `error_state_test.dart` (5), `live_run_map_test.dart` (3), `plan_calendar_test.dart`, `route_share_card_test.dart`, `run_screen_test.dart`, `goal_editor_sheet_test.dart`, `workout_execution_band_test.dart`, `workout_review_section_test.dart`, `fitness_card_test.dart`, `todays_workout_card_test.dart`, `upcoming_event_card_test.dart`, `run_share_card_test.dart`, `import_screen_test.dart`, `home_screen_test.dart`.
+
+- **Form sheets (2 files):** `showClubFormSheet` + `showEventFormSheet` — open the sheet from a launcher widget at `600x1200` test viewport (default `600x800` clips the bottom of the modal column).
 
 ### Pure-helper extractions — 4 files, ~55 tests
 

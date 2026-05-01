@@ -74,7 +74,8 @@ Opens at **http://localhost:7777**.
 | `pnpm preview` | Preview production build on `:8888` |
 | `pnpm check` | Type-check all Svelte and TypeScript files |
 | `pnpm check:watch` | Type-check in watch mode |
-| `npx tsx --test src/lib/training.test.ts` | Run the training-engine unit tests (21 tests, ~150ms) |
+| `npx tsx --test src/lib/training.test.ts` | Run the training-engine unit tests (29 tests, ~150ms) |
+| `npx tsx --test src/lib/*.test.ts` | Run every web TypeScript suite (~77 tests across 7 files) |
 
 
 ---
