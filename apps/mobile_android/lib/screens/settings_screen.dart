@@ -1183,7 +1183,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? theme.colorScheme.primaryContainer
                   : theme.colorScheme.surfaceContainerHighest,
               child: Text(
-                widget.apiClient?.userEmail != null
+                // userEmail can be the empty string for an OAuth user
+                // without a verified email — guard against [0] crashing
+                // with RangeError on '' before .toUpperCase().
+                (widget.apiClient?.userEmail?.isNotEmpty ?? false)
                     ? widget.apiClient!.userEmail![0].toUpperCase()
                     : '?',
               ),

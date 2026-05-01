@@ -324,6 +324,11 @@ class _CoachScreenState extends State<CoachScreen> {
             value: viewerId,
           ),
           callback: (payload) {
+            // Realtime callback can fire in the gap between user-pop
+            // and channel.unsubscribe (the latter is async). Without
+            // the mounted guard, setState here throws "called after
+            // dispose" and the unhandled error is reported to Sentry.
+            if (!mounted) return;
             final row = payload.newRecord;
             if (row['archived_at'] != null) return;
             final rowPlan = row['plan_id'];
@@ -439,31 +444,35 @@ class _CoachScreenState extends State<CoachScreen> {
           } catch (_) {}
           if (res.statusCode == 429) {
             final used = (j['used'] as num?)?.toInt() ?? _dailyLimit;
-            setState(() {
-              _usedToday = used;
-              if (j['tier'] is String) {
-                _tier = j['tier'] as String;
-              }
-              if (j['limit'] is num) {
-                _dailyLimit = (j['limit'] as num).toInt();
-              }
-              _error = (j['message'] as String?) ??
-                  'Daily limit reached ($_dailyLimit messages). Come back tomorrow!';
-            });
+            if (mounted) {
+              setState(() {
+                _usedToday = used;
+                if (j['tier'] is String) {
+                  _tier = j['tier'] as String;
+                }
+                if (j['limit'] is num) {
+                  _dailyLimit = (j['limit'] as num).toInt();
+                }
+                _error = (j['message'] as String?) ??
+                    'Daily limit reached ($_dailyLimit messages). Come back tomorrow!';
+              });
+            }
           } else {
-            setState(() => _error = (j['error'] as String?) ??
-                'Coach error (${res.statusCode})');
+            if (mounted) {
+              setState(() => _error = (j['error'] as String?) ??
+                  'Coach error (${res.statusCode})');
+            }
           }
           _rollback(assistantIdx, userText != null);
           return;
         }
-        setState(() => _usedToday++);
+        if (mounted) setState(() => _usedToday++);
         await _readSse(res, assistantIdx);
       } finally {
         client.close(force: true);
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
       _rollback(assistantIdx, userText != null);
     } finally {
       if (mounted) {
@@ -508,13 +517,23 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   void _handleSseEvent(String block, int assistantIdx) {
+    // SSE events can land after the user pops the screen — the HTTP
+    // client is closed in the catch/finally but stream blocks may still
+    // be in-flight. Guarding once at the top is enough; every setState
+    // below is gated by this early return.
+    if (!mounted) return;
     final parsed = parseCoachSseEvent(block);
     if (parsed == null) return;
     final event = parsed.event;
     final data = parsed.data;
     if (event == 'meta') {
       final userMessageId = data['user_message_id'] as String?;
-      if (userMessageId != null && assistantIdx - 1 >= 0) {
+      // _messages may have been mutated by _rollback / _archiveCurrent
+      // in a parallel code path; bracket-guard every index access so we
+      // never crash with RangeError on a stale assistantIdx.
+      if (userMessageId != null &&
+          assistantIdx - 1 >= 0 &&
+          assistantIdx - 1 < _messages.length) {
         final m = _messages[assistantIdx - 1];
         if (m.role == 'user' && m.id == null) {
           setState(() => m.id = userMessageId);
@@ -529,14 +548,16 @@ class _CoachScreenState extends State<CoachScreen> {
       }
     } else if (event == 'token') {
       final text = (data['text'] as String?) ?? '';
-      if (assistantIdx < _messages.length) {
+      if (assistantIdx >= 0 && assistantIdx < _messages.length) {
         // No setState — the bubble subscribes via ValueListenableBuilder.
         _messages[assistantIdx].content.value += text;
       }
       _scrollToBottom();
     } else if (event == 'done') {
       final id = data['assistant_message_id'] as String?;
-      if (id != null && assistantIdx < _messages.length) {
+      if (id != null &&
+          assistantIdx >= 0 &&
+          assistantIdx < _messages.length) {
         setState(() => _messages[assistantIdx].id = id);
       }
     } else if (event == 'error') {

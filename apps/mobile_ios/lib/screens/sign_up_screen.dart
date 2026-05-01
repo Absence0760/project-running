@@ -45,7 +45,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signUp failed: $e');
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -84,7 +84,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signInWithGoogle failed: $e');
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -113,7 +113,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signInWithApple failed: $e');
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }

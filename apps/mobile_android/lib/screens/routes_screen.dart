@@ -124,11 +124,27 @@ class _RoutesScreenState extends State<RoutesScreen> {
     );
     if (result == null || result.files.isEmpty) return;
 
-    final file = File(result.files.first.path!);
-    final content = await file.readAsString();
-    final ext = result.files.first.extension?.toLowerCase();
-
     try {
+      // path can be null when the picker hands back a content URI it
+      // couldn't resolve to a real file (Drive / OneDrive document
+      // providers do this). readAsString may also throw on permission
+      // errors or if the user revokes access mid-read — both stay
+      // inside the try so the snackbar handles them, not an uncaught
+      // unhandled-async-error crash.
+      final path = result.files.first.path;
+      if (path == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(
+              'Import failed: pick the file from local storage, '
+              'not a cloud-only document picker.',
+            )),
+          );
+        }
+        return;
+      }
+      final ext = result.files.first.extension?.toLowerCase();
+      final content = await File(path).readAsString();
       final route = await compute(_parseRouteFile, _RouteParseRequest(ext, content));
       await widget.routeStore.save(route);
       if (mounted) {

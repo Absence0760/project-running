@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:run_recorder/run_recorder.dart' show
     PaceDriftEvent,
@@ -76,10 +77,20 @@ class AudioCues {
 
   Future<void> _init() async {
     if (_initialized) return;
-    await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(0.5);
-    await _tts.setVolume(1.0);
+    // Latch _initialized BEFORE the platform calls so a partial
+    // failure (e.g. setLanguage rejects on a fresh install where the
+    // TTS engine hasn't downloaded en-US data yet) doesn't trap every
+    // future announceX in a re-init loop. The plugin keeps whatever
+    // settings landed; subsequent announceX may speak in the default
+    // voice / rate / volume, which is preferable to silent retries.
     _initialized = true;
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setSpeechRate(0.5);
+      await _tts.setVolume(1.0);
+    } catch (e) {
+      debugPrint('audio_cues._init partial failure: $e');
+    }
   }
 
   /// Announce a split, e.g. "1 kilometre, pace 5 minutes 30 seconds".

@@ -344,42 +344,50 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   void _onWorkoutEvent(WorkoutExecEvent e) {
+    // Every announceX returns a Future and can reject if the TTS engine
+    // hasn't initialised (Play Services TTS update mid-run, missing
+    // language pack on a fresh install). The synchronous try/catch
+    // we used to use only caught sync throws — async rejections leaked
+    // out as unhandled errors. _ttsCue() does the unawaited+catchError
+    // dance so the cue is fire-and-forget but the rejection is logged
+    // instead of escaping.
     if (e is StepTransitionEvent) {
       _publishWorkoutBand();
       if (widget.preferences.audioCues) {
-        try {
-          widget.audioCues.announceWorkoutStepTransition(e.step);
-        } catch (err) {
-          debugPrint('announceWorkoutStepTransition failed: $err');
-        }
+        _ttsCue('announceWorkoutStepTransition',
+            () => widget.audioCues.announceWorkoutStepTransition(e.step));
       }
     } else if (e is StepProgressEvent) {
       if (widget.preferences.audioCues) {
-        try {
-          widget.audioCues.announceWorkoutStepProgress(e.step, e.kind);
-        } catch (err) {
-          debugPrint('announceWorkoutStepProgress failed: $err');
-        }
+        _ttsCue('announceWorkoutStepProgress',
+            () => widget.audioCues.announceWorkoutStepProgress(e.step, e.kind));
       }
     } else if (e is PaceDriftEvent) {
       if (widget.preferences.audioCues) {
-        try {
-          widget.audioCues.announceWorkoutPaceDrift(e);
-        } catch (err) {
-          debugPrint('announceWorkoutPaceDrift failed: $err');
-        }
+        _ttsCue('announceWorkoutPaceDrift',
+            () => widget.audioCues.announceWorkoutPaceDrift(e));
       }
     } else if (e is WorkoutCompleteEvent) {
       _publishWorkoutBand();
       if (widget.preferences.audioCues) {
-        try {
-          widget.audioCues.announceWorkoutComplete();
-        } catch (err) {
-          debugPrint('announceWorkoutComplete failed: $err');
-        }
+        _ttsCue('announceWorkoutComplete',
+            () => widget.audioCues.announceWorkoutComplete());
       }
     } else if (e is WorkoutAbandonedEvent) {
       _publishWorkoutBand();
+    }
+  }
+
+  /// Fire-and-forget TTS announcement. Wraps both synchronous and
+  /// asynchronous failures so a TTS-engine fault never escapes as an
+  /// unhandled error.
+  void _ttsCue(String label, Future<void> Function() invoke) {
+    try {
+      unawaited(invoke().catchError((Object e) {
+        debugPrint('$label failed (async): $e');
+      }));
+    } catch (e) {
+      debugPrint('$label failed (sync): $e');
     }
   }
 
@@ -716,10 +724,19 @@ class _RunScreenState extends State<RunScreen> {
     // averaged on stop into `metadata.avg_bpm`.
     _bpmSamples.clear();
     _currentBpm = null;
-    _hrSub = widget.heartRate.stream.listen((bpm) {
-      _bpmSamples.add(bpm);
-      if (mounted) setState(() => _currentBpm = bpm);
-    });
+    _hrSub = widget.heartRate.stream.listen(
+      (bpm) {
+        _bpmSamples.add(bpm);
+        if (mounted) setState(() => _currentBpm = bpm);
+      },
+      // The strap stream doesn't error today, but a future plugin
+      // bump or a mid-run BT toggle could surface one — without an
+      // onError, that becomes an unhandled async error and tears
+      // down the whole zone.
+      onError: (Object e) {
+        debugPrint('heartRate.stream error: $e');
+      },
+    );
 
     // Crash-safe incremental persistence — every 10s, write the current
     // track + stats to a separate file so a force-kill mid-run is recoverable.
@@ -738,11 +755,7 @@ class _RunScreenState extends State<RunScreen> {
     );
 
     if (widget.preferences.audioCues) {
-      try {
-        widget.audioCues.announceStart();
-      } catch (e) {
-        debugPrint('announceStart failed: $e');
-      }
+      _ttsCue('announceStart', () => widget.audioCues.announceStart());
     }
 
     setState(() => _state = _ScreenState.recording);
@@ -895,7 +908,8 @@ class _RunScreenState extends State<RunScreen> {
           if (off > _offRouteThresholdMetres && !_offRouteWarned) {
             _offRouteWarned = true;
             if (widget.preferences.audioCues) {
-              widget.audioCues.announceOffRoute();
+              _ttsCue('announceOffRoute',
+                  () => widget.audioCues.announceOffRoute());
             }
           } else if (off < _offRouteThresholdMetres / 2) {
             _offRouteWarned = false;
@@ -918,7 +932,8 @@ class _RunScreenState extends State<RunScreen> {
               DateTime.now().difference(lastAlert).inSeconds > 30;
           if (canAlert && diff.abs() > 30) {
             _lastPaceAlertAt = DateTime.now();
-            widget.audioCues.announcePaceAlert(tooSlow: diff > 0);
+            _ttsCue('announcePaceAlert',
+                () => widget.audioCues.announcePaceAlert(tooSlow: diff > 0));
             // Haptic companion to the TTS so the runner notices even
             // with headphones paused or ambient noise masking the cue.
             // Two-pulse for "speed up", single strong pulse for "slow
@@ -961,13 +976,13 @@ class _RunScreenState extends State<RunScreen> {
             );
           }
           if (widget.preferences.audioCues) {
-            widget.audioCues.announceSplit(
-              distanceTicks: currentTick,
-              paceSecondsPerKm: _pace,
-              unit: unit,
-              useSpeed: _activityType.usesSpeed,
-              tickIntervalMetres: tickInterval,
-            );
+            _ttsCue('announceSplit', () => widget.audioCues.announceSplit(
+                  distanceTicks: currentTick,
+                  paceSecondsPerKm: _pace,
+                  unit: unit,
+                  useSpeed: _activityType.usesSpeed,
+                  tickIntervalMetres: tickInterval,
+                ));
           }
         }
       } catch (e) {

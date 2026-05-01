@@ -53,6 +53,14 @@ class BleHeartRate {
       }
       controller.add(found.values.toList()
         ..sort((a, b) => b.rssi.compareTo(a.rssi)));
+    }, onError: (Object e) {
+      // The scan stream emits errors when the user toggles BT off
+      // mid-scan or revokes the runtime BT permission. Without an
+      // onError handler, the rejection becomes an unhandled async
+      // error. Forward to the broadcast controller so the caller's
+      // bottom-sheet can dismiss cleanly.
+      debugPrint('BLE scanResults error: $e');
+      if (!controller.isClosed) controller.addError(e);
     });
 
     FlutterBluePlus.startScan(

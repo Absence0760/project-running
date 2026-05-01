@@ -49,7 +49,7 @@ class _SignInScreenState extends State<SignInScreen> {
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -92,7 +92,7 @@ class _SignInScreenState extends State<SignInScreen> {
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -125,7 +125,7 @@ class _SignInScreenState extends State<SignInScreen> {
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }

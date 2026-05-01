@@ -105,7 +105,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       lat: lat,
       lng: lng,
       elevationMetres: ele,
-      timestamp: at == null ? null : DateTime.parse(at),
+      // tryParse never throws — a manually-edited row or future format
+      // change would otherwise crash the realtime callback (no outer
+      // catch) and tear down live tracking for the spectator.
+      timestamp: at == null ? null : DateTime.tryParse(at),
     ));
     final dist = (row['distance_m'] as num?)?.toDouble();
     if (dist != null) _distanceM = dist;
