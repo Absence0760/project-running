@@ -946,6 +946,16 @@ Fix: read the optional `<time>` child node on every `<trkpt>` / `<rtept>` / `<wp
 
 **Don't re-litigate unless:** we ever ingest GPX from a source that emits malformed timestamps (haven't seen one yet), or we want to derive timestamps from a GPX that explicitly lacks them (interpolate from `Activity Date` + cumulative haversine + a target pace — would need a separate code path).
 
+## 48. Heavy import / backup parsers run in `compute()` isolates, never on the UI thread
+
+Found during a UI-freeze audit. `StravaImporter.importFromZip` did `ZipDecoder().decodeBytes()` plus per-file GZip decompression and XML / FIT parsing all synchronously on the main isolate. A 5-year Strava export (hundreds of activities) froze the foreground for tens of seconds — the import-progress dialog stopped repainting until parsing finished. `BackupService.createBackup` and `BackupService.restore` had the same shape with `ZipEncoder().encode()` and `ZipDecoder().decodeBytes()` on multi-MB archives. The single-file route import (`routes_screen._importFile`) ran `RouteParser.fromGpx` on a potentially 5 MB XML on the UI thread.
+
+Fix: every heavy synchronous parser body now runs inside [`compute()`](https://api.flutter.dev/flutter/foundation/compute.html). Run / Waypoint / Duration / DateTime are all sendable across isolate boundaries; `Archive` is not, so backup encode/decode serialises through `[(name, bytes)]` pairs with a thin rebuild on the main isolate. The architecture guards in `apps/mobile_android/test/architecture_guards_test.dart#heavy parsers run in compute() isolates` will fail loudly if a future refactor inlines any of these calls back onto the UI thread. The same pass also swapped `_dir.listSync()` for async `_dir.list()` in `LocalRunStore` / `LocalRouteStore` cold-start, removing a smaller blocking step.
+
+**Trade-off:** `compute()` has fixed startup overhead (~10 ms to spawn the isolate plus serialisation cost). For a 1-row backup or a single-waypoint GPX it's a net loss vs inline. We accept that — every code path gated this way is by definition handling user-supplied data of unbounded size, and the worst-case freeze is what kills the experience.
+
+**Don't re-litigate unless:** we add a streaming parser API that yields control on its own (e.g. a SAX-style GPX parser) — that would let us skip the isolate hop and stay on the main thread. Until then, `compute()` is the cheap, correct boundary.
+
 ---
 
 ## How to add an entry
