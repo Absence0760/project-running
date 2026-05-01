@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../goals.dart';
 import '../local_route_store.dart';
@@ -37,7 +40,14 @@ class RunsScreen extends StatefulWidget {
 
 enum _RunsSort { newest, oldest, longest, fastest }
 
-enum _RunsRange { today, week, month, year, all }
+enum _RunsRange { today, week, month, year, all, custom }
+
+/// SharedPreferences key for the persisted filter blob (range / sort /
+/// activity / source / custom-from / custom-to). Mirrors the web app's
+/// `runs_filters_v1` key — the shape is screen-local, not roamed
+/// through `user_settings`, because date filters are personal-context
+/// (the device + moment), not a cross-device preference.
+const String _kRunsFiltersKey = 'runs_filters_v1';
 
 /// Page size for the cloud fetch + the visible-list window. Mirrors the
 /// web app's `/runs` PAGE_SIZE so a returning user sees the same shape
@@ -87,6 +97,14 @@ class _RunsScreenState extends State<RunsScreen> {
   /// `Run.source` exactly; see `RunSource` in `core_models`.
   RunSource? _sourceFilter;
 
+  /// Custom range bounds. Either may be `null` (open-ended on that
+  /// side) — matches web's `customFrom` / `customTo`. Only consulted
+  /// when `_range == _RunsRange.custom`. The values are kept across
+  /// flips to/from custom so the user doesn't have to re-pick after
+  /// switching to "All time" and back.
+  DateTime? _customFrom;
+  DateTime? _customTo;
+
   // Filtered + sorted full list (the slice _visible is taken from).
   // We keep the unfiltered superset around so the Load-more button can
   // reveal local rows before paying the cost of a cloud round-trip.
@@ -117,6 +135,7 @@ class _RunsScreenState extends State<RunsScreen> {
     widget.runStore.addListener(_onStoreChanged);
     widget.preferences.addListener(_onStoreChanged);
     _recompute();
+    _hydrateFilters();
     _fetchRemote();
   }
 
@@ -139,7 +158,13 @@ class _RunsScreenState extends State<RunsScreen> {
 
   void _recompute() {
     _filtered = _filterAndSort(
-      widget.runStore.runs, _range, _sort, _activityFilter, _sourceFilter);
+      widget.runStore.runs,
+      _lowerCutoff(),
+      _upperCutoff(),
+      _sort,
+      _activityFilter,
+      _sourceFilter,
+    );
     _visible = _filtered.length <= _visibleCount
         ? _filtered
         : _filtered.sublist(0, _visibleCount);
@@ -154,22 +179,98 @@ class _RunsScreenState extends State<RunsScreen> {
     _remoteHasMore = true;
   }
 
+  /// Restore range / sort / activity / source / custom-bounds from
+  /// SharedPreferences so the user picks up where they left off across
+  /// app restarts. Best-effort: any malformed blob is ignored and the
+  /// in-memory defaults stand. Mirrors the web app's `runs_filters_v1`
+  /// localStorage shape.
+  Future<void> _hydrateFilters() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kRunsFiltersKey);
+      if (raw == null || !mounted) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final rangeName = j['range'] as String?;
+      final sortName = j['sort'] as String?;
+      final activityName = j['activity'] as String?;
+      final sourceName = j['source'] as String?;
+      final fromMs = j['customFromMs'];
+      final toMs = j['customToMs'];
+      setState(() {
+        if (rangeName != null) {
+          _range = _RunsRange.values.firstWhere(
+            (e) => e.name == rangeName,
+            orElse: () => _range,
+          );
+        }
+        if (sortName != null) {
+          _sort = _RunsSort.values.firstWhere(
+            (e) => e.name == sortName,
+            orElse: () => _sort,
+          );
+        }
+        _activityFilter =
+            activityName == null ? null : ActivityType.fromName(activityName);
+        _sourceFilter = sourceName == null
+            ? null
+            : RunSource.values.firstWhere(
+                (e) => e.name == sourceName,
+                orElse: () => RunSource.app,
+              );
+        if (fromMs is int) {
+          _customFrom = DateTime.fromMillisecondsSinceEpoch(fromMs);
+        }
+        if (toMs is int) {
+          _customTo = DateTime.fromMillisecondsSinceEpoch(toMs);
+        }
+        _resetPaging();
+        _recompute();
+      });
+    } catch (_) {
+      // Corrupt blob or storage unavailable — leave defaults in place.
+    }
+  }
+
+  /// Persist the current filter selection. Fire-and-forget; a failed
+  /// write isn't worth blocking the UI for, and the next change will
+  /// retry.
+  void _persistFilters() {
+    SharedPreferences.getInstance().then((p) {
+      p.setString(
+        _kRunsFiltersKey,
+        jsonEncode({
+          'range': _range.name,
+          'sort': _sort.name,
+          'activity': _activityFilter?.name,
+          'source': _sourceFilter?.name,
+          'customFromMs': _customFrom?.millisecondsSinceEpoch,
+          'customToMs': _customTo?.millisecondsSinceEpoch,
+        }),
+      );
+    }).catchError((Object _) {
+      // L4 best-effort persistence — never escalate.
+    });
+  }
+
   static List<Run> _filterAndSort(
     List<Run> all,
-    _RunsRange range,
+    DateTime? lowerCutoff,
+    DateTime? upperCutoff,
     _RunsSort sort,
     ActivityType? activityFilter,
     RunSource? sourceFilter,
   ) {
-    final cutoff = _rangeCutoff(range);
     // Pipe filters through Iterable.where so we materialise a List
     // exactly once. When no filter applies and the requested sort
     // matches the store's natural newest-first order, we can return
     // the input directly (zero-alloc fast path) since the store hands
     // us an unmodifiable view that the caller only reads.
     Iterable<Run> stream = all;
-    if (cutoff != null) {
-      stream = stream.where((r) => !r.startedAt.isBefore(cutoff));
+    if (lowerCutoff != null) {
+      stream = stream.where((r) => !r.startedAt.isBefore(lowerCutoff));
+    }
+    if (upperCutoff != null) {
+      stream = stream.where((r) => !r.startedAt.isAfter(upperCutoff));
     }
     if (activityFilter != null) {
       stream = stream.where((r) {
@@ -201,9 +302,11 @@ class _RunsScreenState extends State<RunsScreen> {
     return filtered;
   }
 
-  static DateTime? _rangeCutoff(_RunsRange range) {
+  /// Lower bound of the active range filter, in local time. `null`
+  /// means "no lower cutoff" (range = all, or custom with no `from`).
+  DateTime? _lowerCutoff() {
     final now = DateTime.now();
-    switch (range) {
+    switch (_range) {
       case _RunsRange.today:
         return DateTime(now.year, now.month, now.day);
       case _RunsRange.week:
@@ -215,7 +318,19 @@ class _RunsScreenState extends State<RunsScreen> {
         return DateTime(now.year, 1, 1);
       case _RunsRange.all:
         return null;
+      case _RunsRange.custom:
+        return _customFrom;
     }
+  }
+
+  /// Upper bound of the active range filter, in local time. Only
+  /// `custom` carries an upper cutoff today — every other preset is
+  /// open-ended on the high side ("today" runs from midnight to now,
+  /// but a future run scheduled today would still show, which matches
+  /// the web app's choice).
+  DateTime? _upperCutoff() {
+    if (_range == _RunsRange.custom) return _customTo;
+    return null;
   }
 
   static String _rangeLabel(_RunsRange range) {
@@ -230,7 +345,38 @@ class _RunsScreenState extends State<RunsScreen> {
         return 'This year';
       case _RunsRange.all:
         return 'All time';
+      case _RunsRange.custom:
+        return 'Custom…';
     }
+  }
+
+  /// Header label for the active range. For preset ranges we render
+  /// the static label; for custom we format the picked bounds inline
+  /// so the user always sees what window the list is showing.
+  String _activeRangeLabel() {
+    if (_range != _RunsRange.custom) return _rangeLabel(_range);
+    final from = _customFrom;
+    final to = _customTo;
+    if (from == null && to == null) return 'Custom…';
+    if (from != null && to != null) {
+      return '${_formatRangeDate(from)} – ${_formatRangeDate(to)}';
+    }
+    if (from != null) return 'From ${_formatRangeDate(from)}';
+    return 'Until ${_formatRangeDate(to!)}';
+  }
+
+  /// Compact "May 1" / "May 1, 2025" date formatter for the header
+  /// label. Year is omitted when it matches the current year so the
+  /// usual case stays terse; included otherwise so "Jan 5" doesn't
+  /// silently mean a different year than the user expects.
+  static String _formatRangeDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final now = DateTime.now();
+    final base = '${months[d.month - 1]} ${d.day}';
+    return d.year == now.year ? base : '$base, ${d.year}';
   }
 
   Future<void> _fetchRemote() async {
@@ -527,6 +673,39 @@ class _RunsScreenState extends State<RunsScreen> {
     );
   }
 
+  /// Opens Material's date-range picker. On confirm, snaps the bounds
+  /// to the selected day boundaries (start of day / end of day) so the
+  /// `_filterAndSort` comparators include both endpoints inclusively,
+  /// flips the active range to custom, and persists. Cancel is a no-op
+  /// — no commit, no persisted change.
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final initial = (_customFrom != null && _customTo != null)
+        ? DateTimeRange(start: _customFrom!, end: _customTo!)
+        : null;
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 10),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: initial,
+      saveText: 'Apply',
+      helpText: 'Select date range',
+    );
+    if (picked == null || !mounted) return;
+    final from = DateTime(
+        picked.start.year, picked.start.month, picked.start.day);
+    final to = DateTime(picked.end.year, picked.end.month, picked.end.day,
+        23, 59, 59, 999);
+    setState(() {
+      _range = _RunsRange.custom;
+      _customFrom = from;
+      _customTo = to;
+      _resetPaging();
+      _recompute();
+    });
+    _persistFilters();
+  }
+
   AppBar _normalAppBar() {
     final unsyncedCount = widget.runStore.unsyncedCount;
     return AppBar(
@@ -535,12 +714,20 @@ class _RunsScreenState extends State<RunsScreen> {
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
           tooltip: 'Date range',
-          onSelected: (v) {
+          onSelected: (v) async {
+            // Custom always opens the picker, even when already selected
+            // — that's the only way to change the bounds without first
+            // flipping to a different range and back.
+            if (v == _RunsRange.custom) {
+              await _pickCustomRange();
+              return;
+            }
             setState(() {
               _range = v;
               _resetPaging();
               _recompute();
             });
+            _persistFilters();
           },
           itemBuilder: (_) => _RunsRange.values
               .map((r) => CheckedPopupMenuItem(
@@ -559,6 +746,7 @@ class _RunsScreenState extends State<RunsScreen> {
               _resetPaging();
               _recompute();
             });
+            _persistFilters();
           },
           itemBuilder: (_) => [
             CheckedPopupMenuItem(
@@ -672,7 +860,7 @@ class _RunsScreenState extends State<RunsScreen> {
           filteredCount: _filtered.length,
           remoteHasMore: _remoteHasMore,
           apiSignedIn: widget.apiClient?.userId != null,
-          filterCutoff: _rangeCutoff(_range),
+          filterCutoff: _lowerCutoff(),
           oldestLocalStartedAt: oldestLocal,
         );
     final loadMoreSlot = showLoadMore ? 1 : 0;
@@ -701,7 +889,7 @@ class _RunsScreenState extends State<RunsScreen> {
         }
         if (index == 0) {
           return _RunsFilterHeader(
-            rangeLabel: _rangeLabel(_range),
+            rangeLabel: _activeRangeLabel(),
             visibleCount: _visible.length,
             activityFilter: _activityFilter,
             sourceFilter: _sourceFilter,
@@ -711,6 +899,7 @@ class _RunsScreenState extends State<RunsScreen> {
                 _resetPaging();
                 _recompute();
               });
+              _persistFilters();
             },
             onSourceChanged: (v) {
               setState(() {
@@ -718,6 +907,7 @@ class _RunsScreenState extends State<RunsScreen> {
                 _resetPaging();
                 _recompute();
               });
+              _persistFilters();
             },
           );
         }
@@ -740,9 +930,12 @@ class _RunsScreenState extends State<RunsScreen> {
                       _activityFilter = null;
                       _sourceFilter = null;
                       _range = _RunsRange.all;
+                      _customFrom = null;
+                      _customTo = null;
                       _resetPaging();
                       _recompute();
                     });
+                    _persistFilters();
                   },
                   child: const Text('Clear filters'),
                 ),
