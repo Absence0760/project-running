@@ -343,12 +343,11 @@ If `.env.local` is missing, empty, or the backend is unreachable, the app starts
 
 ### Not yet implemented
 
-A few items are deliberately out of scope for now:
+A few items remain out of scope for now:
 
-- **OAuth sign-in (Google/Apple)** — only email/password is supported on Android; the web app has OAuth
-- **Strava and parkrun sync** — see roadmap; need API credentials and OAuth/scraping work
-- **Heart rate from Bluetooth devices** — no Bluetooth LE support yet
-- **Persistent offline map tile cache** — currently in-memory only; tiles re-download on app restart
+- **Strava live OAuth** — the ZIP import path is shipped; the OAuth flow that auto-syncs new activities still routes through the web app per [decisions.md § 41](../../docs/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns).
+- **Garmin live OAuth** — same shape as Strava: ZIP import works, live OAuth still web-only.
+- **Live race spectator** — see roadmap, the recording side ships but the active spectator screen on mobile is web-only today.
 
 ---
 

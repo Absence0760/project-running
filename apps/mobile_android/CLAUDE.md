@@ -29,7 +29,7 @@ When closing a parity gap, the order is: row classes (already generated) → `ap
 - **Hot-path exception — `run_screen.dart`:** the per-second `_onSnapshot` handler does NOT call `setState`. It updates mirror fields (for `_saveInProgress`, `_refreshLockScreenNotification`, and the `_formattedX` getters) then publishes to a `ValueNotifier<_LiveStats>`. The affected subtrees (map, off-route banner, route-remaining badge, stats panel) are wrapped in `ValueListenableBuilder`, so the rest of the recording tree (activity chips, GPS-lost / permission-revoked banners, layout) doesn't rebuild at GPS rate. If you add a new stat that updates per snapshot, put it behind the notifier, not in a `setState`. Control-state changes (state transitions, manual pause, lap mark) still go through `setState` — that cadence is low enough that a full rebuild is fine.
 - **Maps:** `flutter_map` with a MapLibre-compatible raster tile source. Cached via `flutter_map_cache` + `dio_cache_interceptor` for the disk-backed persistent tile cache. See [decisions.md § 8](../../docs/decisions.md) and [§ 5](../../docs/decisions.md).
 - **Recording:** delegates to `packages/run_recorder` — state machine, GPS filter chain, auto-pause, off-route detection, all live there. This app holds the UI and the screens; the recording logic is a package so the iOS and Wear OS apps can eventually reuse it.
-- **Auth / backend:** `packages/api_client` for Supabase. Google Sign-In is wired via the native `google_sign_in` package → exchanges the ID token through `ApiClient.signInWithGoogleIdToken`. Apple Sign-In scaffolded but not wired on Android (see the deferred list in `roadmap.md`).
+- **Auth / backend:** `packages/api_client` for Supabase. Google Sign-In is wired via the native `google_sign_in` package → exchanges the ID token through `ApiClient.signInWithGoogleIdToken`. Apple Sign-In is wired via `sign_in_with_apple` → `ApiClient.signInWithAppleIdToken`. Both buttons render on `sign_in_screen.dart` and `sign_up_screen.dart`. parkrun athlete-number import lives behind a Settings tile rather than a true OAuth flow (parkrun has no public OAuth surface).
 
 ## What's real vs stubbed
 
@@ -47,7 +47,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - Advanced GPS mode (Settings > Advanced GPS) for higher accuracy under tree cover.
 
 **Stubbed or deferred:**
-- OAuth sign-in for providers other than Google (Apple, Strava, parkrun) — UI removed from Settings in the meantime. See the "Deferred from Phase 1" section in `roadmap.md`.
+- Strava live OAuth (the ZIP import path is shipped). The OAuth surface is a Settings → Connect Strava button that's still scaffolded behind the same `apps/web` flow that ADR §41 covers.
 
 ## Files
 
@@ -166,7 +166,7 @@ Test files in `test/`:
 - `architecture_guards_test.dart` — 20 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
 - plus `run_recorder`'s own tests in `packages/run_recorder/test/` — 17 behavioural + 7 guards + 13 `workout_runner_test.dart` (step expansion, auto-advance, halfway / last-50m progress, skip / abandon, pace-adherence wayBehind, results JSON shape)
 
-See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for all screens and widgets except `RunScreen` and `LiveRunMap` (109 `testWidgets` calls across 22 files); see `test/` for the full list.
+See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for every screen and widget, including `RunScreen` (`run_screen_test.dart`) and `LiveRunMap` (`live_run_map_test.dart`) (~178 `testWidgets` calls across ~48 files); see `test/` for the full list.
 
 ## Running it locally
 
