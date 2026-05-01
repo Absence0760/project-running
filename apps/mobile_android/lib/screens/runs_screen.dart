@@ -673,29 +673,46 @@ class _RunsScreenState extends State<RunsScreen> {
     );
   }
 
-  /// Opens Material's date-range picker. On confirm, snaps the bounds
-  /// to the selected day boundaries (start of day / end of day) so the
-  /// `_filterAndSort` comparators include both endpoints inclusively,
-  /// flips the active range to custom, and persists. Cancel is a no-op
-  /// — no commit, no persisted change.
+  /// Two sequential `showDatePicker` dialogs — From, then To — so the
+  /// custom-range flow uses the same compact Material calendar dialog
+  /// as every other date pick in the app (`add_run_screen`,
+  /// `plan_new_screen`, `event_form_sheet`, `settings_screen`). Bounds
+  /// snap to start-of-day / end-of-day so the `_filterAndSort`
+  /// comparators include both endpoints inclusively. Cancelling either
+  /// step aborts the whole flow — no partial commit, no persisted
+  /// change.
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
-    final initial = (_customFrom != null && _customTo != null)
-        ? DateTimeRange(start: _customFrom!, end: _customTo!)
-        : null;
-    final picked = await showDateRangePicker(
+    final firstAllowed = DateTime(now.year - 10);
+    final lastAllowed = DateTime(now.year + 1, 12, 31);
+    final fromInitial = _customFrom ??
+        DateTime(now.year, now.month, now.day)
+            .subtract(const Duration(days: 7));
+    final fromPick = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year - 10),
-      lastDate: DateTime(now.year + 1, 12, 31),
-      initialDateRange: initial,
-      saveText: 'Apply',
-      helpText: 'Select date range',
+      initialDate: fromInitial,
+      firstDate: firstAllowed,
+      lastDate: lastAllowed,
+      helpText: 'Select start date',
     );
-    if (picked == null || !mounted) return;
-    final from = DateTime(
-        picked.start.year, picked.start.month, picked.start.day);
-    final to = DateTime(picked.end.year, picked.end.month, picked.end.day,
-        23, 59, 59, 999);
+    if (fromPick == null || !mounted) return;
+    final from =
+        DateTime(fromPick.year, fromPick.month, fromPick.day);
+    // To defaults to today (or whatever was previously picked, if it's
+    // still not before `from`); the picker is bounded below by `from`
+    // so the user can't accidentally invert the range.
+    final toInitialCandidate = _customTo ?? DateTime(now.year, now.month, now.day);
+    final toInitial = toInitialCandidate.isBefore(from) ? from : toInitialCandidate;
+    final toPick = await showDatePicker(
+      context: context,
+      initialDate: toInitial,
+      firstDate: from,
+      lastDate: lastAllowed,
+      helpText: 'Select end date',
+    );
+    if (toPick == null || !mounted) return;
+    final to = DateTime(
+        toPick.year, toPick.month, toPick.day, 23, 59, 59, 999);
     setState(() {
       _range = _RunsRange.custom;
       _customFrom = from;
