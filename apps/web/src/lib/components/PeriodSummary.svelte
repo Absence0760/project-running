@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import {
 		formatDistance,
 		formatDuration,
@@ -27,14 +28,18 @@
 		onPeriodChange,
 	}: Props = $props();
 
-	let type = $state<PeriodType>(initialType);
+	// `type` and `anchor` are seeded from the props once, then mutated
+	// locally by setType / shiftPeriod. untrack silences Svelte 5's
+	// state_referenced_locally warning — capturing the initial prop is
+	// the intended behaviour, not a derived view.
+	let type = $state<PeriodType>(untrack(() => initialType));
 	// `anchor` is a stable reference date that survives type toggles —
 	// it's NOT the start of the visible period. `startDate` is derived
 	// from (anchor, type) so toggling Week ↔ Month doesn't drift the
 	// window backwards/forwards (the previous code recomputed
 	// startDate from itself, so the Monday-of-week-containing-the-1st
 	// could land in the previous month).
-	let anchor = $state<Date>(initialDate ?? new Date());
+	let anchor = $state<Date>(untrack(() => initialDate ?? new Date()));
 	let startDate = $derived(periodStart(anchor, type));
 
 	function periodStart(d: Date, t: PeriodType): Date {

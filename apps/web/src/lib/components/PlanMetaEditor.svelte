@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Modal from './Modal.svelte';
 	import { updatePlanMeta } from '$lib/data';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -13,24 +14,27 @@
 
 	// Snapshot the incoming plan into editable state. We don't bind
 	// directly to `plan.x` because the parent passes a $state proxy
-	// and live edits would mutate the source before save.
-	let name = $state(plan.name);
-	let notes = $state(plan.notes ?? '');
-	let daysPerWeek = $state(plan.days_per_week ?? 4);
+	// and live edits would mutate the source before save. Each
+	// initialiser runs inside `untrack` to silence Svelte 5's
+	// state_referenced_locally warning — capturing the prop once is
+	// exactly what we want; tracking would defeat the snapshot.
+	let name = $state(untrack(() => plan.name));
+	let notes = $state(untrack(() => plan.notes ?? ''));
+	let daysPerWeek = $state(untrack(() => plan.days_per_week ?? 4));
 
-	let goalTimeHours = $state<number | ''>(
+	let goalTimeHours = $state<number | ''>(untrack(() =>
 		plan.goal_time_seconds != null ? Math.floor(plan.goal_time_seconds / 3600) : ''
-	);
-	let goalTimeMin = $state<number | ''>(
+	));
+	let goalTimeMin = $state<number | ''>(untrack(() =>
 		plan.goal_time_seconds != null ? Math.floor((plan.goal_time_seconds % 3600) / 60) : ''
-	);
-	let goalTimeSec = $state<number | ''>(
+	));
+	let goalTimeSec = $state<number | ''>(untrack(() =>
 		plan.goal_time_seconds != null ? plan.goal_time_seconds % 60 : ''
-	);
+	));
 
-	let rulesText = $state(
+	let rulesText = $state(untrack(() =>
 		Array.isArray(plan.rules) ? (plan.rules as string[]).join('\n') : ''
-	);
+	));
 
 	let saving = $state(false);
 	let error = $state<string | null>(null);

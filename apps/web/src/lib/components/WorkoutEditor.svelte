@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/data';
 	import {
 		isWorkoutCompleted,
@@ -30,35 +31,42 @@
 
 	// Local form state. Initialised from the workout row and only pushed to
 	// the server when the user hits Save, so cancelling restores cleanly.
-	let kind = $state<WorkoutKind>(workout.kind as WorkoutKind);
-	let distance = $state<number | null>(
+	// Each initialiser runs inside `untrack` because we want a one-time
+	// snapshot of the prop — without it, Svelte 5 (correctly) warns that
+	// reading the reactive `workout` prop here captures only its initial
+	// value and won't track later changes. That's the intended behaviour:
+	// the form holds its own state until Save / Cancel.
+	let kind = $state<WorkoutKind>(untrack(() => workout.kind as WorkoutKind));
+	let distance = $state<number | null>(untrack(() =>
 		workout.target_distance_m != null
 			? +(workout.target_distance_m / distanceDivisor).toFixed(2)
 			: null
-	);
-	let paceMin = $state<number | null>(
+	));
+	let paceMin = $state<number | null>(untrack(() =>
 		workout.target_pace_sec_per_km != null
 			? Math.floor(paceFromCanonical(workout.target_pace_sec_per_km) / 60)
 			: null
-	);
-	let paceSec = $state<number | null>(
+	));
+	let paceSec = $state<number | null>(untrack(() =>
 		workout.target_pace_sec_per_km != null
 			? Math.round(paceFromCanonical(workout.target_pace_sec_per_km) % 60)
 			: null
-	);
-	let paceEndMin = $state<number | null>(
+	));
+	let paceEndMin = $state<number | null>(untrack(() =>
 		workout.target_pace_end_sec_per_km != null
 			? Math.floor(paceFromCanonical(workout.target_pace_end_sec_per_km) / 60)
 			: null
-	);
-	let paceEndSec = $state<number | null>(
+	));
+	let paceEndSec = $state<number | null>(untrack(() =>
 		workout.target_pace_end_sec_per_km != null
 			? Math.round(paceFromCanonical(workout.target_pace_end_sec_per_km) % 60)
 			: null
+	));
+	let toleranceSec = $state<number | null>(
+		untrack(() => workout.target_pace_tolerance_sec)
 	);
-	let toleranceSec = $state<number | null>(workout.target_pace_tolerance_sec);
-	let zone = $state<string>(workout.pace_zone ?? '');
-	let notes = $state<string>(workout.notes ?? '');
+	let zone = $state<string>(untrack(() => workout.pace_zone ?? ''));
+	let notes = $state<string>(untrack(() => workout.notes ?? ''));
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
@@ -67,9 +75,10 @@
 	// "Mark as done" here when they ran without recording — sets the
 	// manually_completed flag instead. The two are mutually compatible:
 	// linking a real run later overrides the manual flag without losing
-	// the timestamp.
-	const wasCompleted = isWorkoutCompleted(workout);
-	const hasLinkedRun = workout.completed_run_id != null;
+	// the timestamp. These are read-only views of `workout`, so they
+	// derive (re-evaluate when the prop changes) rather than capture once.
+	const wasCompleted = $derived(isWorkoutCompleted(workout));
+	const hasLinkedRun = $derived(workout.completed_run_id != null);
 
 	const kindOptions: WorkoutKind[] = [
 		'easy', 'long', 'recovery', 'tempo', 'interval', 'marathon_pace', 'race', 'rest'
