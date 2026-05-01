@@ -278,6 +278,23 @@
 	let showRunModal = $state(false);
 	let showRangePicker = $state(false);
 
+	/// Last non-custom value of `dateRange`. Used to bounce back when
+	/// the user picks Custom from the dropdown then closes the picker
+	/// without committing — without this they'd be stranded in a
+	/// "Custom but no bounds" state (which behaves like All time but
+	/// reads as Custom in the dropdown).
+	let prevNonCustomRange = $state<DateRange>('today');
+	$effect(() => {
+		if (dateRange !== 'custom') prevNonCustomRange = dateRange;
+	});
+
+	function handleRangePickerClose(): void {
+		showRangePicker = false;
+		if (dateRange === 'custom' && !customFrom && !customTo) {
+			dateRange = prevNonCustomRange;
+		}
+	}
+
 	/// Compact label for the toolbar chip when a custom range is set.
 	/// "May 1 – May 7" (cross-year picks add the year suffix). When the
 	/// user is in custom mode but hasn't set bounds yet (e.g. just
@@ -334,7 +351,14 @@
 						<option value={src.value}>{src.label}</option>
 					{/each}
 				</select>
-				<select bind:value={dateRange} class="toolbar-select" aria-label="Date range">
+				<select
+					bind:value={dateRange}
+					class="toolbar-select"
+					aria-label="Date range"
+					onchange={() => {
+						if (dateRange === 'custom') showRangePicker = true;
+					}}
+				>
 					<option value="all">All time</option>
 					<option value="today">Today</option>
 					<option value="week">This week</option>
@@ -502,7 +526,7 @@
 
 <DateRangePicker
 	open={showRangePicker}
-	onclose={() => (showRangePicker = false)}
+	onclose={handleRangePickerClose}
 	initialFrom={customFrom}
 	initialTo={customTo}
 	onapply={(from, to) => {

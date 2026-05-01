@@ -123,7 +123,7 @@
 	let activeStart = $derived(pendingFrom === null || !selectingEnd());
 </script>
 
-<Modal {open} {onclose} title="Select dates" wide bodyClass="range-body">
+<Modal {open} {onclose} title="Select dates" bodyClass="range-body">
 	<div class="range-picker">
 		<div class="chip-row">
 			<div class="chip" class:active={activeStart}>
@@ -208,42 +208,40 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		max-height: min(80vh, 720px);
+		max-height: min(72vh, 560px);
 	}
 
 	.chip-row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 12px;
-		padding: 0 4px 12px;
+		gap: 8px;
+		padding: 0 0 8px;
 	}
 
 	.chip {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 10px 14px;
-		border-radius: 10px;
+		gap: 1px;
+		padding: 6px 10px;
+		border-radius: 8px;
 		border: 1px solid var(--color-border);
 		background: var(--color-surface);
-		min-height: 56px;
 	}
 
 	.chip.active {
 		border-color: var(--color-primary);
-		border-width: 1.5px;
 		background: var(--color-primary-light);
 	}
 
 	.chip-label {
-		font-size: 0.7rem;
-		letter-spacing: 0.06em;
+		font-size: 0.65rem;
+		letter-spacing: 0.05em;
 		font-weight: 600;
 		color: var(--color-text-tertiary);
 	}
 
 	.chip-value {
-		font-size: 1rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-text);
 	}
@@ -251,7 +249,7 @@
 	.dow-row {
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
-		padding: 8px 4px;
+		padding: 4px 0;
 		border-top: 1px solid var(--color-border);
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
@@ -262,7 +260,7 @@
 
 	.dow-row span {
 		text-align: center;
-		font-size: 0.75rem;
+		font-size: 0.7rem;
 		font-weight: 600;
 		color: var(--color-text-secondary);
 	}
@@ -271,19 +269,17 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 8px 0;
 	}
 
 	.month {
-		padding: 12px 4px 4px;
+		padding: 6px 0 2px;
 	}
 
 	.month-name {
-		font-size: 0.95rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-text);
-		margin: 0 0 8px;
-		padding: 0 4px;
+		margin: 0 0 4px;
 	}
 
 	.grid {
@@ -293,13 +289,13 @@
 
 	.cell {
 		all: unset;
-		aspect-ratio: 1;
+		height: 36px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
 		position: relative;
-		font-size: 0.95rem;
+		font-size: 0.85rem;
 		color: var(--color-text);
 		transition: background-color 80ms ease;
 	}
@@ -312,7 +308,6 @@
 		background: var(--color-primary-light);
 	}
 
-	/* In-range fill — full-width band that bridges adjacent cells. */
 	.cell.in-range {
 		background: var(--color-primary-light);
 	}
@@ -326,23 +321,18 @@
 	.cell.end::before {
 		content: '';
 		position: absolute;
-		inset: 4px;
+		inset: 3px;
 		border-radius: 50%;
 		background: var(--color-primary);
 		z-index: 0;
 	}
 
-	/* Cap the range bar against the endpoint pills so the connecting
-	 * band terminates flush with the circle edge instead of running
-	 * underneath it. */
 	.cell.start {
 		background: linear-gradient(to right, transparent 50%, var(--color-primary-light) 50%);
 	}
 	.cell.end {
 		background: linear-gradient(to right, var(--color-primary-light) 50%, transparent 50%);
 	}
-	/* Single-day pick (start == end before a second tap) shouldn't draw
-	 * the connector — only the circle. */
 	.cell.start.end {
 		background: transparent;
 	}
@@ -350,7 +340,7 @@
 	.cell.today::before {
 		content: '';
 		position: absolute;
-		inset: 4px;
+		inset: 3px;
 		border: 1.4px solid var(--color-primary);
 		border-radius: 50%;
 		z-index: 0;
@@ -370,8 +360,8 @@
 	.actions {
 		display: flex;
 		justify-content: space-between;
-		gap: 12px;
-		padding: 12px 4px 4px;
+		gap: 8px;
+		padding: 8px 0 0;
 		border-top: 1px solid var(--color-border);
 		background: var(--color-surface);
 	}
@@ -380,6 +370,6 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		padding: 12px;
+		padding: 10px 12px;
 	}
 </style>
