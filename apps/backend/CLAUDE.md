@@ -12,30 +12,19 @@ apps/backend/
 └── supabase/
     ├── config.toml           # local-stack config — ports, auth, email
     ├── seed.sql              # test user + 12 runs + 5 routes + integrations
-    ├── migrations/
-    │   ├── 20260405_001_initial_schema.sql
-    │   ├── 20260406_001_database_functions.sql
-    │   ├── 20260407_001_performance.sql
-    │   ├── 20260410_001_runs_to_storage.sql
-    │   ├── 20260413_001_public_runs.sql
-    │   ├── 20260414_001_route_reviews.sql
-    │   ├── 20260415_001_postgis_nearby_routes.sql
-    │   ├── 20260416_001_clubs_and_events.sql
-    │   ├── 20260417_001_phase2_social.sql
-    │   ├── 20260418_001_social_realtime.sql
-    │   ├── 20260419_001_training_plans.sql
-    │   ├── 20260420_001_plan_editor.sql
-    │   ├── 20260421_001_plan_hardening.sql
-    │   ├── 20260422_001_user_settings.sql
-    │   ├── 20260423_001_backfill_preferred_unit.sql
-    │   ├── 20260424_001_event_results.sql
-    │   ├── 20260425_001_race_sessions.sql
-    │   ├── 20260426_001_route_discovery.sql
-    │   ├── 20260427_001_fix_run_count_trigger.sql
-    │   ├── 20260428_001_role_permissions.sql
-    │   ├── 20260429_001_subscription_paywall.sql
-    │   ├── 20260430_001_coach_usage.sql
-    │   └── 20260501_001_funding.sql
+    ├── migrations/                # ~50 files; full list at `ls supabase/migrations/`.
+    │   │                          # Apr 2026 batch laid the schema foundation
+    │   │                          # (initial_schema → funding); May 2026 added the
+    │   │                          # social layer (notifications, kudos/comments,
+    │   │                          # photos, segments, follows, privacy zones, plan
+    │   │                          # templates) plus subscription paywall + coach
+    │   │                          # messages; June 2026 brought the route + run-
+    │   │                          # match pipeline (geom LineString, is_starred,
+    │   │                          # routes_within_box, run_match_pipeline,
+    │   │                          # routes_intersecting_track, source_track_url
+    │   │                          # CAS) and the pg_cron + rate-limit + Vault
+    │   │                          # tooling.
+    │   └── 20260611_001_run_matched_tracks_cas.sql  # latest at time of writing
     └── functions/
         ├── delete-account/index.ts
         ├── export-data/index.ts
@@ -124,7 +113,7 @@ It understands `create table`, `alter table ... add column`, and `alter table ..
 
 ## Edge Functions
 
-Five functions live under `supabase/functions/`. Two are wired up and shippable; three are skeletons with `TODO` markers. None currently have tests.
+Seven functions live under `supabase/functions/`. Six are wired up; `export-data` is the lone TODO stub. None currently have tests.
 
 | Function | Status | Trigger | Auth | Env vars |
 |---|---|---|---|---|
@@ -134,10 +123,9 @@ Five functions live under `supabase/functions/`. Two are wired up and shippable;
 | `strava-webhook` | **Partial** — verification works, activity sync is a TODO | GET verification from Strava + POST activity events | Shared `?secret=` in the callback URL guards both methods (Strava doesn't sign POSTs); GET also checks `hub.verify_token`. Service role for DB writes. | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `export-data` | **Stub** — every step is a TODO | Client POST with `{ format }` | User JWT | — |
 | `revenuecat-webhook` | **Working** | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC signature verification (`REVENUECAT_WEBHOOK_SECRET`) | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
-
 | `delete-account` | **Working** | Client POST (user action) | User JWT + service role for admin delete | `SUPABASE_SERVICE_ROLE_KEY` |
 
-All seven are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers.
+All seven are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers (other than `_shared/rate_limit.ts` for the throttle).
 
 ### Rate limiting
 

@@ -6,15 +6,17 @@ This is not a strict ADR template — each entry is a few paragraphs: what we de
 
 ---
 
-## 1. Apple Watch is native Swift / SwiftUI; Wear OS is Flutter
+## 1. Both watches are native: Apple Watch is Swift / SwiftUI, Wear OS is Kotlin / Compose-for-Wear
 
-**Decided:** Phase 2 planning (Q1 2026 · see [roadmap.md](roadmap.md))
+**Decided:** Phase 2 planning (Q1 2026 · see [roadmap.md](roadmap.md)). The Wear OS half was originally Flutter; reversed in §15 below — keeping this entry to record the original framing and what changed.
 
-Flutter's watchOS support is a non-starter for a first-class running computer — the build target isn't stable, the widget tree costs are too high for a small screen under a workout, and the native health frameworks (HealthKit, CoreLocation, WKWorkoutSession) are only reachable through channels we'd have to write ourselves. Swift / SwiftUI / WatchKit is the path everyone else takes and it's the only one that lets the watch run standalone GPS sessions without the phone. Flutter on Wear OS is fine — the Compose interop story is good enough, and the Android team already writes Dart, so we reuse core_models and api_client.
+Apple Watch was always going to be native Swift. Flutter's watchOS support is a non-starter for a first-class running computer — the build target isn't stable, widget-tree costs are too high under a workout, and the native health frameworks (HealthKit, CoreLocation, WKWorkoutSession) are only reachable through channels we'd have to write ourselves. SwiftUI / WatchKit is the path everyone else takes and it's the only one that lets the watch run standalone GPS sessions without the phone.
 
-**Trade-off:** We now maintain a second codebase (`apps/watch_ios/`) with its own networking, auth, and Supabase client (`SupabaseService.swift`) that doesn't share anything with the Flutter stack. Acceptable because the watch scope is intentionally small (record + navigate) and the watch mostly relays to the phone.
+Wear OS originally shipped as Flutter on the assumption that Compose interop was good enough and that we'd reuse `core_models` + `api_client`. In practice the Flutter-on-Wear surface dragged on framework upgrades, made tile / complication work awkward, and the schema-typed Dart `RunRow` had to be re-derived in Kotlin anyway. **§15 reversed this** — Wear OS is now pure Kotlin + Compose-for-Wear, with `RunRow` regenerated from the same Supabase migrations as Dart's `db_rows.dart` via `scripts/gen_dart_models.dart`. Read §15 for the move and the trade-offs.
 
-**Don't re-litigate unless:** Flutter ships a production-ready watchOS target, or Wear OS drops Compose interop support.
+**Trade-off:** Two native codebases now (`apps/watch_ios/` Swift, `apps/watch_wear/` Kotlin) with their own networking, auth, and Supabase clients. Acceptable because the watch scope is intentionally small (record + navigate + sync) and the schema codegen keeps the row-shape contract enforced at compile time on both sides.
+
+**Don't re-litigate unless:** Flutter ships a production-ready watchOS target *and* a similarly stable Wear OS target *and* the schema-codegen story works across both — at which point unifying back into Dart could be reconsidered. None of those are imminent.
 
 ---
 

@@ -9,8 +9,10 @@ For the behaviour being tested, see [run_recording.md](run_recording.md). For ho
 ## TL;DR
 
 ```bash
-# Run every test in the workspace
-melos run test
+# Run every Flutter test in the workspace (Melos 7 — see CLAUDE.md gotcha:
+# the `melos run` script lookup is broken; use `melos exec` instead).
+melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
+# (CI runs the same scopes — broader globs cost time without coverage.)
 
 # Run one package's tests
 cd apps/mobile_android && flutter test
@@ -35,8 +37,8 @@ npx tsx --test src/lib/training.test.ts
 **When to run:**
 
 - **While editing the file you're testing** — run that one test file (`flutter test test/foo_test.dart`). Sub-second feedback loop.
-- **Before committing** — `melos run test` across the workspace. Catches cross-package breakage.
-- **Before pushing a PR** — `melos run analyze && melos run test`. Both must pass.
+- **Before committing** — `melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test` across the workspace. Catches cross-package breakage.
+- **Before pushing a PR** — `melos exec -- dart analyze && melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test`. Both must pass.
 - **In CI** — both commands run automatically (see [architecture.md — CI/CD](architecture.md#cicd-pipeline)).
 
 ---
@@ -549,7 +551,7 @@ flutter test
 
 # Or the whole workspace
 cd /path/to/project-running
-melos run test
+melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
 ```
 
 ---
@@ -612,16 +614,15 @@ If you want to expand coverage, those are the best targets in priority order: `_
 
 ## Continuous integration
 
-Tests run in CI via the `melos run test` script defined in `melos.yaml`:
+Tests run in CI via `melos exec` directly — the per-script lookup that `melos run` uses is broken on Melos 7 (see the gotcha in the root [`CLAUDE.md`](../CLAUDE.md)), so the workflow drives the binary by command instead. From [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
 ```yaml
-scripts:
-  test:
-    run: melos exec -- flutter test
-    description: Run tests in all Flutter packages
+- run: melos bootstrap
+- run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
+- run: melos exec -- dart analyze
 ```
 
-`melos exec -- flutter test` walks every Flutter package in the workspace (defined by the top-level `melos.yaml`'s `packages` list) and runs `flutter test` in each one that has a `test/` directory. Packages without tests are silently skipped. See [architecture.md — CI/CD](architecture.md#cicd-pipeline) for the pipeline wiring.
+The scopes pin coverage to the two packages that own meaningful test bodies; widening the glob doesn't add coverage and slows the runner. `melos exec -- dart analyze` walks every Flutter package and gates on the analyzer. See [architecture.md — CI/CD](architecture.md#cicd-pipeline) for the rest of the pipeline wiring.
 
 ---
 

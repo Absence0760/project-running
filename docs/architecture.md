@@ -577,8 +577,8 @@ Three trigger tiers:
 jobs:
   test-packages:          # PR + push + release
     steps:
-      - run: melos run test
-      - run: melos run analyze
+      - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
+      - run: melos exec -- dart analyze
 
   build-web:              # PR + push + release
     steps:

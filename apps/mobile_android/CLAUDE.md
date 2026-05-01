@@ -138,7 +138,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `deprecated_member_use` — mostly `withOpacity` → `withValues` and `share_plus` v13 (`Share.shareXFiles` → `SharePlus.instance.share`). Deferred until we do a theme/deps pass.
 - `dangling_library_doc_comments`, `unnecessary_brace_in_string_interps`, `unnecessary_import` — stragglers.
 
-**Do not waste a turn on these.** Only act on `info` if your change touched that specific file. **Do act on any new `warning`/`error`** — the bar is "zero warnings", so a fresh one is a regression your change introduced. The CI `test-packages` job runs `melos run analyze` via `dart analyze`; the exit code is ignored for this package (per roadmap intent, not per CI config — verify before relying on this).
+**Do not waste a turn on these.** Only act on `info` if your change touched that specific file. **Do act on any new `warning`/`error`** — the bar is "zero warnings", so a fresh one is a regression your change introduced. The CI `test-packages` job runs `melos exec -- dart analyze`; the exit code is ignored for this package (per roadmap intent, not per CI config — verify before relying on this).
 
 ## Tests
 

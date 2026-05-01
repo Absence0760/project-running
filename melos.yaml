@@ -1,9 +1,12 @@
 name: run-app
 
+# watch_wear is intentionally NOT a Melos package — it's pure Kotlin /
+# Compose-for-Wear (decisions.md §15) with its own Gradle build at
+# apps/watch_wear/android/. Build it with `./gradlew assembleDebug`
+# from that directory; melos has nothing to bootstrap there.
 packages:
   - apps/mobile_ios
   - apps/mobile_android
-  - apps/watch_wear
   - packages/**
 
 command:
@@ -28,11 +31,6 @@ scripts:
     run: flutter build appbundle
     packageFilters:
       scope: mobile_android
-
-  build:wear:
-    run: flutter build apk
-    packageFilters:
-      scope: watch_wear
 
   format:
     run: melos exec -- dart format .

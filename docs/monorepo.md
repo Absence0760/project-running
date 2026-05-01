@@ -30,8 +30,9 @@ melos bootstrap
 # Install web app dependencies
 cd apps/web && pnpm install && cd ../..
 
-# Verify everything is wired up
-melos run analyze
+# Verify everything is wired up (use `melos exec`, not `melos run` —
+# Melos 7's per-script lookup is broken; see root CLAUDE.md gotcha)
+melos exec -- dart analyze
 cd apps/web && pnpm check
 ```
 
@@ -101,10 +102,9 @@ scripts:
     packageFilters:
       scope: mobile_android
 
-  build:wear:
-    run: flutter build apk
-    packageFilters:
-      scope: watch_wear
+  # watch_wear is NOT a Melos package — it's pure Kotlin / Compose-for-Wear
+  # with its own Gradle build (decisions.md §15). Build it with:
+  #   cd apps/watch_wear/android && ./gradlew assembleDebug
 
   # Format all Dart code
   format:
@@ -349,7 +349,7 @@ Full pipeline defined in `.github/workflows/ci.yml`. Key jobs:
 
 | Job | Runner | Trigger | What it does |
 |---|---|---|---|
-| `test-packages` | ubuntu-latest | PR + push to main + release | `melos bootstrap` → `melos run test` → `melos run analyze` |
+| `test-packages` | ubuntu-latest | PR + push to main + release | `melos bootstrap` → `melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test` → `melos exec -- dart analyze` |
 | `build-web` | ubuntu-latest | PR + push to main + release | `npm ci` → `npm run lint` → `npm run build` |
 | `parity-types` | ubuntu-latest | PR + push to main + release | `supabase start` → `npm run gen:types:check` |
 | `build-ios` | macos-latest | Push to main | `flutter build ipa --no-codesign` |
@@ -364,13 +364,14 @@ Full pipeline defined in `.github/workflows/ci.yml`. Key jobs:
 ### Run all tests
 
 ```bash
-melos run test
+# Melos 7 — `melos run` doesn't pick up scripts here (CLAUDE.md gotcha); drive the binary instead.
+melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
 ```
 
 ### Check for lint issues across all packages
 
 ```bash
-melos run analyze
+melos exec -- dart analyze
 cd apps/web && pnpm check
 ```
 
