@@ -60,6 +60,70 @@ void main() {
       );
     });
 
+    test('_onSnapshot updates L0/L1 stats before any L4 effect', () {
+      // Reason: the layering rule (docs/conventions.md § Layered
+      // resilience, docs/run_recording.md § Layering) says L0 (clock)
+      // and L1 (GPS distance / pace) must not be broken by any L4
+      // failure. Concretely: the mirror-field write + _statsNotifier
+      // publish must complete before the first L4 try-block runs.
+      // If a future edit hoists an effect (workout runner, race ping,
+      // pace alert, lock-screen update, etc.) above the publish, an
+      // unhandled throw inside it freezes the visible counters.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      final notifierIdx = body.indexOf('_statsNotifier.value = _LiveStats(');
+      final firstTryIdx = body.indexOf('try {');
+      expect(
+        notifierIdx,
+        greaterThan(-1),
+        reason: '_onSnapshot must publish to _statsNotifier — '
+            'this is what drives the visible stats.',
+      );
+      expect(
+        firstTryIdx,
+        greaterThan(notifierIdx),
+        reason: '_onSnapshot has a try-block before the _statsNotifier '
+            'publish. Move the L0/L1 update (mirror fields + '
+            '_statsNotifier.value = ...) above every L4 effect, so a '
+            'thrown auxiliary cannot freeze the clock and distance.',
+      );
+    });
+
+    test('_onSnapshot wraps every L4 effect in its own try/catch', () {
+      // Reason: layering rule again. A single shared outer try would
+      // mean the first L4 throw skips every later effect (race ping
+      // dies → off-route cue, pace alert, split snackbar, lock-screen
+      // refresh all silently stop). Each effect gets its own try so
+      // failures are isolated.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      final tryCount = RegExp(r'\btry\s*\{').allMatches(body).length;
+      final catchCount = RegExp(r'\}\s*catch\s*\(').allMatches(body).length;
+      expect(
+        tryCount,
+        equals(catchCount),
+        reason: 'Every try in _onSnapshot must have a matching catch. '
+            'A bare try with no catch lets a throw escape and kill the '
+            'snapshot pipeline.',
+      );
+      // We expect at least one try per L4 effect: workout runner,
+      // race ping, live broadcaster, off-route cue, pace alert, split
+      // snackbar, lock-screen refresh = 7. If this drops, someone
+      // collapsed effects under a shared catch — re-split them.
+      expect(
+        tryCount,
+        greaterThanOrEqualTo(7),
+        reason: '_onSnapshot is expected to host >=7 individually '
+            'wrapped L4 effects. A drop usually means effects were '
+            'collapsed under a shared try, which re-introduces the '
+            'failure mode the layering rule is meant to prevent.',
+      );
+    });
+
     test('_formattedElevation reads the accumulator field, not a loop', () {
       // Reason: was O(n) over the full track on every build. For a 60-min
       // run (~3600 waypoints) that's millions of iterator steps per

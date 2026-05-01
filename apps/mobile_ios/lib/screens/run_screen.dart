@@ -759,16 +759,6 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   void _onSnapshot(RunSnapshot snapshot) {
-      // Drive the structured-workout runner first so its event stream
-      // (transitions, drift cues) is in sync with this snapshot. The
-      // runner is purely a snapshot consumer; it doesn't fire setState
-      // — _publishWorkoutBand pushes the new state via _workoutBand.
-      final wr = _workoutRunner;
-      if (wr != null && !wr.isComplete) {
-        wr.onSnapshot(snapshot);
-        _publishWorkoutBand();
-      }
-
       final unit = widget.preferences.unit;
 
       // Only count GPS-backed snapshots as evidence that the sensor is
@@ -843,6 +833,22 @@ class _RunScreenState extends State<RunScreen> {
       // update above stays intact. The layering rule is: L0 (clock) and
       // L1 (GPS distance / pace in the setState above) must not be broken
       // by any failure in L4 auxiliaries.
+
+      // L4 — Structured-workout runner. Pure snapshot consumer; emits
+      // events (transitions, halfway / last-50m / pace-drift cues) onto
+      // an async stream that _onWorkoutEvent drains, so ordering vs the
+      // L0/L1 update above doesn't matter for cue synchrony. Wrapped so
+      // a future runner change (e.g. corrupted step list, out-of-bounds
+      // index) can't freeze the visible counters.
+      try {
+        final wr = _workoutRunner;
+        if (wr != null && !wr.isComplete) {
+          wr.onSnapshot(snapshot);
+          _publishWorkoutBand();
+        }
+      } catch (e) {
+        debugPrint('workout runner snapshot failed: $e');
+      }
 
       // L4 — Live race spectator ping. Requires a real GPS fix; cadence
       // throttled inside RaceController. Network / Supabase realtime can
