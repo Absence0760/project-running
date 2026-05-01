@@ -15,6 +15,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
+	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import type { Run, RunSource } from '$lib/types';
 	import type { Snapshot } from './$types';
 
@@ -275,6 +276,29 @@
 	};
 
 	let showRunModal = $state(false);
+	let showRangePicker = $state(false);
+
+	/// Compact label for the toolbar chip when a custom range is set.
+	/// "May 1 – May 7" (cross-year picks add the year suffix). When the
+	/// user is in custom mode but hasn't set bounds yet (e.g. just
+	/// flipped to Custom in the dropdown), we show "Pick dates…" instead.
+	function customRangeChipLabel(): string {
+		const months = [
+			'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+			'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+		];
+		const fmt = (s: string) => {
+			const d = new Date(s + 'T00:00:00');
+			const base = `${months[d.getMonth()]} ${d.getDate()}`;
+			return d.getFullYear() === new Date().getFullYear()
+				? base
+				: `${base}, ${d.getFullYear()}`;
+		};
+		if (!customFrom && !customTo) return 'Pick dates…';
+		if (customFrom && customTo) return `${fmt(customFrom)} – ${fmt(customTo)}`;
+		if (customFrom) return `From ${fmt(customFrom)}`;
+		return `Until ${fmt(customTo)}`;
+	}
 
 	async function handleRunCreated(run: { id: string }) {
 		showRunModal = false;
@@ -339,14 +363,15 @@
 
 		{#if dateRange === 'custom'}
 			<div class="date-picker-row">
-				<label>
-					From
-					<input type="date" bind:value={customFrom} />
-				</label>
-				<label>
-					To
-					<input type="date" bind:value={customTo} />
-				</label>
+				<button
+					type="button"
+					class="range-chip"
+					onclick={() => (showRangePicker = true)}
+					aria-label="Open date range picker"
+				>
+					<span class="material-symbols">calendar_month</span>
+					{customRangeChipLabel()}
+				</button>
 				{#if customFrom || customTo}
 					<button
 						type="button"
@@ -474,6 +499,22 @@
 >
 	<RunEditor oncreated={handleRunCreated} oncancel={() => (showRunModal = false)} />
 </Modal>
+
+<DateRangePicker
+	open={showRangePicker}
+	onclose={() => (showRangePicker = false)}
+	initialFrom={customFrom}
+	initialTo={customTo}
+	onapply={(from, to) => {
+		customFrom = from;
+		customTo = to;
+		showRangePicker = false;
+	}}
+	onclear={() => {
+		customFrom = '';
+		customTo = '';
+	}}
+/>
 
 <style>
 	.page {
@@ -710,20 +751,26 @@
 		margin-top: var(--space-sm);
 		flex-wrap: wrap;
 	}
-	.date-picker-row label {
+	.range-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		font-size: 0.85rem;
-		color: var(--color-text-secondary);
-	}
-	.date-picker-row input[type='date'] {
-		padding: 0.35rem 0.5rem;
+		gap: 0.5rem;
+		padding: 0.4rem 0.75rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
-		color: var(--color-text-primary);
-		font-size: 0.85rem;
+		color: var(--color-text);
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+	}
+	.range-chip:hover {
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.range-chip .material-symbols {
+		font-size: 1.1rem;
+		color: var(--color-text-secondary);
 	}
 	.link-btn {
 		background: transparent;
