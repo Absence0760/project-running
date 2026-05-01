@@ -407,9 +407,10 @@ class LocalRunStore extends ChangeNotifier {
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeleteIds.addAll(pendingDeletes);
 
-    final files = _dir
-        .listSync()
-        .whereType<File>()
+    final files = await _dir
+        .list()
+        .where((e) => e is File)
+        .cast<File>()
         .where((f) => f.path.endsWith('.json'))
         .where((f) => !f.path.endsWith(_inProgressFilename))
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
