@@ -132,30 +132,49 @@ Web env vars:
 
 Register once per app (not per user). Strava pushes a notification within seconds of a user creating, updating, or deleting an activity.
 
+The real implementation lives in `apps/backend/supabase/functions/strava-webhook/index.ts` and shares its ingest path with the OAuth backfill via `apps/backend/supabase/functions/_shared/strava.ts`. Sketch of the actual flow (read the source for the full version — auth, retries, refresh, sport-type filtering):
+
 ```typescript
-// apps/backend/functions/strava-webhook/index.ts
-// POST — Strava sends this on every activity event
-export async function POST(req: Request) {
-  const { object_type, object_id, aspect_type, owner_id } = await req.json();
+// 1. URL-secret guard (Strava doesn't sign POSTs)
+const secret = new URL(req.url).searchParams.get('secret');
+if (secret !== Deno.env.get('STRAVA_WEBHOOK_SECRET')) return new Response('forbidden', {status: 403});
 
-  if (object_type !== 'activity' || aspect_type !== 'create') return ok();
+const { object_type, object_id, aspect_type, owner_id } = await req.json();
+if (object_type !== 'activity') return new Response('OK');           // ack non-run events
+if (aspect_type !== 'create' && aspect_type !== 'update') return new Response('OK');
 
-  // Look up user by Strava athlete ID
-  const { data: integration } = await supabase
-    .from('integrations')
-    .select('user_id, access_token')
-    .eq('provider', 'strava')
-    .eq('external_id', String(owner_id))
-    .single();
+// 2. Service-role client (the webhook isn't a user request)
+const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-  // Fetch full activity from Strava
-  const activity = await stravaGet(`/activities/${object_id}`, integration.access_token);
-  const stream = await stravaGet(`/activities/${object_id}/streams?keys=latlng,altitude,time`, integration.access_token);
+// 3. Look up the integration WITHOUT joining secrets — tokens live in Vault
+const { data: integration } = await supabase
+  .from('integrations').select('user_id')
+  .eq('provider', 'strava').eq('external_id', String(owner_id))
+  .single();
+if (!integration) return new Response('OK');                          // unknown athlete: ack and drop
 
-  // Map to Run and upsert
-  await supabase.from('runs').upsert(toRun(activity, stream, integration.user_id));
-}
+// 4. Dedupe before refresh — repeated webhooks are common
+if (await isAlreadyImported(supabase, integration.user_id, object_id)) return new Response('OK');
+
+// 5. Fetch tokens from Vault; refresh if within 5 min of expiry
+let { accessToken, expiresAt } = await getTokens(supabase, integration.user_id);
+if (expiresAt - Date.now() < 5 * 60_000) ({accessToken} = await refreshStravaToken(supabase, integration.user_id));
+
+// 6. Fetch + filter + ingest via the same code path as backfill
+const activity = await fetchStravaActivity(accessToken, object_id);
+if (!isRunOrWalkOrHike(activity.sport_type)) return new Response('OK');
+await ingestActivity(supabase, integration.user_id, accessToken, activity);
+
+// 7. ALWAYS 200 — Strava retries on non-2xx and a retry storm would re-trigger ingest
+return new Response('OK');
 ```
+
+Important properties of the real implementation:
+
+- **Always 200 on the success and the swallow paths.** Returning 5xx invites Strava's retry policy (~5 retries over an hour); since the function de-dupes on `metadata.strava_id`, a retry just costs us a token refresh + a fetch. We log to Sentry via `withSentry` instead.
+- **Tokens live in Vault** (decisions §41). The integration row exposes `user_id` + `external_id` + `scope`; the actual `access_token` / `refresh_token` go through `get_integration_tokens` / `set_integration_tokens` SECURITY DEFINER RPCs.
+- **Dedupe key is `metadata.strava_id`** (jsonb), not a column, not `external_id`. The shared `isAlreadyImported` helper checks both the legacy `external_id LIKE 'strava:%'` shape and the metadata shape so historic and current rows both block re-ingestion.
+- **Sport-type filter narrows to run / walk / hike.** A user's bike ride or swim is acknowledged but not ingested.
 
 ### Key endpoints
 

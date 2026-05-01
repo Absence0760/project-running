@@ -224,6 +224,8 @@ The Go worker at `apps/job_worker/` drains the `jobs` queue. Default matcher is 
 | Pending state | Open `/runs/[id]` immediately after creating a run | Pill says **Snap pending**; raw track renders. Refresh after the worker finishes (1–2 s) and the matched line takes over. |
 | Failed / skipped | Insert a run with a track outside the OSRM region (e.g. London coords against the Victoria PBF) | `status='skipped'`; pill flips to absent; raw track keeps rendering. The run is preserved. |
 | Re-match on engine bump | Bump `OSRMMatcher.AlgVersion` and force a re-match (`update run_matched_tracks set status='pending', algorithm_version=null where run_id='...'`) | Worker picks the row up via the trigger, produces a new matched blob, web reads the fresher line. |
+| Owner Re-match button | Sign in as the run owner; open `/runs/[id]` for a `failed` or `skipped` match; click the **Re-match** chip in the corner pill | Toast "Re-snapping to roads…"; pill flips to **Snapping to roads…**; `jobs` table gains a new `map_match` row with this `run_id`; once the worker drains it the pill disappears (matched-state silence) and the matched line replaces the raw track. Calling twice in quick succession is a no-op (idempotent against `jobs_dedupe_map_match`). |
+| Re-match permissions | Sign in as a different user, or load the page anonymously; open the same `/runs/[id]` if it's public | The Re-match chip is not rendered. Calling the RPC directly with a non-owner JWT returns 42501 ("not authorized"). |
 | Mobile read path | Open run detail on mobile for a matched run | `_matchInfo` populated; `RunMap` shows the matched line; `_RouteSuggestBanner` surfaces if a candidate scored above the auto-link threshold. |
 
 ---
@@ -353,7 +355,7 @@ See [decisions.md §36](decisions.md#36-photos-on-runs-own-table--storage-bucket
 |---|---|---|---|
 | Strava ZIP (web) | `/settings/integrations` → Strava bulk import | Upload the export ZIP | Activities import; `metadata.strava_id` set for dedupe; tracks land in Storage. |
 | Strava OAuth (Edge Function) | OAuth flow then `strava-import` EF | `{action: 'connect', code, scope}` after redirect, then `{action: 'sync'}` for backfill | Activities import; tokens land in Vault via `set_integration_tokens`; `metadata.title` + `metadata.elevation_m` populated when present (recently-fixed bug — these used to be written as columns that don't exist). |
-| Strava webhook | `strava-webhook` EF | Send a verification GET, then a POST event | Verification responds with the challenge; activity events are TODO (the EF is partial — see [api_database.md § strava-webhook](api_database.md)). |
+| Strava webhook | `strava-webhook` EF | (a) send a `GET ?secret=<STRAVA_WEBHOOK_SECRET>&hub.mode=subscribe&hub.verify_token=<STRAVA_VERIFY_TOKEN>&hub.challenge=ping`; (b) send a `POST` event with `{object_type:'activity',aspect_type:'create',owner_id,object_id}` and the secret query string | (a) responds 200 with `{"hub.challenge":"ping"}`; (b) returns 200 (always — Strava retries on non-2xx) and an authed Run row appears for `owner_id` with `metadata.strava_id == object_id`. Replay the same POST → no duplicate (dedupe via `metadata.strava_id`). Activity types other than run/walk/hike are silently ignored. |
 | Garmin ZIP (web) | `/settings/integrations` → Garmin bulk | Upload either a single `.fit` or the Account Data `.zip` | Activities import via `garmin-zip.ts`; `metadata.garmin_id` set; routed inner GPX/TCX go through `parseRouteFile`. |
 | parkrun (mobile) | Settings → Import parkrun results → enter athlete number | Calls `parkrun-import` EF | New results land as runs with `source='parkrun'`; `metadata.event` + `metadata.position` + `metadata.age_grade` set. |
 | Health Connect (Android) | Settings → Import from Health Connect | Pick a date range | Workouts come in via `health_connect_importer.dart`; `metadata.health_connect_type` preserves the original enum. |
@@ -396,7 +398,9 @@ See [paywall.md](paywall.md) for the full tier matrix and feature gates.
 | Web full backup ZIP | `/settings/account` → Create backup | Downloads a `run-app-backup` v1 ZIP with `runs.json` + `routes.json` + `profile.json` + `manifest.json` + per-run gzipped tracks. |
 | Web restore | Same screen → Restore | Round-trips the same ZIP; idempotent on `external_id`. |
 | Web single-file export | Same screen → Export runs JSON | Downloads `runs-{ts}.json` (no tracks, `user_id` stripped). Identical row shape to the ZIP's `runs.json`. |
-| GDPR export (Edge Function) | `export-data` EF call | EF is currently a stub — every step is a TODO. Expect 501-ish behaviour until it ships. |
+| GDPR export (Edge Function, CSV) | `POST /functions/v1/export-data` with `{format:'csv'}` and a user JWT | Returns `{url, path, expires_in:600, count, format:'csv'}`. The signed URL downloads a single CSV with one row per run (columns: `id, started_at, distance_m, duration_s, source, activity_type, title, avg_bpm, steps, elevation_m, route_id, event_id, external_id, is_public, track_url, metadata, created_at, updated_at`). Capped at 5000 runs; rate-limit 2/h free, 8/h pro. |
+| GDPR export (Edge Function, GPX zip) | Same EF with `{format:'gpx'}` | Same response shape; the signed URL downloads a `.zip` containing one `.gpx` per run plus a `manifest.json`. GPX 1.1 with `<ele>`, `<time>`, and `<gpxtpx:hr>` extensions when the source data carries them. |
+| GDPR export (rate limit) | Hit the EF 3× as a free user within an hour | Third call returns 429 with `Retry-After`. |
 | Account deletion | Web `/settings/account` → Delete account | `delete-account` EF runs admin delete (User JWT + service role); cascading FKs clear `runs`, `routes`, `clubs` membership, etc. |
 
 ---

@@ -278,5 +278,5 @@ Before flipping the row in [`docs/deployment.md`](../../docs/deployment.md) from
 - [ ] Storage versioning on for `runs`
 - [ ] External uptime probe live
 - [ ] Backup drill performed at least once
-- [ ] Sentry project + DSN wired into the EF base (when that lands)
+- [x] Sentry project + DSN wired into the EF base — every EF wraps `serve` in `withSentry('<ef-name>', ...)` from `functions/_shared/sentry.ts`; `SENTRY_DSN` + `APP_RELEASE` set via `supabase secrets set`. Unset DSN keeps the wrapper a passthrough.
 - [ ] `parity.md` rows marked ✓ for the EF-driven features

@@ -60,6 +60,9 @@ Set these in **Project → Settings → Environment Variables**, scoped to "Prod
 | `PUBLIC_MAPTILER_KEY` | MapTiler dashboard | shared with mobile + Wear OS |
 | `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat dashboard | client-side web SDK key |
 | `ANTHROPIC_API_KEY` | Anthropic console | server-only — `/api/coach` reads it |
+| `PUBLIC_SENTRY_DSN` | Sentry frontend project | optional — empty disables client-side capture (`hooks.client.ts`) |
+| `SENTRY_DSN` | Sentry frontend project | optional — empty disables server-side capture (`hooks.server.ts`); typically the same DSN as `PUBLIC_SENTRY_DSN` |
+| `PUBLIC_APP_RELEASE` / `APP_RELEASE` | CI tag (e.g. `web@1.2.3`) | optional — tags Sentry events with the release; defaults to `dev` when unset |
 | `BASE_PATH` | `/` for Vercel; `/<repo-name>` for Pages | empty in Vercel; the Pages workflow sets it |
 
 `PUBLIC_*` vars are inlined at build time and shipped to the browser. Anything that should stay server-side (the Anthropic key) must NOT have the `PUBLIC_` prefix.

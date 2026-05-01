@@ -89,6 +89,8 @@ Configure at **Settings → Secrets and variables → Actions**.
 | `ANDROID_KEY_ALIAS` | alias inside the keystore |
 | `ANDROID_KEY_PASSWORD` | key password (often same as store) |
 | `PLAY_SERVICE_ACCOUNT_JSON` | Google Play service-account JSON key |
+| `SENTRY_DSN` | Sentry mobile project DSN. Passed as `--dart-define=SENTRY_DSN=...` at build time; empty disables (`sentry_flutter` init in `lib/main.dart` is gated). |
+| `APP_RELEASE` | `mobile_android@<version>` tag — passed as `--dart-define=APP_RELEASE=...` so Sentry events are tagged with the release. Defaults to `dev` when unset. |
 
 Creating the keystore (one-time):
 ```bash
@@ -117,6 +119,8 @@ identity):
 | `WATCH_WEAR_KEY_PASSWORD` | |
 | `SUPABASE_URL` | production Supabase URL (injected at build time) |
 | `SUPABASE_ANON_KEY` | production anon key |
+| `SENTRY_DSN` | Sentry watch_wear project DSN. Read via `BuildConfig.SENTRY_DSN` from `.env.local` at Gradle-configure time; CI sets it from this secret. Empty disables. |
+| `APP_RELEASE` | `watch_wear@<version>` tag for Sentry release tagging. Defaults to `dev`. |
 
 `PLAY_SERVICE_ACCOUNT_JSON` can be shared with the Android release if
 the service account has Release-manager on both apps.
@@ -132,9 +136,16 @@ the service account has Release-manager on both apps.
 | `APP_STORE_CONNECT_API_KEY_ID` | |
 | `APP_STORE_CONNECT_API_ISSUER_ID` | |
 | `APP_STORE_CONNECT_API_KEY_BASE64` | `.p8` from App Store Connect |
+| `SENTRY_DSN` | Sentry mobile project DSN — same DSN as Android (Sentry tags by platform automatically). Passed as `--dart-define=SENTRY_DSN=...`. |
+| `APP_RELEASE` | `mobile_ios@<version>` tag for Sentry release tagging. Defaults to `dev`. |
 
 These blocks are commented out in `release-ios.yml` today — uncomment
 when the Flutter iOS app is feature-complete (see `apps/mobile_ios/CLAUDE.md`).
+The watch_ios target reads `SENTRY_DSN` + `APP_RELEASE` from the
+build's Info.plist (set via Xcode build settings or a `xcrun
+agvtool`-style script step in CI); the Sentry SwiftPM package needs
+to be added to the watchOS target before the init in `RunApp.init()`
+activates (gated on `canImport(Sentry)`).
 
 ### Backend
 
@@ -143,6 +154,8 @@ when the Flutter iOS app is feature-complete (see `apps/mobile_ios/CLAUDE.md`).
 | `SUPABASE_ACCESS_TOKEN` | CLI personal access token |
 | `SUPABASE_PROJECT_REF` | target project's ref (e.g. `abcd1234xyz`) |
 | `SUPABASE_DB_PASSWORD` | Postgres password for `supabase db push` |
+| `SENTRY_DSN` | Sentry backend project DSN. Set via `supabase secrets set` against the linked project; the EFs' `_shared/sentry.ts` no-ops when unset. |
+| `APP_RELEASE` | `backend@<version>` tag for Sentry release tagging. Set alongside `SENTRY_DSN` via `supabase secrets set`. |
 
 ### Worker + OSRM (Fly.io)
 
