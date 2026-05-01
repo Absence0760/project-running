@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'goals.dart';
@@ -106,6 +107,17 @@ class SettingsSyncService extends ChangeNotifier {
     await s.updateDevice(changes);
     notifyListeners();
   }
+
+  /// Test-only: drives the universal-bag overlay logic against a
+  /// supplied Preferences instance. Lets unit tests exercise the
+  /// key-by-key mapping without a Supabase round-trip.
+  @visibleForTesting
+  void debugApplyUniversal(Map<String, dynamic> prefs) =>
+      _applyUniversal(prefs);
+
+  /// Test-only: drives the device-bag overlay logic. See [debugApplyUniversal].
+  @visibleForTesting
+  void debugApplyDevice(Map<String, dynamic> prefs) => _applyDevice(prefs);
 
   void _applyUniversal(Map<String, dynamic> prefs) {
     final unit = prefs[SettingsKeys.preferredUnit];

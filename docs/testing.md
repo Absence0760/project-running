@@ -149,6 +149,16 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/settings_sync_test.dart` — 18 tests
+
+Covers the universal-bag and device-bag overlay logic on `SettingsSyncService` via two new `@visibleForTesting` delegates (`debugApplyUniversal`, `debugApplyDevice`). The applied-bag flow is the substantive logic — `pushX` / `updateX` are passthroughs to `SettingsService` which needs Supabase to test. Uses a real `Preferences` instance backed by `SharedPreferences.setMockInitialValues({})`.
+
+**Universal bag (9 tests):** `preferred_unit` ("mi" → `useMiles=true`, "km" → false, integer-typed value ignored), `default_activity_type` (string updates local default, empty string rejected), `weekly_mileage_goal_m` (seeds a weekly distance goal when none exists, does NOT replace an existing one — the dashboard editor wins on edit, zero / negative values ignored), empty bag is a no-op, unknown keys ignored.
+
+**Device bag (6 tests):** `voice_feedback_enabled` flips `audioCues`, `voice_feedback_interval_km` maps to `splitIntervalMetres` for both double and integer-typed values, non-bool `voice_feedback_enabled` is ignored, `keep_screen_on` round-trips, empty device bag is a no-op.
+
+**Initial state (2 tests):** `synced` is false and `service` is null before `onSignedIn`, every `pushX` / `updateX` is a no-op while settings is null (so a UI handler can safely call them before sign-in).
+
 ### `apps/mobile_android/test/backup_test.dart` — 20 tests
 
 Covers `BackupService.restore` on the offline path (no Supabase session — runs hydrate into `LocalRunStore` and `LocalRouteStore`, ready for `SyncService` to push once the user signs in). Builds synthetic backup zips in-memory using `package:archive` so the tests don't need a real backup file on disk. Initialises Supabase with the same fake-URL pattern the screen tests use (`http://127.0.0.1:54321`) so `BackupService(api: _OfflineApi())` can construct without hitting the network.
