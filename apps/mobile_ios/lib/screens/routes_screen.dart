@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -6,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gpx_parser/gpx_parser.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
@@ -16,6 +18,17 @@ import 'route_detail_screen.dart';
 /// runs_screen — `docs/conventions.md § Pagination` makes consistency
 /// across surfaces a load-bearing rule.
 const int _kRoutesPageSize = 20;
+
+/// SharedPreferences key for the persisted filter blob (search /
+/// surface / distance / sort / starredOnly). Matches the web app's
+/// localStorage key so the convention is the same on every surface.
+const String _kRoutesFiltersKey = 'routes_filters_v1';
+
+enum _RouteSort { newest, longest, shortest, mostRun, az }
+
+enum _DistanceBucket { any, lt5, t5to10, t10to20, gt20 }
+
+enum _SurfaceFilter { any, road, trail, mixed }
 
 /// True when the Load-more button should render at the bottom of the
 /// routes list — either the merged local+bookmark superset has more
@@ -57,11 +70,19 @@ class _RoutesScreenState extends State<RoutesScreen> {
   bool _syncing = false;
   List<cm.Route> _bookmarks = const [];
 
-  /// How many merged rows the list reveals. Resets only on explicit
-  /// reload — there are no inline filters on this screen, unlike runs.
+  /// How many merged rows the list reveals. Resets to one page when
+  /// the filter state changes so a narrowed view starts at page 1.
   int _visibleCount = _kRoutesPageSize;
   bool _loadingMore = false;
   bool _remoteHasMore = true;
+
+  // Filter state — mirrors the web `/routes` toolbar. The
+  // post-filter list feeds the visible-window paging.
+  String _search = '';
+  _SurfaceFilter _surfaceFilter = _SurfaceFilter.any;
+  _DistanceBucket _distanceFilter = _DistanceBucket.any;
+  _RouteSort _sort = _RouteSort.newest;
+  bool _starredOnly = false;
 
   @override
   void initState() {
@@ -70,6 +91,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     widget.preferences.addListener(_onChange);
     _fetchRemoteRoutes();
     _fetchBookmarks();
+    _hydrateFilters();
   }
 
   @override
@@ -183,6 +205,139 @@ class _RoutesScreenState extends State<RoutesScreen> {
     }
   }
 
+  /// Restore filter state from SharedPreferences. Best-effort — a
+  /// malformed blob is ignored and defaults stand. Mirrors the web
+  /// app's runs/routes hydration shape.
+  Future<void> _hydrateFilters() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kRoutesFiltersKey);
+      if (raw == null || !mounted) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final search = j['search'];
+      final surface = j['surface'];
+      final distance = j['distance'];
+      final sort = j['sort'];
+      final starred = j['starredOnly'];
+      setState(() {
+        if (search is String) _search = search;
+        if (surface is String) {
+          _surfaceFilter = _SurfaceFilter.values.firstWhere(
+            (e) => e.name == surface,
+            orElse: () => _SurfaceFilter.any,
+          );
+        }
+        if (distance is String) {
+          _distanceFilter = _DistanceBucket.values.firstWhere(
+            (e) => e.name == distance,
+            orElse: () => _DistanceBucket.any,
+          );
+        }
+        if (sort is String) {
+          _sort = _RouteSort.values.firstWhere(
+            (e) => e.name == sort,
+            orElse: () => _sort,
+          );
+        }
+        if (starred is bool) _starredOnly = starred;
+        // Reset paging — the filtered list might be smaller.
+        _visibleCount = _kRoutesPageSize;
+      });
+    } catch (_) {
+      // Corrupt blob; leave defaults.
+    }
+  }
+
+  void _persistFilters() {
+    SharedPreferences.getInstance().then((p) {
+      p.setString(
+        _kRoutesFiltersKey,
+        jsonEncode({
+          'search': _search,
+          'surface': _surfaceFilter.name,
+          'distance': _distanceFilter.name,
+          'sort': _sort.name,
+          'starredOnly': _starredOnly,
+        }),
+      );
+    }).catchError((Object _) {
+      // L4 best-effort — never escalate.
+    });
+  }
+
+  bool _filtersActive() =>
+      _search.trim().isNotEmpty ||
+      _surfaceFilter != _SurfaceFilter.any ||
+      _distanceFilter != _DistanceBucket.any ||
+      _starredOnly;
+
+  void _clearFilters() {
+    setState(() {
+      _search = '';
+      _surfaceFilter = _SurfaceFilter.any;
+      _distanceFilter = _DistanceBucket.any;
+      _starredOnly = false;
+      _visibleCount = _kRoutesPageSize;
+    });
+    _persistFilters();
+  }
+
+  static bool _inDistanceBucket(double meters, _DistanceBucket b) {
+    final km = meters / 1000;
+    switch (b) {
+      case _DistanceBucket.any:
+        return true;
+      case _DistanceBucket.lt5:
+        return km < 5;
+      case _DistanceBucket.t5to10:
+        return km >= 5 && km < 10;
+      case _DistanceBucket.t10to20:
+        return km >= 10 && km < 20;
+      case _DistanceBucket.gt20:
+        return km >= 20;
+    }
+  }
+
+  /// Apply the current filter + sort to the merged owned + bookmarks
+  /// list. Pure pass over the input — no setState, no I/O.
+  List<cm.Route> _filteredAndSorted(List<cm.Route> all) {
+    final q = _search.trim().toLowerCase();
+    Iterable<cm.Route> stream = all;
+    if (_starredOnly) stream = stream.where((r) => r.isStarred);
+    if (_surfaceFilter != _SurfaceFilter.any) {
+      stream = stream.where((r) => r.surface == _surfaceFilter.name);
+    }
+    if (_distanceFilter != _DistanceBucket.any) {
+      stream = stream
+          .where((r) => _inDistanceBucket(r.distanceMetres, _distanceFilter));
+    }
+    if (q.isNotEmpty) {
+      stream = stream.where((r) => r.name.toLowerCase().contains(q));
+    }
+    final out = stream.toList();
+    switch (_sort) {
+      case _RouteSort.newest:
+        out.sort((a, b) {
+          final ax = a.createdAt;
+          final bx = b.createdAt;
+          if (ax == null && bx == null) return 0;
+          if (ax == null) return 1;
+          if (bx == null) return -1;
+          return bx.compareTo(ax);
+        });
+      case _RouteSort.longest:
+        out.sort((a, b) => b.distanceMetres.compareTo(a.distanceMetres));
+      case _RouteSort.shortest:
+        out.sort((a, b) => a.distanceMetres.compareTo(b.distanceMetres));
+      case _RouteSort.mostRun:
+        out.sort((a, b) => b.runCount.compareTo(a.runCount));
+      case _RouteSort.az:
+        out.sort((a, b) =>
+            a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
+    return out;
+  }
+
   Future<void> _toggleStar(cm.Route route) async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
@@ -264,19 +419,25 @@ class _RoutesScreenState extends State<RoutesScreen> {
     final unit = widget.preferences.unit;
     final owned = widget.routeStore.routes;
     final ownedIds = {for (final r in owned) r.id};
-    final allRoutes = <cm.Route>[
+    final mergedRoutes = <cm.Route>[
       ...owned,
       ..._bookmarks.where((b) => !ownedIds.contains(b.id)),
     ];
-    final routes = allRoutes.length <= _visibleCount
-        ? allRoutes
-        : allRoutes.sublist(0, _visibleCount);
+    // Filter pass first; pagination is computed against the filtered
+    // list (a search of "trail" with 30 matches still pages 20 at a
+    // time rather than locking the whole library to the screen).
+    final filtered = _filteredAndSorted(mergedRoutes);
+    final routes = filtered.length <= _visibleCount
+        ? filtered
+        : filtered.sublist(0, _visibleCount);
     final showLoadMore = shouldShowRoutesLoadMore(
       visibleCount: _visibleCount,
-      totalCount: allRoutes.length,
+      totalCount: filtered.length,
       remoteHasMore: _remoteHasMore,
       apiSignedIn: widget.apiClient?.userId != null,
     );
+    final emptyAfterFilter =
+        mergedRoutes.isNotEmpty && filtered.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -322,7 +483,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
         icon: const Icon(Icons.upload_file),
         label: const Text('Import'),
       ),
-      body: routes.isEmpty
+      body: mergedRoutes.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -342,9 +503,81 @@ class _RoutesScreenState extends State<RoutesScreen> {
             )
           : ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: routes.length + (showLoadMore ? 1 : 0),
+              itemCount: 1 +
+                  (emptyAfterFilter ? 1 : routes.length) +
+                  (showLoadMore && !emptyAfterFilter ? 1 : 0),
               itemBuilder: (context, index) {
-                if (showLoadMore && index == routes.length) {
+                if (index == 0) {
+                  return _RoutesFilterHeader(
+                    search: _search,
+                    surfaceFilter: _surfaceFilter,
+                    distanceFilter: _distanceFilter,
+                    sort: _sort,
+                    starredOnly: _starredOnly,
+                    visibleCount: routes.length,
+                    totalCount: mergedRoutes.length,
+                    filtersActive: _filtersActive(),
+                    onSearchChanged: (v) {
+                      setState(() {
+                        _search = v;
+                        _visibleCount = _kRoutesPageSize;
+                      });
+                      _persistFilters();
+                    },
+                    onSurfaceChanged: (v) {
+                      setState(() {
+                        _surfaceFilter = v;
+                        _visibleCount = _kRoutesPageSize;
+                      });
+                      _persistFilters();
+                    },
+                    onDistanceChanged: (v) {
+                      setState(() {
+                        _distanceFilter = v;
+                        _visibleCount = _kRoutesPageSize;
+                      });
+                      _persistFilters();
+                    },
+                    onSortChanged: (v) {
+                      setState(() {
+                        _sort = v;
+                        _visibleCount = _kRoutesPageSize;
+                      });
+                      _persistFilters();
+                    },
+                    onStarredOnlyToggled: () {
+                      setState(() {
+                        _starredOnly = !_starredOnly;
+                        _visibleCount = _kRoutesPageSize;
+                      });
+                      _persistFilters();
+                    },
+                    onClearFilters: _clearFilters,
+                  );
+                }
+                if (emptyAfterFilter && index == 1) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Column(
+                      children: [
+                        Icon(Icons.filter_alt_off,
+                            size: 48, color: theme.colorScheme.outline),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No routes match these filters',
+                          style: theme.textTheme.bodyLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _clearFilters,
+                          child: const Text('Clear filters'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final routeIndex = index - 1;
+                if (showLoadMore && routeIndex == routes.length) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Center(
@@ -362,7 +595,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
                     ),
                   );
                 }
-                final route = routes[index];
+                final route = routes[routeIndex];
                 final isOwned = ownedIds.contains(route.id);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -436,4 +669,252 @@ class _RouteParseRequest {
 cm.Route _parseRouteFile(_RouteParseRequest req) {
   if (req.ext == 'kml') return RouteParser.fromKml(req.content);
   return RouteParser.fromGpx(req.content);
+}
+
+/// Filter toolbar for the routes list. Stateless — every change goes
+/// through callbacks back to the screen so persistence + paging reset
+/// stay in one place. Layout matches the web `/routes` toolbar:
+/// search, surface, distance, sort, starred toggle, then a
+/// visible-count meta row with Clear filters when active.
+class _RoutesFilterHeader extends StatefulWidget {
+  final String search;
+  final _SurfaceFilter surfaceFilter;
+  final _DistanceBucket distanceFilter;
+  final _RouteSort sort;
+  final bool starredOnly;
+  final int visibleCount;
+  final int totalCount;
+  final bool filtersActive;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<_SurfaceFilter> onSurfaceChanged;
+  final ValueChanged<_DistanceBucket> onDistanceChanged;
+  final ValueChanged<_RouteSort> onSortChanged;
+  final VoidCallback onStarredOnlyToggled;
+  final VoidCallback onClearFilters;
+
+  const _RoutesFilterHeader({
+    required this.search,
+    required this.surfaceFilter,
+    required this.distanceFilter,
+    required this.sort,
+    required this.starredOnly,
+    required this.visibleCount,
+    required this.totalCount,
+    required this.filtersActive,
+    required this.onSearchChanged,
+    required this.onSurfaceChanged,
+    required this.onDistanceChanged,
+    required this.onSortChanged,
+    required this.onStarredOnlyToggled,
+    required this.onClearFilters,
+  });
+
+  @override
+  State<_RoutesFilterHeader> createState() => _RoutesFilterHeaderState();
+}
+
+class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
+  late final TextEditingController _searchCtl;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtl = TextEditingController(text: widget.search);
+  }
+
+  @override
+  void didUpdateWidget(covariant _RoutesFilterHeader old) {
+    super.didUpdateWidget(old);
+    // Only stomp the controller when an external reset (Clear filters)
+    // changes the prop out from under us — otherwise the user's typing
+    // would lose the cursor position on every keystroke roundtrip.
+    if (widget.search != _searchCtl.text) {
+      _searchCtl.value = TextEditingValue(
+        text: widget.search,
+        selection: TextSelection.collapsed(offset: widget.search.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
+
+  static String _surfaceLabel(_SurfaceFilter v) {
+    switch (v) {
+      case _SurfaceFilter.any:
+        return 'Any surface';
+      case _SurfaceFilter.road:
+        return 'Road';
+      case _SurfaceFilter.trail:
+        return 'Trail';
+      case _SurfaceFilter.mixed:
+        return 'Mixed';
+    }
+  }
+
+  static String _distanceLabel(_DistanceBucket v) {
+    switch (v) {
+      case _DistanceBucket.any:
+        return 'Any distance';
+      case _DistanceBucket.lt5:
+        return '< 5 km';
+      case _DistanceBucket.t5to10:
+        return '5–10 km';
+      case _DistanceBucket.t10to20:
+        return '10–20 km';
+      case _DistanceBucket.gt20:
+        return '20+ km';
+    }
+  }
+
+  static String _sortLabel(_RouteSort v) {
+    switch (v) {
+      case _RouteSort.newest:
+        return 'Newest first';
+      case _RouteSort.longest:
+        return 'Longest';
+      case _RouteSort.shortest:
+        return 'Shortest';
+      case _RouteSort.mostRun:
+        return 'Most-run';
+      case _RouteSort.az:
+        return 'A–Z';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _searchCtl,
+            onChanged: widget.onSearchChanged,
+            decoration: InputDecoration(
+              isDense: true,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchCtl.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Clear search',
+                      onPressed: () {
+                        _searchCtl.clear();
+                        widget.onSearchChanged('');
+                      },
+                    ),
+              hintText: 'Search routes by name…',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _DropdownChip<_SurfaceFilter>(
+                value: widget.surfaceFilter,
+                items: _SurfaceFilter.values,
+                labelOf: _surfaceLabel,
+                onChanged: widget.onSurfaceChanged,
+              ),
+              _DropdownChip<_DistanceBucket>(
+                value: widget.distanceFilter,
+                items: _DistanceBucket.values,
+                labelOf: _distanceLabel,
+                onChanged: widget.onDistanceChanged,
+              ),
+              _DropdownChip<_RouteSort>(
+                value: widget.sort,
+                items: _RouteSort.values,
+                labelOf: _sortLabel,
+                onChanged: widget.onSortChanged,
+              ),
+              FilterChip(
+                label: const Text('Starred'),
+                avatar: Icon(
+                  widget.starredOnly ? Icons.star : Icons.star_border,
+                  size: 18,
+                  color: widget.starredOnly
+                      ? const Color(0xFFFBBF24)
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                selected: widget.starredOnly,
+                onSelected: (_) => widget.onStarredOnlyToggled(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                '${widget.visibleCount} of ${widget.totalCount} '
+                '${widget.totalCount == 1 ? 'route' : 'routes'}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              if (widget.filtersActive)
+                TextButton(
+                  onPressed: widget.onClearFilters,
+                  child: const Text('Clear filters'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact dropdown rendered as a chip — used for surface / distance /
+/// sort so they share the wrap row visually with the starred toggle.
+class _DropdownChip<T> extends StatelessWidget {
+  final T value;
+  final List<T> items;
+  final String Function(T) labelOf;
+  final ValueChanged<T> onChanged;
+
+  const _DropdownChip({
+    required this.value,
+    required this.items,
+    required this.labelOf,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          icon: const Icon(Icons.arrow_drop_down, size: 18),
+          style: theme.textTheme.bodyMedium,
+          items: [
+            for (final v in items)
+              DropdownMenuItem(value: v, child: Text(labelOf(v))),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    );
+  }
 }
