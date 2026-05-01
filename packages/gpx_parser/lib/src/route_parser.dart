@@ -156,7 +156,17 @@ class RouteParser {
     final eleNode = node.findElements('ele').firstOrNull;
     final ele = eleNode != null ? double.tryParse(eleNode.innerText) : null;
 
-    return Waypoint(lat: lat, lng: lng, elevationMetres: ele);
+    final timeNode = node.findElements('time').firstOrNull;
+    final time = timeNode != null
+        ? DateTime.tryParse(timeNode.innerText.trim())
+        : null;
+
+    return Waypoint(
+      lat: lat,
+      lng: lng,
+      elevationMetres: ele,
+      timestamp: time,
+    );
   }
 
   static Route _buildRoute(String name, List<Waypoint> points) {

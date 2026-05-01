@@ -149,6 +149,20 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/strava_importer_zip_test.dart` — 21 tests
+
+Comprehensive coverage for `StravaImporter.importFromZip`. Complements the smaller `importer_external_id_test.dart` (which only pinned the `external_id` prefix). Each test builds an in-memory zip with the `activities.csv` + a track file, then asserts on the resulting `Run`.
+
+**Activity-type derivation (6 tests):** `Run`/`Walk`/`Hike` map directly, `Trail Running` still maps to `run`, case-insensitive (`WALKING` → `walk`), unknown activity type falls back to `run`.
+
+**CSV column handling (6 tests):** missing `activities.csv` throws, missing `Filename` column throws, missing `Activity Date` column throws, header-only CSV → empty result with no errors, row with empty filename silently skipped, the `Distance (km)` header variant is recognised.
+
+**Multi-row imports (3 tests):** multiple activities import as separate runs, one missing track file errors per-file but the rest still import, an unknown track extension is reported as a per-file error.
+
+**Distance + duration fallback (3 tests):** distance falls back to CSV when GPX has no waypoints, duration falls back to CSV elapsed when track has fewer than 2 waypoints, duration uses GPX timestamps when CSV elapsed is 0 (regression for the "GPX `<time>` was never parsed" bug).
+
+**Metadata + compression (3 tests):** `imported_from`/`strava_activity_type`/`title`/`activity_type`/`imported_at` populate, blank activity name falls back to "Strava import", `.gpx.gz` is decompressed before parsing.
+
 ### `apps/mobile_android/test/settings_sync_test.dart` — 18 tests
 
 Covers the universal-bag and device-bag overlay logic on `SettingsSyncService` via two new `@visibleForTesting` delegates (`debugApplyUniversal`, `debugApplyDevice`). The applied-bag flow is the substantive logic — `pushX` / `updateX` are passthroughs to `SettingsService` which needs Supabase to test. Uses a real `Preferences` instance backed by `SharedPreferences.setMockInitialValues({})`.
@@ -323,9 +337,9 @@ Covers the four pure helpers on `ApiClient` exposed via `@visibleForTesting` sta
 
 The tests run under `flutter test` because `api_client` transitively depends on `supabase_flutter` (which pins Flutter); the test bodies themselves use only `package:test/test.dart`.
 
-### `packages/gpx_parser/test/route_parser_test.dart` — 23 tests
+### `packages/gpx_parser/test/route_parser_test.dart` — 25 tests
 
-Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GPX block (7 tests): `<trkpt>` happy path with elevation gain summed correctly, `<rtept>` and `<wpt>` fallbacks when no track points, malformed `lat="bad"` skipped, `name` defaults to "Imported route", elevation gain ignores descents, empty document returns an empty waypoint list. KML block (4 tests): LineString with elevation, missing `<coordinates>` element, non-numeric triples dropped, 2D coordinates leave elevation null. TCX block (3 tests): `<Trackpoint><Position>` with altitude + timestamps, missing `<Position>` skipped, `<Notes>` fallback when `<Name>` is absent. GeoJSON block (5 tests): `[lng, lat, ele]` order, 2D coordinates, missing geometry, missing `properties.name`, malformed coordinate entries skipped. FIT block (4 tests): too-short bytes throw, `.FIT` signature mismatch throws, header size other than 12/14 throws, valid empty header parses to an empty route.
+Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GPX block (9 tests): `<trkpt>` happy path with elevation gain summed correctly, `<rtept>` and `<wpt>` fallbacks when no track points, malformed `lat="bad"` skipped, `name` defaults to "Imported route", elevation gain ignores descents, `<time>` parsed onto `Waypoint.timestamp`, missing `<time>` leaves it null, empty document returns an empty waypoint list. KML block (4 tests): LineString with elevation, missing `<coordinates>` element, non-numeric triples dropped, 2D coordinates leave elevation null. TCX block (3 tests): `<Trackpoint><Position>` with altitude + timestamps, missing `<Position>` skipped, `<Notes>` fallback when `<Name>` is absent. GeoJSON block (5 tests): `[lng, lat, ele]` order, 2D coordinates, missing geometry, missing `properties.name`, malformed coordinate entries skipped. FIT block (4 tests): too-short bytes throw, `.FIT` signature mismatch throws, header size other than 12/14 throws, valid empty header parses to an empty route.
 
 ### `packages/core_models/test/run_source_test.dart` — 2 tests
 

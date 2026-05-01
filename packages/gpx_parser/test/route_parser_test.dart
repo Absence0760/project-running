@@ -96,6 +96,29 @@ void main() {
       expect(r.elevationGainMetres, closeTo(30.0, 1e-9));
     });
 
+    test('parses <time> on each trkpt into Waypoint.timestamp', () {
+      const gpx = '''<?xml version="1.0"?>
+<gpx version="1.1"><trk><trkseg>
+  <trkpt lat="0" lon="0"><time>2026-04-09T07:30:00Z</time></trkpt>
+  <trkpt lat="0" lon="0.001"><time>2026-04-09T07:30:30Z</time></trkpt>
+</trkseg></trk></gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+
+      expect(r.waypoints[0].timestamp, DateTime.utc(2026, 4, 9, 7, 30, 0));
+      expect(r.waypoints[1].timestamp, DateTime.utc(2026, 4, 9, 7, 30, 30));
+    });
+
+    test('trkpt without <time> leaves timestamp null', () {
+      const gpx = '''<?xml version="1.0"?>
+<gpx><trk><trkseg>
+  <trkpt lat="0" lon="0"><ele>10</ele></trkpt>
+</trkseg></trk></gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+      expect(r.waypoints.single.timestamp, isNull);
+    });
+
     test('returns empty waypoint list when GPX has no points at all', () {
       const gpx = '''<?xml version="1.0"?>
 <gpx><metadata><name>Empty</name></metadata></gpx>''';

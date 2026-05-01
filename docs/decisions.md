@@ -936,6 +936,16 @@ Fix: use `pos.timestamp` for the waypoint. GPS timestamps are accurate to ~ms re
 
 **Don't re-litigate unless:** a real geolocator backend ever surfaces malformed `pos.timestamp` values (none do today), or we add a non-GPS fix source (pedometer-only, network-positioned) that doesn't carry an authoritative timestamp.
 
+## 47. GPX `<time>` is parsed onto `Waypoint.timestamp` for every track-point variant
+
+`packages/gpx_parser/RouteParser._waypointFromGpxNode` originally read only `lat`, `lon`, and `<ele>` — `<time>` was ignored. Found during the StravaImporter coverage audit: a Strava GPX import with `CSV Elapsed Time = 0` was supposed to fall back to the GPS-supplied duration (`track.last.timestamp - track.first.timestamp`) but always landed on `Duration.zero` because the parser never populated `Waypoint.timestamp`. Knock-on effect: any GPX-imported run had null per-point timestamps, which silently broke `_calculatePace`, `movingTimeOf`, `fastestWindowOf`, `hr_zones`, and the run-detail elevation/pace chart's time axis.
+
+Fix: read the optional `<time>` child node on every `<trkpt>` / `<rtept>` / `<wpt>` and pass it through `DateTime.tryParse` onto `Waypoint.timestamp`. TCX already did this (`Trackpoint > Time`); GeoJSON has no widely-used per-point timestamp convention so it stays unset.
+
+**Trade-off:** if a GPX file has wildly off-spec or future-dated `<time>` values, those propagate into the run record. In practice GPX exporters (Strava, Garmin Connect, Wahoo, COROS) all emit ISO 8601 UTC timestamps from the device's GNSS timestamp, so this is a safe assumption.
+
+**Don't re-litigate unless:** we ever ingest GPX from a source that emits malformed timestamps (haven't seen one yet), or we want to derive timestamps from a GPX that explicitly lacks them (interpolate from `Activity Date` + cumulative haversine + a target pace — would need a separate code path).
+
 ---
 
 ## How to add an entry
