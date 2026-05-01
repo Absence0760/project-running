@@ -403,6 +403,12 @@ class RunRecorder {
   @visibleForTesting
   Waypoint? get debugCurrentWaypoint => _currentWaypoint;
 
+  /// Test-only: rolling-pace computed from the trailing ~200 m of track.
+  /// Returns null when the track is too short or timestamps are missing —
+  /// matches the contract documented on [RunSnapshot.currentPaceSecondsPerKm].
+  @visibleForTesting
+  double? get debugPaceSecondsPerKm => _calculatePace();
+
   /// Pause the timer and stop accumulating distance until [resume] is called.
   void pause() {
     if (!_recording || _paused) return;

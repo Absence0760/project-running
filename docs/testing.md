@@ -103,6 +103,10 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 
 **Not covered (require mocking `GeolocatorPlatform.instance`):** typed errors thrown from `prepare()`, the `_gpsRetryTimer` retry loop, position-stream `onError` cleanup, `stop`/`dispose` cancelling the retry timer.
 
+### `packages/run_recorder/test/calculate_pace_test.dart` — 8 tests
+
+Tests for the rolling-pace helper exposed via `RunRecorder.debugPaceSecondsPerKm`. Pins the documented null returns (track shorter than 5 points, total tracked distance below 50 m, wall-clock collapse to zero seconds within a tight inject loop, paused state), confirms the snapshot stream's `currentPaceSecondsPerKm` matches the helper, and checks the trailing-200 m window returns a positive finite pace once enough movement has accumulated. The `wall-clock collapse` test pins a known design quirk: `_calculatePace` reads `_currentWaypoint.timestamp` (= `DateTime.now()` at fix-process time) rather than `pos.timestamp` from GPS — see the gotcha in § Troubleshooting.
+
 ### `packages/run_recorder/test/laps_serialiser_test.dart` — 6 tests
 
 Round-trips the canonical `metadata.laps` shape through `lapsToCanonicalJson` and `parseLapsFromJson`. Pins the per-lap-delta fields (1-based `index`, `start_offset_s` cumulative-BEFORE, `distance_m` + `duration_s` per-lap deltas) so a refactor of the serialiser can't quietly regress the cross-platform contract. Ties into the watch-payload fixture test on every platform — see [§ Cross-platform fixture contract](manual_testing.md#cross-platform-fixture-contract) in the manual testing guide.
@@ -138,6 +142,14 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 **Edge cases (2 tests):**
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
+
+### `apps/mobile_android/test/local_route_store_test.dart` — 16 tests
+
+Persistence tests for `LocalRouteStore` mirroring the `local_run_store_test.dart` pattern — `init(overrideDirectory: ...)` with a tempDir, real file I/O, no mocks. Covers init (directory creation, non-`.json` file filtering, corrupt-file tolerance), save (file write, round-trip across fresh instances, replace-on-same-id, newest-first ordering, single-listener-call invariant), `saveBatch` (parallel write + single notify, empty-iterable no-op, overlapping-id replace), `delete` (disk + memory + unknown-id), and the unmodifiable `routes` view.
+
+### `apps/mobile_android/test/track_smoother_test.dart` — 9 tests
+
+Pure-function tests for the top-level `smoothTrack(List<LatLng>)` helper extracted from `widgets/live_run_map.dart` (1-2-3-2-1 weighted polyline smoother used to reduce GPS jitter on the live map). Pins: short-track passthrough (length < 5), first-two-and-last-two preservation, the explicit `(a + 2b + 3c + 2d + e) / 9` weighted-mean formula, co-linear evenly-spaced points are unchanged, the no-mutation contract (returns a new list), length-0/1 inputs handled, length-5 input smooths exactly index 2, and constant-coordinate input (weights sum to 9) returns its input.
 
 ### `apps/mobile_android/test/period_summary_test.dart` — 23 tests
 
@@ -256,6 +268,10 @@ Several private formatters were extracted from stateful classes into top-level p
 ### `apps/mobile_ios/test/` — same 72 files, byte-for-byte
 
 After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
+
+### `packages/gpx_parser/test/route_parser_test.dart` — 23 tests
+
+Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GPX block (7 tests): `<trkpt>` happy path with elevation gain summed correctly, `<rtept>` and `<wpt>` fallbacks when no track points, malformed `lat="bad"` skipped, `name` defaults to "Imported route", elevation gain ignores descents, empty document returns an empty waypoint list. KML block (4 tests): LineString with elevation, missing `<coordinates>` element, non-numeric triples dropped, 2D coordinates leave elevation null. TCX block (3 tests): `<Trackpoint><Position>` with altitude + timestamps, missing `<Position>` skipped, `<Notes>` fallback when `<Name>` is absent. GeoJSON block (5 tests): `[lng, lat, ele]` order, 2D coordinates, missing geometry, missing `properties.name`, malformed coordinate entries skipped. FIT block (4 tests): too-short bytes throw, `.FIT` signature mismatch throws, header size other than 12/14 throws, valid empty header parses to an empty route.
 
 ### `packages/core_models/test/run_source_test.dart` — 2 tests
 
@@ -619,12 +635,10 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 - **Widget tests (key remaining gaps).** `RunScreen` and `LiveRunMap` have no widget tests; those require platform-channel mocks (geolocator, pedometer) to exercise the recording path. All other screens and the majority of widgets now have widget tests (109 `testWidgets` calls across 22 files). The original four — `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, `WorkoutReviewSection` — have been joined by `HomeScreen`, `DashboardScreen`, `ImportScreen`, and many more.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
-- **`RunRecorder._calculatePace`, `_routeRemaining`, `_offRouteDistance`.** The pace calculation and route helpers have no direct tests. Their logic is exercised via `_emitSnapshot` but only through the tests that assert on `distanceMetres` and `track`. Dedicated tests would be a good follow-up.
-- **`ApiClient`, `SyncService`, `LocalRouteStore`.** Nothing on the sync path, the routes store, or the Supabase client has tests. Most of these would want a fake HTTP client or a tempDir override.
-- **GPX/KML import (`gpx_parser` package).** Parses real files at runtime without any fixture-based tests.
-- **`live_run_map.dart:_smoothTrack`** (the 1-2-3-2-1 polyline smoother). Pure function, trivially testable with the waypoint helper pattern — just not done yet.
+- **`RunRecorder._routeRemaining`, `_offRouteDistance`.** The route helpers have no direct tests. Their logic is exercised via `_emitSnapshot` but only through the tests that assert on `distanceMetres` and `track`. Dedicated tests would be a good follow-up.
+- **`ApiClient`, `SyncService`.** Nothing on the sync path or the Supabase client has tests. These would want a fake HTTP client.
 
-If you want to expand coverage, those are the best targets in priority order: `_smoothTrack` (cheapest) → `_calculatePace` → `gpx_parser` → widget tests for `run_screen`'s state transitions.
+If you want to expand coverage, those are the best targets in priority order: `_routeRemaining` / `_offRouteDistance` → widget tests for `run_screen`'s state transitions → `ApiClient` (fake HTTP).
 
 ---
 
@@ -648,7 +662,7 @@ The scopes pin coverage to the two packages that own meaningful test bodies; wid
 
 **"Cannot read pubspec.lock"** — run `flutter pub get` at the repo root. The workspace uses pubspec overrides managed by Melos; `melos bootstrap` is the canonical setup.
 
-**Tests pass locally but fail in CI** — most commonly from wall-clock assumptions. The recorder used to have exactly this bug in its speed clamp (wall-clock dt went near zero under load). If you see flaky timing tests, use GPS-reported timestamps from the `Position` rather than `DateTime.now()`, and be suspicious of any direct `DateTime.now()` subtraction in production code.
+**Tests pass locally but fail in CI** — most commonly from wall-clock assumptions. The recorder used to have exactly this bug in its speed clamp (wall-clock dt went near zero under load). If you see flaky timing tests, use GPS-reported timestamps from the `Position` rather than `DateTime.now()`, and be suspicious of any direct `DateTime.now()` subtraction in production code. `RunRecorder._calculatePace` still uses `_currentWaypoint.timestamp` (= `DateTime.now()` when each fix is processed) rather than `pos.timestamp` — `calculate_pace_test.dart` deliberately pins this so you'll notice if the behaviour changes; the same test suite uses `Future.delayed(const Duration(milliseconds: 2))` between injections to spread out the wall-clock so a non-null pace can be observed.
 
 **Dart analyzer complains that a `debug*` method on a production class isn't called** — the `@visibleForTesting` annotation suppresses this in test files but the warning still fires at the declaration site. Add `// ignore: invalid_use_of_visible_for_testing_member` only if you need to call from non-test code (you almost certainly don't).
 
