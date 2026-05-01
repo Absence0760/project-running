@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
@@ -38,6 +39,29 @@ enum _RunsSort { newest, oldest, longest, fastest }
 
 enum _RunsRange { today, week, month, year, all }
 
+/// Page size for the cloud fetch + the visible-list window. Mirrors the
+/// web app's `/runs` PAGE_SIZE so a returning user sees the same shape
+/// of "first page + Load more" on both clients. Keep it small — the
+/// list view is the cold-start frame, and pulling 200 rows over a
+/// flaky cellular connection blocks the rest of the home screen.
+const int _kRunsPageSize = 20;
+
+/// True when the Load-more button should render at the bottom of the
+/// runs list — either the local filtered superset has more rows beyond
+/// `visibleCount`, or the cloud might have older runs we haven't
+/// pulled yet. Pure helper kept top-level so its boundary conditions
+/// can be unit-tested directly without mounting the screen.
+@visibleForTesting
+bool shouldShowRunsLoadMore({
+  required int visibleCount,
+  required int filteredCount,
+  required bool remoteHasMore,
+  required bool apiSignedIn,
+}) {
+  if (visibleCount < filteredCount) return true;
+  return remoteHasMore && apiSignedIn;
+}
+
 class _RunsScreenState extends State<RunsScreen> {
   bool _syncing = false;
   bool _fetching = false;
@@ -48,10 +72,26 @@ class _RunsScreenState extends State<RunsScreen> {
   /// `Run.source` exactly; see `RunSource` in `core_models`.
   RunSource? _sourceFilter;
 
-  // Derived view — recomputed when the store, filter, or sort changes,
-  // never on an unrelated rebuild. Keeps scroll jank down at 10k+ runs.
+  // Filtered + sorted full list (the slice _visible is taken from).
+  // We keep the unfiltered superset around so the Load-more button can
+  // reveal local rows before paying the cost of a cloud round-trip.
+  List<Run> _filtered = const [];
+  // What the UI actually renders — the first _visibleCount of _filtered.
+  // Capped at _filtered.length so taking past the end is a no-op.
   List<Run> _visible = const [];
   Set<String> _unsyncedIds = const {};
+
+  /// How many filtered rows the list is currently revealing. Resets to
+  /// _kRunsPageSize whenever the filter/sort changes. Grows by
+  /// _kRunsPageSize on each Load-more tap.
+  int _visibleCount = _kRunsPageSize;
+  /// True while a "Load more" cloud fetch is in flight. Disables the
+  /// button and renders an inline progress indicator.
+  bool _loadingMore = false;
+  /// Whether the cloud is believed to have older runs the local store
+  /// hasn't seen. Set to false when a paginated `getRuns` returns less
+  /// than _kRunsPageSize rows (the standard "out of pages" signal).
+  bool _remoteHasMore = true;
 
   bool _selecting = false;
   final Set<String> _selected = {};
@@ -83,9 +123,20 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   void _recompute() {
-    _visible = _filterAndSort(
+    _filtered = _filterAndSort(
       widget.runStore.runs, _range, _sort, _activityFilter, _sourceFilter);
+    _visible = _filtered.length <= _visibleCount
+        ? _filtered
+        : _filtered.sublist(0, _visibleCount);
     _unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
+  }
+
+  /// Reset paging window back to the first page. Called on filter /
+  /// sort / range change so a user who narrows their view doesn't
+  /// inherit the previous "Load more" depth.
+  void _resetPaging() {
+    _visibleCount = _kRunsPageSize;
+    _remoteHasMore = true;
   }
 
   static List<Run> _filterAndSort(
@@ -172,22 +223,28 @@ class _RunsScreenState extends State<RunsScreen> {
     if (api == null || api.userId == null) return;
     setState(() => _fetching = true);
     try {
-      // Delta-fetch on subsequent refreshes: the first pull populates the
-      // local store from scratch, every subsequent one only asks for rows
-      // modified since the last successful fetch. A user with hundreds
-      // of runs saves both the round-trip payload and the per-row
-      // saveFromRemote cost.
+      // Two distinct paths, both bounded:
       //
-      // The `since` cursor is snapshotted *before* the request so a run
-      // written by another device between the request and the response
-      // still gets picked up on the next refresh.
+      // - First load (since == null): fetch the first page only — same
+      //   shape as the web app's `/runs` initial load. Older runs come
+      //   in via "Load more" rather than a 200-row up-front pull. Sets
+      //   `_remoteHasMore` based on whether the page filled, so the
+      //   button knows when to stop.
+      //
+      // - Delta sync (since != null): pull every row modified since
+      //   the last successful fetch. The cap is generous (200) because
+      //   this catches up from a multi-device edit burst, not a cold
+      //   library load — and the cap is one trip, not per-paint.
       final since = widget.preferences.runsLastFetchedAt;
       final fetchStartedAt = DateTime.now().toUtc();
       final remote = since == null
-          ? await api.getRuns(limit: 200)
+          ? await api.getRuns(limit: _kRunsPageSize)
           : await api.getRuns(limit: 200, updatedSince: since);
       await widget.runStore.saveManyFromRemote(remote);
       await widget.preferences.setRunsLastFetchedAt(fetchStartedAt);
+      if (since == null && mounted) {
+        setState(() => _remoteHasMore = remote.length == _kRunsPageSize);
+      }
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');
       if (mounted) {
@@ -197,6 +254,77 @@ class _RunsScreenState extends State<RunsScreen> {
       }
     } finally {
       if (mounted) setState(() => _fetching = false);
+    }
+  }
+
+  /// Reveal the next page of runs. Two layers, in order:
+  ///
+  /// 1. If the local filtered list has more rows than we're currently
+  ///    showing, just bump the visibility window — no network round-trip.
+  /// 2. If we've revealed everything local and the cloud might still
+  ///    have older runs (`_remoteHasMore`), fetch one page using the
+  ///    oldest local run's `started_at` as a `before` cursor. Cursor
+  ///    over offset because runs are append-only-by-time and a cursor
+  ///    is stable against concurrent inserts/deletes.
+  Future<void> _loadMore() async {
+    if (_loadingMore) return;
+
+    final hasMoreLocal = _visibleCount < _filtered.length;
+    if (hasMoreLocal) {
+      setState(() {
+        _visibleCount += _kRunsPageSize;
+        _recompute();
+      });
+      // After revealing locally, opportunistically pull the next cloud
+      // page if we just hit the bottom of what's cached and the cloud
+      // is believed to have more. Prevents a "tap, see new rows, tap
+      // again, wait" two-step.
+      if (_visibleCount >= _filtered.length && _remoteHasMore) {
+        await _fetchOlderFromRemote();
+      }
+      return;
+    }
+
+    if (_remoteHasMore) {
+      await _fetchOlderFromRemote();
+    }
+  }
+
+  Future<void> _fetchOlderFromRemote() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      // Nothing to fetch — flip `_remoteHasMore` so the button hides
+      // instead of perpetually offering a no-op.
+      if (mounted) setState(() => _remoteHasMore = false);
+      return;
+    }
+
+    setState(() => _loadingMore = true);
+    try {
+      // Oldest *unfiltered* local run drives the cursor — the cloud
+      // doesn't know about local filters, and asking for "before
+      // 2024-06-12 amongst this-week runs" would skip rows the user
+      // never had.
+      final all = widget.runStore.runs;
+      final cursor = all.isEmpty ? DateTime.now() : all.last.startedAt;
+      final remote =
+          await api.getRuns(limit: _kRunsPageSize, before: cursor);
+      await widget.runStore.saveManyFromRemote(remote);
+      if (!mounted) return;
+      setState(() {
+        _remoteHasMore = remote.length == _kRunsPageSize;
+        _visibleCount += _kRunsPageSize;
+        _recompute();
+      });
+    } catch (e) {
+      debugPrint('Load more runs failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load more runs')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -395,6 +523,7 @@ class _RunsScreenState extends State<RunsScreen> {
           onSelected: (v) {
             setState(() {
               _range = v;
+              _resetPaging();
               _recompute();
             });
           },
@@ -412,6 +541,7 @@ class _RunsScreenState extends State<RunsScreen> {
           onSelected: (v) {
             setState(() {
               _sort = v;
+              _resetPaging();
               _recompute();
             });
           },
@@ -511,12 +641,41 @@ class _RunsScreenState extends State<RunsScreen> {
 
   Widget _buildRunList(ThemeData theme, DistanceUnit unit) {
     // +1 for the header row; +1 for the empty-state message when filters
-    // match nothing (so the filter chips stay visible and tappable).
+    // match nothing (so the filter chips stay visible and tappable);
+    // +1 for the Load-more footer row when there's potentially another
+    // page (more local rows under the filter or more on the cloud).
     final emptyAfterFilter = _visible.isEmpty;
+    final showLoadMore = !emptyAfterFilter &&
+        shouldShowRunsLoadMore(
+          visibleCount: _visibleCount,
+          filteredCount: _filtered.length,
+          remoteHasMore: _remoteHasMore,
+          apiSignedIn: widget.apiClient?.userId != null,
+        );
+    final loadMoreSlot = showLoadMore ? 1 : 0;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _visible.length + 1 + (emptyAfterFilter ? 1 : 0),
+      itemCount:
+          _visible.length + 1 + (emptyAfterFilter ? 1 : 0) + loadMoreSlot,
       itemBuilder: (context, index) {
+        if (showLoadMore && index == _visible.length + 1) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: _loadingMore
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: _loadMore,
+                      icon: const Icon(Icons.expand_more),
+                      label: Text('Load $_kRunsPageSize more'),
+                    ),
+            ),
+          );
+        }
         if (index == 0) {
           return _RunsFilterHeader(
             rangeLabel: _rangeLabel(_range),
@@ -526,12 +685,14 @@ class _RunsScreenState extends State<RunsScreen> {
             onActivityChanged: (v) {
               setState(() {
                 _activityFilter = v;
+                _resetPaging();
                 _recompute();
               });
             },
             onSourceChanged: (v) {
               setState(() {
                 _sourceFilter = v;
+                _resetPaging();
                 _recompute();
               });
             },
@@ -556,6 +717,7 @@ class _RunsScreenState extends State<RunsScreen> {
                       _activityFilter = null;
                       _sourceFilter = null;
                       _range = _RunsRange.all;
+                      _resetPaging();
                       _recompute();
                     });
                   },

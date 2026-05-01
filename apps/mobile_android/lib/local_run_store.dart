@@ -54,6 +54,25 @@ class LocalRunStore extends ChangeNotifier {
   Set<String> get pendingRemoteDeleteIds =>
       Set<String>.unmodifiable(_pendingRemoteDeleteIds);
 
+  /// Test-only seed that populates the in-memory list directly,
+  /// bypassing `init()` + `_loadAll()` and their parallel async file
+  /// reads. The `Future.wait` over `readAsString` in `_loadAll`
+  /// interacts poorly with `flutter_test`'s fake-async zone for
+  /// non-empty directories (RunsScreen widget tests hang for >10
+  /// minutes — same root cause as the listSync revert). Tests that
+  /// need a populated store call this instead. Production code never
+  /// touches it.
+  @visibleForTesting
+  void debugSeed(Iterable<Run> runs, {Directory? dir, bool synced = true}) {
+    if (dir != null) _dir = dir;
+    _runs = List<Run>.from(runs);
+    _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    if (synced) {
+      _syncedIds.addAll(_runs.map((r) => r.id));
+    }
+    notifyListeners();
+  }
+
   /// Call once at startup. Pass [overrideDirectory] in tests to avoid the
   /// `path_provider` plugin channel — the store will write runs to the
   /// supplied directory instead of the platform documents dir.
