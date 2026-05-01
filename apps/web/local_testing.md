@@ -299,7 +299,6 @@ apps/web/
 │   └── app.d.ts
 ├── svelte.config.js
 ├── vite.config.ts
-├── tailwind.config.ts
 └── package.json
 ```
 

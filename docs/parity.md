@@ -174,7 +174,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 |---|---|---|---|---|---|---|
 | Pull remote runs from Supabase | ✓ | ✗ | ✓ | N/A | N/A | Watches hand off to the phone rather than maintaining their own synced history. |
 | Bulk sync button (manual re-push) | ✓ | ✗ | N/A | N/A | N/A | Web has no unsynced-queue concept — it's always online. |
-| Auto-sync on connectivity change | ✓ | ✗ | N/A | ✗ | ✓ | Apple Watch syncs on reconnect; Wear OS `drainQueue` is manual / app-start today. |
+| Auto-sync on connectivity change | ✓ | ✗ | N/A | ✓ | ✓ | Both watches sync on reconnect; Wear OS via `RunViewModel.observeConnectivity` collecting from `system/NetworkWatcher.kt` (offline → online edge fires `drainQueue`), in addition to app-open + post-stop drains. |
 | Background periodic sync (WorkManager etc.) | ✓ | ✗ | N/A | ✗ | ✗ | |
 | Conflict resolution (newer-wins) | ✓ | ✗ | ✓ | N/A | N/A | |
 | Backup all runs as JSON | ✓ | ✗ | ✓ | N/A | N/A | Two surfaces on web. (1) **Full backup ZIP** on `/settings/account` (`createBackup()` in `lib/backup.ts`) — same `run-app-backup` v1 wire format as Android, contains `runs.json` + `routes.json` + `profile.json` + `manifest.json` + per-run gzipped tracks; round-trip restores via the same UI. (2) **Single-file `runs-{ts}.json` quick export** in the same Data Export card as the existing CSV — identical row shape to the `runs.json` inside the ZIP (so scripts consume them interchangeably), no tracks, `user_id` stripped. |
@@ -363,7 +363,7 @@ Controls that live on a settings screen but aren't part of `user_settings.prefs`
 | Offline-only mode switch | ✓ | ✗ | N/A | N/A | N/A | Mirror of the offline-only sync behaviour. |
 | HR monitor pairing (BLE) | ✓ | ✗ | N/A | N/A | N/A | External chest-strap pairing; watches use their built-in sensor instead. |
 | Advanced GPS filter tuning | ✓ | ✗ | N/A | ✗ | ✗ | Per-activity-type speed / accuracy thresholds. |
-| Licenses / open-source notices | ✓ | ✓ | ✓ | ✗ | ✗ | Web: `/legal/licenses` with dep + licence list and map-data / OSM attribution. Linked from the settings sidebar. |
+| Licenses / open-source notices | ✓ | ✓ | ✓ | ✗ | ✗ | Web: `/settings/licenses` with dep + licence list and map-data / OSM attribution. Linked from the settings sidebar. |
 | App version display | ✓ | ✓ | ✓ | ✗ | ✗ | |
 | Manage premium subscription | Partial | ✗ | ✓ | N/A | N/A | Web: "Manage subscription" button on `/settings/upgrade` when the user is Pro. Calls `managementUrl(userId)` (`lib/revenuecat.ts`) which pulls `managementURL` off the user's RevenueCat `CustomerInfo` and opens the billing portal in a new tab. Falls back to a "manage where you bought it" toast when the build has no `PUBLIC_REVENUECAT_WEB_API_KEY` (preview / dev) or when the active subscription was started in App Store / Play Store rather than on the web. Android: tile in Settings → Account opens the upgrade URL via `url_launcher` in the system browser (Partial because native RevenueCat management sheet is still pending). |
 | Funding / donation surface | Partial | ✗ | ✓ | N/A | N/A | Web-only; see row under *Paywall and funding*. Android: "Support the app" tile in Settings → Account opens the donate URL via `url_launcher` in the system browser. |

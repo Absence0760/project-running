@@ -85,7 +85,7 @@ The Wear OS emulator does **not** synthesise heart-rate samples — `HealthServi
 3. Restart Supabase.
 4. Open the app again — the `init` block's `drainQueue()` fires after auth, and the queued run uploads. The queued-count badge on the pre-run screen disappears.
 
-(Auto-retry on connectivity-change isn't wired up yet — it fires on app open + after every stop. TODO in `CLAUDE.md`.)
+Auto-retry on connectivity change is wired: `RunViewModel.observeConnectivity` collects from `system/NetworkWatcher.kt`'s `ConnectivityManager.NetworkCallback` flow and runs `drainQueue()` on every offline → online edge, in addition to the app-open and post-stop drains.
 
 ---
 
@@ -98,7 +98,7 @@ cd apps/watch_wear/android
 ./gradlew assembleRelease      # release-signed with debug keys; same verify path
 ```
 
-There's no test suite yet. `compileDebugKotlin` is the bar.
+JVM unit tests live under `apps/watch_wear/android/app/src/test/` (~86 `@Test` methods across 8 files — `SupabaseErrorClassificationTest`, `WatchRunPayloadFixtureTest`, `MercatorTilesTest`, `RouteMiniMapWiringTest`, `ActiveRunTileFormattersTest`, recording-side helpers, etc. — see [docs/testing.md](../../docs/testing.md) for what each pins). Run them with `./gradlew testDebugUnitTest`. There are no instrumented (`androidTest`) tests yet; for end-to-end coverage we still rely on `compileDebugKotlin` plus a real-device soak.
 
 ---
 
