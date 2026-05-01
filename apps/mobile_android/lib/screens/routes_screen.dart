@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 
@@ -128,12 +129,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     final ext = result.files.first.extension?.toLowerCase();
 
     try {
-      cm.Route route;
-      if (ext == 'kml') {
-        route = RouteParser.fromKml(content);
-      } else {
-        route = RouteParser.fromGpx(content);
-      }
+      final route = await compute(_parseRouteFile, _RouteParseRequest(ext, content));
       await widget.routeStore.save(route);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -289,4 +285,15 @@ class _RoutesScreenState extends State<RoutesScreen> {
             ),
     );
   }
+}
+
+class _RouteParseRequest {
+  final String? ext;
+  final String content;
+  const _RouteParseRequest(this.ext, this.content);
+}
+
+cm.Route _parseRouteFile(_RouteParseRequest req) {
+  if (req.ext == 'kml') return RouteParser.fromKml(req.content);
+  return RouteParser.fromGpx(req.content);
 }
