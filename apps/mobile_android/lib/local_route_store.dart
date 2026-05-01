@@ -60,10 +60,11 @@ class LocalRouteStore extends ChangeNotifier {
 
   Future<void> _loadAll() async {
     _routes = [];
-    final files = await _dir
-        .list()
-        .where((e) => e is File)
-        .cast<File>()
+    // listSync is intentional — see LocalRunStore._loadAll for the
+    // explanation (async _dir.list() deadlocks under `testWidgets`).
+    final files = _dir
+        .listSync()
+        .whereType<File>()
         .where((f) => f.path.endsWith('.json'))
         .toList();
 

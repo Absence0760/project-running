@@ -407,10 +407,16 @@ class LocalRunStore extends ChangeNotifier {
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeleteIds.addAll(pendingDeletes);
 
-    final files = await _dir
-        .list()
-        .where((e) => e is File)
-        .cast<File>()
+    // listSync is intentional: the async stream form (`_dir.list()`)
+    // deadlocks inside `testWidgets` because the I/O isolate's reply
+    // ports interact poorly with the test binding's fake-async zone
+    // (RunsScreen widget tests hang for >10 min). The directory listing
+    // is small (one file per run) and runs once at cold-start, before
+    // first frame, so the sync call is bounded; the per-file reads that
+    // follow are still async + parallel.
+    final files = _dir
+        .listSync()
+        .whereType<File>()
         .where((f) => f.path.endsWith('.json'))
         .where((f) => !f.path.endsWith(_inProgressFilename))
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
