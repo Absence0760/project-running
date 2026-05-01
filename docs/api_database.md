@@ -20,11 +20,12 @@ create table runs (
   duration_s    integer not null,           -- elapsed seconds
   distance_m    numeric(10, 2) not null,    -- metres
   route_id      uuid references routes,     -- linked planned route, if any
+  event_id      uuid references events,     -- linked club event instance, if any
   source        text not null,              -- see RunSource enum below
-  external_id   text unique,               -- deduplication key
-  metadata      jsonb,                     -- source-specific extra fields
-  track_url     text,                      -- Storage path: {user_id}/{run_id}.json.gz
-  is_public     boolean default false,     -- visible at /share/run/{id}
+  external_id   text unique,                -- deduplication key
+  metadata      jsonb,                      -- source-specific extra fields
+  track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz
+  is_public     boolean default false,      -- visible at /share/run/{id}
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
@@ -324,12 +325,16 @@ create table user_profiles (
   id                uuid primary key references auth.users,
   display_name      text,
   avatar_url        text,
-  parkrun_number    text,                   -- e.g. 'A123456' (world-readable)
-  preferred_unit    text default 'km',      -- 'km' | 'mi'
-  subscription_tier text default 'free',    -- 'free' | 'premium' (world-readable)
+  parkrun_number    text,                                -- e.g. 'A123456' (world-readable)
+  preferred_unit    text default 'km',                   -- 'km' | 'mi'
+  subscription_tier text default 'free',                 -- 'free' | 'pro' | 'lifetime' (world-readable)
   subscription_at   timestamptz,
   created_at        timestamptz default now()
 );
+-- CHECK constraint enforces subscription_tier ∈ ('free','pro','lifetime') —
+-- migration 20260429_001_subscription_paywall.sql backfills any pre-existing
+-- 'premium' values to 'pro'. Keep this list in lockstep with the
+-- SubscriptionTier TS union in apps/web/src/lib/types.ts.
 ```
 
 ### `clone_plan_template(template_id uuid, new_start_date date)`
@@ -711,6 +716,36 @@ create unique index jobs_dedupe_map_match
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
 - **Partial indexes**: the `jobs_queued` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
+### `user_settings` / `user_device_settings`
+
+Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/settings.md](settings.md) for the registered key catalogue.
+
+### `training_plans` / `plan_weeks` / `plan_workouts`
+
+Generated training plans + week phasing + scheduled workouts. Owner-only RLS, deep cascading on plan delete. Plans can be cloned from a club-shared template via `clone_plan_template` (decisions §35); workouts link back to the run that completed them via `plan_workouts.completed_run_id`. Migrations `20260419_001_training_plans.sql` (schema), `20260420_001_plan_workouts_workout_kind.sql`, `20260421_001_plan_workouts_structure.sql`, `20260524_001_plan_template_sharing.sql`, `20260510_001_plan_workout_completion.sql`. Engine + week-grid UI: [docs/training.md](training.md). Live execution: [docs/workout_execution.md](workout_execution.md).
+
+### `event_results`
+
+Per-instance event leaderboard. PK is `(event_id, instance_start, user_id)` so a recurring event's Tuesday-this-week and Tuesday-next-week have independent rankings. `finisher_status` ∈ `'finished' | 'dnf' | 'dns'`; `rank` is recomputed by `recompute_event_ranks` (called by trigger on insert/update/delete and by the race-mode auto-finalize path). Migration `20260424_001_event_results.sql`; rank tooling and approval grants in `20260428_001_role_permissions.sql`.
+
+### `race_sessions` / `race_pings`
+
+Live race mode (Wear OS-led, decisions per roadmap §227). `race_sessions` is the per-instance state machine (`armed → running → finished | cancelled`); `race_pings` is the append-only telemetry stream (lat/lng/distance_m/elapsed_s/bpm) the watch posts during the session. Race-director / event-organiser permissions are checked by `is_race_director(uuid)` / `is_event_organiser(uuid)` SECURITY DEFINER functions. Migration `20260425_001_race_sessions.sql`. Stale pings are purged by the `cleanup-stale-live-run-pings` cron (see [§ pg_cron schedules](#pg_cron-schedules)).
+
+### `mv_weekly_mileage`
+
+Materialized view that pre-aggregates `runs` into `(user_id, week_start) → (total_distance_m, run_count)` so the `weekly_mileage` RPC and the dashboard's "This Week" card stay sub-millisecond as the runs table grows. Refreshed every five minutes by the `refresh-mv-weekly-mileage` pg_cron job (`refresh materialized view concurrently` — non-blocking thanks to the `mv_weekly_mileage_pk` unique index). Migrations: created in the seed-route + index pass, refresh schedule in `20260602_001_mv_weekly_mileage_refresh.sql`, EXECUTE revoke in `20260517_001_mv_weekly_mileage_revoke.sql` (callers go through the RPC, not direct SELECT).
+
+### pg_cron schedules
+
+| Job | Schedule | What it does |
+|---|---|---|
+| `refresh-mv-weekly-mileage` | `*/5 * * * *` | `refresh materialized view concurrently mv_weekly_mileage`. |
+| `cleanup-stale-live-run-pings` | every minute | Deletes `race_pings` older than the configured retention window — keeps the table from growing unbounded during a multi-hour event. |
+| `cleanup-stale-rate-limits` | hourly | Calls `cleanup_stale_rate_limits()` to GC old `rate_limits` rows so the table stays small for the per-user check. |
+
+All three are EXECUTE-revoked from PUBLIC; the cron extension runs as superuser. Migrations: `20260602_001_mv_weekly_mileage_refresh.sql`, `20260604_001_cleanup_stale_rate_limits.sql`, plus the inline `select cron.schedule(...)` block in the live-run-pings migration.
+
 ---
 
 ## Row-level security
@@ -921,6 +956,12 @@ A signed Supabase Storage URL pointing to the generated file, valid for 10 minut
 
 ---
 
+### `POST /revenuecat-webhook`
+
+Receives RevenueCat subscription events (initial purchase, renewal, cancellation, billing issues, expiration, transfer) and updates the corresponding `user_profiles.subscription_tier` + `subscription_at`. Authenticated by a shared HMAC secret in the `Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>` header — RevenueCat configures the same value in their dashboard. Idempotent on `event.id` so retries don't double-grant. See [paywall.md](paywall.md) for the tier mapping. Migration ladder: `20260429_001_subscription_paywall.sql` (the column + CHECK constraint), then this function as the write path.
+
+---
+
 ## REST API (Supabase auto-generated)
 
 Supabase generates a full REST API from the database schema automatically. Clients use the `supabase-js` (web) or `supabase-dart` (Flutter) clients which call these endpoints.
@@ -1091,6 +1132,52 @@ select * from routes_intersecting_track(
 - `max_results` — defaults to 10.
 
 **Returns:** `(id, name, distance_m, start_offset_m, end_offset_m)` sorted by `start_offset_m + end_offset_m` ascending. The caller does the final ranking — combining the endpoint offsets with `|distance_m − track_length| / track_length` is a strong "definitely the same route" signal; either dimension alone is too noisy.
+
+---
+
+### `search_public_routes(q text, max_results int)`
+
+Full-text search over `name` (using the `routes_name_search` GIN index over `to_tsvector('english', name)`) restricted to `is_public = true`. Granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Used by `RouteExplorer.svelte` via `apps/web/src/lib/data.ts:searchPublicRoutes`.
+
+### `popular_route_tags(tag_limit int)`
+
+Returns the top-N most-used tag strings across `routes.tags` for the Explore tab's tag chips. Granted to `anon` + `authenticated`. Migration `20260502_001_popular_route_tags.sql`.
+
+### `recompute_event_ranks(event_uuid uuid, instance_start timestamptz)`
+
+SECURITY DEFINER recompute of `event_results.rank` for the given (event, instance) tuple. Triggered automatically on `event_results` insert/update/delete; also exposed as an RPC for the race-mode auto-finalize path and admin tooling. Migration `20260424_001_event_results.sql`.
+
+### `approve_event_result(result_event_id, result_instance_start, result_user_id, approved boolean)`
+
+SECURITY DEFINER. Lets a club admin or event organiser flip an `event_results` row between approved + pending visibility. Permission is checked via `is_event_organiser(uuid)`. Granted to `authenticated`. Migration `20260428_001_role_permissions.sql`.
+
+### `is_event_organiser(event_uuid uuid)` / `is_race_director(event_uuid uuid)`
+
+SECURITY DEFINER booleans used by RLS policies and other RPCs to check whether `auth.uid()` is allowed to administer a specific event (organiser is broader; race-director is the in-event live-mode start/stop role). Both granted to `authenticated`.
+
+### `is_pro()`
+
+SECURITY DEFINER boolean — `select user_profiles.subscription_tier in ('pro','lifetime')` for `auth.uid()`. Used by Edge Functions and the `/api/coach` server route to gate paywalled features without a separate column lookup per request. Granted to `authenticated`. Migration `20260429_001_subscription_paywall.sql` (the predecessor `is_user_pro(uuid)` was dropped in `20260516_001`).
+
+### `join_club_by_token(token text)`
+
+SECURITY DEFINER. Validates a `club_invites.token`, checks expiry / max-uses, inserts a `club_members` row for the caller, and bumps the invite's redemption counter. Atomic — partial failures roll back. Granted to `authenticated`. Migration `20260417_001_club_invites.sql`.
+
+### `latest_fitness_snapshot()`
+
+Returns the caller's most recent `fitness_snapshots` row (VDOT, weekly mileage, ATL/CTL, etc.). Cached materialisation of the inputs the dashboard fitness card needs. Granted to `authenticated`. Migration `20260507_001_fitness_snapshots.sql`.
+
+### `get_integration_tokens(provider text)` / `set_integration_tokens(provider, access, refresh, expires_at)`
+
+SECURITY DEFINER pair that brokers OAuth tokens through Supabase Vault rather than exposing the encrypted columns directly to the row. `set` writes the access + refresh + expiry into Vault and stores only the secret IDs on the `integrations` row; `get` round-trips them back to the calling Edge Function. Granted to `authenticated`. Decision: [decisions.md § 41](decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns). Migration `20260603_001_integrations_vault.sql`.
+
+### `check_rate_limit_tiered(bucket text, free_per_hour int, pro_per_hour int)`
+
+SECURITY DEFINER. Atomic per-bucket per-user counter using `is_pro()` to pick the ceiling. Returns boolean (true = under limit, action allowed). Used by `/api/coach`, `parkrun-import`, `strava-import` to enforce paywall throttling without each Edge Function hand-rolling the logic. Granted to `authenticated`. Migration `20260605_001_rate_limit_tiered.sql`.
+
+### `cleanup_stale_rate_limits()`
+
+SECURITY DEFINER GC for the `rate_limits` table — deletes rows whose window has elapsed. Driven by the hourly `cleanup-stale-rate-limits` pg_cron job. Migration `20260604_001_cleanup_stale_rate_limits.sql`.
 
 ---
 
