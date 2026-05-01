@@ -293,8 +293,13 @@ async function ingestActivity(
 		strava_activity_type: act.type,
 	};
 	if (act.average_heartrate) metadata.avg_bpm = Math.round(act.average_heartrate);
+	if (act.name) metadata.title = act.name;
+	if (act.total_elevation_gain != null) metadata.elevation_m = Math.round(act.total_elevation_gain);
 
 	// Insert the run first so we have its id for the Storage path.
+	// Note: `runs` has no `title` or `elevation_m` columns — both live on
+	// `metadata` per docs/metadata.md (matches the apps/web/src/lib/data.ts
+	// saveRun writer used by the Strava + Garmin ZIP importers).
 	const { data: inserted, error } = await supabase
 		.from('runs')
 		.insert({
@@ -302,10 +307,8 @@ async function ingestActivity(
 			started_at: act.start_date,
 			distance_m: Math.round(act.distance),
 			duration_s: act.moving_time || act.elapsed_time,
-			elevation_m: act.total_elevation_gain != null ? Math.round(act.total_elevation_gain) : null,
 			source: 'strava',
 			metadata,
-			title: act.name,
 		})
 		.select('id')
 		.single();
