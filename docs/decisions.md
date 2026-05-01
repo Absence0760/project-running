@@ -926,6 +926,16 @@ This is intentional, not technical debt.
 
 **Don't re-litigate unless:** we see a sustained skip rate above ~5% on real user tracks (then re-evaluate Meili — its richer per-point metadata is what would help); we hit the chunking ceiling on multi-hour ultras (might want a single `POST /match` against a different engine instead of splitting); or we want offline / on-device matching, which is its own multi-week effort tracked under roadmap §531.
 
+## 46. Recorder waypoint timestamps come from `pos.timestamp`, never `DateTime.now()`
+
+`RunRecorder._onPosition` originally stamped `_currentWaypoint.timestamp = DateTime.now()`. Found during a test-coverage audit of the previously-untested `_calculatePace` helper: a synchronous inject burst (or any CPU stall that batches GPS callbacks together) collapsed every wall-clock waypoint timestamp to the same millisecond, and the function silently returned null because `endTs.difference(startTs).inMilliseconds == 0`. Same shape as the speed-clamp bug we fixed earlier — the testing.md gotcha already warned: "use GPS-reported timestamps from the `Position` rather than `DateTime.now()`."
+
+Fix: use `pos.timestamp` for the waypoint. GPS timestamps are accurate to ~ms regardless of how the OS schedules the callback, and the Position class guarantees the field is non-null. Also makes the GPX/TCX/FIT export timestamps reflect the actual GPS time of each fix instead of the wall-clock time of the Dart-side process — a pure improvement.
+
+**Trade-off:** if the device's GPS module ever returns a stale or wildly wrong timestamp, that error now propagates to pace and to exports. In practice all real geolocator providers (Android FusedLocation, iOS CLLocationManager) timestamp on-device from the GNSS hardware itself, so this is not a real risk.
+
+**Don't re-litigate unless:** a real geolocator backend ever surfaces malformed `pos.timestamp` values (none do today), or we add a non-GPS fix source (pedometer-only, network-positioned) that doesn't carry an authoritative timestamp.
+
 ---
 
 ## How to add an entry

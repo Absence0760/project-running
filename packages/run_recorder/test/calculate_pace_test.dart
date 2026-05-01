@@ -59,27 +59,23 @@ void main() {
       expect(r.debugPaceSecondsPerKm, isNull);
     });
 
-    test('returns a positive pace once track has 5 points and ≥50m covered',
-        () async {
+    test('returns the GPS-derived pace once track has 5 points and ≥50m', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();
       for (int i = 0; i < 5; i++) {
         r.debugInjectPosition(
           makePosition(metresEast: i * 50.0, secondsFromStart: i * 10),
         );
-        await Future.delayed(const Duration(milliseconds: 2));
       }
       expect(r.debugTrack.length, 5);
       expect(r.debugDistanceMetres, closeTo(200, 1));
 
       final pace = r.debugPaceSecondsPerKm;
       expect(pace, isNotNull);
-      expect(pace, greaterThan(0));
-      expect(pace, lessThan(60 * 60));
+      expect(pace, closeTo(200, 1));
     });
 
-    test('returns null when wall-clock timestamps collapse to zero seconds',
-        () {
+    test('synchronous inject loop still produces a non-null pace', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();
       for (int i = 0; i < 5; i++) {
@@ -88,27 +84,27 @@ void main() {
         );
       }
       expect(r.debugTrack.length, 5);
-      expect(r.debugDistanceMetres, closeTo(200, 1));
-      expect(r.debugPaceSecondsPerKm, isNull);
+      expect(r.debugPaceSecondsPerKm, isNotNull);
+      expect(r.debugPaceSecondsPerKm, closeTo(200, 1));
     });
 
-    test('window slides — early-track samples beyond ~200m are excluded',
-        () async {
+    test('window slides — early-slow segments excluded from pace', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();
-      for (int i = 0; i < 8; i++) {
-        r.debugInjectPosition(
-          makePosition(metresEast: i * 50.0, secondsFromStart: i * 10),
-        );
-        await Future.delayed(const Duration(milliseconds: 5));
-      }
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 50, secondsFromStart: 60));
+      r.debugInjectPosition(makePosition(metresEast: 100, secondsFromStart: 120));
+      r.debugInjectPosition(makePosition(metresEast: 150, secondsFromStart: 130));
+      r.debugInjectPosition(makePosition(metresEast: 200, secondsFromStart: 140));
+      r.debugInjectPosition(makePosition(metresEast: 250, secondsFromStart: 150));
+      r.debugInjectPosition(makePosition(metresEast: 300, secondsFromStart: 160));
+      r.debugInjectPosition(makePosition(metresEast: 350, secondsFromStart: 170));
+
       expect(r.debugTrack.length, 8);
-      expect(r.debugDistanceMetres, closeTo(350, 2));
 
       final pace = r.debugPaceSecondsPerKm;
       expect(pace, isNotNull);
-      expect(pace, greaterThan(0));
-      expect(pace, lessThan(60 * 60));
+      expect(pace, closeTo(200, 5));
     });
 
     test('snapshot stream reports the same pace value as debugPaceSecondsPerKm',

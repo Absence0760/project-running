@@ -447,11 +447,19 @@ class RunRecorder {
     // every valid fix, independent of the track-append threshold. This
     // happens even before [begin] is called, so the map can show the runner
     // during the countdown.
+    //
+    // Use pos.timestamp (GPS-reported) rather than DateTime.now() so any
+    // downstream consumer that subtracts two waypoint timestamps gets the
+    // real elapsed time. Wall-clock dt collapsed to zero whenever positions
+    // were processed in a tight loop (queued fixes after a CPU stall, or
+    // synthetic injection in unit tests), and _calculatePace silently
+    // returned null in those cases. Same lesson the speed-clamp learned
+    // earlier in this file (see the "GPS-reported time" comment below).
     _currentWaypoint = Waypoint(
       lat: pos.latitude,
       lng: pos.longitude,
       elevationMetres: pos.altitude != 0 ? pos.altitude : null,
-      timestamp: DateTime.now(),
+      timestamp: pos.timestamp,
     );
 
     // Only append to the track and accumulate distance once the run has
