@@ -165,4 +165,40 @@ void main() {
           'warmup snapshots can carry a null.',
     );
   });
+
+  test('_currentWaypoint constructor uses pos.timestamp, not DateTime.now()',
+      () {
+    // Reason: an earlier version stamped _currentWaypoint.timestamp =
+    // DateTime.now(). Wall-clock dt collapsed to zero whenever GPS
+    // callbacks landed in the same millisecond (CPU stall, batched fixes,
+    // or synchronous unit-test injection), and _calculatePace silently
+    // returned null because endTs.difference(startTs).inMilliseconds == 0.
+    // GPX/TCX/FIT exports also embed Run.track[i].timestamp, so wall-clock
+    // would mean "process time" rather than "GPS time" in shared files.
+    // Fixed in decisions.md §46 — this guard pins the policy.
+    final assignment = RegExp(
+      r'_currentWaypoint\s*=\s*Waypoint\((?:[^()]|\([^()]*\))*\)',
+      multiLine: true,
+    ).firstMatch(source)?.group(0);
+    expect(
+      assignment,
+      isNotNull,
+      reason: 'Could not find the _currentWaypoint = Waypoint(...) '
+          'assignment — rename? Update the guard to match the new shape.',
+    );
+    expect(
+      assignment,
+      contains('timestamp: pos.timestamp'),
+      reason: 'The _currentWaypoint constructor must read timestamp from '
+          'pos.timestamp (GPS-reported), not DateTime.now() — see '
+          'decisions.md §46. Reverting this re-introduces the silent '
+          '_calculatePace = null bug under fix-batching.',
+    );
+    expect(
+      assignment,
+      isNot(contains('DateTime.now()')),
+      reason: 'Same as above — DateTime.now() must not appear inside the '
+          '_currentWaypoint constructor.',
+    );
+  });
 }
