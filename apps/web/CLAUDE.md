@@ -10,7 +10,7 @@ Deployed to GitHub Pages for the static site; Vercel adapter is used when a serv
 
 - **Framework**: SvelteKit 2 with Svelte 5 (runes/next)
 - **Language**: TypeScript
-- **Package manager**: pnpm
+- **Package manager**: npm via the root workspace (`npm run <script> --workspace=apps/web`). The repo bootstrapped with pnpm originally and `apps/web/pnpm-lock.yaml` still exists; CI and the canonical build path are npm — see [decisions.md § 7](../../docs/decisions.md). Either works locally; just don't mix.
 - **Adapters**: `@sveltejs/adapter-static` (GitHub Pages), `@sveltejs/adapter-vercel` (Vercel)
 - **Styling**: normalize.css + custom CSS in `src/app.css`
 - **Icons**: unplugin-icons with `@iconify-json/material-symbols`
@@ -89,12 +89,15 @@ src/
 ## Development
 
 ```bash
-pnpm i          # Install dependencies
-pnpm dev        # Dev server on :7777
-pnpm build      # Production build
-pnpm preview    # Preview build on :8888
-pnpm check      # Type-check
+# From the repo root (matches CI):
+npm install                              # workspace bootstrap
+npm run dev --workspace=apps/web         # Dev server on :7777
+npm run build --workspace=apps/web       # Production build
+npm run preview --workspace=apps/web     # Preview build on :8888
+npm run check --workspace=apps/web       # Type-check
 ```
+
+(`pnpm i / pnpm dev` from inside `apps/web/` still work locally because of the historical `pnpm-lock.yaml`, but CI runs the npm path.)
 
 ## Conventions
 

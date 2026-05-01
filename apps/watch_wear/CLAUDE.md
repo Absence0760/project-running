@@ -46,6 +46,7 @@ is **not** trying to mirror web's feature surface.
 ```
 apps/watch_wear/
 ├── CLAUDE.md                       # this file
+├── local_testing.md
 └── android/                        # Android project root
     ├── build.gradle.kts
     ├── settings.gradle.kts
@@ -57,19 +58,40 @@ apps/watch_wear/
             ├── AndroidManifest.xml
             ├── kotlin/com/runapp/watchwear/
             │   ├── MainActivity.kt
-            │   ├── RunViewModel.kt        # single source of UI state
-            │   ├── SupabaseClient.kt      # OkHttp REST + Storage client
-            │   ├── GpsRecorder.kt         # FusedLocationProviderClient wrapper
-            │   ├── HeartRateMonitor.kt    # Health Services MeasureClient
-            │   ├── LocalRunStore.kt       # DataStore-backed retry queue
-            │   ├── ui/RunWatchApp.kt      # Compose-for-Wear screens
-            │   ├── ui/RouteMiniMap.kt     # Polyline + position-dot + track-so-far + raster tiles
-            │   ├── ui/TileSource.kt        # MapTiler raster tile fetcher (OkHttp + LRU)
-            │   ├── ui/TileLayer.kt         # Compose composable that draws tile bitmaps
-            │   ├── recording/MercatorTiles.kt       # Web Mercator projection + tile coords
-            │   ├── recording/TrackOverlayBuffer.kt  # Rolling-buffer geometric halving
-            │   ├── recording/MapProjection.kt  # Pure lat/lng → unit-square projection
-            │   └── generated/DbRows.kt    # GENERATED — do not edit
+            │   ├── RunViewModel.kt          # single source of UI state
+            │   ├── SupabaseClient.kt        # OkHttp REST + Storage client
+            │   ├── GpsRecorder.kt           # FusedLocationProviderClient wrapper
+            │   ├── HeartRateMonitor.kt      # Health Services MeasureClient
+            │   ├── Pedometer.kt             # Sensor.TYPE_STEP_COUNTER wrapper
+            │   ├── LocalRunStore.kt         # DataStore-backed retry queue (`queued_runs_v2`)
+            │   ├── LocalRouteStore.kt       # DataStore-backed cache of starred routes
+            │   ├── SavedRoute.kt            # in-memory + persisted route shape
+            │   ├── WatchRunMetadata.kt      # `buildRunMetadata` + queued-run encoder
+            │   ├── SessionBridge.kt         # Wearable Data Layer listener for phone-handed session
+            │   ├── SessionStore.kt          # DataStore cache of the auth session
+            │   ├── RaceSessionClient.kt     # live race-mode ping client (`race_pings`)
+            │   ├── ui/RunWatchApp.kt        # Compose-for-Wear screens
+            │   ├── ui/RouteMiniMap.kt       # Polyline + position-dot + track-so-far + raster tiles
+            │   ├── ui/TileSource.kt         # MapTiler raster tile fetcher (OkHttp + LRU)
+            │   ├── ui/TileLayer.kt          # Compose composable that draws tile bitmaps
+            │   ├── ui/Theme.kt              # MaterialTheme palette + typography
+            │   ├── recording/                # foreground-service-owned recording loop
+            │   │   ├── RunRecordingService.kt   # foregroundServiceType=location
+            │   │   ├── RecordingRepository.kt   # process-singleton StateFlow
+            │   │   ├── CheckpointStore.kt       # in-progress recovery snapshot
+            │   │   ├── TrackWriter.kt           # streaming GPS to disk JSON
+            │   │   ├── ElapsedMath.kt           # pure pause/resume elapsed-time math
+            │   │   ├── RouteMath.kt             # off-route distance + remaining km
+            │   │   ├── TtsAnnouncer.kt          # split + pace-alert TTS
+            │   │   ├── MercatorTiles.kt         # Web Mercator + tile coords
+            │   │   └── TrackOverlayBuffer.kt    # rolling-buffer geometric halving
+            │   ├── system/
+            │   │   ├── BatteryOptimization.kt   # whitelist check + UI nudge
+            │   │   ├── BatteryStatus.kt         # capacity reading for pre-run warning
+            │   │   └── NetworkWatcher.kt        # ConnectivityManager.NetworkCallback flow
+            │   ├── tiles/
+            │   │   └── ActiveRunTileService.kt  # active-run tile (Wear Tiles + ProtoLayout)
+            │   └── generated/DbRows.kt      # GENERATED — do not edit
             └── res/mipmap-*/ic_launcher.png
 ```
 
