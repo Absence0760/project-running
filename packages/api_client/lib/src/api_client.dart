@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:core_models/core_models.dart';
+import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Typed client for the Supabase REST API.
@@ -417,6 +418,28 @@ class ApiClient {
     final list = jsonDecode(json) as List<dynamic>;
     return list.map((t) => _waypointFromJson(t as Map<String, dynamic>)).toList();
   }
+
+  /// Test-only: exposes the private waypoint codec used by the track
+  /// upload/download path. Returns the JSON shape stored inside the
+  /// gzipped track blob in the `runs` Storage bucket.
+  @visibleForTesting
+  static Map<String, dynamic> debugWaypointToJson(Waypoint w) =>
+      _waypointToJson(w);
+
+  /// Test-only: inverse of [debugWaypointToJson].
+  @visibleForTesting
+  static Waypoint debugWaypointFromJson(Map<String, dynamic> m) =>
+      _waypointFromJson(m);
+
+  /// Test-only: exposes [_runFromRow] so the row-to-domain conversion can
+  /// be exercised without booting Supabase.
+  @visibleForTesting
+  static Run debugRunFromRow(Map<String, dynamic> row) => _runFromRow(row);
+
+  /// Test-only: exposes [_routeFromRow] for the same reason.
+  @visibleForTesting
+  static Route debugRouteFromRow(Map<String, dynamic> row) =>
+      _routeFromRow(row);
 
   static Map<String, dynamic> _waypointToJson(Waypoint w) => {
         'lat': w.lat,

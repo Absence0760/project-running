@@ -275,6 +275,18 @@ Several private formatters were extracted from stateful classes into top-level p
 
 After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
 
+### `packages/api_client/test/api_client_codecs_test.dart` — 24 tests
+
+Covers the four pure helpers on `ApiClient` exposed via `@visibleForTesting` static accessors (`debugWaypointToJson`, `debugWaypointFromJson`, `debugRunFromRow`, `debugRouteFromRow`). The methods drive the wire format for the gzipped track blob in the `runs` Storage bucket and the row-to-domain conversion that powers every list / detail screen — code that previously had no direct coverage because it hides behind `Supabase.instance.client`.
+
+**Waypoint codec (7 tests):** round-trip with all optional fields, timestamp encodes UTC ISO 8601, local-time timestamps are normalised to UTC on encode, omits `bpm` key when `null`, decodes integer-typed `lat`/`lng` into `double`, treats `null`-vs-absent `ele` the same, malformed timestamp falls back to `null` (via `DateTime.tryParse`).
+
+**`debugRunFromRow` (8 tests):** basic field mapping, `track_url` stashed onto `metadata` for lazy-fetch by callers, null metadata + null `track_url` leaves `Run.metadata` null, existing metadata keys survive alongside the stashed `track_url`, every `RunSource` value parses correctly, unknown `source` falls back to `RunSource.app` (matches the [`apps/web/src/lib/types.test.ts`](../apps/web/src/lib/types.test.ts) defensive contract), `externalId` and `createdAt` pass through.
+
+**`debugRouteFromRow` (9 tests):** basic field mapping, null `elevation_m` collapses to `0` (not null), explicit `elevation_m` is preserved, null `is_public` is treated as `false`, explicit `is_public=true` round-trips, `tags` pass through verbatim, `featured` + `run_count` + `is_starred` populate as expected, waypoint elevation passes through (or is null when absent).
+
+The tests run under `flutter test` because `api_client` transitively depends on `supabase_flutter` (which pins Flutter); the test bodies themselves use only `package:test/test.dart`.
+
 ### `packages/gpx_parser/test/route_parser_test.dart` — 23 tests
 
 Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GPX block (7 tests): `<trkpt>` happy path with elevation gain summed correctly, `<rtept>` and `<wpt>` fallbacks when no track points, malformed `lat="bad"` skipped, `name` defaults to "Imported route", elevation gain ignores descents, empty document returns an empty waypoint list. KML block (4 tests): LineString with elevation, missing `<coordinates>` element, non-numeric triples dropped, 2D coordinates leave elevation null. TCX block (3 tests): `<Trackpoint><Position>` with altitude + timestamps, missing `<Position>` skipped, `<Notes>` fallback when `<Name>` is absent. GeoJSON block (5 tests): `[lng, lat, ele]` order, 2D coordinates, missing geometry, missing `properties.name`, malformed coordinate entries skipped. FIT block (4 tests): too-short bytes throw, `.FIT` signature mismatch throws, header size other than 12/14 throws, valid empty header parses to an empty route.
@@ -641,9 +653,10 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 - **Widget tests (key remaining gaps).** `RunScreen` and `LiveRunMap` have no widget tests; those require platform-channel mocks (geolocator, pedometer) to exercise the recording path. All other screens and the majority of widgets now have widget tests (109 `testWidgets` calls across 22 files). The original four — `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, `WorkoutReviewSection` — have been joined by `HomeScreen`, `DashboardScreen`, `ImportScreen`, and many more.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
-- **`ApiClient`, `SyncService`.** Nothing on the sync path or the Supabase client has tests. These would want a fake HTTP client.
+- **`ApiClient` HTTP / Storage / RPC paths.** Pure helpers (codecs, row-to-domain) are now covered (see `api_client_codecs_test.dart`); the wire-level methods (`saveRun`, `getRuns`, `fetchTrack`, `signIn`, `_uploadTrack`, etc.) still hit `Supabase.instance.client` directly, which would need a fake HTTP transport or a constructor that takes a `SupabaseClient` to be testable.
+- **`SyncService`.** Wraps `ApiClient` calls with conflict-resolution and debouncing. Same shape as above — needs a fake `ApiClient` to cover.
 
-If you want to expand coverage, the best targets are: widget tests for `run_screen`'s state transitions → `ApiClient` (fake HTTP).
+If you want to expand coverage, the best targets are: widget tests for `run_screen`'s state transitions → refactor `ApiClient` to take a `SupabaseClient` parameter so a fake transport is injectable.
 
 ---
 

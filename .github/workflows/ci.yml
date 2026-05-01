@@ -23,7 +23,7 @@ jobs:
       # below: two `flutter test` processes racing on `bin/cache/engine.stamp`
       # produces a malformed `flutter//engine_stamp.json` 404.
       - run: flutter precache
-      - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
+      - run: melos exec --scope="run_recorder" --scope="mobile_android" --scope="api_client" --scope="gpx_parser" -- flutter test
       - run: melos exec -- dart analyze
 
   parity-types:
