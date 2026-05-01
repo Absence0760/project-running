@@ -158,6 +158,7 @@
 			{#if wo && c.inPlan}
 				<svelte:element
 					this={onSelect ? 'button' : 'a'}
+					role={onSelect ? 'button' : 'link'}
 					type={onSelect ? 'button' : undefined}
 					href={onSelect ? undefined : `/plans/${planId}/workouts/${wo.id}`}
 					onclick={onSelect ? () => onSelect(wo) : undefined}

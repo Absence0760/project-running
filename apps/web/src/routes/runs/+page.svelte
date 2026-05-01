@@ -368,6 +368,7 @@
 				{@const isSelected = selected.has(run.id)}
 				<svelte:element
 					this={selecting ? 'button' : 'a'}
+					role={selecting ? 'button' : 'link'}
 					class="run-card"
 					class:selecting
 					class:selected={selecting && isSelected}
