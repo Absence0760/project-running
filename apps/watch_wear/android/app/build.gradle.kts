@@ -138,7 +138,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     // Compose
-    val composeBom = platform("androidx.compose:compose-bom:2026.03.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.04.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
@@ -151,18 +151,18 @@ dependencies {
     implementation("androidx.wear.compose:compose-navigation:1.6.1")
     implementation("androidx.wear:wear-ongoing:1.1.0")
     // AmbientLifecycleObserver + AmbientAware lives here.
-    implementation("androidx.wear:wear:1.3.0")
+    implementation("androidx.wear:wear:1.4.0")
 
     // Tiles + ProtoLayout for the active-run tile. ProtoLayout is the
     // modern layout dialect (replaces the older `wear-tiles-material`
     // builders); the `tooling-preview` artefact is the side-loadable
     // tile preview Studio uses, kept off the release classpath via
     // `debugImplementation`.
-    implementation("androidx.wear.tiles:tiles:1.4.1")
-    implementation("androidx.wear.protolayout:protolayout:1.2.1")
-    implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
-    implementation("androidx.wear.protolayout:protolayout-expression:1.2.1")
-    debugImplementation("androidx.wear.tiles:tiles-renderer:1.4.1")
+    implementation("androidx.wear.tiles:tiles:1.6.0")
+    implementation("androidx.wear.protolayout:protolayout:1.4.0")
+    implementation("androidx.wear.protolayout:protolayout-material:1.4.0")
+    implementation("androidx.wear.protolayout:protolayout-expression:1.4.0")
+    debugImplementation("androidx.wear.tiles:tiles-renderer:1.6.0")
 
     // Health Services (live HR). 1.1.0-rc01 is the latest pre-stable; 1.0.0
     // is the last stable tag but lacks the flow helpers we want. Move to
@@ -175,7 +175,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // Wearable Data Layer — receives Supabase session handoff from the paired phone.
-    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     // Networking
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
@@ -193,5 +193,5 @@ dependencies {
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:7.18.0")
+    implementation("io.sentry:sentry-android:8.40.0")
 }
