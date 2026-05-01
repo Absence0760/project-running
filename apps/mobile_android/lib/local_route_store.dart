@@ -12,9 +12,13 @@ class LocalRouteStore extends ChangeNotifier {
 
   List<Route> get routes => List.unmodifiable(_routes);
 
-  Future<void> init() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    _dir = Directory('${appDir.path}/routes');
+  Future<void> init({Directory? overrideDirectory}) async {
+    if (overrideDirectory != null) {
+      _dir = overrideDirectory;
+    } else {
+      final appDir = await getApplicationDocumentsDirectory();
+      _dir = Directory('${appDir.path}/routes');
+    }
     if (!_dir.existsSync()) {
       _dir.createSync(recursive: true);
     }
