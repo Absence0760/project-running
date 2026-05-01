@@ -152,7 +152,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Standalone workout session (no phone required)
 - [x] Heart rate via HealthKit sensor (live BPM in `RunningView`, `avg_bpm` forwarded in run metadata)
 - [x] Haptic pace alerts (above / below target)
-- [ ] Syncs run data via Watch Connectivity framework
+- [x] Syncs run data via Watch Connectivity framework — `WatchConnectivityManager.swift` posts gzipped track + metadata via `WCSession.transferFile(_:metadata:)`; the iOS Flutter `WatchIngestBridge` decodes and persists. WatchIngestQueue on the phone side persists pre-auth payloads to disk so a restart between watch transfer and sign-in doesn't lose the run.
 
 ### Wear OS standalone GPS recording
 

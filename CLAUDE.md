@@ -65,9 +65,9 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 
 ### Tools and workspace
 
-- **Supabase lives under `apps/backend/supabase/`**, not at the repo root. The root-level `supabase/` directory is just the CLI's local state (`.branches`, `.temp`), don't write migrations there. Always `cd apps/backend` before `supabase <cmd>` (or use `--workdir`).
+- **Supabase lives under `apps/backend/supabase/`**, not at the repo root. If you ever see a top-level `supabase/` directory appear, it's the CLI's local state cache (`.branches`, `.temp`); don't write migrations there. Always `cd apps/backend` before `supabase <cmd>` (or use `--workdir`).
 - **`melos run <script>` is broken on Melos 7** — scripts in `melos.yaml` aren't picked up (Melos 7 moved script definitions into package `pubspec.yaml` files). Use `melos exec -- <cmd>` for ad-hoc workspace-wide commands. Example: `melos exec -- dart analyze`.
-- **`dart analyze` exits non-zero on `info`-level lints.** `mobile_android` has ~76 info-level lints (mostly `always_use_package_imports` and deprecated `withOpacity`) that are acknowledged tech debt. Treat `info` as noise; only act on `warning`/`error`.
+- **`dart analyze` exits non-zero on `info`-level lints.** `mobile_android` carries ~480 info-level lints today (the bulk are `always_use_package_imports` + `avoid_relative_lib_imports` interacting with the byte-identical-twin convention, plus `deprecated_member_use` from `withOpacity` → `withValues`). All acknowledged tech debt. Treat `info` as noise; only act on `warning`/`error`.
 - **Two package managers.** `apps/web` and `apps/backend` are npm workspaces (run `npm` commands from repo root or the app dir). Flutter packages are managed by Melos. Don't cross the streams.
 - **`supabase gen types typescript --local` writes "Connecting to db 5432" to stdout**, not stderr. The `gen:types` script in `apps/backend/package.json` pipes through `grep -v '^Connecting to db'` to strip it. If you rewrite the script, keep the filter.
 - **Seed user**: `runner@test.com` / `testtest`. Lives in `apps/backend/supabase/seed.sql`. Use it for any manual testing.

@@ -137,11 +137,11 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Dart analyzer policy — treat `info` as noise
 
-`dart analyze` on this package reports ~90 issues. **Every remaining entry is `info`-level** — the package is clean of `warning`/`error` as of this pass. The noise buckets:
+`dart analyze` on this package reports ~480 issues. **Every remaining entry is `info`-level** — the package is clean of `warning`/`error` as of this pass. The noise buckets (top categories from `dart analyze | grep -oE ' - [a-z_]+$' | sort | uniq -c | sort -rn`):
 
-- `always_use_package_imports` — pervasive; every screen imports relative. Not being fixed in a sweep.
-- `deprecated_member_use` — mostly `withOpacity` → `withValues` and `share_plus` v13 (`Share.shareXFiles` → `SharePlus.instance.share`). Deferred until we do a theme/deps pass.
-- `dangling_library_doc_comments`, `unnecessary_brace_in_string_interps`, `unnecessary_import` — stragglers.
+- `always_use_package_imports` (~220) and `avoid_relative_lib_imports` (~140) — these two interact with [decisions.md § 39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase): tests use relative imports so the same file resolves on both targets. Not being fixed.
+- `deprecated_member_use` (~46) — mostly `withOpacity` → `withValues` and `share_plus` v13 (`Share.shareXFiles` → `SharePlus.instance.share`). Deferred until we do a theme/deps pass.
+- `unnecessary_underscores` / `use_null_aware_elements` / `prefer_single_quotes` / `use_build_context_synchronously` — small stragglers.
 
 **Do not waste a turn on these.** Only act on `info` if your change touched that specific file. **Do act on any new `warning`/`error`** — the bar is "zero warnings", so a fresh one is a regression your change introduced. The CI `test-packages` job runs `melos exec -- dart analyze`; the exit code is ignored for this package (per roadmap intent, not per CI config — verify before relying on this).
 
@@ -149,7 +149,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 Test files in `test/`:
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
-- `local_run_store_test.dart` — 17 tests: store persistence, sync state, in-progress save/load, deleteMany batch, edge cases
+- `local_run_store_test.dart` — 23 tests: store persistence, sync state, in-progress save/load, deleteMany batch, newer-wins guards, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
 - `goals_test.dart` — 20 tests: goal evaluation (distance/time/pace/run-count, weekly/monthly, multi-target)
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification
@@ -169,7 +169,7 @@ Test files in `test/`:
 - `recurrence_test.dart` — 8 tests: weekly / biweekly / monthly `expandInstances`, hour/minute local-tz preservation, `count` cap, `until` cap, non-recurring single-instance
 - `importer_external_id_test.dart` — 2 tests: `StravaImporter` ZIP import produces `strava:<id>` prefix; source-text guard confirms `HealthConnectImporter` uses `healthconnect:<uuid>` prefix
 - `architecture_guards_test.dart` — 20 tests: static source-level assertions that pin in place the efficiency + layering optimizations (no `setState` in `_onSnapshot`, `markSynced` doesn't rewrite the run file, sync paths use `saveRunsBatch`, `ErrorWidget.builder` override present, RunNotificationBridge pins geolocator channel constants, plus the `LocalRunStore` newer-wins guards — `save`/`update` must stamp `last_modified_at`, `saveFromRemote` must not — added in the Apr 2026 data-sync hardening pass). **When one of these fails, read the `reason:` before rubber-stamping a fix** — a failure means a recent change reversed an optimization we deliberately codified.
-- plus `run_recorder`'s own tests in `packages/run_recorder/test/` — 17 behavioural + 7 guards + 13 `workout_runner_test.dart` (step expansion, auto-advance, halfway / last-50m progress, skip / abandon, pace-adherence wayBehind, results JSON shape)
+- plus `run_recorder`'s own tests in `packages/run_recorder/test/` — 18 behavioural in `run_recorder_test.dart` + 7 guards in `architecture_guards_test.dart` + 6 in `laps_serialiser_test.dart` (canonical `metadata.laps` round-trip) + 13 in `workout_runner_test.dart` (step expansion, auto-advance, halfway / last-50m progress, skip / abandon, pace-adherence wayBehind, results JSON shape)
 
 See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for every screen and widget, including `RunScreen` (`run_screen_test.dart`) and `LiveRunMap` (`live_run_map_test.dart`) (~178 `testWidgets` calls across ~48 files); see `test/` for the full list.
 
