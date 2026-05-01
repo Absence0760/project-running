@@ -52,6 +52,12 @@ class SyncService with WidgetsBindingObserver {
     if (online) _trySync('connectivity');
   }
 
+  /// Test-only: drives the same code path the connectivity / lifecycle
+  /// observers do. Lets unit tests exercise the sync loop without the
+  /// `WidgetsBindingObserver` subscription.
+  @visibleForTesting
+  Future<void> debugTrySync(String reason) => _trySync(reason);
+
   Future<void> _trySync(String reason) async {
     if (_syncing) return;
     final api = apiClient;

@@ -149,6 +149,18 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/sync_service_test.dart` — 10 tests
+
+Covers the `_trySync` loop on `SyncService` via the new `@visibleForTesting debugTrySync` hook. A `_FakeApiClient` subclasses `ApiClient` and overrides `userId`, `saveRunsBatch`, and `deleteRunById`; `LocalRunStore` runs against a real `tempDir` (same pattern as `local_run_store_test.dart`).
+
+**Guard clauses (3 tests):** no-op when `apiClient` is null, no-op when not signed in (`userId == null`), no-op when there is nothing to do.
+
+**Push path (2 tests):** every unsynced run goes through one `saveRunsBatch` call and is marked synced afterwards, and a `saveRunsBatch` failure is swallowed without flipping the unsynced flag.
+
+**Pending-delete drain (3 tests):** a successful delete removes the row from cloud / local / pending set, one failing delete does not poison the rest of the queue (others still drain), and `deleteRunById` is called once per pending id.
+
+**Combined paths (2 tests):** a single tick handles both an unsynced push and a pending-delete drain in one cycle, and a reentrant call landing while a sync is in flight short-circuits on the `_syncing` guard so the batch isn't pushed twice.
+
 ### `apps/mobile_android/test/local_route_store_test.dart` — 16 tests
 
 Persistence tests for `LocalRouteStore` mirroring the `local_run_store_test.dart` pattern — `init(overrideDirectory: ...)` with a tempDir, real file I/O, no mocks. Covers init (directory creation, non-`.json` file filtering, corrupt-file tolerance), save (file write, round-trip across fresh instances, replace-on-same-id, newest-first ordering, single-listener-call invariant), `saveBatch` (parallel write + single notify, empty-iterable no-op, overlapping-id replace), `delete` (disk + memory + unknown-id), and the unmodifiable `routes` view.
@@ -654,9 +666,9 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 - **Widget tests (key remaining gaps).** `RunScreen` and `LiveRunMap` have no widget tests; those require platform-channel mocks (geolocator, pedometer) to exercise the recording path. All other screens and the majority of widgets now have widget tests (109 `testWidgets` calls across 22 files). The original four — `FitnessCard`, `PlanCalendar`, `WorkoutExecutionBand`, `WorkoutReviewSection` — have been joined by `HomeScreen`, `DashboardScreen`, `ImportScreen`, and many more.
 - **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
 - **`ApiClient` HTTP / Storage / RPC paths.** Pure helpers (codecs, row-to-domain) are now covered (see `api_client_codecs_test.dart`); the wire-level methods (`saveRun`, `getRuns`, `fetchTrack`, `signIn`, `_uploadTrack`, etc.) still hit `Supabase.instance.client` directly, which would need a fake HTTP transport or a constructor that takes a `SupabaseClient` to be testable.
-- **`SyncService`.** Wraps `ApiClient` calls with conflict-resolution and debouncing. Same shape as above — needs a fake `ApiClient` to cover.
+- **`SyncService` lifecycle wiring.** The `_trySync` loop is covered (`sync_service_test.dart`); the `WidgetsBindingObserver` lifecycle bridge and the `Connectivity().onConnectivityChanged` subscription still fire only when `start()` runs against a real binding.
 
-If you want to expand coverage, the best targets are: widget tests for `run_screen`'s state transitions → refactor `ApiClient` to take a `SupabaseClient` parameter so a fake transport is injectable.
+If you want to expand coverage, the best target is to refactor `ApiClient` to take a `SupabaseClient` parameter so a fake transport is injectable, then drive the wire-level methods through it.
 
 ---
 
