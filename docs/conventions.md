@@ -114,6 +114,19 @@ See [testing.md](testing.md) for the full reference — patterns, fixtures, what
 - **No database mocks.** Integration tests that touch Supabase should hit a real local instance (`supabase start`), not a mock client. Drift between a mock and the real schema is the bug we're trying to catch.
 - **SECURITY DEFINER + `vault.*` paths get inline DO-block assertions in `seed.sql`.** Edge Function CI doesn't deploy and exercise functions end-to-end, so contract tests for `check_rate_limit`, `get_integration_tokens` etc. live in `apps/backend/supabase/seed.sql` as `do $$ ... raise exception ... end $$` blocks. They run on every `supabase db reset` (locally) but not on production migrations — exactly the semantics we want for tests. Use `set_config('request.jwt.claim.role', ...)` / `request.jwt.claim.sub` to simulate auth contexts; clean up any test rows at the end of the block so the seed leaves no residue. See the trailing "Regression tests" section of `seed.sql` for the canonical shape.
 
+## Pagination — first page + Load more
+
+**Default to a bounded first page on any list that talks to the network or scans an unbounded store.** The shape we follow across web, mobile, and watch:
+
+- **Page size: 20.** Concrete enough to render fast on the slowest device, big enough that most users never tap Load more. Don't twiddle the value per screen — consistency across surfaces is more valuable than micro-tuning.
+- **Cursor over offset.** A row id or `started_at`/`created_at` value is stable against concurrent inserts and deletes; offset shifts a row out from under the user. The `before:` parameter on `ApiClient.getRuns` and the `(startedAt, id)` cursor on `fetchFollowingFeed` are the canonical shapes.
+- **`hasMore = lastPage.length == pageSize`.** That's the "out of pages" signal — no separate count query.
+- **A visible "Load more" footer**, not infinite scroll. Infinite scroll loses scroll position on back-navigation and surprises users on cellular. Reference implementations: `apps/web/src/routes/runs/+page.svelte`, `apps/web/src/routes/feed/+page.svelte`, `apps/mobile_android/lib/screens/runs_screen.dart` (helper: `shouldShowRunsLoadMore`), `apps/mobile_android/lib/screens/feed_screen.dart`.
+- **Reset paging on filter/sort change.** If the user narrows the view, drop back to page 1 — don't carry the previous depth. The pure helper for the visibility decision should take primitives so the boundary cases are unit-testable without mounting the screen.
+- **Two layers when the client has a local store.** The visible window caps how many cached rows render even when the store has more (`_visibleCount` on the runs screen); a separate `_remoteHasMore` flag drives the cloud cursor. Tap Load more → reveal local first, fetch from cloud only when the local cache is exhausted.
+
+Don't paginate when the bound is intrinsic and small (members of a club ≤ a few dozen, segments on a route ≤ tens, comments on a single run ≤ a handful). When in doubt, paginate — the cost of an unused Load-more button is zero, the cost of a 200-row first paint on a flaky cellular link is a frame drop and a power spike.
+
 ## Dependency discipline
 
 - Don't add a dependency to solve a one-function problem. Write the function.
