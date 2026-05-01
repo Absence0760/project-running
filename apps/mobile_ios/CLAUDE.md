@@ -81,6 +81,10 @@ No warning or error level issues. The app carries ~20 info-level lints (mostly `
 
 See [local_testing.md](local_testing.md). You need an iOS simulator or a paired device.
 
+## Deploying to production
+
+See [deployment.md](deployment.md) — App Store Connect setup, distribution cert + provisioning profile, ASC API key, Apple Watch bundling, observability, rollback, DR. The Apple Watch app at `apps/watch_ios/` ships inside this app's IPA — no separate listing.
+
 The iOS Runner project uses Swift Package Manager + CocoaPods in hybrid mode (most plugins via SPM, `health` still via pods). Podfile pins `platform :ios, '15.0'`. Secrets for `flutter run` pass through `dart_defines.json` (gitignored) because inline `--dart-define=` flags break on the `sb_publishable_…` Supabase anon key format. Rationale: [../../docs/decisions.md § 13](../../docs/decisions.md).
 
 ## Before reporting a task done

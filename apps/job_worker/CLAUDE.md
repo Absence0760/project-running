@@ -117,6 +117,10 @@ the file is now an orphan in Storage. The worker logs the path so
 an operator can sweep these later; an automated cleanup job would
 be the natural follow-up.
 
+## Deploying to production
+
+See [deployment.md](deployment.md) — two Fly.io apps (worker + OSRM) under one `runonward` org, talking over 6PN. Covers fly.toml shapes, Volume + graph build, weekly OSRM rebuild, secrets, rollback, DR, and the proposed `release-worker.yml` / `release-osrm.yml` workflows.
+
 ## Local dev
 
 See [README.md](README.md) for the smoke-test recipe.

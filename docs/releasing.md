@@ -4,6 +4,18 @@ Per-app release workflows, triggered by git tags. Each app ships on its
 own cadence — tagging `mobile_android@1.2.3` cuts an Android release and
 does not touch web, backend, or any of the watches.
 
+This file covers the **tag → CI workflow** mechanics. For where each
+service runs in production (provider, region, sizing, secrets,
+observability, rollback, DR) see the per-service deployment plans:
+
+- [`docs/deployment.md`](deployment.md) — cross-service hub
+- [`apps/backend/deployment.md`](../apps/backend/deployment.md)
+- [`apps/web/deployment.md`](../apps/web/deployment.md)
+- [`apps/job_worker/deployment.md`](../apps/job_worker/deployment.md) (worker + OSRM)
+- [`apps/mobile_android/deployment.md`](../apps/mobile_android/deployment.md)
+- [`apps/mobile_ios/deployment.md`](../apps/mobile_ios/deployment.md) (covers Apple Watch bundling)
+- [`apps/watch_wear/deployment.md`](../apps/watch_wear/deployment.md)
+
 **CI-only.** Release builds happen on GitHub Actions runners, never on a
 laptop. Signing keys live in GitHub Secrets; no developer ever holds a
 copy. A release APK built with `flutter build apk` on your machine will

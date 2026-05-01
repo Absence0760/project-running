@@ -218,6 +218,8 @@ For Phase 1, option 4 is what's been done (or nothing). If you're about to write
 
 ### Deploying functions to production
 
+For the full production plan — Supabase Cloud project setup, region, custom domain, secrets, observability, DR — see [deployment.md](deployment.md).
+
 Handled by CI in `.github/workflows/ci.yml`'s `deploy-functions` job on GitHub release (published). Do not deploy manually in dev — you'll clobber whatever's live. If you need to run a one-off deploy, ask first.
 
 Manual deploy syntax (for reference):

@@ -79,13 +79,14 @@ FROM run_matched_tracks WHERE run_id='$RUN_ID';
 
 ## Production
 
-Single Docker image, distroless final layer (~9 MB):
+For the full deployment plan (Fly.io app shape, Volume sizing, weekly OSRM rebuild, observability, rollback, DR), see [deployment.md](deployment.md). The container itself is a single Docker image, distroless final layer (~9 MB):
 
 ```bash
 docker build -t job_worker:latest .
 docker run --rm \
   -e SUPABASE_URL=https://<project>.supabase.co \
   -e SUPABASE_SERVICE_ROLE_KEY=<key> \
+  -e OSRM_URL=http://osrm.internal:5000 \
   job_worker:latest
 ```
 

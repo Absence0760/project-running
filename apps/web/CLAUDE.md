@@ -119,8 +119,11 @@ The standalone `/new` routes (`/clubs/new`, `/plans/new`, `/runs/new`, `/clubs/[
 The modal shell uses the canonical `.modal-backdrop` / `.modal` / `.modal-header` / `.modal-close` / `.modal-body` classes from `app.css`. Pages and components must not redefine those locally — only field-level layout (e.g. a `.goal-editor-body { display: grid }` for a specific dialog's contents). See [conventions § Web modals](../../docs/conventions.md#web-modals).
 ## Deployment
 
-- **GitHub Pages**: push to `main` triggers `.github/workflows/deploy.yml`, which builds and deploys automatically
-- The `build/.nojekyll` file is created at build time to bypass Jekyll processing
+Production plan + cost / observability / rollback: [deployment.md](deployment.md). Canonical provider is **Vercel** (gets the SSR `/api/coach` route); GitHub Pages is kept as a free static mirror.
+
+Today's deploy mechanics:
+- **GitHub Pages**: push to `main` triggers `.github/workflows/deploy.yml`, which builds and deploys automatically.
+- The `build/.nojekyll` file is created at build time to bypass Jekyll processing.
 
 ## Pull Request Guidelines
 

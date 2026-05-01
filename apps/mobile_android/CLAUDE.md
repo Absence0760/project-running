@@ -177,6 +177,10 @@ See [../../docs/testing.md](../../docs/testing.md) for how to run them and the p
 
 See [local_testing.md](local_testing.md). Short version: `cd apps/mobile_android && flutter run -d <device>`. The seed user in local Supabase is `runner@test.com` / `testtest`.
 
+## Deploying to production
+
+See [deployment.md](deployment.md) — Play Console signing, GitHub Secrets, release workflow, observability, rollback, DR.
+
 ## Before reporting a task done
 
 - Run `dart analyze` on this package and confirm no new `warning`/`error` level issues. `info` are OK per policy above.
