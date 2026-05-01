@@ -1683,6 +1683,7 @@ export type Database = {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: undefined
       }
+      enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
       finish_job: {
         Args: { err?: string; job_id: number; result_status: string }
         Returns: undefined

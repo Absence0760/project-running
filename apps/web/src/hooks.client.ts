@@ -1,12 +1,15 @@
 import * as Sentry from "@sentry/sveltekit";
 import { dev } from "$app/environment";
-import { PUBLIC_SENTRY_DSN, PUBLIC_APP_RELEASE } from "$env/static/public";
+import { env } from "$env/dynamic/public";
 
-if (!dev && PUBLIC_SENTRY_DSN) {
+const dsn = env.PUBLIC_SENTRY_DSN ?? "";
+const release = env.PUBLIC_APP_RELEASE || "dev";
+
+if (!dev && dsn) {
 	Sentry.init({
-		dsn: PUBLIC_SENTRY_DSN,
-		release: PUBLIC_APP_RELEASE || "dev",
-		environment: PUBLIC_APP_RELEASE && PUBLIC_APP_RELEASE !== "dev" ? "production" : "development",
+		dsn,
+		release,
+		environment: release !== "dev" ? "production" : "development",
 		tracesSampleRate: 0.1,
 		replaysSessionSampleRate: 0,
 		replaysOnErrorSampleRate: 0,

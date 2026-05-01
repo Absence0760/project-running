@@ -25,6 +25,7 @@
 		fetchRunMatchedTrack,
 		fetchRoutesIntersectingTrack,
 		linkRunToRoute,
+		enqueueRunRematch,
 		type RunMatchInfo,
 		type RouteMatchCandidate,
 	} from '$lib/data';
@@ -57,6 +58,12 @@
 	/// (auxiliary) per docs/conventions.md § Layered resilience — the
 	/// raw track keeps rendering so the page always works.
 	let matchInfo = $state<RunMatchInfo | null>(null);
+	/// Latched while a re-match RPC is in flight so the button can't
+	/// fire twice. Decoupled from `matchInfo.status === 'pending'`
+	/// because the worker may bounce the row to 'pending' even before
+	/// our RPC returns — the busy flag tracks our intent, the status
+	/// pill tracks the row.
+	let rematchBusy = $state(false);
 	/// Auto-link candidates surfaced when run.route_id is null and
 	/// the track overlaps a saved route. Picks the single best
 	/// candidate (lowest combined start+end offset + plausible
@@ -352,6 +359,27 @@
 		}
 	}
 
+	/// Owner-only: force a fresh map-match against the current track.
+	/// Resets run_matched_tracks to pending and queues a `map_match`
+	/// job (server-side RPC enqueue_run_rematch). The match-pill flips
+	/// to 'pending' on the next mount; we also re-fetch immediately so
+	/// the user sees feedback without a manual reload. Idempotent
+	/// against already-queued jobs.
+	async function handleRematch() {
+		if (!run || rematchBusy) return;
+		rematchBusy = true;
+		try {
+			await enqueueRunRematch(run.id);
+			matchInfo = await fetchRunMatchedTrack(run.id);
+			showToast('Re-snapping to roads…', 'success');
+		} catch (e) {
+			const msg = (e as Error).message ?? String(e);
+			showToast(`Re-match failed: ${msg}`, 'error');
+		} finally {
+			rematchBusy = false;
+		}
+	}
+
 	function handleDownloadGpx() {
 		if (!run?.track || run.track.length < 2) return;
 		const title =
@@ -615,6 +643,18 @@
 				{:else if matchInfo.status === 'failed'}
 					<span class="material-symbols">error</span>
 					Snap failed — showing raw track
+				{/if}
+				{#if run && auth.user?.id === run.user_id && matchInfo.status !== 'pending'}
+					<button
+						type="button"
+						class="match-pill-action"
+						onclick={handleRematch}
+						disabled={rematchBusy}
+						title="Re-run the map matcher against the current track"
+					>
+						<span class="material-symbols">refresh</span>
+						{rematchBusy ? 'Queueing…' : 'Re-match'}
+					</button>
 				{/if}
 			</aside>
 		{/if}
@@ -1138,6 +1178,32 @@
 	}
 	.match-pill-failed { color: var(--color-text-primary); }
 	.match-pill-skipped { color: var(--color-text-tertiary); }
+
+	.match-pill-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-left: 0.4rem;
+		padding: 0.15rem 0.45rem;
+		border-radius: 999px;
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: inherit;
+		font-size: 0.72rem;
+		line-height: 1;
+		cursor: pointer;
+		pointer-events: auto;
+	}
+	.match-pill-action:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.08);
+	}
+	.match-pill-action:disabled {
+		opacity: 0.55;
+		cursor: progress;
+	}
+	.match-pill-action .material-symbols {
+		font-size: 0.85rem;
+	}
 
 	.segment-card {
 		position: absolute;

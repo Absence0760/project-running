@@ -1215,6 +1215,10 @@ SECURITY DEFINER. Marks a claimed job as `done` / `failed` / `cancelled`, sets `
 
 SECURITY DEFINER. Pushes a claimed job back into the queue with a delay — the row's `status` reverts to `queued`, `scheduled_at` is set to `now() + delay_seconds`, and the `locked_at` / `locked_by` are cleared. Use when a transient upstream (the matching engine, a third-party API) is unavailable. `attempts` is NOT decremented — the increment from the original `claim_next_job` stands, so the per-job `max_attempts` ceiling still applies.
 
+### `enqueue_run_rematch(p_run_id)`
+
+SECURITY DEFINER. Owner-only manual re-match trigger called by the "Re-match" button on `/runs/[id]`. Resets `run_matched_tracks` (status=pending, attempts=0, error_message=null, …) and inserts a fresh `map_match` row into `jobs`. Self-gates on `auth.uid() = run.user_id`; non-owner calls raise `42501`. Idempotent against in-flight jobs via `jobs_dedupe_map_match`. Migration `20260612_001_enqueue_run_rematch.sql`.
+
 ---
 
 ## Supabase Storage

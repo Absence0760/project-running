@@ -238,6 +238,18 @@ export async function fetchRunMatchedTrack(
 	};
 }
 
+/// Force a fresh map-match for a run the caller owns. Resets
+/// run_matched_tracks to pending and queues a `map_match` job. The
+/// PostgREST RPC self-gates on auth.uid() = run.user_id; non-owner
+/// calls get a 42501 error which we surface to the toast layer.
+/// Idempotent against in-flight jobs (jobs_dedupe_map_match unique
+/// index) — calling twice while a previous re-match is queued is a
+/// no-op.
+export async function enqueueRunRematch(runId: string): Promise<void> {
+	const { error } = await supabase.rpc('enqueue_run_rematch', { p_run_id: runId });
+	if (error) throw error;
+}
+
 /** Decompress a gzipped ArrayBuffer using the browser's DecompressionStream. */
 async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 	const ds = new (globalThis as any).DecompressionStream('gzip');
