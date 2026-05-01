@@ -52,7 +52,7 @@ Why the worker app stays separate from OSRM: independent restart (worker → 5 s
 
 ### `fly.toml`
 
-Minimal shape — exact contents land when we wire CI:
+Lives at [`fly.toml`](fly.toml). Shape:
 
 ```toml
 app = "job_worker"
@@ -104,7 +104,7 @@ Once the `release-worker.yml` workflow lands (see § CI wiring below), tagging `
 | Queue lag | Custom: `select count(*) from jobs where status='queued' and scheduled_at <= now()` — wire to a Better Stack heartbeat that PG-queries every minute and alerts if >50 |
 | Worker liveness | Heartbeat: have the worker `update jobs set scheduled_at = ... where ...` once per claim; alert if no claim observed in >10 min while queued > 0 |
 
-The worker doesn't expose a `/health` endpoint today. A natural follow-up is to add one (pure HTTP server on a private port) so Fly.io's health check can restart wedged machines automatically. Until then, manual `flyctl status` + the queue-lag alert is the bar.
+The worker exposes a `/health` endpoint on `:8080` (override with `HEALTH_PORT`). Returns 200 + a small JSON body while the poll loop ticks, 503 once the heartbeat ages past 10 s — long enough that a job mid-handle is fine but short enough that a wedged loop is caught. `fly.toml` declares both a TCP check and an HTTP check against `/health`; Fly's auto-restart catches stale machines without a watchdog of our own.
 
 ### Rollback
 
@@ -132,6 +132,8 @@ The driver is OSM extract size:
 **Recommended v1: UK extract on `performance-2x` 8 GB.** Tracks outside the UK return `code=NoMatch` and the worker writes `status='skipped'` — the run still ships, just without the snapped line. This keeps cost modest while we learn from the live skip rate.
 
 ### `fly.toml`
+
+Lives at [`osrm/fly.toml`](osrm/fly.toml). Shape:
 
 ```toml
 app = "osrm"

@@ -1,0 +1,51 @@
+# Fly.io app config for the Go background worker.
+# See apps/job_worker/deployment.md for the full plan (sizing, secrets,
+# observability, rollback, DR).
+#
+# This file lives next to the Dockerfile so `flyctl deploy` picks it
+# up without --config flags.
+
+app = "job_worker"
+primary_region = "lhr"
+
+[build]
+# The Dockerfile in this directory is multi-stage; the final image is
+# distroless and ~9 MB. Fly's remote-only build runs the same path the
+# CI workflow does.
+dockerfile = "Dockerfile"
+
+[env]
+# WORKER_ID is read by main.go and stamped on jobs.locked_by for
+# stuck-job debugging. ${FLY_MACHINE_ID} expands per-machine so
+# multiple replicas have distinct IDs.
+WORKER_ID = "fly-${FLY_MACHINE_ID}"
+
+# OSRM_URL points at the sibling osrm app over Fly's private 6PN
+# network. Never publicly resolvable — see apps/job_worker/osrm/fly.toml.
+OSRM_URL = "http://osrm.internal:5000"
+
+# Worker is a pure consumer (polls Postgres, writes to Storage), so it
+# exposes no [[services]] block. Health checks come from the optional
+# /health endpoint on a private port (see deployment.md).
+[[services]]
+internal_port = 8080
+protocol = "tcp"
+auto_start_machines = true
+auto_stop_machines = false
+min_machines_running = 1
+
+[[services.tcp_checks]]
+interval = "30s"
+timeout = "5s"
+grace_period = "10s"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"
+cpus = 1
+
+# Secrets (set via `flyctl secrets set`):
+#   SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+# Set with:
+#   flyctl secrets set --app job_worker SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...

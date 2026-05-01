@@ -13,6 +13,7 @@ into `internal/worker.go`'s dispatch switch.
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role JWT. The worker uses this for every call so it bypasses RLS on `jobs` + `run_matched_tracks`. **Never put this on a client.** |
 | `WORKER_ID` | Optional. Stamped on the `jobs.locked_by` column for stuck-job debugging. Defaults to the hostname. |
 | `OSRM_URL` | Optional. When set (e.g. `http://127.0.0.1:5000`), the worker uses the OSRM `/match` endpoint instead of the passthrough shim. Local OSRM stack lives at [`./osrm/`](osrm/). |
+| `HEALTH_PORT` | Optional. Port for the embedded `/health` HTTP endpoint. Defaults to `8080` (matches `fly.toml`). Health flips to 503 if the worker poll loop hasn't ticked within 10 s — Fly.io's auto-restart catches wedged machines. |
 
 ## Run locally
 

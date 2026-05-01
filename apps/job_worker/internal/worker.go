@@ -47,6 +47,11 @@ type Worker struct {
 	Matcher Matcher
 	Config  Config
 	Log     *slog.Logger
+	// OnPollTick fires after every claim attempt (whether or not a job
+	// was returned). Used by the /health server to distinguish "queue
+	// empty" from "loop wedged" — see main.go. Safe to leave nil; the
+	// loop calls only when the hook is set.
+	OnPollTick func()
 }
 
 // Run is the worker loop. Returns nil on graceful shutdown (ctx
@@ -73,6 +78,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 
 		job, err := w.Backend.ClaimNextJob(ctx, w.Config.WorkerID, "map_match")
+		// Heartbeat fires after the claim returns — including the
+		// error and empty-queue paths. /health reads this; a stuck
+		// claim (DB down, network gone) won't bump it and the
+		// endpoint flips to 503 once the heartbeat ages past 5x
+		// PollInterval.
+		if w.OnPollTick != nil {
+			w.OnPollTick()
+		}
 		if err != nil {
 			// Claim failures are infrastructural — DB is down,
 			// service key is wrong, etc. Log and back off rather

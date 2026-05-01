@@ -1,0 +1,72 @@
+# Fly.io app config for the OSRM map-matching engine.
+# See apps/job_worker/deployment.md § OSRM app for the full plan
+# (sizing per region, graph build, weekly rebuild, DR).
+#
+# IMPORTANT: this app intentionally has NO public IPv4 / IPv6
+# attached. Access is restricted to Fly's private 6PN network so
+# the worker can reach it via http://osrm.internal:5000 while
+# /match remains unreachable from the public internet (osrm-routed
+# has no auth — exposing it would invite abuse).
+
+app = "osrm"
+primary_region = "lhr"
+
+[build]
+# Use the upstream OSRM image. The graph itself lives on the volume,
+# not in the image, so a redeploy doesn't touch the graph.
+image = "osrm/osrm-backend:latest"
+
+# osrm-routed reads /data/region.osrm by default. MLD = Multi-Level
+# Dijkstra, the modern algorithm; matches what the local docker-compose
+# in this directory uses so behaviour is identical between dev + prod.
+[processes]
+app = "osrm-routed --algorithm mld /data/region.osrm"
+
+[[mounts]]
+source = "osrm_data"
+destination = "/data"
+
+[[services]]
+# Internal-only: the worker reaches us via 6PN. Public IPs are
+# deliberately not allocated to this app.
+internal_port = 5000
+protocol = "tcp"
+auto_start_machines = true
+auto_stop_machines = false
+min_machines_running = 1
+
+[[services.tcp_checks]]
+interval = "30s"
+timeout = "5s"
+grace_period = "60s"
+
+# osrm-routed exposes /health which returns 200 with a small JSON
+# body. Use this rather than the bare TCP check once we're confident
+# the service is settled.
+[[services.http_checks]]
+interval = "30s"
+timeout = "5s"
+grace_period = "60s"
+method = "GET"
+path = "/health"
+protocol = "http"
+
+[[vm]]
+# UK extract at MLD needs ~3-5 GB; performance-2x gives 8 GB headroom
+# for in-place graph rebuild + tiny buffer overhead.
+size = "performance-2x"
+memory = "8gb"
+cpus = 2
+
+# Volume creation (one-time, before first deploy):
+#   flyctl volumes create osrm_data --app osrm --region lhr --size 20
+#
+# Initial graph load (one-time):
+#   1. Run apps/job_worker/osrm/Makefile locally to produce data/region.osrm*
+#   2. flyctl ssh sftp shell --app osrm
+#   3. put data/region.osrm /data/region.osrm
+#      ...repeat for every region.osrm.* file
+#   4. flyctl machine restart <id> --app osrm
+#
+# No secrets required — OSRM has no auth and that's why it can never
+# have a public route.

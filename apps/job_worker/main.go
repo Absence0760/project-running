@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -42,6 +45,16 @@ func main() {
 	}
 
 	client := internal.NewSupabaseClient(baseURL, serviceKey)
+
+	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
+	// worker's poll loop bumps it on every successful poll
+	// (claim-or-empty), so /health flips to 503 only when the loop
+	// itself is stuck — distinct from "queue empty" (which is fine).
+	// Initialise to start-time so a freshly-launched container reports
+	// healthy until the first poll lands.
+	var lastClaimAtUnix atomic.Int64
+	lastClaimAtUnix.Store(time.Now().Unix())
+
 	worker := &internal.Worker{
 		Backend: client,
 		Matcher: matcher,
@@ -51,16 +64,73 @@ func main() {
 			HandleTimeout:  5 * time.Minute,
 			TransientDelay: 30,
 		},
-		Log: logger,
+		Log:        logger,
+		OnPollTick: func() { lastClaimAtUnix.Store(time.Now().Unix()) },
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Start a tiny health server on :8080. Fly.io's tcp_check probes
+	// the port; the /health endpoint surfaces a JSON body with the
+	// last-poll heartbeat for richer external monitoring (Better
+	// Stack etc.). Port is configurable for local dev, defaults to
+	// 8080 to match fly.toml.
+	healthPort := os.Getenv("HEALTH_PORT")
+	if healthPort == "" {
+		healthPort = "8080"
+	}
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = healthSrv.Shutdown(shutdownCtx)
+	}()
+
 	if err := worker.Run(ctx); err != nil {
 		logger.Error("worker exited", "err", err)
 		os.Exit(1)
 	}
+}
+
+// startHealthServer mounts a /health endpoint on the configured port
+// and returns the running server. The caller is expected to Shutdown
+// it on exit.
+//
+// /health returns:
+//   - 200 + `{"status":"ok",...}` while the worker poll loop is
+//     ticking (heartbeat seen within 5 × PollInterval).
+//   - 503 + `{"status":"stale",...}` when the heartbeat is stale —
+//     Fly's auto-restart kicks in on repeated 503s.
+//
+// The grace period (5 × PollInterval = 10s) accommodates a job that
+// happens to take that long to handle; longer-running jobs would
+// trigger a restart, which is the correct response for "this job is
+// hung".
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		ageSec := time.Now().Unix() - lastClaim.Load()
+		w.Header().Set("Content-Type", "application/json")
+		// 10s = 5 × default 2s PollInterval. If the loop ticks every
+		// 2s in the steady state, anything over 10s means it's stuck.
+		if ageSec > 10 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintf(w, `{"status":"stale","worker_id":%q,"poll_age_s":%d}`, workerID, ageSec)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"ok","worker_id":%q,"poll_age_s":%d}`, workerID, ageSec)
+	})
+
+	srv := &http.Server{Addr: ":" + port, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		log.Info("health server listening", "port", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("health server failed", "err", err)
+		}
+	}()
+	return srv
 }
 
 func requireEnv(log *slog.Logger, name string) string {
