@@ -84,7 +84,10 @@ export async function subscribeToPush(): Promise<StoredPushSubscription> {
 		}
 		sub = await reg.pushManager.subscribe({
 			userVisibleOnly: true,
-			applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_PUBLIC_KEY),
+			// TS 6 widened Uint8Array.buffer to ArrayBufferLike; pushManager
+			// accepts BufferSource which requires the concrete ArrayBuffer
+			// shape. The runtime value is a real ArrayBuffer-backed view.
+			applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_PUBLIC_KEY) as BufferSource,
 		});
 	}
 

@@ -570,7 +570,7 @@ export async function saveRun(input: {
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
 				.from('runs')
-				.upload(path, new Blob([gzipped], { type: 'application/gzip' }), {
+				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
 				});
@@ -597,7 +597,10 @@ export async function saveRun(input: {
 
 async function gzipBytes(data: Uint8Array): Promise<Uint8Array> {
 	const cs = new (globalThis as any).CompressionStream('gzip');
-	const stream = new Response(data).body!.pipeThrough(cs);
+	// TS 6 widened Uint8Array.buffer to ArrayBufferLike; Response()
+	// wants BodyInit which excludes SharedArrayBuffer-backed views.
+	// Cast is safe because data is always backed by a real ArrayBuffer.
+	const stream = new Response(data as BodyInit).body!.pipeThrough(cs);
 	const chunks: Uint8Array[] = [];
 	const reader = stream.getReader();
 	while (true) {
@@ -1992,7 +1995,7 @@ export async function fetchMyPlans(limit = 100): Promise<TrainingPlan[]> {
 		.eq('is_template', false)
 		.order('created_at', { ascending: false })
 		.limit(limit);
-	return ((data ?? []) as TrainingPlan[]) ?? [];
+	return (data ?? []) as TrainingPlan[];
 }
 
 /// Plan templates owned by `clubId`. Visible to club members; admins
@@ -2162,7 +2165,7 @@ export async function fetchPlan(id: string): Promise<{
 			.order('week_index', { ascending: true })
 	]);
 	const plan = (planRes.data ?? null) as TrainingPlan | null;
-	const weeks = ((weeksRes.data ?? []) as PlanWeek[]) ?? [];
+	const weeks = (weeksRes.data ?? []) as PlanWeek[];
 	if (!plan || weeks.length === 0) {
 		return { plan, weeks, workouts: [] };
 	}
@@ -2175,7 +2178,7 @@ export async function fetchPlan(id: string): Promise<{
 	return {
 		plan,
 		weeks,
-		workouts: ((woData ?? []) as PlanWorkout[]) ?? []
+		workouts: (woData ?? []) as PlanWorkout[]
 	};
 }
 

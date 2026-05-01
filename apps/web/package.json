@@ -13,7 +13,7 @@
 		"test:unit": "tsx --test src/lib/*.test.ts"
 	},
 	"devDependencies": {
-		"@iconify-json/material-symbols": "1.1.89",
+		"@iconify-json/material-symbols": "1.2.69",
 		"@sveltejs/adapter-static": "3.0.10",
 		"@sveltejs/adapter-vercel": "6.3.3",
 		"@sveltejs/kit": "2.57.0",
@@ -21,24 +21,24 @@
 		"@types/node": "^25.6.0",
 		"mdsvex": "^0.12.7",
 		"normalize.css": "8.0.1",
-		"svelte": "5.55.2",
-		"svelte-check": "4.4.6",
-		"typescript": "5.5.4",
-		"unplugin-icons": "0.19.2",
-		"vite": "8.0.7"
+		"svelte": "5.55.5",
+		"svelte-check": "4.4.7",
+		"typescript": "6.0.3",
+		"unplugin-icons": "23.0.1",
+		"vite": "8.0.10"
 	},
 	"type": "module",
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.89.0",
-		"@revenuecat/purchases-js": "^1.36.0",
-		"@sentry/sveltekit": "^8.0.0",
-		"@supabase/ssr": "^0.1.0",
-		"@supabase/supabase-js": "^2.39.0",
+		"@anthropic-ai/sdk": "^0.92.0",
+		"@revenuecat/purchases-js": "^1.38.0",
+		"@sentry/sveltekit": "^10.0.0",
+		"@supabase/ssr": "^0.10.0",
+		"@supabase/supabase-js": "^2.105.0",
 		"fit-file-parser": "^2.3.3",
 		"html-to-image": "^1.11.13",
-		"isomorphic-dompurify": "^2.35.0",
+		"isomorphic-dompurify": "^3.0.0",
 		"jszip": "^3.10.1",
-		"maplibre-gl": "^5.22.0",
-		"marked": "^18.0.2"
+		"maplibre-gl": "^5.24.0",
+		"marked": "^18.0.3"
 	}
 }

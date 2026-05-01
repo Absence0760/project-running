@@ -165,7 +165,10 @@ async function importFitFile(
 ): Promise<'imported' | 'skipped' | 'failed'> {
 	let parsed: ParsedFitRun | null;
 	try {
-		parsed = await parseFitBuffer(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+		// TS 6 typed Uint8Array.buffer as ArrayBufferLike (union with
+		// SharedArrayBuffer); parseFitBuffer wants a concrete ArrayBuffer.
+		// .slice() always returns a fresh ArrayBuffer either way.
+		parsed = await parseFitBuffer(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
 	} catch (_e) {
 		return 'failed';
 	}
