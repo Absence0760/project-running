@@ -30,6 +30,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
+| Where each service runs in production / cost / DR / rollback | [docs/deployment.md](docs/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
 | Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
 
 Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas). **Each non-web app's CLAUDE.md opens with a "Scope — read before writing code" section** that spells out what to build there vs. what to push to web first per [decisions.md § 24](docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive). Read it before adding a feature on a non-web client.
