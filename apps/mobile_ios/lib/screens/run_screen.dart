@@ -20,6 +20,7 @@ import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../live_broadcaster.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../race_controller.dart';
@@ -149,6 +150,13 @@ class _RunScreenState extends State<RunScreen> {
   Timer? _incrementalSaveTimer;
   String? _runId;
   DateTime? _runStartedAtWall;
+
+  // Live spectator broadcast. Off by default — flips on when the user
+  // taps "Share live link". Holds the throttled ping pump that runs
+  // alongside `_onSnapshot` while a run is in flight. Only constructed
+  // when an authenticated ApiClient is available — anonymous /
+  // offline-only sessions skip the broadcaster entirely.
+  LiveBroadcaster? _liveBroadcaster;
 
   // GPS signal state. If snapshots stop arriving for > _gpsLostThreshold we
   // show a banner warning the runner so they're not surprised at stop time.
@@ -624,6 +632,30 @@ class _RunScreenState extends State<RunScreen> {
     _runId ??= _uuid.v4();
     final base = _liveLinkBase();
     final url = '$base/live/${_runId!}';
+
+    // Pre-create the parent runs row + flip the broadcaster on so the
+    // first ping after _begin() lands successfully. The runs row is
+    // marked is_public=true here (this is the user's opt-in to sharing);
+    // saveRun on stop preserves it via a follow-up makeRunPublic call
+    // in _stop. Best-effort — sharing the URL must succeed even if the
+    // server-side stub create fails (offline tap, transient 5xx). The
+    // user can re-tap once back online. Skipped on anonymous sessions —
+    // only signed-in users can broadcast.
+    final api = widget.apiClient;
+    if (api != null && api.userId != null) {
+      _liveBroadcaster ??= LiveBroadcaster(api);
+      try {
+        await api.beginLiveBroadcast(
+          runId: _runId!,
+          startedAt: _runStartedAtWall ?? DateTime.now(),
+          activityType: _activityType.name,
+        );
+        _liveBroadcaster!.attach(_runId!);
+      } catch (e) {
+        debugPrint('beginLiveBroadcast failed: $e');
+      }
+    }
+
     try {
       await Share.share(url, subject: 'Track me live');
     } catch (e) {
@@ -828,6 +860,25 @@ class _RunScreenState extends State<RunScreen> {
         }
       } catch (e) {
         debugPrint('raceController.pushPing failed: $e');
+      }
+
+      // L4 — Live spectator broadcast (separate from race-mode pings).
+      // Active only when the user has tapped "Share live link"; throttled
+      // inside the broadcaster. Same swallow-on-fail rule as race pings.
+      try {
+        final pos = snapshot.currentPosition;
+        if (pos != null) {
+          _liveBroadcaster?.pushPing(
+            lat: pos.lat,
+            lng: pos.lng,
+            distanceM: snapshot.distanceMetres,
+            elapsedS: snapshot.elapsed.inSeconds,
+            bpm: _currentBpm,
+            ele: pos.elevationMetres,
+          );
+        }
+      } catch (e) {
+        debugPrint('liveBroadcaster.pushPing failed: $e');
       }
 
       // L4 — Off-route warning + audio cue. Route math is pure but the
@@ -1206,6 +1257,31 @@ class _RunScreenState extends State<RunScreen> {
       }
     } else {
       if (mounted) setState(() => _syncError = 'Saved offline.');
+    }
+
+    // Live broadcast wind-down. Three things to do, all best-effort:
+    //   1. Re-assert is_public=true on the saved run (saveRun's upsert
+    //      writes is_public=null, which clobbers the stub's true value).
+    //   2. Drop the spectator ping history — the saved track + Storage
+    //      track_url are now the canonical record.
+    //   3. Detach the broadcaster so a stray late-arriving snapshot
+    //      doesn't try to ping a wiped run id.
+    final lb = _liveBroadcaster;
+    if (lb != null && lb.isActive) {
+      final api2 = widget.apiClient;
+      if (api2 != null && api2.userId != null) {
+        try {
+          await api2.makeRunPublic(run.id);
+        } catch (e) {
+          debugPrint('makeRunPublic after live broadcast failed: $e');
+        }
+        try {
+          await api2.endLiveBroadcast(run.id);
+        } catch (e) {
+          debugPrint('endLiveBroadcast failed: $e');
+        }
+      }
+      lb.detach();
     }
 
     // If this run was hosting a live race, submit the finisher time so

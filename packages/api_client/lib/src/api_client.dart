@@ -2276,4 +2276,83 @@ class ApiClient {
         .order('at', ascending: true);
     return (rows as List).cast<Map<String, dynamic>>();
   }
+
+  /// Pre-create a stub `runs` row so live spectator pings can land
+  /// before the real save on stop. The `live_run_pings` FK + the
+  /// insert RLS both require a parent `runs` row owned by the caller;
+  /// this is the cheapest way to satisfy both without restructuring
+  /// the recorder's save flow.
+  ///
+  /// Idempotent — repeated calls (e.g. user re-taps "Share live link")
+  /// are no-ops via ignoreDuplicates. The row is created with
+  /// `is_public = true` so anyone with the share URL can watch; the
+  /// final `saveRun` upsert will overwrite the placeholder fields, so
+  /// callers that want the finished run to stay public must re-assert
+  /// it via [makeRunPublic] after save.
+  Future<void> beginLiveBroadcast({
+    required String runId,
+    required DateTime startedAt,
+    String activityType = 'run',
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    // metadata MUST include `activity_type` (CHECK constraint
+    // `runs_metadata_activity_type_check`, migration 20260601_001).
+    // Default to `run` — the recorder updates the same row on stop
+    // with the user's actual activity choice via saveRun's upsert.
+    await _client.from(RunRow.table).upsert(
+      {
+        RunRow.colId: runId,
+        RunRow.colUserId: userId,
+        RunRow.colStartedAt: startedAt.toUtc().toIso8601String(),
+        RunRow.colDurationS: 0,
+        RunRow.colDistanceM: 0,
+        RunRow.colSource: 'app',
+        RunRow.colIsPublic: true,
+        RunRow.colMetadata: {
+          'activity_type': activityType,
+          'in_progress': true,
+        },
+      },
+      ignoreDuplicates: true,
+    );
+  }
+
+  /// Append one spectator ping for an in-progress run. Intended to be
+  /// called from the recorder's per-snapshot hot path, throttled by
+  /// the caller to ~5 s (more than that overwhelms the spectator map
+  /// and Realtime fanout). Failures are L4 — caller swallows.
+  Future<void> insertLivePing({
+    required String runId,
+    required double lat,
+    required double lng,
+    double? distanceM,
+    int? elapsedS,
+    int? bpm,
+    double? ele,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    await _client.from('live_run_pings').insert({
+      'run_id': runId,
+      'user_id': userId,
+      'lat': lat,
+      'lng': lng,
+      if (distanceM != null) 'distance_m': distanceM,
+      if (elapsedS != null) 'elapsed_s': elapsedS,
+      if (bpm != null) 'bpm': bpm,
+      if (ele != null) 'ele': ele,
+    });
+  }
+
+  /// Wipe spectator pings for a run. Called after the recorder's
+  /// final `saveRun` so the spectator history isn't duplicated by the
+  /// completed run's track. The `cleanup-stale-live-run-pings` cron
+  /// is a safety net for clients that crash before this fires.
+  Future<void> endLiveBroadcast(String runId) async {
+    await _client
+        .from('live_run_pings')
+        .delete()
+        .eq('run_id', runId);
+  }
 }
