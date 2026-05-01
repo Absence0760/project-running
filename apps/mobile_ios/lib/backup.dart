@@ -119,7 +119,7 @@ class BackupService {
     });
 
     onProgress?.call(const BackupProgress.stage('writing'));
-    final encoded = ZipEncoder().encode(archive);
+    final encoded = await _encodeArchiveInIsolate(archive);
     await outputFile.writeAsBytes(encoded, flush: true);
     onProgress?.call(const BackupProgress.done());
     return outputFile;
@@ -157,7 +157,7 @@ class BackupService {
 
     onProgress?.call(const RestoreProgress.stage('reading'));
     final bytes = await zipFile.readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
+    final archive = await _decodeArchiveInIsolate(bytes);
 
     final manifest = _readJson(archive, 'manifest.json');
     if (manifest == null || manifest['format'] != _format) {
@@ -461,6 +461,35 @@ class BackupService {
 
   // ----- helpers -----
 
+  /// Run `ZipEncoder().encode(archive)` in a background isolate so a large
+  /// backup (multi-MB tracks + thousands of runs) can't lock the foreground.
+  /// `Archive` itself isn't transferable across isolate boundaries, so we
+  /// extract `(path, bytes)` pairs on the main isolate and rebuild the
+  /// archive inside the worker before encoding.
+  static Future<Uint8List> _encodeArchiveInIsolate(Archive archive) async {
+    final entries = <List<Object>>[
+      for (final f in archive.files)
+        [f.name, Uint8List.fromList(f.content as List<int>)],
+    ];
+    return compute(_encodeZipFromEntries, entries);
+  }
+
+  /// Run `ZipDecoder().decodeBytes(bytes)` in a background isolate, then
+  /// rebuild a thin `Archive` on the main isolate from the decoded entries.
+  /// Heavy decompression happens off the UI thread; the cheap rebuild
+  /// (allocate `ArchiveFile` objects) stays on-thread so `findFile` /
+  /// `_readJson` continue to work without further changes.
+  static Future<Archive> _decodeArchiveInIsolate(Uint8List bytes) async {
+    final entries = await compute(_decodeZipToEntries, bytes);
+    final archive = Archive();
+    for (final entry in entries) {
+      final name = entry[0] as String;
+      final body = entry[1] as Uint8List;
+      archive.addFile(ArchiveFile(name, body.length, body));
+    }
+    return archive;
+  }
+
   void _addJson(Archive archive, String path, Object body) {
     final bytes = utf8.encode(jsonEncode(body));
     archive.addFile(ArchiveFile(path, bytes.length, bytes));
@@ -480,6 +509,28 @@ class BackupService {
   }
 
   String _randomUuid() => const Uuid().v4();
+}
+
+/// Top-level so it can run inside [compute]. Rebuilds the archive from
+/// `(path, bytes)` pairs and returns the encoded ZIP bytes.
+Uint8List _encodeZipFromEntries(List<List<Object>> entries) {
+  final archive = Archive();
+  for (final entry in entries) {
+    final name = entry[0] as String;
+    final body = entry[1] as Uint8List;
+    archive.addFile(ArchiveFile(name, body.length, body));
+  }
+  return Uint8List.fromList(ZipEncoder().encode(archive));
+}
+
+/// Top-level for [compute]. Decodes the ZIP off the UI thread and returns
+/// `[name, bytes]` pairs the caller can rebuild into an [Archive].
+List<List<Object>> _decodeZipToEntries(Uint8List bytes) {
+  final archive = ZipDecoder().decodeBytes(bytes);
+  return [
+    for (final f in archive.files)
+      [f.name, Uint8List.fromList(f.content as List<int>)],
+  ];
 }
 
 class BackupProgress {
