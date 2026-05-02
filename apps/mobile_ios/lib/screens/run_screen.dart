@@ -245,6 +245,11 @@ class _RunScreenState extends State<RunScreen> {
   final RunNotificationBridge _lockScreen = RunNotificationBridge();
   DateTime? _lastNotificationAt;
 
+  // Ephemeral top-anchored notice ("split done", "lap marked"). Anchored to
+  // the top so it never covers the Stop button in the bottom stats panel.
+  String? _topBanner;
+  Timer? _topBannerTimer;
+
   @override
   void initState() {
     super.initState();
@@ -965,16 +970,9 @@ class _RunScreenState extends State<RunScreen> {
           final tail = _activityType.usesSpeed
               ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
               : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                    '${UnitFormat.distance(totalDistanceMetres, unit)} — $tail'),
-                duration: const Duration(seconds: 3),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
+          _showTopBanner(
+            '${UnitFormat.distance(totalDistanceMetres, unit)} — $tail',
+          );
           if (widget.preferences.audioCues) {
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(
                   distanceTicks: currentTick,
@@ -996,6 +994,20 @@ class _RunScreenState extends State<RunScreen> {
       } catch (e) {
         debugPrint('lock-screen notification update failed: $e');
       }
+  }
+
+  /// Show a transient top-anchored banner. Replaces in-run SnackBars so
+  /// they never overlap the bottom stats panel (and the Stop button).
+  void _showTopBanner(
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    if (!mounted) return;
+    _topBannerTimer?.cancel();
+    setState(() => _topBanner = message);
+    _topBannerTimer = Timer(duration, () {
+      if (mounted) setState(() => _topBanner = null);
+    });
   }
 
   /// Push the current stats to the native lock-screen notification,
@@ -1157,13 +1169,7 @@ class _RunScreenState extends State<RunScreen> {
     final n = _recorder!.lap();
     if (n > 0) {
       setState(() => _lapCount = n);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lap $n marked'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showTopBanner('Lap $n marked', duration: const Duration(seconds: 2));
     }
   }
 
@@ -1403,6 +1409,7 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
+    _topBannerTimer?.cancel();
     _workoutEventsSub?.cancel();
     _workoutRunner?.dispose();
     _workoutBand.dispose();
@@ -2059,6 +2066,38 @@ class _RunScreenState extends State<RunScreen> {
                             color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (_topBanner != null)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            right: 16,
+            child: IgnorePointer(
+              child: Center(
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 8),
+                      ],
+                    ),
+                    child: Text(
+                      _topBanner!,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
                   ),
                 ),
               ),
