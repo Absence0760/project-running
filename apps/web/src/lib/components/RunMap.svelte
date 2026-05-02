@@ -6,6 +6,11 @@
 	import { getUnit } from '$lib/units.svelte';
 	import { getMapStyle, mapStyleUrl } from '$lib/map-style.svelte';
 	import type { TrackPoint } from '$lib/types';
+	import {
+		buildPaceSegments,
+		hasTrackTimestamps,
+		type ActivityKind,
+	} from '$lib/pace_segments';
 
 	/// Segment-detail callback. When set, clicks anywhere on the map
 	/// snap to the nearest track point, compute a small window (±150 m
@@ -37,8 +42,17 @@
 		/// route can render with only one mile-marker because the
 		/// straight-line polyline is just 1.5mi long.
 		totalDistanceM?: number;
+		/// When set (and the track carries per-point timestamps), the
+		/// trace renders as a per-segment NRC-style pace heatmap instead
+		/// of the single indigo line. Activity scales the speed
+		/// breakpoints so a 5:00/km run and a 25 km/h ride both land
+		/// mid-ramp. Routes (which never carry timestamps) and
+		/// imports without `ts` fall through to the legacy single-line
+		/// render.
+		activity?: ActivityKind;
 	}
-	let { track = [], animatable = false, onSegmentSelect, totalDistanceM }: Props = $props();
+	let { track = [], animatable = false, onSegmentSelect, totalDistanceM, activity }: Props =
+		$props();
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -327,13 +341,42 @@
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 
-		map.addLayer({
-			id: 'trace-line',
-			type: 'line',
-			source: 'trace',
-			paint: { 'line-color': prefersDark ? '#818CF8' : '#4F46E5', 'line-width': 3.5 },
-			layout: { 'line-join': 'round', 'line-cap': 'round' }
-		});
+		// Pace heatmap when the host knows the activity AND the track
+		// carries per-point timestamps; otherwise fall back to the
+		// single indigo line. Mirrors the mobile behaviour
+		// (`apps/mobile_android/lib/widgets/live_run_map.dart`) so a
+		// run looks the same on web and on mobile.
+		const heatmap = activity && hasTrackTimestamps(track)
+			? buildPaceSegments(track, activity)
+			: [];
+		if (heatmap.length > 0) {
+			map.addSource('trace-pace', {
+				type: 'geojson',
+				data: {
+					type: 'FeatureCollection',
+					features: heatmap.map((s) => ({
+						type: 'Feature',
+						properties: { color: s.color },
+						geometry: { type: 'LineString', coordinates: s.coords },
+					})),
+				},
+			});
+			map.addLayer({
+				id: 'trace-line',
+				type: 'line',
+				source: 'trace-pace',
+				paint: { 'line-color': ['get', 'color'], 'line-width': 4 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+			});
+		} else {
+			map.addLayer({
+				id: 'trace-line',
+				type: 'line',
+				source: 'trace',
+				paint: { 'line-color': prefersDark ? '#818CF8' : '#4F46E5', 'line-width': 3.5 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+			});
+		}
 
 		map.addLayer({
 			id: 'trace-arrows',

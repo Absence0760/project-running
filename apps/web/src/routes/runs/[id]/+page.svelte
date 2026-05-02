@@ -419,6 +419,16 @@
 		return activityMeta[key] ?? { label: key, icon: 'directions_run' };
 	});
 
+	/// Activity tag the map uses to scale its pace-heatmap breakpoints.
+	/// Only the four kinds the heatmap knows about are passed through;
+	/// anything else (or a missing tag) falls back to the legacy
+	/// single-line render via `undefined`.
+	let paceHeatmapActivity = $derived.by<'run' | 'walk' | 'cycle' | 'hike' | undefined>(() => {
+		const key = run?.metadata?.['activity_type'];
+		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
+		return undefined;
+	});
+
 	/** Derived from the GPS track rather than stored, matching mobile. */
 	let movingSeconds = $derived(run?.track ? movingTimeSeconds(run.track) : 0);
 
@@ -624,6 +634,7 @@
 		<RunMap
 			track={baseTrack}
 			animatable
+			activity={paceHeatmapActivity}
 			onSegmentSelect={(seg) => (selectedSegment = seg)}
 		/>
 		<!-- Map-match status pill. Only renders when we have a status

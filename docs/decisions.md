@@ -974,6 +974,18 @@ Routes carry `waypoints` inline so route surfaces hit `TrackPreview` directly; r
 
 **Don't re-litigate unless:** the parallel cold-start fetches start showing up in startup latency telemetry, or the SVG geometry is intentionally redesigned on web (then port the new constants in lock-step).
 
+## 50. Web run map mirrors the mobile NRC-style pace heatmap
+
+Mobile (Android + iOS via the byte-identical Dart codebase) has rendered the run-detail trace as a six-bucket pace heatmap with a three-band age fade since `feat(android): draw NRC-style pace heatmap on the live + detail track` (Apr 21). Web kept a single indigo→lavender gradient on `RunMap.svelte` until now — same run, different colour story on each platform.
+
+`apps/web/src/lib/pace_segments.ts` is a 1:1 TS port of `apps/mobile_android/lib/widgets/pace_segments.dart` — same colour ramp (`#EF4444 → #22D3EE`), same alpha bands (0.55 / 0.80 / 1.0), same activity-scaled m/s breakpoints. `RunMap.svelte` takes a new optional `activity` prop; when set AND the track carries per-point timestamps, the trace renders as a MapLibre `line` layer with data-driven `'line-color': ['get', 'color']` over the existing dark casing. Routes (which never carry timestamps) and historical imports without `ts` fall through to the legacy single-line render path so nothing regresses.
+
+**Why mirror the buckets exactly:** the heatmap is the visual identity of the run — having the same fast-cyan mid-section on the same run on the phone and the laptop is the whole point of the alignment exercise. Drifting either side's breakpoints by even one m/s produces visibly different colour bands at the same speed, which would let the parity drift back over time.
+
+**Trade-off:** the casing (single-colour blue halo) tints the heatmap slightly under low-saturation buckets. Acceptable — replacing the casing with a per-segment outer halo would multiply MapLibre layer count by 2× without the visual win to justify it.
+
+**Don't re-litigate unless:** mobile changes its breakpoints / colours / alpha bands (port them over in the same PR), or we move web off MapLibre to a renderer where data-driven `line-color` isn't ergonomic.
+
 ---
 
 ## How to add an entry

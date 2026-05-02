@@ -29,6 +29,12 @@
 	});
 
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
+
+	let paceHeatmapActivity = $derived.by<'run' | 'walk' | 'cycle' | 'hike' | undefined>(() => {
+		const key = run?.metadata?.['activity_type'];
+		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
+		return undefined;
+	});
 </script>
 
 {#if loading}
@@ -49,7 +55,7 @@
 
 	{#if track.length > 0}
 		<div class="map-container" class:compact>
-			<RunMap {track} />
+			<RunMap {track} activity={paceHeatmapActivity} />
 		</div>
 	{/if}
 
