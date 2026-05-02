@@ -587,6 +587,8 @@ A list is the right shape because every realistic user has exactly 0–3 zones (
 - *`/runs/[id]`* and *`/routes/[id]`* — owner-only views; never clipped.
 - *`/feed`* — entries link to `/share/run/[id]`, so clipping happens there.
 - *`/u/[id]/...`* — the profile page surfaces a list of public runs but each one's detail page handles its own clipping.
+- *Mobile `public_run_screen` and `public_route_screen`* — Flutter mirrors of `/share/run/[id]` + `/share/route/[id]`. Same gate: viewer id read from `api.userId`, anon (`null`) treated as non-owner. The RPC is shared (`clipTrackForUser` in `packages/api_client`), so a future change to the SECURITY DEFINER body covers web and mobile in lockstep.
+- *Feed thumbnails* (web `RunTrackPreview.svelte`, mobile `widgets/run_track_preview.dart`) — the per-card preview always clips for non-owners. Cache key is prefixed `raw:` vs `clip:` so an owner viewing their own card and a follower viewing the same card don't pollute each other's session cache.
 
 **Why a SECURITY DEFINER RPC, not pure-client clipping:**
 

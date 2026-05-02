@@ -29,6 +29,7 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
   bool _loading = true;
   Object? _loadError;
   cm.Route? _route;
+  List<cm.Waypoint> _waypoints = const [];
 
   @override
   void initState() {
@@ -42,10 +43,35 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
       _loadError = null;
     });
     try {
-      final route = await widget.api.fetchRouteById(widget.routeId);
+      final fetched = await widget.api.fetchRouteById(widget.routeId);
+      final route = fetched.route;
+      if (route == null) {
+        if (!mounted) return;
+        setState(() {
+          _route = null;
+          _waypoints = const [];
+          _loading = false;
+        });
+        return;
+      }
+      // Privacy-zone clipping for non-owner viewers (decisions §33).
+      // Owners see the full route — anon (`api.userId == null`) is
+      // treated as non-owner so unauthenticated `/share/route/[id]`
+      // hits also honour zones. The RPC fails closed (returns []) on
+      // outage, so a transient blip renders an empty map for non-
+      // owners instead of leaking the start/end home location.
+      final viewerId = widget.api.userId;
+      final ownerId = fetched.ownerId;
+      final isOwner =
+          viewerId != null && ownerId != null && viewerId == ownerId;
+      final waypoints =
+          (isOwner || ownerId == null || route.waypoints.isEmpty)
+              ? route.waypoints
+              : await _clipForViewer(route.waypoints, ownerId);
       if (!mounted) return;
       setState(() {
         _route = route;
+        _waypoints = waypoints;
         _loading = false;
       });
     } catch (e) {
@@ -55,6 +81,29 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<List<cm.Waypoint>> _clipForViewer(
+    List<cm.Waypoint> track,
+    String ownerUserId,
+  ) async {
+    final clipped = await widget.api.clipTrackForUser(
+      targetUserId: ownerUserId,
+      points: track
+          .map((w) => {
+                'lat': w.lat,
+                'lng': w.lng,
+                if (w.elevationMetres != null) 'ele': w.elevationMetres,
+              })
+          .toList(),
+    );
+    return clipped
+        .map((p) => cm.Waypoint(
+              lat: (p['lat'] as num).toDouble(),
+              lng: (p['lng'] as num).toDouble(),
+              elevationMetres: (p['ele'] as num?)?.toDouble(),
+            ))
+        .toList();
   }
 
   @override
@@ -90,7 +139,7 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
           height: 320,
           child: LiveRunMap(
             track: const [],
-            plannedRoute: route.waypoints,
+            plannedRoute: _waypoints,
             followRunner: false,
           ),
         ),
@@ -112,7 +161,7 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
               ),
               _Stat(
                 label: 'Waypoints',
-                value: '${route.waypoints.length}',
+                value: '${_waypoints.length}',
               ),
             ],
           ),

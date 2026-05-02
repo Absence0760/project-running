@@ -790,13 +790,25 @@ class ApiClient {
   /// Fetch a single route by id. RLS gates: owners see their own
   /// (public or private), other viewers only see public routes or
   /// routes owned by a club they belong to.
-  Future<Route?> fetchRouteById(String routeId) async {
+  /// Fetches a route row plus the owner's user id. The owner id is
+  /// peeled out alongside the [Route] domain object so callers on
+  /// public-share surfaces can route the waypoints through
+  /// [clipTrackForUser] for non-owner viewers (decisions §33). The
+  /// [Route] class drops `user_id` to keep its surface display-only —
+  /// this helper exists so a screen can clip without re-querying.
+  Future<({Route? route, String? ownerId})> fetchRouteById(
+    String routeId,
+  ) async {
     final row = await _client
         .from(RouteRow.table)
         .select()
         .eq(RouteRow.colId, routeId)
         .maybeSingle();
-    return row == null ? null : _routeFromRow(row);
+    if (row == null) return (route: null, ownerId: null);
+    return (
+      route: _routeFromRow(row),
+      ownerId: row[RouteRow.colUserId] as String?,
+    );
   }
 
   Future<List<RunRow>> fetchPublicRunsByUser(String userId, {int limit = 50}) async {

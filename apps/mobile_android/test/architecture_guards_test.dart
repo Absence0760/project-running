@@ -675,6 +675,78 @@ void main() {
       );
     });
 
+    test('public_run_screen routes non-owner tracks through clipTrackForUser',
+        () {
+      // Reason: /share/run/[id] (and the feed-card → public_run_screen
+      // navigation path) renders runs from arbitrary owners. Without
+      // routing the fetched track through the clip RPC the polyline
+      // would expose the owner's privacy zones to anonymous and signed-
+      // in non-owner viewers alike (decisions §33). The screen must
+      // gate on `api.userId != row.userId` and call clipTrackForUser
+      // before assigning to `_track`.
+      final source =
+          File('lib/screens/public_run_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('clipTrackForUser'),
+        reason: 'public_run_screen must clip non-owner tracks through '
+            'the privacy-zone RPC. See decisions §33.',
+      );
+      // The owner gate must compare against widget.api.userId — not
+      // some hard-coded "always clip" or "never clip".
+      expect(
+        source,
+        matches(RegExp(r'widget\.api\.userId')),
+        reason: 'public_run_screen must read the viewer id from '
+            'widget.api.userId so the clip step is skipped only for the '
+            'run owner.',
+      );
+    });
+
+    test('public_route_screen routes non-owner waypoints through clipTrackForUser',
+        () {
+      // Reason: /share/route/[id] is reachable by anyone with the
+      // link, including unauthenticated viewers. Routes own a planned
+      // polyline that leaks the same start / end / interior locations
+      // a recorded run would. Same gate as public_run_screen — clip
+      // unless the viewer is the route owner.
+      final source =
+          File('lib/screens/public_route_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('clipTrackForUser'),
+        reason: 'public_route_screen must clip non-owner waypoints '
+            'through the privacy-zone RPC. See decisions §33.',
+      );
+      expect(
+        source,
+        matches(RegExp(r'widget\.api\.userId')),
+        reason: 'public_route_screen must read the viewer id from '
+            'widget.api.userId so the clip step is skipped only for the '
+            'route owner.',
+      );
+    });
+
+    test('fetchRouteById exposes owner id alongside the Route', () {
+      // Reason: Route (the domain class) drops `user_id` to keep its
+      // surface display-only. Without an ownerId in the fetch result
+      // the public_route_screen can't tell viewer from owner and
+      // either over-clips (blanks the owner's own map) or under-clips
+      // (privacy leak). The record-shaped return is the contract that
+      // makes the clip gate safe.
+      final source =
+          File('../../packages/api_client/lib/src/api_client.dart')
+              .readAsStringSync();
+      expect(
+        source,
+        matches(RegExp(
+            r'Future<\(\{Route\? route, String\? ownerId\}\)>\s+fetchRouteById')),
+        reason: 'fetchRouteById must return both the Route and the '
+            'owner id so public_route_screen can clip for non-owner '
+            'viewers. See decisions §33.',
+      );
+    });
+
     test('clipTrackForUser fails closed on RPC error', () {
       // Reason: returning the unclipped input on RPC error was the
       // privacy leak this helper exists to prevent. Fail-closed
