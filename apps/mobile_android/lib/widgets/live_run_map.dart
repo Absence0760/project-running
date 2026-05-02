@@ -8,6 +8,9 @@ import 'package:latlong2/latlong.dart';
 import '../preferences.dart' show ActivityType;
 import '../tile_cache.dart';
 import 'pace_segments.dart';
+import 'track_decorations.dart';
+
+const double _metresPerMile = 1609.344;
 
 /// Apply a 1-2-3-2-1 weighted moving average to the track so GPS jitter
 /// shows as a smoother line instead of a visible zig-zag. The first two
@@ -64,6 +67,21 @@ class LiveRunMap extends StatefulWidget {
   /// polyline — used by route_detail (no pace data) and manual-entry runs.
   final ActivityType? activity;
 
+  /// When true, decorate the recorded track with km / mile distance
+  /// markers and direction chevrons (mirrors web's run-detail map).
+  /// Defaults to false — the live recording surface already has a
+  /// pulsing dot so direction is implicit.
+  final bool showDecorations;
+
+  /// Whether to label distance markers in miles instead of kilometres.
+  final bool useMilesForDecorations;
+
+  /// Authoritative route distance in metres. Used to scale the
+  /// distance-marker positions when the polyline is sparser than the
+  /// real route (legacy seed data + sparse user clicks). Mirrors the
+  /// `totalDistanceM` prop on `RunMap.svelte`.
+  final double? totalDistanceM;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -72,6 +90,9 @@ class LiveRunMap extends StatefulWidget {
     this.followRunner = true,
     this.bottomPadding = 0,
     this.activity,
+    this.showDecorations = false,
+    this.useMilesForDecorations = false,
+    this.totalDistanceM,
   });
 
   @override
@@ -446,6 +467,52 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                 ),
             ],
 
+            // Direction chevrons + km / mile markers — rendered only on
+            // detail surfaces (followRunner = false). Live recording
+            // already has a pulsing dot so direction is implicit; cluttering
+            // the live map with arrows would compete with that signal.
+            if (widget.showDecorations && trackLatLngs.length >= 2) ...[
+              MarkerLayer(
+                markers: [
+                  for (final c in computeChevrons(
+                    trackLatLngs,
+                    stepMetres: widget.useMilesForDecorations
+                        ? _metresPerMile / 2
+                        : 500,
+                  ))
+                    Marker(
+                      point: c.position,
+                      width: 18,
+                      height: 18,
+                      child: Transform.rotate(
+                        angle: c.angleRadians,
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          size: 16,
+                          color: Color(0xFF1D4ED8),
+                          shadows: [Shadow(color: Colors.white, blurRadius: 3)],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              MarkerLayer(
+                markers: [
+                  for (final m in computeDistanceMarkers(
+                    trackLatLngs,
+                    useMiles: widget.useMilesForDecorations,
+                    totalDistanceM: widget.totalDistanceM,
+                  ))
+                    Marker(
+                      point: m.position,
+                      width: 26,
+                      height: 26,
+                      child: _DistanceMarkerPin(label: m.label),
+                    ),
+                ],
+              ),
+            ],
+
             // Current position marker — drawn from the interpolated tween
             // position so the dot glides smoothly between GPS fixes, with
             // the raw latest fix as a fallback on the very first frame.
@@ -479,6 +546,37 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Small circular pin for a km / mile distance marker. Mirrors the
+/// `distance-marker-bg` + `distance-marker-text` MapLibre layers on
+/// `RunMap.svelte` (white circle, indigo border, indigo digit).
+class _DistanceMarkerPin extends StatelessWidget {
+  final int label;
+  const _DistanceMarkerPin({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF4F46E5), width: 2),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 3, spreadRadius: 0.5),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '$label',
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF1E293B),
+        ),
+      ),
     );
   }
 }

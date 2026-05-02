@@ -535,6 +535,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                                 replayIndex < run.track.length
                             ? run.track[replayIndex]
                             : null,
+                        showDecorations: mapTrack.isNotEmpty,
+                        useMilesForDecorations:
+                            widget.preferences.unit == DistanceUnit.mi,
+                        totalDistanceM: run.distanceMetres,
                       );
                     },
                   ),
