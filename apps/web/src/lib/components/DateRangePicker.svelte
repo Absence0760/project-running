@@ -47,14 +47,19 @@
 
 	let pendingFrom = $state<Date | null>(null);
 	let pendingTo = $state<Date | null>(null);
+	let monthsEl: HTMLDivElement | undefined = $state();
 
 	// Reset pending state every time the modal re-opens, hydrating from
 	// the latest props. Without this, a closed-and-reopened modal would
 	// silently keep stale picks from a previous session.
+	// Also scrolls the months list to wherever the user was last
+	// looking — pendingFrom if set, otherwise the current month — so a
+	// reopen doesn't dump them at the very top of the 3-year range.
 	$effect(() => {
 		if (open) {
 			pendingFrom = parseIso(initialFrom);
 			pendingTo = parseIso(initialTo);
+			queueMicrotask(() => scrollToMonth(pendingFrom ?? today));
 		}
 	});
 
@@ -70,6 +75,68 @@
 		const yr = firstMonth.getFullYear() + Math.floor((firstMonth.getMonth() + i) / 12);
 		const mo = (firstMonth.getMonth() + i) % 12;
 		return new Date(yr, mo, 1);
+	}
+
+	function monthIndex(target: Date): number {
+		return (
+			(target.getFullYear() - firstMonth.getFullYear()) * 12 +
+			(target.getMonth() - firstMonth.getMonth())
+		);
+	}
+
+	function scrollToMonth(target: Date): void {
+		if (!monthsEl) return;
+		const idx = monthIndex(target);
+		const clamped = Math.max(0, Math.min(monthCount - 1, idx));
+		const section = monthsEl.querySelector<HTMLElement>(
+			`[data-month-idx="${clamped}"]`,
+		);
+		section?.scrollIntoView({ block: 'start' });
+	}
+
+	/// List of years spanned by the scrollable range. Drives the year
+	/// jumper at the top so the user doesn't have to scroll through 36
+	/// months to get from May 2026 back to March 2024.
+	const yearOptions: number[] = (() => {
+		const out: number[] = [];
+		for (let y = firstMonth.getFullYear(); y <= lastMonth.getFullYear(); y++) {
+			out.push(y);
+		}
+		return out;
+	})();
+
+	/// Year currently anchored at the top of the visible months list.
+	/// Tracked so the dropdown reflects where the user has scrolled to
+	/// — otherwise picking "2025" twice in a row would feel like a no-op
+	/// after they'd manually scrolled away from January 2025.
+	let visibleYear = $state(today.getFullYear());
+
+	function jumpToYear(y: number): void {
+		// Land on the current month if jumping to the active year
+		// (so "2026" with today = May 2026 lands on May, not January).
+		// Otherwise land on January of the chosen year.
+		const target =
+			y === today.getFullYear()
+				? new Date(y, today.getMonth(), 1)
+				: new Date(y, 0, 1);
+		scrollToMonth(target);
+		visibleYear = y;
+	}
+
+	function onMonthsScroll(): void {
+		if (!monthsEl) return;
+		// Find the first month section whose top is at or above the
+		// scroll viewport's top edge — that's the one anchoring the view.
+		const sections = monthsEl.querySelectorAll<HTMLElement>('[data-month-idx]');
+		for (const s of sections) {
+			const rect = s.getBoundingClientRect();
+			const containerTop = monthsEl.getBoundingClientRect().top;
+			if (rect.bottom > containerTop + 4) {
+				const idx = Number(s.dataset.monthIdx);
+				visibleYear = monthAt(idx).getFullYear();
+				return;
+			}
+		}
 	}
 
 	function selectingEnd(): boolean {
@@ -140,19 +207,57 @@
 			</div>
 		</div>
 
+		<div class="jumper-row">
+			<button
+				type="button"
+				class="jumper-btn"
+				aria-label="Previous year"
+				onclick={() => jumpToYear(Math.max(yearOptions[0], visibleYear - 1))}
+				disabled={visibleYear <= yearOptions[0]}
+			>
+				<span class="material-symbols">chevron_left</span>
+			</button>
+			<select
+				class="jumper-select"
+				aria-label="Jump to year"
+				value={visibleYear}
+				onchange={(e) => jumpToYear(Number((e.currentTarget as HTMLSelectElement).value))}
+			>
+				{#each yearOptions as y (y)}
+					<option value={y}>{y}</option>
+				{/each}
+			</select>
+			<button
+				type="button"
+				class="jumper-btn"
+				aria-label="Next year"
+				onclick={() => jumpToYear(Math.min(yearOptions[yearOptions.length - 1], visibleYear + 1))}
+				disabled={visibleYear >= yearOptions[yearOptions.length - 1]}
+			>
+				<span class="material-symbols">chevron_right</span>
+			</button>
+			<button
+				type="button"
+				class="jumper-today"
+				onclick={() => jumpToYear(today.getFullYear())}
+			>
+				Today
+			</button>
+		</div>
+
 		<div class="dow-row" aria-hidden="true">
 			{#each DOW_LABELS as dow, i (i)}
 				<span>{dow}</span>
 			{/each}
 		</div>
 
-		<div class="months">
+		<div class="months" bind:this={monthsEl} onscroll={onMonthsScroll}>
 			{#each Array.from({ length: monthCount }, (_, i) => i) as i (i)}
 				{@const month = monthAt(i)}
 				{@const firstOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)}
 				{@const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()}
 				{@const leading = (firstOfMonth.getDay() + 6) % 7}
-				<section class="month">
+				<section class="month" data-month-idx={i}>
 					<h3 class="month-name">
 						{MONTH_NAMES[month.getMonth()]} {month.getFullYear()}
 					</h3>
@@ -244,6 +349,64 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-text);
+	}
+
+	.jumper-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 0 0 8px;
+	}
+	.jumper-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		color: var(--color-text);
+		border-radius: 6px;
+		cursor: pointer;
+	}
+	.jumper-btn:hover:not(:disabled) {
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.jumper-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.jumper-btn .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
+	}
+	.jumper-select {
+		flex: 1;
+		padding: 4px 8px;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-weight: 600;
+		border-radius: 6px;
+		cursor: pointer;
+		text-align: center;
+	}
+	.jumper-today {
+		padding: 4px 10px;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.8rem;
+		font-weight: 500;
+		border-radius: 6px;
+		cursor: pointer;
+	}
+	.jumper-today:hover {
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
 	}
 
 	.dow-row {
