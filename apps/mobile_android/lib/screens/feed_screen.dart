@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/error_state.dart';
+import '../widgets/run_track_preview.dart';
 import 'profile_screen.dart';
 import 'public_run_screen.dart';
 
@@ -395,6 +396,23 @@ class _EntryCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
+          // Track thumbnail — banner-style preview of the run shape so
+          // the card's most distinctive signal sits above the fold.
+          if (entry.run.trackUrl != null && entry.run.trackUrl!.isNotEmpty)
+            InkWell(
+              onTap: onCardTap,
+              child: Container(
+                height: 120,
+                color: theme.colorScheme.surfaceContainerHighest,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: RunTrackPreview(
+                  trackUrl: entry.run.trackUrl,
+                  api: api,
+                ),
+              ),
+            ),
+          if (entry.run.trackUrl != null && entry.run.trackUrl!.isNotEmpty)
+            const Divider(height: 1),
           // Stats — distance / time / pace; tap opens PublicRunScreen.
           InkWell(
             onTap: onCardTap,

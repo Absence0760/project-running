@@ -11,6 +11,8 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../widgets/run_track_preview.dart';
+import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
 import 'run_detail_screen.dart';
 
@@ -952,6 +954,7 @@ class _RunsScreenState extends State<RunsScreen> {
         final run = _visible[runIndex];
         return _RunTile(
           key: ValueKey(run.id),
+          api: widget.apiClient,
           run: run,
           unit: unit,
           theme: theme,
@@ -996,6 +999,7 @@ class _RunTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final ApiClient? api;
 
   const _RunTile({
     super.key,
@@ -1007,6 +1011,7 @@ class _RunTile extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onLongPress,
+    required this.api,
   });
 
   @override
@@ -1023,17 +1028,44 @@ class _RunTile extends StatelessWidget {
         : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
     final date = _formatDate(run.startedAt);
 
-    final leading = selecting
-        ? Icon(
+    final trackUrl = run.metadata?['track_url'] as String?;
+    final hasInlineTrack = run.track.length >= 2;
+    final Widget leading;
+    if (selecting) {
+      leading = SizedBox(
+        width: 56,
+        height: 40,
+        child: Center(
+          child: Icon(
             selected ? Icons.check_circle : Icons.radio_button_unchecked,
             color: selected
                 ? theme.colorScheme.primary
                 : theme.colorScheme.outline,
-          )
-        : CircleAvatar(
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Icon(activity.icon, color: theme.colorScheme.primary),
-          );
+          ),
+        ),
+      );
+    } else if (hasInlineTrack) {
+      leading = SizedBox(
+        width: 72,
+        height: 40,
+        child: TrackPreview(points: run.track),
+      );
+    } else if (trackUrl != null && api != null) {
+      leading = SizedBox(
+        width: 72,
+        height: 40,
+        child: RunTrackPreview(trackUrl: trackUrl, api: api!),
+      );
+    } else {
+      leading = SizedBox(
+        width: 56,
+        height: 40,
+        child: CircleAvatar(
+          backgroundColor: theme.colorScheme.primaryContainer,
+          child: Icon(activity.icon, color: theme.colorScheme.primary),
+        ),
+      );
+    }
 
     return Card(
       color: selected
@@ -1041,7 +1073,13 @@ class _RunTile extends StatelessWidget {
           : null,
       child: ListTile(
         leading: leading,
-        title: Text(dist),
+        title: Row(
+          children: [
+            Icon(activity.icon, size: 16, color: theme.colorScheme.outline),
+            const SizedBox(width: 6),
+            Text(dist),
+          ],
+        ),
         subtitle: Text('$date  •  $dur'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

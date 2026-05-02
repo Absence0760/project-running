@@ -958,6 +958,22 @@ The same pass also tried swapping `_dir.listSync()` for async `_dir.list()...toL
 
 **Don't re-litigate unless:** we add a streaming parser API that yields control on its own (e.g. a SAX-style GPX parser) — that would let us skip the isolate hop and stay on the main thread. Until then, `compute()` is the cheap, correct boundary.
 
+## 49. Mobile list-card thumbnails mirror the web SVG track preview
+
+`runs_screen`, `routes_screen`, `feed_screen`, `explore_routes_screen`, and the Routes tab on `club_detail_screen` previously rendered each row with a generic `CircleAvatar` icon and forced the user to tap into the detail screen to see the run / route shape. Web has shipped SVG list-card previews (`apps/web/src/lib/components/TrackPreview.svelte` + `RunTrackPreview.svelte`) on every equivalent surface for months — `parity.md` was silently `Partial` on this until now.
+
+Two new widgets land in `apps/mobile_android/lib/widgets/`:
+- `track_preview.dart` — pure `CustomPainter` that mirrors the SVG geometry one-to-one: viewBox short axis = 100 with PAD = 4; white casing stroke 4.5; coloured line stroke 2.6; up to four directional chevrons at evenly-spaced indices; green start cap + red end cap at r = 2.6. The web `isMoving` jitter guard ports as `isTrackRenderable` (5 m bounding-box diagonal threshold).
+- `run_track_preview.dart` — lazy fetcher around `ApiClient.fetchTrackByPath` with a static `Map<String, List<Waypoint>?>` cache keyed on the URL; a `null` entry is the "fetch failed" sentinel so a broken Storage object doesn't get retried on every rebuild.
+
+Routes carry `waypoints` inline so route surfaces hit `TrackPreview` directly; runs go through `RunTrackPreview` since the GPS trace lives in Storage at `track_url`.
+
+**Why mirror the SVG geometry exactly:** the web previews are a known-good render that's been in users' hands since `apps/web` shipped. Drifting the mobile geometry — different stroke widths, different chevron count, different cap colours — would be a parity regression even though the feature itself is new on mobile. Same shape on both surfaces lets users glance at a list without re-learning what the markers mean.
+
+**Trade-off:** `RunTrackPreview` doesn't use `IntersectionObserver`-style lazy fetching the way the web component does; it issues the fetch in `initState` and relies on `ListView.builder`'s lazy element creation to throttle off-screen requests. For a 200-run history this kicks ~10 fetches at first paint while the `Map<>` cache absorbs subsequent rebuilds. If list scrolling ever feels janky we revisit with a visibility-driven trigger (e.g. `VisibilityDetector`).
+
+**Don't re-litigate unless:** the parallel cold-start fetches start showing up in startup latency telemetry, or the SVG geometry is intentionally redesigned on web (then port the new constants in lock-step).
+
 ---
 
 ## How to add an entry

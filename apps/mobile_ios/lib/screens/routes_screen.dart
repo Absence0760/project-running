@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../widgets/track_preview.dart';
 import 'explore_routes_screen.dart';
 import 'route_detail_screen.dart';
 
@@ -600,13 +601,24 @@ class _RoutesScreenState extends State<RoutesScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: theme.colorScheme.secondaryContainer,
-                      child: Icon(
-                        isOwned ? Icons.route : Icons.bookmark,
-                        color: theme.colorScheme.secondary,
-                      ),
-                    ),
+                    leading: route.waypoints.length >= 2
+                        ? SizedBox(
+                            width: 72,
+                            height: 40,
+                            child: TrackPreview(points: route.waypoints),
+                          )
+                        : SizedBox(
+                            width: 56,
+                            height: 40,
+                            child: CircleAvatar(
+                              backgroundColor:
+                                  theme.colorScheme.secondaryContainer,
+                              child: Icon(
+                                isOwned ? Icons.route : Icons.bookmark,
+                                color: theme.colorScheme.secondary,
+                              ),
+                            ),
+                          ),
                     title: Text(route.name),
                     subtitle: Text(
                       '${UnitFormat.distance(route.distanceMetres, unit)}'

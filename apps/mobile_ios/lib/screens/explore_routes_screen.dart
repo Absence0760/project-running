@@ -9,6 +9,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/track_preview.dart';
 import 'route_detail_screen.dart';
 
 enum _ExploreMode { search, nearMe }
@@ -622,17 +623,21 @@ class _RouteCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Container(
-                width: 48,
+              SizedBox(
+                width: 80,
                 height: 48,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _surfaceIcon(route.surface),
-                  color: theme.colorScheme.secondary,
-                ),
+                child: route.waypoints.length >= 2
+                    ? TrackPreview(points: route.waypoints)
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _surfaceIcon(route.surface),
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(

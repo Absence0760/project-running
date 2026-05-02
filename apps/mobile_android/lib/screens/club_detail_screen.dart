@@ -12,6 +12,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/event_form_sheet.dart';
+import '../widgets/track_preview.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'public_route_screen.dart';
@@ -1065,10 +1066,21 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           final r = _routes[i];
           return Card(
             child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: theme.colorScheme.secondaryContainer,
-                child: Icon(Icons.route, color: theme.colorScheme.secondary),
-              ),
+              leading: r.waypoints.length >= 2
+                  ? SizedBox(
+                      width: 72,
+                      height: 40,
+                      child: TrackPreview(points: r.waypoints),
+                    )
+                  : SizedBox(
+                      width: 56,
+                      height: 40,
+                      child: CircleAvatar(
+                        backgroundColor: theme.colorScheme.secondaryContainer,
+                        child: Icon(Icons.route,
+                            color: theme.colorScheme.secondary),
+                      ),
+                    ),
               title: Text(r.name),
               subtitle: Text(
                 '${(r.distanceMetres / 1000).toStringAsFixed(2)} km'
