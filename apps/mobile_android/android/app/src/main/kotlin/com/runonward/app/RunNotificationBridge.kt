@@ -1,4 +1,4 @@
-package com.betterrunner.app
+package com.runonward.app
 
 import android.Manifest
 import android.app.Notification

@@ -390,7 +390,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             // the polyline floating on a white background.
             TileLayer(
               urlTemplate: _tileUrl,
-              userAgentPackageName: 'com.betterrunner.app',
+              userAgentPackageName: 'com.runonward.app',
               maxNativeZoom: 19,
               maxZoom: 22,
               tileProvider: CachedTileProvider(

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 ///
 /// Overrides the geolocator foreground-service notification with live run
 /// stats, so the lock screen shows time / distance / pace during a run.
-/// See `android/app/src/main/kotlin/com/betterrunner/app/RunNotificationBridge.kt`
+/// See `android/app/src/main/kotlin/com/runonward/app/RunNotificationBridge.kt`
 /// for the Android side (the native receiver reposts on geolocator's
 /// channel id + notification id to replace rather than duplicate).
 class RunNotificationBridge {

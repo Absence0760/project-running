@@ -602,7 +602,7 @@ void main() {
       // from `apps/mobile_ios` — skip the assertion there since the
       // host file is shared between targets and only ever lives once.
       final file = File(
-        'android/app/src/main/kotlin/com/betterrunner/app/RunNotificationBridge.kt',
+        'android/app/src/main/kotlin/com/runonward/app/RunNotificationBridge.kt',
       );
       if (!file.existsSync()) return;
       final source = file.readAsStringSync();

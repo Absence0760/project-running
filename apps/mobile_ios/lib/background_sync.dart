@@ -6,7 +6,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'local_run_store.dart';
 
-const backgroundSyncTaskName = 'com.betterrunner.backgroundSync';
+const backgroundSyncTaskName = 'com.runonward.backgroundSync';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {

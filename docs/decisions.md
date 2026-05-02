@@ -417,17 +417,17 @@ The spectator page at `/live/{run_id}` streams a runner's in-progress GPS trace 
 
 ---
 
-## 27. Product renamed from "Better Runner" to "Run Onward"; bundle IDs stay
+## 27. Product renamed from "Better Runner" to "Run Onward"; bundle IDs follow
 
-**Decided:** April 2026.
+**Decided:** April 2026 (display rebrand). **Revised:** May 2026 (bundle IDs aligned).
 
-The user-visible product name is now **Run Onward** (URL: `runonward.com`). All display strings — Android `android:label`, iOS `CFBundleDisplayName` / `CFBundleName`, watchOS health-permission usage strings, web `<title>` + meta + share-card chrome, GPX `creator=` attribute — were updated. Internal identifiers were deliberately *not* changed: the Android `applicationId` / Kotlin package directory remain `com.betterrunner.app`, the WorkManager task name remains `com.betterrunner.backgroundSync`, and `BACKUP_FORMAT` remains `'run-app-backup'`.
+The user-visible product name is **Run Onward** (URL: `runonward.com`). All display strings — Android `android:label`, iOS `CFBundleDisplayName` / `CFBundleName`, watchOS health-permission usage strings, web `<title>` + meta + share-card chrome, GPX `creator=` attribute — match. The Android `applicationId` + Kotlin package directory + iOS `PRODUCT_BUNDLE_IDENTIFIER` are now also `com.runonward.app`, and the WorkManager task name is `com.runonward.backgroundSync`. `BACKUP_FORMAT` stays `'run-app-backup'` since changing it would break restore of any local backup blobs already exported during the dev cycle.
 
 **Why:** "Better Runner" was running-only branding for a multi-modal app (run + walk + hike + cycle). "Run Onward" reframes the verb as forward movement rather than jogging, and `runonward.com` was the rare clean `.com` left in the running-adjacent namespace (most short slang `.com`s are squatted on Afternic).
 
-**Trade-off:** keeping the bundle ID tied to the old name means the Play Store / App Store internal identity, on-device install identity, signing key association, and existing-user upgrade path are all preserved — at the cost of some lasting "betterrunner" strings inside the codebase that are jarring to read but never user-visible. Changing the bundle ID would create a new app listing with no upgrade path and break deep links / signing. Twitter→X did the same (kept `com.atebits.Tweetie2` long after the rebrand). Similarly, the WorkManager task name and backup format are stable identifiers — changing them would orphan scheduled tasks on existing devices and break restore of old backups respectively.
+**Why the revision:** the original April 2026 decision deliberately kept the bundle ID at `com.betterrunner.app` to preserve the Play Store / App Store upgrade path. We later confirmed there are no published builds yet — pre-launch was the free window to align internal identifiers with the rebrand. Once published, the rule from the original ADR holds: **never change the bundle ID afterwards**, since that creates a new app listing with no upgrade path, breaks deep links, and forces signing-key reassociation. Twitter→X kept `com.atebits.Tweetie2` long after their rebrand for exactly this reason.
 
-**Don't re-litigate unless:** we're prepared to accept a clean-break new app listing (new Play Store / App Store entries, deep-link migration, user re-install, signing-key reassociation). At that point we'd also revisit the WorkManager and backup-format identifiers in the same migration.
+**If we re-rebrand later:** changing the bundle ID post-launch is a clean-break new app listing — new Play Store / App Store entries, deep-link migration, user re-install, signing-key reassociation. The WorkManager task name and backup format would need a coordinated migration (orphaning old scheduled tasks and breaking old backups respectively).
 
 ---
 

@@ -15,7 +15,7 @@ if (keystoreFile.exists()) {
 }
 
 android {
-    namespace = "com.betterrunner.app"
+    namespace = "com.runonward.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.betterrunner.app"
+        applicationId = "com.runonward.app"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

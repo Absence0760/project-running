@@ -1,4 +1,4 @@
-package com.betterrunner.app
+package com.runonward.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

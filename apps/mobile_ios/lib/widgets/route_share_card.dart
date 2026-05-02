@@ -207,7 +207,7 @@ class _ShareCardContent extends StatelessWidget {
       children: [
         TileLayer(
           urlTemplate: _tileUrl,
-          userAgentPackageName: 'com.betterrunner.app',
+          userAgentPackageName: 'com.runonward.app',
           maxZoom: 19,
           tileProvider: CachedTileProvider(
             store: TileCache.store,
@@ -304,7 +304,7 @@ class _ShareCardContent extends StatelessWidget {
             ],
           ),
           const Text(
-            'Run · Better Runner',
+            'Run · Run Onward',
             style: TextStyle(
               color: Color(0xFF818CF8),
               fontSize: 11,
