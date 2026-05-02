@@ -2,7 +2,35 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { withSentry } from '../_shared/sentry.ts';
 
-serve(withSentry('refresh-tokens', async () => {
+/// pg_cron schedules this function on the hour; the cron job invokes
+/// it with `Authorization: Bearer ${CRON_SECRET}`. Without the gate
+/// the function URL is publicly invokable — any attacker hitting it
+/// would loop the entire `integrations` table through Strava's OAuth
+/// refresh endpoint, burning Strava API quota and forcing token
+/// churn. The secret is shared between the cron job config and the
+/// EF env. Timing-safe compare so a missed-character probe can't
+/// tease the secret out byte-by-byte.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+serve(withSentry('refresh-tokens', async (req: Request) => {
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (!cronSecret) {
+    // Fail-closed when misconfigured. Same posture as strava-webhook.
+    return new Response('Cron not configured', { status: 503 });
+  }
+  const auth = req.headers.get('Authorization') ?? '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token || !timingSafeEqual(token, cronSecret)) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,

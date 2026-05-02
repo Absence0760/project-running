@@ -118,7 +118,7 @@ Seven functions live under `supabase/functions/`. Six are wired up; `export-data
 | Function | Status | Trigger | Auth | Env vars |
 |---|---|---|---|---|
 | `parkrun-import` | **Working** (scraper) | Client POST with `{ athleteNumber }` | User JWT → `supabase.auth.getUser()` | `PARKRUN_USER_AGENT` |
-| `refresh-tokens` | **Working** | Scheduled (pg_cron) every hour | Service role (`SUPABASE_SERVICE_ROLE_KEY`) | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
+| `refresh-tokens` | **Working** | Scheduled (pg_cron) every hour, invoked with `Authorization: Bearer ${CRON_SECRET}` | Shared `CRON_SECRET` in the bearer token (timing-safe compare); service role for DB writes | `CRON_SECRET`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
 | `strava-import` | **Working** — OAuth exchange + 90-day backfill + `sync` action for already-connected users; GPS streams uploaded to the `runs` Storage bucket and deduped against existing Strava activity IDs | Client POST with `{ action: 'connect', code, scope }` (after the OAuth redirect) or `{ action: 'sync', lookbackDays? }` | User JWT | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
 | `strava-webhook` | **Working** — verification + per-activity ingest via shared logic in `_shared/strava.ts` | GET verification from Strava + POST activity events | Shared `?secret=` in the callback URL guards both methods (Strava doesn't sign POSTs); GET also checks `hub.verify_token`. Service role for DB writes. | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `export-data` | **Working** — CSV (one row per run) + GPX zip (per-run GPX + manifest); upload to `runs/{user_id}/exports/<ts>.{csv,zip}` and return a 10-min signed URL | Client POST with `{ format: 'csv' \| 'gpx' }` | User JWT | — |
@@ -241,6 +241,7 @@ Variables currently used:
 - `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` — Strava OAuth credentials.
 - `STRAVA_VERIFY_TOKEN` — shared secret for the webhook GET handshake (sent by Strava in `hub.verify_token`).
 - `STRAVA_WEBHOOK_SECRET` — shared secret embedded in the callback URL's query string (`?secret=...`). Strava preserves URL query strings on both GET and POST, so this is the only auth available on POST events (Strava doesn't sign payloads). Required: function fails closed without it.
+- `CRON_SECRET` — shared bearer token the pg_cron schedule passes to `refresh-tokens` so an unauthenticated caller can't trigger Strava token-refresh churn on every integration in the table. Required: function fails closed without it.
 - `PARKRUN_USER_AGENT` — identifies us to parkrun's server. Be polite.
 
 ## CLI gotchas I've hit
