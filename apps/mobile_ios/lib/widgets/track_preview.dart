@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:core_models/core_models.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 
 /// Compact static thumbnail of a GPS track. Mirrors
@@ -69,33 +70,13 @@ class _TrackPreviewPainter extends CustomPainter {
     final aspect = size.width / size.height;
     final vbW = aspect >= 1 ? _viewBoxShort * aspect : _viewBoxShort;
     final vbH = aspect < 1 ? _viewBoxShort / aspect : _viewBoxShort;
-
-    double minLat = points.first.lat, maxLat = points.first.lat;
-    double minLng = points.first.lng, maxLng = points.first.lng;
-    for (final p in points) {
-      if (p.lat < minLat) minLat = p.lat;
-      if (p.lat > maxLat) maxLat = p.lat;
-      if (p.lng < minLng) minLng = p.lng;
-      if (p.lng > maxLng) maxLng = p.lng;
-    }
-    final dLat = max(maxLat - minLat, 1e-6);
-    final dLng = max(maxLng - minLng, 1e-6);
-
-    final scaleX = (vbW - _pad * 2) / dLng;
-    final scaleY = (vbH - _pad * 2) / dLat;
-    final scale = min(scaleX, scaleY);
-    final offX = _pad + ((vbW - _pad * 2) - dLng * scale) / 2;
-    final offY = _pad + ((vbH - _pad * 2) - dLat * scale) / 2;
-
     final pxPerVb = size.width / vbW;
-    final projected = <Offset>[];
-    for (final p in points) {
-      projected.add(Offset(
-        (offX + (p.lng - minLng) * scale) * pxPerVb,
-        // SVG-style y inversion so north renders up.
-        (offY + (maxLat - p.lat) * scale) * pxPerVb,
-      ));
-    }
+    // Projection lives in projectTrack so the cos(midLat) correction can
+    // be unit-tested without instantiating a Flutter canvas.
+    final projected = [
+      for (final o in projectTrack(points, vbW, vbH, pad: _pad))
+        Offset(o.dx * pxPerVb, o.dy * pxPerVb),
+    ];
 
     final path = Path()..moveTo(projected.first.dx, projected.first.dy);
     for (int i = 1; i < projected.length; i++) {
@@ -167,6 +148,41 @@ class _TrackPreviewPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TrackPreviewPainter old) =>
       old.points != points || old.color != color;
+}
+
+/// Project `points` into a `[0, vbW] × [0, vbH]` viewBox with the same
+/// `cos(midLat)` longitude correction the painter uses. Pure helper
+/// extracted so the projection can be unit-tested without spinning up
+/// a Flutter canvas. Mirrors `apps/web/src/lib/components/TrackPreview.svelte`
+/// — keep them in lockstep.
+@visibleForTesting
+List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
+    {double pad = 4}) {
+  if (points.length < 2) return const [];
+  double minLat = points.first.lat, maxLat = points.first.lat;
+  double minLng = points.first.lng, maxLng = points.first.lng;
+  for (final p in points) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  final midLat = (minLat + maxLat) / 2;
+  final lngScale = cos(midLat * pi / 180).abs();
+  final dLat = max(maxLat - minLat, 1e-6);
+  final dLng = max((maxLng - minLng) * lngScale, 1e-6);
+  final scaleX = (vbW - pad * 2) / dLng;
+  final scaleY = (vbH - pad * 2) / dLat;
+  final scale = min(scaleX, scaleY);
+  final offX = pad + ((vbW - pad * 2) - dLng * scale) / 2;
+  final offY = pad + ((vbH - pad * 2) - dLat * scale) / 2;
+  return [
+    for (final p in points)
+      Offset(
+        offX + (p.lng - minLng) * lngScale * scale,
+        offY + (maxLat - p.lat) * scale,
+      ),
+  ];
 }
 
 /// True iff the track's bounding-box diagonal is large enough to be

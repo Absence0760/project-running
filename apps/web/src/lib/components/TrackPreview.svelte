@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { TrackPoint } from '$lib/types';
+	import { projectTrack, type Projected } from '$lib/track_projection';
 
 	// Compact SVG polyline thumbnail, normalised into the viewBox with
 	// a small margin. Used in list cards (runs + routes) where loading a
@@ -23,36 +24,7 @@
 	let vbW = $derived(aspect >= 1 ? 100 * aspect : 100);
 	let vbH = $derived(aspect < 1 ? 100 / aspect : 100);
 
-	type Projected = { x: number; y: number };
-
-	let projected = $derived.by<Projected[]>(() => {
-		if (!points || points.length < 2) return [];
-		const lats = points.map((p) => p.lat);
-		const lngs = points.map((p) => p.lng);
-		const minLat = Math.min(...lats);
-		const maxLat = Math.max(...lats);
-		const minLng = Math.min(...lngs);
-		const maxLng = Math.max(...lngs);
-		const dLat = maxLat - minLat || 1e-6;
-		const dLng = maxLng - minLng || 1e-6;
-		// Preserve the route's aspect — fit within the viewBox using
-		// whichever axis hits the limit first. The other axis gets
-		// centered so the trace sits in the visual middle.
-		const scaleX = (vbW - PAD * 2) / dLng;
-		const scaleY = (vbH - PAD * 2) / dLat;
-		const scale = Math.min(scaleX, scaleY);
-		const offX = PAD + ((vbW - PAD * 2) - dLng * scale) / 2;
-		const offY = PAD + ((vbH - PAD * 2) - dLat * scale) / 2;
-		const out: Projected[] = [];
-		for (const p of points) {
-			out.push({
-				x: offX + (p.lng - minLng) * scale,
-				// SVG y grows downward; invert latitude so north is up.
-				y: offY + (maxLat - p.lat) * scale,
-			});
-		}
-		return out;
-	});
+	let projected = $derived.by<Projected[]>(() => projectTrack(points, vbW, vbH, PAD));
 
 	let pathD = $derived.by(() => {
 		if (projected.length < 2) return '';

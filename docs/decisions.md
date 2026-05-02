@@ -986,6 +986,18 @@ Mobile (Android + iOS via the byte-identical Dart codebase) has rendered the run
 
 **Don't re-litigate unless:** mobile changes its breakpoints / colours / alpha bands (port them over in the same PR), or we move web off MapLibre to a renderer where data-driven `line-color` isn't ergonomic.
 
+## 51. Thumbnail projection applies a cos(midLat) longitude correction
+
+The original `TrackPreview` projection — both the web SVG component and the Dart `CustomPainter` ported from it in §49 — scaled latitude and longitude differences by the same factor. A degree of latitude is roughly 111 km everywhere, but a degree of longitude shrinks with `cos(latitude)` (62 % of a latitude degree at 51 °N, 50 % at 60 °N). A square 100 m loop at London latitude therefore rendered as a horizontally-stretched rectangle ~60 % wider than tall. Users reported this as "the run preview doesn't follow the line I ran."
+
+Fix: scale `(maxLng - minLng)` by `cos(midLat)` before computing the bounding box, then apply the same `lngScale` factor when projecting each point's `lng` offset. Equirectangular projection at the route's mid-latitude. The viewBox-fit logic stays unchanged so `preserveAspectRatio="xMidYMid meet"` (web) and the `Size.infinite` painter (mobile) still render at the requested aspect.
+
+The projection lives in pure helpers — `projectTrack` in `apps/web/src/lib/track_projection.ts` and `apps/mobile_android/lib/widgets/track_preview.dart` — so the math can be unit-tested without rendering. Both suites assert that a 100 m × 100 m loop at 51 °N renders square within 2 %.
+
+**Trade-off:** equirectangular at one latitude is still wrong for multi-degree routes where the mid-latitude isn't representative — a marathon-distance trip from London to Paris would still distort. Acceptable for thumbnail rendering: the bounding box of any single run is small enough that one `cos(midLat)` value is accurate to within sub-pixel tolerance at thumbnail scale. A proper Mercator projection would solve the multi-degree case but adds complexity we don't need until we ship a "city-to-city" feature.
+
+**Don't re-litigate unless:** users start uploading routes that span multiple degrees of latitude (then move to Mercator), or one platform's correction drifts from the other (then re-port in lock-step).
+
 ---
 
 ## How to add an entry
