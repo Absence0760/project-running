@@ -9,6 +9,7 @@ import '../preferences.dart' show ActivityType;
 import '../tile_cache.dart';
 import 'pace_segments.dart';
 import 'track_decorations.dart';
+import 'track_segment.dart';
 
 const double _metresPerMile = 1609.344;
 
@@ -82,6 +83,14 @@ class LiveRunMap extends StatefulWidget {
   /// `totalDistanceM` prop on `RunMap.svelte`.
   final double? totalDistanceM;
 
+  /// Fires when the user taps the map and the tap is close enough to
+  /// the recorded track to be considered a segment selection. The
+  /// callback receives a [SelectedSegment] for the ±150 m window
+  /// around the nearest track point, or `null` when the tap was
+  /// outside that radius (in which case the caller should clear any
+  /// rendered popup). When `null`, the map disables the gesture.
+  final ValueChanged<SelectedSegment?>? onSegmentSelect;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -93,6 +102,7 @@ class LiveRunMap extends StatefulWidget {
     this.showDecorations = false,
     this.useMilesForDecorations = false,
     this.totalDistanceM,
+    this.onSegmentSelect,
   });
 
   @override
@@ -103,6 +113,18 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   bool _userPanned = false;
   bool _mapReady = false;
+
+  // Currently-highlighted segment from the most-recent tap, when
+  // segment-selection is enabled. Null when no segment is selected (or
+  // the feature is disabled).
+  SelectedSegment? _selectedSegment;
+
+  // Cumulative-distance vector for the segment-selection nearest-index
+  // path. Recomputed only when the track length changes — the host
+  // only ever appends to the track during a recording, so a matching
+  // length means the cumulative array is still valid.
+  List<double>? _cachedCumulative;
+  int _cachedCumulativeForLen = -1;
 
   // Shared disk-backed tile cache (via [TileCache.init] at app startup).
   // Survives app restarts — a previously-loaded area renders offline.
@@ -267,6 +289,36 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   /// value to lift the dot above the overlay.
   Offset get _cameraOffset => Offset(0, -widget.bottomPadding / 2);
 
+  /// A tap is considered a segment selection when the nearest track point
+  /// is within this distance. Beyond it, the tap clears the current
+  /// selection (so a tap on empty map dismisses the popup).
+  static const double _tapMatchRadiusMetres = 80;
+
+  void _handleMapTap(TapPosition _, LatLng tap) {
+    final track = widget.track;
+    final cb = widget.onSegmentSelect;
+    if (cb == null || track.length < 2) return;
+
+    if (_cachedCumulative == null ||
+        _cachedCumulativeForLen != track.length) {
+      _cachedCumulative = buildCumulativeDistances(track);
+      _cachedCumulativeForLen = track.length;
+    }
+    final idx = nearestTrackIdx(tap, track);
+    final nearest = LatLng(track[idx].lat, track[idx].lng);
+    final distanceToTrack = const Distance().as(LengthUnit.Meter, tap, nearest);
+    if (distanceToTrack > _tapMatchRadiusMetres) {
+      if (_selectedSegment != null) {
+        setState(() => _selectedSegment = null);
+        cb(null);
+      }
+      return;
+    }
+    final seg = buildSegmentAt(track, idx, cumulative: _cachedCumulative);
+    setState(() => _selectedSegment = seg);
+    cb(seg);
+  }
+
   void _moveCamera(LatLng target, {double? zoom}) {
     if (!_mapReady) return;
     final z = zoom ??
@@ -401,6 +453,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             onPositionChanged: (pos, hasGesture) {
               if (hasGesture) setState(() => _userPanned = true);
             },
+            onTap: widget.onSegmentSelect == null ? null : _handleMapTap,
           ),
           children: [
             // Dark map tiles with HTTP cache. `maxNativeZoom` caps tile
@@ -466,6 +519,23 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                   ],
                 ),
             ],
+
+            // Selected-segment highlight — drawn over the trace + heatmap
+            // so the user sees what they tapped. The host renders the
+            // stats popup; the map only owns the visual highlight.
+            if (_selectedSegment != null && trackLatLngs.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: trackLatLngs.sublist(
+                      _selectedSegment!.startIdx,
+                      _selectedSegment!.endIdx + 1,
+                    ),
+                    strokeWidth: 9,
+                    color: const Color(0xFFF59E0B), // amber, matches web
+                  ),
+                ],
+              ),
 
             // Direction chevrons + km / mile markers — rendered only on
             // detail surfaces (followRunner = false). Live recording

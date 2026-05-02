@@ -14,6 +14,7 @@ import '../route_simplify.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/track_segment.dart';
 import '../widgets/run_photos.dart';
 import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_share_card.dart';
@@ -70,6 +71,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// whole ListView and its O(n) splits / best-efforts / HR-zone math.
   AnimationController? _replayController;
   final ValueNotifier<int?> _replayIndex = ValueNotifier<int?>(null);
+
+  /// Currently-tapped segment of the track. Drives the floating stats
+  /// card overlaid on the map. Null when nothing is selected.
+  SelectedSegment? _selectedSegment;
 
   // Memoised derived stats. The recorder only ever appends to a run's
   // track (or a fresh fetch swaps the whole `run` object), so a matching
@@ -539,9 +544,24 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         useMilesForDecorations:
                             widget.preferences.unit == DistanceUnit.mi,
                         totalDistanceM: run.distanceMetres,
+                        onSegmentSelect: mapTrack.isNotEmpty
+                            ? (seg) => setState(() => _selectedSegment = seg)
+                            : null,
                       );
                     },
                   ),
+                  if (_selectedSegment != null)
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
+                      child: _SegmentStatsCard(
+                        segment: _selectedSegment!,
+                        unit: widget.preferences.unit,
+                        onDismiss: () =>
+                            setState(() => _selectedSegment = null),
+                      ),
+                    ),
                   if (_matchInfo != null &&
                       _matchInfo!.status != MatchStatus.matched)
                     Positioned(
@@ -2090,6 +2110,88 @@ class _MatchStatusPill extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _SegmentStatsCard extends StatelessWidget {
+  final SelectedSegment segment;
+  final DistanceUnit unit;
+  final VoidCallback onDismiss;
+
+  const _SegmentStatsCard({
+    required this.segment,
+    required this.unit,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dur = segment.duration;
+    final pace = segment.paceSecondsPerKm;
+    final stats = <Widget>[
+      _stat('Distance', UnitFormat.distance(segment.distanceMetres, unit)),
+      if (dur != null) _stat('Time', _formatDur(dur)),
+      if (pace != null)
+        _stat('Pace',
+            '${UnitFormat.pace(pace, unit)} ${UnitFormat.paceLabel(unit)}'),
+      if (segment.avgBpm != null) _stat('HR', '${segment.avgBpm} bpm'),
+      if (segment.eleGainMetres > 0)
+        _stat('Gain', '+${segment.eleGainMetres.round()} m'),
+    ];
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 4,
+                children: stats,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: 'Dismiss',
+              onPressed: onDismiss,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _stat(String label, String value) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.4,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+
+  static String _formatDur(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) return '${h}h ${m}m';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
   }
 }
 
