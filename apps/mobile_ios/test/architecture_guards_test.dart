@@ -621,4 +621,37 @@ void main() {
       );
     });
   });
+
+  group('thumbnail privacy-zone clipping', () {
+    test('RunTrackPreview routes non-owner fetches through clipTrackForUser',
+        () {
+      // Reason: feed thumbnails are shown to non-owner viewers. Without
+      // the clip step the polyline would expose the owner's privacy
+      // zones (start / end / interior — see decisions §33). The clip
+      // RPC trims them server-side. Removing this call re-introduces a
+      // privacy leak — keep it.
+      final source = File('lib/widgets/run_track_preview.dart')
+          .readAsStringSync();
+      expect(
+        source,
+        contains('clipTrackForUser'),
+        reason: 'Non-owner thumbnails must clip through the privacy-zone '
+            'RPC. See decisions §33.',
+      );
+    });
+
+    test('feed_screen passes ownerUserId to RunTrackPreview', () {
+      // Reason: without the prop, RunTrackPreview can't tell viewer
+      // from owner and skips the clip step. Always pass the run
+      // owner's id on the feed.
+      final source =
+          File('lib/screens/feed_screen.dart').readAsStringSync();
+      expect(
+        source,
+        matches(RegExp(r'RunTrackPreview\([^)]*ownerUserId:', dotAll: true)),
+        reason: 'feed_screen must thread the run owner id into '
+            'RunTrackPreview so the privacy-zone clip kicks in.',
+      );
+    });
+  });
 }

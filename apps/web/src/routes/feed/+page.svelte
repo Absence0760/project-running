@@ -406,7 +406,10 @@
 					<button type="button" class="entry-body" onclick={() => openRun(entry.id)}>
 						{#if entry.track_url}
 							<div class="entry-map">
-								<RunTrackPreview trackUrl={entry.track_url} />
+								<RunTrackPreview
+									trackUrl={entry.track_url}
+									ownerUserId={entry.author.id}
+								/>
 							</div>
 						{/if}
 						<div class="entry-stats-wrap">

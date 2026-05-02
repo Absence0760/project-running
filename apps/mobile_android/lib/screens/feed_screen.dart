@@ -408,6 +408,7 @@ class _EntryCard extends StatelessWidget {
                 child: RunTrackPreview(
                   trackUrl: entry.run.trackUrl,
                   api: api,
+                  ownerUserId: entry.author.id,
                 ),
               ),
             ),

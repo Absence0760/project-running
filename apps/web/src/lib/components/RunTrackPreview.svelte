@@ -1,31 +1,53 @@
 <script lang="ts" module>
 	import type { TrackPoint } from '$lib/types';
 
-	// Module-level cache keyed by track URL. Populated the first time a
-	// card scrolls into view and re-read on subsequent renders without
-	// re-downloading. Falls back to a sentinel `null` on fetch failure
-	// so we don't retry in a tight loop on a broken object.
+	// Module-level cache keyed by track URL + clip variant. Populated the
+	// first time a card scrolls into view and re-read on subsequent
+	// renders without re-downloading. Falls back to a sentinel `null` on
+	// fetch failure so we don't retry in a tight loop on a broken object.
+	// The clip-variant prefix (`raw:` vs `clip:`) keeps owner and non-
+	// owner reads of the same track from polluting each other.
 	const CACHE = new Map<string, TrackPoint[] | null>();
 </script>
 
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TrackPreview from './TrackPreview.svelte';
-	import { fetchTrackByPath } from '$lib/data';
+	import { fetchTrackByPath, clipTrackForUser } from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
 
-	let { trackUrl }: { trackUrl: string | null } = $props();
+	let {
+		trackUrl,
+		ownerUserId,
+	}: {
+		trackUrl: string | null;
+		/// Set this when the run isn't the current viewer's own — e.g. on
+		/// the activity feed. The fetched track is then routed through
+		/// `clipTrackForUser` so the owner's privacy zones are honoured
+		/// before we render the polyline. Omit when the row is the
+		/// viewer's own (no clip needed, faster cold load).
+		ownerUserId?: string | null;
+	} = $props();
+
+	const viewerId = $derived(auth.user?.id ?? null);
+	const shouldClip = $derived(
+		ownerUserId != null && viewerId != null && ownerUserId !== viewerId,
+	);
+	const cacheKey = $derived(
+		trackUrl == null ? null : `${shouldClip ? 'clip' : 'raw'}:${trackUrl}`,
+	);
 
 	let el: HTMLDivElement;
 	let points = $state<TrackPoint[] | null>(null);
 	let attempted = $state(false);
 
 	onMount(() => {
-		if (!trackUrl) return;
+		if (!trackUrl || !cacheKey) return;
 		// Hit cache synchronously if we've fetched this one before in
 		// this session — common when the user scrolls up / re-enters the
 		// list page.
-		if (CACHE.has(trackUrl)) {
-			points = CACHE.get(trackUrl) ?? null;
+		if (CACHE.has(cacheKey)) {
+			points = CACHE.get(cacheKey) ?? null;
 			attempted = true;
 			return;
 		}
@@ -46,10 +68,18 @@
 	});
 
 	async function load() {
-		if (!trackUrl || attempted) return;
+		if (!trackUrl || !cacheKey || attempted) return;
 		attempted = true;
 		try {
-			const track = (await fetchTrackByPath(trackUrl)) as TrackPoint[];
+			let track = (await fetchTrackByPath(trackUrl)) as TrackPoint[];
+			// Privacy-zone clipping for non-owner viewers (decisions §33).
+			// When the run isn't ours and the owner has zones configured,
+			// the RPC trims start / end / interior windows so a follower
+			// scrolling the feed never sees the owner's home. Owners
+			// always see their full track.
+			if (shouldClip && ownerUserId) {
+				track = (await clipTrackForUser(ownerUserId, track)) as TrackPoint[];
+			}
 			// Treat a track that never moves more than ~5 m total as
 			// equivalent to an empty track. Wear OS / iOS recorders log
 			// every fix the OS produces, so a runner who hits Start +
@@ -58,10 +88,10 @@
 			// thumbnail would otherwise project them all onto a single
 			// pixel and render a meaningless red dot.
 			const renderable = isMoving(track) ? track : [];
-			CACHE.set(trackUrl, renderable);
+			CACHE.set(cacheKey, renderable);
 			points = renderable;
 		} catch (_) {
-			CACHE.set(trackUrl, null);
+			CACHE.set(cacheKey, null);
 		}
 	}
 
