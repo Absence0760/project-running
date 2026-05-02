@@ -785,12 +785,21 @@ class _RunsScreenState extends State<RunsScreen> {
             ),
           )
         else if (unsyncedCount > 0)
-          Badge(
-            label: Text('$unsyncedCount'),
-            child: IconButton(
-              icon: const Icon(Icons.cloud_upload),
-              tooltip: 'Sync $unsyncedCount runs',
-              onPressed: _syncAll,
+          // The unsynced badge sits in the rightmost AppBar action slot.
+          // Without the trailing padding the badge label clips against
+          // the screen edge as soon as the count gets to two digits.
+          // `Badge.count` also caps the rendered text at "99+" so a
+          // pile-up after a long offline trip doesn't blow out the
+          // badge width either.
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Badge.count(
+              count: unsyncedCount,
+              child: IconButton(
+                icon: const Icon(Icons.cloud_upload),
+                tooltip: 'Sync $unsyncedCount runs',
+                onPressed: _syncAll,
+              ),
             ),
           )
         else if (widget.apiClient?.userId != null)

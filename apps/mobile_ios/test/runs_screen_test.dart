@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_relative_lib_imports
 import 'dart:convert';
 import 'dart:io';
 
@@ -110,6 +111,29 @@ void main() {
       final s = await _makeStores();
       await _pump(tester, runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
       expect(find.byIcon(Icons.cloud_off), findsOneWidget);
+    });
+
+    test('sync badge uses Badge.count + trailing padding so the label never overflows', () {
+      // Reason: the badge sits in the rightmost AppBar action slot. With
+      // a three-digit count ("150 unsynced"), `Badge(label: Text('$count'))`
+      // clips against the screen edge. `Badge.count` caps at "99+" so the
+      // label is at most three glyphs wide; the wrapping `Padding` keeps
+      // the badge inside the AppBar's actions area. Source-level guard —
+      // populating the store with 100+ runs to drive this through the
+      // widget tree blew past the per-test timeout in CI.
+      final source = File('lib/screens/runs_screen.dart').readAsStringSync();
+      // The guard pins both pieces of the fix in place: a future refactor
+      // that drops either one re-introduces the off-screen overflow.
+      expect(
+        source.contains('Badge.count('),
+        isTrue,
+        reason: 'Use Badge.count (caps at "99+") instead of Badge(label: Text(\$count)).',
+      );
+      expect(
+        RegExp(r"Padding\(\s*padding:\s*const\s+EdgeInsets\.only\(right:\s*\d").hasMatch(source),
+        isTrue,
+        reason: 'Wrap the unsynced badge in a trailing Padding so it stays inside the AppBar.',
+      );
     });
   });
 
