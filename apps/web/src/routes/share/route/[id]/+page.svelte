@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { fetchPublicRoute, clipTrackForUser } from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Route, TrackPoint } from '$lib/types';
@@ -20,7 +21,12 @@
 		} else {
 			route = r;
 			// Clip start + end against the owner's privacy zones (§33).
-			waypoints = (await clipTrackForUser(r.user_id, r.waypoints ?? [])) as TrackPoint[];
+			// Owners see their full route — the helper fails closed for
+			// non-owner viewers so we route around it for the owner.
+			const isOwner = auth.user?.id === r.user_id;
+			waypoints = isOwner
+				? ((r.waypoints ?? []) as TrackPoint[])
+				: ((await clipTrackForUser(r.user_id, r.waypoints ?? [])) as TrackPoint[]);
 		}
 		loading = false;
 	});

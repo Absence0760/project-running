@@ -2681,8 +2681,16 @@ export async function fetchFollowingFeed(opts?: {
 /// Server-side privacy-zone clipping (decisions §33). Pass the run /
 /// route owner's `user_id` and a points array; receive the clipped
 /// middle. Zones never come down the wire — the RPC reads them
-/// internally with security-definer privileges. Returns the input
-/// unchanged when the owner has no zones configured.
+/// internally with security-definer privileges. The RPC is a no-op
+/// (returns the input) when the owner has no zones configured.
+///
+/// **Fails closed:** on RPC error or unexpected response shape this
+/// returns `[]` rather than the unclipped input. The previous
+/// behaviour (return `points` on error) is the leak this helper exists
+/// to prevent — a transient DB blip that bypassed clipping was a
+/// privacy regression. Callers should guard owner views *before*
+/// calling so an outage doesn't blank the owner's own map; this
+/// function only ever speaks for non-owner viewers.
 export async function clipTrackForUser(
 	targetUserId: string,
 	points: { lat: number; lng: number; ele?: number; t?: number }[]
@@ -2693,10 +2701,11 @@ export async function clipTrackForUser(
 		points,
 	});
 	if (error) {
-		console.warn('clip_track_for_user failed; falling back to unclipped track', error);
-		return points;
+		console.warn('clip_track_for_user failed; failing closed (empty track)', error);
+		return [];
 	}
-	return (data ?? points) as typeof points;
+	if (!Array.isArray(data)) return [];
+	return data as typeof points;
 }
 
 /// Recent public runs from a single user — used by the profile page.

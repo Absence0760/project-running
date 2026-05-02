@@ -21,7 +21,15 @@
 		if (r) {
 			run = r;
 			const fullTrack = (r.track ?? []) as TrackPoint[];
-			track = (await clipTrackForUser(r.user_id, fullTrack)) as TrackPoint[];
+			// Owner views render the unclipped track — privacy zones exist
+			// to hide the owner's home from *viewers*, not from the owner.
+			// Skipping the RPC here also keeps the owner's map alive
+			// through a transient clip_track_for_user outage (the helper
+			// fails closed for non-owner views).
+			const isOwner = auth.user?.id === r.user_id;
+			track = isOwner
+				? fullTrack
+				: ((await clipTrackForUser(r.user_id, fullTrack)) as TrackPoint[]);
 		} else {
 			notFound = true;
 		}

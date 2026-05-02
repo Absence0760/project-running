@@ -653,5 +653,63 @@ void main() {
             'RunTrackPreview so the privacy-zone clip kicks in.',
       );
     });
+
+    test('RunTrackPreview cache is bounded (LRU)', () {
+      // Reason: without the cap a long session through 1000+ runs
+      // holds every deserialised track in memory until app restart.
+      // Map preserves insertion order so dropping `keys.first` evicts
+      // the oldest.
+      final source = File('lib/widgets/run_track_preview.dart')
+          .readAsStringSync();
+      expect(
+        source,
+        contains('_cacheMax'),
+        reason: 'RunTrackPreview cache must have a bounded size — see '
+            'the _cacheMax constant.',
+      );
+      expect(
+        source,
+        contains('_cache.remove(_cache.keys.first)'),
+        reason: 'LRU eviction must drop the oldest entry when the cache '
+            'is full.',
+      );
+    });
+
+    test('clipTrackForUser fails closed on RPC error', () {
+      // Reason: returning the unclipped input on RPC error was the
+      // privacy leak this helper exists to prevent. Fail-closed
+      // (return []) so a transient outage renders an empty map for
+      // non-owner viewers instead of leaking the full track. The
+      // empty-input early-return is fine — `points.isEmpty ? points`
+      // is the same shape as `[]`, just no allocation.
+      final source =
+          File('../../packages/api_client/lib/src/api_client.dart')
+              .readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'Future<List<Map<String, dynamic>>> clipTrackForUser\([^)]*\)\s*async\s*\{',
+      );
+      // Pull just the catch block and the post-rpc shape-validation
+      // path so the assertion doesn't trip on the empty-input guard.
+      final tail = body.substring(body.indexOf('try'));
+      expect(
+        tail.contains('return const [];'),
+        isTrue,
+        reason: 'clipTrackForUser must return [] on RPC failure — see '
+            'decisions §33.',
+      );
+      // The catch / shape-fail branches must not return the unclipped
+      // input.
+      final catchMatch = RegExp(r'catch \([^)]*\) \{[^}]*\}').firstMatch(tail);
+      expect(catchMatch, isNotNull,
+          reason: 'clipTrackForUser must have an explicit catch branch.');
+      expect(
+        catchMatch!.group(0)!.contains('return points'),
+        isFalse,
+        reason: 'clipTrackForUser must not fall back to the input track '
+            'on RPC error — that is the leak this helper exists to '
+            'prevent.',
+      );
+    });
   });
 }

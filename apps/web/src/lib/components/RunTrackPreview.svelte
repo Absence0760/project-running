@@ -7,7 +7,20 @@
 	// fetch failure so we don't retry in a tight loop on a broken object.
 	// The clip-variant prefix (`raw:` vs `clip:`) keeps owner and non-
 	// owner reads of the same track from polluting each other.
+	//
+	// Cap at CACHE_MAX entries — `Map` preserves insertion order so
+	// dropping `keys().next()` evicts the oldest. A power user with
+	// 1000+ runs in a long session would otherwise hold every
+	// deserialised track in memory until reload.
+	const CACHE_MAX = 200;
 	const CACHE = new Map<string, TrackPoint[] | null>();
+	function cacheSet(key: string, value: TrackPoint[] | null) {
+		if (CACHE.size >= CACHE_MAX && !CACHE.has(key)) {
+			const oldest = CACHE.keys().next().value;
+			if (oldest !== undefined) CACHE.delete(oldest);
+		}
+		CACHE.set(key, value);
+	}
 </script>
 
 <script lang="ts">
@@ -30,8 +43,11 @@
 	} = $props();
 
 	const viewerId = $derived(auth.user?.id ?? null);
+	// Treat anon (`viewerId == null`) as non-owner — they can hit
+	// public share routes without signing in and must still see a
+	// clipped track.
 	const shouldClip = $derived(
-		ownerUserId != null && viewerId != null && ownerUserId !== viewerId,
+		ownerUserId != null && ownerUserId !== viewerId,
 	);
 	const cacheKey = $derived(
 		trackUrl == null ? null : `${shouldClip ? 'clip' : 'raw'}:${trackUrl}`,
@@ -88,10 +104,10 @@
 			// thumbnail would otherwise project them all onto a single
 			// pixel and render a meaningless red dot.
 			const renderable = isMoving(track) ? track : [];
-			CACHE.set(cacheKey, renderable);
+			cacheSet(cacheKey, renderable);
 			points = renderable;
 		} catch (_) {
-			CACHE.set(cacheKey, null);
+			cacheSet(cacheKey, null);
 		}
 	}
 

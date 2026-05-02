@@ -41,3 +41,48 @@ test('feed page passes ownerUserId to RunTrackPreview', () => {
 		'Feed page must thread the run owner id into RunTrackPreview so the privacy-zone clip kicks in.',
 	);
 });
+
+test('RunTrackPreview cache is bounded (LRU)', () => {
+	// Reason: without the cap a long session through 1000+ runs holds
+	// every deserialised track in memory until reload. JS Map preserves
+	// insertion order so dropping `keys().next()` evicts the oldest.
+	const source = read('src/lib/components/RunTrackPreview.svelte');
+	assert.match(
+		source,
+		/CACHE_MAX/,
+		'RunTrackPreview cache must have a bounded size — see the CACHE_MAX constant.',
+	);
+	assert.match(
+		source,
+		/CACHE\.keys\(\)\.next\(\)/,
+		'LRU eviction must drop the oldest entry when the cache is full.',
+	);
+});
+
+test('clipTrackForUser fails closed on RPC error', () => {
+	// Reason: returning the unclipped input on RPC error was the
+	// privacy leak this helper exists to prevent. Fail-closed (return
+	// []) so a transient outage renders an empty map for non-owner
+	// viewers instead of leaking the full track. The empty-input
+	// early-return is fine — it returns the empty input which is the
+	// same shape as `[]`.
+	const source = read('src/lib/data.ts');
+	const fnMatch = source.match(
+		/export async function clipTrackForUser[\s\S]*?^}/m,
+	);
+	assert.ok(fnMatch, 'Could not locate clipTrackForUser body — rename?');
+	const body = fnMatch![0];
+	// The `if (error) { ... }` branch must return [], not points.
+	const errBranch = body.match(/if \(error\) \{[\s\S]*?\}/);
+	assert.ok(errBranch, 'clipTrackForUser must have an explicit error branch');
+	assert.match(
+		errBranch![0],
+		/return \[\];/,
+		'clipTrackForUser must return [] on RPC failure — see decisions §33.',
+	);
+	assert.doesNotMatch(
+		errBranch![0],
+		/return points/,
+		'clipTrackForUser must not fall back to the input track on RPC error — that is the leak this helper exists to prevent.',
+	);
+});

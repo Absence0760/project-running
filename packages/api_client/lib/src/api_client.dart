@@ -1453,9 +1453,16 @@ class ApiClient {
 
   /// Server-side privacy-zone clipping. The zones never reach the
   /// client; the RPC reads them with security-definer privileges and
-  /// returns the clipped middle of the input track. Falls back to
-  /// the input if the RPC fails so a transient server error never
-  /// leaks the unclipped track to a non-owner viewer of a public run.
+  /// returns the clipped middle of the input track. The RPC is a
+  /// no-op (returns the input) when the owner has no zones configured.
+  ///
+  /// **Fails closed:** on RPC error or unexpected response shape this
+  /// returns `[]` rather than the unclipped input. The previous
+  /// behaviour (return `points` on error) was the leak this helper
+  /// exists to prevent — a transient DB blip that bypassed clipping
+  /// was a privacy regression. Callers should guard owner views
+  /// *before* calling so an outage doesn't blank the owner's own
+  /// map; this function only ever speaks for non-owner viewers.
   Future<List<Map<String, dynamic>>> clipTrackForUser({
     required String targetUserId,
     required List<Map<String, dynamic>> points,
@@ -1469,9 +1476,9 @@ class ApiClient {
       if (data is List) {
         return data.cast<Map<String, dynamic>>();
       }
-      return points;
+      return const [];
     } catch (_) {
-      return points;
+      return const [];
     }
   }
 

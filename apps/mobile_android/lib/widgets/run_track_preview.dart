@@ -44,15 +44,31 @@ class _RunTrackPreviewState extends State<RunTrackPreview> {
   // and non-owner reads of the same track from polluting each other —
   // a sibling user that shares no privacy zones with the viewer would
   // otherwise see the cached clipped polyline.
+  //
+  // Cap at [_cacheMax] entries — `Map` literals are LinkedHashMaps that
+  // preserve insertion order, so dropping `keys.first` evicts the
+  // oldest. Without the cap a long session over a 1000-run history
+  // holds every deserialised track in memory until app restart.
+  static const int _cacheMax = 200;
   static final Map<String, List<Waypoint>?> _cache = {};
+
+  static void _cacheSet(String key, List<Waypoint>? value) {
+    if (_cache.length >= _cacheMax && !_cache.containsKey(key)) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[key] = value;
+  }
 
   List<Waypoint>? _points;
   bool _attempted = false;
 
   bool get _shouldClip {
     final owner = widget.ownerUserId;
-    final viewer = widget.api.userId;
-    return owner != null && viewer != null && owner != viewer;
+    if (owner == null) return false;
+    // Treat anon (`viewer == null`) as non-owner — public share
+    // surfaces can be reached without signing in and must still see a
+    // clipped track.
+    return widget.api.userId != owner;
   }
 
   String? _cacheKey() {
@@ -114,10 +130,10 @@ class _RunTrackPreviewState extends State<RunTrackPreview> {
               .toList();
         }
         final renderable = isTrackRenderable(track) ? track : <Waypoint>[];
-        _cache[key] = renderable;
+        _cacheSet(key, renderable);
         if (mounted) setState(() => _points = renderable);
       } catch (_) {
-        _cache[key] = null;
+        _cacheSet(key, null);
         if (mounted) setState(() => _points = null);
       }
     }();
