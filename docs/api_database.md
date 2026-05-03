@@ -80,6 +80,15 @@ when `bpm` is absent.
 { "race_name": "Richmond Half Marathon", "bib": "1234", "overall_place": 142, "chip_time": "1:47:23" }
 ```
 
+**Public reads go through the `public_runs` view, not the base table.** Migration `20260626_001_public_runs_view.sql` adds a redacted projection over `runs` that:
+
+- omits `external_id` (which leaks third-party activity ids — `strava:<id>`, `parkrun:<event>:<date>`, `garmin:<file_id>`),
+- strips audit/sync/training-plan-linkage keys from `metadata` (denylist in lockstep with [metadata.md](metadata.md)'s "Public-safe?" column — `imported_from`, `*_id`, `*_activity_type`, `last_modified_at`, `recovered_from_crash`, `in_progress*`, `manual_entry`, `indoor_estimated`, `distance_source`, `plan_workout_id`, `workout_step_results`, `workout_adherence`, `source_file`, `max_bpm`),
+- nulls `route_id` / `event_id` when the joined route or event isn't itself public (via SECURITY DEFINER helpers `is_public_route_by_id` / `is_public_event_by_id`),
+- restricts to `is_public = true`.
+
+Granted to `anon` + `authenticated`. Every public-runs reader (`fetchPublicRun`, `fetchPublicRunsByUser`, `fetchFollowingFeed` on web; `fetchPublicRunById`, `fetchPublicRunsByUser`, `fetchFollowingFeed` on mobile) reads the view, not the base table — architecture-guard tests on both platforms enforce this. Owner-context reads (`select * from runs where user_id = auth.uid()`) keep the bare-table path because they need the unredacted columns. Decisions §33's wire-leak follow-up entry has the full motivation.
+
 ---
 
 ### `routes`

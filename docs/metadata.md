@@ -8,7 +8,7 @@ The `runs.metadata` column is `jsonb` — a schema-less bag that any client can 
 
 ## Key registry
 
-Each row: what the key is, its shape, which platforms *write* it, which platforms *read* it, and whether the client must tolerate its absence. "Optional" means "a consumer must be safe with it missing." All keys are optional unless explicitly required.
+Each row: what the key is, its shape, which platforms *write* it, which platforms *read* it, whether the client must tolerate its absence, and whether the key is **public-safe** (preserved by the `public_runs` view) or **owner-only** (stripped from the view's `metadata` projection — see migration `20260626_001_public_runs_view.sql` and decisions §33's wire-leak follow-up). "Optional" means "a consumer must be safe with it missing." All keys are optional unless explicitly required. **When you add a new key, classify it.** If the public_runs strip-list and this column drift, the next public-rows audit will catch it; we'd rather catch it at PR review.
 
 ### Core run properties
 
@@ -96,6 +96,27 @@ When adding a new metadata key:
 3. **Name it for what it is, not what writes it.** `activity_type` not `recorded_activity_type`. The writer is obvious from the data flow.
 4. **Be explicit about absence.** "Optional" is the default. If a reader can't tolerate the key being missing, call that out in the notes column and ask whether it should be a real NOT NULL column instead.
 5. **Update this file and remove the key here when you remove it from code.** The schema generators can't do this for you.
+
+## Public-safe vs owner-only classification
+
+When a run's `is_public = true`, the row's `metadata` jsonb travels alongside it. The `public_runs` view (migration `20260626_001_public_runs_view.sql`) projects a *redacted* version that drops the owner-only keys before they cross the wire. The classification:
+
+**Public-safe** (kept by the view's projection):
+
+- `activity_type`, `steps`, `laps`, `cadence` — core run properties
+- `title`, `notes` — user-editable display fields
+- `event`, `position`, `age_grade` — parkrun fields
+- `avg_bpm` — scalar HR
+- `elevation_m` — total elevation gain
+
+**Owner-only** (stripped by the view's projection — denylist in the migration body):
+
+- `imported_from`, `imported_at`, `health_connect_type`, `strava_activity_type`, `strava_id`, `garmin_id`, `source_file`, `max_bpm` — import provenance / third-party-id-cross-walks
+- `plan_workout_id`, `workout_step_results`, `workout_adherence` — training-plan linkage; leaks the runner's structured-workout paces and adherence
+- `last_modified_at` — sync-state internal; leaks device-upload cadence
+- `recovered_from_crash`, `in_progress_saved_at`, `in_progress`, `manual_entry`, `indoor_estimated`, `distance_source` — recorder internals
+
+When you add a new key, classify it explicitly — and update the strip list in `20260626_001_public_runs_view.sql` if it lands on the owner-only side. The seed assertions in `apps/backend/supabase/seed.sql` for `public_runs` exercise the projection; an unclassified key that's accidentally dropped (or accidentally exposed) will fail the seed.
 
 ## Enforcement
 
