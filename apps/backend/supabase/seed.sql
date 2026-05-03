@@ -1344,3 +1344,63 @@ BEGIN
     AND (metadata->>'title' IN ('Public test', 'Private'));
   PERFORM set_config('request.jwt.claim.role', '', true);
 END $$;
+
+-- ───────── route_reviews INSERT visibility gate (migration 20260627_001) ─────────
+-- A non-existent route_id must fail the WITH CHECK, and a private
+-- route owned by another user must also fail.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  other_user uuid := '99999999-9999-9999-9999-999999999991';
+  v_private_route_id uuid;
+  v_public_route_id uuid;
+BEGIN
+  -- Set up: a private route owned by another user.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  INSERT INTO auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    VALUES (other_user, 'rls-test@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (other_user, 'private rls test route', 1000, false, '[]'::jsonb)
+    RETURNING id INTO v_private_route_id;
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (other_user, 'public rls test route', 1000, true, '[]'::jsonb)
+    RETURNING id INTO v_public_route_id;
+
+  -- SET ROLE is required to exercise RLS — the seed runs as the
+  -- postgres superuser by default, which bypasses RLS entirely.
+  -- Switching to the `authenticated` role applies RLS as a real
+  -- PostgREST request would. set_config still drives auth.uid()
+  -- via the JWT-sub claim.
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  SET LOCAL ROLE authenticated;
+
+  -- (The FK constraint on route_reviews.route_id already blocks
+  -- truly-missing UUIDs with 23503 before the RLS gate runs, so
+  -- we don't test the missing-route branch here.)
+
+  -- Private foreign route → routes RLS returns no row → policy fails.
+  BEGIN
+    INSERT INTO route_reviews (route_id, user_id, rating)
+      VALUES (v_private_route_id, test_user, 3);
+    RAISE EXCEPTION 'route_reviews: private foreign route insert should have been blocked';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Public route belonging to another user → succeeds.
+  INSERT INTO route_reviews (route_id, user_id, rating)
+    VALUES (v_public_route_id, test_user, 4);
+
+  -- Cleanup. RESET ROLE so the rest of the seed runs as postgres.
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  DELETE FROM route_reviews WHERE route_id IN (v_public_route_id, v_private_route_id);
+  DELETE FROM routes WHERE id IN (v_public_route_id, v_private_route_id);
+  DELETE FROM auth.users WHERE id = other_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
