@@ -347,6 +347,10 @@ SECURITY DEFINER RPC for plan-template adoption (decisions §35). Verifies the c
 
 SECURITY DEFINER RPC for privacy-zone clipping (decisions §33). Reads `user_settings.prefs.privacy_zones` for the target user, walks the input points dropping in-zone leading + trailing entries, and returns the contiguous middle as jsonb. Zones never leave the database. Granted to `anon` + `authenticated` so anonymous `/share/run/[id]` and `/share/route/[id]` viewers also receive clipped output. Input is capped at 50 000 points (raise on overflow) to bound the residual dense-grid probe attack. Returns input unchanged when the target user has no zones configured. Helpers `privacy_distance_m(lat1, lng1, lat2, lng2)` and `privacy_in_any_zone(lat, lng, zones_json)` are exposed in the same migration but used only internally by the RPC.
 
+### `clip_route_for_viewer(p_route_id uuid)`
+
+SECURITY DEFINER RPC for the routes equivalent of `clip_track_for_user` (decisions §33, migration `20260625_001`). Self-contained: caller passes only the route id. Looks up the row internally, applies the same visibility gate as the routes SELECT policies (owner / public / club member; raises `42501` otherwise so private-route reads are loud), and returns either the unclipped `waypoints` (owner) or the clipped output (non-owner, delegated to `clip_track_for_user` so the zone walk has one implementation). Granted to `anon` + `authenticated`. Anon callers can only read `is_public = true` routes — private-route reads from anon raise `42501`. Routes carry waypoints inline (no Storage indirection like runs) so this is a straight RPC rather than an Edge Function.
+
 ### `user_follows`
 
 Asymmetric follow graph. One row per `(follower, followee)` pair; CHECK blocks self-follow; cascading deletes on both sides. RLS: anyone authenticated can SELECT (graph is public); only the follower can INSERT or DELETE their own row. See `decisions.md § 31`.
