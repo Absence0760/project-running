@@ -43,10 +43,10 @@ class Route {
 
   const Route({
     required this.id,
-    required this.userId,
     required this.name,
     required this.waypoints,
     required this.distanceMetres,
+    this.userId = '',
     this.elevationGainMetres = 0,
     this.isPublic = false,
     this.createdAt,
