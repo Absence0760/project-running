@@ -871,6 +871,51 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
+-- ───────── runs.track_url path-shape CHECK (migration 20260621_001) ─────────
+-- Verifies an attacker can't rewrite their own row's track_url to
+-- point at another user's blob — the CHECK rejects any path that
+-- isn't the canonical {user_id}/{run_id}.json.gz.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  test_run_id uuid;
+BEGIN
+  SELECT id INTO test_run_id FROM runs WHERE user_id = test_user LIMIT 1;
+
+  -- Canonical shape — must succeed.
+  UPDATE runs SET track_url = test_user::text || '/' || test_run_id::text || '.json.gz'
+    WHERE id = test_run_id;
+
+  -- Foreign user's path — must raise.
+  BEGIN
+    UPDATE runs
+      SET track_url = '99999999-9999-9999-9999-999999999991/'
+                      || test_run_id::text || '.json.gz'
+      WHERE id = test_run_id;
+    RAISE EXCEPTION 'runs_track_url_path_shape: foreign-user path should have been rejected';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  -- Foreign run id — must raise.
+  BEGIN
+    UPDATE runs
+      SET track_url = test_user::text
+                      || '/99999999-9999-9999-9999-999999999991.json.gz'
+      WHERE id = test_run_id;
+    RAISE EXCEPTION 'runs_track_url_path_shape: foreign-run path should have been rejected';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  -- NULL is fine (no track yet).
+  UPDATE runs SET track_url = NULL WHERE id = test_run_id;
+
+  -- Restore canonical so downstream live_run_pings test has a valid run.
+  UPDATE runs SET track_url = test_user::text || '/' || test_run_id::text || '.json.gz'
+    WHERE id = test_run_id;
+END $$;
+
 -- ───────── live_run_pings privacy clipping (migration 20260618_001) ─────────
 -- Verifies the BEFORE INSERT trigger drops pings inside any of the
 -- runner's privacy zones — the surface that Realtime broadcasts to

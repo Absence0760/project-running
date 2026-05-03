@@ -57,6 +57,18 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
 
+  // Defence-in-depth against track_url forgery (audit/storage High).
+  // A CHECK constraint on runs.track_url (migration 20260621_001)
+  // pins the column to {user_id}/{run_id}.json.gz at write time.
+  // This assertion catches anything that slipped through (legacy
+  // rows pre-validate, or a future weakening of the CHECK) — without
+  // it, an attacker rewriting their own row to a victim's path
+  // could trick the service-role downloader into reading any blob.
+  const expected = `${run.user_id}/${runId}.json.gz`;
+  if (run.track_url !== expected) {
+    return Response.json({ error: 'track_url mismatch' }, { status: 422 });
+  }
+
   const adminClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
