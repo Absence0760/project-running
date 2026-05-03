@@ -426,8 +426,11 @@ class _RunScreenState extends State<RunScreen> {
     try {
       final evt = await widget.social.fetchNextRsvpedEvent();
       if (mounted) setState(() => _upcomingEvent = evt);
-    } catch (_) {
-      // Non-critical — leave the card hidden if the fetch fails.
+    } catch (e) {
+      // Non-critical — leave the card hidden if the fetch fails. Log
+      // so an upstream API rename doesn't surface only as a missing
+      // UI card. See docs/conventions.md § Layered resilience.
+      debugPrint('refresh upcoming-event card failed: $e');
     }
   }
 
@@ -435,8 +438,9 @@ class _RunScreenState extends State<RunScreen> {
     try {
       final p = await widget.training.fetchActiveOverview();
       if (mounted) setState(() => _planOverview = p);
-    } catch (_) {
-      // Non-critical.
+    } catch (e) {
+      // Non-critical — same logging rationale as `_refreshUpcomingEvent`.
+      debugPrint('refresh plan-overview card failed: $e');
     }
   }
 
@@ -671,6 +675,10 @@ class _RunScreenState extends State<RunScreen> {
     try {
       await Share.share(url, subject: 'Track me live');
     } catch (e) {
+      // The user-facing banner is the primary signal, but also log
+      // so a Share.share regression is observable in dev/release
+      // logs without us reproducing the user's exact moment.
+      debugPrint('Share.share live link failed: $e');
       if (mounted) _showTopBanner('Could not share live link: $e');
     }
   }
@@ -940,8 +948,18 @@ class _RunScreenState extends State<RunScreen> {
             // down" — the direction is distinguishable by feel alone.
             HapticFeedback.heavyImpact();
             if (diff > 0) {
+              // The delayed pulse runs on a different stack frame from
+              // the surrounding try/catch — without its own guard, a
+              // throw here propagates as unhandled and can break the
+              // _onSnapshot pipeline (L0/L1 freeze). Each auxiliary
+              // effect owns its own try/catch + debugPrint; see
+              // docs/conventions.md § Layered resilience.
               Future<void>.delayed(const Duration(milliseconds: 180), () {
-                HapticFeedback.heavyImpact();
+                try {
+                  HapticFeedback.heavyImpact();
+                } catch (e) {
+                  debugPrint('pace-alert second-pulse haptic failed: $e');
+                }
               });
             }
           }
