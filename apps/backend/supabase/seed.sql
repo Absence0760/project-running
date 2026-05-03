@@ -870,3 +870,52 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
+
+-- ───────── live_run_pings privacy clipping (migration 20260618_001) ─────────
+-- Verifies the BEFORE INSERT trigger drops pings inside any of the
+-- runner's privacy zones — the surface that Realtime broadcasts to
+-- /live/{run_id} subscribers.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  test_run_id uuid;
+  v_count_before int;
+  v_count_after int;
+  v_zones_before jsonb;
+BEGIN
+  SELECT prefs->'privacy_zones' INTO v_zones_before
+    FROM user_settings WHERE user_id = test_user;
+
+  UPDATE user_settings
+    SET prefs = prefs || jsonb_build_object(
+      'privacy_zones',
+      jsonb_build_array(jsonb_build_object('lat', 40.0, 'lng', -74.0, 'radius_m', 200))
+    )
+    WHERE user_id = test_user;
+
+  SELECT id INTO test_run_id FROM runs WHERE user_id = test_user LIMIT 1;
+  DELETE FROM live_run_pings WHERE run_id = test_run_id;
+
+  SELECT count(*) INTO v_count_before FROM live_run_pings WHERE run_id = test_run_id;
+
+  -- Out-of-zone ping (~5km north): should land.
+  INSERT INTO live_run_pings (run_id, user_id, lat, lng)
+    VALUES (test_run_id, test_user, 40.045, -74.0);
+
+  -- In-zone ping (~55m offset): should be silently dropped by the trigger.
+  INSERT INTO live_run_pings (run_id, user_id, lat, lng)
+    VALUES (test_run_id, test_user, 40.0005, -74.0);
+
+  SELECT count(*) INTO v_count_after FROM live_run_pings WHERE run_id = test_run_id;
+  IF v_count_after - v_count_before <> 1 THEN
+    RAISE EXCEPTION 'live_run_pings privacy trigger: expected exactly 1 ping to land (out-of-zone only), got delta=%', v_count_after - v_count_before;
+  END IF;
+
+  DELETE FROM live_run_pings WHERE run_id = test_run_id;
+  UPDATE user_settings
+    SET prefs = case
+      when v_zones_before is null then prefs - 'privacy_zones'
+      else prefs || jsonb_build_object('privacy_zones', v_zones_before)
+    end
+    WHERE user_id = test_user;
+END $$;
