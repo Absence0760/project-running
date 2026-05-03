@@ -966,11 +966,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return 0;
   }
 
+  /// Average cadence in steps-per-minute, derived as
+  /// `steps / moving_time_minutes`. Mirrors the web formula at
+  /// `apps/web/src/routes/runs/[id]/+page.svelte` (`avgCadence`).
+  /// Returns 0 when the input is too thin to compute meaningfully
+  /// (no steps, or under 30 s of moving time) so the tile collapses
+  /// to "0 spm" instead of misreporting.
   int get _cadence {
-    final c = run.metadata?['cadence'];
-    if (c is int) return c;
-    if (c is num) return c.toInt();
-    return 0;
+    final steps = _steps;
+    final movingSeconds = _movingTime.inSeconds;
+    if (steps <= 0 || movingSeconds < 30) return 0;
+    return (steps / (movingSeconds / 60)).round();
   }
 
   /// Average heart rate in BPM. Watch apps (watch_ios, watch_wear) write
