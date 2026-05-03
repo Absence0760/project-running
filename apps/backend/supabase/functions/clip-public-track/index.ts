@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 // Serves a privacy-zone-clipped track for a public run. Replaces
@@ -36,6 +37,30 @@ serve(withSentry('clip-public-track', async (req: Request) => {
 
   const { data: { user } } = await userClient.auth.getUser();
   const callerId = user?.id ?? null;
+
+  // Rate-limit before doing any DB / Storage work. Authenticated
+  // callers get their own per-user bucket via the existing user-id
+  // path. Anon callers share a per-IP bucket — they're the abuse
+  // surface (each call is 1 PostgREST query + up to 25 MB Storage
+  // download + a clip walk over up to 50k points). The admin client
+  // is required for the anon path because the user-context guard
+  // from migration 20260616_001 rejects synthetic IP-derived keys.
+  const adminClient = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+  if (callerId) {
+    const denied = await checkRateLimit(
+      userClient, callerId, 'clip-public-track', 600, 3600,
+    );
+    if (denied) return denied;
+  } else {
+    const anonKey = await ipBucketKey(req);
+    const denied = await checkRateLimit(
+      adminClient, anonKey, 'clip-public-track:anon', 60, 3600,
+    );
+    if (denied) return denied;
+  }
 
   let body: { run_id?: unknown };
   try {
@@ -80,10 +105,6 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
 
-  const adminClient = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  );
   const { data: blob, error: dlErr } = await adminClient.storage
     .from('runs')
     .download(run.track_url);

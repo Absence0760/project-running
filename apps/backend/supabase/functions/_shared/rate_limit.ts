@@ -57,6 +57,35 @@ export async function checkRateLimit(
   );
 }
 
+/// Derive a synthetic UUID from the request's client IP. Used for
+/// IP-keyed rate-limiting on EFs that accept anon callers (e.g.
+/// `clip-public-track`) — the `rate_limits` table is `user_id uuid`,
+/// so the key has to fit a UUID. The Cloudflare header is preferred
+/// (Supabase's edge runs behind Cloudflare); `x-real-ip` and
+/// `x-forwarded-for` are fallbacks for local-dev and self-hosted
+/// setups. A missing IP collapses to `0.0.0.0` which buckets every
+/// header-less caller together — strict but rare in practice.
+///
+/// Caller must use the service-role client when calling
+/// `check_rate_limit` with this key — the user-context guard added
+/// in migration `20260616_001` rejects keys that don't match
+/// `auth.uid()`, and a synthetic anon key never matches.
+export async function ipBucketKey(req: Request): Promise<string> {
+  const ip =
+    req.headers.get('cf-connecting-ip') ??
+    req.headers.get('x-real-ip') ??
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    '0.0.0.0';
+  const data = new TextEncoder().encode(`anon-rate-limit-v1:${ip}`);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  // UUIDv8-shape (literal '8' in the version nibble) so the synthetic
+  // key can never collide with a real auth.users row.
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 /// Tier-aware variant. Picks between `freeMax` and `proMax` based on
 /// the caller's `user_profiles.subscription_tier`. Single SQL round
 /// trip — the function does the tier lookup + the window check in
