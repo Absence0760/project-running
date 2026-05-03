@@ -56,18 +56,25 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // future time. Two gates:
   //   1. Freshness — reject events whose event_timestamp_ms is more
   //      than REPLAY_WINDOW_MS old or more than CLOCK_SKEW_MS in the
-  //      future. Bounds the replay window and catches captures that
-  //      have been sitting on a flash drive.
+  //      future. Catches captures that have been sitting on a flash
+  //      drive.
   //   2. Event-id dedupe — first writer to webhook_events wins; a
   //      duplicate insert (23505 unique_violation) means we've
   //      already processed this delivery, so skip the side effect
   //      and return 200 so RevenueCat doesn't keep retrying.
-  // Without #1 the dedupe table grows unboundedly defended against
-  // a captured event from years ago; without #2 a captured event
-  // delivered twice within the freshness window can trigger duplicate
-  // tier flips (relevant when a deactivation is replayed *after* a
-  // re-subscription has flipped the tier back to 'pro').
-  const REPLAY_WINDOW_MS = 5 * 60 * 1000;
+  //
+  // The freshness window must be wider than RC's retry envelope
+  // (~3 days of exponential backoff while the original
+  // event_timestamp_ms is preserved on retry) AND narrower than the
+  // dedupe-row TTL (30 days, set by the cleanup-stale-webhook-events
+  // cron in 20260623_001). 7 days threads both: a delivery that
+  // failed for ~6 days of cold-start outage still ingests cleanly,
+  // and an attacker can't replay a captured event past the dedupe
+  // table's pruning horizon. Without the dedupe table this would
+  // need to be much tighter; with it, the window only has to bound
+  // the replay-after-prune window. CLOCK_SKEW_MS handles a future-
+  // dated event_timestamp_ms from clock drift.
+  const REPLAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
   const CLOCK_SKEW_MS = 60 * 1000;
   const eventTsMs = typeof event.event_timestamp_ms === 'number'
     ? event.event_timestamp_ms
