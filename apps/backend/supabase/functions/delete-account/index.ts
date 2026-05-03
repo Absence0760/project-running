@@ -16,24 +16,36 @@ const PAGE = 1000;
 // Without this, `${user.id}/exports/<ts>.{csv,zip}` blobs survive
 // account deletion even though the parent prefix is "drained" — a
 // privacy-deletion failure mode that audit/storage pass 3 caught.
+//
+// Throws on any list / remove error so the caller can abort before
+// dropping the auth user. A partial Storage drain followed by the
+// auth-row cascade orphans blobs with no row to point at them — a
+// privacy-deletion silent failure that the user can't observe and
+// can't retry (their auth row is already gone).
 async function deletePrefix(
   client: SupabaseClient,
   bucket: string,
   prefix: string,
 ): Promise<void> {
   while (true) {
-    const { data: entries } = await client.storage
+    const { data: entries, error: listErr } = await client.storage
       .from(bucket)
       .list(prefix, { limit: PAGE });
+    if (listErr) {
+      throw new Error(`list ${bucket}/${prefix} failed: ${listErr.message}`);
+    }
     if (!entries || entries.length === 0) break;
 
     const files = entries.filter((e) => e.id !== null);
     const folders = entries.filter((e) => e.id === null);
 
     if (files.length > 0) {
-      await client.storage
+      const { error: rmErr } = await client.storage
         .from(bucket)
         .remove(files.map((f) => `${prefix}/${f.name}`));
+      if (rmErr) {
+        throw new Error(`remove in ${bucket}/${prefix} failed: ${rmErr.message}`);
+      }
     }
     for (const folder of folders) {
       await deletePrefix(client, bucket, `${prefix}/${folder.name}`);
@@ -83,9 +95,19 @@ serve(withSentry('delete-account', async (req: Request) => {
   // them behind means saved URLs keep resolving even after account
   // deletion). deletePrefix recurses through pseudo-folders so the
   // exports/ subdirectory is fully drained alongside the top-level
-  // tracks.
-  for (const bucket of ['runs', 'run-photos']) {
-    await deletePrefix(adminClient, bucket, user.id);
+  // tracks. A partial drain followed by the auth-row cascade orphans
+  // blobs with no row to point at them, so we abort before deleting
+  // the auth user — the user can retry once Storage recovers.
+  try {
+    for (const bucket of ['runs', 'run-photos']) {
+      await deletePrefix(adminClient, bucket, user.id);
+    }
+  } catch (err) {
+    console.error('delete-account: Storage drain failed:', err);
+    return Response.json(
+      { error: 'storage drain failed' },
+      { status: 500, headers: { 'content-type': 'application/json' } },
+    );
   }
 
   // Row data cascades from auth.users via ON DELETE CASCADE on most
