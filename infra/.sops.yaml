@@ -1,0 +1,28 @@
+# sops-encrypted file routing.
+#
+# Each per-env `secrets.enc.yaml` is encrypted with that env's KMS key.
+# The KMS key is created by `modules/web-stack` on `terraform apply`
+# for the env.
+#
+# First-time setup for an env (after `terraform apply` has created the
+# KMS key):
+#
+#   ARN=$(cd infra/envs/prod && terraform output -raw kms_key_arn)
+#   sed -i "s|REPLACE_PROD_KMS_ARN|$ARN|" infra/.sops.yaml
+#   echo "ANTHROPIC_API_KEY: replace-me" > /tmp/coach.yaml
+#   sops --encrypt /tmp/coach.yaml > infra/envs/prod/secrets.enc.yaml
+#
+# Rotation: edit the file in place with `sops infra/envs/prod/secrets.enc.yaml`,
+# save, then `terraform apply` to push the new value to the Lambda.
+#
+# The two creation_rules below are placeholders — fill the ARNs in
+# (or move them to ~/.config/sops/runonward.sops.yaml if you'd rather
+# keep ARNs out of the repo). The rules don't affect *decryption* — that
+# uses whatever KMS key the file was encrypted with — only what `sops`
+# defaults to when you run `sops --encrypt` on a fresh file.
+
+creation_rules:
+  - path_regex: envs/prod/secrets\.enc\.yaml$
+    kms: REPLACE_PROD_KMS_ARN
+  - path_regex: envs/preview/secrets\.enc\.yaml$
+    kms: REPLACE_PREVIEW_KMS_ARN

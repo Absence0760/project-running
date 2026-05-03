@@ -1,0 +1,445 @@
+# Per-env web stack.
+#
+# Used by `infra/envs/<env>/main.tf`. Creates everything for one
+# environment: S3 bucket (private, OAC-fronted), CloudFront
+# distribution with two behaviours (default → S3, /api/coach/* →
+# Lambda Function URL), the coach Lambda with response streaming, the
+# per-env KMS key + alias used to encrypt secrets, the sops-decrypted
+# Lambda env, and the Route 53 ALIAS records pointing at CloudFront.
+#
+# CloudWatch alarms live in `alarms.tf`.
+
+locals {
+  resource_prefix = "runonward-web-${var.env}"
+
+  # If the sops file exists at apply time, decrypt it and merge into
+  # the Lambda env. On first apply (before the user has encoded
+  # anything against the env's KMS key), `secrets_file = null` and the
+  # secrets map is empty — the Lambda boots but `/api/coach` returns
+  # 503 because ANTHROPIC_API_KEY isn't set.
+  has_secrets = var.secrets_file != null && fileexists(var.secrets_file)
+
+  base_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+    },
+    var.extra_lambda_env,
+  )
+
+  lambda_env = merge(
+    local.base_lambda_env,
+    local.has_secrets ? data.sops_file.secrets[0].data : {},
+  )
+}
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+data "sops_file" "secrets" {
+  count       = local.has_secrets ? 1 : 0
+  source_file = var.secrets_file
+}
+
+# Placeholder zip — used until CI's first `aws lambda update-function-
+# code` replaces the code with the real bundle from
+# `apps/web/lambda/coach/build.mjs`. After that, `ignore_changes` on
+# the function keeps Terraform from reverting the deployed bundle.
+data "archive_file" "placeholder" {
+  type        = "zip"
+  source_dir  = "${path.module}/placeholder"
+  output_path = "${path.module}/placeholder/.placeholder.zip"
+}
+
+locals {
+  effective_zip_path = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
+}
+
+# ──────────────────────────── KMS key for sops ────────────────────────────
+
+resource "aws_kms_key" "secrets" {
+  description             = "Encrypts sops secrets for runonward-web-${var.env}"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  tags                    = var.tags
+}
+
+resource "aws_kms_alias" "secrets" {
+  name          = "alias/${local.resource_prefix}-secrets"
+  target_key_id = aws_kms_key.secrets.key_id
+}
+
+# ──────────────────────────── S3 bucket (static site) ────────────────────────────
+
+resource "aws_s3_bucket" "site" {
+  bucket        = "${local.resource_prefix}-site"
+  force_destroy = false
+  tags          = var.tags
+}
+
+resource "aws_s3_bucket_public_access_block" "site" {
+  bucket                  = aws_s3_bucket.site.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "site" {
+  bucket = aws_s3_bucket.site.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+    filter {}
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "site" {
+  bucket = aws_s3_bucket.site.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AllowCloudFrontReadViaOAC"
+      Effect    = "Allow"
+      Principal = { Service = "cloudfront.amazonaws.com" }
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.site.arn}/*"
+      Condition = {
+        StringEquals = {
+          "AWS:SourceArn" = aws_cloudfront_distribution.this.arn
+        }
+      }
+    }]
+  })
+}
+
+# ──────────────────────────── Coach Lambda ────────────────────────────
+
+resource "aws_iam_role" "lambda" {
+  name = "${local.resource_prefix}-coach-lambda"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/${local.resource_prefix}-coach"
+  retention_in_days = 30
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "coach" {
+  function_name = "${local.resource_prefix}-coach"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  architectures = ["arm64"]
+  memory_size   = 1024
+  timeout       = 30
+
+  filename         = local.effective_zip_path
+  source_code_hash = filebase64sha256(local.effective_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.lambda_env
+  }
+
+  tags = var.tags
+
+  # CI updates the code on every web@* tag via `aws lambda update-
+  # function-code`. We don't want Terraform to fight CI by reverting
+  # to var.lambda_zip_path — once the function exists, code changes
+  # are CI's job, infra changes (env vars, role, alarms, distribution)
+  # are Terraform's job. Same for the bumped version that CI publishes.
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      qualified_arn,
+      version,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda]
+}
+
+resource "aws_lambda_alias" "live" {
+  name             = "live"
+  function_name    = aws_lambda_function.coach.function_name
+  function_version = aws_lambda_function.coach.version
+
+  # CI retargets this alias on every deploy. Same rationale as
+  # ignore_changes on the function itself.
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "coach" {
+  function_name      = aws_lambda_function.coach.function_name
+  qualifier          = aws_lambda_alias.live.name
+  authorization_type = "NONE"
+  invoke_mode        = "RESPONSE_STREAM"
+
+  cors {
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["POST"]
+    allow_headers = ["authorization", "content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_lambda_permission" "url_invoke" {
+  statement_id           = "AllowFunctionUrlInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.coach.function_name
+  qualifier              = aws_lambda_alias.live.name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
+# ──────────────────────────── CloudFront ────────────────────────────
+
+resource "aws_cloudfront_origin_access_control" "site" {
+  name                              = "${local.resource_prefix}-site-oac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name    = "${local.resource_prefix}-security"
+  comment = "Security headers for ${var.domain_name}"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    # Permissive CSP — the app loads MapTiler tiles, calls Supabase,
+    # streams from itself. Tighten as the surface stabilises; for now
+    # `default-src 'self'` plus listed origins is the minimum that
+    # doesn't break the app.
+    content_security_policy {
+      content_security_policy = join("; ", [
+        "default-src 'self'",
+        "img-src 'self' data: https://*.maptiler.com",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self' data:",
+        "connect-src 'self' https://*.supabase.co https://*.supabase.io https://api.runonward.app https://*.maptiler.com",
+        "worker-src 'self' blob:",
+        "manifest-src 'self'",
+      ])
+      override = true
+    }
+  }
+}
+
+resource "aws_cloudfront_cache_policy" "static" {
+  name        = "${local.resource_prefix}-static"
+  comment     = "Static assets — cache aggressively"
+  default_ttl = 86400
+  max_ttl     = 31536000
+  min_ttl     = 0
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+    cookies_config { cookie_behavior = "none" }
+    headers_config { header_behavior = "none" }
+    query_strings_config { query_string_behavior = "none" }
+  }
+}
+
+resource "aws_cloudfront_cache_policy" "lambda_passthrough" {
+  name        = "${local.resource_prefix}-lambda-passthrough"
+  comment     = "Coach endpoint — disables caching, streams responses"
+  default_ttl = 0
+  max_ttl     = 0
+  min_ttl     = 0
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = false
+    enable_accept_encoding_gzip   = false
+    cookies_config { cookie_behavior = "all" }
+    headers_config { header_behavior = "none" }
+    query_strings_config { query_string_behavior = "all" }
+  }
+}
+
+resource "aws_cloudfront_origin_request_policy" "lambda" {
+  name = "${local.resource_prefix}-lambda-origin"
+  cookies_config { cookie_behavior = "all" }
+  query_strings_config { query_string_behavior = "all" }
+  headers_config {
+    header_behavior = "allViewerExceptHostHeader"
+  }
+}
+
+resource "aws_cloudfront_distribution" "this" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "${local.resource_prefix} — SvelteKit static + /api/coach"
+  default_root_object = "index.html"
+  http_version        = "http2and3"
+  price_class         = "PriceClass_100"
+  aliases             = concat([var.domain_name], var.aliases)
+  tags                = var.tags
+
+  origin {
+    origin_id                = "s3-site"
+    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.site.id
+  }
+
+  origin {
+    origin_id   = "lambda-coach"
+    domain_name = replace(aws_lambda_function_url.coach.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id           = "s3-site"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.static.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/api/coach*"
+    target_origin_id           = "lambda-coach"
+    viewer_protocol_policy     = "https-only"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = false
+    cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # SPA fallback — SvelteKit static fallback is index.html on 404.
+  custom_error_response {
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+# ──────────────────────────── DNS records ────────────────────────────
+
+resource "aws_route53_record" "primary" {
+  zone_id = var.route53_zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "primary_aaaa" {
+  zone_id = var.route53_zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "aliases_a" {
+  for_each = toset(var.aliases)
+
+  zone_id = var.route53_zone_id
+  name    = each.value
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "aliases_aaaa" {
+  for_each = toset(var.aliases)
+
+  zone_id = var.route53_zone_id
+  name    = each.value
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}

@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (gitignored) before applying.
+#
+# These are non-secret config values. Real secrets (ANTHROPIC_API_KEY,
+# server-side SENTRY_DSN) live in the sops-encrypted file
+# `secrets.enc.yaml`, not here.
+
+apex_domain              = "runonward.app"
+public_supabase_url      = "https://api.runonward.app"
+public_supabase_anon_key = "ey..." # publishable key, NOT service-role
+
+extra_lambda_env = {
+  # COACH_PROVIDER = "anthropic"   # default
+  # APP_RELEASE    = "web@1.0.0"   # set by CI on tag deploys
+}

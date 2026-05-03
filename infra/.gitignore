@@ -1,0 +1,13 @@
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+crash.log
+crash.*.log
+*.tfvars.local
+.envrc.local
+
+# Per-env vars hold publishable Supabase keys + domain config —
+# keep them out of git. The tfvars.example files are committed as
+# templates.
+envs/*/terraform.tfvars
