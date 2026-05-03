@@ -61,7 +61,7 @@ serve(withSentry('strava-import', async (req: Request) => {
 	if (denied) return denied;
 
 	if (action === 'connect') {
-		return handleConnect(supabase, user.id, body.code, body.scope);
+		return handleConnect(supabase, user.id, body.code, body.scope, body.redirect_uri);
 	}
 	if (action === 'sync') {
 		return handleSync(supabase, user.id, body.lookbackDays ?? 90);
@@ -74,8 +74,30 @@ async function handleConnect(
 	userId: string,
 	code: string,
 	scope: string,
+	redirectUri: string | undefined,
 ): Promise<Response> {
 	if (!code) return new Response('Missing code', { status: 400 });
+
+	// Pin the redirect_uri the client claims it used. Strava's
+	// /oauth/authorize already enforces that callbacks land on the
+	// registered domain (`Authorization Callback Domain`), but that
+	// validation is path-prefix loose — any path under our domain
+	// counts. A code captured from an unrelated path under our domain
+	// (e.g. an old or experimental route that got a code in its query
+	// string) would still token-exchange. The allow-list pins the
+	// exchange to an explicit set of redirect URIs declared via env,
+	// closing that window. We never call Strava with this value
+	// (Strava's token endpoint ignores redirect_uri); it's purely a
+	// client-claim assertion against our own allow-list.
+	const allowed = (Deno.env.get('STRAVA_ALLOWED_REDIRECTS') ?? '')
+		.split(',')
+		.map((s) => s.trim())
+		.filter(Boolean);
+	if (allowed.length > 0) {
+		if (!redirectUri || !allowed.includes(redirectUri)) {
+			return new Response('Invalid redirect_uri', { status: 400 });
+		}
+	}
 
 	const tokenResponse = await fetch('https://www.strava.com/oauth/token', {
 		method: 'POST',

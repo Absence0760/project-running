@@ -52,6 +52,7 @@ export function stravaAuthUrl(origin: string): string {
 /// re-run the exchange (Strava codes are single-use).
 export async function completeStravaOAuth(
 	searchParams: URLSearchParams,
+	origin: string,
 ): Promise<StravaSyncResult> {
 	const code = searchParams.get('code');
 	const scope = searchParams.get('scope') ?? '';
@@ -63,8 +64,13 @@ export async function completeStravaOAuth(
 	const token = sessionData.session?.access_token;
 	if (!token) throw new Error('Not signed in');
 
+	// Forward the redirect_uri so the EF can validate it against the
+	// configured allow-list. Same shape we used to build the authorize
+	// URL — see `stravaAuthUrl`.
+	const redirect_uri = `${origin}/settings/integrations`;
+
 	const { data, error: fnError } = await supabase.functions.invoke('strava-import', {
-		body: { action: 'connect', code, scope },
+		body: { action: 'connect', code, scope, redirect_uri },
 	});
 	if (fnError) throw fnError;
 	return data as StravaSyncResult;

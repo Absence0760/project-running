@@ -56,7 +56,7 @@
 			const strava = integrations.find((i) => i.provider === 'strava');
 			if (strava) strava.loading = true;
 			try {
-				const result = await completeStravaOAuth(params);
+				const result = await completeStravaOAuth(params, $page.url.origin);
 				await refreshIntegrations();
 				showToast(
 					`Strava connected. ${result.imported} runs imported, ${result.skipped} already present.`,
