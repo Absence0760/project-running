@@ -1108,3 +1108,106 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
+
+-- ───────── clip_route_for_viewer (migration 20260625_001) ─────────
+-- Mirrors the runs-side clip_track_for_user contract for routes:
+-- owner gets unclipped waypoints, non-owner gets clipped output, anon
+-- can read public-only and is treated as non-owner. The clip step
+-- delegates to clip_track_for_user so this test exercises the routes
+-- gating layer specifically (visibility check + owner detection).
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  other_user uuid := '00000000-0000-0000-0000-000000000099';
+  test_route uuid;
+  v_zones_before jsonb;
+  v_waypoints jsonb := jsonb_build_array(
+    jsonb_build_object('lat', 40.0,    'lng', -74.0),    -- in zone (centre)
+    jsonb_build_object('lat', 40.0001, 'lng', -74.0),    -- in zone (~11 m N)
+    jsonb_build_object('lat', 40.05,   'lng', -74.0),    -- out of zone (~5 km N)
+    jsonb_build_object('lat', 40.1,    'lng', -74.0),    -- out of zone
+    jsonb_build_object('lat', 40.0001, 'lng', -74.0)     -- in zone (trailing)
+  );
+  v_owner_result jsonb;
+  v_anon_result jsonb;
+BEGIN
+  -- Stash existing zones, install a 100 m zone at (40, -74).
+  SELECT prefs->'privacy_zones' INTO v_zones_before
+    FROM user_settings WHERE user_id = test_user;
+
+  UPDATE user_settings
+    SET prefs = prefs || jsonb_build_object(
+      'privacy_zones',
+      jsonb_build_array(
+        jsonb_build_object('lat', 40.0, 'lng', -74.0, 'radius_m', 100)
+      )
+    )
+    WHERE user_id = test_user;
+
+  -- Create a public test route owned by runner@test.com with the
+  -- waypoints above (some inside the zone, some outside).
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (test_user, 'clip_route_for_viewer test', 1234, true, v_waypoints)
+    RETURNING id INTO test_route;
+
+  -- Owner caller: must receive the full unclipped array.
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  v_owner_result := clip_route_for_viewer(test_route);
+  IF jsonb_array_length(v_owner_result) <> 5 THEN
+    RAISE EXCEPTION 'clip_route_for_viewer: owner should see all 5 points, got %', jsonb_array_length(v_owner_result);
+  END IF;
+
+  -- Anon caller: public route is visible, but waypoints must be
+  -- clipped. The contiguous middle is points 2 + 3 (indices 2..3),
+  -- so we expect 2 entries.
+  PERFORM set_config('request.jwt.claim.role', 'anon', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  v_anon_result := clip_route_for_viewer(test_route);
+  IF jsonb_array_length(v_anon_result) <> 2 THEN
+    RAISE EXCEPTION 'clip_route_for_viewer: anon should see 2 clipped points, got %', jsonb_array_length(v_anon_result);
+  END IF;
+
+  -- Flip route to private. Anon must now be rejected (42501).
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  UPDATE routes SET is_public = false WHERE id = test_route;
+  PERFORM set_config('request.jwt.claim.role', 'anon', true);
+
+  BEGIN
+    PERFORM clip_route_for_viewer(test_route);
+    RAISE EXCEPTION 'clip_route_for_viewer: anon read of private route should have raised';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Authenticated non-owner of a private route: also rejected.
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', other_user::text, true);
+  BEGIN
+    PERFORM clip_route_for_viewer(test_route);
+    RAISE EXCEPTION 'clip_route_for_viewer: non-owner read of private route should have raised';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Missing route: P0002.
+  BEGIN
+    PERFORM clip_route_for_viewer('00000000-0000-0000-0000-000000000000');
+    RAISE EXCEPTION 'clip_route_for_viewer: missing route should have raised';
+  EXCEPTION
+    WHEN no_data_found THEN NULL;
+  END;
+
+  -- Cleanup. Service role flip needed for the route delete + tier
+  -- columns aren't touched here but restore zones cleanly.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  DELETE FROM routes WHERE id = test_route;
+  UPDATE user_settings
+    SET prefs = case
+      when v_zones_before is null then prefs - 'privacy_zones'
+      else prefs || jsonb_build_object('privacy_zones', v_zones_before)
+    end
+    WHERE user_id = test_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;

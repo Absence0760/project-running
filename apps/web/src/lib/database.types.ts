@@ -1689,6 +1689,7 @@ export type Database = {
       }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
+      clip_route_for_viewer: { Args: { p_route_id: string }; Returns: Json }
       clip_track_for_user: {
         Args: { points: Json; target_user_id: string }
         Returns: Json
