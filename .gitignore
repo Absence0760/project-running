@@ -15,6 +15,10 @@ node_modules/
 .next/
 out/
 .vercel
+# apps/web migrated from pnpm to npm in 66b910f. The lockfile
+# regenerates locally on a stray `pnpm install` and would drift
+# from package-lock.json — CI uses npm.
+apps/web/pnpm-lock.yaml
 
 # Environment
 .env
