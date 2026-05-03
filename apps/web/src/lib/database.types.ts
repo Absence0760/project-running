@@ -1846,6 +1846,10 @@ export type Database = {
         Args: { p_route_id: string; p_user_id: string }
         Returns: boolean
       }
+      is_run_visible_to: {
+        Args: { p_run_id: string; p_user_id: string }
+        Returns: boolean
+      }
       join_club_by_token: { Args: { token: string }; Returns: string }
       latest_fitness_snapshot: {
         Args: never

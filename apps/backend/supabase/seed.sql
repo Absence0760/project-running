@@ -1590,3 +1590,132 @@ BEGIN
   DELETE FROM fitness_snapshots WHERE user_id = test_user AND vdot = 50.0;
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
+
+-- ───────── runs public-anyone policy drop (migration 20260701_001) ─────────
+-- The wire-leak closer. After this migration:
+--   * Direct `from runs` SELECT for non-owner rows returns zero
+--     (only `users own their runs` policy remains).
+--   * The public_runs view still serves rows (view runs as owner).
+--   * Sibling tables (run_kudos, run_comments, run_photos,
+--     segment_efforts, live_run_pings) still surface their rows on
+--     public runs to non-owners via is_run_visible_to.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  other_user uuid := '99999999-9999-9999-9999-999999999994';
+  v_public_run_id uuid;
+  v_private_run_id uuid;
+  v_kudo_count int;
+  v_comment_id uuid;
+  v_runs_visible int;
+  v_view_visible int;
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  INSERT INTO auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    VALUES (other_user, 'wire-leak-test@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+
+  -- A public run and a private run, both owned by `other_user`.
+  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m,
+                    source, is_public, metadata)
+    VALUES (gen_random_uuid(), other_user, now(), 600, 5000, 'app', true,
+            jsonb_build_object('activity_type', 'run'))
+    RETURNING id INTO v_public_run_id;
+  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m,
+                    source, is_public, metadata)
+    VALUES (gen_random_uuid(), other_user, now(), 600, 5000, 'app', false,
+            jsonb_build_object('activity_type', 'run'))
+    RETURNING id INTO v_private_run_id;
+
+  -- Plant a kudo on the public run by `other_user`. We expect
+  -- `test_user` (a non-owner) to see this kudo via the helper.
+  INSERT INTO run_kudos (run_id, user_id) VALUES (v_public_run_id, other_user);
+  -- And a comment.
+  INSERT INTO run_comments (run_id, author_id, body)
+    VALUES (v_public_run_id, other_user, 'great run')
+    RETURNING id INTO v_comment_id;
+
+  -- Apply RLS as the test_user (a non-owner of these runs).
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  SET LOCAL ROLE authenticated;
+
+  -- (a) Direct `runs` SELECT for the public row must return zero
+  -- (this is the wire-leak closing).
+  SELECT count(*) INTO v_runs_visible
+    FROM runs WHERE id = v_public_run_id;
+  IF v_runs_visible <> 0 THEN
+    RAISE EXCEPTION 'runs base table still leaks public rows to non-owners (got %)',
+      v_runs_visible;
+  END IF;
+  -- And the private row stays hidden too.
+  SELECT count(*) INTO v_runs_visible
+    FROM runs WHERE id = v_private_run_id;
+  IF v_runs_visible <> 0 THEN
+    RAISE EXCEPTION 'runs base table leaks private rows to non-owners (got %)',
+      v_runs_visible;
+  END IF;
+
+  -- (b) The public_runs view still serves the public row.
+  SELECT count(*) INTO v_view_visible
+    FROM public_runs WHERE id = v_public_run_id;
+  IF v_view_visible <> 1 THEN
+    RAISE EXCEPTION 'public_runs view should still serve public rows (got %)',
+      v_view_visible;
+  END IF;
+  -- And it does NOT serve the private row.
+  SELECT count(*) INTO v_view_visible
+    FROM public_runs WHERE id = v_private_run_id;
+  IF v_view_visible <> 0 THEN
+    RAISE EXCEPTION 'public_runs view leaks private rows (got %)', v_view_visible;
+  END IF;
+
+  -- (c) Sibling tables: kudos / comments on the PUBLIC run must
+  -- still be visible to test_user via is_run_visible_to.
+  SELECT count(*) INTO v_kudo_count
+    FROM run_kudos WHERE run_id = v_public_run_id;
+  IF v_kudo_count <> 1 THEN
+    RAISE EXCEPTION 'run_kudos on public run should be visible to non-owners (got %)',
+      v_kudo_count;
+  END IF;
+  SELECT count(*) INTO v_kudo_count
+    FROM run_comments WHERE run_id = v_public_run_id;
+  IF v_kudo_count <> 1 THEN
+    RAISE EXCEPTION 'run_comments on public run should be visible to non-owners (got %)',
+      v_kudo_count;
+  END IF;
+
+  -- (d) Sibling tables: kudos / comments on the PRIVATE run must
+  -- NOT be visible.
+  -- Plant private-run engagement first (need to switch back to
+  -- service-role briefly).
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  INSERT INTO run_kudos (run_id, user_id) VALUES (v_private_run_id, other_user);
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  SET LOCAL ROLE authenticated;
+
+  SELECT count(*) INTO v_kudo_count
+    FROM run_kudos WHERE run_id = v_private_run_id;
+  IF v_kudo_count <> 0 THEN
+    RAISE EXCEPTION 'run_kudos on private run should be invisible to non-owners (got %)',
+      v_kudo_count;
+  END IF;
+
+  -- Cleanup. Clear claim.sub first — the runs DELETE fires the
+  -- personal_records trigger which calls refresh_personal_records_for_user;
+  -- its caller-identity guard (20260515_001) raises if auth.uid()
+  -- (= test_user from claim.sub) doesn't match the target row's
+  -- user_id (= other_user). Clearing sub leaves auth.uid() null,
+  -- which the guard explicitly skips.
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  DELETE FROM run_kudos WHERE run_id IN (v_public_run_id, v_private_run_id);
+  DELETE FROM run_comments WHERE run_id IN (v_public_run_id, v_private_run_id);
+  DELETE FROM runs WHERE id IN (v_public_run_id, v_private_run_id);
+  DELETE FROM auth.users WHERE id = other_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+END $$;
