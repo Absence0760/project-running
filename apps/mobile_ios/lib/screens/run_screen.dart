@@ -245,9 +245,13 @@ class _RunScreenState extends State<RunScreen> {
   final RunNotificationBridge _lockScreen = RunNotificationBridge();
   DateTime? _lastNotificationAt;
 
-  // Ephemeral top-anchored notice ("split done", "lap marked"). Anchored to
-  // the top so it never covers the Stop button in the bottom stats panel.
+  // Ephemeral top-anchored notice ("split done", "lap marked", "no GPS").
+  // Anchored to the top so it never covers the Stop / Pause / Lap buttons
+  // in the bottom stats panel — replaces in-run SnackBars which Material's
+  // floating placement docks at the bottom of the screen.
   String? _topBanner;
+  String? _topBannerActionLabel;
+  VoidCallback? _topBannerOnAction;
   Timer? _topBannerTimer;
 
   @override
@@ -672,11 +676,7 @@ class _RunScreenState extends State<RunScreen> {
     try {
       await Share.share(url, subject: 'Track me live');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share live link: $e')),
-        );
-      }
+      if (mounted) _showTopBanner('Could not share live link: $e');
     }
   }
 
@@ -998,16 +998,43 @@ class _RunScreenState extends State<RunScreen> {
 
   /// Show a transient top-anchored banner. Replaces in-run SnackBars so
   /// they never overlap the bottom stats panel (and the Stop button).
+  ///
+  /// Optional [actionLabel] + [onAction] adds a tappable button (e.g.
+  /// the "Settings" shortcut on the GPS-unavailable banner) — tapping
+  /// it fires the callback AND dismisses the banner.
   void _showTopBanner(
     String message, {
     Duration duration = const Duration(seconds: 3),
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     if (!mounted) return;
     _topBannerTimer?.cancel();
-    setState(() => _topBanner = message);
-    _topBannerTimer = Timer(duration, () {
-      if (mounted) setState(() => _topBanner = null);
+    setState(() {
+      _topBanner = message;
+      _topBannerActionLabel = actionLabel;
+      _topBannerOnAction = onAction;
     });
+    _topBannerTimer = Timer(duration, () {
+      if (mounted) {
+        setState(() {
+          _topBanner = null;
+          _topBannerActionLabel = null;
+          _topBannerOnAction = null;
+        });
+      }
+    });
+  }
+
+  void _onTopBannerActionTapped() {
+    final cb = _topBannerOnAction;
+    _topBannerTimer?.cancel();
+    setState(() {
+      _topBanner = null;
+      _topBannerActionLabel = null;
+      _topBannerOnAction = null;
+    });
+    cb?.call();
   }
 
   /// Push the current stats to the native lock-screen notification,
@@ -1141,15 +1168,13 @@ class _RunScreenState extends State<RunScreen> {
       message = 'Recording without GPS — could not start the sensor.';
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 6),
-        behavior: SnackBarBehavior.floating,
-        action: onAction == null
-            ? null
-            : SnackBarAction(label: actionLabel!, onPressed: onAction),
-      ),
+    // Top-anchored banner instead of a SnackBar so we don't cover the
+    // Pause / Stop / Lap buttons in the bottom stats panel.
+    _showTopBanner(
+      message,
+      duration: const Duration(seconds: 6),
+      actionLabel: actionLabel,
+      onAction: onAction,
     );
   }
 
@@ -2129,28 +2154,63 @@ class _RunScreenState extends State<RunScreen> {
             top: MediaQuery.of(context).padding.top + 12,
             left: 16,
             right: 16,
-            child: IgnorePointer(
-              child: Center(
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 8),
+            child: Center(
+              // The text portion is IgnorePointer'd so a tap on the
+              // banner pill doesn't compete with the map/panel below;
+              // only the explicit action button is interactive.
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    6,
+                    _topBannerActionLabel == null ? 16 : 6,
+                    6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surface
+                        .withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 8),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: IgnorePointer(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              _topBanner!,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_topBannerActionLabel != null) ...[
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: _onTopBannerActionTapped,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            _topBannerActionLabel!,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                        ),
                       ],
-                    ),
-                    child: Text(
-                      _topBanner!,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13),
-                    ),
+                    ],
                   ),
                 ),
               ),
