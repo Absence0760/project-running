@@ -162,23 +162,58 @@ void main() {
       }
     });
 
-    test('recording tree wraps stats-driven subtrees in ValueListenableBuilder',
+    test('live tree wraps stats-driven subtrees in ValueListenableBuilder',
         () {
       // Reason: if the map / off-route banner / route-remaining badge /
       // stats panel stop subscribing to _statsNotifier, they'll freeze at
       // whatever values they held at the last setState.
-      final buildRecording = _extractMethodBody(
+      final buildLive = _extractMethodBody(
         source,
-        r'Widget _buildRecording\(BuildContext context\)\s*\{',
+        r'Widget _buildLive\(BuildContext context\)\s*\{',
       );
       final matches = RegExp(r'ValueListenableBuilder<_LiveStats>')
-          .allMatches(buildRecording);
+          .allMatches(buildLive);
       expect(
         matches.length,
         greaterThanOrEqualTo(4),
-        reason: '_buildRecording expects at least 4 '
+        reason: '_buildLive expects at least 4 '
             'ValueListenableBuilder<_LiveStats> wrappers (map, '
             'route-remaining badge, off-route banner, stats panel).',
+      );
+    });
+
+    test('_buildLive shares one LiveRunMap across countdown and recording',
+        () {
+      // Reason: keeping a single LiveRunMap mounted across the
+      // countdown→recording stage flip is what kills the brief "flash to
+      // default backdrop" the runner used to see at the end of the
+      // count. Element identity is what preserves the flutter_map
+      // MapController + tile-cache attachment + interpolated-dot tween
+      // state, so the stage transition becomes a chrome swap instead of
+      // an unmount-and-remount. A future refactor that returns to the
+      // pre-2026 shape (separate `_buildCountdown` that owns its own
+      // LiveRunMap, plus `_buildRecording` that owns another) would
+      // re-introduce the flash. Mirrors the watch_wear CountdownOverlay
+      // (RunWatchApp.kt:264) which solves the same problem.
+      final src = source;
+      // `_buildCountdown` should no longer exist as a separate method.
+      expect(
+        RegExp(r'Widget _buildCountdown\b').hasMatch(src),
+        isFalse,
+        reason: '_buildCountdown was unified into _buildLive — '
+            're-introducing it splits the map across two subtrees and '
+            'brings back the flash.',
+      );
+      // _buildLive should contain exactly one LiveRunMap construction.
+      final body =
+          _extractMethodBody(src, r'Widget _buildLive\(BuildContext context\)\s*\{');
+      final mapCtors = RegExp(r'\bLiveRunMap\(').allMatches(body).length;
+      expect(
+        mapCtors,
+        1,
+        reason: '_buildLive must contain exactly one LiveRunMap '
+            'construction; found $mapCtors. Two would defeat the '
+            'shared-element optimisation.',
       );
     });
 

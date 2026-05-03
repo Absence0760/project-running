@@ -1652,8 +1652,10 @@ class _RunScreenState extends State<RunScreen> {
     return Scaffold(
       body: switch (_state) {
         _ScreenState.idle => _buildIdle(context),
-        _ScreenState.countdown => _buildCountdown(context),
-        _ScreenState.recording || _ScreenState.paused => _buildRecording(context),
+        _ScreenState.countdown ||
+        _ScreenState.recording ||
+        _ScreenState.paused =>
+          _buildLive(context),
         _ScreenState.finished => _buildFinished(context),
       },
     );
@@ -1887,94 +1889,105 @@ class _RunScreenState extends State<RunScreen> {
     return sorted.first;
   }
 
-  Widget _buildCountdown(BuildContext context) {
-    // Mirrors the watch_wear CountdownOverlay (RunWatchApp.kt:264) — map
-    // underlay so the runner sees the streets they're about to run while
-    // the digit plays, soft scrim so the digit pops without hiding the
-    // map, tap-anywhere to cancel and reset to idle. _preload() has
-    // already opened the GPS stream, so currentPosition fills in
-    // mid-countdown if a fix hadn't landed at start.
-    return GestureDetector(
-      onTap: _discard,
-      behavior: HitTestBehavior.opaque,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          LiveRunMap(
-            track: const [],
-            currentPosition: _currentPosition,
-            plannedRoute: _selectedRoute?.waypoints,
-          ),
-          // Soft scrim — strong enough that the digit's strokes don't
-          // fight tile contrast, light enough that the map stays
-          // readable around the edges.
-          Container(color: Colors.black.withValues(alpha: 0.45)),
-          Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 350),
-              transitionBuilder: (child, anim) => ScaleTransition(
-                scale: Tween<double>(begin: 1.4, end: 1.0).animate(
-                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
-                ),
-                child: FadeTransition(opacity: anim, child: child),
-              ),
-              child: Text(
-                '$_countdownValue',
-                key: ValueKey(_countdownValue),
-                style: TextStyle(
-                  fontSize: 200,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black.withValues(alpha: 0.8),
-                      offset: const Offset(0, 2),
-                      blurRadius: 16,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Tiny "Tap to cancel" hint — only renders the first second
-          // so it doesn't compete with the digit on the third tick.
-          if (_countdownValue == 3)
-            Positioned(
-              bottom: 48,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  'Tap to cancel',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecording(BuildContext context) {
+  Widget _buildLive(BuildContext context) {
+    // Unified countdown + recording + paused subtree. Sharing a single
+    // LiveRunMap instance across the countdown → recording flip preserves
+    // its element identity (and therefore the flutter_map MapController,
+    // tile cache attachment, and the interpolated-dot tween state) — the
+    // stage transition becomes a chrome swap instead of an unmount-and-
+    // remount, which is what produced the brief flash to the map's
+    // default backdrop. Mirrors the watch_wear CountdownOverlay
+    // (RunWatchApp.kt:264) which solves the same problem by keeping the
+    // RouteMiniMap mounted under the digit.
+    final isCountdown = _state == _ScreenState.countdown;
     return Stack(
       children: [
-        // Map — rebuilds only when snapshot track / currentPosition change,
-        // not on every parent setState (e.g. manual pause toggle, lap mark).
+        // Always-mounted map. During countdown stats.currentPosition may
+        // be null (no snapshots until the prep stream lands a fix); fall
+        // back to _currentPosition so the camera can centre on the most
+        // recent fix _preload() captured. The two stay in sync once
+        // recording starts (_onSnapshot writes both).
         ValueListenableBuilder<_LiveStats>(
           valueListenable: _statsNotifier,
           builder: (context, stats, _) => LiveRunMap(
             track: stats.track,
-            currentPosition: stats.currentPosition,
+            currentPosition: stats.currentPosition ?? _currentPosition,
             plannedRoute: _selectedRoute?.waypoints,
-            bottomPadding: _statsOverlayHeight,
-            activity: _activityType,
+            bottomPadding: isCountdown ? 0 : _statsOverlayHeight,
+            activity: isCountdown ? null : _activityType,
           ),
         ),
+
+        // Countdown chrome — scrim + digit + cancel hint, layered on top
+        // of the same map. Tap-anywhere cancels and resets to idle.
+        if (isCountdown)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _discard,
+              behavior: HitTestBehavior.opaque,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Soft scrim — strong enough that the digit's strokes
+                  // don't fight tile contrast, light enough that the map
+                  // stays readable around the edges.
+                  Container(color: Colors.black.withValues(alpha: 0.45)),
+                  Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      transitionBuilder: (child, anim) => ScaleTransition(
+                        scale: Tween<double>(begin: 1.4, end: 1.0).animate(
+                          CurvedAnimation(
+                              parent: anim, curve: Curves.easeOutCubic),
+                        ),
+                        child: FadeTransition(opacity: anim, child: child),
+                      ),
+                      child: Text(
+                        '$_countdownValue',
+                        key: ValueKey(_countdownValue),
+                        style: TextStyle(
+                          fontSize: 200,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.8),
+                              offset: const Offset(0, 2),
+                              blurRadius: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // "Tap to cancel" hint — only renders the first second
+                  // so it doesn't compete with the digit on the third tick.
+                  if (_countdownValue == 3)
+                    Positioned(
+                      bottom: 48,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Text(
+                          'Tap to cancel',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+        // Recording chrome — workout band, route badge, off-route /
+        // GPS / permission banners, and the stats panel. All hidden
+        // during countdown.
+        if (!isCountdown) ...[
 
         // Structured-workout band — only mounts when the run was
         // started from a planned workout. Reads through its own
@@ -2115,73 +2128,9 @@ class _RunScreenState extends State<RunScreen> {
               ),
             ),
           ),
-        if (_topBanner != null)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 12,
-            left: 16,
-            right: 16,
-            child: Center(
-              // The text portion is IgnorePointer'd so a tap on the
-              // banner pill doesn't compete with the map/panel below;
-              // only the explicit action button is interactive.
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    6,
-                    _topBannerActionLabel == null ? 16 : 6,
-                    6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surface
-                        .withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 8),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: IgnorePointer(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Text(
-                              _topBanner!,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_topBannerActionLabel != null) ...[
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: _onTopBannerActionTapped,
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            _topBannerActionLabel!,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        // Top banner is rendered via the Overlay-based `showTopBanner`
+        // helper (lib/widgets/top_banner.dart) — no inline pill needed
+        // in the recording Stack.
         Positioned(
           left: 0,
           right: 0,
@@ -2246,6 +2195,7 @@ class _RunScreenState extends State<RunScreen> {
             ),
           ),
         ),
+        ],
       ],
     );
   }
