@@ -34,13 +34,23 @@ serve(withSentry('delete-account', async (req: Request) => {
   // (public-read, so leaving them behind means saved URLs keep
   // resolving even after account deletion). Both keyed under
   // `{user.id}/`.
+  //
+  // Page through `list` because Supabase Storage caps at 1000 per
+  // call and a power user (parkrun + Strava bulk import) can land
+  // several thousand tracks. A non-paginated list would silently
+  // orphan blobs past the cap. Each iteration removes everything
+  // returned — Storage then re-fills the next page from the start
+  // of the prefix, so we keep looping until a page comes back empty.
+  const PAGE = 1000;
   for (const bucket of ['runs', 'run-photos']) {
-    const { data: files } = await adminClient.storage
-      .from(bucket)
-      .list(user.id, { limit: 1000 });
-    if (files && files.length > 0) {
+    while (true) {
+      const { data: files } = await adminClient.storage
+        .from(bucket)
+        .list(user.id, { limit: PAGE });
+      if (!files || files.length === 0) break;
       const paths = files.map((f) => `${user.id}/${f.name}`);
       await adminClient.storage.from(bucket).remove(paths);
+      if (files.length < PAGE) break;
     }
   }
 
