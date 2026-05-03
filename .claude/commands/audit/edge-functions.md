@@ -40,4 +40,8 @@ For each: function name, file:line, the missing check, what an attacker could do
 - `docs/decisions.md` — search "Edge Function" for relevant ADRs
 - The recent `fix(backend): auth-guard refresh-tokens Edge Function` commit (b3373c6) — the canonical pattern to mirror
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit every Edge Function for JWT verification, input validation, body limits, and webhook HMAC."`
+
 Read-only. Don't edit function code without explicit instruction.

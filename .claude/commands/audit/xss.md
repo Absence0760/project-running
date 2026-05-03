@@ -35,4 +35,8 @@ For each: file:line, the source of the user-supplied text, the rendering site, t
 - `apps/mobile_android/lib/screens/coach_screen.dart` — `flutter_markdown` usage
 - `docs/decisions.md` — search "XSS", "sanitize", "DOMPurify"
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit user-content rendering paths for XSS — {@html}, flutter_markdown, sanitization sinks."`
+
 Read-only. Report findings; don't patch without confirmation.

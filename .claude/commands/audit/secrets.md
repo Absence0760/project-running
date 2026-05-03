@@ -35,4 +35,8 @@ For each: the literal env var or filename, where it's referenced, what should ch
 - `.github/workflows/*.yml`
 - `apps/web/.env.example` if it exists, otherwise `apps/web/svelte.config.js` for env access patterns
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit for server-only secrets that may have leaked into a client bundle, public asset, or git history."`
+
 Read-only. Recommendations only — never paste a found key into the report. Identify by name + location.

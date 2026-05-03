@@ -36,4 +36,8 @@ For each: feature name, the missing or weak gate, the file:line of both client a
 - `apps/backend/supabase/migrations/20260429_001_subscription_paywall.sql`
 - `docs/decisions.md` — search "subscription", "paywall", "tier"
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit paywall gates — Pro features must gate at the API boundary, not just the UI; BYPASS_PAYWALL must be dev-only."`
+
 Read-only audit.

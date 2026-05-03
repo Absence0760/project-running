@@ -36,4 +36,8 @@ File:line for each finding, plus a concrete reproduction path (curl with anon ke
 - `docs/api_database.md` — documented Storage layout
 - `apps/backend/CLAUDE.md` — backend-specific notes
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit Storage bucket policies + path guessability + signed-URL hygiene."`
+
 Read-only audit. Don't change bucket policies without explicit instruction.

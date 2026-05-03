@@ -42,4 +42,8 @@ For each: file:line, the missing call or the broken gate, the surface it affects
 - `apps/web/src/lib/components/RunShareView.svelte` + `apps/web/src/routes/share/route/[id]/+page.svelte` — the owner-bypass-RPC pattern
 - `apps/mobile_android/test/architecture_guards_test.dart` — the `thumbnail privacy-zone clipping` group; new render sites should grow this group
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit every track / waypoint render site for privacy-zone clipping coverage per decisions §33."`
+
 Read-only audit. Don't patch a leak without flagging it for the user first.

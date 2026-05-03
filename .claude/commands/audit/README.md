@@ -52,7 +52,19 @@ Invoke from a Claude Code session as `/audit/<name>`.
 - Findings are grouped by severity: **Critical / High / Medium / Low**.
 - Each command is a **self-contained prompt** — runnable from a fresh session with no prior context.
 - Cross-references decisions: paths follow `docs/decisions.md §<n>` so a finding can be traced to the rule it violates.
-- Diff-time helpers (the `mobile-twin-mirror`, `metadata-key-keeper`, `schema-change-coordinator`, `doc-hygiene-checker` agents under `.claude/agents/`) cover the per-PR enforcement; these audits are for periodic broad sweeps and pre-deploy checks.
+
+## Agent delegation
+
+Every command in **Security** and **Privacy** delegates to the `repo-security-auditor` agent (under `.claude/agents/`). That agent has the four trust boundaries baked in (DB↔client, Edge Function↔caller, Storage↔URL, client-bundle↔runtime) plus the audit-area routing table — it picks up the project's conventions without re-reading them every run. `/audit/all` spawns one auditor instance per area in parallel.
+
+Diff-time enforcement is handled by complementary agents:
+- `mobile-twin-mirror` — mirrors mobile_android → mobile_ios after Dart edits
+- `shared-library-syncer` — proactive on edits to TS↔Dart parity helpers (`training`, `segments`, `privacy`, `recurrence`, `pace_segments`, `training_load`, `fitness`, `track_projection`)
+- `metadata-key-keeper` — diff-time sweep of `runs.metadata.<key>` writes vs the registry
+- `schema-change-coordinator` — applies a migration + regen + check + doc updates
+- `doc-hygiene-checker` — surveys docs after a change for stale references
+
+These audit commands are for periodic broad sweeps and pre-deploy checks; the diff-time agents handle per-PR enforcement.
 
 ## When to run
 

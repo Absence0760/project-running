@@ -34,4 +34,8 @@ For each: file:line, the policy/function name, what's missing, the worst-case bl
 - `docs/decisions.md` §33 (privacy-zone clipping), §37 (segments), §38 (notifications) — RLS intent for those features
 - `apps/web/src/lib/data.ts` — every web-side query, useful to cross-check what the policies enable
 
-Spawn an Explore agent if the surface is too wide for a single read pass. Read-only by default; only edit migrations on explicit instruction.
+## Delegate to
+
+Use the `repo-security-auditor` agent. Pass it the audit area as the prompt's first sentence: `"Audit RLS policies and SECURITY DEFINER RPCs for missing or weak auth checks."` That agent has the project's RLS conventions baked in and won't re-derive them.
+
+Read-only by default; only edit migrations on explicit instruction.

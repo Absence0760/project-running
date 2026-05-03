@@ -41,4 +41,8 @@ For each: table.column (or `metadata.<key>`), what private state it reveals, the
 - `docs/api_database.md` — documented public-vs-private intent
 - `apps/web/src/lib/data.ts` — `fetchPublicRun`, `fetchPublicRoute`, `fetchFeed` — what the app actually reads from public rows
 
+## Delegate to
+
+Use the `repo-security-auditor` agent: `"Audit which columns leak alongside is_public=true rows."`
+
 Read-only audit.
