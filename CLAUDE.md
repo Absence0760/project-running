@@ -40,6 +40,10 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 - [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter); wrist-only complement, NOT a pocket-app mirror
 - [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional; wrist-only complement, NOT a pocket-app mirror
 
+## Audit commands
+
+Project-curated slash commands for security / privacy / invariant audits live under `.claude/commands/audit/`. Invoke as `/audit/<name>` (e.g. `/audit/rls`, `/audit/privacy-zones`). `/audit/all` runs the full sweep in parallel. Each is read-only — they report findings, they don't fix without confirmation. See [`.claude/commands/audit/README.md`](.claude/commands/audit/README.md) for the index + when to run each.
+
 ## Branches & PRs
 
 - `dev` is the working branch. `main` is the PR target.
