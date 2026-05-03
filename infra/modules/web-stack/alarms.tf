@@ -11,9 +11,9 @@ resource "aws_sns_topic" "alerts" {
 
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_name          = "${local.resource_prefix}-coach-lambda-errors"
-  alarm_description   = "Coach Lambda 4xx/5xx error rate over 2%."
+  alarm_description   = "Coach Lambda 4xx/5xx error rate over 2% across two consecutive 5-min windows (10 min sustained)."
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
+  evaluation_periods  = 2
   threshold           = 2
   treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.alerts.arn]
@@ -56,9 +56,9 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 
 resource "aws_cloudwatch_metric_alarm" "lambda_p95_duration" {
   alarm_name          = "${local.resource_prefix}-coach-lambda-p95"
-  alarm_description   = "Coach Lambda p95 duration >25 s (approaching the 30 s timeout)."
+  alarm_description   = "Coach Lambda p95 duration >25 s across two consecutive 5-min windows (approaching the 30 s timeout)."
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
+  evaluation_periods  = 2
   threshold           = 25000
   treat_missing_data  = "notBreaching"
   metric_name         = "Duration"

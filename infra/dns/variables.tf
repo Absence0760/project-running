@@ -10,9 +10,9 @@ variable "apex_domain" {
 }
 
 variable "subject_alternative_names" {
-  description = "All non-apex names the prod cert needs to cover. Put preview here too — one cert across both envs is simpler than two certs."
+  description = "All non-apex names the cert needs to cover. Default null → derived from apex_domain as ['www.<apex>', 'preview.<apex>']. Override to extend (e.g. add 'staging.<apex>') or to drop names you don't need."
   type        = list(string)
-  default     = ["www.runonward.app", "preview.runonward.app"]
+  default     = null
 }
 
 variable "tags" {

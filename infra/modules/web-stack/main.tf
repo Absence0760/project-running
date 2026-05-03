@@ -159,13 +159,14 @@ resource "aws_cloudwatch_log_group" "lambda" {
 }
 
 resource "aws_lambda_function" "coach" {
-  function_name = "${local.resource_prefix}-coach"
-  role          = aws_iam_role.lambda.arn
-  handler       = "index.handler"
-  runtime       = "nodejs20.x"
-  architectures = ["arm64"]
-  memory_size   = 1024
-  timeout       = 30
+  function_name                  = "${local.resource_prefix}-coach"
+  role                           = aws_iam_role.lambda.arn
+  handler                        = "index.handler"
+  runtime                        = "nodejs20.x"
+  architectures                  = ["arm64"]
+  memory_size                    = 1024
+  timeout                        = 30
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
 
   filename         = local.effective_zip_path
   source_code_hash = filebase64sha256(local.effective_zip_path)
@@ -210,7 +211,7 @@ resource "aws_lambda_alias" "live" {
 resource "aws_lambda_function_url" "coach" {
   function_name      = aws_lambda_function.coach.function_name
   qualifier          = aws_lambda_alias.live.name
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
   invoke_mode        = "RESPONSE_STREAM"
 
   cors {
@@ -221,13 +222,28 @@ resource "aws_lambda_function_url" "coach" {
   }
 }
 
-resource "aws_lambda_permission" "url_invoke" {
-  statement_id           = "AllowFunctionUrlInvoke"
+# CloudFront → Lambda Function URL OAC (AWS announced April 2024).
+# CloudFront sigv4-signs every request with the role granted in
+# `aws_lambda_permission.cloudfront_invoke` below; without that signed
+# header the Function URL rejects with 403. Combined with
+# `authorization_type = "AWS_IAM"` on the Function URL itself, this
+# means anyone who learns the .lambda-url.* hostname can't bypass
+# CloudFront — a curl directly to the URL gets 403.
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  name                              = "${local.resource_prefix}-lambda-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  statement_id           = "AllowCloudFrontInvoke"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.coach.function_name
   qualifier              = aws_lambda_alias.live.name
-  principal              = "*"
-  function_url_auth_type = "NONE"
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
 }
 
 # ──────────────────────────── CloudFront ────────────────────────────
@@ -272,7 +288,13 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self' data:",
-        "connect-src 'self' https://*.supabase.co https://*.supabase.io https://api.runonward.app https://*.maptiler.com",
+        # `connect-src` covers fetch / XHR / EventSource / WebSocket —
+        # everything the browser sends OUT. `*.ingest.sentry.io` is
+        # where @sentry/sveltekit's browser SDK posts errors; without
+        # it errors are silently CSP-blocked. `*.supabase.{co,io}`
+        # covers REST + Realtime + Storage; `*.maptiler.com` covers
+        # tile fetches.
+        "connect-src 'self' https://*.supabase.co https://*.supabase.io https://api.runonward.app https://*.maptiler.com https://*.ingest.sentry.io",
         "worker-src 'self' blob:",
         "manifest-src 'self'",
       ])
@@ -337,8 +359,9 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   origin {
-    origin_id   = "lambda-coach"
-    domain_name = replace(aws_lambda_function_url.coach.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_id                = "lambda-coach"
+    domain_name              = replace(aws_lambda_function_url.coach.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
 
     custom_origin_config {
       http_port              = 80

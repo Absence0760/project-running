@@ -39,6 +39,11 @@ module "web" {
   public_supabase_url      = var.public_supabase_url
   public_supabase_anon_key = var.public_supabase_anon_key
 
+  # Tight cap on preview — single-digit concurrency is plenty for
+  # smoke tests and PR review and bounds Anthropic spend if a script
+  # accidentally hammers preview.
+  lambda_reserved_concurrency = 5
+
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 

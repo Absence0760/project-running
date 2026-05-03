@@ -25,10 +25,17 @@ resource "aws_route53_zone" "apex" {
 
 # ─────────────────── ACM cert (us-east-1, for CloudFront) ───────────────────
 
+locals {
+  effective_sans = var.subject_alternative_names != null ? var.subject_alternative_names : [
+    "www.${var.apex_domain}",
+    "preview.${var.apex_domain}",
+  ]
+}
+
 resource "aws_acm_certificate" "apex" {
   provider                  = aws.us_east_1
   domain_name               = var.apex_domain
-  subject_alternative_names = var.subject_alternative_names
+  subject_alternative_names = local.effective_sans
   validation_method         = "DNS"
   tags                      = var.tags
 
@@ -57,4 +64,12 @@ resource "aws_acm_certificate_validation" "apex" {
   provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.apex.arn
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+
+  # Pair with create_before_destroy on the cert itself — when SANs
+  # change, the validation goes through the new cert before the old
+  # one is destroyed, so CloudFront never references a cert without
+  # an attached validation.
+  lifecycle {
+    create_before_destroy = true
+  }
 }

@@ -54,6 +54,12 @@ module "web" {
   public_supabase_url      = var.public_supabase_url
   public_supabase_anon_key = var.public_supabase_anon_key
 
+  # Caps worst-case concurrency. 50 = ~50 simultaneous coach turns,
+  # which at ~3k input + ~1k output × Anthropic pricing puts the
+  # absolute burst spend at a known ceiling. Raise once we have real
+  # traffic data.
+  lambda_reserved_concurrency = 50
+
   # Null on first apply (file doesn't exist yet). The user encrypts a
   # secrets file against the KMS key created here, then re-applies and
   # the Lambda gets the real env vars.
