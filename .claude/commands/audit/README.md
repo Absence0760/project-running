@@ -39,6 +39,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 | Command | What it checks |
 |---|---|
 | [/audit/deps](deps.md) | Cross-toolchain dependency CVEs (npm, flutter pub, Deno, Actions) |
+| [/audit/infra](infra.md) | AWS Terraform stacks under `infra/` — IAM least-privilege, encryption, drift hygiene, cost + DR guardrails |
 
 ### Dispatcher
 
@@ -73,4 +74,5 @@ These audit commands are for periodic broad sweeps and pre-deploy checks; the di
 - **After adding a new Edge Function** — `/audit/edge-functions`.
 - **After a new migration** — `/audit/rls` + `/audit/schema-drift` + `/audit/public-rows`.
 - **After bumping a dependency major** — `/audit/deps` + `/audit/secrets`.
+- **After editing anything under `infra/`** — `/audit/infra` before `terraform apply`.
 - **Periodically (monthly)** — `/audit/all` to catch slow-moving drift.

@@ -11,6 +11,7 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
 - **privacy** — `audit/privacy-zones`
 - **invariants** — `audit/twin-parity`, `audit/schema-drift`, `audit/metadata-keys`, `audit/architecture-guards`, `audit/layered-resilience`
 - **deps** — `audit/deps`
+- **infra** — `audit/infra` (AWS Terraform stacks)
 
 ## Procedure
 
@@ -19,10 +20,12 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
    - `security` → security + privacy
    - `invariants` → invariants subset
    - `deps` → deps only
+   - `infra` → infra only
 2. **Spawn the right agent per audit area, in parallel.** Send all dispatches in a single message with multiple tool calls.
    - Security + privacy areas (`rls`, `storage`, `edge-functions`, `xss`, `secrets`, `public-rows`, `paywall`, `privacy-zones`): each is a separate `repo-security-auditor` invocation, with the audit area passed as the prompt's first sentence. Seven of these run together; each gets the corresponding `.claude/commands/audit/<name>.md` body as its full instruction.
    - `metadata-keys`: spawn `metadata-key-keeper` for the per-key sweep, OR an Explore agent if you need broader codebase scan beyond a single diff.
    - `deps`: a single Explore agent with the `deps.md` prompt is fine — the work is mostly running each tool in turn.
+   - `infra`: a single `general-purpose` agent with the `infra.md` prompt — reads ~30 small `.tf` files plus the apply walkthrough.
 3. While the agents run, run the local checks that don't need an agent:
    - `audit/twin-parity` — single `diff -rq` (or invoke `mobile-twin-mirror` if there's drift to fix; otherwise handle inline)
    - `audit/architecture-guards` — run the three test suites inline
