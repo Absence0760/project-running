@@ -21,7 +21,7 @@
 /// `export-data` heavy zips, OAuth code exchange. Fail-closed returns
 /// 503 with a `Retry-After: 60` so the client can back off and retry.
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 
 export interface RateLimitOpts {
   /// When the rate-limit RPC itself errors, return 503 instead of

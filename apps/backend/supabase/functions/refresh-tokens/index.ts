@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { withSentry } from '../_shared/sentry.ts';
 
 /// pg_cron schedules this function on the hour; the cron job invokes
