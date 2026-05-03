@@ -67,23 +67,58 @@ test('RunTrackPreview cache is bounded (LRU)', () => {
 	);
 });
 
-test('routes/[id] page clips waypoints for non-owner viewers', () => {
-	// Reason: pre-prod privacy-zones audit found this surface rendered
-	// `<RunMap track={route.waypoints} />` with no clip step. Bookmarked,
-	// public, and club routes were leaking the unclipped polyline to
-	// non-owners. Must use fetchClippedRouteForViewer (decisions §33).
+test('routes/[id] page reads through the owner-aware fetchRouteById', () => {
+	// Reason: pre-prod privacy-zones + public-rows audits found this
+	// surface rendered `<RunMap track={route.waypoints} />` with no clip
+	// step. Bookmarked, public, and club routes were leaking the unclipped
+	// polyline to non-owners. The fix dropped the bare-table public-anyone
+	// SELECT (migration 20260703_001) and reshaped fetchRouteById to be
+	// owner-aware: bare `routes` first (RLS gates owners + active club
+	// members), `public_routes` view + clip_route_for_viewer fallback for
+	// everyone else. The page must read through that gateway — not from
+	// the bare table directly. See decisions §33.
 	const source = read('src/routes/routes/[id]/+page.svelte');
 	assert.match(
 		source,
-		/fetchClippedRouteForViewer/,
-		'/routes/[id] must call fetchClippedRouteForViewer for non-owner viewers — direct route.waypoints render leaks the unclipped polyline. See decisions §33.',
+		/fetchRouteById/,
+		'/routes/[id] must read through fetchRouteById — bypassing it (e.g. supabase.from("routes")) skips the public_routes view + clip overlay for non-owners. See decisions §33.',
 	);
-	// The renderer must hand displayWaypoints to RunMap, not the raw
-	// route.waypoints (which is the unclipped row column for non-owners).
-	assert.match(
+	assert.doesNotMatch(
 		source,
-		/<RunMap[^>]*track=\{displayWaypoints/s,
-		'/routes/[id] must render <RunMap track={displayWaypoints}> rather than route.waypoints — the raw column is the unclipped polyline.',
+		/from\(['"]routes['"]\)/,
+		'/routes/[id] must not read from the bare `routes` table — go through fetchRouteById, which is owner-aware.',
+	);
+});
+
+test('fetchRouteById is owner-aware (bare-table first, public_routes view fallback)', () => {
+	// Reason: closes the audit/public-rows + audit/privacy-zones High
+	// finding from /audit/all on 2026-05-03. Owners (and active club
+	// members) hit `routes` directly under RLS — the unclipped polyline
+	// is theirs to see. Anon and non-owner viewers must fall back to the
+	// `public_routes` view (which strips waypoints/geom/start_point/
+	// is_starred and conditionally nulls club_id) and overlay
+	// fetchClippedRouteForViewer so the polyline respects the runner's
+	// privacy zones. See migration 20260703_001_public_routes_view.sql.
+	const source = read('src/lib/data.ts');
+	const fnMatch = source.match(
+		/export async function fetchRouteById[\s\S]*?^}/m,
+	);
+	assert.ok(fnMatch, 'Could not locate fetchRouteById body — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/from\(['"]routes['"]\)/,
+		'fetchRouteById must try the bare `routes` table first — RLS gates owners + active club members.',
+	);
+	assert.match(
+		body,
+		/from\(['"]public_routes['"]\)/,
+		'fetchRouteById must fall back to the public_routes view for non-owner viewers.',
+	);
+	assert.match(
+		body,
+		/fetchClippedRouteForViewer/,
+		'fetchRouteById must overlay fetchClippedRouteForViewer for non-owner viewers — the public_routes view ships no waypoints.',
 	);
 });
 
