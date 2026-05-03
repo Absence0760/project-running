@@ -1543,3 +1543,50 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
+
+-- ───────── RLS audit cleanup batch (migration 20260630_001) ─────────
+-- (a) fitness_snapshots client-INSERT must reject `source='server'`.
+-- (b) authenticated must NOT be able to INSERT/UPDATE/DELETE
+--     personal_records or monthly_funding (RLS + GRANTs both deny).
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  SET LOCAL ROLE authenticated;
+
+  -- (a) fitness_snapshots: source='client' allowed, source='server' blocked.
+  INSERT INTO fitness_snapshots (user_id, vdot, source)
+    VALUES (test_user, 50.0, 'client');
+  BEGIN
+    INSERT INTO fitness_snapshots (user_id, vdot, source)
+      VALUES (test_user, 99.9, 'server');
+    RAISE EXCEPTION 'fitness_snapshots: source=server insert should have been blocked';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- (b) personal_records: writes must be blocked.
+  BEGIN
+    INSERT INTO personal_records (user_id, distance, best_time_s, run_id, achieved_at)
+      VALUES (test_user, '5k', 1, '00000000-0000-0000-0000-000000000000', now());
+    RAISE EXCEPTION 'personal_records: client INSERT should have been blocked';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+    WHEN check_violation THEN NULL;
+  END;
+
+  -- (b) monthly_funding: writes must be blocked.
+  BEGIN
+    INSERT INTO monthly_funding (month, amount_received)
+      VALUES ('2099-01-01', 9999.99);
+    RAISE EXCEPTION 'monthly_funding: client INSERT should have been blocked';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Cleanup the legitimate fitness_snapshots row we inserted.
+  RESET ROLE;
+  DELETE FROM fitness_snapshots WHERE user_id = test_user AND vdot = 50.0;
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
