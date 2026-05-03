@@ -407,6 +407,7 @@
 						{#if entry.track_url}
 							<div class="entry-map">
 								<RunTrackPreview
+									runId={entry.id}
 									trackUrl={entry.track_url}
 									ownerUserId={entry.author.id}
 								/>

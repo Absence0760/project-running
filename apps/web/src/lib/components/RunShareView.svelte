@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDuration, formatPace, formatDistance, formatDate, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { fetchPublicRun, clipTrackForUser } from '$lib/data';
+	import { fetchPublicRun, fetchClippedTrackForRun } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
@@ -20,16 +20,19 @@
 		const r = await fetchPublicRun(runId);
 		if (r) {
 			run = r;
-			const fullTrack = (r.track ?? []) as TrackPoint[];
-			// Owner views render the unclipped track — privacy zones exist
-			// to hide the owner's home from *viewers*, not from the owner.
-			// Skipping the RPC here also keeps the owner's map alive
-			// through a transient clip_track_for_user outage (the helper
-			// fails closed for non-owner views).
+			// Owner views render the unclipped track via fetchPublicRun's
+			// embedded `r.track` (Storage download gated by the per-user-
+			// folder owner policy). Non-owner viewers go through the
+			// clip-public-track Edge Function so the unclipped blob
+			// never crosses the wire — the public-run Storage policy
+			// was dropped in 20260619_001 (decisions.md §33). The EF
+			// fails closed (return [] on RPC error) so a transient
+			// outage renders an empty map for non-owners; owners stay
+			// alive because they take the direct-Storage path.
 			const isOwner = auth.user?.id === r.user_id;
 			track = isOwner
-				? fullTrack
-				: ((await clipTrackForUser(r.user_id, fullTrack)) as TrackPoint[]);
+				? ((r.track ?? []) as TrackPoint[])
+				: ((await fetchClippedTrackForRun(r.id)) as TrackPoint[]);
 		} else {
 			notFound = true;
 		}

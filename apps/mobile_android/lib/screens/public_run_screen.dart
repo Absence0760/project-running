@@ -55,25 +55,29 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
         });
         return;
       }
-      final hasTrack = row.trackUrl != null && row.trackUrl!.isNotEmpty;
-      final results = await Future.wait<dynamic>([
-        hasTrack
-            ? widget.api.fetchTrackByPath(row.trackUrl!)
-            : Future.value(const <Waypoint>[]),
-        widget.api.fetchPublicProfile(row.userId),
-      ]);
-      final fullTrack = results[0] as List<Waypoint>;
       // Privacy-zone clipping for non-owner viewers (decisions §33).
-      // Owners see their full track. Anon (`api.userId == null`) is
-      // treated as non-owner — public share links don't require auth
-      // and must still honour the owner's zones. The RPC fails closed
-      // (returns []) on outage; non-owners see an empty map rather
-      // than the unclipped track.
+      // Owners take the direct-Storage path (the per-user-folder
+      // policy from 20260410_001 still gates them). Non-owner viewers
+      // — including anon, where `api.userId == null` — go through the
+      // `clip-public-track` Edge Function so the unclipped blob never
+      // crosses the wire (migration 20260619_001 dropped the
+      // public-runs Storage policy that previously made direct
+      // download possible). The EF fails closed (returns []) on
+      // outage; non-owners see an empty map rather than the
+      // unclipped track.
+      final hasTrack = row.trackUrl != null && row.trackUrl!.isNotEmpty;
       final viewerId = widget.api.userId;
       final isOwner = viewerId != null && viewerId == row.userId;
-      final track = (isOwner || fullTrack.isEmpty)
-          ? fullTrack
-          : await _clipForViewer(fullTrack, row.userId);
+      final trackFuture = hasTrack
+          ? (isOwner
+              ? widget.api.fetchTrackByPath(row.trackUrl!)
+              : widget.api.fetchClippedTrackForRun(row.id))
+          : Future.value(const <Waypoint>[]);
+      final results = await Future.wait<dynamic>([
+        trackFuture,
+        widget.api.fetchPublicProfile(row.userId),
+      ]);
+      final track = results[0] as List<Waypoint>;
       if (!mounted) return;
       setState(() {
         _row = row;
@@ -95,29 +99,6 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
         _loading = false;
       });
     }
-  }
-
-  Future<List<Waypoint>> _clipForViewer(
-    List<Waypoint> track,
-    String ownerUserId,
-  ) async {
-    final clipped = await widget.api.clipTrackForUser(
-      targetUserId: ownerUserId,
-      points: track
-          .map((w) => {
-                'lat': w.lat,
-                'lng': w.lng,
-                if (w.elevationMetres != null) 'ele': w.elevationMetres,
-              })
-          .toList(),
-    );
-    return clipped
-        .map((p) => Waypoint(
-              lat: (p['lat'] as num).toDouble(),
-              lng: (p['lng'] as num).toDouble(),
-              elevationMetres: (p['ele'] as num?)?.toDouble(),
-            ))
-        .toList();
   }
 
   @override

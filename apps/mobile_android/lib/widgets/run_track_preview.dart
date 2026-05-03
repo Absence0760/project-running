@@ -13,23 +13,32 @@ import 'track_preview.dart';
 /// Falls back to a placeholder when the URL is missing, the fetch
 /// fails, or the bounding-box diagonal is below the jitter threshold.
 class RunTrackPreview extends StatefulWidget {
+  /// Run id. Required for non-owner thumbnails — the
+  /// `clip-public-track` Edge Function takes a run id and resolves
+  /// `track_url` server-side so the unclipped blob never crosses the
+  /// wire. Omit only when [ownerUserId] is null (i.e. the viewer is
+  /// the owner) and the direct-Storage path is taken instead.
+  final String? runId;
+
   final String? trackUrl;
   final ApiClient api;
   final Color color;
   final double aspect;
 
   /// User id of the run's owner. When set AND it differs from the
-  /// signed-in viewer's id, the fetched track is routed through the
-  /// `clip_track_for_user` RPC so the owner's privacy zones are
-  /// honoured before we render the polyline (decisions §33). Omit
-  /// when the row is the viewer's own — no clip required, faster
-  /// cold load.
+  /// signed-in viewer's id, the thumbnail goes through the
+  /// `clip-public-track` Edge Function so the owner's privacy zones
+  /// are honoured server-side (decisions §33, migration
+  /// `20260619_001` dropped the public-runs Storage policy). Omit
+  /// when the row is the viewer's own — direct Storage download is
+  /// fine and faster.
   final String? ownerUserId;
 
   const RunTrackPreview({
     super.key,
     required this.trackUrl,
     required this.api,
+    this.runId,
     this.color = const Color(0xFF4F46E5),
     this.aspect = 2.4,
     this.ownerUserId,
@@ -107,27 +116,22 @@ class _RunTrackPreviewState extends State<RunTrackPreview> {
     _attempted = true;
     () async {
       try {
-        var track = await widget.api.fetchTrackByPath(url);
+        final List<Waypoint> track;
         if (_shouldClip) {
-          // Server-side privacy-zone clipping for non-owner viewers
-          // (decisions §33). Owners always see their full track.
-          final clipped = await widget.api.clipTrackForUser(
-            targetUserId: widget.ownerUserId!,
-            points: track
-                .map((w) => {
-                      'lat': w.lat,
-                      'lng': w.lng,
-                      if (w.elevationMetres != null) 'ele': w.elevationMetres,
-                    })
-                .toList(),
-          );
-          track = clipped
-              .map((p) => Waypoint(
-                    lat: (p['lat'] as num).toDouble(),
-                    lng: (p['lng'] as num).toDouble(),
-                    elevationMetres: (p['ele'] as num?)?.toDouble(),
-                  ))
-              .toList();
+          // Non-owner thumbnail — direct Storage download has been
+          // revoked (migration 20260619_001). Use the EF path instead.
+          // No runId = no way to identify the run for the EF; fail
+          // closed and render the placeholder rather than fall back to
+          // the (now-blocked) direct download.
+          final id = widget.runId;
+          if (id == null || id.isEmpty) {
+            _cacheSet(key, null);
+            if (mounted) setState(() => _points = null);
+            return;
+          }
+          track = await widget.api.fetchClippedTrackForRun(id);
+        } else {
+          track = await widget.api.fetchTrackByPath(url);
         }
         final renderable = isTrackRenderable(track) ? track : <Waypoint>[];
         _cacheSet(key, renderable);

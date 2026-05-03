@@ -1,0 +1,26 @@
+-- Close the privacy-zone-bypass via direct Storage download
+-- (audit/storage High finding).
+--
+-- 20260413_001_public_runs.sql added a Storage policy that lets
+-- anon + authenticated callers download `runs/{user_id}/{run_id}.json.gz`
+-- whenever the parent runs row has `is_public = true`. The blob is
+-- always unclipped — callers were expected to pass the result
+-- through clip_track_for_user client-side. An attacker who reads
+-- track_url from the public-runs SELECT policy and downloads the
+-- blob directly skips the clip step and gets the unclipped track,
+-- including every point inside the owner's privacy zones.
+--
+-- decisions.md §33 anticipated this gap as future "v3" work
+-- (pre-clip + two Storage objects per run); this is the v2 fix that
+-- closes the leak today without a recorder change. The
+-- clip-public-track Edge Function (apps/backend/supabase/functions/
+-- clip-public-track/index.ts) now serves all non-owner reads — it
+-- downloads via service-role, runs clip_track_for_user inside the
+-- function, and returns clipped points only.
+--
+-- Owner downloads keep the original direct-download path because
+-- the per-user-folder owner policy from 20260410_001 still grants
+-- `(storage.foldername(name))[1] = auth.uid()::text` SELECT on the
+-- `runs` bucket.
+
+drop policy if exists "Anyone can read tracks of public runs" on storage.objects;

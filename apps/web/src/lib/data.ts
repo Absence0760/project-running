@@ -130,9 +130,34 @@ async function fetchTrack(path: string) {
 
 /// Public wrapper for list-page thumbnail fetches. Same pipeline as
 /// the detail-page track loader but exposed so the runs list can lazy-
-/// download track blobs as cards scroll into view.
+/// download track blobs as cards scroll into view. **Owner-only path** —
+/// the per-user-folder Storage policy from 20260410_001 gates access to
+/// `(storage.foldername(name))[1] = auth.uid()::text`. Non-owner viewers
+/// must use [fetchClippedTrackForRun] instead, which routes through the
+/// `clip-public-track` Edge Function so the privacy-zone clip happens
+/// server-side and the unclipped blob never crosses the wire.
 export async function fetchTrackByPath(path: string) {
 	return fetchTrack(path);
+}
+
+/// Privacy-aware non-owner track fetcher. Calls the `clip-public-track`
+/// Edge Function which downloads the gzipped track via service-role,
+/// passes the points through `clip_track_for_user`, and returns the
+/// clipped result. Use this on every non-owner surface where the old
+/// pattern was "fetchTrackByPath then clipTrackForUser client-side" —
+/// that pattern leaked the unclipped blob (audit/storage High,
+/// closed by migration 20260619_001 dropping the public-runs Storage
+/// policy).
+export async function fetchClippedTrackForRun(runId: string) {
+	const { data, error } = await supabase.functions.invoke('clip-public-track', {
+		body: { run_id: runId },
+	});
+	if (error) throw error;
+	const points = (data as { points?: unknown })?.points;
+	if (!Array.isArray(points)) {
+		throw new Error('clip-public-track returned malformed payload');
+	}
+	return points;
 }
 
 export type RouteMatchCandidate = {

@@ -406,6 +406,7 @@ class _EntryCard extends StatelessWidget {
                 color: theme.colorScheme.surfaceContainerHighest,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: RunTrackPreview(
+                  runId: entry.run.id,
                   trackUrl: entry.run.trackUrl,
                   api: api,
                   ownerUserId: entry.author.id,

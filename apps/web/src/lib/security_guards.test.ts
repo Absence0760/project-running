@@ -16,25 +16,33 @@ function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
 }
 
-test('RunTrackPreview routes non-owner fetches through clipTrackForUser', () => {
-	// Reason: feed thumbnails are shown to non-owner viewers. Without
-	// the clip step the polyline exposes the owner's privacy zones
-	// (start / end / interior — see decisions §33). The clip RPC trims
-	// them server-side. Removing this call re-introduces a privacy leak
-	// — keep it.
+test('RunTrackPreview routes non-owner fetches through clip-public-track EF', () => {
+	// Reason: feed thumbnails are shown to non-owner viewers. The pre-
+	// 20260619_001 pattern was "fetchTrackByPath then clipTrackForUser
+	// client-side" but that leaked the unclipped blob via direct
+	// Storage download. Non-owner thumbnails must now go through
+	// fetchClippedTrackForRun (which calls the clip-public-track Edge
+	// Function — server-side download + clip). Owners keep the direct
+	// path since the per-user-folder Storage policy still gates them.
 	const source = read('src/lib/components/RunTrackPreview.svelte');
 	assert.match(
 		source,
-		/clipTrackForUser/,
-		'RunTrackPreview must clip through the privacy-zone RPC for non-owner viewers. See decisions §33.',
+		/fetchClippedTrackForRun/,
+		'RunTrackPreview must use fetchClippedTrackForRun for non-owner viewers — direct Storage download leaks the unclipped blob. See decisions §33.',
 	);
 });
 
-test('feed page passes ownerUserId to RunTrackPreview', () => {
-	// Reason: without the prop, RunTrackPreview can't tell viewer from
-	// owner and skips the clip step. Always pass the run owner's id on
-	// the feed.
+test('feed page passes runId + ownerUserId to RunTrackPreview', () => {
+	// Reason: the EF non-owner clip path needs the run id (server
+	// resolves track_url + clips inline). Without the prop,
+	// RunTrackPreview can't reach the EF and renders a placeholder
+	// instead of the clipped polyline.
 	const source = read('src/routes/feed/+page.svelte');
+	assert.match(
+		source,
+		/<RunTrackPreview[^>]*runId=/s,
+		'Feed page must thread the run id into RunTrackPreview so the clip-public-track EF can resolve it.',
+	);
 	assert.match(
 		source,
 		/<RunTrackPreview[^>]*ownerUserId=/s,

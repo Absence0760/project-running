@@ -623,29 +623,40 @@ void main() {
   });
 
   group('thumbnail privacy-zone clipping', () {
-    test('RunTrackPreview routes non-owner fetches through clipTrackForUser',
+    test('RunTrackPreview routes non-owner fetches through clip-public-track EF',
         () {
-      // Reason: feed thumbnails are shown to non-owner viewers. Without
-      // the clip step the polyline would expose the owner's privacy
-      // zones (start / end / interior — see decisions §33). The clip
-      // RPC trims them server-side. Removing this call re-introduces a
-      // privacy leak — keep it.
+      // Reason: feed thumbnails are shown to non-owner viewers. The
+      // pre-20260619_001 pattern was "fetchTrackByPath then
+      // clipTrackForUser client-side" but that leaked the unclipped
+      // blob via direct Storage download. Non-owner thumbnails must
+      // now go through fetchClippedTrackForRun (which calls the
+      // clip-public-track Edge Function — server-side download +
+      // clip). Owners keep the direct path since the per-user-folder
+      // Storage policy still gates them.
       final source = File('lib/widgets/run_track_preview.dart')
           .readAsStringSync();
       expect(
         source,
-        contains('clipTrackForUser'),
-        reason: 'Non-owner thumbnails must clip through the privacy-zone '
-            'RPC. See decisions §33.',
+        contains('fetchClippedTrackForRun'),
+        reason: 'Non-owner thumbnails must use fetchClippedTrackForRun '
+            '— direct Storage download leaks the unclipped blob. See '
+            'decisions §33.',
       );
     });
 
-    test('feed_screen passes ownerUserId to RunTrackPreview', () {
-      // Reason: without the prop, RunTrackPreview can't tell viewer
-      // from owner and skips the clip step. Always pass the run
-      // owner's id on the feed.
+    test('feed_screen passes runId + ownerUserId to RunTrackPreview', () {
+      // Reason: the EF non-owner clip path needs the run id (server
+      // resolves track_url + clips inline). Without the prop,
+      // RunTrackPreview can't reach the EF and renders a placeholder
+      // instead of the clipped polyline.
       final source =
           File('lib/screens/feed_screen.dart').readAsStringSync();
+      expect(
+        source,
+        matches(RegExp(r'RunTrackPreview\([^)]*runId:', dotAll: true)),
+        reason: 'feed_screen must thread the run id into '
+            'RunTrackPreview so the clip-public-track EF can resolve it.',
+      );
       expect(
         source,
         matches(RegExp(r'RunTrackPreview\([^)]*ownerUserId:', dotAll: true)),
@@ -675,22 +686,23 @@ void main() {
       );
     });
 
-    test('public_run_screen routes non-owner tracks through clipTrackForUser',
+    test('public_run_screen routes non-owner tracks through clip-public-track EF',
         () {
       // Reason: /share/run/[id] (and the feed-card → public_run_screen
-      // navigation path) renders runs from arbitrary owners. Without
-      // routing the fetched track through the clip RPC the polyline
-      // would expose the owner's privacy zones to anonymous and signed-
-      // in non-owner viewers alike (decisions §33). The screen must
-      // gate on `api.userId != row.userId` and call clipTrackForUser
-      // before assigning to `_track`.
+      // navigation path) renders runs from arbitrary owners. The pre-
+      // 20260619_001 pattern of "fetchTrackByPath then clipTrackForUser"
+      // leaked the unclipped blob via direct Storage download. The
+      // screen must now branch on `api.userId == row.userId`: owners
+      // take fetchTrackByPath (direct, gated by per-user-folder
+      // policy), non-owners take fetchClippedTrackForRun (EF,
+      // server-side clip).
       final source =
           File('lib/screens/public_run_screen.dart').readAsStringSync();
       expect(
         source,
-        contains('clipTrackForUser'),
-        reason: 'public_run_screen must clip non-owner tracks through '
-            'the privacy-zone RPC. See decisions §33.',
+        contains('fetchClippedTrackForRun'),
+        reason: 'public_run_screen must use fetchClippedTrackForRun '
+            'for non-owner viewers. See decisions §33.',
       );
       // The owner gate must compare against widget.api.userId — not
       // some hard-coded "always clip" or "never clip".

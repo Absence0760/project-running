@@ -300,9 +300,41 @@ class ApiClient {
   /// Download a track by its Storage path. Used when a caller has a
   /// raw `RunRow` (e.g. public-share screens) and doesn't want to
   /// shape it into a `Run` first.
+  ///
+  /// **Owner-only path** — the per-user-folder Storage policy from
+  /// `20260410_001` gates access to
+  /// `(storage.foldername(name))[1] = auth.uid()::text`. Non-owner
+  /// viewers must use [fetchClippedTrackForRun] instead, which routes
+  /// through the `clip-public-track` Edge Function so the unclipped
+  /// blob never crosses the wire (decisions §33, migration
+  /// `20260619_001` dropped the public-runs Storage policy).
   Future<List<Waypoint>> fetchTrackByPath(String path) async {
     if (path.isEmpty) return const [];
     return _downloadTrack(path);
+  }
+
+  /// Privacy-aware non-owner track fetcher. Calls the
+  /// `clip-public-track` Edge Function which downloads the gzipped
+  /// track via service-role, passes the points through
+  /// `clip_track_for_user`, and returns the clipped result. Use this
+  /// on every non-owner surface where the old pattern was
+  /// "fetchTrackByPath then clipTrackForUser client-side" — that
+  /// pattern leaked the unclipped blob (audit/storage High, closed
+  /// by migration `20260619_001`).
+  Future<List<Waypoint>> fetchClippedTrackForRun(String runId) async {
+    if (runId.isEmpty) return const [];
+    final res = await _client.functions.invoke(
+      'clip-public-track',
+      body: {'run_id': runId},
+    );
+    final data = res.data;
+    if (data is! Map) return const [];
+    final points = data['points'];
+    if (points is! List) return const [];
+    return points
+        .whereType<Map>()
+        .map((p) => _waypointFromJson(p.cast<String, dynamic>()))
+        .toList();
   }
 
   /// Fetch the map-match state + matched track for a run. Returns null

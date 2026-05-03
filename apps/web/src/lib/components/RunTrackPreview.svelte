@@ -26,19 +26,25 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TrackPreview from './TrackPreview.svelte';
-	import { fetchTrackByPath, clipTrackForUser } from '$lib/data';
+	import { fetchTrackByPath, fetchClippedTrackForRun } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 
 	let {
+		runId,
 		trackUrl,
 		ownerUserId,
 	}: {
+		/// Used by the non-owner clip path. Required when ownerUserId is
+		/// set — the EF route needs the run's id to look up track_url
+		/// server-side and apply the privacy-zone clip.
+		runId?: string | null;
 		trackUrl: string | null;
 		/// Set this when the run isn't the current viewer's own — e.g. on
-		/// the activity feed. The fetched track is then routed through
-		/// `clipTrackForUser` so the owner's privacy zones are honoured
-		/// before we render the polyline. Omit when the row is the
-		/// viewer's own (no clip needed, faster cold load).
+		/// the activity feed. Non-owner viewers go through the
+		/// `clip-public-track` Edge Function so the unclipped blob never
+		/// crosses the wire (decisions.md §33, migration 20260619_001
+		/// dropped the public-runs Storage policy). Omit when the row is
+		/// the viewer's own — direct Storage download is fine and faster.
 		ownerUserId?: string | null;
 	} = $props();
 
@@ -87,14 +93,18 @@
 		if (!trackUrl || !cacheKey || attempted) return;
 		attempted = true;
 		try {
-			let track = (await fetchTrackByPath(trackUrl)) as TrackPoint[];
-			// Privacy-zone clipping for non-owner viewers (decisions §33).
-			// When the run isn't ours and the owner has zones configured,
-			// the RPC trims start / end / interior windows so a follower
-			// scrolling the feed never sees the owner's home. Owners
-			// always see their full track.
-			if (shouldClip && ownerUserId) {
-				track = (await clipTrackForUser(ownerUserId, track)) as TrackPoint[];
+			let track: TrackPoint[];
+			if (shouldClip) {
+				if (!runId) {
+					// Non-owner thumbnail without a runId can't use the EF
+					// path. Fail closed — render a placeholder rather than
+					// fall back to the (now-blocked) direct Storage path.
+					cacheSet(cacheKey, null);
+					return;
+				}
+				track = (await fetchClippedTrackForRun(runId)) as TrackPoint[];
+			} else {
+				track = (await fetchTrackByPath(trackUrl)) as TrackPoint[];
 			}
 			// Treat a track that never moves more than ~5 m total as
 			// equivalent to an empty track. Wear OS / iOS recorders log
