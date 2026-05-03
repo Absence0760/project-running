@@ -916,6 +916,58 @@ BEGIN
     WHERE id = test_run_id;
 END $$;
 
+-- ───────── run_photos.storage_path path-shape CHECK (migration 20260622_001) ─────────
+-- Verifies an owner can't rewrite their own row's storage_path to
+-- point at another user's blob — the CHECK rejects any non-empty
+-- value that doesn't start with owner_id/.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  test_run_id uuid;
+  test_photo_id uuid;
+BEGIN
+  SELECT id INTO test_run_id FROM runs WHERE user_id = test_user LIMIT 1;
+  test_photo_id := gen_random_uuid();
+
+  -- Insert with the transient empty-string placeholder used by the
+  -- mobile addRunPhoto flow — must succeed.
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  INSERT INTO run_photos (id, run_id, owner_id, storage_path, position_idx)
+    VALUES (test_photo_id, test_run_id, test_user, '', 0);
+
+  -- Update to a foreign-owner path — must raise.
+  BEGIN
+    UPDATE run_photos
+      SET storage_path = '99999999-9999-9999-9999-999999999991/'
+                         || test_photo_id::text || '.jpg'
+      WHERE id = test_photo_id;
+    RAISE EXCEPTION 'run_photos_storage_path_shape: foreign-owner path should have been rejected';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  -- Update to a path missing the owner-prefix — must raise.
+  BEGIN
+    UPDATE run_photos
+      SET storage_path = 'somefolder/' || test_photo_id::text || '.jpg'
+      WHERE id = test_photo_id;
+    RAISE EXCEPTION 'run_photos_storage_path_shape: prefixless path should have been rejected';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  -- Canonical path — must succeed.
+  UPDATE run_photos
+    SET storage_path = test_user::text || '/' || test_photo_id::text || '.jpg'
+    WHERE id = test_photo_id;
+
+  -- Cleanup.
+  DELETE FROM run_photos WHERE id = test_photo_id;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
+
 -- ───────── live_run_pings privacy clipping (migration 20260618_001) ─────────
 -- Verifies the BEFORE INSERT trigger drops pings inside any of the
 -- runner's privacy zones — the surface that Realtime broadcasts to
