@@ -1026,6 +1026,52 @@ The table is provider-keyed so future webhooks (Stripe, Linear, etc.) share the 
 
 ---
 
+## 53. Web app + domain on AWS (S3 + CloudFront + Lambda + Route 53), not Vercel or Cloudflare Pages
+
+The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Origin Access Control), CloudFront in front, Lambda Function URL for the single SSR route (`/api/coach`), Route 53 + ACM cert in `us-east-1` for `runonward.app` / `www.runonward.app`. Provisioned via CDK (TypeScript), GitHub Actions deploys via OIDC role assumption (no long-lived AWS keys in `Settings → Secrets`).
+
+**Why:**
+
+- **Already in AWS.** Workstation uses AWS KMS via SSO for shared sops secrets. Adding a second cloud (Vercel, Cloudflare) introduces a separate billing/IAM/audit relationship for marginal benefit.
+- **Standard, hireable, audit-friendly infra.** S3 + CloudFront + Lambda + Route 53 is bog-standard. Anyone who's done AWS knows this shape. Vercel-specific deploy semantics, CF Workers, and Pages all add platform-specific knowledge requirements.
+- **Optionality for ancillary services.** When the app eventually needs SES (transactional email), KMS (per-user app-level encryption), Bedrock (alternate Claude routing), or Secrets Manager — they're already adjacent.
+- **No commercial-use restriction.** Vercel Hobby is non-commercial in the ToS; a paid running app technically requires Pro at $20/mo per seat. AWS has no such gate.
+- **For *this* app specifically, web-host cost is <5% of total infra spend.** The bytes that matter (run photos, GPS tracks, exports) live in Supabase Storage; LLM tokens are per-call regardless of host. So Cloudflare's bandwidth-cost advantage barely applies here, and the AWS ecosystem benefit dominates.
+
+**Trade-off:**
+
+- **More day-one setup** than Vercel's import-and-go. CDK app, OIDC role, OAC, ACM cert, CloudFront response-headers policy, per-env stacks, build-time env injection from GitHub Secrets, CloudWatch alarms — about a day or two of focused work. Bolting these on later is painful, so they ship together with the first deploy. See [`apps/web/deployment.md`](../apps/web/deployment.md).
+- **CloudFront egress is ~$0.085/GB** (after the first 1 TB free for 12 months). Cloudflare's egress is functionally free. At the projected scale for this app the difference is single-digit dollars/month for a long time.
+- **CDK lock-in.** Moving to a different cloud later means rewriting the IaC. Acceptable given how rarely we'd want to.
+
+**Architecture pinned by this decision:**
+
+```
+Route 53 (runonward.app, www.runonward.app)
+   │  ALIAS / A
+   ▼
+CloudFront distribution (one per env: prod, preview)
+   ├── default behaviour       → S3 origin (private, OAC) — SvelteKit static build
+   ├── /api/coach/* behaviour  → Lambda Function URL (Node 20, streaming response)
+   └── response headers policy → CSP / HSTS / X-Content-Type-Options / Referrer-Policy
+
+ACM cert (us-east-1) — auto-renew
+
+GitHub Actions
+   │  OIDC AssumeRole (no long-lived keys)
+   ▼
+IAM role (s3:PutObject on artifacts bucket, cloudfront:CreateInvalidation,
+          lambda:UpdateFunctionCode on the coach handler — and nothing else)
+```
+
+**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The CDK app emits both from one source so they don't drift.
+
+**SvelteKit adapter posture:** `@sveltejs/adapter-static` for the bulk; `/api/coach/+server.ts` is reused as the body of a hand-rolled Node 20 Lambda handler so we don't depend on a community SvelteKit-AWS adapter.
+
+**Don't re-litigate unless:** monthly CloudFront egress exceeds ~10 TB AND the team has bandwidth to migrate. At that scale Cloudflare's free egress could save real money, but the migration cost (rewriting IaC, redoing OIDC, cutover DNS without breaking sessions) needs justification.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

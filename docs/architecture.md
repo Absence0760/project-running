@@ -171,7 +171,7 @@ Talks to Supabase **directly** (standalone — no paired-phone dependency). Sche
 
 ### Web app (SvelteKit)
 
-A standalone SvelteKit app at `apps/web/`, deployed to Vercel. It is intentionally not a full-featured clone of the mobile app — its purpose is the things that are genuinely better on a large screen.
+A standalone SvelteKit app at `apps/web/`, deployed to AWS (S3 + CloudFront + Lambda + Route 53 — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). It is intentionally not a full-featured clone of the mobile app — its purpose is the things that are genuinely better on a large screen.
 
 **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · Supabase JS client · MapLibre GL JS
 
@@ -545,7 +545,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | iOS + Android UI | Flutter 3.x + Dart | Single codebase, ~80% shared |
 | Apple Watch | Swift 5 + SwiftUI + WatchKit | Separate Xcode project in monorepo |
 | Wear OS | Native Kotlin + Jetpack Compose-for-Wear | Separate Gradle project in monorepo, schema-codegen'd Kotlin row classes — see [decisions.md § 15](decisions.md) |
-| Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to Vercel |
+| Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to AWS S3 + CloudFront with `/api/coach` on Lambda — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) |
 | Web maps | MapLibre GL JS | Route builder, run GPS trace, live spectator |
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
@@ -598,7 +598,7 @@ jobs:
     needs: [test-packages, build-web]
 ```
 
-Web app deploys to Vercel via the Vercel GitHub integration — no manual deploy step needed. Preview deployments are created automatically for every pull request.
+Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHub OIDC to assume an IAM role and runs `aws s3 sync` + `aws lambda update-function-code` + `aws cloudfront create-invalidation` against the `prod` environment on tag `web@*`. Pushes to `main` deploy to the `preview` environment at `preview.runonward.app`. See [`apps/web/deployment.md`](../apps/web/deployment.md).
 
 ---
 
@@ -611,7 +611,7 @@ Web app deploys to Vercel via the Vercel GitHub integration — no manual deploy
 - **Apple Sign-In** on iOS 13+ — no email/password surface to attack
 - **Web app sessions** managed via `@supabase/ssr` — auth cookies are httpOnly and not accessible to JavaScript
 - **Public route/run pages** use Supabase `is_public` flag — RLS policies enforce that only explicitly shared records are readable without auth
-- **Environment secrets** (`SUPABASE_URL`, `STRAVA_CLIENT_SECRET`, `MAPTILER_KEY`, `PUBLIC_SUPABASE_ANON_KEY`) stored in GitHub Actions secrets and Vercel environment variables — never committed to the repo
+- **Environment secrets** stored in three places, never the repo: GitHub Actions secrets (`PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, etc. — injected at CI build time into `.env.production` before the static build), AWS Secrets Manager (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN` — read by the coach Lambda at runtime), and Supabase Vault (`STRAVA_CLIENT_SECRET` and other OAuth-token secrets — see [decisions.md § 41](decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns))
 
 ---
 

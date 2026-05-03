@@ -4,14 +4,14 @@
 
 **Working rule:** when you're asked to build a feature, build it here first. When you're asked to fix drift between web and mobile, close it by bringing web up to parity with mobile (not the reverse) unless the feature is a physical exception. See [../../docs/parity.md](../../docs/parity.md) for the live matrix — rows where this app is `✗` or `Partial` on a non-exception feature are the backlog.
 
-Deployed to GitHub Pages for the static site; Vercel adapter is used when a server runtime is needed (the `/api/coach/+server.ts` Claude endpoint, for example).
+Deployed to AWS — S3 (static SvelteKit build) + CloudFront + Route 53 for everything except `/api/coach`, which deploys as a Node 20 Lambda Function URL routed by a separate CloudFront behaviour. CDK-provisioned, OIDC-deployed from GitHub Actions. See [decisions.md § 53](../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the rationale and [deployment.md](deployment.md) for the full plan.
 
 ## Stack
 
 - **Framework**: SvelteKit 2 with Svelte 5 (runes/next)
 - **Language**: TypeScript
 - **Package manager**: npm via the root workspace (`npm run <script> --workspace=apps/web`). The repo bootstrapped with pnpm originally and `apps/web/pnpm-lock.yaml` still exists; CI and the canonical build path are npm — see [decisions.md § 7](../../docs/decisions.md). Either works locally; just don't mix.
-- **Adapters**: `@sveltejs/adapter-static` (GitHub Pages), `@sveltejs/adapter-vercel` (Vercel)
+- **Adapter**: `@sveltejs/adapter-static` for the bulk; `/api/coach/+server.ts` is reused as the body of a hand-rolled Node 20 Lambda handler (no SvelteKit AWS adapter — see [decisions.md § 53](../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages))
 - **Styling**: normalize.css + custom CSS in `src/app.css`
 - **Icons**: unplugin-icons with `@iconify-json/material-symbols`
 - **Markdown**: mdsvex
@@ -106,8 +106,8 @@ npm run check --workspace=apps/web       # Type-check
 
 - Use Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, `$props`) — not the legacy options API
 - TypeScript throughout; `lang="ts"` on all `<script>` blocks
-- Prefer `@sveltejs/adapter-static` for GitHub Pages output (output dir: `build/`)
-- `BASE_PATH` env var is set to `/<repo-name>` during CI builds for correct asset paths
+- `@sveltejs/adapter-static` is the only SvelteKit adapter (output dir: `build/`); the coach endpoint is a separate Lambda artifact built from `src/routes/api/coach/+server.ts`
+- `BASE_PATH` is empty in production (CloudFront serves at the root). It's only set on a non-root Pages-style mirror, which we no longer use.
 - Buttons: don't define `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-outline`, `.btn-danger`, or `.btn-sm` locally — they live in `app.css` globally. Page-specific variants (`.btn-google`, `.btn-save`, etc.) extend the base. See [conventions § Web buttons](../../docs/conventions.md#web-buttons).
 - Modals: don't define `.modal-backdrop`, `.modal`, `.modal-header`, `.modal-close`, `.modal-body`, `.modal-wide`, or `.modal-narrow` locally — they live in `app.css` globally. Every create / edit dialog (clubs, plans, runs, events, goals, device overrides, workout editor, import route, ConfirmDialog) uses the same shape. See [conventions § Web modals](../../docs/conventions.md#web-modals).
 - Page width: list / detail pages **uncapped** (fill the screen), settings tabs cap at `64rem`, focused single-form pages at `40–48rem`. Padding is `var(--space-xl) var(--space-2xl)`, left-aligned (no `margin: 0 auto`). See [conventions § Web page padding](../../docs/conventions.md#web-page-padding).
@@ -121,11 +121,9 @@ The standalone `/new` routes (`/clubs/new`, `/plans/new`, `/runs/new`, `/clubs/[
 The modal shell uses the canonical `.modal-backdrop` / `.modal` / `.modal-header` / `.modal-close` / `.modal-body` classes from `app.css`. Pages and components must not redefine those locally — only field-level layout (e.g. a `.goal-editor-body { display: grid }` for a specific dialog's contents). See [conventions § Web modals](../../docs/conventions.md#web-modals).
 ## Deployment
 
-Production plan + cost / observability / rollback: [deployment.md](deployment.md). Canonical provider is **Vercel** (gets the SSR `/api/coach` route); GitHub Pages is kept as a free static mirror.
+Production plan + cost / observability / rollback: [deployment.md](deployment.md). Hosted on **AWS** (S3 + CloudFront + Lambda + Route 53), CDK-provisioned, OIDC-deployed from GitHub Actions. See [decisions.md § 53](../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the choice rationale.
 
-Today's deploy mechanics:
-- **GitHub Pages**: push to `main` triggers `.github/workflows/deploy.yml`, which builds and deploys automatically.
-- The `build/.nojekyll` file is created at build time to bypass Jekyll processing.
+Tag `web@*` triggers `.github/workflows/release-web.yml` which: builds the static site → uploads to the prod S3 bucket → updates the coach Lambda → invalidates CloudFront. Push to `main` deploys to the `preview.runonward.app` environment.
 
 ## Pull Request Guidelines
 

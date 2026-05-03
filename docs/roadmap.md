@@ -615,7 +615,7 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 | Wear OS watch | Native Kotlin + Compose-for-Wear | 2 |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | 2b |
 | Web maps | MapLibre GL JS (tiles via MapTiler, future: Protomaps self-hosted) | 2b |
-| Web deployment | Vercel | 2b |
+| Web deployment | AWS (S3 + CloudFront + Lambda + Route 53) — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | 2b |
 | Monorepo | Melos workspace (Flutter) + pnpm (web) | 1 |
 | Maps (mobile) | flutter_map + MapLibre | 1 |
 | GPX/KML parsing | Dart `gpx` package + `togeojson` (web) | 1 |

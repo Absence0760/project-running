@@ -2,24 +2,49 @@
 
 How `apps/web/` (SvelteKit 2 + Svelte 5) ships to production.
 
-Operational counterpart of [`apps/web/CLAUDE.md`](CLAUDE.md) (stack, conventions, file layout) and [`apps/web/local_testing.md`](local_testing.md) (running it locally). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md).
+Operational counterpart of [`apps/web/CLAUDE.md`](CLAUDE.md) (stack, conventions, file layout) and [`apps/web/local_testing.md`](local_testing.md) (running it locally). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md). For the rationale behind hosting choices see [`docs/decisions.md § 53`](../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages).
 
 **Status: plan.** Today the web app exists as a working dev server only.
 
 ---
 
-## Provider — Vercel (canonical), GitHub Pages (fallback)
+## Provider — AWS (S3 + CloudFront + Lambda + Route 53)
 
 The web app has two parts:
 
-1. **Static site** — every route except `/api/coach`. SvelteKit prerenders / SPA-renders these. Either provider serves them fine.
-2. **Server-side `/api/coach/+server.ts`** — needs a runtime that can stream Anthropic responses back to the client. GitHub Pages can't do this; Vercel can.
+1. **Static site** — every route except `/api/coach`. SvelteKit prerenders / SPA-renders these. Served from S3 (private bucket) via CloudFront with Origin Access Control (OAC).
+2. **Server-side `/api/coach/+server.ts`** — needs a runtime that can stream Anthropic responses back to the client. Deployed as a Node 20 Lambda Function URL; CloudFront routes `/api/coach/*` to it as a separate behaviour on the same distribution.
 
-So the two-provider story collapses if we just run Vercel for everything. Recommended path: **Vercel as canonical**, with the Pages deploy kept as a free static mirror that also acts as a fallback if Vercel ever has an outage. The SvelteKit Vercel adapter handles the SSR routes; the static adapter handles everything else.
+Same domain, same CORS posture for both halves. No API Gateway in front of the Lambda — Function URLs are free, support response streaming, and skip the per-request API Gateway cost. ACM cert lives in `us-east-1` (CloudFront only reads from there, regardless of where the rest of the stack runs).
 
-If we never need the Coach endpoint, GitHub Pages alone is enough — but rolling back from "Vercel only" to "Pages only" forfeits Coach. Easier to set up Vercel once and never look back.
+**Region:** `eu-west-2` (London) for everything except the cert. CloudFront is global; the cert region is fixed.
 
-**Region:** Vercel auto-picks edges; the Coach SSR route uses Vercel's edge runtime (Node 20 default; switch to `runtime: 'edge'` if cold-start matters more than max payload size). Anthropic API calls go from Vercel's edge directly to `api.anthropic.com`, no proxy.
+---
+
+## Architecture
+
+```
+Route 53 (runonward.app, www.runonward.app)
+   │  ALIAS / A
+   ▼
+CloudFront distribution (one per env: prod, preview)
+   ├── default behaviour       → S3 origin (private, OAC) — SvelteKit static build
+   ├── /api/coach/* behaviour  → Lambda Function URL (Node 20, response streaming)
+   └── response headers policy → CSP / HSTS / X-Content-Type-Options / Referrer-Policy
+                                 / Permissions-Policy
+
+ACM cert (us-east-1) — auto-renew via DNS validation in Route 53
+
+GitHub Actions
+   │  OIDC AssumeRole (no long-lived AWS keys in GH Secrets)
+   ▼
+IAM role  s3:PutObject       on the env's artifacts bucket prefix
+          cloudfront:CreateInvalidation  on the env's distribution
+          lambda:UpdateFunctionCode      on the coach Lambda
+          (and nothing else — least-privilege)
+```
+
+**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The CDK app emits both from one source so they don't drift.
 
 ---
 
@@ -27,78 +52,89 @@ If we never need the Coach endpoint, GitHub Pages alone is enough — but rollin
 
 | Hostname | Routed to | TTL |
 |---|---|---|
-| `runonward.app` | Vercel (apex, A → ALIAS) | 300 |
-| `www.runonward.app` | Vercel (CNAME → `runonward.app`) | 300 |
+| `runonward.app` | Route 53 ALIAS → CloudFront (prod distribution) | 300 |
+| `www.runonward.app` | Route 53 ALIAS → CloudFront (prod distribution) | 300 |
+| `preview.runonward.app` | Route 53 ALIAS → CloudFront (preview distribution) | 300 |
 
-Vercel handles certificate provisioning automatically once the domain is verified. The first deploy after wiring DNS issues a Let's Encrypt cert; renews every 60 days without intervention.
+ACM provisions the cert via DNS validation against Route 53 — no email validation, no manual cert renewal. Cert covers `runonward.app`, `www.runonward.app`, `preview.runonward.app`.
 
-**Apex `A` record gotcha**: Cloudflare Registrar lets you `CNAME @`; most other registrars don't allow CNAMEs at the apex. If you're using one that doesn't, set `A` records to Vercel's documented IPs (`76.76.21.21` is the one they advertise; check the dashboard for the current set when wiring).
+**Domain registration.** Either register `runonward.app` directly in Route 53 (~$12/year for `.app`), or register at Cloudflare Registrar / Porkbun and delegate the NS records to Route 53. Both are fine; Route-53-native is simpler since DNS + cert renewal use the same hosted zone.
 
 ---
 
-## One-time setup
+## CDK app
 
-```bash
-# 1. Sign in to Vercel and import the GitHub repo.
-# 2. Set Root Directory to "apps/web" in the Vercel project settings.
-# 3. Set Framework Preset to "SvelteKit".
-# 4. Add the production env vars (next section).
-# 5. Trigger the first deploy (Vercel does it automatically on import).
-# 6. Wire DNS for runonward.app to point at the Vercel project.
-```
+Provisioned via CDK (TypeScript). The CDK app lives at `infra/web/` (to be created as part of the AWS migration). Three stacks:
 
-Vercel reads `vercel.json` if present; today there isn't one. Add one only if we need to override defaults (custom headers, redirects, regex rewrites). The SvelteKit Vercel adapter handles the build output without configuration.
+- **`WebStack`** (per env: `WebStack-prod`, `WebStack-preview`) — S3 bucket, CloudFront distribution, Lambda Function URL for `/api/coach`, response headers policy, OAC, log buckets.
+- **`DnsStack`** — Route 53 hosted zone, ALIAS records, ACM cert in `us-east-1`. One stack, one zone, all envs share it.
+- **`GithubOidcStack`** — OIDC provider for `token.actions.githubusercontent.com`, deploy IAM role per env, trust policy scoped to `repo:<owner>/<repo>:ref:refs/tags/web@*` (prod) and `:ref:refs/heads/main` (preview).
 
-### Production env vars (Vercel)
+Bootstrap: `cdk bootstrap aws://<account>/eu-west-2` and `aws://<account>/us-east-1`. Both regions need the bootstrap stack because the cert lives in `us-east-1` while everything else lives in `eu-west-2`.
 
-Set these in **Project → Settings → Environment Variables**, scoped to "Production" and "Preview":
+---
 
-| Variable | Source | Notes |
+## Build-time env vars (injected by CI before `npm run build`)
+
+The static SvelteKit build inlines `PUBLIC_*` vars at build time. The CI workflow reads them from GitHub Secrets and writes a `.env.production` file before the build step:
+
+| Variable | Source (GitHub Secrets) | Notes |
 |---|---|---|
-| `PUBLIC_SUPABASE_URL` | Supabase project | once custom domain is live, use `https://api.runonward.app` |
-| `PUBLIC_SUPABASE_ANON_KEY` | Supabase project | the **publishable** key, not service-role |
-| `PUBLIC_MAPTILER_KEY` | MapTiler dashboard | shared with mobile + Wear OS |
-| `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat dashboard | client-side web SDK key |
-| `ANTHROPIC_API_KEY` | Anthropic console | server-only — `/api/coach` reads it |
-| `PUBLIC_SENTRY_DSN` | Sentry frontend project | optional — empty disables client-side capture (`hooks.client.ts`) |
-| `SENTRY_DSN` | Sentry frontend project | optional — empty disables server-side capture (`hooks.server.ts`); typically the same DSN as `PUBLIC_SENTRY_DSN` |
-| `PUBLIC_APP_RELEASE` / `APP_RELEASE` | CI tag (e.g. `web@1.2.3`) | optional — tags Sentry events with the release; defaults to `dev` when unset |
-| `BASE_PATH` | `/` for Vercel; `/<repo-name>` for Pages | empty in Vercel; the Pages workflow sets it |
+| `PUBLIC_SUPABASE_URL` | `PUBLIC_SUPABASE_URL` | once custom domain is live, use `https://api.runonward.app` |
+| `PUBLIC_SUPABASE_ANON_KEY` | `PUBLIC_SUPABASE_ANON_KEY` | the **publishable** key, not service-role |
+| `PUBLIC_MAPTILER_KEY` | `PUBLIC_MAPTILER_KEY` | shared with mobile + Wear OS |
+| `PUBLIC_REVENUECAT_WEB_API_KEY` | `PUBLIC_REVENUECAT_WEB_API_KEY` | client-side web SDK key |
+| `PUBLIC_SENTRY_DSN` | `PUBLIC_SENTRY_DSN` | optional — empty disables client-side capture |
+| `PUBLIC_APP_RELEASE` | derived from CI tag (e.g. `web@1.2.3`) | tags Sentry events |
 
-`PUBLIC_*` vars are inlined at build time and shipped to the browser. Anything that should stay server-side (the Anthropic key) must NOT have the `PUBLIC_` prefix.
+**Anything that should stay server-side does NOT have the `PUBLIC_` prefix and lives in the Lambda's env**, set by CDK — not in the SvelteKit build. The coach Lambda reads:
 
-`COACH_PROVIDER` and `OPENAI_BASE_URL` are optional — set them if pointing the Coach endpoint at a self-hosted Ollama / OpenAI-compatible service instead of Anthropic. Default behaviour without them is Claude.
+| Lambda env var | Source | Notes |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | AWS Secrets Manager (looked up by CDK at synth time) | server-only — `/api/coach` reads it |
+| `SENTRY_DSN` | Secrets Manager | optional — server-side capture |
+| `APP_RELEASE` | tag value, passed at deploy time | tags Sentry events |
+| `COACH_PROVIDER` / `OPENAI_BASE_URL` | optional Lambda env vars | for self-hosted Ollama / OpenAI-compatible service |
+
+The Lambda also receives `PUBLIC_SUPABASE_URL` and the **publishable** `PUBLIC_SUPABASE_ANON_KEY` (not service-role) so it can validate the user's JWT and call `is_pro()` / `increment_coach_usage` RPCs as the user.
 
 ---
 
 ## CI deploy path
 
-Triggered by tagging `web@*`. The workflow at `.github/workflows/release-web.yml`:
+Triggered by tagging `web@*`. The workflow at `.github/workflows/release-web.yml` (to be rewritten as part of the AWS migration):
 
 1. Checks out the tag.
-2. `npm ci` at the workspace root.
-3. `npm run check --workspace=apps/web`.
-4. `npm run build --workspace=apps/web`.
-5. (Pages mirror, if kept) Pushes the build to the `gh-pages` branch.
-6. (Vercel) The Vercel GitHub integration auto-deploys on every push to `main`; the tag itself is a "pin this build" marker rather than the trigger.
+2. `aws-actions/configure-aws-credentials` with OIDC role assumption — never a long-lived `AWS_ACCESS_KEY_ID`.
+3. `npm ci` at the workspace root.
+4. Write `.env.production` from GitHub Secrets (the `PUBLIC_*` vars table above). Strip after build.
+5. `npm run check --workspace=apps/web`.
+6. `npm run build --workspace=apps/web` → produces `apps/web/build/` (static).
+7. Build the coach Lambda zip — bundle `src/routes/api/coach/+server.ts` into a single `index.mjs` Node 20 handler, zip it.
+8. `aws s3 sync apps/web/build/ s3://<bucket>/ --delete` — sync the static build.
+9. `aws lambda update-function-code --function-name web-coach-prod --zip-file fileb://coach.zip` — update the Lambda.
+10. `aws cloudfront create-invalidation --distribution-id <id> --paths "/*"` — invalidate the cache.
+11. Attach the build zip to a GitHub Release for rollback.
 
-Vercel's deployment model is automatic: every push to the configured production branch (`main`) triggers a build + deploy. Tagging `web@*` doesn't *trigger* the Vercel deploy; it labels the GitHub Release with whatever Vercel built off the same commit. To deploy a non-`main` build (hotfix, rollback), use Vercel's "Promote" UI on a previous deployment.
-
-If we'd rather have tags drive Vercel deploys explicitly: set up a `release-web.yml` step that calls `npx vercel deploy --prod --token=$VERCEL_TOKEN`. Adds CI control at the cost of duplicating Vercel's built-in trigger.
+Preview environment fires on every push to `main` against the `preview` env's bucket / distribution / Lambda, scoped to `preview.runonward.app`. Tags only deploy to `prod`.
 
 ---
 
-## Coach `/api/coach` specifics
+## Coach `/api/coach` specifics — Lambda
 
 The only SSR route in the app, and the only one that costs money to run.
 
-**Cost model:** Each chat turn is a streaming call to `claude-haiku-4-5` (or Opus per request). At ~3k input tokens + 1k output per turn × ~5k turns/month at launch ≈ $15. The hard ceiling lives in `check_rate_limit_tiered` (default 4/hour for free, 16/hour for pro per [paywall.md](../../docs/paywall.md)) — adjust the limits if Anthropic costs spike.
+**Cost model.** Each chat turn is a streaming call to `claude-haiku-4-5` (or Opus per request). At ~3k input tokens + 1k output per turn × ~5k turns/month at launch ≈ $15. The hard ceiling lives in `check_rate_limit_tiered` (default 4/hour for free, 16/hour for pro per [paywall.md](../../docs/paywall.md)) — adjust the limits if Anthropic costs spike.
 
-**Latency.** First-token latency is ~600 ms from Vercel edge → Anthropic. The Vercel function runtime is set to `nodejs20.x` (default) rather than `edge` because the Anthropic SDK's streaming uses Node-only APIs. Switching to `edge` would shave ~150 ms but breaks the SDK.
+**Latency.** First-token latency is ~600 ms from `eu-west-2` Lambda → Anthropic. Lambda response streaming is enabled (`InvokeMode = RESPONSE_STREAM` on the Function URL); CloudFront passes the stream through without buffering on the `/api/coach/*` behaviour by setting `OriginRequestPolicy.AllViewerExceptHostHeader` and disabling response buffering on the cache policy.
 
-**Rate limit response.** When the EF returns 429, `apps/web/src/routes/coach/+page.svelte` surfaces a "Daily limit reached, upgrade to Pro for higher limits" toast. Verify this on every deploy that touches the coach surface.
+**Cold starts.** Node 20 Lambda cold start at 1 GB memory is ~400 ms. For a chat endpoint that's already streaming a multi-second response, cold-start overhead is barely visible. Provisioned concurrency is *not* configured — the cost isn't justified at pre-launch traffic.
 
-**Self-hosted alternative.** Set `COACH_PROVIDER=openai` + `OPENAI_BASE_URL=http://...` in the Vercel env to point at an Ollama instance. We don't run one in production today, but local dev uses this path against a workstation Ollama for fast iteration.
+**Memory + timeout.** 1024 MB memory (gives proportional CPU headroom for the Anthropic SDK), 30 s timeout (max for streaming through CloudFront — Function URL hard cap is 15 min but CloudFront cuts off long connections). If a user's coach turn truly runs longer than 30 s the response was already in trouble; surface the timeout cleanly client-side.
+
+**Rate limit response.** When the Lambda returns 429, `apps/web/src/routes/coach/+page.svelte` surfaces a "Daily limit reached, upgrade to Pro for higher limits" toast. Verify this on every deploy that touches the coach surface.
+
+**Self-hosted alternative.** Set `COACH_PROVIDER=openai` + `OPENAI_BASE_URL=http://...` in the Lambda env to point at an Ollama instance. We don't run one in production today, but local dev uses this path against a workstation Ollama for fast iteration.
 
 ---
 
@@ -106,7 +142,7 @@ The only SSR route in the app, and the only one that costs money to run.
 
 `apps/web/static/sw.js` registers as the push-notification service worker (decisions §38). Two prerequisites for it to work in production:
 
-1. **HTTPS only.** Vercel handles this.
+1. **HTTPS only.** CloudFront + ACM handle this — the distribution forces `redirect-to-https` and serves a valid cert.
 2. **VAPID keys.** Generated once with `npx web-push generate-vapid-keys`. The public key is checked into `apps/web/src/lib/push.ts`; the private key lives in Supabase EF env (`VAPID_PRIVATE_KEY`) so the EF can sign push messages. Update both halves together if rotated.
 
 The `Notifications` row in the database carries the user's subscription endpoint (in `user_device_settings.prefs.push_subscription`); EF triggers (`notify_run_kudos` etc.) issue HTTP POSTs to those endpoints.
@@ -117,15 +153,26 @@ The `Notifications` row in the database carries the user's subscription endpoint
 
 | Surface | Tool | What |
 |---|---|---|
-| Request logs | Vercel dashboard → Project → Logs | every request, response code, runtime |
-| Build logs | Vercel dashboard → Project → Deployments → <id> | full build output, useful when SvelteKit pre-render trips |
-| Web Vitals | Vercel Analytics | LCP, CLS, INP, page views |
+| Static request logs | CloudFront access logs → S3 → Athena query when needed | request volume, status codes, cache hit ratio |
+| Lambda logs | CloudWatch Logs (`/aws/lambda/web-coach-prod`) | every invocation, structured JSON, source-mapped errors |
+| Lambda metrics | CloudWatch — `Errors`, `Duration` (p50/p95/p99), `ConcurrentExecutions`, `Throttles`, `InitDuration` (cold-start latency) | tied to alarms |
+| Web Vitals | client-side via `@sentry/sveltekit` performance monitoring | LCP, CLS, INP, page views |
 | Client errors | Sentry (frontend project) | bundled via `@sentry/sveltekit`, source-mapped |
+| Server errors | Sentry (server) — bundled into the coach Lambda | grouped exceptions on coach failures |
 | Coach usage | Anthropic console | per-key spend, request rate, model mix |
 
-**Alerts to wire:**
+**CloudWatch alarms (wired by CDK):**
 
-- Vercel "Deployment Failed" → email
+- Lambda error rate >2% over 5 min → SNS topic `web-prod-alerts`
+- Lambda p95 duration >25 s over 5 min (approaching the 30 s timeout) → same topic
+- Lambda throttles >0 in any 1 min window → same topic
+- 4xx rate at the CloudFront distribution >5% over 5 min → same topic (catches mass auth failures, SPA fallback misconfig, etc.)
+- 5xx rate at the distribution >1% over 5 min → same topic
+
+The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-launch a single email subscription is enough; route to `oncall@runonward.app` once the team is real.
+
+**Other alerts:**
+
 - Sentry: any new error class with >10 events in 5 min
 - Better Stack probe of `https://runonward.app/` returning non-200 for >2 min
 - Anthropic cost above $X/day (Console → Usage → Alerts)
@@ -136,79 +183,70 @@ The `Notifications` row in the database carries the user's subscription endpoint
 
 | Component | Tier | Monthly |
 |---|---|---|
-| Vercel | Hobby (free) covers static + 100 GB bandwidth + 100 GB-hours compute | $0 |
-| Vercel Pro | needed if we exceed the Hobby limits or want password protection on previews | $20 |
+| S3 | <1 GB storage + PUTs at deploy time | <$0.20 |
+| CloudFront | Free tier 1 TB egress + 10M HTTPS req for the first 12 months; ~$0.085/GB after | $0 → ~$3 |
+| Lambda | Free tier 1M req + 400k GB-s/mo; coach is paywalled + tier-rate-limited so requests are bounded | $0 |
+| Lambda Function URL | Free | $0 |
+| Route 53 | $0.50/mo per hosted zone + $0.40/M queries | ~$0.60 |
+| ACM cert | $0 | $0 |
+| CloudWatch Logs | <1 GB ingest at pre-launch | <$1 |
+| Secrets Manager | $0.40/secret/mo × ~3 secrets (Anthropic, Sentry, Sentry DSN) | $1.20 |
 | Anthropic API | Coach usage at launch | ~$15 |
-| Sentry | Free tier (50k errors/month) | $0 |
-| Vercel Analytics | included on Pro; $10/mo on Hobby for the web-vitals add-on | $0 → $10 |
-| **Subtotal — launch** | | **$15–35** |
+| Sentry | Free tier (5k errors/month) | $0 |
+| **Subtotal — launch** | | **~$17–20** |
 
-Bandwidth is the variable that tips us off Hobby. 1k users × 5 sessions/month × ~300 KB each ≈ 1.5 GB — far below. Once we're past 100 GB/month (≈ 50k–100k sessions depending on cache hit rate), Pro becomes mandatory.
+**Egress is the variable that grows with users.** 1k users × 5 sessions/month × ~300 KB each ≈ 1.5 GB — far below the free tier. Once we're past 1 TB/month (≈ 3M sessions depending on cache hit rate), CloudFront billing kicks in at ~$0.085/GB.
 
 ---
 
 ## Rollback
 
-Vercel's UI: Project → Deployments → pick a previous green deployment → "Promote to Production". Takes <30 s.
+Two layers:
 
-Equivalent CLI:
+1. **Static site rollback** — re-`aws s3 sync` from the build zip attached to the previous green tag's GitHub Release, then `aws cloudfront create-invalidation`. ~60 s end-to-end.
+2. **Lambda rollback** — Lambda versions are auto-incremented on every `update-function-code`. The CDK creates an alias `live` that points at the most recent version; rolling back is `aws lambda update-alias --function-name web-coach-prod --name live --function-version <previous>`. ~10 s.
 
-```bash
-npx vercel ls --token=$VERCEL_TOKEN
-npx vercel promote <deployment-url> --token=$VERCEL_TOKEN
-```
-
-The Vercel rollback doesn't revert the GitHub commit. To make `main` reflect the rollback (so the next push doesn't re-deploy the broken version), tag a revert commit and let Vercel pick it up.
+For the *git* rollback (so the next push doesn't re-deploy the broken version), tag a revert commit and let the workflow pick it up.
 
 **Database-coupled rollback.** If a web release relied on a backend migration, rolling back the web deploy without rolling back the schema is fine (newer schema is read-compatible). The reverse — rolling back the schema while leaving the new web deploy serving — is what causes 500s. Always roll forward on the backend, even if the symptom looks like a backend issue.
 
 ---
 
-## GitHub Pages mirror (optional)
-
-Today's `release-web.yml` deploys to Pages. Keeping that flow gives:
-
-- Zero-cost static hosting at `<github-org>.github.io/<repo>/`
-- A second URL to point at if Vercel is having a bad day
-
-Cost of keeping it: a `BASE_PATH` env var threaded through every `<a>`, `<img>`, and `import.meta.env.BASE_URL` consumer (already done in the existing build). The Pages build can't run `/api/coach`, so a Pages-only deploy hides the coach UI by feature-flagging it off.
-
-If the maintenance is cheaper than the optionality, retire it. The decision can be made post-launch — neither path closes the other off.
-
----
-
 ## Disaster recovery
 
-Vercel is stateless from our side — the build is reproducible from any tagged commit, and the deployment artifact is downloadable from the dashboard for ~30 days. There's nothing to back up that isn't in git.
+The web app is stateless from our side — the build is reproducible from any tagged commit, and the deployment artifact is downloadable from the GitHub Release for a year. There's nothing to back up that isn't in git.
 
-The dependent services that *do* hold state (Supabase, RevenueCat, Anthropic) have their own DR stories. The web app simply needs:
+The dependent services that *do* hold state (Supabase, RevenueCat, Anthropic) have their own DR stories.
 
-1. The repo at the desired tag.
-2. The production env vars in Vercel (or replicated to a fresh Vercel project on the same domain).
-3. DNS pointing at Vercel.
+If the AWS account itself is lost, recovery is roughly:
 
-If the Vercel account itself is lost, recovery is roughly:
+1. Spin up a new AWS account, bootstrap CDK in `eu-west-2` + `us-east-1`.
+2. `cdk deploy --all` from the repo at the desired tag — recreates buckets, distributions, Lambda, OIDC role, hosted zone.
+3. Update the domain registrar's NS records to point at the new Route 53 hosted zone.
+4. Issue Sentry / Supabase / Anthropic / MapTiler keys into the new account's Secrets Manager + GitHub Secrets.
+5. Push the same tag to trigger a deploy.
 
-- Spin up a new Vercel account or migrate to Cloudflare Pages / Netlify (both serve SvelteKit-static fine; Coach SSR migrates to Cloudflare Workers with the `@sveltejs/adapter-cloudflare`).
-- Reimport the repo, set env vars from 1Password, redeploy.
-- Update DNS.
-
-RTO: ~1 hour from a cold-start of a new account if the domain is at a registrar we control. RPO: 0 — there's no data on Vercel.
+RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar we control. Most of that is DNS propagation. RPO: 0 — there's no data on AWS.
 
 ---
 
 ## Production readiness checklist
 
-- [ ] Vercel project imported, root dir `apps/web`, framework SvelteKit
-- [ ] Production env vars set (Supabase URL + anon, MapTiler, RevenueCat, Anthropic, optional Coach overrides)
-- [ ] `runonward.app` and `www.runonward.app` verified in Vercel
-- [ ] DNS records resolve worldwide (use `dig +short runonward.app @1.1.1.1` from a few networks)
-- [ ] HTTPS cert issued (visible in Vercel project → Domains)
-- [ ] First deploy green; smoke test sign-in + dashboard + run detail
-- [ ] Coach endpoint responds (try a free user → expect a successful streamed reply)
+- [ ] AWS account created (or sub-account in an org), root MFA enabled, billing alerts at $50 / $200 / $500
+- [ ] CDK bootstrapped in `eu-west-2` and `us-east-1`
+- [ ] Domain `runonward.app` registered (Route 53 or external + delegated)
+- [ ] Route 53 hosted zone live, NS records propagated
+- [ ] ACM cert issued in `us-east-1`, DNS-validated
+- [ ] CDK app deployed: `WebStack-prod`, `WebStack-preview`, `DnsStack`, `GithubOidcStack`
+- [ ] GitHub OIDC role trust policy verified (only the repo + ref scopes intended can assume it)
+- [ ] Secrets Manager populated: `ANTHROPIC_API_KEY`, `SENTRY_DSN` (server)
+- [ ] GitHub Secrets populated: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_API_KEY`, `PUBLIC_SENTRY_DSN`, `AWS_DEPLOY_ROLE_ARN_PROD`, `AWS_DEPLOY_ROLE_ARN_PREVIEW`
+- [ ] First preview deploy green; smoke test sign-in + dashboard + run detail at `preview.runonward.app`
+- [ ] First prod deploy green via tag `web@0.1.0`
+- [ ] Coach endpoint responds (try a free user → expect a successful streamed reply, then a 4th request → expect 429)
 - [ ] Push notification flow verified end-to-end (subscribe in Settings, trigger via a kudos on another account)
-- [ ] Sentry frontend project receiving events
-- [ ] Vercel Analytics live
+- [ ] CloudWatch alarms wired to SNS → email (or PagerDuty)
+- [ ] Sentry frontend + server projects receiving events
 - [ ] Better Stack probe configured
 - [ ] Anthropic cost alert set
-- [ ] Rollback drill: roll back to a previous deployment, confirm the site behaves, roll forward
+- [ ] Rollback drill: deploy a known-bad commit, run the rollback procedure, confirm the site recovers within 60 s

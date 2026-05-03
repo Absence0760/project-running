@@ -66,7 +66,7 @@ success — creates a GitHub Release with the built artifact(s) attached.
 | `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.runapp.watchwear`) | `.aab` + `.apk` |
 | `mobile_ios@*` | macos-latest | *unsigned today* (skeleton until app ships) | — | `.ipa` |
 | `watch_ios@*` | macos-latest | — | — | build log |
-| `web@*` | ubuntu-latest | — | GitHub Pages | build zip |
+| `web@*` | ubuntu-latest | — | AWS S3 + CloudFront + Lambda (`prod` env at `runonward.app` / `www.runonward.app`) | build zip |
 | `backend@*` | ubuntu-latest | — | Supabase (migrations + functions on linked project) | — |
 | `worker@*` | ubuntu-latest | — | Fly.io `job_worker` app via `flyctl deploy --remote-only` | — |
 | `osrm@*` | ubuntu-latest | — | Fly.io `osrm` app (image only — graph on the volume rides along) | — |
@@ -147,6 +147,23 @@ agvtool`-style script step in CI); the Sentry SwiftPM package needs
 to be added to the watchOS target before the init in `RunApp.init()`
 activates (gated on `canImport(Sentry)`).
 
+### Web (AWS deploy)
+
+The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` long-lived secret. The role ARN points at the deploy role provisioned by the CDK app (see [`apps/web/deployment.md`](../apps/web/deployment.md)). Build-time `PUBLIC_*` env vars are written into `apps/web/.env.production` before `npm run build` and inlined into the static bundle.
+
+| Secret | What |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN_PROD` | IAM role ARN assumed via OIDC for prod deploys (tag `web@*`). Trust policy scoped to `repo:<owner>/<repo>:ref:refs/tags/web@*`. |
+| `AWS_DEPLOY_ROLE_ARN_PREVIEW` | Same shape for the preview env (push to `main`). Trust policy scoped to `:ref:refs/heads/main`. |
+| `PUBLIC_SUPABASE_URL` | Production Supabase REST URL (`https://api.runonward.app` once the custom domain is live). Inlined into the build. |
+| `PUBLIC_SUPABASE_ANON_KEY` | Supabase **publishable** key. Inlined into the build. |
+| `PUBLIC_MAPTILER_KEY` | MapTiler key shared with mobile + Wear OS. Inlined into the build. |
+| `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat web SDK key. Inlined into the build. |
+| `PUBLIC_SENTRY_DSN` | Frontend Sentry DSN. Optional — empty disables client-side capture. |
+| `APP_RELEASE` | `web@<version>` tag — passed as `PUBLIC_APP_RELEASE` for Sentry release tagging. Defaults to `dev`. |
+
+Server-only secrets (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN`) live in **AWS Secrets Manager** in the prod and preview accounts, not GitHub Secrets — the coach Lambda reads them at cold-start via the AWS SDK. CDK wires the Secrets Manager ARN into the Lambda's IAM policy so the function can `secretsmanager:GetSecretValue` only on its own secrets.
+
 ### Backend
 
 | Secret | What |
@@ -169,10 +186,16 @@ activates (gated on `canImport(Sentry)`).
   any release. Use it, then push a fresh patch tag (`mobile_android@1.2.4`)
   with the fix — you can't re-use a `versionCode`, so rolling back is
   always a roll-forward with higher numbers.
-- **Web:** re-run the Pages deploy with the previous tag's build zip.
-  The GitHub Release attached to the tag has the artifact; download it,
-  unzip, and push to the `gh-pages` branch manually, or re-run the
-  workflow pointing at the older tag.
+- **Web:** two paths depending on which half is broken. Static-site
+  rollback: download the previous tag's `web-build-<version>.zip` from
+  its GitHub Release, unzip, and `aws s3 sync ./build/ s3://<bucket>/
+  --delete` against the prod bucket, then `aws cloudfront create-
+  invalidation --distribution-id <id> --paths "/*"`. Coach Lambda
+  rollback: every `lambda update-function-code` produces a numbered
+  version, and the CDK creates a `live` alias — `aws lambda update-
+  alias --function-name web-coach-prod --name live --function-version
+  <previous>` retargets traffic in seconds. Full procedure in
+  [`apps/web/deployment.md` § Rollback](../apps/web/deployment.md#rollback).
 - **Backend:** Edge Functions can be rolled back by re-deploying the
   previous tag's function code (`supabase functions deploy <name>
   --project-ref ... --tag <ref>` — or just push a new tag with the old
