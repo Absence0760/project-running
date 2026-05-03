@@ -797,9 +797,18 @@ class ApiClient {
   /// Fetch a single run by id. RLS gates access — owners see their own
   /// (public or private), other viewers only see runs where `is_public`
   /// is true.
-  Future<RunRow?> fetchRunById(String runId) async {
+  /// Reads a public run by id through the `public_runs` view
+  /// (decisions §33 wire-leak follow-up, migration `20260626_001`).
+  /// The view drops `external_id`, redacts the metadata bag's audit /
+  /// sync / training-plan-linkage keys, and nulls `route_id` /
+  /// `event_id` when the joined target isn't itself public. The
+  /// where clause restricts to `is_public = true` — a private run
+  /// is invisible here even to its owner, which matches the
+  /// "share page = what your followers see" contract from §33's
+  /// trade-off list.
+  Future<RunRow?> fetchPublicRunById(String runId) async {
     final row = await _client
-        .from(RunRow.table)
+        .from('public_runs')
         .select()
         .eq(RunRow.colId, runId)
         .maybeSingle();
@@ -844,11 +853,15 @@ class ApiClient {
   }
 
   Future<List<RunRow>> fetchPublicRunsByUser(String userId, {int limit = 50}) async {
+    // Reads through the public_runs view (decisions §33 wire-leak
+    // follow-up, migration 20260626_001) so the redaction applies
+    // even when the caller is signed in. The view's where clause
+    // restricts to is_public = true so the explicit eq filter is
+    // redundant.
     final data = await _client
-        .from(RunRow.table)
+        .from('public_runs')
         .select()
         .eq(RunRow.colUserId, userId)
-        .eq(RunRow.colIsPublic, true)
         .order(RunRow.colStartedAt, ascending: false)
         .limit(limit);
     return data.map<RunRow>((r) => RunRow.fromJson(r)).toList();
@@ -2022,11 +2035,15 @@ class ApiClient {
         .subtract(Duration(days: feedWindowDays))
         .toIso8601String();
 
+    // Feed reads go through the public_runs view (decisions §33,
+    // migration 20260626_001) so the column / metadata-key
+    // redaction applies on the wire. The view filters on
+    // is_public = true so the explicit eq filter would be
+    // redundant.
     var q = _client
-        .from(RunRow.table)
+        .from('public_runs')
         .select()
         .inFilter(RunRow.colUserId, filtered)
-        .eq(RunRow.colIsPublic, true)
         .gte(RunRow.colStartedAt, cutoff);
     if (activityType != null && activityType != 'all') {
       q = q.eq('metadata->>activity_type', activityType);

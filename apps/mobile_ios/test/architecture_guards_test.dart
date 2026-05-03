@@ -855,6 +855,51 @@ void main() {
       );
     });
 
+    test('public-runs readers go through the public_runs view', () {
+      // Reason: pre-prod public-rows audit (June 2026) found that
+      // `select * from runs where is_public = true` exposes
+      // external_id, training-plan-linkage metadata, sync-state
+      // metadata, and link-existence to private routes/events. The
+      // public_runs view (migration 20260626_001) strips these.
+      // Every public-runs reader must read from the view. fetchRunById
+      // was renamed to fetchPublicRunById in the same change to make
+      // the contract explicit.
+      final source =
+          File('../../packages/api_client/lib/src/api_client.dart')
+              .readAsStringSync();
+      for (final fn in const [
+        'fetchPublicRunById',
+        'fetchPublicRunsByUser',
+        'fetchFollowingFeed',
+      ]) {
+        final start = source.indexOf(' $fn(');
+        expect(start >= 0, isTrue,
+            reason: 'Could not locate $fn — rename?');
+        // Walk forward to the next blank-line + close-brace which is
+        // the natural end of an api_client method body. Concrete
+        // enough for the assertion: we just need the .from() call
+        // present somewhere in the body region.
+        final end = source.indexOf('\n  }\n', start);
+        expect(end > start, isTrue,
+            reason: 'Could not locate end of $fn body');
+        final body = source.substring(start, end);
+        expect(
+          body.contains("from('public_runs')"),
+          isTrue,
+          reason:
+              '$fn must read from public_runs view rather than the runs '
+              'table — see decisions §33 and migration 20260626_001.',
+        );
+        expect(
+          RegExp(r"from\(\s*RunRow\.table\s*\)").hasMatch(body),
+          isFalse,
+          reason:
+              '$fn must NOT read from the bare RunRow.table — that path '
+              'leaks external_id, training-plan-linkage metadata, etc.',
+        );
+      }
+    });
+
     test('clipTrackForUser fails closed on RPC error', () {
       // Reason: returning the unclipped input on RPC error was the
       // privacy leak this helper exists to prevent. Fail-closed

@@ -46,7 +46,7 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
       _loadError = null;
     });
     try {
-      final row = await widget.api.fetchRunById(widget.runId);
+      final row = await widget.api.fetchPublicRunById(widget.runId);
       if (row == null) {
         if (!mounted) return;
         setState(() {
