@@ -841,8 +841,10 @@ Initiates the Strava OAuth flow and backfills the last 90 days of activities.
 
 **Request:**
 ```json
-{ "code": "abc123", "scope": "activity:read_all" }
+{ "code": "abc123", "scope": "activity:read_all,read", "redirect_uri": "https://app.example.com/settings/integrations" }
 ```
+
+`scope` must contain `activity:read_all` (the function 400s otherwise — Strava lets users untick scopes on the consent screen and we can't backfill without it). `redirect_uri` is validated against `STRAVA_ALLOWED_REDIRECTS` (comma-separated env var); when the env var is empty the check is disabled (single-tenant / dev).
 
 **Flow:**
 1. Exchange `code` for access + refresh tokens via Strava
@@ -966,7 +968,7 @@ A signed Supabase Storage URL pointing to the generated artifact, valid for 10 m
 
 ### `POST /revenuecat-webhook`
 
-Receives RevenueCat subscription events (initial purchase, renewal, cancellation, billing issues, expiration, transfer) and updates the corresponding `user_profiles.subscription_tier` + `subscription_at`. Authenticated by a shared HMAC secret in the `Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>` header — RevenueCat configures the same value in their dashboard. Idempotent on `event.id` so retries don't double-grant. See [paywall.md](paywall.md) for the tier mapping. Migration ladder: `20260429_001_subscription_paywall.sql` (the column + CHECK constraint), then this function as the write path.
+Receives RevenueCat subscription events (initial purchase, renewal, cancellation, billing issues, expiration, transfer) and updates the corresponding `user_profiles.subscription_tier` + `subscription_at`. Authenticated by an HMAC-SHA256 of the raw body in the `x-revenuecat-hmac` header (constant-time compared against `REVENUECAT_WEBHOOK_SECRET`) — RevenueCat configures the same value in their dashboard. Replay-protected: events are rejected if `event_timestamp_ms` is outside `[now - 5min, now + 1min]`, and `event.id` is recorded in `webhook_events (provider, event_id)` (migration `20260623_001_webhook_event_dedupe.sql`) so a duplicate delivery skips the side effect and returns 200. See [paywall.md](paywall.md) for the tier mapping. Migration ladder: `20260429_001_subscription_paywall.sql` (the column + CHECK constraint), `20260623_001_webhook_event_dedupe.sql` (replay table), then this function as the write path.
 
 ---
 

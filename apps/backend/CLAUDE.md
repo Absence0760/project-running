@@ -26,6 +26,8 @@ apps/backend/
     │   │                          # tooling.
     │   └── 20260611_001_run_matched_tracks_cas.sql  # latest at time of writing
     └── functions/
+        ├── _shared/{rate_limit,sentry,strava,body_limit}.ts
+        ├── clip-public-track/index.ts
         ├── delete-account/index.ts
         ├── export-data/index.ts
         ├── parkrun-import/index.ts
@@ -113,17 +115,18 @@ It understands `create table`, `alter table ... add column`, and `alter table ..
 
 ## Edge Functions
 
-Seven functions live under `supabase/functions/`. Six are wired up; `export-data` is the lone TODO stub. None currently have tests.
+Eight functions live under `supabase/functions/`. All are wired up; none currently have tests.
 
 | Function | Status | Trigger | Auth | Env vars |
 |---|---|---|---|---|
 | `parkrun-import` | **Working** (scraper) | Client POST with `{ athleteNumber }` | User JWT → `supabase.auth.getUser()` | `PARKRUN_USER_AGENT` |
-| `refresh-tokens` | **Working** | Scheduled (pg_cron) every hour, invoked with `Authorization: Bearer ${CRON_SECRET}` | Shared `CRON_SECRET` in the bearer token (timing-safe compare); service role for DB writes | `CRON_SECRET`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
-| `strava-import` | **Working** — OAuth exchange + 90-day backfill + `sync` action for already-connected users; GPS streams uploaded to the `runs` Storage bucket and deduped against existing Strava activity IDs | Client POST with `{ action: 'connect', code, scope }` (after the OAuth redirect) or `{ action: 'sync', lookbackDays? }` | User JWT | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
-| `strava-webhook` | **Working** — verification + per-activity ingest via shared logic in `_shared/strava.ts` | GET verification from Strava + POST activity events | Shared `?secret=` in the callback URL guards both methods (Strava doesn't sign POSTs); GET also checks `hub.verify_token`. Service role for DB writes. | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `refresh-tokens` | **Working** | Scheduled (pg_cron) every hour, invoked with `Authorization: Bearer ${CRON_SECRET}` | Shared `CRON_SECRET` in the bearer token (timing-safe compare); service role for DB writes. `verify_jwt = false` in `config.toml`. | `CRON_SECRET`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` |
+| `strava-import` | **Working** — OAuth exchange + 90-day backfill + `sync` action for already-connected users; GPS streams uploaded to the `runs` Storage bucket and deduped against existing Strava activity IDs. The `connect` path also pins `redirect_uri` against `STRAVA_ALLOWED_REDIRECTS` and rejects scope grants missing `activity:read_all`. | Client POST with `{ action: 'connect', code, scope, redirect_uri }` (after the OAuth redirect) or `{ action: 'sync', lookbackDays? }` | User JWT | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_ALLOWED_REDIRECTS` |
+| `strava-webhook` | **Working** — verification + per-activity ingest via shared logic in `_shared/strava.ts` | GET verification from Strava + POST activity events | Shared `?secret=` in the callback URL guards both methods (Strava doesn't sign POSTs); GET also checks `hub.verify_token`. Service role for DB writes. `verify_jwt = false` in `config.toml`. | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `export-data` | **Working** — CSV (one row per run) + GPX zip (per-run GPX + manifest); upload to `runs/{user_id}/exports/<ts>.{csv,zip}` and return a 10-min signed URL | Client POST with `{ format: 'csv' \| 'gpx' }` | User JWT | — |
-| `revenuecat-webhook` | **Working** | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC signature verification (`REVENUECAT_WEBHOOK_SECRET`) | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
-| `delete-account` | **Working** | Client POST (user action) | User JWT + service role for admin delete | `SUPABASE_SERVICE_ROLE_KEY` |
+| `revenuecat-webhook` | **Working** — replay-protected (5-min freshness window + `event.id` dedupe via `webhook_events`, migration `20260623_001`). | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC-SHA256 of raw body in `x-revenuecat-hmac` (timing-safe compare against `REVENUECAT_WEBHOOK_SECRET`). `verify_jwt = false` in `config.toml`. | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `delete-account` | **Working** — recursive Storage prefix walk drains `{user_id}/exports/` blobs alongside top-level tracks. | Client POST (user action) | User JWT + service role for admin delete | `SUPABASE_SERVICE_ROLE_KEY` |
+| `clip-public-track` | **Working** — server-side privacy-zone clipping for non-owner viewers. Downloads the gzipped track via service-role, runs `clip_track_for_user`, returns clipped points. Replaces the dropped public-runs Storage policy (decisions §33, audit/storage High). | Anon or user JWT POST with `{ run_id }` | Anon JWT accepted (RLS gates the row read); per-IP rate limit for anon, per-user for authenticated | — |
 
 All seven are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers (other than `_shared/rate_limit.ts` for the throttle).
 

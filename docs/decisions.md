@@ -1003,6 +1003,23 @@ The projection lives in pure helpers — `projectTrack` in `apps/web/src/lib/tra
 
 **Don't re-litigate unless:** users start uploading routes that span multiple degrees of latitude (then move to Mercator), or one platform's correction drifts from the other (then re-port in lock-step).
 
+## 52. Webhook replay protection lives in `webhook_events`, not inlined per-EF
+
+`revenuecat-webhook` verifies HMAC-SHA256 over the raw body, which authenticates *what* was sent but does nothing against *when* — a captured POST can be replayed at any future time. Active-state replays (RENEWAL → 'pro') are idempotent today, but a stale EXPIRATION replayed *after* a re-subscription has flipped the tier back to 'pro' would silently downgrade a paying user back to 'free'. The audit/edge-functions sweep (June 2026) caught this.
+
+The defence is two-gate, and lives in shared infrastructure rather than per-EF logic:
+
+1. **Freshness window.** Reject events whose `event_timestamp_ms` falls outside `[now - 5min, now + 1min]`. Bounds the replay window so the dedupe table can be pruned aggressively. The +1 minute is clock-skew tolerance; a captured event older than the window forces an attacker to capture-and-replay within the freshness budget.
+2. **Event-id dedupe.** `webhook_events (provider, event_id, received_at)` (migration `20260623_001_webhook_event_dedupe.sql`). Insert-first: a 23505 unique-violation maps to a 200 ok-skipped (RC retries on non-2xx). Insert before the side effect means a crash between insert and update leaves no doubled tier flip — RC's next renewal/state event corrects any missed update.
+
+The table is provider-keyed so future webhooks (Stripe, Linear, etc.) share the dedupe store without colliding on event-id namespaces. A daily cleanup cron prunes rows older than 30 days — comfortably longer than RC's ~3-day retry horizon.
+
+**Why insert-first rather than update-then-record:** the side effect is the irrecoverable bit. A duplicate record with no side effect is harmless; a duplicate side effect with no record is the bug. Reserving the row first means we either succeed entirely or visibly fail the reservation; we never half-process.
+
+**Trade-off:** the freshness window means a webhook delivered through a slow proxy can be rejected as stale. RC's median delivery latency is sub-second; the 5-minute budget is comfortable. If we ever ingest a provider with a multi-minute SLA on its retry queue, raise the window for that provider only — this is why the table is provider-keyed.
+
+**Don't re-litigate unless:** a provider's retry semantics demand a different shape (e.g. monotonically-increasing sequence numbers, in which case skip the timestamp check and use `event_id` ordering).
+
 ---
 
 ## How to add an entry
