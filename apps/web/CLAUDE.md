@@ -50,6 +50,7 @@ src/
     garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
     push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
     privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
+    coach/          # Transport-agnostic core for the /api/coach handler. handler.ts (entry), providers.ts (Anthropic + OpenAI streaming), context.ts (builds the runner profile + plan + recent-runs JSON dump), types.ts, system_prompt.ts. Wrapped twice — once by src/routes/api/coach/+server.ts (SvelteKit dev), once by apps/web/lambda/coach/src/index.ts (production AWS Lambda). Decisions §53.
     training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.
     segments.ts     # Pure compute for segment efforts — haversine cumulative distance + timestamp interpolation. 8 unit tests. Used by RunSegmentEfforts on /runs/[id] for client-side auto-effort generation. Decisions §37.
     pace_segments.ts  # NRC-style pace heatmap helpers (`paceBucketForSpeed`, `ageBandFor`, `buildPaceSegments`, `hasTrackTimestamps`). TS port of `apps/mobile_android/lib/widgets/pace_segments.dart` — keep in lockstep. Mounted via the `activity` prop on `RunMap.svelte` (run-detail + share-run); routes never carry timestamps so they fall through to the legacy single line. 11 unit tests in `pace_segments.test.ts`.
@@ -87,6 +88,13 @@ src/
     auth/callback/  # OAuth redirect handler
   app.css           # Global styles + CSS variables
   app.d.ts          # App-level TypeScript declarations
+lambda/
+  coach/            # AWS Lambda Function URL handler for /api/coach in production.
+                    # src/index.ts wraps $lib/coach/handler with awslambda.streamifyResponse +
+                    # HttpResponseStream so SSE streams pass through CloudFront. build.mjs
+                    # bundles via esbuild → dist/coach.zip (Anthropic SDK + supabase-js
+                    # inlined, ~537 KB). CI's release-web.yml updates the Lambda code on every
+                    # web@* tag. See decisions.md §53.
 ```
 
 ## Development

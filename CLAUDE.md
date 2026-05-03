@@ -31,6 +31,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
 | Where each service runs in production / cost / DR / rollback | [docs/deployment.md](docs/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
+| Touching AWS infra (web hosting) | [infra/README.md](infra/README.md) — Terraform stacks (bootstrap, dns, github-oidc, modules/web-stack, envs/{prod,preview}), sops + KMS for runtime secrets, first-deploy walkthrough; see [decisions.md § 53](docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the rationale |
 | Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
 
 Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas). **Each non-web app's CLAUDE.md opens with a "Scope — read before writing code" section** that spells out what to build there vs. what to push to web first per [decisions.md § 24](docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive). Read it before adding a feature on a non-web client.
@@ -109,6 +110,8 @@ apps/
   web/               → SvelteKit 2 + Svelte 5 runes
     src/lib/database.types.ts  (generated, committed)
     src/lib/types.ts            (Run/Route/Integration/UserProfile overlays)
+    src/lib/coach/              (transport-agnostic core for /api/coach)
+    lambda/coach/               (production AWS Lambda wrapper, decisions §53)
   mobile_android/    → Flutter; real screens, stores, sync, tile cache
   mobile_ios/        → Flutter; lib/ + test/ kept byte-identical to mobile_android (see decisions.md § 39)
   watch_wear/        → native Kotlin + Compose-for-Wear (not Flutter)
@@ -122,6 +125,12 @@ packages/
   run_recorder/      → Live GPS recording state machine (used by both mobile apps via the unified Dart codebase)
   ui_kit/            → Shared Flutter widgets
 docs/                → The canonical reference — read these first
+infra/               → Terraform stacks for AWS web hosting (decisions §53)
+  bootstrap/         → state bucket + DDB lock (one-time)
+  modules/web-stack/ → reusable per-env: S3 + CloudFront + Lambda + KMS
+  dns/               → Route 53 hosted zone + ACM cert
+  github-oidc/       → OIDC provider + per-env deploy roles
+  envs/{prod,preview}/ → root modules for each environment
 scripts/
   gen_dart_models.dart  → Dart row-class generator
 .github/workflows/
