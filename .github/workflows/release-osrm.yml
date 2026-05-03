@@ -37,7 +37,12 @@ jobs:
           echo "Version: ${ref}"
 
       - name: Setup flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        # SHA-pinned to the v1 tag (May 2026). The action's @master ref
+        # is a *branch*, force-pushable by the publisher; this workflow
+        # consumes secrets.FLY_API_TOKEN to deploy production OSRM, so
+        # the pin closes a real supply-chain risk. Bump by re-resolving
+        # the v1 tag's commit SHA — `gh api repos/superfly/flyctl-actions/git/refs/tags/v1`.
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
 
       - name: Deploy to Fly.io
         # The fly.toml in apps/job_worker/osrm/ pins app=osrm,
