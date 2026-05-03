@@ -716,11 +716,17 @@ BEGIN
   -- depend on that.
   SELECT subscription_tier INTO v_initial_tier FROM user_profiles WHERE id = test_user;
   DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
+
+  -- Tier flips bracket the role: switch to service_role for the UPDATE
+  -- (the lock_subscription_columns trigger from 20260624_001 only
+  -- accepts service_role / direct-SQL writers), then back to
+  -- authenticated for the rate-limit assertion which exercises the
+  -- caller-identity guard.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  UPDATE user_profiles SET subscription_tier = 'free' WHERE id = test_user;
+
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
-
-  -- Ensure free tier first.
-  UPDATE user_profiles SET subscription_tier = 'free' WHERE id = test_user;
 
   -- Free user: limit (free=2, pro=10) — 3rd call denies.
   SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
@@ -735,7 +741,9 @@ BEGIN
   DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
 
   -- Pro user: same params, 11th call denies.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
   UPDATE user_profiles SET subscription_tier = 'pro' WHERE id = test_user;
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   FOR i IN 1..10 LOOP
     SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
     IF NOT v_allowed THEN RAISE EXCEPTION 'tiered: pro call % should allow', i; END IF;
@@ -748,7 +756,9 @@ BEGIN
   DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
 
   -- Lifetime treated identically to pro (gets the higher ceiling).
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
   UPDATE user_profiles SET subscription_tier = 'lifetime' WHERE id = test_user;
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   FOR i IN 1..10 LOOP
     SELECT allowed INTO v_allowed FROM check_rate_limit_tiered(test_user, test_bucket, 2, 10, 3600);
     IF NOT v_allowed THEN RAISE EXCEPTION 'tiered: lifetime call % should allow (treated as pro)', i; END IF;
@@ -768,6 +778,7 @@ BEGIN
   END;
 
   -- Restore the seed-time tier so downstream tests don't see drift.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
   UPDATE user_profiles SET subscription_tier = v_initial_tier WHERE id = test_user;
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
@@ -1043,4 +1054,57 @@ BEGIN
     VALUES ('stripe', 'evt-seed-test-1');
 
   DELETE FROM webhook_events WHERE event_id = 'evt-seed-test-1';
+END $$;
+
+-- ───────── lock_subscription_columns (migration 20260624_001) ─────────
+-- A free user must not be able to self-promote subscription_tier or
+-- forge subscription_at via a direct PostgREST PATCH. The trigger
+-- raises 42501 for any non-service-role caller; service-role and
+-- direct-SQL callers (no JWT context) pass through.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  v_initial_tier text;
+  v_initial_at timestamptz;
+  v_after_tier text;
+BEGIN
+  SELECT subscription_tier, subscription_at INTO v_initial_tier, v_initial_at
+    FROM user_profiles WHERE id = test_user;
+
+  -- Authenticated user-JWT context: tier write must raise.
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+
+  BEGIN
+    UPDATE user_profiles SET subscription_tier = 'pro' WHERE id = test_user;
+    RAISE EXCEPTION 'lock_subscription_columns: authenticated tier write should have raised';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- subscription_at must be locked too.
+  BEGIN
+    UPDATE user_profiles SET subscription_at = now() WHERE id = test_user;
+    RAISE EXCEPTION 'lock_subscription_columns: authenticated subscription_at write should have raised';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Non-tier columns must still be writable for the owner.
+  UPDATE user_profiles SET display_name = 'Trigger Test' WHERE id = test_user;
+
+  -- Service-role: tier write must succeed.
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  UPDATE user_profiles SET subscription_tier = 'pro' WHERE id = test_user;
+  SELECT subscription_tier INTO v_after_tier FROM user_profiles WHERE id = test_user;
+  IF v_after_tier <> 'pro' THEN
+    RAISE EXCEPTION 'lock_subscription_columns: service-role write didn''t land, got %', v_after_tier;
+  END IF;
+
+  -- Restore.
+  UPDATE user_profiles
+    SET subscription_tier = v_initial_tier, subscription_at = v_initial_at, display_name = 'Jared Howard'
+    WHERE id = test_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
