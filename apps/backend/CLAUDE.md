@@ -254,6 +254,7 @@ Variables currently used:
 - **`supabase gen types typescript --local` writes `Connecting to db 5432` to stdout** before the real output. The `gen:types` npm script pipes through `grep -v '^Connecting to db'` to strip it. Don't remove that filter.
 - **`supabase functions serve` does not autoload `.env.local`**. You must pass `--env-file .env.local` explicitly. A missing env var shows up as a `Deno.env.get('X')!` assertion failure at runtime — the `!` eats the error.
 - **Docker must be running.** All local Supabase services run under Docker. If `supabase start` hangs or errors weirdly, check `docker ps`.
+- **`deno.lock` lives at the repo root and is committed.** Newer Supabase CLIs write it during `supabase db reset` / `functions serve` to pin Edge Function dependency resolutions (e.g. `https://esm.sh/@supabase/supabase-js@2 → 2.105.1` plus integrity hashes for every transitive Deno URL). The file is created inside the CLI's Docker container as `root:root`, so after a fresh resolution you may need to `sudo chown` it before staging. Treat it like `package-lock.json`: review the diff on dependency-version changes, but otherwise let it ride.
 
 ## Before reporting a task done
 
