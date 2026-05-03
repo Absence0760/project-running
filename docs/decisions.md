@@ -340,12 +340,12 @@ Decision #18 pivoted the app to "everything free, funded by donations" with a tr
 
 The new model is a **Pro tier at $9.99 / month** that unlocks two things:
 
-- **Unlimited AI Coach.** The 10 / day cap still applies to the free tier (cost control); Pro users bypass it. Server-side enforcement lives in `/api/coach/+server.ts` via the `is_user_pro(uid)` RPC.
+- **Unlimited AI Coach.** The 10 / day cap still applies to the free tier (cost control); Pro users bypass it. Server-side enforcement lives in `/api/coach/+server.ts` via the no-arg `is_pro()` RPC (the predecessor `is_user_pro(uuid)` was dropped in `20260516_001` because it took a user-id argument and let any authenticated caller probe another user's tier).
 - **Priority processing.** Pro requests are routed ahead of the free queue at rate-limit boundaries. Today this is a marketing claim with no enforcement beyond the unlimited-coach bypass; concrete enforcement (Edge Function queue priority, client throttle hints) lands as needed.
 
 The `/settings/upgrade` page replaces the transparent funding page with a two-card layout: a Pro plan card ($9.99/mo, feature bullets, "Get Pro" CTA) and a single "Donate" card linking to an external one-off payment provider. Cost breakdown, per-month progress bars, donor count, and the tiered donation buttons are gone — those stats were a nice-to-have that didn't move conversion.
 
-Infrastructure from #18 is largely reusable: the `GATED_FEATURES` registry, `is_user_pro` / `is_pro` SQL helpers, the `subscription_tier` column, the RevenueCat webhook, and the `user_coach_usage` table all stay. The only registry change is renaming `priority_sync` → `priority_processing` with broader copy. The `monthly_funding` table stays in place (orphaned but not dropped); if transparency becomes a differentiator later it's a one-migration revival.
+Infrastructure from #18 is largely reusable: the `GATED_FEATURES` registry, the `is_pro()` SQL helper, the `subscription_tier` column, the RevenueCat webhook, and the `user_coach_usage` table all stay. The only registry change is renaming `priority_sync` → `priority_processing` with broader copy. The `monthly_funding` table stays in place (orphaned but not dropped); if transparency becomes a differentiator later it's a one-migration revival.
 
 **Why:** A clear, price-anchored value proposition ("$9.99 for unlimited chat and priority handling") converts better than an open-ended donation ask, and it aligns cost with usage — heavy coach users are exactly who benefits, and they're the ones generating the API spend.
 
