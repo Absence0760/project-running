@@ -17,6 +17,14 @@
 /// (and all GETs that don't supply the secret) — the only correct
 /// behaviour for a misconfigured webhook is to fail closed.
 ///
+/// Replay protection: the URL secret authenticates the channel but a
+/// captured POST is otherwise replayable forever. Each actionable
+/// event is bound to a 7-day freshness window on `event_time` AND
+/// deduped via `webhook_events` (provider='strava', event_id =
+/// '<owner>:<object>:<aspect>:<event_time>') — first writer wins,
+/// any 23505 unique-violation maps to a 200 ok-skipped. Mirrors the
+/// revenuecat-webhook pattern; see migration 20260623_001.
+///
 /// Activity ingestion is delegated to `../_shared/strava.ts` so the
 /// webhook and the backfill EF (`strava-import`) write byte-identical
 /// rows. A webhook firing while a backfill is mid-run is harmless —
@@ -79,6 +87,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 		object_id?: number;
 		aspect_type?: string;
 		owner_id?: number;
+		event_time?: number;
 	};
 	try {
 		event = await req.json();
@@ -89,20 +98,59 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	if (event.object_type !== 'activity' || event.aspect_type !== 'create') {
 		// Strava expects a 200 within 2s for any POST; logging 'OK' for
 		// non-actionable events keeps the subscription healthy without
-		// implying we did work.
+		// implying we did work. Don't burn a webhook_events row for
+		// noise we'll never act on.
 		return new Response('OK');
 	}
 
 	const activityId = event.object_id;
 	const ownerId = event.owner_id;
+	const eventTime = event.event_time;
 	if (!activityId || !ownerId) {
 		return new Response('Missing object_id or owner_id', { status: 400 });
+	}
+	if (typeof eventTime !== 'number') {
+		return new Response('Missing event_time', { status: 400 });
+	}
+
+	// Replay protection. Strava doesn't sign payloads — the URL secret
+	// authenticates the *channel* but does nothing against a captured
+	// POST being re-sent. Two gates, mirroring revenuecat-webhook:
+	//   1. Freshness — reject events whose event_time is older than
+	//      REPLAY_WINDOW_MS or further in the future than CLOCK_SKEW_MS.
+	//      Catches captures sitting on a flash drive.
+	//   2. Event-id dedupe — first writer to webhook_events wins.
+	//      Strava doesn't send a server-side unique event id, so we
+	//      synthesise one from owner+object+aspect+event_time. A
+	//      replayed POST with the same body inserts the same key and
+	//      raises 23505, which we map to 200 ok-skipped.
+	//
+	// REPLAY_WINDOW_MS must be wider than Strava's retry envelope
+	// (hours) and narrower than the dedupe-row TTL (30 days). 7 days
+	// matches revenuecat-webhook for one-knob consistency.
+	const REPLAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+	const CLOCK_SKEW_MS = 60 * 1000;
+	const ageMs = Date.now() - eventTime * 1000;
+	if (ageMs > REPLAY_WINDOW_MS || ageMs < -CLOCK_SKEW_MS) {
+		return new Response('Event outside freshness window', { status: 400 });
 	}
 
 	const supabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
 		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 	);
+
+	const eventId = `${ownerId}:${activityId}:${event.aspect_type}:${eventTime}`;
+	const { error: dedupeErr } = await supabase
+		.from('webhook_events')
+		.insert({ provider: 'strava', event_id: eventId });
+	if (dedupeErr) {
+		if (dedupeErr.code === '23505') {
+			return Response.json({ ok: true, skipped: 'duplicate_event' });
+		}
+		console.error('Webhook dedupe insert failed:', dedupeErr);
+		return Response.json({ ok: false, error: 'dedupe failed' }, { status: 500 });
+	}
 
 	// Look up user by Strava athlete ID.
 	const { data: integration } = await supabase
