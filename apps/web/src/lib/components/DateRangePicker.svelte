@@ -47,56 +47,35 @@
 
 	let pendingFrom = $state<Date | null>(null);
 	let pendingTo = $state<Date | null>(null);
-	let monthsEl: HTMLDivElement | undefined = $state();
-
-	// Reset pending state every time the modal re-opens, hydrating from
-	// the latest props. Without this, a closed-and-reopened modal would
-	// silently keep stale picks from a previous session.
-	// Also scrolls the months list to wherever the user was last
-	// looking — pendingFrom if set, otherwise the current month — so a
-	// reopen doesn't dump them at the very top of the 3-year range.
-	$effect(() => {
-		if (open) {
-			pendingFrom = parseIso(initialFrom);
-			pendingTo = parseIso(initialTo);
-			queueMicrotask(() => scrollToMonth(pendingFrom ?? today));
-		}
-	});
 
 	const today = new Date();
 	const firstMonth = new Date(today.getFullYear() - 2, today.getMonth(), 1);
 	const lastMonth = new Date(today.getFullYear() + 1, today.getMonth(), 1);
-	const monthCount =
-		(lastMonth.getFullYear() - firstMonth.getFullYear()) * 12 +
-		(lastMonth.getMonth() - firstMonth.getMonth()) +
-		1;
 
-	function monthAt(i: number): Date {
-		const yr = firstMonth.getFullYear() + Math.floor((firstMonth.getMonth() + i) / 12);
-		const mo = (firstMonth.getMonth() + i) % 12;
-		return new Date(yr, mo, 1);
-	}
+	/// Single-month "paged" view. Replaces the previous 36-month vertical
+	/// scroll: only the month identified by (viewYear, viewMonth) is
+	/// rendered, and the user navigates via the chevrons or the year /
+	/// month dropdowns above it.
+	let viewYear = $state(today.getFullYear());
+	let viewMonth = $state(today.getMonth());
 
-	function monthIndex(target: Date): number {
-		return (
-			(target.getFullYear() - firstMonth.getFullYear()) * 12 +
-			(target.getMonth() - firstMonth.getMonth())
-		);
-	}
+	// Reset pending state every time the modal re-opens, hydrating from
+	// the latest props. Without this, a closed-and-reopened modal would
+	// silently keep stale picks from a previous session. Also re-anchors
+	// the visible month on the user's last `from` pick (or today) so a
+	// reopen doesn't dump them on January of the earliest allowed year.
+	$effect(() => {
+		if (open) {
+			pendingFrom = parseIso(initialFrom);
+			pendingTo = parseIso(initialTo);
+			const anchor = pendingFrom ?? today;
+			viewYear = anchor.getFullYear();
+			viewMonth = anchor.getMonth();
+		}
+	});
 
-	function scrollToMonth(target: Date): void {
-		if (!monthsEl) return;
-		const idx = monthIndex(target);
-		const clamped = Math.max(0, Math.min(monthCount - 1, idx));
-		const section = monthsEl.querySelector<HTMLElement>(
-			`[data-month-idx="${clamped}"]`,
-		);
-		section?.scrollIntoView({ block: 'start' });
-	}
-
-	/// List of years spanned by the scrollable range. Drives the year
-	/// jumper at the top so the user doesn't have to scroll through 36
-	/// months to get from May 2026 back to March 2024.
+	/// List of years spanned by the navigable range. Drives the year
+	/// dropdown.
 	const yearOptions: number[] = (() => {
 		const out: number[] = [];
 		for (let y = firstMonth.getFullYear(); y <= lastMonth.getFullYear(); y++) {
@@ -105,39 +84,45 @@
 		return out;
 	})();
 
-	/// Year currently anchored at the top of the visible months list.
-	/// Tracked so the dropdown reflects where the user has scrolled to
-	/// — otherwise picking "2025" twice in a row would feel like a no-op
-	/// after they'd manually scrolled away from January 2025.
-	let visibleYear = $state(today.getFullYear());
+	/// Compare-friendly index used to clamp the chevron buttons against
+	/// the navigable range. firstMonth = 0, lastMonth = monthCount - 1.
+	function indexOf(year: number, month: number): number {
+		return (year - firstMonth.getFullYear()) * 12 + (month - firstMonth.getMonth());
+	}
+	const minIndex = 0;
+	const maxIndex = indexOf(lastMonth.getFullYear(), lastMonth.getMonth());
 
-	function jumpToYear(y: number): void {
-		// Land on the current month if jumping to the active year
-		// (so "2026" with today = May 2026 lands on May, not January).
-		// Otherwise land on January of the chosen year.
-		const target =
-			y === today.getFullYear()
-				? new Date(y, today.getMonth(), 1)
-				: new Date(y, 0, 1);
-		scrollToMonth(target);
-		visibleYear = y;
+	let viewIndex = $derived(indexOf(viewYear, viewMonth));
+
+	function setView(year: number, month: number): void {
+		// Roll month over so callers can pass month=12 (→ Jan, year+1)
+		// or month=-1 (→ Dec, year-1) without doing the math themselves.
+		const rolledYear = year + Math.floor(month / 12);
+		const rolledMonth = ((month % 12) + 12) % 12;
+		const idx = indexOf(rolledYear, rolledMonth);
+		const clamped = Math.max(minIndex, Math.min(maxIndex, idx));
+		const yr = firstMonth.getFullYear() + Math.floor((firstMonth.getMonth() + clamped) / 12);
+		const mo = (firstMonth.getMonth() + clamped) % 12;
+		viewYear = yr;
+		viewMonth = mo;
 	}
 
-	function onMonthsScroll(): void {
-		if (!monthsEl) return;
-		// Find the first month section whose top is at or above the
-		// scroll viewport's top edge — that's the one anchoring the view.
-		const sections = monthsEl.querySelectorAll<HTMLElement>('[data-month-idx]');
-		for (const s of sections) {
-			const rect = s.getBoundingClientRect();
-			const containerTop = monthsEl.getBoundingClientRect().top;
-			if (rect.bottom > containerTop + 4) {
-				const idx = Number(s.dataset.monthIdx);
-				visibleYear = monthAt(idx).getFullYear();
-				return;
-			}
-		}
+	function stepMonth(delta: number): void {
+		setView(viewYear, viewMonth + delta);
 	}
+
+	function stepYear(delta: number): void {
+		setView(viewYear + delta, viewMonth);
+	}
+
+	function jumpToToday(): void {
+		setView(today.getFullYear(), today.getMonth());
+	}
+
+	let firstOfMonth = $derived(new Date(viewYear, viewMonth, 1));
+	let daysInMonth = $derived(new Date(viewYear, viewMonth + 1, 0).getDate());
+	// Monday-first leading offset: getDay() returns 0=Sun..6=Sat.
+	let leading = $derived((firstOfMonth.getDay() + 6) % 7);
 
 	function selectingEnd(): boolean {
 		return pendingFrom !== null && pendingTo === null;
@@ -208,41 +193,69 @@
 		</div>
 
 		<div class="jumper-row">
-			<button
-				type="button"
-				class="jumper-btn"
-				aria-label="Previous year"
-				onclick={() => jumpToYear(Math.max(yearOptions[0], visibleYear - 1))}
-				disabled={visibleYear <= yearOptions[0]}
-			>
-				<span class="material-symbols">chevron_left</span>
-			</button>
-			<select
-				class="jumper-select"
-				aria-label="Jump to year"
-				value={visibleYear}
-				onchange={(e) => jumpToYear(Number((e.currentTarget as HTMLSelectElement).value))}
-			>
-				{#each yearOptions as y (y)}
-					<option value={y}>{y}</option>
-				{/each}
-			</select>
-			<button
-				type="button"
-				class="jumper-btn"
-				aria-label="Next year"
-				onclick={() => jumpToYear(Math.min(yearOptions[yearOptions.length - 1], visibleYear + 1))}
-				disabled={visibleYear >= yearOptions[yearOptions.length - 1]}
-			>
-				<span class="material-symbols">chevron_right</span>
-			</button>
-			<button
-				type="button"
-				class="jumper-today"
-				onclick={() => jumpToYear(today.getFullYear())}
-			>
-				Today
-			</button>
+			<div class="jumper-group">
+				<button
+					type="button"
+					class="jumper-btn"
+					aria-label="Previous month"
+					onclick={() => stepMonth(-1)}
+					disabled={viewIndex <= minIndex}
+				>
+					<span class="material-symbols">chevron_left</span>
+				</button>
+				<select
+					class="jumper-select"
+					aria-label="Month"
+					value={viewMonth}
+					onchange={(e) =>
+						setView(viewYear, Number((e.currentTarget as HTMLSelectElement).value))}
+				>
+					{#each MONTH_NAMES as name, i (i)}
+						<option value={i}>{name}</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					class="jumper-btn"
+					aria-label="Next month"
+					onclick={() => stepMonth(1)}
+					disabled={viewIndex >= maxIndex}
+				>
+					<span class="material-symbols">chevron_right</span>
+				</button>
+			</div>
+			<div class="jumper-group">
+				<button
+					type="button"
+					class="jumper-btn"
+					aria-label="Previous year"
+					onclick={() => stepYear(-1)}
+					disabled={viewYear <= yearOptions[0]}
+				>
+					<span class="material-symbols">chevron_left</span>
+				</button>
+				<select
+					class="jumper-select"
+					aria-label="Year"
+					value={viewYear}
+					onchange={(e) =>
+						setView(Number((e.currentTarget as HTMLSelectElement).value), viewMonth)}
+				>
+					{#each yearOptions as y (y)}
+						<option value={y}>{y}</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					class="jumper-btn"
+					aria-label="Next year"
+					onclick={() => stepYear(1)}
+					disabled={viewYear >= yearOptions[yearOptions.length - 1]}
+				>
+					<span class="material-symbols">chevron_right</span>
+				</button>
+			</div>
+			<button type="button" class="jumper-today" onclick={jumpToToday}>Today</button>
 		</div>
 
 		<div class="dow-row" aria-hidden="true">
@@ -251,46 +264,35 @@
 			{/each}
 		</div>
 
-		<div class="months" bind:this={monthsEl} onscroll={onMonthsScroll}>
-			{#each Array.from({ length: monthCount }, (_, i) => i) as i (i)}
-				{@const month = monthAt(i)}
-				{@const firstOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)}
-				{@const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()}
-				{@const leading = (firstOfMonth.getDay() + 6) % 7}
-				<section class="month" data-month-idx={i}>
-					<h3 class="month-name">
-						{MONTH_NAMES[month.getMonth()]} {month.getFullYear()}
-					</h3>
-					<div class="grid">
-						{#each Array.from({ length: leading }, (_, k) => k) as pad (pad)}
-							<span class="cell empty"></span>
-						{/each}
-						{#each Array.from({ length: daysInMonth }, (_, d) => d + 1) as day (day)}
-							{@const date = new Date(month.getFullYear(), month.getMonth(), day)}
-							{@const isStart = pendingFrom !== null && sameDay(date, pendingFrom)}
-							{@const isEnd = pendingTo !== null && sameDay(date, pendingTo)}
-							{@const inRange =
-								pendingFrom !== null &&
-								pendingTo !== null &&
-								date > pendingFrom &&
-								date < pendingTo}
-							{@const isToday = sameDay(date, today)}
-							<button
-								type="button"
-								class="cell"
-								class:start={isStart}
-								class:end={isEnd}
-								class:in-range={inRange}
-								class:today={isToday && !isStart && !isEnd}
-								onclick={() => onTapDate(date)}
-								aria-label={formatChip(date)}
-							>
-								<span class="day">{day}</span>
-							</button>
-						{/each}
-					</div>
-				</section>
-			{/each}
+		<div class="month-pane">
+			<div class="grid">
+				{#each Array.from({ length: leading }, (_, k) => k) as pad (pad)}
+					<span class="cell empty"></span>
+				{/each}
+				{#each Array.from({ length: daysInMonth }, (_, d) => d + 1) as day (day)}
+					{@const date = new Date(viewYear, viewMonth, day)}
+					{@const isStart = pendingFrom !== null && sameDay(date, pendingFrom)}
+					{@const isEnd = pendingTo !== null && sameDay(date, pendingTo)}
+					{@const inRange =
+						pendingFrom !== null &&
+						pendingTo !== null &&
+						date > pendingFrom &&
+						date < pendingTo}
+					{@const isToday = sameDay(date, today)}
+					<button
+						type="button"
+						class="cell"
+						class:start={isStart}
+						class:end={isEnd}
+						class:in-range={inRange}
+						class:today={isToday && !isStart && !isEnd}
+						onclick={() => onTapDate(date)}
+						aria-label={formatChip(date)}
+					>
+						<span class="day">{day}</span>
+					</button>
+				{/each}
+			</div>
 		</div>
 
 		<footer class="actions">
@@ -354,8 +356,16 @@
 	.jumper-row {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		padding: 0 0 8px;
+		flex-wrap: wrap;
+	}
+	.jumper-group {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex: 1;
+		min-width: 0;
 	}
 	.jumper-btn {
 		display: inline-flex;
@@ -428,21 +438,11 @@
 		color: var(--color-text-secondary);
 	}
 
-	.months {
+	.month-pane {
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-	}
-
-	.month {
 		padding: 6px 0 2px;
-	}
-
-	.month-name {
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--color-text);
-		margin: 0 0 4px;
 	}
 
 	.grid {

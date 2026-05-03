@@ -1287,21 +1287,23 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
   ];
   static const List<String> _kDowLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-  /// Lower bound of the scrollable month list. 2 years back covers the
-  /// vast majority of running history searches; older runs are reachable
-  /// through the All-time preset.
+  /// Lower bound of the navigable range. 2 years back covers the vast
+  /// majority of running history searches; older runs are reachable via
+  /// the All-time preset.
   late final DateTime _firstMonth;
 
   /// Upper bound — current month + 1 year, so a user planning a future
   /// trip can still select dates ahead.
   late final DateTime _lastMonth;
 
-  /// Total number of months between `_firstMonth` and `_lastMonth`,
-  /// inclusive. Drives the ListView itemCount.
-  late final int _monthCount;
-
   DateTime? _pendingFrom;
   DateTime? _pendingTo;
+
+  /// Currently displayed month. Replaces the previous vertical-scroll
+  /// list of every month between [_firstMonth] and [_lastMonth] — we now
+  /// page through one month at a time via the chevrons + the year /
+  /// month dropdowns. Mirrors the web `DateRangePicker.svelte` shape.
+  late DateTime _viewMonth;
 
   /// Tracks where the user is in the two-tap flow so the chips can
   /// reflect the next required action ("Tap a date" → start vs end).
@@ -1313,15 +1315,55 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
     final now = DateTime.now();
     _firstMonth = DateTime(now.year - 2, now.month);
     _lastMonth = DateTime(now.year + 1, now.month);
-    _monthCount = (_lastMonth.year - _firstMonth.year) * 12 +
-        (_lastMonth.month - _firstMonth.month) +
-        1;
     _pendingFrom = _normalize(widget.initialFrom);
     _pendingTo = _normalize(widget.initialTo);
+    // Anchor the visible month on the user's existing `from` pick, or
+    // today when the picker is opened fresh — never the bottom of the
+    // 3-year range.
+    final anchor = _pendingFrom ?? now;
+    _viewMonth = _clampMonth(DateTime(anchor.year, anchor.month));
   }
 
   static DateTime? _normalize(DateTime? d) =>
       d == null ? null : DateTime(d.year, d.month, d.day);
+
+  /// Clamp [m] (month-of-year-1) into the navigable range so a callers
+  /// passing month=13 / month=0 etc. roll over cleanly.
+  DateTime _clampMonth(DateTime m) {
+    if (m.isBefore(_firstMonth)) return _firstMonth;
+    if (m.isAfter(_lastMonth)) return _lastMonth;
+    return m;
+  }
+
+  bool get _atFirstMonth =>
+      _viewMonth.year == _firstMonth.year && _viewMonth.month == _firstMonth.month;
+  bool get _atLastMonth =>
+      _viewMonth.year == _lastMonth.year && _viewMonth.month == _lastMonth.month;
+
+  void _setView(int year, int month) {
+    // Roll over month underflows / overflows into year deltas so a
+    // caller can pass month=0 (Dec, year-1) or month=13 (Jan, year+1)
+    // without doing the math.
+    var y = year;
+    var m = month;
+    while (m < 1) {
+      y -= 1;
+      m += 12;
+    }
+    while (m > 12) {
+      y += 1;
+      m -= 12;
+    }
+    setState(() {
+      _viewMonth = _clampMonth(DateTime(y, m));
+    });
+  }
+
+  void _stepMonth(int delta) =>
+      _setView(_viewMonth.year, _viewMonth.month + delta);
+
+  void _stepYear(int delta) =>
+      _setView(_viewMonth.year + delta, _viewMonth.month);
 
   void _onTapDate(DateTime d) {
     final tapped = _normalize(d)!;
@@ -1408,7 +1450,75 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                 ],
               ),
             ),
-            // Day-of-week header row (sticky above the scrollable months).
+            // Month / year nav row. Mirrors the web picker: month
+            // dropdown + chevrons on the left, year dropdown + chevrons
+            // on the right. Stepping past December rolls into January
+            // of the next year (and vice versa) inside `_setView`.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _NavGroup(
+                      onPrev: _atFirstMonth ? null : () => _stepMonth(-1),
+                      onNext: _atLastMonth ? null : () => _stepMonth(1),
+                      prevTooltip: 'Previous month',
+                      nextTooltip: 'Next month',
+                      child: DropdownButton<int>(
+                        value: _viewMonth.month,
+                        isExpanded: true,
+                        underline: const SizedBox.shrink(),
+                        alignment: Alignment.center,
+                        items: [
+                          for (int m = 1; m <= 12; m++)
+                            DropdownMenuItem(
+                              value: m,
+                              alignment: Alignment.center,
+                              child: Text(_kMonthNames[m - 1]),
+                            ),
+                        ],
+                        onChanged: (m) {
+                          if (m != null) _setView(_viewMonth.year, m);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _NavGroup(
+                      onPrev: _viewMonth.year <= _firstMonth.year
+                          ? null
+                          : () => _stepYear(-1),
+                      onNext: _viewMonth.year >= _lastMonth.year
+                          ? null
+                          : () => _stepYear(1),
+                      prevTooltip: 'Previous year',
+                      nextTooltip: 'Next year',
+                      child: DropdownButton<int>(
+                        value: _viewMonth.year,
+                        isExpanded: true,
+                        underline: const SizedBox.shrink(),
+                        alignment: Alignment.center,
+                        items: [
+                          for (int y = _firstMonth.year;
+                              y <= _lastMonth.year;
+                              y++)
+                            DropdownMenuItem(
+                              value: y,
+                              alignment: Alignment.center,
+                              child: Text('$y'),
+                            ),
+                        ],
+                        onChanged: (y) {
+                          if (y != null) _setView(y, _viewMonth.month);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Day-of-week header row.
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -1434,20 +1544,17 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                 ],
               ),
             ),
-            // Scrollable list of month grids.
+            // Single visible month — paged in via chevrons / dropdowns.
             Expanded(
-              child: ListView.builder(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _monthCount,
-                itemBuilder: (context, index) {
-                  final month = _monthAtOffset(index);
-                  return _MonthGrid(
-                    month: month,
-                    pendingFrom: _pendingFrom,
-                    pendingTo: _pendingTo,
-                    onTapDate: _onTapDate,
-                  );
-                },
+                child: _MonthGrid(
+                  month: _viewMonth,
+                  pendingFrom: _pendingFrom,
+                  pendingTo: _pendingTo,
+                  onTapDate: _onTapDate,
+                  showHeader: false,
+                ),
               ),
             ),
             // Sticky footer: Clear (left) + Apply (right). Apply is
@@ -1483,10 +1590,58 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
     );
   }
 
-  DateTime _monthAtOffset(int i) {
-    final yr = _firstMonth.year + ((_firstMonth.month - 1 + i) ~/ 12);
-    final mo = ((_firstMonth.month - 1 + i) % 12) + 1;
-    return DateTime(yr, mo);
+}
+
+/// One half of the month / year nav row: a leading "previous" chevron,
+/// the supplied [child] (a [DropdownButton]) sandwiched between, and a
+/// trailing "next" chevron. Disabling [onPrev] / [onNext] greys out the
+/// corresponding chevron at the navigable edges.
+class _NavGroup extends StatelessWidget {
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+  final String prevTooltip;
+  final String nextTooltip;
+  final Widget child;
+
+  const _NavGroup({
+    required this.onPrev,
+    required this.onNext,
+    required this.prevTooltip,
+    required this.nextTooltip,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: cs.outlineVariant, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            tooltip: prevTooltip,
+            onPressed: onPrev,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          ),
+          Expanded(child: child),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            tooltip: nextTooltip,
+            onPressed: onNext,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1566,11 +1721,17 @@ class _MonthGrid extends StatelessWidget {
   final DateTime? pendingTo;
   final ValueChanged<DateTime> onTapDate;
 
+  /// When `false`, the inner "Month YYYY" header is suppressed. The
+  /// range picker turns this off because the nav row above the grid
+  /// already shows the same month + year via the dropdowns.
+  final bool showHeader;
+
   const _MonthGrid({
     required this.month,
     required this.pendingFrom,
     required this.pendingTo,
     required this.onTapDate,
+    this.showHeader = true,
   });
 
   @override
@@ -1589,17 +1750,18 @@ class _MonthGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-            child: Text(
-              '${_RangeCalendarSheetState._kMonthNames[month.month - 1]} '
-              '${month.year}',
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w600,
+          if (showHeader)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+              child: Text(
+                '${_RangeCalendarSheetState._kMonthNames[month.month - 1]} '
+                '${month.year}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
           for (int row = 0; row < rows; row++)
             Row(
               children: [
