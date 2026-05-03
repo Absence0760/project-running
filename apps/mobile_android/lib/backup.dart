@@ -405,6 +405,7 @@ class BackupService {
             }
             final route = cm.Route(
               id: newId,
+              userId: r['user_id'] as String? ?? '',
               name: r['name'] as String? ?? 'Route',
               waypoints: waypoints,
               distanceMetres: (r['distance_m'] as num?)?.toDouble() ?? 0,

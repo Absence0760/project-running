@@ -759,6 +759,102 @@ void main() {
       );
     });
 
+    test('route_detail_screen clips waypoints for non-owner viewers', () {
+      // Reason: pre-prod privacy-zones audit (June 2026) found this
+      // surface rendered LiveRunMap(plannedRoute: route.waypoints)
+      // with no clip step. Bookmarked / public / club-readable routes
+      // were leaking the unclipped polyline. Must derive
+      // _displayWaypoints via clipRouteForViewer for non-owners; the
+      // owner branch reads route.waypoints directly so an outage
+      // doesn't blank the owner's own map.
+      final source =
+          File('lib/screens/route_detail_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('clipRouteForViewer'),
+        reason: 'route_detail_screen must call clipRouteForViewer for '
+            'non-owner viewers — bare route.waypoints render leaks the '
+            'unclipped polyline. See decisions §33.',
+      );
+      expect(
+        source,
+        matches(RegExp(r'plannedRoute:\s*_displayWaypoints')),
+        reason: 'route_detail_screen must hand _displayWaypoints to '
+            'LiveRunMap, not route.waypoints — the row column is the '
+            'unclipped polyline for non-owners.',
+      );
+    });
+
+    test('routes_screen + club_detail + explore_routes use RouteTrackPreview',
+        () {
+      // Reason: same audit. Three list-view screens previously
+      // rendered <TrackPreview points: route.waypoints>. Owned rows
+      // were fine but bookmarked / club / community-public rows leaked.
+      // RouteTrackPreview wraps with the same lazy clip + cache
+      // pattern as RunTrackPreview so non-owner viewers see clipped
+      // output and owners short-circuit to the row column.
+      for (final path in const [
+        'lib/screens/routes_screen.dart',
+        'lib/screens/club_detail_screen.dart',
+        'lib/screens/explore_routes_screen.dart',
+      ]) {
+        final source = File(path).readAsStringSync();
+        expect(
+          source,
+          contains('RouteTrackPreview'),
+          reason:
+              '$path must use RouteTrackPreview rather than bare TrackPreview — '
+              'non-owner thumbnails leak the unclipped polyline otherwise. '
+              'See decisions §33.',
+        );
+      }
+    });
+
+    test('RouteTrackPreview routes non-owner fetches through clip_route_for_viewer',
+        () {
+      // Reason: clipRouteForViewer is the only path that returns
+      // clipped waypoints without first leaking the row's `waypoints`
+      // column to the wire. Owner reads use the prop directly;
+      // non-owner reads must call ApiClient.clipRouteForViewer.
+      final source =
+          File('lib/widgets/route_track_preview.dart').readAsStringSync();
+      expect(
+        source,
+        contains('clipRouteForViewer'),
+        reason: 'RouteTrackPreview must use ApiClient.clipRouteForViewer '
+            'for non-owner viewers. See decisions §33.',
+      );
+      // LRU bound — same shape as RunTrackPreview.
+      expect(
+        source,
+        contains('_cacheMax'),
+        reason: 'RouteTrackPreview cache must have a bounded size — '
+            'see RunTrackPreview for the LRU shape.',
+      );
+    });
+
+    test('clipRouteForViewer fails closed on RPC error', () {
+      // Reason: same fail-closed contract as clipTrackForUser. Returning
+      // the unclipped row column on RPC error would defeat the helper.
+      final source =
+          File('../../packages/api_client/lib/src/api_client.dart')
+              .readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'Future<List<Waypoint>> clipRouteForViewer\([^)]*\)\s*async\s*\{',
+      );
+      final tail = body.substring(body.indexOf('try'));
+      final catchMatch = RegExp(r'catch \([^)]*\) \{[^}]*\}').firstMatch(tail);
+      expect(catchMatch, isNotNull,
+          reason: 'clipRouteForViewer must have an explicit catch branch.');
+      expect(
+        catchMatch!.group(0)!.contains('return const []'),
+        isTrue,
+        reason: 'clipRouteForViewer must return [] on RPC failure — '
+            'see decisions §33.',
+      );
+    });
+
     test('clipTrackForUser fails closed on RPC error', () {
       // Reason: returning the unclipped input on RPC error was the
       // privacy leak this helper exists to prevent. Fail-closed

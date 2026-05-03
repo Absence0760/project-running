@@ -12,7 +12,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/event_form_sheet.dart';
-import '../widgets/track_preview.dart';
+import '../widgets/route_track_preview.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'public_route_screen.dart';
@@ -1070,7 +1070,15 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                   ? SizedBox(
                       width: 72,
                       height: 40,
-                      child: TrackPreview(points: r.waypoints),
+                      // Club routes are owned by other admins / members.
+                      // Non-owner thumbnails route through
+                      // clip_route_for_viewer (decisions §33).
+                      child: RouteTrackPreview(
+                        routeId: r.id,
+                        waypoints: r.waypoints,
+                        ownerUserId: r.userId,
+                        api: ApiClient(),
+                      ),
                     )
                   : SizedBox(
                       width: 56,

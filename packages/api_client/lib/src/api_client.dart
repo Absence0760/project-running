@@ -1526,6 +1526,36 @@ class ApiClient {
     }
   }
 
+  /// Server-side privacy-zone-clipped waypoints for a route owned by
+  /// someone other than the caller. Routes carry waypoints inline as
+  /// a jsonb column (no Storage indirection like runs), so this is a
+  /// straight RPC call rather than an Edge Function. The SECURITY
+  /// DEFINER function visibility-gates (owner / public / club member)
+  /// then returns either unclipped waypoints (owner) or clipped
+  /// output (non-owner). Anon callers get public routes only —
+  /// private-route reads raise `42501`, which surfaces as a
+  /// PostgrestException we swallow into `[]`.
+  ///
+  /// **Fails closed:** any error or unexpected shape returns `[]`.
+  /// Callers that need the unclipped polyline (the owner of the
+  /// route) should read `route.waypoints` directly rather than
+  /// calling this helper.
+  Future<List<Waypoint>> clipRouteForViewer(String routeId) async {
+    if (routeId.isEmpty) return const [];
+    try {
+      final data = await _client.rpc('clip_route_for_viewer', params: {
+        'p_route_id': routeId,
+      });
+      if (data is! List) return const [];
+      return data
+          .whereType<Map>()
+          .map((p) => _waypointFromJson(p.cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   // ──────────────────── Coach messages (P1.C) ────────────────────
   //
   // Active thread is `archived_at IS NULL` filtered by `(user_id,
@@ -2266,6 +2296,7 @@ class ApiClient {
     final r = RouteRow.fromJson(row);
     return Route(
       id: r.id,
+      userId: r.userId,
       name: r.name,
       waypoints: r.waypoints.map((m) => Waypoint(
             lat: (m['lat'] as num).toDouble(),

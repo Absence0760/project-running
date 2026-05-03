@@ -1502,6 +1502,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
     final route = Route(
       id: const Uuid().v4(),
+      userId: widget.apiClient?.userId ?? '',
       name: name,
       waypoints: simplified,
       distanceMetres: run.distanceMetres,

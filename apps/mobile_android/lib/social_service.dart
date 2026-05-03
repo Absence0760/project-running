@@ -331,6 +331,7 @@ class SocialService extends ChangeNotifier {
     final r = RouteRow.fromJson(row);
     return Route(
       id: r.id,
+      userId: r.userId,
       name: r.name,
       waypoints: r.waypoints
           .map((m) => Waypoint(

@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../widgets/route_track_preview.dart';
 import '../widgets/track_preview.dart';
 import 'explore_routes_screen.dart';
 import 'route_detail_screen.dart';
@@ -345,6 +346,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     final next = !route.isStarred;
     final updated = cm.Route(
       id: route.id,
+      userId: route.userId,
       name: route.name,
       waypoints: route.waypoints,
       distanceMetres: route.distanceMetres,
@@ -601,11 +603,21 @@ class _RoutesScreenState extends State<RoutesScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
-                    leading: route.waypoints.length >= 2
+                    leading: route.waypoints.length >= 2 && widget.apiClient != null
                         ? SizedBox(
                             width: 72,
                             height: 40,
-                            child: TrackPreview(points: route.waypoints),
+                            // Bookmarked rows are owned by other users — must
+                            // route through clip_route_for_viewer for non-owner
+                            // viewers (decisions §33). Owner branch in
+                            // RouteTrackPreview short-circuits to the raw row
+                            // waypoints, so owned rows still render directly.
+                            child: RouteTrackPreview(
+                              routeId: route.id,
+                              waypoints: route.waypoints,
+                              ownerUserId: route.userId,
+                              api: widget.apiClient!,
+                            ),
                           )
                         : SizedBox(
                             width: 56,

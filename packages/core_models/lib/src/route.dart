@@ -7,6 +7,10 @@ part 'route.g.dart';
 @JsonSerializable()
 class Route {
   final String id;
+  /// Owner of the route. Required for the privacy-zone clipping path —
+  /// non-owner viewers must route through `clip_route_for_viewer`
+  /// (decisions §33). Sourced from `routes.user_id` on the row.
+  final String userId;
   final String name;
   final List<Waypoint> waypoints;
   final double distanceMetres;
@@ -39,6 +43,7 @@ class Route {
 
   const Route({
     required this.id,
+    required this.userId,
     required this.name,
     required this.waypoints,
     required this.distanceMetres,

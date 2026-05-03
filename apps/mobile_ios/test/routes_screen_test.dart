@@ -11,6 +11,7 @@ List<cm.Route> _makeRoutes(int count) {
     for (int i = 0; i < count; i++)
       cm.Route(
         id: 'route-${i.toString().padLeft(3, '0')}',
+        userId: 'test-user',
         name: 'Route $i',
         waypoints: const [
           cm.Waypoint(lat: 51.5, lng: -0.12),

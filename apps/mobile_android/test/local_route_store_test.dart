@@ -26,6 +26,7 @@ void main() {
   }) {
     return Route(
       id: id,
+      userId: 'test-user',
       name: name,
       waypoints: const [
         Waypoint(lat: 47.37, lng: 8.54),

@@ -10,6 +10,7 @@ import '../lib/screens/route_detail_screen.dart';
 cm.Route _route({String name = 'River Loop', bool isPublic = false}) =>
     cm.Route(
       id: 'r1',
+      userId: 'test-user',
       name: name,
       waypoints: const [],
       distanceMetres: 8500,

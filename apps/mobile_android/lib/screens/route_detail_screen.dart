@@ -46,6 +46,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   bool? _bookmarked;
   bool _bookmarkBusy = false;
 
+  // Waypoints handed to the renderer. For the owner this mirrors
+  // widget.route.waypoints from the row; for non-owners this is the
+  // privacy-zone-clipped output of clip_route_for_viewer (decisions
+  // §33). Bookmarked / public / club-readable routes the viewer
+  // doesn't own would otherwise leak the unclipped polyline through
+  // LiveRunMap's plannedRoute prop.
+  List<cm.Waypoint> _displayWaypoints = const [];
+
   bool get _isOwner => widget.isOwner && widget.apiClient?.userId != null;
 
   Widget _inlineMeta(ThemeData theme, IconData icon, String label) {
@@ -71,6 +79,34 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     super.initState();
     _fetchReviews();
     _loadBookmarkState();
+    _resolveDisplayWaypoints();
+  }
+
+  Future<void> _resolveDisplayWaypoints() async {
+    final api = widget.apiClient;
+    final viewerId = api?.userId;
+    final ownerId = widget.route.userId;
+    // Owner / direct-owner-bypass surface keeps the row's waypoints —
+    // RPC at render time would round-trip and an outage would blank
+    // the owner's own map.
+    if (viewerId != null && viewerId == ownerId) {
+      setState(() => _displayWaypoints = widget.route.waypoints);
+      return;
+    }
+    // Non-owner (incl. anon api == null): fetch clipped output. The
+    // helper fails closed — an RPC error renders an empty map rather
+    // than fall through to the unclipped row column.
+    if (api == null) {
+      setState(() => _displayWaypoints = const []);
+      return;
+    }
+    try {
+      final clipped = await api.clipRouteForViewer(widget.route.id);
+      if (!mounted) return;
+      setState(() => _displayWaypoints = clipped);
+    } catch (_) {
+      if (mounted) setState(() => _displayWaypoints = const []);
+    }
   }
 
   Future<void> _loadBookmarkState() async {
@@ -154,6 +190,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final r = widget.route;
     cm.Route buildRoute(bool starred) => cm.Route(
           id: r.id,
+          userId: r.userId,
           name: r.name,
           waypoints: r.waypoints,
           distanceMetres: r.distanceMetres,
@@ -332,7 +369,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               height: 320,
               child: LiveRunMap(
                 track: const [],
-                plannedRoute: route.waypoints,
+                plannedRoute: _displayWaypoints,
                 followRunner: false,
               ),
             ),
@@ -526,7 +563,24 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _shareAs(BuildContext context, String format) async {
-    final route = widget.route;
+    // Use displayWaypoints (clipped for non-owners) so a non-owner
+    // sharing a public route can't leak the unclipped polyline via
+    // the GPX/KML exporter.
+    final route = cm.Route(
+      id: widget.route.id,
+      userId: widget.route.userId,
+      name: widget.route.name,
+      waypoints: _displayWaypoints,
+      distanceMetres: widget.route.distanceMetres,
+      elevationGainMetres: widget.route.elevationGainMetres,
+      isPublic: widget.route.isPublic,
+      createdAt: widget.route.createdAt,
+      surface: widget.route.surface,
+      tags: widget.route.tags,
+      featured: widget.route.featured,
+      runCount: widget.route.runCount,
+      isStarred: widget.route.isStarred,
+    );
     if (format == 'image') {
       await showRouteShareSheet(
         context,

@@ -9,7 +9,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
-import '../widgets/track_preview.dart';
+import '../widgets/route_track_preview.dart';
 import 'route_detail_screen.dart';
 
 enum _ExploreMode { search, nearMe }
@@ -626,8 +626,17 @@ class _RouteCard extends StatelessWidget {
               SizedBox(
                 width: 80,
                 height: 48,
+                // Explore is community-public routes — every row is by
+                // a non-owner. RouteTrackPreview's owner branch
+                // short-circuits to raw waypoints if the rare case of
+                // viewing your own published route arises.
                 child: route.waypoints.length >= 2
-                    ? TrackPreview(points: route.waypoints)
+                    ? RouteTrackPreview(
+                        routeId: route.id,
+                        waypoints: route.waypoints,
+                        ownerUserId: route.userId,
+                        api: ApiClient(),
+                      )
                     : Container(
                         decoration: BoxDecoration(
                           color: theme.colorScheme.secondaryContainer,
