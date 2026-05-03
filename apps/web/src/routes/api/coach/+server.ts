@@ -120,7 +120,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		return jsonError(401, 'not authenticated', { detail: userRes.error?.message ?? null });
 	}
 
-	const bypassLimit = env.BYPASS_PAYWALL === 'true';
+	// BYPASS_PAYWALL is a dev-only escape hatch. Refuse to honour it
+	// when the deployment env reports production — VERCEL_ENV is set
+	// to 'production' on Vercel prod, NODE_ENV is set to 'production'
+	// on most adapters. .env hygiene is the primary defence; this is
+	// the code-level backstop so a stray `BYPASS_PAYWALL=true` in a
+	// prod env cannot silently disable the coach quota.
+	const isProdEnv =
+		env.VERCEL_ENV === 'production' || env.NODE_ENV === 'production';
+	const bypassLimit = !isProdEnv && env.BYPASS_PAYWALL === 'true';
 	let tier: Tier = 'free';
 	let usedToday = 0;
 	if (!bypassLimit) {
