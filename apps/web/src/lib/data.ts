@@ -965,26 +965,55 @@ export async function setRouteClubId(routeId: string, clubId: string | null): Pr
 	if (error) throw error;
 }
 
+/// Read a route by id. Owners and active club members get the full
+/// `routes` row directly (RLS allows it). Anon and non-owner /
+/// non-club-member callers read the redacted metadata from the
+/// `public_routes` view and assemble a `Route` with server-clipped
+/// waypoints from `clip_route_for_viewer`. Non-owners never see
+/// unclipped polyline / `geom` / `start_point` on the wire — closes
+/// the audit/public-rows + audit/privacy-zones High finding.
 export async function fetchRouteById(id: string): Promise<Route | null> {
-	const { data } = await supabase
+	const ownerRead = await supabase
 		.from('routes')
 		.select('*')
 		.eq('id', id)
-		.single();
+		.maybeSingle();
+	if (ownerRead.data) return ownerRead.data;
 
-	if (data) return data;
-	return null;
+	const meta = await supabase
+		.from('public_routes')
+		.select('*')
+		.eq('id', id)
+		.maybeSingle();
+	if (!meta.data) return null;
+
+	const clipped = await fetchClippedRouteForViewer(id);
+	// public_routes intentionally omits `waypoints`, `geom`, `start_point`,
+	// and `is_starred`; pad them out so downstream consumers that read
+	// these keys still get a defined shape (empty arrays / nulls).
+	return {
+		...meta.data,
+		waypoints: clipped,
+		is_starred: false,
+	} as Route;
 }
 
+/// Public-share read path. Same redaction shape as `fetchRouteById`'s
+/// non-owner branch — kept as a separate export so call sites that
+/// only ever intend to read a public route stay explicit.
 export async function fetchPublicRoute(id: string): Promise<Route | null> {
 	const { data } = await supabase
-		.from('routes')
+		.from('public_routes')
 		.select('*')
 		.eq('id', id)
-		.eq('is_public', true)
-		.single();
-
-	return data;
+		.maybeSingle();
+	if (!data) return null;
+	const clipped = await fetchClippedRouteForViewer(id);
+	return {
+		...data,
+		waypoints: clipped,
+		is_starred: false,
+	} as Route;
 }
 
 export async function saveRoute(route: {

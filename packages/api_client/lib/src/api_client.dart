@@ -859,24 +859,81 @@ class ApiClient {
   /// (public or private), other viewers only see public routes or
   /// routes owned by a club they belong to.
   /// Fetches a route row plus the owner's user id. The owner id is
-  /// peeled out alongside the [Route] domain object so callers on
-  /// public-share surfaces can route the waypoints through
-  /// [clipTrackForUser] for non-owner viewers (decisions §33). The
-  /// [Route] class drops `user_id` to keep its surface display-only —
-  /// this helper exists so a screen can clip without re-querying.
+  /// Read a route by id. Owner-aware:
+  ///
+  /// 1. First tries the bare `routes` table — RLS lets owners and
+  ///    active club members see the full row, which carries the
+  ///    unclipped polyline for owners' own surfaces.
+  /// 2. If that returns nothing (anon, or non-owner viewing a public
+  ///    route), falls back to the `public_routes` view (which strips
+  ///    `waypoints` / `geom` / `start_point` / `is_starred` server-
+  ///    side) and overlays the polyline from `clip_route_for_viewer`
+  ///    so the runner's privacy zones are respected.
+  ///
+  /// Closes the audit/public-rows + audit/privacy-zones High finding
+  /// from /audit/all on 2026-05-03 — see migration
+  /// 20260703_001_public_routes_view.sql.
+  ///
+  /// `ownerId` is peeled out alongside the [Route] domain object so
+  /// callers on public-share surfaces can decide whether further
+  /// owner-only affordances apply.
   Future<({Route? route, String? ownerId})> fetchRouteById(
     String routeId,
   ) async {
-    final row = await _client
+    final ownerRow = await _client
         .from(RouteRow.table)
         .select()
         .eq(RouteRow.colId, routeId)
         .maybeSingle();
-    if (row == null) return (route: null, ownerId: null);
-    return (
-      route: _routeFromRow(row),
-      ownerId: row[RouteRow.colUserId] as String?,
-    );
+    if (ownerRow != null) {
+      return (
+        route: _routeFromRow(ownerRow),
+        ownerId: ownerRow[RouteRow.colUserId] as String?,
+      );
+    }
+
+    final publicRow = await _client
+        .from('public_routes')
+        .select()
+        .eq(RouteRow.colId, routeId)
+        .maybeSingle();
+    if (publicRow == null) return (route: null, ownerId: null);
+
+    // public_routes carries no `waypoints`; fetch the clipped polyline
+    // separately so the response respects the owner's privacy zones.
+    List<Waypoint> clipped;
+    try {
+      final clip = await _client.rpc(
+        'clip_route_for_viewer',
+        params: {'p_route_id': routeId},
+      );
+      clipped = (clip as List?)
+              ?.map((p) {
+                final m = p as Map<String, dynamic>;
+                return Waypoint(
+                  lat: (m['lat'] as num).toDouble(),
+                  lng: (m['lng'] as num).toDouble(),
+                  elevationMetres: (m['ele'] as num?)?.toDouble(),
+                );
+              })
+              .toList() ??
+          const [];
+    } catch (_) {
+      // Fail closed — render an empty polyline rather than leak the
+      // unclipped track on RPC error. Matches clipTrackForUser shape.
+      clipped = const [];
+    }
+
+    final ownerId = publicRow[RouteRow.colUserId] as String?;
+    final routeRow = Map<String, dynamic>.from(publicRow);
+    routeRow['waypoints'] = clipped
+        .map((w) => {
+              'lat': w.lat,
+              'lng': w.lng,
+              if (w.elevationMetres != null) 'ele': w.elevationMetres,
+            })
+        .toList();
+    return (route: _routeFromRow(routeRow), ownerId: ownerId);
   }
 
   Future<List<RunRow>> fetchPublicRunsByUser(String userId, {int limit = 50}) async {
@@ -2337,21 +2394,35 @@ class ApiClient {
   }
 
   static Route _routeFromRow(Map<String, dynamic> row) {
-    final r = RouteRow.fromJson(row);
+    // Tolerant of rows from the `public_routes` view, which strips
+    // `waypoints` / `geom` / `start_point` / `is_starred` to close the
+    // wire-leak documented in migration 20260703_001_public_routes_view.sql.
+    // Browse / list surfaces (search, nearby, within-box) read through
+    // the view and don't render polylines anyway; the caller layers a
+    // separate clip_route_for_viewer call for surfaces that need one.
+    final waypointsRaw = row['waypoints'];
+    final waypoints = waypointsRaw is List
+        ? waypointsRaw.map((e) {
+            final m = e as Map<String, dynamic>;
+            return Waypoint(
+              lat: (m['lat'] as num).toDouble(),
+              lng: (m['lng'] as num).toDouble(),
+              elevationMetres: (m['ele'] as num?)?.toDouble(),
+            );
+          }).toList()
+        : const <Waypoint>[];
     return Route(
-      id: r.id,
-      userId: r.userId,
-      name: r.name,
-      waypoints: r.waypoints.map((m) => Waypoint(
-            lat: (m['lat'] as num).toDouble(),
-            lng: (m['lng'] as num).toDouble(),
-            elevationMetres: (m['ele'] as num?)?.toDouble(),
-          )).toList(),
-      distanceMetres: r.distanceM,
-      elevationGainMetres: r.elevationM ?? 0,
-      isPublic: r.isPublic ?? false,
-      surface: r.surface,
-      createdAt: r.createdAt,
+      id: row['id'] as String,
+      userId: row['user_id'] as String,
+      name: row['name'] as String,
+      waypoints: waypoints,
+      distanceMetres: (row['distance_m'] as num).toDouble(),
+      elevationGainMetres: (row['elevation_m'] as num?)?.toDouble() ?? 0,
+      isPublic: row['is_public'] as bool? ?? false,
+      surface: row['surface'] as String?,
+      createdAt: row['created_at'] == null
+          ? null
+          : DateTime.parse(row['created_at'] as String),
       tags: (row['tags'] as List?)?.cast<String>() ?? const [],
       featured: row['featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, fetchClippedRouteForViewer, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/data';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -14,12 +14,10 @@
 	let { data } = $props();
 
 	let route = $state<Route | null>(null);
-	// `displayWaypoints` is what gets handed to the renderer. For the
-	// owner it mirrors `route.waypoints` from the row; for non-owners
-	// it's the privacy-zone-clipped output of clip_route_for_viewer
-	// (decisions §33). Bookmarked / public / club routes the viewer
-	// doesn't own would otherwise leak the unclipped polyline through
-	// `<RunMap track={route.waypoints} />`.
+	// `fetchRouteById` returns owner-clipped waypoints for owners and
+	// server-clipped waypoints for non-owners (via the public_routes
+	// view + clip_route_for_viewer). The wire-leak is closed there;
+	// the renderer just consumes what it gets.
 	let displayWaypoints = $state<{ lat: number; lng: number; ele?: number }[]>([]);
 	let loading = $state(true);
 	let reviews = $state<any[]>([]);
@@ -37,15 +35,7 @@
 		route = await fetchRouteById(data.id);
 		loading = false;
 		if (route) {
-			// Owner reads waypoints directly; non-owner goes through the
-			// clip RPC. Anon (viewerId == null) is treated as non-owner so
-			// share-link traffic gets the clip pass too.
-			const viewerId = auth.user?.id ?? null;
-			if (viewerId !== null && viewerId === route.user_id) {
-				displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
-			} else {
-				displayWaypoints = (await fetchClippedRouteForViewer(route.id)) as typeof displayWaypoints;
-			}
+			displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
 			try {
 				reviews = await getRouteReviews(route.id);
 			} catch (_) {}

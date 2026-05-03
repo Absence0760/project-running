@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
-	import { fetchPublicRoute, clipTrackForUser } from '$lib/data';
-	import { auth } from '$lib/stores/auth.svelte';
+	import { fetchRouteById } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import type { Route, TrackPoint } from '$lib/types';
@@ -15,18 +14,18 @@
 	let notFound = $state(false);
 
 	onMount(async () => {
-		const r = await fetchPublicRoute(data.id);
+		// `fetchRouteById` is the owner-aware reader: owner / club member
+		// gets the full route via RLS; anon / non-owner gets the
+		// `public_routes` view (no `geom` / `start_point`) plus
+		// server-side privacy-zone clipping for `waypoints`. The wire
+		// never carries unclipped polyline to a non-owner viewer; no
+		// client-side clip pass needed here.
+		const r = await fetchRouteById(data.id);
 		if (!r) {
 			notFound = true;
 		} else {
 			route = r;
-			// Clip start + end against the owner's privacy zones (§33).
-			// Owners see their full route — the helper fails closed for
-			// non-owner viewers so we route around it for the owner.
-			const isOwner = auth.user?.id === r.user_id;
-			waypoints = isOwner
-				? ((r.waypoints ?? []) as TrackPoint[])
-				: ((await clipTrackForUser(r.user_id, r.waypoints ?? [])) as TrackPoint[]);
+			waypoints = (r.waypoints ?? []) as TrackPoint[];
 		}
 		loading = false;
 	});

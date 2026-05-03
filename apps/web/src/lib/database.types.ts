@@ -433,6 +433,13 @@ export type Database = {
             foreignKeyName: "events_route_id_fkey"
             columns: ["route_id"]
             isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
             referencedRelation: "routes"
             referencedColumns: ["id"]
           },
@@ -1004,6 +1011,13 @@ export type Database = {
             foreignKeyName: "route_reviews_route_id_fkey"
             columns: ["route_id"]
             isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_reviews_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
             referencedRelation: "routes"
             referencedColumns: ["id"]
           },
@@ -1331,6 +1345,13 @@ export type Database = {
             foreignKeyName: "runs_route_id_fkey"
             columns: ["route_id"]
             isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
             referencedRelation: "routes"
             referencedColumns: ["id"]
           },
@@ -1353,6 +1374,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "saved_routes_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "saved_routes_route_id_fkey"
             columns: ["route_id"]
@@ -1446,6 +1474,13 @@ export type Database = {
           start_distance_m?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "segments_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "segments_route_id_fkey"
             columns: ["route_id"]
@@ -1685,6 +1720,60 @@ export type Database = {
         }
         Relationships: []
       }
+      public_routes: {
+        Row: {
+          club_id: string | null
+          created_at: string | null
+          distance_m: number | null
+          elevation_m: number | null
+          featured: boolean | null
+          featured_at: string | null
+          id: string | null
+          is_public: boolean | null
+          name: string | null
+          run_count: number | null
+          slug: string | null
+          surface: string | null
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          club_id?: never
+          created_at?: string | null
+          distance_m?: number | null
+          elevation_m?: number | null
+          featured?: boolean | null
+          featured_at?: string | null
+          id?: string | null
+          is_public?: boolean | null
+          name?: string | null
+          run_count?: number | null
+          slug?: string | null
+          surface?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          club_id?: never
+          created_at?: string | null
+          distance_m?: number | null
+          elevation_m?: number | null
+          featured?: boolean | null
+          featured_at?: string | null
+          id?: string | null
+          is_public?: boolean | null
+          name?: string | null
+          run_count?: number | null
+          slug?: string | null
+          surface?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       public_runs: {
         Row: {
           created_at: string | null
@@ -1839,6 +1928,7 @@ export type Database = {
       is_club_member: { Args: { target_club: string }; Returns: boolean }
       is_event_organiser: { Args: { target_club: string }; Returns: boolean }
       is_pro: { Args: never; Returns: boolean }
+      is_public_club_by_id: { Args: { p_club_id: string }; Returns: boolean }
       is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }
       is_public_route_by_id: { Args: { p_route_id: string }; Returns: boolean }
       is_race_director: { Args: { target_club: string }; Returns: boolean }
@@ -1884,27 +1974,23 @@ export type Database = {
         Returns: {
           club_id: string | null
           created_at: string | null
-          distance_m: number
+          distance_m: number | null
           elevation_m: number | null
-          featured: boolean
+          featured: boolean | null
           featured_at: string | null
-          geom: unknown
-          id: string
+          id: string | null
           is_public: boolean | null
-          is_starred: boolean
-          name: string
-          run_count: number
+          name: string | null
+          run_count: number | null
           slug: string | null
-          start_point: unknown
           surface: string | null
-          tags: string[]
+          tags: string[] | null
           updated_at: string | null
-          user_id: string
-          waypoints: Json
+          user_id: string | null
         }[]
         SetofOptions: {
           from: "*"
-          to: "routes"
+          to: "public_routes"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -1966,27 +2052,23 @@ export type Database = {
         Returns: {
           club_id: string | null
           created_at: string | null
-          distance_m: number
+          distance_m: number | null
           elevation_m: number | null
-          featured: boolean
+          featured: boolean | null
           featured_at: string | null
-          geom: unknown
-          id: string
+          id: string | null
           is_public: boolean | null
-          is_starred: boolean
-          name: string
-          run_count: number
+          name: string | null
+          run_count: number | null
           slug: string | null
-          start_point: unknown
           surface: string | null
-          tags: string[]
+          tags: string[] | null
           updated_at: string | null
-          user_id: string
-          waypoints: Json
+          user_id: string | null
         }[]
         SetofOptions: {
           from: "*"
-          to: "routes"
+          to: "public_routes"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -2006,27 +2088,23 @@ export type Database = {
         Returns: {
           club_id: string | null
           created_at: string | null
-          distance_m: number
+          distance_m: number | null
           elevation_m: number | null
-          featured: boolean
+          featured: boolean | null
           featured_at: string | null
-          geom: unknown
-          id: string
+          id: string | null
           is_public: boolean | null
-          is_starred: boolean
-          name: string
-          run_count: number
+          name: string | null
+          run_count: number | null
           slug: string | null
-          start_point: unknown
           surface: string | null
-          tags: string[]
+          tags: string[] | null
           updated_at: string | null
-          user_id: string
-          waypoints: Json
+          user_id: string | null
         }[]
         SetofOptions: {
           from: "*"
-          to: "routes"
+          to: "public_routes"
           isOneToOne: false
           isSetofReturn: true
         }
