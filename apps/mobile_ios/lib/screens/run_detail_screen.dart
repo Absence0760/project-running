@@ -20,6 +20,7 @@ import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_share_card.dart';
 import '../widgets/run_social_section.dart';
 import '../widgets/workout_review_section.dart';
+import '../widgets/top_banner.dart';
 
 /// Detail view for a completed run, showing the route map, splits, and stats.
 class RunDetailScreen extends StatefulWidget {
@@ -168,15 +169,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         _suggestedRoute = null;
       });
       _loadLinkedRoute();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Linked to ${candidate.name}')),
-      );
+      showTopBanner(context, 'Linked to ${candidate.name}');
     } catch (e) {
       debugPrint('linkRunToRoute failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not link route')),
-        );
+        showTopBanner(context, 'Could not link route');
       }
     } finally {
       if (mounted) setState(() => _linkingRoute = false);
@@ -405,11 +402,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       );
       if (parsedDistance == null || parsedDuration == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Enter a valid distance and duration'),
-          ),
-        );
+        showTopBanner(context, 'Enter a valid distance and duration');
         return;
       }
       newDistance = parsedDistance;
@@ -1448,11 +1441,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// Ramer–Douglas–Peucker so the saved route isn't noisy.
   Future<void> _saveAsRoute() async {
     if (run.track.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("This run has no GPS track to save as a route"),
-        ),
-      );
+      showTopBanner(context, "This run has no GPS track to save as a route");
       return;
     }
 
@@ -1512,14 +1501,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     await widget.routeStore.save(route);
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Saved "$name" — ${simplified.length} waypoints '
-          '(${run.track.length - simplified.length} smoothed out)',
-        ),
-      ),
-    );
+    showTopBanner(context, 'Saved "$name" — ${simplified.length} waypoints '
+          '(${run.track.length - simplified.length} smoothed out)',);
   }
 
   /// Open the share sheet — lets the user share an image of the run card or

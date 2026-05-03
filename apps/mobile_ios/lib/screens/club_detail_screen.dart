@@ -16,6 +16,7 @@ import '../widgets/route_track_preview.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'public_route_screen.dart';
+import '../widgets/top_banner.dart';
 
 class ClubDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -120,9 +121,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     try {
       final status = await widget.social.joinClub(c.row.id, c.joinPolicy);
       if (status == 'pending' && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Request sent to admins.')),
-        );
+        showTopBanner(context, 'Request sent to admins.');
       }
       await _load();
     } catch (e) {
@@ -891,8 +890,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Approve failed: $e')));
+      showTopBanner(context, 'Approve failed: $e');
     }
   }
 
@@ -910,8 +908,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Deny failed: $e')));
+      showTopBanner(context, 'Deny failed: $e');
     }
   }
 
@@ -1016,9 +1013,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     try {
       final newId = await widget.training.clonePlanTemplate(templateId: t.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Template added to your plans.')),
-      );
+      showTopBanner(context, 'Template added to your plans.');
       Navigator.push(
         context,
         MaterialPageRoute<void>(
@@ -1030,9 +1025,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Adopt failed: $e')),
-      );
+      showTopBanner(context, 'Adopt failed: $e');
     }
   }
 

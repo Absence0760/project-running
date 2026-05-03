@@ -8,6 +8,7 @@ import '../recurrence.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/top_banner.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -171,16 +172,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         finisherStatus: picked.finisherStatus,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Result submitted.')),
-        );
+        showTopBanner(context, 'Result submitted.');
       }
       await _load();
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Submit failed: $err')),
-        );
+        showTopBanner(context, 'Submit failed: $err');
       }
     } finally {
       if (mounted) setState(() => _submittingResult = false);
@@ -233,9 +230,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Race control failed: $err')),
-        );
+        showTopBanner(context, 'Race control failed: $err');
       }
     } finally {
       if (mounted) setState(() => _raceBusy = false);
@@ -477,9 +472,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   body: body,
                 );
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Update posted to the club feed.')),
-                );
+                showTopBanner(context, 'Update posted to the club feed.');
               },
             ),
           ],

@@ -15,6 +15,7 @@ import '../widgets/run_track_preview.dart';
 import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
 import 'run_detail_screen.dart';
+import '../widgets/top_banner.dart';
 
 /// Runs list showing local runs with sync status.
 ///
@@ -411,9 +412,7 @@ class _RunsScreenState extends State<RunsScreen> {
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not refresh — check your connection')),
-        );
+        showTopBanner(context, 'Could not refresh — check your connection');
       }
     } finally {
       if (mounted) setState(() => _fetching = false);
@@ -482,9 +481,7 @@ class _RunsScreenState extends State<RunsScreen> {
     } catch (e) {
       debugPrint('Load more runs failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load more runs')),
-        );
+        showTopBanner(context, 'Could not load more runs');
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -494,9 +491,7 @@ class _RunsScreenState extends State<RunsScreen> {
   Future<void> _syncAll() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in from Settings to sync runs')),
-      );
+      showTopBanner(context, 'Sign in from Settings to sync runs');
       return;
     }
 
@@ -519,13 +514,9 @@ class _RunsScreenState extends State<RunsScreen> {
 
     if (!mounted) return;
     if (lastError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Synced $synced/${unsynced.length}. Error: $lastError')),
-      );
+      showTopBanner(context, 'Synced $synced/${unsynced.length}. Error: $lastError');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('All $synced runs synced')),
-      );
+      showTopBanner(context, 'All $synced runs synced');
     }
   }
 
@@ -618,18 +609,10 @@ class _RunsScreenState extends State<RunsScreen> {
       _selected.clear();
     });
     if (failedIds.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${ids.length - failedIds.length} deleted; '
-            '${failedIds.length} queued — will retry when back online.',
-          ),
-        ),
-      );
+      showTopBanner(context, '${ids.length - failedIds.length} deleted; '
+            '${failedIds.length} queued — will retry when back online.',);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted $count run${count == 1 ? '' : 's'}')),
-      );
+      showTopBanner(context, 'Deleted $count run${count == 1 ? '' : 's'}');
     }
   }
 

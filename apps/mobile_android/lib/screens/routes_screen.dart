@@ -14,6 +14,7 @@ import '../preferences.dart';
 import '../widgets/route_track_preview.dart';
 import 'explore_routes_screen.dart';
 import 'route_detail_screen.dart';
+import '../widgets/top_banner.dart';
 
 /// Page size for the cloud fetch + visible-list window. Same value as
 /// runs_screen — `docs/conventions.md § Pagination` makes consistency
@@ -133,9 +134,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     } catch (e) {
       debugPrint('Fetch routes failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not sync routes — working offline')),
-        );
+        showTopBanner(context, 'Could not sync routes — working offline');
       }
     } finally {
       if (mounted) setState(() => _syncing = false);
@@ -197,9 +196,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     } catch (e) {
       debugPrint('Load more routes failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load more routes')),
-        );
+        showTopBanner(context, 'Could not load more routes');
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -364,9 +361,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     } catch (e) {
       await widget.routeStore.save(route);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update star: $e')),
-        );
+        showTopBanner(context, 'Could not update star: $e');
       }
     }
   }
@@ -388,12 +383,8 @@ class _RoutesScreenState extends State<RoutesScreen> {
       final path = result.files.first.path;
       if (path == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text(
-              'Import failed: pick the file from local storage, '
-              'not a cloud-only document picker.',
-            )),
-          );
+          showTopBanner(context, 'Import failed: pick the file from local storage, '
+              'not a cloud-only document picker.',);
         }
         return;
       }
@@ -402,15 +393,11 @@ class _RoutesScreenState extends State<RoutesScreen> {
       final route = await compute(_parseRouteFile, _RouteParseRequest(ext, content));
       await widget.routeStore.save(route);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imported "${route.name}"')),
-        );
+        showTopBanner(context, 'Imported "${route.name}"');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import failed: $e')),
-        );
+        showTopBanner(context, 'Import failed: $e');
       }
     }
   }

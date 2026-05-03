@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../preferences.dart';
 import '../tile_cache.dart';
+import '../widgets/top_banner.dart';
 
 /// Open a portrait "share card" modal for [route] — a branded preview
 /// of the route map plus headline stats — and let the user share the
@@ -93,9 +94,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
     } catch (e) {
       debugPrint('Failed to capture route share card: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create share image')),
-        );
+        showTopBanner(context, 'Could not create share image');
       }
     } finally {
       if (mounted) setState(() => _capturing = false);

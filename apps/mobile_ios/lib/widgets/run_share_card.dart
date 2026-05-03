@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../tile_cache.dart';
+import '../widgets/top_banner.dart';
 
 /// Opens a modal sheet showing a portrait "share card" for [run] — a branded
 /// preview of the route map plus headline stats — and lets the user share
@@ -90,9 +91,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
     } catch (e) {
       debugPrint('Failed to capture run share card: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create share image')),
-        );
+        showTopBanner(context, 'Could not create share image');
       }
     } finally {
       if (mounted) setState(() => _capturing = false);
@@ -120,9 +119,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
     } catch (e) {
       debugPrint('Failed to export run file: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not export file')),
-        );
+        showTopBanner(context, 'Could not export file');
       }
     }
   }

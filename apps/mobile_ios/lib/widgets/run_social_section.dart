@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import '../widgets/top_banner.dart';
 
 /// Run-detail kudos pill + one-level comment thread + composer. Mirrors
 /// the web `RunSocial.svelte` component.
@@ -122,9 +123,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _eng = before);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update kudos: $e')),
-      );
+      showTopBanner(context, 'Could not update kudos: $e');
     } finally {
       if (mounted) setState(() => _kudosBusy = false);
     }
@@ -166,9 +165,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to post: $e')),
-      );
+      showTopBanner(context, 'Failed to post: $e');
     } finally {
       if (mounted) setState(() => _posting = false);
     }
@@ -180,9 +177,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete: $e')),
-      );
+      showTopBanner(context, 'Failed to delete: $e');
     }
   }
 

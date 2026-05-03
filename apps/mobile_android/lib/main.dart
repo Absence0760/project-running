@@ -397,39 +397,6 @@ class RunApp extends StatefulWidget {
 }
 
 class _RunAppState extends State<RunApp> {
-  final GlobalKey<ScaffoldMessengerState> _messengerKey =
-      GlobalKey<ScaffoldMessengerState>();
-
-  @override
-  void initState() {
-    super.initState();
-    final recovered = widget.recoveredRun;
-    if (recovered != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _messengerKey.currentState?.showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 6),
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'Recovered unfinished run — '
-              '${(recovered.distanceMetres / 1000).toStringAsFixed(2)} km, '
-              '${recovered.duration.inMinutes} min',
-            ),
-            action: SnackBarAction(
-              label: 'View',
-              onPressed: () {
-                // Navigating from a root snackbar action is app-specific —
-                // for now the run is already in history, surfaced by the
-                // default list view. Dismiss the snackbar.
-                _messengerKey.currentState?.hideCurrentSnackBar();
-              },
-            ),
-          ),
-        );
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -440,7 +407,6 @@ class _RunAppState extends State<RunApp> {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
-          scaffoldMessengerKey: _messengerKey,
           home: widget.preferences.onboarded
               ? HomeScreen(
                   apiClient: widget.apiClient,
@@ -453,6 +419,7 @@ class _RunAppState extends State<RunApp> {
                   training: widget.training,
                   heartRate: widget.heartRate,
                   settingsSync: widget.settingsSync,
+                  recoveredRun: widget.recoveredRun,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,

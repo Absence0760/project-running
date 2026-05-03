@@ -13,6 +13,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import 'run_detail_screen.dart';
+import '../widgets/top_banner.dart';
 
 enum PeriodType { week, month }
 
@@ -615,9 +616,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
     } catch (e) {
       debugPrint('Failed to capture period share card: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create share image')),
-        );
+        showTopBanner(context, 'Could not create share image');
       }
     } finally {
       if (mounted) setState(() => _capturing = false);

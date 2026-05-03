@@ -22,6 +22,7 @@ import 'devices_screen.dart';
 import 'privacy_zones_screen.dart';
 import 'profile_screen.dart';
 import 'sign_in_screen.dart';
+import '../widgets/top_banner.dart';
 
 /// Account settings, preferences, and integrations.
 class SettingsScreen extends StatefulWidget {
@@ -93,9 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _signIn() async {
     final api = widget.apiClient;
     if (api == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backend not configured')),
-      );
+      showTopBanner(context, 'Backend not configured');
       return;
     }
     final ok = await Navigator.of(context).push<bool>(
@@ -111,9 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await api.signOut();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sign out failed — check your connection')),
-        );
+        showTopBanner(context, 'Sign out failed — check your connection');
         return;
       }
     }
@@ -230,12 +227,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _exportRunsCsv() async {
     final store = widget.runStore;
-    final messenger = ScaffoldMessenger.of(context);
     final runs = store?.runs ?? const [];
     if (runs.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('No runs to export.')),
-      );
+      showTopBanner(context, 'No runs to export.');
       return;
     }
     try {
@@ -263,24 +257,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         text: 'Run app — runs export',
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('CSV export failed: $e')),
-      );
+      if (!mounted) return;
+      showTopBanner(context, 'CSV export failed: $e');
     }
   }
 
   Future<void> _exportBackup() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in first to back up your runs.')),
-      );
+      showTopBanner(context, 'Sign in first to back up your runs.');
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Preparing backup…')),
-    );
+    showTopBanner(context, 'Preparing backup…');
     try {
       final tmp = await getTemporaryDirectory();
       final ts = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
@@ -291,9 +279,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         text: 'Run app backup',
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Backup failed: $e')),
-      );
+      if (!mounted) return;
+      showTopBanner(context, 'Backup failed: $e');
     }
   }
 
@@ -301,9 +288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final api = widget.apiClient;
     final store = widget.runStore;
     if (api == null || store == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Backup service unavailable.')),
-      );
+      showTopBanner(context, 'Backup service unavailable.');
       return;
     }
     final picked = await FilePicker.pickFiles(
@@ -339,23 +324,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (ok != true) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(const SnackBar(content: Text('Restoring…')));
+    if (!mounted) return;
+    showTopBanner(context, 'Restoring…');
     try {
       final res = await BackupService(api: api).restore(
         zipFile: File(path),
         runStore: store,
       );
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Restored ${res.runsImported} runs · ${res.tracksUploaded} tracks · ${res.routesImported} routes'
-            '${res.warnings.isNotEmpty ? ' · ${res.warnings.length} warnings' : ''}',
-          ),
-        ),
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        'Restored ${res.runsImported} runs · ${res.tracksUploaded} tracks · ${res.routesImported} routes'
+        '${res.warnings.isNotEmpty ? ' · ${res.warnings.length} warnings' : ''}',
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+      if (!mounted) return;
+      showTopBanner(context, 'Restore failed: $e');
     }
   }
 
@@ -861,14 +845,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _connectStrava() async {
     await _openExternal('https://run.app/settings/integrations');
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Complete the Strava sign-in in your browser, then return here '
-          'and pull to refresh.',
-        ),
-      ),
-    );
+    showTopBanner(context, 'Complete the Strava sign-in in your browser, then return here '
+          'and pull to refresh.',);
   }
 
   Future<void> _syncStrava() async {
@@ -880,15 +858,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       final imported = (res['imported'] as num?)?.toInt() ?? 0;
       final skipped = (res['skipped'] as num?)?.toInt() ?? 0;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Synced. $imported new, $skipped already present.')),
-      );
+      showTopBanner(context, 'Synced. $imported new, $skipped already present.');
       await _refreshIntegrations();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sync failed: $e')),
-      );
+      showTopBanner(context, 'Sync failed: $e');
     } finally {
       if (mounted) setState(() => _stravaBusy = false);
     }
@@ -924,14 +898,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await api.disconnectIntegration('strava');
       await _refreshIntegrations();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Strava disconnected.')),
-      );
+      showTopBanner(context, 'Strava disconnected.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Disconnect failed: $e')),
-      );
+      showTopBanner(context, 'Disconnect failed: $e');
     } finally {
       if (mounted) setState(() => _stravaBusy = false);
     }
@@ -1012,21 +982,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final imported = await api.importParkrunResults(athleteNumber);
       if (!mounted) return;
       Navigator.of(context).pop(); // dismiss progress
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            imported > 0
+      showTopBanner(context, imported > 0
                 ? 'Imported $imported parkrun result${imported == 1 ? '' : 's'}.'
-                : 'No new parkrun results since last import.',
-          ),
-        ),
-      );
+                : 'No new parkrun results since last import.',);
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Import failed: $e')),
-      );
+      showTopBanner(context, 'Import failed: $e');
     }
   }
 
@@ -1043,9 +1005,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Share.share(url);
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open: $e')),
-        );
+        showTopBanner(context, 'Could not open: $e');
       }
     }
   }
@@ -1106,17 +1066,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (ok != true) return;
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await Supabase.instance.client.auth
           .updateUser(UserAttributes(password: pwdCtl.text));
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Password updated')),
-      );
+      if (!mounted) return;
+      showTopBanner(context, 'Password updated');
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not update password: $e')),
-      );
+      if (!mounted) return;
+      showTopBanner(context, 'Could not update password: $e');
     }
   }
 
@@ -1145,20 +1102,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (confirm != true) return;
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await Supabase.instance.client.functions.invoke('delete-account');
       await widget.apiClient?.signOut();
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Account deleted')),
-        );
+        showTopBanner(context, 'Account deleted');
         setState(() {});
       }
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Account deletion failed: $e')),
-      );
+      if (!mounted) return;
+      showTopBanner(context, 'Account deletion failed: $e');
     }
   }
 
@@ -1653,9 +1606,7 @@ class _HeartRateTileState extends State<_HeartRateTile> {
         await widget.heartRate.pair(device);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Pair failed: $e')),
-          );
+          showTopBanner(context, 'Pair failed: $e');
         }
       }
       await _refresh();

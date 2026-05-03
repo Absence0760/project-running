@@ -6,6 +6,7 @@ import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
 import 'profile_screen.dart';
 import 'public_run_screen.dart';
+import '../widgets/top_banner.dart';
 
 /// Activity feed of public runs from people you follow, capped to the
 /// last 14 days. Mirrors the web `/feed` route (decisions §31).
@@ -128,9 +129,7 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadingMore = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not load more: $e')),
-      );
+      showTopBanner(context, 'Could not load more: $e');
     }
   }
 
@@ -555,9 +554,7 @@ class _EngagementFooterState extends State<_EngagementFooter> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _eng = prev);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update kudos: $e')),
-      );
+      showTopBanner(context, 'Could not update kudos: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -11,6 +11,7 @@ import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/route_track_preview.dart';
 import 'route_detail_screen.dart';
+import '../widgets/top_banner.dart';
 
 enum _ExploreMode { search, nearMe }
 
@@ -173,9 +174,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           _loading = false;
           _hasMore = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load more — check your connection')),
-        );
+        showTopBanner(context, 'Could not load more — check your connection');
       }
     }
   }
@@ -300,9 +299,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   Future<void> _saveRoute(cm.Route route) async {
     await widget.routeStore.save(route);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved "${route.name}" to your library')),
-    );
+    showTopBanner(context, 'Saved "${route.name}" to your library');
   }
 
   @override

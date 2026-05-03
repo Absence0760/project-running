@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../widgets/top_banner.dart';
 
 /// Form for adding a run to history without recording it live.
 ///
@@ -185,17 +186,13 @@ class _AddRunScreenState extends State<AddRunScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save run: $e')),
-      );
+      showTopBanner(context, 'Failed to save run: $e');
       return;
     }
 
     if (!mounted) return;
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Run added to history')),
-    );
+    showTopBanner(context, 'Run added to history');
   }
 
   @override

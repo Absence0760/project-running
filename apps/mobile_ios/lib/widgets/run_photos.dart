@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/top_banner.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
 /// `jpeg` collapses to `jpg` (Storage path stays consistent regardless of
@@ -112,9 +113,7 @@ class _RunPhotosState extends State<RunPhotos> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open picker: $e')),
-      );
+      showTopBanner(context, 'Could not open picker: $e');
     }
   }
 
@@ -145,9 +144,7 @@ class _RunPhotosState extends State<RunPhotos> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _uploading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
-      );
+      showTopBanner(context, 'Upload failed: $e');
     }
   }
 
@@ -177,9 +174,7 @@ class _RunPhotosState extends State<RunPhotos> {
       setState(() => _photos = _photos.where((q) => q.id != p.id).toList());
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $e')),
-      );
+      showTopBanner(context, 'Delete failed: $e');
     }
   }
 
@@ -216,9 +211,7 @@ class _RunPhotosState extends State<RunPhotos> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update caption: $e')),
-      );
+      showTopBanner(context, 'Could not update caption: $e');
     }
   }
 

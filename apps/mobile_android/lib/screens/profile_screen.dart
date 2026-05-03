@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
 import '../widgets/error_state.dart';
+import '../widgets/top_banner.dart';
 
 /// Page size for the followers / following tabs. Same value as the
 /// runs + routes screens — the convention is one consistent page size
@@ -138,9 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Load more followers failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load more followers')),
-        );
+        showTopBanner(context, 'Could not load more followers');
       }
     } finally {
       if (mounted) setState(() => _loadingMoreFollowers = false);
@@ -164,9 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Load more following failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load more following')),
-        );
+        showTopBanner(context, 'Could not load more following');
       }
     } finally {
       if (mounted) setState(() => _loadingMoreFollowing = false);
@@ -201,9 +198,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (!mounted) return;
       // Roll back on failure.
       setState(() => _summary = summary);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update follow: $e')),
-      );
+      showTopBanner(context, 'Could not update follow: $e');
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -266,9 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to mark all read: $e')),
-      );
+      showTopBanner(context, 'Failed to mark all read: $e');
     }
   }
 
@@ -284,9 +277,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       setState(() {
         _dismissedNotifIds = _dismissedNotifIds.difference({id});
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to dismiss: $e')),
-      );
+      showTopBanner(context, 'Failed to dismiss: $e');
     }
   }
 

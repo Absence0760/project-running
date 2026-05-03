@@ -2,6 +2,8 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import 'top_banner.dart';
+
 /// Route-detail segments panel: lists every segment on the parent
 /// route, expands each row to a leaderboard on tap, and (for the
 /// route owner) hosts a "New segment" form. Mirrors the web
@@ -160,8 +162,7 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    showTopBanner(context, msg);
   }
 
   @override

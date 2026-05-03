@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../privacy.dart';
 import '../settings_sync.dart';
+import '../widgets/top_banner.dart';
 
 /// Settings → Privacy zones: tap-to-add geofences clipped from the
 /// start and end of any public-surface track. Mirrors the web
@@ -51,14 +52,10 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
         privacyZonesKey: _zones.map((z) => z.toJson()).toList(),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Privacy zones saved.')),
-      );
+      showTopBanner(context, 'Privacy zones saved.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      showTopBanner(context, 'Save failed: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

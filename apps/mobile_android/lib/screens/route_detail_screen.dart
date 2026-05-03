@@ -11,6 +11,7 @@ import '../preferences.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
+import '../widgets/top_banner.dart';
 
 class RouteDetailScreen extends StatefulWidget {
   final cm.Route route;
@@ -138,9 +139,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _bookmarked = before);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bookmark failed: $e')),
-      );
+      showTopBanner(context, 'Bookmark failed: $e');
     } finally {
       if (mounted) setState(() => _bookmarkBusy = false);
     }
@@ -211,9 +210,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       if (mounted) setState(() => _isStarred = !newValue);
       await widget.routeStore.save(buildRoute(!newValue));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update star: $e')),
-        );
+        showTopBanner(context, 'Could not update star: $e');
       }
     }
   }
@@ -221,9 +218,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   Future<void> _submitReview() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in to leave a review')),
-      );
+      showTopBanner(context, 'Sign in to leave a review');
       return;
     }
 
@@ -300,9 +295,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       await _fetchReviews();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit review: $e')),
-        );
+        showTopBanner(context, 'Failed to submit review: $e');
       }
     }
   }
@@ -610,9 +603,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share ${format.toUpperCase()}: $e')),
-        );
+        showTopBanner(context, 'Could not share ${format.toUpperCase()}: $e');
       }
     }
   }
@@ -823,9 +814,7 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     } catch (e) {
       setState(() => _saving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save tag: $e')),
-        );
+        showTopBanner(context, 'Could not save tag: $e');
       }
     }
   }

@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../backend_timeout.dart';
 import '../training_service.dart';
+import '../widgets/top_banner.dart';
 
 /// Truncate a coach message to a sidebar-thread title. Strips repeated
 /// whitespace so multi-line user prompts collapse to a single line, then
@@ -621,9 +622,7 @@ class _CoachScreenState extends State<CoachScreen> {
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open archive: $e')),
-      );
+      showTopBanner(context, 'Could not open archive: $e');
     }
   }
 
@@ -661,12 +660,7 @@ class _CoachScreenState extends State<CoachScreen> {
   Future<void> _copy(String content) async {
     await Clipboard.setData(ClipboardData(text: content));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Copied to clipboard'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    showTopBanner(context, 'Copied to clipboard', duration: Duration(seconds: 1));
   }
 
   void _onPlanChanged(String? next) {

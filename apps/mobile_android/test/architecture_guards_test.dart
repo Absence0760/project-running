@@ -1004,4 +1004,62 @@ void main() {
       );
     });
   });
+
+  group('top banner is the canonical notification primitive', () {
+    // Reason: SnackBar floats at the bottom of the screen and on the
+    // recording surface overlapped the Pause / Stop / Lap controls; the
+    // runner couldn't reach Stop without dismissing a snack first. We
+    // standardised on the top-anchored banner in
+    // lib/widgets/top_banner.dart so notifications never cover bottom
+    // controls. Direct showSnackBar / ScaffoldMessenger.of(context) calls
+    // anywhere under lib/screens/ or lib/widgets/ are a regression — go
+    // through showTopBanner instead.
+
+    Iterable<File> _libDartFiles(String subdir) sync* {
+      final dir = Directory('lib/$subdir');
+      if (!dir.existsSync()) return;
+      for (final e in dir.listSync(recursive: true)) {
+        if (e is File && e.path.endsWith('.dart')) yield e;
+      }
+    }
+
+    test('no direct showSnackBar calls in lib/screens or lib/widgets', () {
+      final offenders = <String>[];
+      for (final f in [..._libDartFiles('screens'), ..._libDartFiles('widgets')]) {
+        // Skip the helper itself; its doc comment legitimately mentions
+        // the API it replaces.
+        if (f.path.endsWith('top_banner.dart')) continue;
+        final src = f.readAsStringSync();
+        if (src.contains('showSnackBar')) {
+          offenders.add(f.path);
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'Use showTopBanner(context, ...) instead of '
+            'ScaffoldMessenger.showSnackBar — see '
+            'lib/widgets/top_banner.dart. Offenders: $offenders',
+      );
+    });
+
+    test('no ScaffoldMessenger.of(context) lookups in lib/screens or lib/widgets',
+        () {
+      final offenders = <String>[];
+      for (final f in [..._libDartFiles('screens'), ..._libDartFiles('widgets')]) {
+        if (f.path.endsWith('top_banner.dart')) continue;
+        final src = f.readAsStringSync();
+        if (src.contains('ScaffoldMessenger.of(')) {
+          offenders.add(f.path);
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'ScaffoldMessenger.of(context) is the SnackBar entrypoint; '
+            'route notifications through showTopBanner instead. '
+            'Offenders: $offenders',
+      );
+    });
+  });
 }

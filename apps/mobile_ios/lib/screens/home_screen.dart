@@ -12,6 +12,7 @@ import '../race_controller.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../widgets/top_banner.dart';
 import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
 import 'runs_screen.dart';
@@ -30,6 +31,7 @@ class HomeScreen extends StatefulWidget {
   final TrainingService training;
   final BleHeartRate heartRate;
   final SettingsSyncService? settingsSync;
+  final cm.Run? recoveredRun;
 
   const HomeScreen({
     super.key,
@@ -43,6 +45,7 @@ class HomeScreen extends StatefulWidget {
     required this.training,
     required this.heartRate,
     this.settingsSync,
+    this.recoveredRun,
   });
 
   @override
@@ -73,6 +76,19 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _rebuildPages();
     pendingStartWorkout.addListener(_onPendingStartWorkout);
+    final recovered = widget.recoveredRun;
+    if (recovered != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showTopBanner(
+          context,
+          'Recovered unfinished run — '
+          '${(recovered.distanceMetres / 1000).toStringAsFixed(2)} km, '
+          '${recovered.duration.inMinutes} min',
+          duration: const Duration(seconds: 6),
+        );
+      });
+    }
   }
 
   /// Bring the user to the Run tab when something deeper in the nav

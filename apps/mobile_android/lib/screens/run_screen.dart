@@ -32,6 +32,7 @@ import '../training_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/todays_workout_card.dart';
+import '../widgets/top_banner.dart';
 import '../widgets/upcoming_event_card.dart';
 import '../widgets/workout_execution_band.dart';
 import 'event_detail_screen.dart';
@@ -245,14 +246,10 @@ class _RunScreenState extends State<RunScreen> {
   final RunNotificationBridge _lockScreen = RunNotificationBridge();
   DateTime? _lastNotificationAt;
 
-  // Ephemeral top-anchored notice ("split done", "lap marked", "no GPS").
-  // Anchored to the top so it never covers the Stop / Pause / Lap buttons
-  // in the bottom stats panel — replaces in-run SnackBars which Material's
-  // floating placement docks at the bottom of the screen.
-  String? _topBanner;
-  String? _topBannerActionLabel;
-  VoidCallback? _topBannerOnAction;
-  Timer? _topBannerTimer;
+  // Ephemeral top-anchored notices ("split done", "lap marked",
+  // "no GPS") render via the shared `showTopBanner` Overlay helper
+  // (lib/widgets/top_banner.dart). The recording surface keeps no
+  // local banner state — single global entry, single dismiss path.
 
   @override
   void initState() {
@@ -508,9 +505,7 @@ class _RunScreenState extends State<RunScreen> {
   Future<void> _selectRoute() async {
     final routes = widget.routeStore.routes;
     if (routes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No routes saved. Import one from the Routes tab.')),
-      );
+      showTopBanner(context, 'No routes saved. Import one from the Routes tab.');
       return;
     }
     final unit = widget.preferences.unit;
@@ -996,12 +991,9 @@ class _RunScreenState extends State<RunScreen> {
       }
   }
 
-  /// Show a transient top-anchored banner. Replaces in-run SnackBars so
-  /// they never overlap the bottom stats panel (and the Stop button).
-  ///
-  /// Optional [actionLabel] + [onAction] adds a tappable button (e.g.
-  /// the "Settings" shortcut on the GPS-unavailable banner) — tapping
-  /// it fires the callback AND dismisses the banner.
+  /// Local shim that adapts to the shared `showTopBanner` helper so
+  /// internal call sites stay terse. Mounted check is here once so
+  /// the call sites don't repeat it.
   void _showTopBanner(
     String message, {
     Duration duration = const Duration(seconds: 3),
@@ -1009,32 +1001,13 @@ class _RunScreenState extends State<RunScreen> {
     VoidCallback? onAction,
   }) {
     if (!mounted) return;
-    _topBannerTimer?.cancel();
-    setState(() {
-      _topBanner = message;
-      _topBannerActionLabel = actionLabel;
-      _topBannerOnAction = onAction;
-    });
-    _topBannerTimer = Timer(duration, () {
-      if (mounted) {
-        setState(() {
-          _topBanner = null;
-          _topBannerActionLabel = null;
-          _topBannerOnAction = null;
-        });
-      }
-    });
-  }
-
-  void _onTopBannerActionTapped() {
-    final cb = _topBannerOnAction;
-    _topBannerTimer?.cancel();
-    setState(() {
-      _topBanner = null;
-      _topBannerActionLabel = null;
-      _topBannerOnAction = null;
-    });
-    cb?.call();
+    showTopBanner(
+      context,
+      message,
+      duration: duration,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    );
   }
 
   /// Push the current stats to the native lock-screen notification,
@@ -1434,7 +1407,9 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
-    _topBannerTimer?.cancel();
+    // Active top banner is global (Overlay-backed); dismiss any
+    // entry we own so the screen tear-down doesn't leave one stuck.
+    hideTopBanner();
     _workoutEventsSub?.cancel();
     _workoutRunner?.dispose();
     _workoutBand.dispose();
@@ -1522,11 +1497,7 @@ class _RunScreenState extends State<RunScreen> {
     );
     if (steps.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This workout has no runnable structure.'),
-          ),
-        );
+        showTopBanner(context, 'This workout has no runnable structure.');
       }
       return;
     }
@@ -1540,12 +1511,7 @@ class _RunScreenState extends State<RunScreen> {
     });
     _publishWorkoutBand();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Workout loaded · ${steps.length} step${steps.length == 1 ? '' : 's'} — tap GO to start'),
-        ),
-      );
+      showTopBanner(context, 'Workout loaded · ${steps.length} step${steps.length == 1 ? '' : 's'} — tap GO to start');
     }
   }
 

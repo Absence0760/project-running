@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../widgets/error_state.dart';
+import '../widgets/top_banner.dart';
 
 /// Settings → Devices: the list of devices the current user has signed
 /// in on, with rename + remove + per-device override-editor surfaces.
@@ -83,9 +84,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Rename failed: $e')),
-      );
+      showTopBanner(context, 'Rename failed: $e');
     }
   }
 
@@ -118,9 +117,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Remove failed: $e')),
-      );
+      showTopBanner(context, 'Remove failed: $e');
     }
   }
 
@@ -149,9 +146,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      showTopBanner(context, 'Save failed: $e');
     }
   }
 
