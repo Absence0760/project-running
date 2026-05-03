@@ -320,6 +320,8 @@ Anyone who can read the parent route can create a segment (Strava-style communit
 
 Supplementary user data not stored in `auth.users`. As of `20260521_001_user_follows.sql` profiles are world-readable to authenticated users (the new `"profiles are readable by anyone authenticated"` policy is additive to the existing self-only `"users own their profile"`). This is required for follow / feed / club-member rendering and was a latent bug fix — pre-migration, all cross-user enrichment queries silently returned empty rows. See `docs/decisions.md § 31` for the trade-off.
 
+`subscription_tier` and `subscription_at` are write-protected against user-JWT writers. The catch-all `users own their profile` policy was split into per-command policies in `20260624_001_lock_subscription_tier_to_service_role.sql`, and a `BEFORE UPDATE` trigger (`lock_subscription_columns`) raises 42501 (`insufficient_privilege`) on any tier-column change whose JWT role isn't `service_role`. Direct SQL (migrations + seed) bypasses the trigger because no JWT context is set. The only legitimate runtime writer is the `revenuecat-webhook` Edge Function (service-role).
+
 ```sql
 create table user_profiles (
   id                uuid primary key references auth.users,

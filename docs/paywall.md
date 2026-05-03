@@ -44,6 +44,17 @@ variant was dropped in `20260516_001_drop_is_user_pro.sql` — it took a
 user-id parameter and let any authenticated caller probe another user's
 tier.)
 
+The column is **write-protected against user-JWT writers**. Migration
+`20260624_001_lock_subscription_tier_to_service_role.sql` splits the
+catch-all profile policy into per-command policies and adds a `BEFORE
+UPDATE` trigger (`lock_subscription_columns`) that rejects any
+`subscription_tier` or `subscription_at` change unless the JWT role is
+`service_role` (the only legitimate writer is the `revenuecat-webhook`
+Edge Function) or empty (direct SQL — migrations + seed). A user
+attempting to self-promote via `PATCH /rest/v1/user_profiles` gets a
+403 `insufficient_privilege`. Bumping the tier outside the webhook
+flow requires an admin SQL session; from a client there is no way.
+
 ## Pro perks and where they're enforced
 
 | Perk | Feature key | Enforcement point |
