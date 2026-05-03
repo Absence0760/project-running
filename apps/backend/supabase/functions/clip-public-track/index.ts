@@ -69,6 +69,17 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     return Response.json({ error: 'track_url mismatch' }, { status: 422 });
   }
 
+  // Explicit visibility gate. RLS already filters this row lookup —
+  // a non-owner asking for a private run lands in the !run branch
+  // above. But the implicit RLS gate is fragile: if a future policy
+  // change loosens runs SELECT (e.g. club-visibility) the EF would
+  // silently start serving non-public rows to clients that
+  // shouldn't get them. Make the contract loud instead — a
+  // non-owner caller must be hitting an explicitly-public run.
+  if (!run.is_public && callerId !== run.user_id) {
+    return Response.json({ error: 'not found' }, { status: 404 });
+  }
+
   const adminClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
