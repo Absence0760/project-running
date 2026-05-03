@@ -1,13 +1,17 @@
-# Bootstrap stack — creates the Terraform state bucket and DynamoDB
-# lock table that every other stack uses as its remote backend.
+# Bootstrap stack — creates the Terraform state bucket that every
+# other stack uses as its remote backend.
 #
 # Run ONCE per AWS account, with local state. After `terraform apply`,
 # the other stacks (`dns`, `github-oidc`, `envs/*`) configure their
-# `backend.tf` to point at the bucket + table created here.
+# `backend.tf` to point at the bucket created here.
 #
-# This stack is the only one that uses local state; everyone else uses
-# remote state. Do NOT migrate this stack's own state into the bucket
-# it creates — that's a chicken-and-egg situation.
+# State locking uses S3-native conditional writes (`use_lockfile =
+# true` in each backend block) — supported by every stack since
+# Terraform 1.10. No DynamoDB table is required.
+#
+# This stack is the only one that uses local state; everyone else
+# uses remote state. Do NOT migrate this stack's own state into the
+# bucket it creates — that's a chicken-and-egg situation.
 
 provider "aws" {
   region = var.aws_region
@@ -41,22 +45,5 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
-  }
-}
-
-# ─────────────────── Lock table ───────────────────
-
-resource "aws_dynamodb_table" "lock" {
-  name         = var.lock_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-
-  point_in_time_recovery {
-    enabled = true
   }
 }

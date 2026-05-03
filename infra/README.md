@@ -8,7 +8,7 @@ For the operational walkthrough (cost, rollback, observability, DR), read [`apps
 
 ```
 infra/
-├── bootstrap/           one-time: state bucket + DDB lock table
+├── bootstrap/           one-time: S3 state bucket
 ├── modules/
 │   └── web-stack/       reusable per-env: S3 + CloudFront + Lambda
 │                        + KMS + IAM + alarms
@@ -19,7 +19,7 @@ infra/
     └── preview/         calls web-stack with env=preview
 ```
 
-Each stack has its own remote state in the bucket created by `bootstrap`. The `dns` and `github-oidc` outputs are consumed by per-env stacks via `terraform_remote_state`.
+Each stack has its own remote state in the bucket created by `bootstrap`. State locking is S3-native via `use_lockfile = true` (Terraform ≥ 1.10) — no DynamoDB table required. The `dns` and `github-oidc` outputs are consumed by per-env stacks via `terraform_remote_state`.
 
 ## First-time deploy
 
@@ -29,7 +29,7 @@ Prereqs on the workstation:
 - sops + `~/.aws/config` SSO profile that resolves via `aws sts get-caller-identity`
 - AWS CLI v2 with the SSO session active (`aws sso login --profile <name>`)
 
-### 1. Bootstrap (one-time)
+### 1. Bootstrap (one-time — S3 state bucket)
 
 ```bash
 cd infra/bootstrap
@@ -37,7 +37,7 @@ terraform init
 terraform apply -var "state_bucket_name=runonward-tfstate"
 ```
 
-Creates the S3 bucket + DynamoDB lock table that every other stack uses. **Local state only** — never migrate this stack into the bucket it creates.
+Creates the S3 bucket every other stack uses for remote state. **Local state only** — never migrate this stack into the bucket it creates.
 
 ### 2. DNS
 
@@ -131,7 +131,7 @@ The Lambda's environment variables update in-place; in-flight requests finish on
 
 ## State
 
-Remote state in `s3://runonward-tfstate/` — locked via DynamoDB. The `bootstrap` stack itself uses local state (chicken-and-egg).
+Remote state in `s3://runonward-tfstate/`. Locking is S3-native via `use_lockfile = true` — Terraform writes a `.tflock` file alongside each state file, using S3's conditional-write `If-None-Match` semantics. No DynamoDB table to manage. The `bootstrap` stack itself uses local state (chicken-and-egg).
 
 ## Disaster recovery
 

@@ -10,7 +10,7 @@ The web app's blast radius runs through these stacks: a permissive OIDC trust po
 
 ## What to check
 
-1. **State bucket + lock table.** `infra/bootstrap/main.tf` — bucket has Public Access Block (all four flags), `versioning_configuration { status = "Enabled" }`, server-side encryption (`AES256` at minimum, `aws:kms` better), and a non-trivial deletion path (no `force_destroy = true`). Lock table uses `PAY_PER_REQUEST` billing and PITR. Every non-bootstrap stack has a `backend "s3"` block pointing at this bucket with `encrypt = true` and `dynamodb_table` set.
+1. **State bucket + S3-native locking.** `infra/bootstrap/main.tf` — bucket has Public Access Block (all four flags), `versioning_configuration { status = "Enabled" }`, server-side encryption (`AES256` at minimum, `aws:kms` better), and a non-trivial deletion path (no `force_destroy = true`). Every non-bootstrap stack has a `backend "s3"` block pointing at this bucket with `encrypt = true` and `use_lockfile = true` (S3-native locking, Terraform ≥ 1.10). **Flag any stack still using `dynamodb_table = ...`** — that's the legacy locking path and should be removed alongside the DynamoDB resource. The `terraform_remote_state` data sources also use `use_lockfile = true` (or omit lock config entirely — read-only data sources don't lock).
 
 2. **OIDC trust policy.** `infra/github-oidc/main.tf` — both `aws_iam_role.deploy_*` resources have `Condition` blocks that pin BOTH `:aud = "sts.amazonaws.com"` AND a `:sub` `StringLike` matching exactly the intended ref (`refs/tags/web@*` for prod, `refs/heads/main` for preview). Wildcards or missing `:sub` conditions are the canonical "fork PR can assume your role" footgun. Thumbprints in `thumbprint_list` exist (AWS validates them inline now, but the field is required).
 
@@ -70,7 +70,6 @@ The web app's blast radius runs through these stacks: a permissive OIDC trust po
 
 12. **Cost guardrails.**
     - CloudWatch log retention set on every log group (default = forever).
-    - DynamoDB `billing_mode = "PAY_PER_REQUEST"` on the lock table (provisioned mode without an alarm is the trap).
     - S3 lifecycle expiring non-current versions on the site bucket (no rule = unbounded version growth).
     - CloudFront `price_class` set.
     - Lambda has no `reserved_concurrent_executions` set unbounded high (default unbounded is fine for low-volume; just verify it's not a runaway).

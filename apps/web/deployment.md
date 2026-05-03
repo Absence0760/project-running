@@ -74,7 +74,7 @@ infra/
 ├── envs/
 │   ├── prod/              # Root module — calls web-stack module
 │   │   ├── main.tf
-│   │   ├── backend.tf     # Remote state in S3 + DynamoDB lock
+│   │   ├── backend.tf     # Remote state in S3 with native lockfile
 │   │   ├── terraform.tfvars
 │   │   └── secrets.enc.yaml   # sops-encrypted (KMS key from this env's stack)
 │   └── preview/           # Same shape, separate state, separate resources
@@ -82,9 +82,12 @@ infra/
 │   └── ...                # One stack — both envs share the zone
 ├── github-oidc/           # OIDC provider + per-env deploy IAM role
 │   └── ...                # One stack — trust policies scoped per env
-├── bootstrap/             # ONE-TIME: creates the state-bucket + DynamoDB lock
-│   │                      # table that the other stacks use as their backend.
-│   │                      # Run once with local state, then ignored.
+├── bootstrap/             # ONE-TIME: creates the S3 state bucket
+│   │                      # the other stacks use as their backend.
+│   │                      # State locking is S3-native (use_lockfile,
+│   │                      # since Terraform 1.10) — no DynamoDB table
+│   │                      # required. Run once with local state, then
+│   │                      # ignored.
 │   └── ...
 └── .sops.yaml             # Routes each env's secrets.enc.yaml to that env's KMS key
 ```
@@ -94,7 +97,7 @@ infra/
 ```bash
 cd infra/bootstrap
 terraform init                              # local state — only the bootstrap uses it
-terraform apply                              # creates: tfstate bucket, DDB lock table
+terraform apply                              # creates: tfstate S3 bucket
 ```
 
 **Per-stack init / apply** (after bootstrap):
@@ -267,7 +270,7 @@ The dependent services that *do* hold state (Supabase, RevenueCat, Anthropic) ha
 If the AWS account itself is lost, recovery is roughly:
 
 1. Spin up a new AWS account.
-2. `cd infra/bootstrap && terraform init && terraform apply` — recreates the state bucket + DDB lock table.
+2. `cd infra/bootstrap && terraform init && terraform apply` — recreates the state bucket.
 3. `cd ../dns && terraform init && terraform apply` — recreates the hosted zone + ACM cert.
 4. `cd ../github-oidc && terraform init && terraform apply -var "github_repo=<owner>/<repo>"` — recreates the OIDC trust + deploy roles.
 5. `cd ../envs/prod && terraform init && terraform apply` — recreates the prod web stack. **The KMS key for runtime secrets is recreated; the existing `secrets.enc.yaml` files are encrypted with the OLD KMS key and unrecoverable.** Re-issue the secrets fresh (Anthropic key, Sentry DSN), `sops` them against the new KMS key ARN, then re-apply.
@@ -281,7 +284,7 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 ## Production readiness checklist
 
 - [ ] AWS account created (or sub-account in an org), root MFA enabled, billing alerts at $50 / $200 / $500
-- [ ] `infra/bootstrap` applied (state bucket + DDB lock table created)
+- [ ] `infra/bootstrap` applied (S3 state bucket created; locking is S3-native)
 - [ ] AWS provider configured for `eu-west-2` and `us-east-1` (the latter for the cert only)
 - [ ] Domain `runonward.app` registered (Route 53 or external + delegated)
 - [ ] Route 53 hosted zone live, NS records propagated

@@ -26,10 +26,9 @@ provider "aws" {
 data "terraform_remote_state" "dns" {
   backend = "s3"
   config = {
-    bucket         = "runonward-tfstate"
-    key            = "dns/terraform.tfstate"
-    region         = "eu-west-2"
-    dynamodb_table = "runonward-tf-lock"
+    bucket = "runonward-tfstate"
+    key    = "dns/terraform.tfstate"
+    region = "eu-west-2"
   }
 }
 
