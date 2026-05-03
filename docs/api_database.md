@@ -1240,38 +1240,30 @@ SECURITY DEFINER. Owner-only manual re-match trigger called by the "Re-match" bu
 
 ## Supabase Storage
 
-Used for GPX file storage and data exports.
-
-### Buckets
+Two buckets in the live schema:
 
 | Bucket | Access | Purpose |
 |---|---|---|
-| `runs` | Private (RLS) | Gzipped GPS tracks (`{user_id}/{run_id}.json.gz`). Public read via RLS when `runs.is_public = true`. |
-| `routes` | Private (RLS) | Uploaded GPX/KML files |
-| `run-photos` | Public read | Photos attached to runs (`{owner_id}/{photo_id}.{ext}`). Per-user-folder INSERT/DELETE policies. See `decisions.md § 36`. |
-| `exports` | Private (signed URLs) | User data export files |
-| `avatars` | Public | User profile photos |
+| `runs` | Private (RLS, owner-scoped) | **Two content classes** under different path prefixes — see below. The bare-table public-read RLS that used to gate this on `runs.is_public` was dropped in `20260619_001_drop_public_runs_storage_policy.sql`; non-owner reads now go through the `clip-public-track` Edge Function. |
+| `run-photos` | Public read (uuid-unguessable paths) | Photos attached to runs at `{owner_id}/{photo_id}.{ext}`. Per-user-folder INSERT/DELETE; storage SELECT joins through `run_photos` → `is_run_visible_to`. See `decisions.md § 36`. |
 
-### File naming
+The `routes`, `exports`, `avatars` buckets shown in older revisions of this doc were never created — `routes.waypoints` is stored inline (jsonb on the `routes` table), exports live under the `runs` bucket's `exports/` prefix, and avatar URLs are free-text columns sourced from OAuth providers or pasted URLs (no upload helper).
+
+### Path layout under the `runs` bucket
 
 ```
-routes/{user_id}/{route_id}.gpx
-exports/{user_id}/{timestamp}.zip
-avatars/{user_id}/avatar.jpg
+{user_id}/{run_id}.json.gz         # gzipped GPS track for run {run_id}
+{user_id}/exports/{timestamp}.zip  # user-requested data export bundles
+{user_id}/exports/{timestamp}.csv  # ditto, CSV variant
 ```
 
-### Uploading a route file (Flutter)
+Path-prefix discipline is enforced at multiple layers:
 
-```dart
-final bytes = File(gpxFilePath).readAsBytesSync();
-await supabase.storage
-    .from('routes')
-    .uploadBinary(
-      '${userId}/${routeId}.gpx',
-      bytes,
-      fileOptions: const FileOptions(contentType: 'application/gpx+xml'),
-    );
-```
+- The `runs_track_url_path_shape` CHECK constraint (`20260621_001_runs_track_url_path_check.sql`) rejects any `runs.track_url` value that doesn't match the per-user track shape.
+- The `clip-public-track` Edge Function asserts the same shape on read so a forged path can't escalate beyond the runner's own folder.
+- `delete-account/index.ts` walks both prefixes when wiping a user's data so neither tracks nor exports orphan.
+
+`allowed_mime_types` on the bucket is left null on purpose because the two prefixes carry different content types (`application/gzip` for tracks, `text/csv` / `application/zip` for exports). The CHECK + EF assertions enforce shape; MIME enforcement adds nothing.
 
 ---
 

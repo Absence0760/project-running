@@ -351,7 +351,14 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 }
 
 export async function deleteRun(id: string): Promise<void> {
-	// Delete the track file from Storage first (best-effort).
+	// Best-effort sweep of attached Storage objects before the row delete:
+	//   - the gzipped track file in the `runs` bucket
+	//   - every photo blob in the `run-photos` bucket
+	// The DB cascade deletes the `run_photos` rows when the run is gone,
+	// but the bytes orphan in Storage and continue paying for storage
+	// indefinitely. (Visibility is closed by the Storage SELECT policy
+	// since the row-cascade kills the join target — but unreachable
+	// orphan bytes still occupy the bucket.) Audit/storage Medium fix.
 	const { data: run } = await supabase
 		.from('runs')
 		.select('track_url')
@@ -362,6 +369,22 @@ export async function deleteRun(id: string): Promise<void> {
 			await supabase.storage.from('runs').remove([run.track_url]);
 		} catch (e) {
 			console.warn('deleteRun: track storage removal failed (orphaned file)', run.track_url, e);
+		}
+	}
+	const { data: photos } = await supabase
+		.from('run_photos')
+		.select('storage_path')
+		.eq('run_id', id);
+	if (photos && photos.length > 0) {
+		const paths = photos
+			.map((p: { storage_path: string | null }) => p.storage_path)
+			.filter((p: string | null): p is string => !!p);
+		if (paths.length > 0) {
+			try {
+				await supabase.storage.from('run-photos').remove(paths);
+			} catch (e) {
+				console.warn('deleteRun: photo storage removal failed (orphaned files)', paths, e);
+			}
 		}
 	}
 	const { error } = await supabase.from('runs').delete().eq('id', id);

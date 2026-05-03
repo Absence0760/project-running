@@ -217,8 +217,15 @@ class ApiClient {
     }
   }
 
-  /// Delete a run from the backend, including its gzipped track file in
-  /// Storage.
+  /// Delete a run from the backend, including its gzipped track file
+  /// and every attached photo's bytes in Storage.
+  ///
+  /// The DB cascade kills `run_photos` rows when the run is gone, but
+  /// the bytes orphan in the `run-photos` bucket and pay for storage
+  /// indefinitely. Visibility-wise the orphans become unreachable
+  /// (the Storage SELECT policy joins through `run_photos` — without
+  /// a matching row the policy denies access), but the bucket-cost
+  /// concern stays. Sweep them here. Audit/storage Medium fix.
   Future<void> deleteRun(Run run) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
@@ -231,6 +238,26 @@ class ApiClient {
         // Best-effort — the row delete is more important than the file cleanup.
       }
     }
+
+    try {
+      final photoRows = await _client
+          .from(RunPhotoRow.table)
+          .select(RunPhotoRow.colStoragePath)
+          .eq(RunPhotoRow.colRunId, run.id);
+      final paths = photoRows
+          .map((row) => row[RunPhotoRow.colStoragePath] as String?)
+          .whereType<String>()
+          .toList();
+      if (paths.isNotEmpty) {
+        await _client.storage.from('run-photos').remove(paths);
+      }
+    } catch (e) {
+      // Same best-effort posture as the track sweep above. Orphan
+      // photo bytes don't leak data after the row cascade — the
+      // Storage SELECT policy gates them — but they pay for storage
+      // until manually swept.
+    }
+
     await _client.from(RunRow.table).delete().eq(RunRow.colId, run.id);
   }
 
