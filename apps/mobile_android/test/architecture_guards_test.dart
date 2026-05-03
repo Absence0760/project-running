@@ -210,6 +210,29 @@ void main() {
       );
     });
 
+    test('_onOverlaySizeChanged defers setState to a post-frame callback', () {
+      // Reason: SizeChangedLayoutNotification dispatches *synchronously*
+      // from inside `_RenderSizeChangedWithCallback.performLayout` —
+      // we're still in the layout phase when the notification fires.
+      // Calling `setState` directly from here throws a "Build scheduled
+      // during frame" assertion. Repro: hold the stop button on the
+      // collapsed bar; the per-tick progress-ring rebuild triggers a
+      // panel relayout which fires the size notifier mid-layout.
+      // Schedule the state change for the next frame instead.
+      final body = _extractMethodBody(
+        source,
+        r'bool _onOverlaySizeChanged\(SizeChangedLayoutNotification _\)\s*\{',
+      );
+      expect(
+        body,
+        contains('addPostFrameCallback'),
+        reason: '_onOverlaySizeChanged must wrap its setState in '
+            'WidgetsBinding.instance.addPostFrameCallback so the '
+            'rebuild lands in the next frame, not during the layout '
+            'pass that fired the notification.',
+      );
+    });
+
     test('_HoldToStopButton Listener is HitTestBehavior.opaque', () {
       // Reason: the hold-to-stop button on the COLLAPSED stats bar
       // didn't fire on Android — taps inside the 48 px square but

@@ -2227,13 +2227,23 @@ class _RunScreenState extends State<RunScreen> {
   /// Remeasure the stats overlay after the collapsible panel has changed
   /// size. Cheaper than the previous per-frame post-frame callback because
   /// SizeChangedLayoutNotification only dispatches on real layout changes.
+  ///
+  /// SizeChangedLayoutNotification dispatches synchronously from inside
+  /// `_RenderSizeChangedWithCallback.performLayout`, so we're still in the
+  /// layout phase when this fires. Calling `setState` directly throws a
+  /// "Build scheduled during frame" assertion (and was reproducing during
+  /// hold-to-stop on the collapsed bar — the per-tick progress-ring
+  /// rebuild triggered a panel relayout). Defer the state change to a
+  /// post-frame callback so the rebuild lands cleanly in the next frame.
   bool _onOverlaySizeChanged(SizeChangedLayoutNotification _) {
     final box =
         _statsOverlayKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return false;
     final h = box.size.height;
-    if ((h - _statsOverlayHeight).abs() > 1 && mounted) {
-      setState(() => _statsOverlayHeight = h);
+    if ((h - _statsOverlayHeight).abs() > 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _statsOverlayHeight = h);
+      });
     }
     return false;
   }
