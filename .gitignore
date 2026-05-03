@@ -51,3 +51,6 @@ key.properties
 /supabase/
 apps/backend/supabase/.branches/
 apps/backend/supabase/.temp/
+
+# Claude Code runtime state (agents/, commands/ are checked in)
+.claude/*.lock
