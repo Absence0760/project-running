@@ -209,6 +209,50 @@ void main() {
             'runStore.notifyListeners fires every 10s regardless.',
       );
     });
+
+    test('_HoldToStopButton Listener is HitTestBehavior.opaque', () {
+      // Reason: the hold-to-stop button on the COLLAPSED stats bar
+      // didn't fire on Android — taps inside the 48 px square but
+      // outside the painted red circle (the corners + the ring
+      // overlay during a hold) passed straight through. Listener's
+      // default `HitTestBehavior.deferToChild` only claims hits a
+      // child claims as opaque; the BoxDecoration circle only paints
+      // within the circle, leaving ~21 % of the touch area
+      // transparent for hit-testing. The expanded panel happened to
+      // work because its 68 px button has a bigger circle vs the
+      // same corner-gap proportion. `HitTestBehavior.opaque` makes
+      // the Listener itself claim the full square — fixes both the
+      // collapsed-bar bug and the proportionally-smaller miss
+      // window in the expanded variant.
+      final body = _extractMethodBody(
+        source,
+        r'class _HoldToStopButtonState extends State<_HoldToStopButton>',
+      );
+      // _extractMethodBody slices to the next top-level `}`, but
+      // class bodies span more than the build method we care about.
+      // Just regex the build() body for the Listener and its
+      // behavior arg in one go.
+      final m = RegExp(
+        r'return Listener\(\s*behavior:\s*HitTestBehavior\.opaque',
+      ).firstMatch(source);
+      expect(
+        m,
+        isNotNull,
+        reason: '_HoldToStopButton must wrap its Listener with '
+            'HitTestBehavior.opaque so taps anywhere inside the 48–68 px '
+            'square fire onPointerDown — see the collapsed-bar stop '
+            'button regression.',
+      );
+      // Use `body` so the test fails clearly if someone renames or
+      // splits the state class beyond the regex above.
+      expect(
+        body,
+        contains('Listener('),
+        reason: 'The Listener call site must live inside '
+            '_HoldToStopButtonState.build — moving it elsewhere defeats '
+            'the regression check.',
+      );
+    });
   });
 
   group('local_run_store.dart', () {

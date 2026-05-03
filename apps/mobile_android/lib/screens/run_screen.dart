@@ -2720,7 +2720,18 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
 
   @override
   Widget build(BuildContext context) {
+    // `behavior: HitTestBehavior.opaque` so the Listener claims any
+    // touch inside its 48–68 px square outright, instead of the default
+    // `deferToChild` which delegates to whichever child happens to be
+    // opaque at that pixel. The visible Container only claims hits
+    // within its painted circle, so a tap inside the square but
+    // outside the circle (corners + the ring overlay during a hold)
+    // would otherwise pass straight through to whatever sat behind
+    // — most visibly inside the AnimatedCrossFade-driven collapsed
+    // stats bar where the button is at the smaller 48 px size and
+    // the corner gap is proportionally bigger.
     return Listener(
+      behavior: HitTestBehavior.opaque,
       onPointerDown: (_) => _onPointerDown(),
       onPointerUp: (_) => _onPointerUpOrCancel(),
       onPointerCancel: (_) => _onPointerUpOrCancel(),
