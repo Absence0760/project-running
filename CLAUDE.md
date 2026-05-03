@@ -44,6 +44,10 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 
 Project-curated slash commands for security / privacy / invariant audits live under `.claude/commands/audit/`. Invoke as `/audit/<name>` (e.g. `/audit/rls`, `/audit/privacy-zones`). `/audit/all` runs the full sweep in parallel. Each is read-only — they report findings, they don't fix without confirmation. See [`.claude/commands/audit/README.md`](.claude/commands/audit/README.md) for the index + when to run each.
 
+## /safe-edit — coder ↔ reviewer loop for non-trivial changes
+
+For security-sensitive, schema, or recording-stack changes — anything where a second pass of "did the diff actually honour the project's invariants" is worth ~2-3x the token cost — use `/safe-edit <task>`. It implements the change, then runs the `code-reviewer` agent against the working diff (cross-checking decisions ADRs, layering contract, twin invariant, paywall gates, fail-closed defaults, comment / abstraction discipline), applies any concrete findings, re-reviews once, and hands off to the user for the commit decision. Hard cap at 2 review cycles. Don't use it on typos, doc tweaks, or any < ~10-line diff that touches no invariant — just edit those directly.
+
 ## Branches & PRs
 
 - `dev` is the working branch. `main` is the PR target.
