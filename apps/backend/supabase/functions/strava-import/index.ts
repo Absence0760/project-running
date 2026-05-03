@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
 	type StravaActivity,
@@ -31,6 +32,12 @@ serve(withSentry('strava-import', async (req: Request) => {
 	if (req.method !== 'POST') {
 		return new Response('Method not allowed', { status: 405 });
 	}
+
+	// 4 KB is plenty for both action shapes — `connect` carries a code
+	// (~40 chars), scope (~40 chars) and a redirect_uri (~80 chars);
+	// `sync` carries action + lookbackDays.
+	const tooBig = enforceBodyLimit(req, 4096);
+	if (tooBig) return tooBig;
 
 	const authHeader = req.headers.get('Authorization');
 	if (!authHeader) return new Response('Unauthorized', { status: 401 });
@@ -77,6 +84,20 @@ async function handleConnect(
 	redirectUri: string | undefined,
 ): Promise<Response> {
 	if (!code) return new Response('Missing code', { status: 400 });
+
+	// Verify the granted scope contains what we asked for. Strava lets
+	// users untick individual scopes on the consent screen; if they
+	// granted only `read` but not `activity:read_all`, the integration
+	// can't actually fetch activities and the backfill below would
+	// silently 401 every page. Reject early with a clear message so
+	// the UI can re-prompt with the right copy.
+	const scopes = (scope ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+	if (!scopes.includes('activity:read_all')) {
+		return new Response(
+			'Strava connection is missing the activity:read_all scope. Please reconnect and accept all permissions.',
+			{ status: 400 },
+		);
+	}
 
 	// Pin the redirect_uri the client claims it used. Strava's
 	// /oauth/authorize already enforces that callbacks land on the

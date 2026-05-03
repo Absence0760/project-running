@@ -4,6 +4,7 @@ import {
   type SupabaseClient,
 } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 const PAGE = 1000;
@@ -50,6 +51,10 @@ serve(withSentry('delete-account', async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
+
+  // delete-account takes no body — clamp tightly.
+  const tooBig = enforceBodyLimit(req, 256);
+  if (tooBig) return tooBig;
 
   const authHeader = req.headers.get('Authorization')!;
   const userClient = createClient(

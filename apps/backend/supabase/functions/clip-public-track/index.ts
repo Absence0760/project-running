@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 // Serves a privacy-zone-clipped track for a public run. Replaces
@@ -23,6 +24,10 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
+
+  // Body is just `{ run_id: uuid }` — 1 KB is plenty.
+  const tooBig = enforceBodyLimit(req, 1024);
+  if (tooBig) return tooBig;
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {

@@ -30,9 +30,18 @@ import {
 	isAlreadyImported,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 serve(withSentry('strava-webhook', async (req: Request) => {
+	// Strava activity event payloads are tiny — a few hundred bytes
+	// of identifiers + state — but cap at 4 KB so a malicious caller
+	// who guessed the URL secret can't force a multi-MB allocation.
+	if (req.method === 'POST') {
+		const tooBig = enforceBodyLimit(req, 4096);
+		if (tooBig) return tooBig;
+	}
+
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
 		return new Response('Webhook not configured', { status: 503 });

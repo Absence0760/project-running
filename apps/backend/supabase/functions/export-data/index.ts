@@ -33,6 +33,7 @@ import {
 	ZipWriter,
 } from 'https://deno.land/x/zipjs@v2.7.45/index.js';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 const MAX_RUNS = 5000;
@@ -67,6 +68,10 @@ serve(withSentry('export-data', async (req: Request) => {
 	if (req.method !== 'POST') {
 		return new Response('Method not allowed', { status: 405 });
 	}
+
+	// Body is `{ format: 'csv' | 'gpx' }` — 1 KB is plenty.
+	const tooBig = enforceBodyLimit(req, 1024);
+	if (tooBig) return tooBig;
 
 	const authHeader = req.headers.get('Authorization');
 	if (!authHeader) return new Response('Unauthorized', { status: 401 });

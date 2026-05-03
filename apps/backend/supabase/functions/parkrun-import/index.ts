@@ -2,9 +2,13 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 serve(withSentry('parkrun-import', async (req: Request) => {
+  const tooBig = enforceBodyLimit(req, 1024);
+  if (tooBig) return tooBig;
+
   // Authenticate before parsing the body. Malformed JSON from an
   // unauthenticated caller would otherwise produce a 500 distinguishable
   // from a 401, and any future code added between the parse and the
@@ -30,8 +34,11 @@ serve(withSentry('parkrun-import', async (req: Request) => {
 
   const { athleteNumber } = await req.json();
 
-  // Validate athlete number format
-  if (!/^A\d+$/.test(athleteNumber)) {
+  // Validate athlete number format. parkrun's real numbers top out at
+  // 7-8 digits today; cap the regex at 12 so an attacker can't post
+  // a 1 MB digit string and force the URL build + outbound fetch to
+  // walk through it before parkrun's own server rejects.
+  if (typeof athleteNumber !== 'string' || !/^A\d{1,12}$/.test(athleteNumber)) {
     return Response.json({ error: 'Invalid athlete number' }, { status: 400 });
   }
 

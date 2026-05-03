@@ -12,12 +12,19 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hmac } from 'https://deno.land/x/hmac@v2.0.1/mod.ts';
+import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
+
+  // RevenueCat webhook payloads are typically 2-4 KB. 32 KB is a
+  // generous ceiling that still rejects anything pathological before
+  // we run the HMAC over it.
+  const tooBig = enforceBodyLimit(req, 32 * 1024);
+  if (tooBig) return tooBig;
 
   const secret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET');
   if (!secret) {
