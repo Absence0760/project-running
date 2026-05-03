@@ -389,6 +389,57 @@ Common timing platforms and their URL patterns:
 
 ---
 
+## Treadmills (BLE FTMS) — deferred
+
+**Status:** not implemented. Sized + scoped here so a future session has a starting point. Deferred until competitor parity rows above settle out — a treadmill integration is a discrete, indoor-only data source and doesn't unlock anything else in the roadmap.
+
+### What it would give you
+
+A real-time speed / distance / incline / cadence / calories stream from the treadmill itself, replacing the GPS-derived numbers that don't exist on a treadmill. Today the indoor path falls back to `pedometer × stride` distance (`distance_source = "pedometer"`, `indoor_estimated = true` — see [docs/metadata.md](metadata.md) and [docs/run_recording.md § Layering](run_recording.md#layering) layer 14). A treadmill stream replaces that estimate with an authoritative one.
+
+### How it would work
+
+The Bluetooth SIG **Fitness Machine Service (FTMS, `0x1826`)** is the standardised GATT profile for cardio equipment. The Treadmill Data characteristic (`0x2ACD`) emits a notification every ~1 s carrying instantaneous speed (uint16, 0.01 km/h), instantaneous pace (uint16, 0.1 s/km), total distance (uint24, m), inclination (sint16, 0.1 %), elevation gain (uint16, 0.1 m), and optional cadence / HR / energy fields gated by the leading flags bitfield. There is also an FTMS Control Point (`0x2AD9`) for write-back commands (start, stop, set speed, set incline) — the read path is enough for v1; control is a follow-up.
+
+Wiring on the mobile side mirrors the existing BLE chest-strap pattern in `apps/mobile_android/lib/ble_heart_rate.dart`:
+
+1. Reuse `flutter_blue_plus` (already a dependency).
+2. New module: `apps/mobile_android/lib/ble_treadmill.dart` exposing `Stream<TreadmillSample>` with `{speedMps, distanceM, inclinePct, cadenceSpm?, hrBpm?, kcal?}`. ~9 unit tests on the parser following the `ble_heart_rate_test.dart` shape.
+3. Settings tile: a "Pair treadmill" entry in Settings → Devices that runs an FTMS-filtered scan, lets the user pick one device, and stores the MAC + display name in `user_device_settings.prefs.treadmill_device`.
+4. Recording substitution: `packages/run_recorder` accepts an optional treadmill stream. When present, snapshots are emitted from treadmill samples instead of GPS — the existing 1 s timer stays as the L0 clock fallback if the BLE link drops mid-run.
+5. New activity type or metadata flag: easiest is `metadata.indoor_source = "treadmill"` alongside the existing `indoor_estimated` / `distance_source` keys; no new union. Register in [docs/metadata.md](metadata.md).
+6. Map / off-route / privacy-zone surfaces are skipped automatically because the run carries no track points — same code path indoor pedometer runs already use.
+
+The watch (Wear OS / watchOS) gets the same BLE plumbing if the user wants the treadmill paired with the watch instead of the phone — Wear OS has its own `BluetoothGatt` API and Apple Watch can pair FTMS via `CBCentralManager`. Watch pairing is a follow-up to phone pairing, not a parallel item.
+
+The web app does not get this integration. Browsers can technically reach FTMS via Web Bluetooth on Chrome desktop / Android, but a 60-minute treadmill run with the screen on is hostile to the browser's BLE permission and power model — and web is the canonical *feature* surface, not a recording surface (see [decisions.md § 24](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)).
+
+### Effort
+
+3–5 dev-days for a v1 that handles the standard FTMS shape, surfaces a pair flow, and substitutes the stream into the recorder. Most of the work is the parser + the UI plumbing; the BLE layer is already proven by the chest-strap path.
+
+### The catch
+
+FTMS coverage is roughly **60 % of the consumer treadmill market**. The big-brand exceptions all run proprietary protocols:
+
+- **Peloton Tread** — proprietary, not BLE-advertised at all in Tread+; reverse-engineered libraries exist but break across firmware updates.
+- **NordicTrack / iFit** — iFit-app-only, no public BLE service.
+- **Echelon Stride** — proprietary characteristic UUIDs, partially reverse-engineered.
+- **Older Life Fitness / Precor** — pre-FTMS, often expose nothing or a vendor-specific service.
+
+Standards-compliant: most newer Sole, Horizon, Bowflex, Matrix, Reebok, Schwinn, plus most commercial gym fleets shipped post-~2020. A v1 that only promises FTMS will work for ~60 % of users and present a clear "we couldn't read this treadmill — your run will fall back to pedometer distance" banner for the rest. Per-vendor integrations are out of scope for v1; if the user base concentrates on a specific brand, treat that as a separate scoped follow-up.
+
+### Schema impact
+
+Minimal:
+
+- `user_device_settings.prefs.treadmill_device: { mac, name, last_paired_at }` — no migration, prefs is already a free-form jsonb.
+- `runs.metadata.indoor_source: "treadmill"` — register in [docs/metadata.md](metadata.md). No CHECK constraint needed (metadata is unschemaed).
+
+No new table; no narrow union to update; no codegen pass needed.
+
+---
+
 ## The `health` Flutter package
 
 The single most important integration library in the stack. One Dart package abstracts both Apple HealthKit (iOS) and Android Health Connect behind an identical API.

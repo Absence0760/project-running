@@ -713,6 +713,7 @@ Until those three are answered, treat this list as a menu, not a sequence. Rough
 | 10 | **Race calendar + results import** (event discovery near me, entry links, auto-match results when you record the race) | 2 wk | Garmin, Runna | `races`, `race_results`; import from RunSignUp + parkrun | Scope: local only or worldwide? |
 | 11 | **Advanced analytics** (VDOT, training load / fitness / freshness curves, weekly/monthly breakdowns, race-time predictor) | 2 wk | Garmin, Runna | No new tables — derived from `runs` | Algorithm source of truth: Daniels vs Banister |
 | 12 | **Premium billing + feature gating** (Stripe Checkout, subscription webhook, `SubscriptionTier` honouring across web + mobile, customer portal) | 1–2 wk | All | `user_profiles.subscription_tier` already exists; add `stripe_customer_id`, `stripe_subscription_id` | Monthly vs annual; grandfather early users? |
+| 13 | **Treadmill (BLE FTMS)** — real-time speed / distance / incline from a paired treadmill replacing the pedometer fallback for indoor runs. Mobile-only (web is not a recording surface). Spec + scope: [integrations.md § Treadmills (BLE FTMS)](integrations.md#treadmills-ble-ftms--deferred). | 3–5 d | Garmin, Runna (indoor) | None — `prefs` jsonb + `metadata.indoor_source = "treadmill"` | FTMS covers ~60 % of treadmills; Peloton / NordicTrack / Echelon need per-vendor work. Punt or scope per-brand follow-ups when v1 ships. |
 
 ### Where each item lives in the repo
 
