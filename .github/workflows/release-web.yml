@@ -1,73 +1,189 @@
 name: Release Web
 
-# Tag: `web@1.2.3`. Builds the static SvelteKit site, deploys to GitHub
-# Pages, and attaches the build artifacts to a GitHub Release for
-# rollback (just re-deploy the older tag's build zip).
+# Two triggers, two environments:
+#   - tag `web@*`     →  prod  →  runonward.app + www.runonward.app
+#   - push to `main`  →  preview  →  preview.runonward.app
 #
-# Main-branch pushes still deploy separately via the project's existing
-# Pages workflow (for dev iteration); this workflow is the canonical
-# audited deploy path.
+# Hosted on AWS (S3 + CloudFront + Lambda + Route 53). Provisioned by
+# Terraform (infra/) — see decisions.md § 53 and apps/web/deployment.md.
+#
+# AWS auth: GitHub OIDC. The deploy roles are created by infra/github-
+# oidc and their ARNs land in repo Secrets as AWS_DEPLOY_ROLE_ARN_PROD
+# and AWS_DEPLOY_ROLE_ARN_PREVIEW. No long-lived AWS keys are stored
+# anywhere.
+#
+# Build artifact: a .zip of the static SvelteKit build is attached to
+# the GitHub Release on prod tags so a rollback is one workflow re-run
+# against the older tag.
 
 on:
   push:
     tags:
       - 'web@*'
+    branches:
+      - main
 
 jobs:
   release:
     name: Build + deploy web
     runs-on: ubuntu-latest
+
     permissions:
-      contents: write
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.pages.outputs.page_url }}
+      id-token: write    # OIDC AssumeRoleWithWebIdentity
+      contents: write    # softprops/action-gh-release writes a Release
+
+    env:
+      AWS_REGION: eu-west-2
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Parse version from tag
-        id: version
+      - name: Determine env + version
+        id: env
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#web@}"
-          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/web@* ]]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF#refs/tags/web@}" >> "$GITHUB_OUTPUT"
+            echo "is_prod=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=preview" >> "$GITHUB_OUTPUT"
+            echo "version=preview-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "is_prod=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - run: npm install --workspace=apps/web
+      - run: npm ci
 
-      - name: Copy dotenv
-        run: cp apps/web/.env.example apps/web/.env
+      # ──────────────────── Build static site ────────────────────
+
+      - name: Write apps/web/.env.production from secrets
+        # PUBLIC_* vars are inlined into the static build — they're
+        # stripped after the build step so they don't leak into the
+        # uploaded build zip's source artifacts.
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+          PUBLIC_MAPTILER_KEY: ${{ secrets.PUBLIC_MAPTILER_KEY }}
+          PUBLIC_REVENUECAT_WEB_API_KEY: ${{ secrets.PUBLIC_REVENUECAT_WEB_API_KEY }}
+          PUBLIC_SENTRY_DSN: ${{ secrets.PUBLIC_SENTRY_DSN }}
+          PUBLIC_APP_RELEASE: web@${{ steps.env.outputs.version }}
+        run: |
+          cat <<EOF > apps/web/.env.production
+          PUBLIC_SUPABASE_URL=${PUBLIC_SUPABASE_URL}
+          PUBLIC_SUPABASE_ANON_KEY=${PUBLIC_SUPABASE_ANON_KEY}
+          PUBLIC_MAPTILER_KEY=${PUBLIC_MAPTILER_KEY}
+          PUBLIC_REVENUECAT_WEB_API_KEY=${PUBLIC_REVENUECAT_WEB_API_KEY}
+          PUBLIC_SENTRY_DSN=${PUBLIC_SENTRY_DSN}
+          PUBLIC_APP_RELEASE=${PUBLIC_APP_RELEASE}
+          EOF
 
       - run: npm run check --workspace=apps/web
+
       - run: npm run build --workspace=apps/web
-        env:
-          PUBLIC_APP_VERSION: ${{ steps.version.outputs.name }}
+
+      - name: Strip .env.production after build
+        run: rm -f apps/web/.env.production
+
+      # ──────────────────── Build Lambda zip ────────────────────
+
+      - name: Bundle coach Lambda
+        working-directory: apps/web
+        run: node lambda/coach/build.mjs
+
+      # ──────────────────── AWS auth via OIDC ────────────────────
+
+      - name: Pick deploy role ARN
+        id: role
+        run: |
+          if [[ "${{ steps.env.outputs.is_prod }}" == "true" ]]; then
+            echo "arn=${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "arn=${{ secrets.AWS_DEPLOY_ROLE_ARN_PREVIEW }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ──────────────────── Resource discovery ────────────────────
+      #
+      # The bucket / Lambda names are deterministic from the env. The
+      # CloudFront distribution ID is discovered by alias to avoid
+      # hard-coding a UUID per env.
+
+      - name: Resolve target resources
+        id: aws
+        run: |
+          ENV="${{ steps.env.outputs.env }}"
+          echo "bucket=runonward-web-${ENV}-site" >> "$GITHUB_OUTPUT"
+          echo "lambda=runonward-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
+
+          if [[ "$ENV" == "prod" ]]; then ALIAS="runonward.app"; else ALIAS="preview.runonward.app"; fi
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items != null && contains(Aliases.Items, '${ALIAS}')] | [0].Id" \
+            --output text)
+          if [[ -z "$DIST_ID" || "$DIST_ID" == "None" ]]; then
+            echo "::error::could not find CloudFront distribution for alias ${ALIAS}"
+            exit 1
+          fi
+          echo "distribution=${DIST_ID}" >> "$GITHUB_OUTPUT"
+
+      # ──────────────────── Deploy ────────────────────
+
+      - name: Sync static build to S3
+        run: |
+          # Hashed assets get a year-long immutable cache; HTML gets
+          # a short cache so route-table changes propagate within the
+          # next page load.
+          aws s3 sync apps/web/build/ "s3://${{ steps.aws.outputs.bucket }}/" \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html" \
+            --exclude "*.html"
+          aws s3 sync apps/web/build/ "s3://${{ steps.aws.outputs.bucket }}/" \
+            --cache-control "public,max-age=60,must-revalidate" \
+            --exclude "*" \
+            --include "*.html"
+
+      - name: Update coach Lambda
+        run: |
+          NEW_VERSION=$(aws lambda update-function-code \
+            --function-name "${{ steps.aws.outputs.lambda }}" \
+            --zip-file "fileb://apps/web/lambda/coach/dist/coach.zip" \
+            --publish \
+            --query Version \
+            --output text)
+          aws lambda update-alias \
+            --function-name "${{ steps.aws.outputs.lambda }}" \
+            --name live \
+            --function-version "$NEW_VERSION"
+          echo "Coach Lambda alias 'live' now points at version $NEW_VERSION"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.aws.outputs.distribution }}" \
+            --paths "/*" > /dev/null
+
+      # ──────────────────── GitHub Release (prod tags only) ────────────────────
 
       - name: Package build for release
+        if: steps.env.outputs.is_prod == 'true'
         run: |
           cd apps/web
-          zip -r web-build-${{ steps.version.outputs.name }}.zip build
-          mv web-build-${{ steps.version.outputs.name }}.zip ../../
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/web/build
-
-      - id: pages
-        uses: actions/deploy-pages@v4
+          zip -qr "../../web-build-${{ steps.env.outputs.version }}.zip" build
 
       - name: Create GitHub Release + attach build zip
+        if: steps.env.outputs.is_prod == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: Web ${{ steps.version.outputs.name }}
+          name: Web ${{ steps.env.outputs.version }}
           tag_name: ${{ github.ref_name }}
-          files: web-build-${{ steps.version.outputs.name }}.zip
+          files: web-build-${{ steps.env.outputs.version }}.zip
           generate_release_notes: true
