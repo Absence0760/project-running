@@ -1097,4 +1097,52 @@ void main() {
       );
     });
   });
+
+  group('explore-screen save clips non-owner routes', () {
+    // Reason: Explore browsing reads from `search_public_routes` /
+    // `nearby_routes` / `routes_within_box`, which (after migration
+    // 20260703_001_public_routes_view.sql) return rows from the
+    // `public_routes` view — i.e. with no waypoints. Naively saving
+    // such a row to LocalRouteStore stores an empty-waypoint route
+    // (broken offline preview), and reaching for the original
+    // unclipped waypoints would leak the original author's start
+    // coordinate to anyone the saver shares the route with. The
+    // mitigation is `_saveRoute` calling `ApiClient.fetchRouteById`
+    // before `routeStore.save` — that helper does owner-aware
+    // clipping (full polyline if the saver IS the owner, server-
+    // clipped polyline via `clip_route_for_viewer` otherwise). This
+    // guard pins that flow in place.
+
+    test('_saveRoute fetches via ApiClient before persisting', () {
+      final src =
+          File('lib/screens/explore_routes_screen.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        src,
+        r'Future<void> _saveRoute\(cm\.Route route\)\s*async\s*\{',
+      );
+      expect(
+        body.contains('fetchRouteById'),
+        isTrue,
+        reason: '_saveRoute must call ApiClient.fetchRouteById to fetch '
+            'the privacy-zone-clipped polyline before saving — see the '
+            'audit/privacy-zones High finding from /audit/all on '
+            '2026-05-03.',
+      );
+      expect(
+        body.contains('routeStore.save'),
+        isTrue,
+        reason: '_saveRoute should still persist via routeStore.save '
+            'once it has the clipped Route in hand.',
+      );
+      // Order check: the fetch must come BEFORE the save.
+      final fetchIdx = body.indexOf('fetchRouteById');
+      final saveIdx = body.indexOf('routeStore.save');
+      expect(
+        fetchIdx < saveIdx,
+        isTrue,
+        reason: 'fetchRouteById must run before routeStore.save — '
+            'persisting before clipping defeats the whole point.',
+      );
+    });
+  });
 }

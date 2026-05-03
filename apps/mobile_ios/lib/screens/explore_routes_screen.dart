@@ -297,7 +297,28 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   }
 
   Future<void> _saveRoute(cm.Route route) async {
-    await widget.routeStore.save(route);
+    // Browse-list rows come back from `search_public_routes` /
+    // `nearby_routes` / `routes_within_box` with no waypoints (the
+    // public_routes view strips them — see migration
+    // 20260703_001_public_routes_view.sql). Pull the privacy-zone-
+    // clipped polyline via `fetchRouteById` before persisting so the
+    // locally-cached copy doesn't carry the original author's
+    // unclipped start coordinate. Owner-of-route gets their full
+    // unclipped polyline through the same call. Audit/privacy-zones
+    // High fix.
+    final api = widget.apiClient;
+    cm.Route toSave = route;
+    if (api != null) {
+      try {
+        final result = await api.fetchRouteById(route.id);
+        if (result.route != null) {
+          toSave = result.route!;
+        }
+      } catch (e) {
+        debugPrint('save-route clip fetch failed: $e');
+      }
+    }
+    await widget.routeStore.save(toSave);
     if (!mounted) return;
     showTopBanner(context, 'Saved "${route.name}" to your library');
   }
