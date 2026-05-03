@@ -68,7 +68,10 @@ serve(withSentry('delete-account', async (req: Request) => {
   const tooBig = enforceBodyLimit(req, 256);
   if (tooBig) return tooBig;
 
-  const authHeader = req.headers.get('Authorization')!;
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const userClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -76,7 +79,7 @@ serve(withSentry('delete-account', async (req: Request) => {
   );
 
   const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return new Response('Unauthorized', { status: 401 });
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   // 3/hour. Destructive endpoint, but we want a typo or double-tap
   // to fail fast rather than panic-spam-cancelling. Once a delete

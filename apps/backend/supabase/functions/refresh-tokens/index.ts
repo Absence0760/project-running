@@ -23,12 +23,12 @@ serve(withSentry('refresh-tokens', async (req: Request) => {
   const cronSecret = Deno.env.get('CRON_SECRET');
   if (!cronSecret) {
     // Fail-closed when misconfigured. Same posture as strava-webhook.
-    return new Response('Cron not configured', { status: 503 });
+    return Response.json({ error: 'cron_not_configured' }, { status: 503 });
   }
   const auth = req.headers.get('Authorization') ?? '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token || !timingSafeEqual(token, cronSecret)) {
-    return new Response('Forbidden', { status: 403 });
+    return Response.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const supabase = createClient(
@@ -39,11 +39,17 @@ serve(withSentry('refresh-tokens', async (req: Request) => {
   // Find Strava integrations with tokens expiring within 1 hour. The
   // `id, user_id` projection used to also pull `refresh_token`; tokens
   // now live in Vault, accessed via `get_integration_tokens`.
+  // Explicit `.order().limit()` so a future PostgREST default-row
+  // bump doesn't blow this up — at 500 rows × ~1s/Strava-refresh we
+  // stay well under the 150s function timeout, and the next cron
+  // tick handles the remainder.
   const { data: expiring } = await supabase
     .from('integrations')
     .select('id, user_id')
     .eq('provider', 'strava')
-    .lt('token_expiry', new Date(Date.now() + 3600_000).toISOString());
+    .lt('token_expiry', new Date(Date.now() + 3600_000).toISOString())
+    .order('token_expiry', { ascending: true })
+    .limit(500);
 
   let refreshed = 0;
 

@@ -30,7 +30,7 @@ import {
 
 serve(withSentry('strava-import', async (req: Request) => {
 	if (req.method !== 'POST') {
-		return new Response('Method not allowed', { status: 405 });
+		return Response.json({ error: 'method_not_allowed' }, { status: 405 });
 	}
 
 	// 4 KB is plenty for both action shapes — `connect` carries a code
@@ -40,7 +40,7 @@ serve(withSentry('strava-import', async (req: Request) => {
 	if (tooBig) return tooBig;
 
 	const authHeader = req.headers.get('Authorization');
-	if (!authHeader) return new Response('Unauthorized', { status: 401 });
+	if (!authHeader) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
 	const supabase = createClient(
 		Deno.env.get('SUPABASE_URL')!,
@@ -50,7 +50,7 @@ serve(withSentry('strava-import', async (req: Request) => {
 
 	const { data: userData } = await supabase.auth.getUser();
 	const user = userData.user;
-	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
 	const body = await req.json().catch(() => ({}));
 	const action = body.action ?? (body.code ? 'connect' : 'sync');
@@ -61,13 +61,13 @@ serve(withSentry('strava-import', async (req: Request) => {
 	// arithmetic, or a non-string scope to throw inside .split().
 	if (action === 'connect') {
 		if (typeof body.code !== 'string' || body.code.length === 0) {
-			return new Response('Invalid code', { status: 400 });
+			return Response.json({ error: 'invalid_code' }, { status: 400 });
 		}
 		if (typeof body.scope !== 'string') {
-			return new Response('Invalid scope', { status: 400 });
+			return Response.json({ error: 'invalid_scope' }, { status: 400 });
 		}
 		if (typeof body.redirect_uri !== 'string') {
-			return new Response('Invalid redirect_uri', { status: 400 });
+			return Response.json({ error: 'invalid_redirect_uri' }, { status: 400 });
 		}
 	} else if (action === 'sync') {
 		if (body.lookbackDays !== undefined) {
@@ -76,7 +76,7 @@ serve(withSentry('strava-import', async (req: Request) => {
 				body.lookbackDays <= 0 ||
 				body.lookbackDays > 365
 			) {
-				return new Response('Invalid lookbackDays', { status: 400 });
+				return Response.json({ error: 'invalid_lookback_days' }, { status: 400 });
 			}
 		}
 	}
@@ -106,7 +106,7 @@ serve(withSentry('strava-import', async (req: Request) => {
 	if (action === 'sync') {
 		return handleSync(supabase, user.id, body.lookbackDays ?? 90);
 	}
-	return new Response('Unknown action', { status: 400 });
+	return Response.json({ error: 'unknown_action' }, { status: 400 });
 }));
 
 async function handleConnect(
@@ -116,7 +116,7 @@ async function handleConnect(
 	_clientClaimedScope: string,
 	redirectUri: string | undefined,
 ): Promise<Response> {
-	if (!code) return new Response('Missing code', { status: 400 });
+	if (!code) return Response.json({ error: 'missing_code' }, { status: 400 });
 
 	// We don't trust the client-supplied `scope` field — it's just a
 	// hint Strava's redirect echoed back, and a man-in-the-middle on
@@ -146,10 +146,10 @@ async function handleConnect(
 		.map((s) => s.trim())
 		.filter(Boolean);
 	if (allowed.length === 0) {
-		return new Response('Strava not configured', { status: 503 });
+		return Response.json({ error: 'strava_not_configured' }, { status: 503 });
 	}
 	if (!redirectUri || !allowed.includes(redirectUri)) {
-		return new Response('Invalid redirect_uri', { status: 400 });
+		return Response.json({ error: 'invalid_redirect_uri' }, { status: 400 });
 	}
 
 	const tokenResponse = await fetch('https://www.strava.com/oauth/token', {
@@ -169,7 +169,7 @@ async function handleConnect(
 		// and shouldn't sit in function logs. The status alone is
 		// enough to debug a real exchange failure.
 		console.error('strava-import: token exchange failed', { status: tokenResponse.status });
-		return new Response('Strava token exchange failed', { status: 502 });
+		return Response.json({ error: 'strava_token_exchange_failed' }, { status: 502 });
 	}
 
 	const tokens = (await tokenResponse.json()) as StravaTokens;
@@ -203,7 +203,7 @@ async function handleConnect(
 	);
 	if (upsertErr) {
 		console.error('strava-import: integrations upsert failed:', upsertErr);
-		return new Response('Store integration failed', { status: 500 });
+		return Response.json({ error: 'store_integration_failed' }, { status: 500 });
 	}
 
 	const { error: tokErr } = await supabase.rpc('set_integration_tokens', {
@@ -215,7 +215,7 @@ async function handleConnect(
 	});
 	if (tokErr) {
 		console.error('strava-import: set_integration_tokens RPC failed:', tokErr);
-		return new Response('Store tokens failed', { status: 500 });
+		return Response.json({ error: 'store_tokens_failed' }, { status: 500 });
 	}
 
 	// First-time connects always trigger a backfill so the user sees data
@@ -237,7 +237,7 @@ async function handleSync(
 	);
 	const tokenRow = tokenRows?.[0];
 	if (tokenErr || !tokenRow?.access_token) {
-		return new Response('Strava not connected', { status: 400 });
+		return Response.json({ error: 'strava_not_connected' }, { status: 400 });
 	}
 
 	let accessToken = tokenRow.access_token as string;

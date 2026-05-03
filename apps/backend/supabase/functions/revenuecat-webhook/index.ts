@@ -17,7 +17,7 @@ import { withSentry } from '../_shared/sentry.ts';
 
 serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return Response.json({ error: 'method_not_allowed' }, { status: 405 });
   }
 
   // RevenueCat webhook payloads are typically 2-4 KB. 32 KB is a
@@ -28,7 +28,7 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
 
   const secret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET');
   if (!secret) {
-    return new Response('Webhook not configured', { status: 503 });
+    return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
   }
 
   // Verify HMAC signature with a constant-time compare so an attacker
@@ -37,18 +37,18 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   const body = await req.text();
   const sig = req.headers.get('x-revenuecat-hmac');
   if (!sig) {
-    return new Response('Missing signature', { status: 401 });
+    return Response.json({ error: 'missing_signature' }, { status: 401 });
   }
   const expected = hmac('sha256', secret, body, 'utf8', 'hex');
   if (!timingSafeEqual(sig, expected)) {
-    return new Response('Bad signature', { status: 401 });
+    return Response.json({ error: 'bad_signature' }, { status: 401 });
   }
 
   let event: RevenueCatEvent;
   try {
     event = JSON.parse(body).event;
   } catch {
-    return new Response('Invalid JSON', { status: 400 });
+    return Response.json({ error: 'invalid_json' }, { status: 400 });
   }
 
   // Replay protection. HMAC authenticates the body but nothing
@@ -80,15 +80,15 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
     ? event.event_timestamp_ms
     : null;
   if (eventTsMs === null) {
-    return new Response('Missing event_timestamp_ms', { status: 400 });
+    return Response.json({ error: 'missing_event_timestamp_ms' }, { status: 400 });
   }
   const ageMs = Date.now() - eventTsMs;
   if (ageMs > REPLAY_WINDOW_MS || ageMs < -CLOCK_SKEW_MS) {
-    return new Response('Event outside freshness window', { status: 400 });
+    return Response.json({ error: 'event_outside_freshness_window' }, { status: 400 });
   }
   const eventId = typeof event.id === 'string' ? event.id : null;
   if (!eventId) {
-    return new Response('Missing event id', { status: 400 });
+    return Response.json({ error: 'missing_event_id' }, { status: 400 });
   }
 
   // The `app_user_id` RevenueCat sends is the Supabase user id — we

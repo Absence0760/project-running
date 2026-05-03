@@ -52,13 +52,13 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
-		return new Response('Webhook not configured', { status: 503 });
+		return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
 	}
 
 	const url = new URL(req.url);
 	const suppliedSecret = url.searchParams.get('secret');
 	if (!suppliedSecret || !timingSafeEqual(suppliedSecret, webhookSecret)) {
-		return new Response('Forbidden', { status: 403 });
+		return Response.json({ error: 'forbidden' }, { status: 403 });
 	}
 
 	// GET: Strava webhook subscription handshake.
@@ -67,14 +67,14 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 		const verifyToken = url.searchParams.get('hub.verify_token');
 
 		if (verifyToken !== Deno.env.get('STRAVA_VERIFY_TOKEN')) {
-			return new Response('Forbidden', { status: 403 });
+			return Response.json({ error: 'forbidden' }, { status: 403 });
 		}
 
 		return Response.json({ 'hub.challenge': challenge });
 	}
 
 	if (req.method !== 'POST') {
-		return new Response('Method not allowed', { status: 405 });
+		return Response.json({ error: 'method_not_allowed' }, { status: 405 });
 	}
 
 	// POST: Activity event from Strava. Payload shape:
@@ -92,7 +92,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	try {
 		event = await req.json();
 	} catch (_) {
-		return new Response('Invalid JSON', { status: 400 });
+		return Response.json({ error: 'invalid_json' }, { status: 400 });
 	}
 
 	if (event.object_type !== 'activity' || event.aspect_type !== 'create') {
@@ -107,10 +107,10 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	const ownerId = event.owner_id;
 	const eventTime = event.event_time;
 	if (!activityId || !ownerId) {
-		return new Response('Missing object_id or owner_id', { status: 400 });
+		return Response.json({ error: 'missing_object_id_or_owner_id' }, { status: 400 });
 	}
 	if (typeof eventTime !== 'number') {
-		return new Response('Missing event_time', { status: 400 });
+		return Response.json({ error: 'missing_event_time' }, { status: 400 });
 	}
 
 	// Replay protection. Strava doesn't sign payloads — the URL secret
@@ -132,7 +132,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	const CLOCK_SKEW_MS = 60 * 1000;
 	const ageMs = Date.now() - eventTime * 1000;
 	if (ageMs > REPLAY_WINDOW_MS || ageMs < -CLOCK_SKEW_MS) {
-		return new Response('Event outside freshness window', { status: 400 });
+		return Response.json({ error: 'event_outside_freshness_window' }, { status: 400 });
 	}
 
 	const supabase = createClient(

@@ -13,7 +13,10 @@ serve(withSentry('parkrun-import', async (req: Request) => {
   // unauthenticated caller would otherwise produce a 500 distinguishable
   // from a 401, and any future code added between the parse and the
   // auth check would run unauthenticated.
-  const authHeader = req.headers.get('Authorization')!;
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -22,7 +25,7 @@ serve(withSentry('parkrun-import', async (req: Request) => {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response('Unauthorized', { status: 401 });
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   // Per-user limit: free 4/h, pro 16/h. parkrun.org doesn't publish
   // a crawl rate; the free ceiling errs on polite scraping while

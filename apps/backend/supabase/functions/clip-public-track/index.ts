@@ -122,6 +122,14 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   }
 
   const gz = new Uint8Array(await blob.arrayBuffer());
+  // Cap the gzipped blob at 5 MB before we even start decompressing.
+  // The runs Storage bucket allows up to 25 MB per object; in practice
+  // a real run track is well under 1 MB compressed. Anything bigger is
+  // either pathological data or an attempt to chain gzip + JSON.parse
+  // into a memory amplifier on the EF instance.
+  if (gz.byteLength > 5 * 1024 * 1024) {
+    return Response.json({ error: 'track too large' }, { status: 502 });
+  }
   const ds = new (globalThis as { DecompressionStream: typeof DecompressionStream })
     .DecompressionStream('gzip');
   const stream = new Response(gz).body!.pipeThrough(ds);
@@ -129,6 +137,13 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   const points = JSON.parse(txt);
   if (!Array.isArray(points)) {
     return Response.json({ error: 'malformed track' }, { status: 502 });
+  }
+  // Bound the decompressed point count too — gzip ratios on JSON
+  // floats can hit 20× and we don't want a 1 MB blob to expand into
+  // a 50k+ point walk through clip_track_for_user. Real tracks top
+  // out around 10k points (a 20 km run logged at 1 Hz).
+  if (points.length > 50_000) {
+    return Response.json({ error: 'track too long' }, { status: 502 });
   }
 
   if (callerId === run.user_id) {
