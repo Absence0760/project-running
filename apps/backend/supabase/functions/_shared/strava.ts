@@ -16,6 +16,12 @@ export type StravaTokens = {
 	refresh_token: string;
 	expires_at: number;
 	athlete: { id: number };
+	// Comma-separated list of scopes Strava actually granted. Differs
+	// from the scope the client claimed when calling /oauth/authorize
+	// — Strava's consent screen lets users untick individual scopes.
+	// Only this value is authoritative; never trust the body-claimed
+	// scope for the activity:read_all gate.
+	scope?: string;
 };
 
 export type StravaActivity = {

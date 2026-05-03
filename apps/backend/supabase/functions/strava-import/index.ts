@@ -87,24 +87,16 @@ async function handleConnect(
 	supabase: ReturnType<typeof createClient>,
 	userId: string,
 	code: string,
-	scope: string,
+	_clientClaimedScope: string,
 	redirectUri: string | undefined,
 ): Promise<Response> {
 	if (!code) return new Response('Missing code', { status: 400 });
 
-	// Verify the granted scope contains what we asked for. Strava lets
-	// users untick individual scopes on the consent screen; if they
-	// granted only `read` but not `activity:read_all`, the integration
-	// can't actually fetch activities and the backfill below would
-	// silently 401 every page. Reject early with a clear message so
-	// the UI can re-prompt with the right copy.
-	const scopes = (scope ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-	if (!scopes.includes('activity:read_all')) {
-		return new Response(
-			'Strava connection is missing the activity:read_all scope. Please reconnect and accept all permissions.',
-			{ status: 400 },
-		);
-	}
+	// We don't trust the client-supplied `scope` field — it's just a
+	// hint Strava's redirect echoed back, and a man-in-the-middle on
+	// that redirect could rewrite it. The authoritative scope comes
+	// from Strava's /oauth/token response and is checked after the
+	// exchange below.
 
 	// Pin the redirect_uri the client claims it used. Strava's
 	// /oauth/authorize already enforces that callbacks land on the
@@ -155,14 +147,30 @@ async function handleConnect(
 
 	const tokens = (await tokenResponse.json()) as StravaTokens;
 
+	// Authoritative scope check, against Strava's response — not the
+	// client-claimed `scope` field (which a MITM on the redirect can
+	// forge). Strava returns the actually-granted scopes here; if
+	// `activity:read_all` is missing, the backfill below would
+	// silently 401 every page and the user would see "connected,
+	// 0 imports" instead of a useful "missing permission, please
+	// reconnect" prompt.
+	const grantedScopes = (tokens.scope ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+	if (!grantedScopes.includes('activity:read_all')) {
+		return new Response(
+			'Strava connection is missing the activity:read_all scope. Please reconnect and accept all permissions.',
+			{ status: 400 },
+		);
+	}
+
 	// Upsert non-secret fields (external_id, scope) directly; the
 	// access / refresh tokens go to Vault via set_integration_tokens.
+	// Persist the *granted* scope, not the client-claimed value.
 	const { error: upsertErr } = await supabase.from('integrations').upsert(
 		{
 			user_id: userId,
 			provider: 'strava',
 			external_id: String(tokens.athlete.id),
-			scope,
+			scope: tokens.scope ?? '',
 		},
 		{ onConflict: 'user_id,provider' },
 	);
