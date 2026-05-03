@@ -110,14 +110,21 @@ async function handleConnect(
 	// closing that window. We never call Strava with this value
 	// (Strava's token endpoint ignores redirect_uri); it's purely a
 	// client-claim assertion against our own allow-list.
+	//
+	// Fail closed when unset — matches the secret-gated webhooks
+	// (CRON_SECRET, REVENUECAT_WEBHOOK_SECRET, STRAVA_WEBHOOK_SECRET)
+	// which 503 on missing config. A silent fall-through to "allow
+	// any redirect" would defeat the remediation in a single missed
+	// `supabase secrets set`.
 	const allowed = (Deno.env.get('STRAVA_ALLOWED_REDIRECTS') ?? '')
 		.split(',')
 		.map((s) => s.trim())
 		.filter(Boolean);
-	if (allowed.length > 0) {
-		if (!redirectUri || !allowed.includes(redirectUri)) {
-			return new Response('Invalid redirect_uri', { status: 400 });
-		}
+	if (allowed.length === 0) {
+		return new Response('Strava not configured', { status: 503 });
+	}
+	if (!redirectUri || !allowed.includes(redirectUri)) {
+		return new Response('Invalid redirect_uri', { status: 400 });
 	}
 
 	const tokenResponse = await fetch('https://www.strava.com/oauth/token', {
