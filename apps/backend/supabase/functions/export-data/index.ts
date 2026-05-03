@@ -111,7 +111,8 @@ serve(withSentry('export-data', async (req: Request) => {
 		.limit(MAX_RUNS);
 
 	if (runsErr) {
-		return new Response(`Run fetch failed: ${runsErr.message}`, { status: 500 });
+		console.error('export-data: runs select failed:', runsErr);
+		return new Response('Run fetch failed', { status: 500 });
 	}
 
 	const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -135,14 +136,16 @@ serve(withSentry('export-data', async (req: Request) => {
 			upsert: false,
 		});
 	if (upErr) {
-		return new Response(`Upload failed: ${upErr.message}`, { status: 500 });
+		console.error('export-data: storage upload failed:', upErr);
+		return new Response('Upload failed', { status: 500 });
 	}
 
 	const { data: signed, error: signErr } = await adminSupabase.storage
 		.from('runs')
 		.createSignedUrl(path, SIGNED_URL_TTL_S);
 	if (signErr || !signed) {
-		return new Response(`Signed URL failed: ${signErr?.message ?? 'unknown'}`, { status: 500 });
+		console.error('export-data: createSignedUrl failed:', signErr);
+		return new Response('Signed URL failed', { status: 500 });
 	}
 
 	return Response.json({

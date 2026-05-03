@@ -111,8 +111,11 @@ async function handleConnect(
 	});
 
 	if (!tokenResponse.ok) {
-		const text = await tokenResponse.text();
-		return new Response(`Strava token exchange failed: ${text}`, { status: 502 });
+		// Log the upstream body but don't bounce it back — Strava error
+		// payloads can include hints about client-id validity that aren't
+		// useful to legitimate callers.
+		console.error('strava-import: token exchange failed:', await tokenResponse.text());
+		return new Response('Strava token exchange failed', { status: 502 });
 	}
 
 	const tokens = (await tokenResponse.json()) as StravaTokens;
@@ -129,7 +132,8 @@ async function handleConnect(
 		{ onConflict: 'user_id,provider' },
 	);
 	if (upsertErr) {
-		return new Response(`Store integration failed: ${upsertErr.message}`, { status: 500 });
+		console.error('strava-import: integrations upsert failed:', upsertErr);
+		return new Response('Store integration failed', { status: 500 });
 	}
 
 	const { error: tokErr } = await supabase.rpc('set_integration_tokens', {
@@ -140,7 +144,8 @@ async function handleConnect(
 		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
 	});
 	if (tokErr) {
-		return new Response(`Store tokens failed: ${tokErr.message}`, { status: 500 });
+		console.error('strava-import: set_integration_tokens RPC failed:', tokErr);
+		return new Response('Store tokens failed', { status: 500 });
 	}
 
 	// First-time connects always trigger a backfill so the user sees data

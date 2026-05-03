@@ -89,8 +89,13 @@ serve(withSentry('delete-account', async (req: Request) => {
 
   const { error } = await adminClient.auth.admin.deleteUser(user.id);
   if (error) {
+    // Log the underlying message via Sentry / function logs but don't
+    // bounce it back to the client — Supabase / GoTrue error text can
+    // expose internal identifiers and schema names that are useless
+    // to legitimate callers.
+    console.error('delete-account: admin.deleteUser failed:', error);
     return Response.json(
-      { error: error.message },
+      { error: 'delete failed' },
       { status: 500, headers: { 'content-type': 'application/json' } },
     );
   }

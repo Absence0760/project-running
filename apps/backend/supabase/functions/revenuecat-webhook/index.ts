@@ -153,7 +153,7 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
       .eq('id', userId);
     if (error) {
       console.error('Tier update failed:', error);
-      return Response.json({ ok: false, error: error.message }, { status: 500 });
+      return Response.json({ ok: false, error: 'tier update failed' }, { status: 500 });
     }
   }
 
