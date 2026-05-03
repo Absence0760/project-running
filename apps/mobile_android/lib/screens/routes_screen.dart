@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../widgets/route_track_preview.dart';
-import '../widgets/track_preview.dart';
 import 'explore_routes_screen.dart';
 import 'route_detail_screen.dart';
 
