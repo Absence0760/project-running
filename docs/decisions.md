@@ -1028,7 +1028,7 @@ The table is provider-keyed so future webhooks (Stripe, Linear, etc.) share the 
 
 ## 53. Web app + domain on AWS (S3 + CloudFront + Lambda + Route 53), not Vercel or Cloudflare Pages
 
-The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Origin Access Control), CloudFront in front, Lambda Function URL for the single SSR route (`/api/coach`), Route 53 + ACM cert in `us-east-1` for `runonward.app` / `www.runonward.app`. Provisioned via CDK (TypeScript), GitHub Actions deploys via OIDC role assumption (no long-lived AWS keys in `Settings → Secrets`).
+The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Origin Access Control), CloudFront in front, Lambda Function URL for the single SSR route (`/api/coach`), Route 53 + ACM cert in `us-east-1` for `runonward.app` / `www.runonward.app`. Provisioned via **Terraform** (matching the workstation toolchain — see [`/home/jhoward/CLAUDE.md`](https://github.com/jaredhoward/dotfiles)), with **sops + AWS KMS** for the runtime secrets the coach Lambda reads. GitHub Actions deploys via OIDC role assumption (no long-lived AWS keys in `Settings → Secrets`).
 
 **Why:**
 
@@ -1040,9 +1040,9 @@ The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Or
 
 **Trade-off:**
 
-- **More day-one setup** than Vercel's import-and-go. CDK app, OIDC role, OAC, ACM cert, CloudFront response-headers policy, per-env stacks, build-time env injection from GitHub Secrets, CloudWatch alarms — about a day or two of focused work. Bolting these on later is painful, so they ship together with the first deploy. See [`apps/web/deployment.md`](../apps/web/deployment.md).
+- **More day-one setup** than Vercel's import-and-go. Terraform modules + per-env stacks, OIDC role, OAC, ACM cert, CloudFront response-headers policy, build-time env injection from GitHub Secrets, runtime secrets via sops/KMS, CloudWatch alarms — about a day or two of focused work. Bolting these on later is painful, so they ship together with the first deploy. See [`apps/web/deployment.md`](../apps/web/deployment.md).
 - **CloudFront egress is ~$0.085/GB** (after the first 1 TB free for 12 months). Cloudflare's egress is functionally free. At the projected scale for this app the difference is single-digit dollars/month for a long time.
-- **CDK lock-in.** Moving to a different cloud later means rewriting the IaC. Acceptable given how rarely we'd want to.
+- **Terraform + provider lock-in.** Moving to a different cloud later means rewriting the modules. Acceptable given how rarely we'd want to. Terraform is more portable than CDK in principle, but the AWS-specific resources (`aws_cloudfront_distribution`, `aws_lambda_function_url`, etc.) don't translate.
 
 **Architecture pinned by this decision:**
 
@@ -1057,6 +1057,8 @@ CloudFront distribution (one per env: prod, preview)
 
 ACM cert (us-east-1) — auto-renew
 
+KMS key (per env) ──► encrypts sops files ──► Terraform decrypts ──► Lambda env vars
+
 GitHub Actions
    │  OIDC AssumeRole (no long-lived keys)
    ▼
@@ -1064,9 +1066,11 @@ IAM role (s3:PutObject on artifacts bucket, cloudfront:CreateInvalidation,
           lambda:UpdateFunctionCode on the coach handler — and nothing else)
 ```
 
-**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The CDK app emits both from one source so they don't drift.
+**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The Terraform setup uses one shared module (`infra/modules/web-stack`) consumed by per-env root modules (`infra/envs/{prod,preview}`) so the two stacks can't drift.
 
-**SvelteKit adapter posture:** `@sveltejs/adapter-static` for the bulk; `/api/coach/+server.ts` is reused as the body of a hand-rolled Node 20 Lambda handler so we don't depend on a community SvelteKit-AWS adapter.
+**SvelteKit adapter posture:** `@sveltejs/adapter-static` for the bulk. The coach handler logic lives in `apps/web/src/lib/coach/handler.ts` (transport-agnostic core) and is wrapped twice: once by `apps/web/src/routes/api/coach/+server.ts` (SvelteKit, dev-only — under `adapter-static` this route is not built) and once by `apps/web/lambda/coach/src/index.ts` (AWS Lambda Function URL with response streaming, prod). No community SvelteKit-AWS adapter — too much surface area for one route.
+
+**Runtime secrets:** the coach Lambda reads `ANTHROPIC_API_KEY` (and optionally `SENTRY_DSN`) from environment variables that Terraform sets at deploy time. The plaintext lives in **sops-encrypted** files committed under `infra/envs/<env>/secrets.enc.yaml`, encrypted with **AWS KMS keys** managed by the same Terraform stack. Rotation is `sops <file>` → `terraform apply`. No secret values touch GitHub Secrets, no secret values touch developer laptops in plaintext.
 
 **Don't re-litigate unless:** monthly CloudFront egress exceeds ~10 TB AND the team has bandwidth to migrate. At that scale Cloudflare's free egress could save real money, but the migration cost (rewriting IaC, redoing OIDC, cutover DNS without breaking sessions) needs justification.
 

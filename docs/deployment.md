@@ -12,7 +12,7 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 
 | Service | Path | Provider | Status |
 |---|---|---|---|
-| Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (CDK-provisioned, OIDC-deployed) — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | Plan |
+| Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed) — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | Plan |
 | Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | Plan |
 | Job worker (Go) | `apps/job_worker/` | **Fly.io** — single machine, distroless | Plan |
 | OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** — single machine + Volume | Plan |
@@ -23,7 +23,7 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 | Apple Watch | `apps/watch_ios/` | Bundled inside the iOS app — no separate listing | Plan |
 | RevenueCat | (third party) | RevenueCat dashboard — webhook to `apps/backend/supabase/functions/revenuecat-webhook` | Plan |
 | MapTiler | (third party) | MapTiler Cloud — `PUBLIC_MAPTILER_KEY` shared by web + Wear OS | Plan |
-| Anthropic API | (third party) | api.anthropic.com — `ANTHROPIC_API_KEY` injected into the coach Lambda via env var (set by CDK from Secrets Manager) | Plan |
+| Anthropic API | (third party) | api.anthropic.com — `ANTHROPIC_API_KEY` injected into the coach Lambda via env var (Terraform reads it from a sops-encrypted file under `infra/envs/<env>/secrets.enc.yaml`, encrypted with the env's AWS KMS key) | Plan |
 
 Per-service deep dives:
 
@@ -188,7 +188,7 @@ The matrix of "what lives where":
 | `STRAVA_CLIENT_SECRET` | Strava developer dashboard | Supabase Vault |
 | `STRAVA_VERIFY_TOKEN`, `STRAVA_WEBHOOK_SECRET` | We invent | Supabase EF env |
 | `REVENUECAT_WEBHOOK_SECRET` | RevenueCat dashboard | Supabase EF env |
-| `ANTHROPIC_API_KEY` | Anthropic console | AWS Secrets Manager — wired into the coach Lambda's environment by CDK |
+| `ANTHROPIC_API_KEY` | Anthropic console | sops-encrypted in `infra/envs/<env>/secrets.enc.yaml` (AWS KMS key per env) — Terraform decrypts at apply time and writes to the coach Lambda's `environment` block |
 | `PUBLIC_MAPTILER_KEY` | MapTiler dashboard | GitHub Secrets (injected at CI build-time as `PUBLIC_*`); Mobile build configs |
 | Android upload keystore | We generate once | GitHub Secrets (`ANDROID_KEYSTORE_BASE64`) |
 | iOS distribution `.p12` + provisioning profile | Apple Developer | GitHub Secrets (`IOS_BUILD_CERTIFICATE_BASE64` etc.) |

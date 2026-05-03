@@ -28,7 +28,7 @@ A Claude-powered second-opinion chat embedded below the week grid on the plan de
 - **Prompt caching at two breakpoints**: (1) coach system prompt, (2) first user message carrying the context dump. Subsequent chat turns hit the cache for ~95% of input tokens. `cache_control: { type: 'ephemeral' }` on both blocks. The UI surfaces `cache_read` / `cache_creation` / `input` / `output` token counts below the composer for verification.
 - Model: `claude-sonnet-4-5`. Output tokens: 768 (free tier) / 2048 (Pro tier). Context window: 30 runs (free) / 200 runs (Pro).
 
-**Deploy requirement**: the endpoint runs as a Node 20 Lambda Function URL behind the prod CloudFront distribution (see [`apps/web/deployment.md`](../apps/web/deployment.md) and [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). The static SvelteKit build (under `adapter-static`) does not serve `/api/coach`; CloudFront routes that path to the Lambda. `ANTHROPIC_API_KEY` lives in AWS Secrets Manager and is wired into the Lambda's env by CDK; missing key returns 503.
+**Deploy requirement**: the endpoint runs as a Node 20 Lambda Function URL behind the prod CloudFront distribution (see [`apps/web/deployment.md`](../apps/web/deployment.md) and [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). The static SvelteKit build (under `adapter-static`) does not serve `/api/coach`; CloudFront routes that path to the Lambda. `ANTHROPIC_API_KEY` is sops-encrypted under `infra/envs/<env>/secrets.enc.yaml` (env-specific AWS KMS key) and wired into the Lambda's env by Terraform; missing key returns 503.
 
 ## Surfaces (Android, v1)
 

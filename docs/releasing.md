@@ -149,7 +149,7 @@ activates (gated on `canImport(Sentry)`).
 
 ### Web (AWS deploy)
 
-The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` long-lived secret. The role ARN points at the deploy role provisioned by the CDK app (see [`apps/web/deployment.md`](../apps/web/deployment.md)). Build-time `PUBLIC_*` env vars are written into `apps/web/.env.production` before `npm run build` and inlined into the static bundle.
+The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` long-lived secret. The role ARN points at the deploy role provisioned by the Terraform `github-oidc` stack (see [`apps/web/deployment.md`](../apps/web/deployment.md)). Build-time `PUBLIC_*` env vars are written into `apps/web/.env.production` before `npm run build` and inlined into the static bundle.
 
 | Secret | What |
 |---|---|
@@ -162,7 +162,7 @@ The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_AC
 | `PUBLIC_SENTRY_DSN` | Frontend Sentry DSN. Optional — empty disables client-side capture. |
 | `APP_RELEASE` | `web@<version>` tag — passed as `PUBLIC_APP_RELEASE` for Sentry release tagging. Defaults to `dev`. |
 
-Server-only secrets (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN`) live in **AWS Secrets Manager** in the prod and preview accounts, not GitHub Secrets — the coach Lambda reads them at cold-start via the AWS SDK. CDK wires the Secrets Manager ARN into the Lambda's IAM policy so the function can `secretsmanager:GetSecretValue` only on its own secrets.
+Server-only secrets (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN`) live **sops-encrypted in the repo** under `infra/envs/<env>/secrets.enc.yaml`, with one AWS KMS key per env decrypting them. Terraform reads them at apply time (via the `carlpett/sops` provider) and writes them into the Lambda's `environment.variables` block. The Lambda gets them as plain env vars at runtime — no AWS SDK calls, no cold-start secret-fetch latency. Rotation is `sops <file>` → save → `terraform apply`. No secret values touch GitHub Secrets.
 
 ### Backend
 
@@ -192,7 +192,7 @@ Server-only secrets (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN`) live in **AW
   --delete` against the prod bucket, then `aws cloudfront create-
   invalidation --distribution-id <id> --paths "/*"`. Coach Lambda
   rollback: every `lambda update-function-code` produces a numbered
-  version, and the CDK creates a `live` alias — `aws lambda update-
+  version, and Terraform creates a `live` alias — `aws lambda update-
   alias --function-name web-coach-prod --name live --function-version
   <previous>` retargets traffic in seconds. Full procedure in
   [`apps/web/deployment.md` § Rollback](../apps/web/deployment.md#rollback).

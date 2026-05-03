@@ -44,7 +44,7 @@ IAM role  s3:PutObject       on the env's artifacts bucket prefix
           (and nothing else — least-privilege)
 ```
 
-**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The CDK app emits both from one source so they don't drift.
+**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The Terraform setup uses one shared module (`infra/modules/web-stack`) consumed by per-env root modules (`infra/envs/{prod,preview}`) so the two stacks can't drift.
 
 ---
 
@@ -62,15 +62,62 @@ ACM provisions the cert via DNS validation against Route 53 — no email validat
 
 ---
 
-## CDK app
+## Terraform layout
 
-Provisioned via CDK (TypeScript). The CDK app lives at `infra/web/` (to be created as part of the AWS migration). Three stacks:
+Provisioned via Terraform — matches the workstation toolchain (`/home/jhoward/CLAUDE.md` lists `dnf via HashiCorp's official Fedora repo`). All infrastructure code lives under `infra/`:
 
-- **`WebStack`** (per env: `WebStack-prod`, `WebStack-preview`) — S3 bucket, CloudFront distribution, Lambda Function URL for `/api/coach`, response headers policy, OAC, log buckets.
-- **`DnsStack`** — Route 53 hosted zone, ALIAS records, ACM cert in `us-east-1`. One stack, one zone, all envs share it.
-- **`GithubOidcStack`** — OIDC provider for `token.actions.githubusercontent.com`, deploy IAM role per env, trust policy scoped to `repo:<owner>/<repo>:ref:refs/tags/web@*` (prod) and `:ref:refs/heads/main` (preview).
+```
+infra/
+├── modules/
+│   └── web-stack/         # Reusable: S3 + CloudFront + Lambda + Function URL +
+│                          # IAM + per-env KMS key + sops integration
+├── envs/
+│   ├── prod/              # Root module — calls web-stack module
+│   │   ├── main.tf
+│   │   ├── backend.tf     # Remote state in S3 + DynamoDB lock
+│   │   ├── terraform.tfvars
+│   │   └── secrets.enc.yaml   # sops-encrypted (KMS key from this env's stack)
+│   └── preview/           # Same shape, separate state, separate resources
+├── dns/                   # Route 53 hosted zone, ACM cert in us-east-1
+│   └── ...                # One stack — both envs share the zone
+├── github-oidc/           # OIDC provider + per-env deploy IAM role
+│   └── ...                # One stack — trust policies scoped per env
+├── bootstrap/             # ONE-TIME: creates the state-bucket + DynamoDB lock
+│   │                      # table that the other stacks use as their backend.
+│   │                      # Run once with local state, then ignored.
+│   └── ...
+└── .sops.yaml             # Routes each env's secrets.enc.yaml to that env's KMS key
+```
 
-Bootstrap: `cdk bootstrap aws://<account>/eu-west-2` and `aws://<account>/us-east-1`. Both regions need the bootstrap stack because the cert lives in `us-east-1` while everything else lives in `eu-west-2`.
+**Bootstrap** (one-time, before any other Terraform runs):
+
+```bash
+cd infra/bootstrap
+terraform init                              # local state — only the bootstrap uses it
+terraform apply                              # creates: tfstate bucket, DDB lock table
+```
+
+**Per-stack init / apply** (after bootstrap):
+
+```bash
+cd infra/dns
+terraform init
+terraform apply                              # creates the hosted zone + ACM cert
+
+cd ../github-oidc
+terraform init
+terraform apply -var "github_repo=<owner>/<repo>"
+
+cd ../envs/prod
+terraform init
+terraform apply                              # creates the prod web stack
+```
+
+The `dns` stack outputs the hosted zone ID and cert ARN; per-env stacks read those via `terraform_remote_state`. Same pattern for the OIDC role ARN (consumed at GitHub Actions runtime, not at Terraform-apply time, so this is just for surfacing the value).
+
+**Two regions in play.** Most resources go to `eu-west-2` (London — close to Supabase EU). The ACM cert for CloudFront has to live in `us-east-1` regardless of where the rest sits — `dns/main.tf` declares two AWS providers aliased by region.
+
+**Runtime secrets via sops + AWS KMS.** `infra/envs/<env>/secrets.enc.yaml` is sops-encrypted with that env's KMS key (created by `web-stack`). Terraform reads it via the [`carlpett/sops`](https://registry.terraform.io/providers/carlpett/sops/latest) provider at apply time and writes the values into the Lambda's `environment.variables` block. Rotation is `sops infra/envs/prod/secrets.enc.yaml` → save → `terraform apply` — the Lambda config update happens in seconds.
 
 ---
 
@@ -87,16 +134,15 @@ The static SvelteKit build inlines `PUBLIC_*` vars at build time. The CI workflo
 | `PUBLIC_SENTRY_DSN` | `PUBLIC_SENTRY_DSN` | optional — empty disables client-side capture |
 | `PUBLIC_APP_RELEASE` | derived from CI tag (e.g. `web@1.2.3`) | tags Sentry events |
 
-**Anything that should stay server-side does NOT have the `PUBLIC_` prefix and lives in the Lambda's env**, set by CDK — not in the SvelteKit build. The coach Lambda reads:
+**Anything that should stay server-side does NOT have the `PUBLIC_` prefix and lives in the Lambda's env**, set by Terraform from the sops-encrypted file — not in the SvelteKit build, not in GitHub Secrets. The coach Lambda reads:
 
 | Lambda env var | Source | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | AWS Secrets Manager (looked up by CDK at synth time) | server-only — `/api/coach` reads it |
-| `SENTRY_DSN` | Secrets Manager | optional — server-side capture |
-| `APP_RELEASE` | tag value, passed at deploy time | tags Sentry events |
-| `COACH_PROVIDER` / `OPENAI_BASE_URL` | optional Lambda env vars | for self-hosted Ollama / OpenAI-compatible service |
-
-The Lambda also receives `PUBLIC_SUPABASE_URL` and the **publishable** `PUBLIC_SUPABASE_ANON_KEY` (not service-role) so it can validate the user's JWT and call `is_pro()` / `increment_coach_usage` RPCs as the user.
+| `ANTHROPIC_API_KEY` | sops-encrypted at `infra/envs/<env>/secrets.enc.yaml` (env-specific AWS KMS key) | server-only — `/api/coach` reads it |
+| `SENTRY_DSN` | same sops file | optional — server-side capture |
+| `APP_RELEASE` | passed at deploy time as a Terraform variable, derived from the CI tag | tags Sentry events |
+| `COACH_PROVIDER` / `OPENAI_BASE_URL` | optional — set in `terraform.tfvars` per env | for self-hosted Ollama / OpenAI-compatible service |
+| `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` | non-secret — passed as Terraform vars from CI environment, written to Lambda env directly | the Lambda needs them to validate the user's JWT and call `is_pro()` / `increment_coach_usage` RPCs |
 
 ---
 
@@ -161,7 +207,7 @@ The `Notifications` row in the database carries the user's subscription endpoint
 | Server errors | Sentry (server) — bundled into the coach Lambda | grouped exceptions on coach failures |
 | Coach usage | Anthropic console | per-key spend, request rate, model mix |
 
-**CloudWatch alarms (wired by CDK):**
+**CloudWatch alarms (wired by the `web-stack` module):**
 
 - Lambda error rate >2% over 5 min → SNS topic `web-prod-alerts`
 - Lambda p95 duration >25 s over 5 min (approaching the 30 s timeout) → same topic
@@ -204,7 +250,7 @@ The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-laun
 Two layers:
 
 1. **Static site rollback** — re-`aws s3 sync` from the build zip attached to the previous green tag's GitHub Release, then `aws cloudfront create-invalidation`. ~60 s end-to-end.
-2. **Lambda rollback** — Lambda versions are auto-incremented on every `update-function-code`. The CDK creates an alias `live` that points at the most recent version; rolling back is `aws lambda update-alias --function-name web-coach-prod --name live --function-version <previous>`. ~10 s.
+2. **Lambda rollback** — Lambda versions are auto-incremented on every `update-function-code`. Terraform creates an alias `live` that points at the most recent version; rolling back is `aws lambda update-alias --function-name web-coach-prod --name live --function-version <previous>`. ~10 s.
 
 For the *git* rollback (so the next push doesn't re-deploy the broken version), tag a revert commit and let the workflow pick it up.
 
@@ -220,11 +266,13 @@ The dependent services that *do* hold state (Supabase, RevenueCat, Anthropic) ha
 
 If the AWS account itself is lost, recovery is roughly:
 
-1. Spin up a new AWS account, bootstrap CDK in `eu-west-2` + `us-east-1`.
-2. `cdk deploy --all` from the repo at the desired tag — recreates buckets, distributions, Lambda, OIDC role, hosted zone.
-3. Update the domain registrar's NS records to point at the new Route 53 hosted zone.
-4. Issue Sentry / Supabase / Anthropic / MapTiler keys into the new account's Secrets Manager + GitHub Secrets.
-5. Push the same tag to trigger a deploy.
+1. Spin up a new AWS account.
+2. `cd infra/bootstrap && terraform init && terraform apply` — recreates the state bucket + DDB lock table.
+3. `cd ../dns && terraform init && terraform apply` — recreates the hosted zone + ACM cert.
+4. `cd ../github-oidc && terraform init && terraform apply -var "github_repo=<owner>/<repo>"` — recreates the OIDC trust + deploy roles.
+5. `cd ../envs/prod && terraform init && terraform apply` — recreates the prod web stack. **The KMS key for runtime secrets is recreated; the existing `secrets.enc.yaml` files are encrypted with the OLD KMS key and unrecoverable.** Re-issue the secrets fresh (Anthropic key, Sentry DSN), `sops` them against the new KMS key ARN, then re-apply.
+6. Update the domain registrar's NS records to point at the new Route 53 hosted zone.
+7. Push the desired tag to trigger a deploy.
 
 RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar we control. Most of that is DNS propagation. RPO: 0 — there's no data on AWS.
 
@@ -233,13 +281,14 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 ## Production readiness checklist
 
 - [ ] AWS account created (or sub-account in an org), root MFA enabled, billing alerts at $50 / $200 / $500
-- [ ] CDK bootstrapped in `eu-west-2` and `us-east-1`
+- [ ] `infra/bootstrap` applied (state bucket + DDB lock table created)
+- [ ] AWS provider configured for `eu-west-2` and `us-east-1` (the latter for the cert only)
 - [ ] Domain `runonward.app` registered (Route 53 or external + delegated)
 - [ ] Route 53 hosted zone live, NS records propagated
 - [ ] ACM cert issued in `us-east-1`, DNS-validated
-- [ ] CDK app deployed: `WebStack-prod`, `WebStack-preview`, `DnsStack`, `GithubOidcStack`
+- [ ] Terraform applied (in order): `infra/dns`, `infra/github-oidc`, `infra/envs/preview`, `infra/envs/prod`
 - [ ] GitHub OIDC role trust policy verified (only the repo + ref scopes intended can assume it)
-- [ ] Secrets Manager populated: `ANTHROPIC_API_KEY`, `SENTRY_DSN` (server)
+- [ ] sops file populated: `infra/envs/prod/secrets.enc.yaml` (with `ANTHROPIC_API_KEY`, `SENTRY_DSN`); same for `preview/`
 - [ ] GitHub Secrets populated: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_API_KEY`, `PUBLIC_SENTRY_DSN`, `AWS_DEPLOY_ROLE_ARN_PROD`, `AWS_DEPLOY_ROLE_ARN_PREVIEW`
 - [ ] First preview deploy green; smoke test sign-in + dashboard + run detail at `preview.runonward.app`
 - [ ] First prod deploy green via tag `web@0.1.0`
