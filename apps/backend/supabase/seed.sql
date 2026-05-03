@@ -1481,3 +1481,65 @@ BEGIN
   DELETE FROM auth.users WHERE id = other_user;
   PERFORM set_config('request.jwt.claim.role', '', true);
 END $$;
+
+-- ───────── event_attendees self-RSVP visibility gate (migration 20260629_001) ─────────
+-- Self-RSVP must be gated on event visibility — an authenticated
+-- user can no longer plant attendee rows against private-club
+-- events they enumerated UUIDs for.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  other_user uuid := '99999999-9999-9999-9999-999999999993';
+  v_private_club_id uuid;
+  v_public_club_id uuid;
+  v_private_event_id uuid;
+  v_public_event_id uuid;
+  v_instance timestamptz := '2099-01-01T10:00:00+00';
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  INSERT INTO auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    VALUES (other_user, 'rsvp-rls-test@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+  INSERT INTO clubs (name, slug, owner_id, is_public)
+    VALUES ('rsvp-rls private', 'rsvp-rls-private-' || floor(random()*1e6), other_user, false)
+    RETURNING id INTO v_private_club_id;
+  INSERT INTO clubs (name, slug, owner_id, is_public)
+    VALUES ('rsvp-rls public', 'rsvp-rls-public-' || floor(random()*1e6), other_user, true)
+    RETURNING id INTO v_public_club_id;
+  INSERT INTO events (club_id, title, starts_at, created_by)
+    VALUES (v_private_club_id, 'private event', v_instance, other_user)
+    RETURNING id INTO v_private_event_id;
+  INSERT INTO events (club_id, title, starts_at, created_by)
+    VALUES (v_public_club_id, 'public event', v_instance, other_user)
+    RETURNING id INTO v_public_event_id;
+
+  -- Apply RLS as the test user.
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
+  SET LOCAL ROLE authenticated;
+
+  -- Self-RSVP on a private-club event the user can't see → blocked.
+  BEGIN
+    INSERT INTO event_attendees (event_id, user_id, instance_start, status)
+      VALUES (v_private_event_id, test_user, v_instance, 'going');
+    RAISE EXCEPTION 'event_attendees: self-RSVP to private-club event should have been blocked';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Self-RSVP on a public-club event → succeeds.
+  INSERT INTO event_attendees (event_id, user_id, instance_start, status)
+    VALUES (v_public_event_id, test_user, v_instance, 'going');
+
+  -- Cleanup.
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  DELETE FROM event_attendees WHERE event_id IN (v_public_event_id, v_private_event_id);
+  DELETE FROM events WHERE id IN (v_public_event_id, v_private_event_id);
+  DELETE FROM clubs WHERE id IN (v_public_club_id, v_private_club_id);
+  DELETE FROM auth.users WHERE id = other_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
