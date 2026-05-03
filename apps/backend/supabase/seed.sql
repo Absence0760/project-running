@@ -1404,3 +1404,80 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
+
+-- ───────── routes_run_count_trigger visibility gate (migration 20260628_001) ─────────
+-- Inserting a run that points at a route the runner cannot see
+-- (private foreign route) must NOT bump that route's run_count.
+-- Inserting against a public foreign route, or the runner's own
+-- route, must still bump it. UPDATE/DELETE mirror the same rule.
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
+  other_user uuid := '99999999-9999-9999-9999-999999999992';
+  v_private_route_id uuid;
+  v_public_route_id uuid;
+  v_run_id uuid;
+  v_count_priv_before int;
+  v_count_priv_after int;
+  v_count_pub_before int;
+  v_count_pub_after int;
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  INSERT INTO auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    VALUES (other_user, 'run-count-test@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (other_user, 'private run-count test route', 1000, false, '[]'::jsonb)
+    RETURNING id INTO v_private_route_id;
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (other_user, 'public run-count test route', 1000, true, '[]'::jsonb)
+    RETURNING id INTO v_public_route_id;
+
+  -- Baseline counts.
+  SELECT run_count INTO v_count_priv_before FROM routes WHERE id = v_private_route_id;
+  SELECT run_count INTO v_count_pub_before FROM routes WHERE id = v_public_route_id;
+
+  -- Private foreign route: trigger must NOT bump.
+  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, route_id, metadata)
+    VALUES (gen_random_uuid(), test_user, now(), 600, 5000, 'app', v_private_route_id,
+            jsonb_build_object('activity_type', 'run'))
+    RETURNING id INTO v_run_id;
+  SELECT run_count INTO v_count_priv_after FROM routes WHERE id = v_private_route_id;
+  IF v_count_priv_after <> v_count_priv_before THEN
+    RAISE EXCEPTION 'routes_run_count_trigger: private foreign route was inflated (% -> %)',
+      v_count_priv_before, v_count_priv_after;
+  END IF;
+  -- Cleanup the run; DELETE must also be a no-op on the counter.
+  DELETE FROM runs WHERE id = v_run_id;
+  SELECT run_count INTO v_count_priv_after FROM routes WHERE id = v_private_route_id;
+  IF v_count_priv_after <> v_count_priv_before THEN
+    RAISE EXCEPTION 'routes_run_count_trigger: private foreign route DELETE drift (% -> %)',
+      v_count_priv_before, v_count_priv_after;
+  END IF;
+
+  -- Public foreign route: trigger MUST bump.
+  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, route_id, metadata)
+    VALUES (gen_random_uuid(), test_user, now(), 600, 5000, 'app', v_public_route_id,
+            jsonb_build_object('activity_type', 'run'))
+    RETURNING id INTO v_run_id;
+  SELECT run_count INTO v_count_pub_after FROM routes WHERE id = v_public_route_id;
+  IF v_count_pub_after <> v_count_pub_before + 1 THEN
+    RAISE EXCEPTION 'routes_run_count_trigger: public foreign route should bump by 1 (% -> %)',
+      v_count_pub_before, v_count_pub_after;
+  END IF;
+  -- And DELETE decrements it back.
+  DELETE FROM runs WHERE id = v_run_id;
+  SELECT run_count INTO v_count_pub_after FROM routes WHERE id = v_public_route_id;
+  IF v_count_pub_after <> v_count_pub_before THEN
+    RAISE EXCEPTION 'routes_run_count_trigger: public foreign route DELETE should restore (% -> %)',
+      v_count_pub_before, v_count_pub_after;
+  END IF;
+
+  -- Cleanup.
+  DELETE FROM routes WHERE id IN (v_public_route_id, v_private_route_id);
+  DELETE FROM auth.users WHERE id = other_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+END $$;

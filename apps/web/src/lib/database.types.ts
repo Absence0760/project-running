@@ -1842,6 +1842,10 @@ export type Database = {
       is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }
       is_public_route_by_id: { Args: { p_route_id: string }; Returns: boolean }
       is_race_director: { Args: { target_club: string }; Returns: boolean }
+      is_route_visible_to: {
+        Args: { p_route_id: string; p_user_id: string }
+        Returns: boolean
+      }
       join_club_by_token: { Args: { token: string }; Returns: string }
       latest_fitness_snapshot: {
         Args: never
