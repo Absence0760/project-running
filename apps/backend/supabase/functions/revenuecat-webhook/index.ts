@@ -94,11 +94,20 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // The `app_user_id` RevenueCat sends is the Supabase user id — we
   // set it on the client when configuring the RevenueCat SDK.
   const userId = event.app_user_id;
-  if (!userId || userId.startsWith('$RCAnonymousID')) {
+  if (!userId || (typeof userId === 'string' && userId.startsWith('$RCAnonymousID'))) {
     // Anonymous users can't map to a Supabase profile. This happens
     // when someone subscribes before signing in; RevenueCat will fire
     // another event when they log in and the alias resolves.
     return Response.json({ ok: true, skipped: 'anonymous_user' });
+  }
+  // RevenueCat won't normally send a malformed app_user_id, but if a
+  // misconfiguration ships their Customer-ID format here it would
+  // become a Postgres `22P02 invalid_input_syntax` on the .eq lookup
+  // below and bounce as a 500, sending RC into retry storms. Validate
+  // the UUID shape and skip cleanly so RC stops retrying.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (typeof userId !== 'string' || !UUID_RE.test(userId)) {
+    return Response.json({ ok: true, skipped: 'invalid_app_user_id' });
   }
 
   const supabase = createClient(

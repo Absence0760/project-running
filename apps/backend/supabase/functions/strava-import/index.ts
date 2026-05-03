@@ -55,6 +55,32 @@ serve(withSentry('strava-import', async (req: Request) => {
 	const body = await req.json().catch(() => ({}));
 	const action = body.action ?? (body.code ? 'connect' : 'sync');
 
+	// Validate body shape per action before any side effects. The
+	// later helpers cast straight from `body.<field>` and we don't
+	// want a number-typed `lookbackDays` to drive negative-epoch
+	// arithmetic, or a non-string scope to throw inside .split().
+	if (action === 'connect') {
+		if (typeof body.code !== 'string' || body.code.length === 0) {
+			return new Response('Invalid code', { status: 400 });
+		}
+		if (typeof body.scope !== 'string') {
+			return new Response('Invalid scope', { status: 400 });
+		}
+		if (typeof body.redirect_uri !== 'string') {
+			return new Response('Invalid redirect_uri', { status: 400 });
+		}
+	} else if (action === 'sync') {
+		if (body.lookbackDays !== undefined) {
+			if (
+				!Number.isInteger(body.lookbackDays) ||
+				body.lookbackDays <= 0 ||
+				body.lookbackDays > 365
+			) {
+				return new Response('Invalid lookbackDays', { status: 400 });
+			}
+		}
+	}
+
 	// Connect is one-shot per user (re-running just rotates tokens),
 	// so 10/h is plenty and tier doesn't matter. Sync is the heavy
 	// path: free 4/h, pro 16/h. Strava's own per-user budget is
@@ -138,10 +164,11 @@ async function handleConnect(
 	});
 
 	if (!tokenResponse.ok) {
-		// Log the upstream body but don't bounce it back — Strava error
-		// payloads can include hints about client-id validity that aren't
-		// useful to legitimate callers.
-		console.error('strava-import: token exchange failed:', await tokenResponse.text());
+		// Don't log Strava's response body — it can echo our client_id
+		// and partial code state, both of which are credential-adjacent
+		// and shouldn't sit in function logs. The status alone is
+		// enough to debug a real exchange failure.
+		console.error('strava-import: token exchange failed', { status: tokenResponse.status });
 		return new Response('Strava token exchange failed', { status: 502 });
 	}
 

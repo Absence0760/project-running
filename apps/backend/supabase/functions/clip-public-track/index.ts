@@ -43,6 +43,21 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   const { data: { user } } = await userClient.auth.getUser();
   const callerId = user?.id ?? null;
 
+  // Parse + validate body BEFORE rate-limiting so malformed requests
+  // don't drain the IP bucket. An anon attacker who fires 60 empty
+  // POSTs in quick succession would otherwise lock everyone behind
+  // the same shared NAT out for the rest of the hour.
+  let body: { run_id?: unknown };
+  try {
+    body = await req.json();
+  } catch (_) {
+    return Response.json({ error: 'invalid json body' }, { status: 400 });
+  }
+  const runId = body.run_id;
+  if (typeof runId !== 'string' || runId.length === 0) {
+    return Response.json({ error: 'run_id required' }, { status: 400 });
+  }
+
   // Rate-limit before doing any DB / Storage work. Authenticated
   // callers get their own per-user bucket via the existing user-id
   // path. Anon callers share a per-IP bucket — they're the abuse
@@ -65,17 +80,6 @@ serve(withSentry('clip-public-track', async (req: Request) => {
       adminClient, anonKey, 'clip-public-track:anon', 60, 3600,
     );
     if (denied) return denied;
-  }
-
-  let body: { run_id?: unknown };
-  try {
-    body = await req.json();
-  } catch (_) {
-    return Response.json({ error: 'invalid json body' }, { status: 400 });
-  }
-  const runId = body.run_id;
-  if (typeof runId !== 'string' || runId.length === 0) {
-    return Response.json({ error: 'run_id required' }, { status: 400 });
   }
 
   const { data: run, error: runErr } = await userClient
