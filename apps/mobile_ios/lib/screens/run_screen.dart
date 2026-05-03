@@ -1897,21 +1897,74 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   Widget _buildCountdown(BuildContext context) {
-    return Container(
-      color: const Color(0xFF0F172A),
-      child: Center(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: Text(
-            '$_countdownValue',
-            key: ValueKey(_countdownValue),
-            style: const TextStyle(
-              fontSize: 200,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF22C55E),
+    // Mirrors the watch_wear CountdownOverlay (RunWatchApp.kt:264) — map
+    // underlay so the runner sees the streets they're about to run while
+    // the digit plays, soft scrim so the digit pops without hiding the
+    // map, tap-anywhere to cancel and reset to idle. _preload() has
+    // already opened the GPS stream, so currentPosition fills in
+    // mid-countdown if a fix hadn't landed at start.
+    return GestureDetector(
+      onTap: _discard,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          LiveRunMap(
+            track: const [],
+            currentPosition: _currentPosition,
+            plannedRoute: _selectedRoute?.waypoints,
+          ),
+          // Soft scrim — strong enough that the digit's strokes don't
+          // fight tile contrast, light enough that the map stays
+          // readable around the edges.
+          Container(color: Colors.black.withValues(alpha: 0.45)),
+          Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              transitionBuilder: (child, anim) => ScaleTransition(
+                scale: Tween<double>(begin: 1.4, end: 1.0).animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+                ),
+                child: FadeTransition(opacity: anim, child: child),
+              ),
+              child: Text(
+                '$_countdownValue',
+                key: ValueKey(_countdownValue),
+                style: TextStyle(
+                  fontSize: 200,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black.withValues(alpha: 0.8),
+                      offset: const Offset(0, 2),
+                      blurRadius: 16,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+          // Tiny "Tap to cancel" hint — only renders the first second
+          // so it doesn't compete with the digit on the third tick.
+          if (_countdownValue == 3)
+            Positioned(
+              bottom: 48,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  'Tap to cancel',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
