@@ -680,6 +680,26 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
+-- Service-role escape hatch (migration 20260616_001): a service-role
+-- caller can pass any p_user_id; the auth.uid() guard is bypassed.
+DO $$
+DECLARE
+  test_user uuid := '99999999-9999-9999-9999-999999999991';
+  test_user2 uuid := '99999999-9999-9999-9999-999999999992';
+  v_allowed boolean;
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+
+  SELECT allowed INTO v_allowed FROM check_rate_limit(test_user, 'svc_rl', 2, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: service role 1st call should allow'; END IF;
+  SELECT allowed INTO v_allowed FROM check_rate_limit(test_user2, 'svc_rl', 2, 3600);
+  IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: service role on second user should allow'; END IF;
+
+  DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+END $$;
+
 -- ───────── check_rate_limit_tiered (migration 20260605_001) ─────────
 -- Mocks the JWT context (migration 20260614_001 added a caller-
 -- identity guard: auth.uid() must match p_user_id).
