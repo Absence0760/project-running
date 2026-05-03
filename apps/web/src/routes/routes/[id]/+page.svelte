@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/data';
+	import { fetchRouteById, fetchClippedRouteForViewer, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -14,6 +14,13 @@
 	let { data } = $props();
 
 	let route = $state<Route | null>(null);
+	// `displayWaypoints` is what gets handed to the renderer. For the
+	// owner it mirrors `route.waypoints` from the row; for non-owners
+	// it's the privacy-zone-clipped output of clip_route_for_viewer
+	// (decisions §33). Bookmarked / public / club routes the viewer
+	// doesn't own would otherwise leak the unclipped polyline through
+	// `<RunMap track={route.waypoints} />`.
+	let displayWaypoints = $state<{ lat: number; lng: number; ele?: number }[]>([]);
 	let loading = $state(true);
 	let reviews = $state<any[]>([]);
 	let showReviewForm = $state(false);
@@ -30,6 +37,15 @@
 		route = await fetchRouteById(data.id);
 		loading = false;
 		if (route) {
+			// Owner reads waypoints directly; non-owner goes through the
+			// clip RPC. Anon (viewerId == null) is treated as non-owner so
+			// share-link traffic gets the clip pass too.
+			const viewerId = auth.user?.id ?? null;
+			if (viewerId !== null && viewerId === route.user_id) {
+				displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
+			} else {
+				displayWaypoints = (await fetchClippedRouteForViewer(route.id)) as typeof displayWaypoints;
+			}
 			try {
 				reviews = await getRouteReviews(route.id);
 			} catch (_) {}
@@ -108,18 +124,20 @@
 	}
 
 	function handleExportGpx() {
-		if (!route || !route.waypoints.length) return;
-		const coords: [number, number][] = route.waypoints.map((w) => [w.lng, w.lat]);
-		const eles = route.waypoints.map((w) => w.ele ?? 0);
+		if (!route || !displayWaypoints.length) return;
+		// Use displayWaypoints (clipped for non-owners) so a non-owner
+		// download doesn't leak what the renderer hides.
+		const coords: [number, number][] = displayWaypoints.map((w) => [w.lng, w.lat]);
+		const eles = displayWaypoints.map((w) => w.ele ?? 0);
 		const gpx = toGpx(route.name, coords, eles);
 		const filename = route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
 		downloadFile(gpx, filename, 'application/gpx+xml');
 	}
 
 	function handleExportKml() {
-		if (!route || !route.waypoints.length) return;
-		const coords: [number, number][] = route.waypoints.map((w) => [w.lng, w.lat]);
-		const eles = route.waypoints.map((w) => w.ele ?? 0);
+		if (!route || !displayWaypoints.length) return;
+		const coords: [number, number][] = displayWaypoints.map((w) => [w.lng, w.lat]);
+		const eles = displayWaypoints.map((w) => w.ele ?? 0);
 		const kml = toKml(route.name, coords, eles);
 		const filename = route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
 		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
@@ -248,8 +266,8 @@
 		{#snippet left()}
 			{#if route}
 			<main class="map-panel">
-				{#if route.waypoints.length > 0}
-					<RunMap track={route.waypoints} totalDistanceM={route.distance_m} />
+				{#if displayWaypoints.length > 0}
+					<RunMap track={displayWaypoints} totalDistanceM={route.distance_m} />
 				{:else}
 					<div class="map-placeholder">
 						<span class="material-symbols">map</span>

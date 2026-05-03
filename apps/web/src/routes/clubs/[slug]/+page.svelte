@@ -28,7 +28,7 @@
 		deleteClub
 	} from '$lib/data';
 	import { formatDistance } from '$lib/mock-data';
-	import TrackPreview from '$lib/components/TrackPreview.svelte';
+	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { Route, TrainingPlan } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -743,7 +743,11 @@
 							<a href="/routes/{route.id}" class="club-route-link">
 								<div class="club-route-preview">
 									{#if route.waypoints && route.waypoints.length > 1}
-										<TrackPreview points={route.waypoints} />
+										<RouteTrackPreview
+											routeId={route.id}
+											waypoints={route.waypoints}
+											ownerUserId={route.user_id}
+										/>
 									{:else}
 										<span class="material-symbols">route</span>
 									{/if}

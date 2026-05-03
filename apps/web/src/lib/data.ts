@@ -160,6 +160,34 @@ export async function fetchClippedTrackForRun(runId: string) {
 	return points;
 }
 
+/// Server-side privacy-zone-clipped waypoints for a route owned by
+/// someone other than the caller. Routes carry waypoints inline as a
+/// jsonb column (no Storage indirection like runs), so this is a
+/// straight RPC rather than an Edge Function. The SECURITY DEFINER
+/// function checks visibility (owner / public / club member), then
+/// returns either unclipped waypoints (owner) or clipped output
+/// (non-owner). Anon callers (no JWT) only get public routes.
+///
+/// Use on every non-owner route render site — the bare `route.waypoints`
+/// from a `routes` row is the unclipped polyline and must not reach
+/// the renderer when the viewer != owner. Decisions §33.
+export async function fetchClippedRouteForViewer(
+	routeId: string,
+): Promise<Array<{ lat: number; lng: number }>> {
+	const { data, error } = await supabase.rpc('clip_route_for_viewer', {
+		p_route_id: routeId,
+	});
+	if (error) {
+		// Fail closed — returning the unclipped waypoints on RPC error
+		// would defeat the helper's purpose. Render an empty polyline
+		// rather than leak. Matches the clipTrackForUser shape.
+		console.warn('clip_route_for_viewer failed; failing closed (empty route)', error);
+		return [];
+	}
+	if (!Array.isArray(data)) return [];
+	return data as Array<{ lat: number; lng: number }>;
+}
+
 export type RouteMatchCandidate = {
 	id: string;
 	name: string;

@@ -8,7 +8,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
-	import TrackPreview from '$lib/components/TrackPreview.svelte';
+	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { Route } from '$lib/types';
 	import type { Snapshot } from './$types';
 
@@ -304,7 +304,11 @@
 					<a href="/routes/{route.id}" class="route-card">
 						<div class="route-map-placeholder">
 							{#if route.waypoints && route.waypoints.length > 1}
-								<TrackPreview points={route.waypoints} />
+								<RouteTrackPreview
+									routeId={route.id}
+									waypoints={route.waypoints}
+									ownerUserId={route.user_id}
+								/>
 							{:else}
 								<span class="material-symbols">route</span>
 							{/if}

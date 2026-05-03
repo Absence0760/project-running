@@ -67,6 +67,84 @@ test('RunTrackPreview cache is bounded (LRU)', () => {
 	);
 });
 
+test('routes/[id] page clips waypoints for non-owner viewers', () => {
+	// Reason: pre-prod privacy-zones audit found this surface rendered
+	// `<RunMap track={route.waypoints} />` with no clip step. Bookmarked,
+	// public, and club routes were leaking the unclipped polyline to
+	// non-owners. Must use fetchClippedRouteForViewer (decisions §33).
+	const source = read('src/routes/routes/[id]/+page.svelte');
+	assert.match(
+		source,
+		/fetchClippedRouteForViewer/,
+		'/routes/[id] must call fetchClippedRouteForViewer for non-owner viewers — direct route.waypoints render leaks the unclipped polyline. See decisions §33.',
+	);
+	// The renderer must hand displayWaypoints to RunMap, not the raw
+	// route.waypoints (which is the unclipped row column for non-owners).
+	assert.match(
+		source,
+		/<RunMap[^>]*track=\{displayWaypoints/s,
+		'/routes/[id] must render <RunMap track={displayWaypoints}> rather than route.waypoints — the raw column is the unclipped polyline.',
+	);
+});
+
+test('routes list + clubs Routes tab use RouteTrackPreview', () => {
+	// Reason: same audit. Both list-view surfaces had bare
+	// <TrackPreview points={route.waypoints} /> — fine for owned rows
+	// but leaks bookmarked / club / public rows. RouteTrackPreview wraps
+	// the raw thumbnail with the same lazy clip + cache pattern as
+	// RunTrackPreview so non-owner viewers see clipped output.
+	const routesList = read('src/routes/routes/+page.svelte');
+	assert.match(
+		routesList,
+		/<RouteTrackPreview/,
+		'My Routes list must use <RouteTrackPreview> rather than bare <TrackPreview> — bookmarked others-routes leak otherwise. See decisions §33.',
+	);
+	const clubsPage = read('src/routes/clubs/[slug]/+page.svelte');
+	assert.match(
+		clubsPage,
+		/<RouteTrackPreview/,
+		'Clubs page Routes tab must use <RouteTrackPreview> — club-route thumbnails (other admins / members) need the clip pass for non-owner viewers.',
+	);
+});
+
+test('RouteTrackPreview routes non-owner fetches through clip_route_for_viewer', () => {
+	// Reason: the clip RPC is the only path that returns clipped
+	// waypoints without first leaking the row's `waypoints` column to
+	// the wire. Owner reads use the row directly; non-owner reads must
+	// call fetchClippedRouteForViewer.
+	const source = read('src/lib/components/RouteTrackPreview.svelte');
+	assert.match(
+		source,
+		/fetchClippedRouteForViewer/,
+		'RouteTrackPreview must use fetchClippedRouteForViewer for non-owner viewers — bare route.waypoints render leaks the unclipped polyline. See decisions §33.',
+	);
+	assert.match(
+		source,
+		/CACHE_MAX/,
+		'RouteTrackPreview must have a bounded cache — see RunTrackPreview for the LRU shape.',
+	);
+});
+
+test('fetchClippedRouteForViewer fails closed on RPC error', () => {
+	// Reason: same as clipTrackForUser. Returning the input on RPC
+	// error would defeat the helper. The empty-input early-return is
+	// not relevant here (the helper takes only an id), so we only
+	// assert that the error branch returns [].
+	const source = read('src/lib/data.ts');
+	const fnMatch = source.match(
+		/export async function fetchClippedRouteForViewer[\s\S]*?^}/m,
+	);
+	assert.ok(fnMatch, 'Could not locate fetchClippedRouteForViewer body — rename?');
+	const body = fnMatch![0];
+	const errBranch = body.match(/if \(error\) \{[\s\S]*?\}/);
+	assert.ok(errBranch, 'fetchClippedRouteForViewer must have an explicit error branch');
+	assert.match(
+		errBranch![0],
+		/return \[\];/,
+		'fetchClippedRouteForViewer must return [] on RPC failure — see decisions §33.',
+	);
+});
+
 test('clipTrackForUser fails closed on RPC error', () => {
 	// Reason: returning the unclipped input on RPC error was the
 	// privacy leak this helper exists to prevent. Fail-closed (return
