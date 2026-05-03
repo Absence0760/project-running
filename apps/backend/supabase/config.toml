@@ -17,3 +17,26 @@ enabled = false
 
 [auth.external.apple]
 enabled = false
+
+# Edge Function defaults bake in verify_jwt = true, which gates the
+# function on a Supabase-issued JWT (anon or user). The three handlers
+# below authenticate themselves another way — Strava signs nothing, so
+# strava-webhook gates on a URL-embedded shared secret + timing-safe
+# HMAC; revenuecat-webhook validates an HMAC over the raw body; and
+# refresh-tokens is invoked by pg_cron with a shared bearer token.
+# Without these blocks the platform 401s the requests before our code
+# runs, so the secrets we *do* check would never get the chance.
+#
+# The other functions (strava-import, parkrun-import, export-data,
+# delete-account, clip-public-track) all need a Supabase JWT (anon for
+# clip-public-track, user-scoped for the rest) and are correct on the
+# default verify_jwt = true.
+
+[functions.strava-webhook]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.refresh-tokens]
+verify_jwt = false
