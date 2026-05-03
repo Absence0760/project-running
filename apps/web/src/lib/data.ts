@@ -325,11 +325,16 @@ async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 }
 
 export async function fetchPublicRun(id: string): Promise<Run | null> {
+	// Public reads go through the public_runs view (decisions §33,
+	// migration 20260626_001) which strips external_id, redacts the
+	// metadata bag's audit / sync / training-plan-linkage keys, and
+	// nulls route_id / event_id when the joined target isn't public.
+	// The view's where clause is `is_public = true` so the dropped
+	// `.eq('is_public', true)` filter is redundant.
 	const { data } = await supabase
-		.from('runs')
+		.from('public_runs')
 		.select('*')
 		.eq('id', id)
-		.eq('is_public', true)
 		.single();
 
 	if (!data) return null;
@@ -342,7 +347,7 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 			console.warn('Failed to fetch public run track', e);
 		}
 	}
-	return { ...data, track };
+	return { ...data, track } as Run;
 }
 
 export async function deleteRun(id: string): Promise<void> {
@@ -2693,11 +2698,14 @@ export async function fetchFollowingFeed(opts?: {
 	if (filteredAuthors.length === 0) return [];
 
 	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+	// Feed reads go through the public_runs view (decisions §33,
+	// migration 20260626_001) — the view filters on is_public and
+	// applies the column / metadata-key redaction so feed entries
+	// don't leak third-party ids or sync-state internals.
 	let q = supabase
-		.from('runs')
+		.from('public_runs')
 		.select('*')
 		.in('user_id', filteredAuthors)
-		.eq('is_public', true)
 		.gte('started_at', cutoff)
 		.order('started_at', { ascending: false })
 		.order('id', { ascending: false })
@@ -2762,12 +2770,14 @@ export async function clipTrackForUser(
 }
 
 /// Recent public runs from a single user — used by the profile page.
+/// Reads through the public_runs view (decisions §33, migration
+/// 20260626_001) so the redaction applies on the wire even when the
+/// caller is signed in.
 export async function fetchPublicRunsByUser(userId: string, limit = 20): Promise<Run[]> {
 	const { data } = await supabase
-		.from('runs')
+		.from('public_runs')
 		.select('*')
 		.eq('user_id', userId)
-		.eq('is_public', true)
 		.order('started_at', { ascending: false })
 		.limit(limit);
 	return (data ?? []) as Run[];

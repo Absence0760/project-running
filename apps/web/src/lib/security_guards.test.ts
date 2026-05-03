@@ -145,6 +145,61 @@ test('fetchClippedRouteForViewer fails closed on RPC error', () => {
 	);
 });
 
+test('public-runs readers go through the public_runs view', () => {
+	// Reason: pre-prod public-rows audit found that `select * from runs
+	// where is_public = true` exposes external_id, training-plan-linkage
+	// metadata, sync-state metadata, and link-existence to private
+	// routes/events. The public_runs view (migration 20260626_001)
+	// strips these. Every public-runs reader must read from the view,
+	// not the base table.
+	const source = read('src/lib/data.ts');
+
+	// Slice the source between two known landmarks per function. Each
+	// helper ends well before the next public-export so we can scan a
+	// reasonable window. We don't try to perfectly delimit a function
+	// body (nested type literals trip a naive `^}` regex); we just need
+	// a window that contains the .from() call and nothing else.
+	function bodyAfter(needle: string, until: string): string {
+		const start = source.indexOf(needle);
+		assert.ok(start >= 0, `Could not locate '${needle}' — rename?`);
+		const end = source.indexOf(until, start + needle.length);
+		assert.ok(
+			end > start,
+			`Could not locate landmark '${until}' after '${needle}'`,
+		);
+		return source.slice(start, end);
+	}
+	const fetchPublicRunBody = bodyAfter(
+		'export async function fetchPublicRun(',
+		'export async function deleteRun(',
+	);
+	const fetchFollowingFeedBody = bodyAfter(
+		'export async function fetchFollowingFeed(',
+		'export async function clipTrackForUser(',
+	);
+	const fetchPublicRunsByUserBody = bodyAfter(
+		'export async function fetchPublicRunsByUser(',
+		'// ─────────────────────── Kudos',
+	);
+
+	for (const [name, body] of [
+		['fetchPublicRun', fetchPublicRunBody],
+		['fetchFollowingFeed', fetchFollowingFeedBody],
+		['fetchPublicRunsByUser', fetchPublicRunsByUserBody],
+	] as const) {
+		assert.match(
+			body,
+			/\.from\(['"]public_runs['"]\)/,
+			`${name} must read from the public_runs view rather than the runs table — see decisions §33 and migration 20260626_001.`,
+		);
+		assert.doesNotMatch(
+			body,
+			/\.from\(['"]runs['"]\)/,
+			`${name} must NOT read from the bare runs table — that path leaks external_id, training-plan-linkage metadata, etc.`,
+		);
+	}
+});
+
 test('clipTrackForUser fails closed on RPC error', () => {
 	// Reason: returning the unclipped input on RPC error was the
 	// privacy leak this helper exists to prevent. Fail-closed (return
