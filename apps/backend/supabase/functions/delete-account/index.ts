@@ -29,13 +29,19 @@ serve(withSentry('delete-account', async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  // Delete Storage files (tracks in the `runs` bucket under user_id/).
-  const { data: files } = await adminClient.storage
-    .from('runs')
-    .list(user.id, { limit: 1000 });
-  if (files && files.length > 0) {
-    const paths = files.map((f) => `${user.id}/${f.name}`);
-    await adminClient.storage.from('runs').remove(paths);
+  // Delete Storage files. The `runs` bucket holds gzipped tracks +
+  // per-user export blobs; the `run-photos` bucket holds run photos
+  // (public-read, so leaving them behind means saved URLs keep
+  // resolving even after account deletion). Both keyed under
+  // `{user.id}/`.
+  for (const bucket of ['runs', 'run-photos']) {
+    const { data: files } = await adminClient.storage
+      .from(bucket)
+      .list(user.id, { limit: 1000 });
+    if (files && files.length > 0) {
+      const paths = files.map((f) => `${user.id}/${f.name}`);
+      await adminClient.storage.from(bucket).remove(paths);
+    }
   }
 
   // Row data cascades from auth.users via ON DELETE CASCADE on most
