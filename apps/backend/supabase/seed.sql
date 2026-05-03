@@ -617,6 +617,8 @@ ON CONFLICT DO NOTHING;
 -- `db reset`; production migrations skip it entirely.
 
 -- ───────── check_rate_limit (migration 20260604_001) ─────────
+-- Mocks the JWT context per call (migration 20260614_001 added a
+-- caller-identity guard: auth.uid() must match p_user_id).
 DO $$
 DECLARE
   test_user uuid := '99999999-9999-9999-9999-999999999991';
@@ -625,6 +627,8 @@ DECLARE
   v_retry integer;
 BEGIN
   DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
 
   -- 1st + 2nd within max → allow.
   SELECT allowed INTO v_allowed FROM check_rate_limit(test_user, 'test_rl', 2, 3600);
@@ -640,10 +644,12 @@ BEGIN
   END IF;
 
   -- Per-user isolation — test_user2 starts fresh.
+  PERFORM set_config('request.jwt.claim.sub', test_user2::text, true);
   SELECT allowed INTO v_allowed FROM check_rate_limit(test_user2, 'test_rl', 2, 3600);
   IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: per-user counter leaked'; END IF;
 
   -- Per-bucket isolation — same user, different bucket starts fresh.
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
   SELECT allowed INTO v_allowed FROM check_rate_limit(test_user, 'test_rl_other', 2, 3600);
   IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: per-bucket counter leaked'; END IF;
 
@@ -658,10 +664,25 @@ BEGIN
       END IF;
   END;
 
+  -- Caller-identity guard: passing a foreign p_user_id raises.
+  BEGIN
+    PERFORM check_rate_limit(test_user2, 'test_rl', 2, 3600);
+    RAISE EXCEPTION 'check_rate_limit: foreign p_user_id should have raised';
+  EXCEPTION
+    WHEN raise_exception THEN
+      IF SQLERRM NOT LIKE '%not authorized%' THEN
+        RAISE EXCEPTION 'check_rate_limit caller-guard raised wrong error: %', SQLERRM;
+      END IF;
+  END;
+
   DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
 -- ───────── check_rate_limit_tiered (migration 20260605_001) ─────────
+-- Mocks the JWT context (migration 20260614_001 added a caller-
+-- identity guard: auth.uid() must match p_user_id).
 DO $$
 DECLARE
   test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
@@ -675,6 +696,8 @@ BEGIN
   -- depend on that.
   SELECT subscription_tier INTO v_initial_tier FROM user_profiles WHERE id = test_user;
   DELETE FROM rate_limits WHERE user_id = test_user AND bucket = test_bucket;
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
 
   -- Ensure free tier first.
   UPDATE user_profiles SET subscription_tier = 'free' WHERE id = test_user;
@@ -726,6 +749,8 @@ BEGIN
 
   -- Restore the seed-time tier so downstream tests don't see drift.
   UPDATE user_profiles SET subscription_tier = v_initial_tier WHERE id = test_user;
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
 -- ───────── integrations vault (migration 20260603_001) ─────────
