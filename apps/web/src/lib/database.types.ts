@@ -342,6 +342,13 @@ export type Database = {
             foreignKeyName: "event_results_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_results_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
             referencedRelation: "runs"
             referencedColumns: ["id"]
           },
@@ -611,6 +618,13 @@ export type Database = {
             foreignKeyName: "live_run_pings_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_run_pings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
             referencedRelation: "runs"
             referencedColumns: ["id"]
           },
@@ -680,6 +694,13 @@ export type Database = {
             foreignKeyName: "notifications_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
             referencedRelation: "runs"
             referencedColumns: ["id"]
           },
@@ -711,6 +732,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "personal_records_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "personal_records_run_id_fkey"
             columns: ["run_id"]
@@ -808,6 +836,13 @@ export type Database = {
           week_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "plan_workouts_completed_run_id_fkey"
+            columns: ["completed_run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "plan_workouts_completed_run_id_fkey"
             columns: ["completed_run_id"]
@@ -1088,6 +1123,13 @@ export type Database = {
             foreignKeyName: "run_comments_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_comments_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
             referencedRelation: "runs"
             referencedColumns: ["id"]
           },
@@ -1110,6 +1152,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "run_kudos_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "run_kudos_run_id_fkey"
             columns: ["run_id"]
@@ -1164,6 +1213,13 @@ export type Database = {
             foreignKeyName: "run_matched_tracks_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: true
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_matched_tracks_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
             referencedRelation: "runs"
             referencedColumns: ["id"]
           },
@@ -1198,6 +1254,13 @@ export type Database = {
           storage_path?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "run_photos_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "run_photos_run_id_fkey"
             columns: ["run_id"]
@@ -1328,6 +1391,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "segment_efforts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "segment_efforts_run_id_fkey"
             columns: ["run_id"]
@@ -1615,6 +1685,54 @@ export type Database = {
         }
         Relationships: []
       }
+      public_runs: {
+        Row: {
+          created_at: string | null
+          distance_m: number | null
+          duration_s: number | null
+          event_id: string | null
+          id: string | null
+          is_public: boolean | null
+          metadata: Json | null
+          route_id: string | null
+          source: string | null
+          started_at: string | null
+          track_url: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          distance_m?: number | null
+          duration_s?: number | null
+          event_id?: never
+          id?: string | null
+          is_public?: boolean | null
+          metadata?: never
+          route_id?: never
+          source?: string | null
+          started_at?: string | null
+          track_url?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          distance_m?: number | null
+          duration_s?: number | null
+          event_id?: never
+          id?: string | null
+          is_public?: boolean | null
+          metadata?: never
+          route_id?: never
+          source?: string | null
+          started_at?: string | null
+          track_url?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _run_comment_parent_is_top_level: {
@@ -1721,6 +1839,8 @@ export type Database = {
       is_club_member: { Args: { target_club: string }; Returns: boolean }
       is_event_organiser: { Args: { target_club: string }; Returns: boolean }
       is_pro: { Args: never; Returns: boolean }
+      is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }
+      is_public_route_by_id: { Args: { p_route_id: string }; Returns: boolean }
       is_race_director: { Args: { target_club: string }; Returns: boolean }
       join_club_by_token: { Args: { token: string }; Returns: string }
       latest_fitness_snapshot: {

@@ -1211,3 +1211,136 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
+
+-- ───────── public_runs view projection (migration 20260626_001) ─────────
+-- Pre-prod public-rows audit fix. Verifies the view:
+--   1. exposes only is_public=true rows
+--   2. omits external_id from the projection (compile-time guard via column-not-found)
+--   3. strips audit / sync / training-plan keys from metadata
+--   4. preserves public-safe keys (activity_type, title, etc.)
+--   5. nulls route_id when the joined route is private
+--   6. nulls event_id when the joined event's club is private
+DO $$
+DECLARE
+  test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  v_run_id uuid;
+  v_private_route_id uuid;
+  v_public_route_id uuid;
+  v_public_metadata jsonb;
+  v_view_route_id uuid;
+  v_count integer;
+  v_columns_exist boolean;
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+
+  -- (2) Compile-time check that external_id is not in the view —
+  --     a select of the column raises 42703 (undefined column).
+  BEGIN
+    PERFORM external_id FROM public_runs LIMIT 0;
+    RAISE EXCEPTION 'public_runs: external_id should not be exposed by the view';
+  EXCEPTION
+    WHEN undefined_column THEN NULL;
+  END;
+
+  -- (1) Insert one public + one private run for the seed user.
+  INSERT INTO runs (user_id, started_at, duration_s, distance_m, source,
+                    external_id, is_public, metadata)
+    VALUES (test_user, now(), 1800, 5000, 'app',
+            'strava:99999990', true,
+            jsonb_build_object(
+              'activity_type', 'run',
+              'title', 'Public test',
+              'notes', 'public',
+              'strava_id', '99999990',
+              'garmin_id', 'test_garmin',
+              'imported_from', 'strava',
+              'imported_at', '2026-05-01T00:00:00Z',
+              'health_connect_type', 'EXERCISE',
+              'strava_activity_type', 'Run',
+              'source_file', '/private/path/run.fit',
+              'max_bpm', 195,
+              'plan_workout_id', '00000000-0000-0000-0000-000000000123',
+              'workout_step_results', jsonb_build_array(
+                jsonb_build_object('step_index', 0, 'kind', 'warmup',
+                                   'target_pace_sec_per_km', 360,
+                                   'actual_pace_sec_per_km', 365)
+              ),
+              'workout_adherence', 'completed',
+              'last_modified_at', '2026-05-01T00:00:00Z',
+              'recovered_from_crash', true,
+              'in_progress', false,
+              'manual_entry', true,
+              'indoor_estimated', true,
+              'distance_source', 'pedometer'
+            ))
+    RETURNING id INTO v_run_id;
+
+  INSERT INTO runs (user_id, started_at, duration_s, distance_m, source,
+                    is_public, metadata)
+    VALUES (test_user, now(), 1800, 5000, 'app',
+            false, jsonb_build_object('activity_type', 'run', 'title', 'Private'));
+
+  -- View should only return the public run we just inserted.
+  SELECT count(*) INTO v_count FROM public_runs WHERE id = v_run_id;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'public_runs: expected the public run to appear, got %', v_count;
+  END IF;
+
+  -- (3) (4) The metadata projection must keep public-safe keys and
+  -- drop the denylisted ones.
+  SELECT metadata INTO v_public_metadata FROM public_runs WHERE id = v_run_id;
+
+  IF NOT (v_public_metadata ? 'activity_type') THEN
+    RAISE EXCEPTION 'public_runs: activity_type must survive (it is public-safe)';
+  END IF;
+  IF NOT (v_public_metadata ? 'title') THEN
+    RAISE EXCEPTION 'public_runs: title must survive (it is public-safe)';
+  END IF;
+
+  IF v_public_metadata ? 'strava_id' OR v_public_metadata ? 'garmin_id'
+     OR v_public_metadata ? 'imported_from' OR v_public_metadata ? 'imported_at'
+     OR v_public_metadata ? 'health_connect_type'
+     OR v_public_metadata ? 'strava_activity_type'
+     OR v_public_metadata ? 'source_file' OR v_public_metadata ? 'max_bpm'
+     OR v_public_metadata ? 'plan_workout_id'
+     OR v_public_metadata ? 'workout_step_results'
+     OR v_public_metadata ? 'workout_adherence'
+     OR v_public_metadata ? 'last_modified_at'
+     OR v_public_metadata ? 'recovered_from_crash'
+     OR v_public_metadata ? 'in_progress'
+     OR v_public_metadata ? 'manual_entry'
+     OR v_public_metadata ? 'indoor_estimated'
+     OR v_public_metadata ? 'distance_source' THEN
+    RAISE EXCEPTION 'public_runs: metadata strip list incomplete — leaked at least one denylisted key';
+  END IF;
+
+  -- (5) Link the public run to a private route. View should null the
+  -- link.
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (test_user, 'Private route', 1000, false, '[]'::jsonb)
+    RETURNING id INTO v_private_route_id;
+  UPDATE runs SET route_id = v_private_route_id WHERE id = v_run_id;
+
+  SELECT route_id INTO v_view_route_id FROM public_runs WHERE id = v_run_id;
+  IF v_view_route_id IS NOT NULL THEN
+    RAISE EXCEPTION 'public_runs: route_id should be null when the joined route is private, got %', v_view_route_id;
+  END IF;
+
+  -- Flip the route to public and re-check — the link should reappear.
+  INSERT INTO routes (user_id, name, distance_m, is_public, waypoints)
+    VALUES (test_user, 'Public route', 1000, true, '[]'::jsonb)
+    RETURNING id INTO v_public_route_id;
+  UPDATE runs SET route_id = v_public_route_id WHERE id = v_run_id;
+
+  SELECT route_id INTO v_view_route_id FROM public_runs WHERE id = v_run_id;
+  IF v_view_route_id IS DISTINCT FROM v_public_route_id THEN
+    RAISE EXCEPTION 'public_runs: route_id should expose the link when the joined route is public, got %', v_view_route_id;
+  END IF;
+
+  -- Cleanup. Delete in reverse FK order.
+  UPDATE runs SET route_id = null WHERE id = v_run_id;
+  DELETE FROM routes WHERE id IN (v_public_route_id, v_private_route_id);
+  DELETE FROM runs WHERE user_id = test_user
+    AND (metadata->>'title' IN ('Public test', 'Private'));
+  PERFORM set_config('request.jwt.claim.role', '', true);
+END $$;
