@@ -1586,6 +1586,24 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events: {
+        Row: {
+          event_id: string
+          provider: string
+          received_at: string
+        }
+        Insert: {
+          event_id: string
+          provider: string
+          received_at?: string
+        }
+        Update: {
+          event_id?: string
+          provider?: string
+          received_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       mv_weekly_mileage: {

@@ -44,6 +44,39 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
+  // Replay protection. HMAC authenticates the body but nothing
+  // sequences requests, so a captured POST can be replayed at any
+  // future time. Two gates:
+  //   1. Freshness — reject events whose event_timestamp_ms is more
+  //      than REPLAY_WINDOW_MS old or more than CLOCK_SKEW_MS in the
+  //      future. Bounds the replay window and catches captures that
+  //      have been sitting on a flash drive.
+  //   2. Event-id dedupe — first writer to webhook_events wins; a
+  //      duplicate insert (23505 unique_violation) means we've
+  //      already processed this delivery, so skip the side effect
+  //      and return 200 so RevenueCat doesn't keep retrying.
+  // Without #1 the dedupe table grows unboundedly defended against
+  // a captured event from years ago; without #2 a captured event
+  // delivered twice within the freshness window can trigger duplicate
+  // tier flips (relevant when a deactivation is replayed *after* a
+  // re-subscription has flipped the tier back to 'pro').
+  const REPLAY_WINDOW_MS = 5 * 60 * 1000;
+  const CLOCK_SKEW_MS = 60 * 1000;
+  const eventTsMs = typeof event.event_timestamp_ms === 'number'
+    ? event.event_timestamp_ms
+    : null;
+  if (eventTsMs === null) {
+    return new Response('Missing event_timestamp_ms', { status: 400 });
+  }
+  const ageMs = Date.now() - eventTsMs;
+  if (ageMs > REPLAY_WINDOW_MS || ageMs < -CLOCK_SKEW_MS) {
+    return new Response('Event outside freshness window', { status: 400 });
+  }
+  const eventId = typeof event.id === 'string' ? event.id : null;
+  if (!eventId) {
+    return new Response('Missing event id', { status: 400 });
+  }
+
   // The `app_user_id` RevenueCat sends is the Supabase user id — we
   // set it on the client when configuring the RevenueCat SDK.
   const userId = event.app_user_id;
@@ -58,6 +91,24 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+
+  // Reserve the event-id row before doing any tier work. The unique
+  // constraint on (provider, event_id) means a replayed delivery
+  // raises 23505 which we map to a 200 (RevenueCat retries on
+  // non-2xx). Insert-first means the side effect can't run twice
+  // even if the function crashes between the insert and the update —
+  // the worst case is a missed update, which RC's next renewal/state
+  // event corrects.
+  const { error: dedupeErr } = await supabase
+    .from('webhook_events')
+    .insert({ provider: 'revenuecat', event_id: eventId });
+  if (dedupeErr) {
+    if (dedupeErr.code === '23505') {
+      return Response.json({ ok: true, skipped: 'duplicate_event' });
+    }
+    console.error('Webhook dedupe insert failed:', dedupeErr);
+    return Response.json({ ok: false, error: 'dedupe failed' }, { status: 500 });
+  }
 
   // Map event type to a tier change. RevenueCat's event taxonomy:
   // https://www.revenuecat.com/docs/integrations/webhooks/event-types
@@ -113,6 +164,8 @@ interface RevenueCatEvent {
   type: string;
   app_user_id: string;
   product_id?: string;
+  id?: string;
+  event_timestamp_ms?: number;
   [key: string]: unknown;
 }
 

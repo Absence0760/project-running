@@ -1016,3 +1016,31 @@ BEGIN
     end
     WHERE user_id = test_user;
 END $$;
+
+-- ───────── webhook_events dedupe (migration 20260623_001) ─────────
+DO $$
+DECLARE
+  v_pk_violation_caught boolean := false;
+BEGIN
+  INSERT INTO webhook_events (provider, event_id)
+    VALUES ('revenuecat', 'evt-seed-test-1');
+
+  BEGIN
+    INSERT INTO webhook_events (provider, event_id)
+      VALUES ('revenuecat', 'evt-seed-test-1');
+  EXCEPTION
+    WHEN unique_violation THEN
+      v_pk_violation_caught := true;
+  END;
+
+  IF NOT v_pk_violation_caught THEN
+    RAISE EXCEPTION 'webhook_events: duplicate (provider,event_id) should have raised unique_violation';
+  END IF;
+
+  -- Different provider with the same id is allowed — namespaces don't
+  -- collide.
+  INSERT INTO webhook_events (provider, event_id)
+    VALUES ('stripe', 'evt-seed-test-1');
+
+  DELETE FROM webhook_events WHERE event_id = 'evt-seed-test-1';
+END $$;
