@@ -12,8 +12,45 @@
 /// On allow it returns null. EFs that don't have a user.id (cron-only
 /// or service-role) shouldn't call this — the rate-limit table is
 /// keyed on user_id.
+///
+/// **Failure posture.** By default the helper fails open on RPC error
+/// (a transient DB blip lets the request through rather than 429-ing
+/// every caller). Pass `{ failClosed: true }` for destructive or
+/// expensive paths where letting traffic through on RPC failure is
+/// worse than the false-positive denial — `delete-account`,
+/// `export-data` heavy zips, OAuth code exchange. Fail-closed returns
+/// 503 with a `Retry-After: 60` so the client can back off and retry.
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+export interface RateLimitOpts {
+  /// When the rate-limit RPC itself errors, return 503 instead of
+  /// allowing the request through. Use on destructive / expensive
+  /// paths. Default false.
+  failClosed?: boolean;
+}
+
+function rpcErrorResponse(bucket: string, error: unknown, failClosed: boolean): Response | null {
+  if (!failClosed) {
+    console.warn('check_rate_limit RPC failed; allowing request:', error);
+    return null;
+  }
+  console.warn('check_rate_limit RPC failed; rejecting fail-closed request:', error);
+  return new Response(
+    JSON.stringify({
+      error: 'rate_limit_unavailable',
+      bucket,
+      retry_after_seconds: 60,
+    }),
+    {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '60',
+      },
+    },
+  );
+}
 
 export async function checkRateLimit(
   supabase: SupabaseClient,
@@ -21,6 +58,7 @@ export async function checkRateLimit(
   bucket: string,
   max: number,
   windowSeconds: number,
+  opts: RateLimitOpts = {},
 ): Promise<Response | null> {
   const { data, error } = await supabase.rpc('check_rate_limit', {
     p_user_id: userId,
@@ -29,12 +67,8 @@ export async function checkRateLimit(
     p_window_seconds: windowSeconds,
   });
 
-  // If the RPC itself failed, don't deny the user — log and let the
-  // request through. Hard-failing on the rate-limit pathway would
-  // make a transient DB blip look like an outage.
   if (error || !Array.isArray(data) || data.length === 0) {
-    console.warn('check_rate_limit RPC failed; allowing request:', error);
-    return null;
+    return rpcErrorResponse(bucket, error, opts.failClosed === true);
   }
 
   const row = data[0] as { allowed: boolean; retry_after_seconds: number };
@@ -106,6 +140,7 @@ export async function checkRateLimitTiered(
   freeMax: number,
   proMax: number,
   windowSeconds: number,
+  opts: RateLimitOpts = {},
 ): Promise<Response | null> {
   const { data, error } = await supabase.rpc('check_rate_limit_tiered', {
     p_user_id: userId,
@@ -116,8 +151,7 @@ export async function checkRateLimitTiered(
   });
 
   if (error || !Array.isArray(data) || data.length === 0) {
-    console.warn('check_rate_limit_tiered RPC failed; allowing request:', error);
-    return null;
+    return rpcErrorResponse(bucket, error, opts.failClosed === true);
   }
 
   const row = data[0] as {

@@ -62,8 +62,15 @@ serve(withSentry('strava-import', async (req: Request) => {
 	// the pro 16/h still stays well inside that envelope while
 	// removing the "refresh again in an hour" UX friction for paying
 	// users.
+	// `connect` is fail-closed: it exchanges an OAuth code (one-shot,
+	// time-bounded by Strava) and writes credentials to Vault. Letting
+	// the limiter fall open on RPC error means a stolen JWT during a
+	// DB blip can spam-exchange codes against Strava's per-app budget.
+	// `sync` stays fail-open — it's idempotent and read-mostly.
 	const denied = action === 'connect'
-		? await checkRateLimit(supabase, user.id, 'strava-import:connect', 10, 3600)
+		? await checkRateLimit(supabase, user.id, 'strava-import:connect', 10, 3600, {
+			failClosed: true,
+		})
 		: await checkRateLimitTiered(supabase, user.id, 'strava-import:sync', 4, 16, 3600);
 	if (denied) return denied;
 

@@ -81,7 +81,12 @@ serve(withSentry('delete-account', async (req: Request) => {
   // 3/hour. Destructive endpoint, but we want a typo or double-tap
   // to fail fast rather than panic-spam-cancelling. Once a delete
   // succeeds the user's auth row is gone, so subsequent calls 401.
-  const denied = await checkRateLimit(userClient, user.id, 'delete-account', 3, 3600);
+  // Fail-closed: if the rate-limit RPC errors we 503 rather than
+  // letting unbounded delete attempts through (the throttle is the
+  // only thing between a stolen JWT and account-destruction spam).
+  const denied = await checkRateLimit(userClient, user.id, 'delete-account', 3, 3600, {
+    failClosed: true,
+  });
   if (denied) return denied;
 
   const adminClient = createClient(

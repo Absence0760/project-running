@@ -94,7 +94,12 @@ serve(withSentry('export-data', async (req: Request) => {
 	const user = userData.user;
 	if (!user) return new Response('Unauthorized', { status: 401 });
 
-	const denied = await checkRateLimitTiered(authedSupabase, user.id, 'export-data', 2, 8, 3600);
+	// Fail-closed: an export builds a multi-MB GPX zip per call.
+	// Letting the throttle silently fall open on RPC error is a free
+	// DoS vector against the function and the caller's Storage prefix.
+	const denied = await checkRateLimitTiered(authedSupabase, user.id, 'export-data', 2, 8, 3600, {
+		failClosed: true,
+	});
 	if (denied) return denied;
 
 	const body = await req.json().catch(() => ({}));
