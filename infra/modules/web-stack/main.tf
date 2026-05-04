@@ -337,8 +337,22 @@ resource "aws_cloudfront_origin_request_policy" "lambda" {
   name = "${local.resource_prefix}-lambda-origin"
   cookies_config { cookie_behavior = "all" }
   query_strings_config { query_string_behavior = "all" }
+  # Explicit allowlist excluding `Authorization`: when Lambda OAC is
+  # in use, CloudFront sigv4-signs every origin request in the
+  # `Authorization` header. Forwarding the viewer's `Authorization`
+  # collides with that signature, fails OAC, and 403s. The user's
+  # Supabase JWT is therefore carried in `X-Supabase-Authorization`
+  # (read by both the Lambda handler and the SvelteKit dev wrapper).
   headers_config {
-    header_behavior = "allViewerExceptHostHeader"
+    header_behavior = "whitelist"
+    headers {
+      items = [
+        "content-type",
+        "accept",
+        "accept-encoding",
+        "x-supabase-authorization",
+      ]
+    }
   }
 }
 

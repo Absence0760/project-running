@@ -446,7 +446,7 @@
 				method: 'POST',
 				headers: {
 					'content-type': 'application/json',
-					Authorization: `Bearer ${token}`,
+					'X-Supabase-Authorization': `Bearer ${token}`,
 				},
 				body: JSON.stringify({
 					messages: payloadMessages,

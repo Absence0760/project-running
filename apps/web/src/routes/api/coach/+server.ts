@@ -43,7 +43,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	const isProdEnv = env.VERCEL_ENV === 'production' || env.NODE_ENV === 'production';
 	const bypassPaywallEnabled = !isProdEnv && env.BYPASS_PAYWALL === 'true';
 
-	const result = await handleCoach(request.headers.get('authorization'), rawBody, {
+	// Mirrors the production Lambda: read the user JWT from
+	// `X-Supabase-Authorization` so dev and prod clients send the same
+	// header. (Prod can't use `Authorization` — CloudFront's Lambda OAC
+	// signs sigv4 in that slot.)
+	const result = await handleCoach(request.headers.get('x-supabase-authorization'), rawBody, {
 		provider,
 		anthropicApiKey: env.ANTHROPIC_API_KEY,
 		openaiBaseUrl: env.OPENAI_BASE_URL ?? 'http://localhost:11434/v1',

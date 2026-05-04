@@ -64,11 +64,15 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 			return;
 		}
 
-		// Function URL header keys are normalised lowercase per the
-		// HTTP/2 spec — but the AWS docs caution that case can vary, so
-		// check both forms defensively.
+		// The user's Supabase JWT is passed in `X-Supabase-Authorization`,
+		// not `Authorization`. CloudFront's Lambda OAC sigv4-signs every
+		// origin request in the `Authorization` header — forwarding the
+		// viewer's `Authorization` would collide with that signature and
+		// break IAM auth on the Function URL.
 		const authHeader =
-			event.headers?.['authorization'] ?? event.headers?.['Authorization'] ?? null;
+			event.headers?.['x-supabase-authorization'] ??
+			event.headers?.['X-Supabase-Authorization'] ??
+			null;
 
 		// BYPASS_PAYWALL is a dev-only escape hatch, never honoured in
 		// the production Lambda. Hard-coding `false` here is the
