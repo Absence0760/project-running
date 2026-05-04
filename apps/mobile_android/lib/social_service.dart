@@ -4,6 +4,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'recurrence.dart';
 
+/// Parse the `events.recurrence_byday` jsonb array (a list of weekday
+/// short-codes like `['MO','WE']`) into a list of `Weekday`s. Returns
+/// null when the input isn't an array or when no code parses — the
+/// EventRecurrence shape treats null and empty as "no day-of-week
+/// override", which is the only behaviour callers care about.
+///
+/// Pulled out of `SocialService._parseByday` so it can be unit-tested
+/// without booting Supabase.
+List<Weekday>? parseBydayCodes(dynamic raw) {
+  if (raw is! List) return null;
+  final codes = raw.cast<String>();
+  final ws = codes.map(weekdayFromCode).whereType<Weekday>().toList();
+  return ws.isEmpty ? null : ws;
+}
+
 /// View-model for a club enriched with the current user's membership and the
 /// live member count. Mirrors `ClubWithMeta` on web.
 class ClubView {
@@ -551,12 +566,7 @@ class SocialService extends ChangeNotifier {
     ];
   }
 
-  List<Weekday>? _parseByday(dynamic raw) {
-    if (raw is! List) return null;
-    final codes = raw.cast<String>();
-    final ws = codes.map(weekdayFromCode).whereType<Weekday>().toList();
-    return ws.isEmpty ? null : ws;
-  }
+  List<Weekday>? _parseByday(dynamic raw) => parseBydayCodes(raw);
 
   Future<void> rsvpEvent(String eventId, String status, DateTime instance) async {
     final uid = _uid;
