@@ -45,7 +45,7 @@ npx tsx --test src/lib/training.test.ts
 
 ## What's covered today
 
-Total: **~679 unique Dart mobile tests across 83 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 70 tests in run_recorder (across 4 files), 28 in api_client, 2 in core_models, and **253 TypeScript unit tests across 20 files** in the web app. Both mobile apps run the same 83 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,358 mobile test runs. No integration tests, no golden tests yet. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **~682 unique Dart mobile tests across 84 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, and **253 TypeScript unit tests across 20 files** in the web app. Both mobile apps run the same 84 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,364 mobile test runs. The `recording_integration_test.dart` covers the GPS → recorder → LocalRunStore → SyncService → API golden path with a fake `GeolocatorPlatform`; no `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -125,6 +125,10 @@ Static source-level guards on the recorder package itself: no banned imports, no
 
 The structured-workout step engine — step expansion (warmup → reps → recovery → cooldown), auto-advance, halfway / last-50 m progress signals, skip / abandon, and pace-adherence "wayBehind" classification. See [workout_execution.md](workout_execution.md) for the runner state machine + UI contract.
 
+### `packages/run_recorder/test/geolocator_platform_fake_test.dart` — 8 tests
+
+Closes the documented "typed errors thrown from `prepare()`" gap. Replaces `GeolocatorPlatform.instance` with a fake that extends `GeolocatorPlatform` (so `PlatformInterface.verify` passes) and exposes setters for `serviceEnabled` / `permissionState` / `requestPermissionResult` plus an `emit(Position)` and `emitError(Object)` method that pushes through the live position stream. The error-path tests cover `LocationServiceDisabledError` when services are off, `LocationPermissionDeniedError(forever: false)` when the request returns denied, and `LocationPermissionDeniedError(forever: true)` when permission is denied-forever — plus the "already granted" path that skips the request. The happy-path tests cover `prepare()` opening the position stream, positions flowing through the filter chain (pre-begin updates the dot but not the track; post-begin first fix becomes the track anchor; subsequent fixes accumulate distance), stream `onError` not crashing the recorder, and `dispose()` cancelling the subscription so subsequent emits don't extend the track.
+
 ### `apps/mobile_android/test/local_run_store_test.dart` — 23 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
@@ -187,7 +191,19 @@ Covers `BackupService.restore` on the offline path (no Supabase session — runs
 
 The online path (`api.fetchRunRowsRaw` + Storage uploads) still needs a fake `SupabaseClient` to test, same constraint as the rest of `ApiClient`'s wire-level methods.
 
-### `apps/mobile_android/test/sync_service_test.dart` — 10 tests
+### `apps/mobile_android/test/recording_integration_test.dart` — 3 tests
+
+Integration test for the GPS → record → save → sync golden path. Reuses the `_FakeGeolocatorPlatform` pattern from `packages/run_recorder/test/geolocator_platform_fake_test.dart` (extends `GeolocatorPlatform` and feeds synthetic positions). Drives the full pipeline:
+
+1. `RunRecorder` consumes the synthetic feed through the real `prepare()` → `begin()` → filter chain.
+2. The recorded track is persisted to a `LocalRunStore` rooted at a fresh tempDir.
+3. `SyncService.debugTrySync` drains the unsynced run through a capturing `_CapturingApiClient` that records the batch.
+
+Three scenarios: the happy-path full pipeline (GPS feed → recorder → store → sync → API), a stream error mid-recording (recorder cancels its subscription on error; the partial track is still saveable), and the offline path (api null → run stays unsynced for a later attempt).
+
+Stops short of driving the full `RunScreen` UI, which would need additional mocks for Pedometer / WakelockPlus / flutter_tts / flutter_local_notifications. The data pipeline is the regression target — UI mocking is documented as a follow-up below.
+
+### `apps/mobile_android/test/sync_service_test.dart` — 19 tests
 
 Covers the `_trySync` loop on `SyncService` via the new `@visibleForTesting debugTrySync` hook. A `_FakeApiClient` subclasses `ApiClient` and overrides `userId`, `saveRunsBatch`, and `deleteRunById`; `LocalRunStore` runs against a real `tempDir` (same pattern as `local_run_store_test.dart`).
 
@@ -198,6 +214,12 @@ Covers the `_trySync` loop on `SyncService` via the new `@visibleForTesting debu
 **Pending-delete drain (3 tests):** a successful delete removes the row from cloud / local / pending set, one failing delete does not poison the rest of the queue (others still drain), and `deleteRunById` is called once per pending id.
 
 **Combined paths (2 tests):** a single tick handles both an unsynced push and a pending-delete drain in one cycle, and a reentrant call landing while a sync is in flight short-circuits on the `_syncing` guard so the batch isn't pushed twice.
+
+**Lifecycle wiring (2 tests):** `didChangeAppLifecycleState(resumed)` triggers a sync; `paused` / `inactive` / `detached` do not.
+
+**Connectivity wiring (5 tests):** drives the connectivity branch directly via `@visibleForTesting debugOnConnectivity`. `[wifi]` triggers a sync; `[mobile]` and `[ethernet]` also trigger; `[none]` and `[bluetooth]` alone do not; multi-result lists with at least one online entry fire (the common Android shape). Pins the guard policy: bluetooth-tethering is intentionally excluded from the "online" set since it isn't routable for upload.
+
+**start / stop (2 tests):** `start()` registers as a binding observer, fires the startup `_trySync`, and routes subsequent lifecycle events through the observer. `stop()` removes the observer so further binding-level resume events don't fire syncs.
 
 ### `apps/mobile_android/test/local_route_store_test.dart` — 16 tests
 
@@ -324,6 +346,10 @@ Several private formatters were extracted from stateful classes into top-level p
 ### `apps/mobile_ios/test/` — same 83 files, byte-for-byte
 
 After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
+
+### `packages/api_client/test/api_client_di_test.dart` — 4 tests
+
+Smoke tests for the `@visibleForTesting ApiClient.withClient(SupabaseClient)` named constructor — the DI seam that lets tests inject a fake `SupabaseClient` without booting `Supabase.initialize`. Pins: `userId` reads from the injected client (null when not signed in), `userEmail` reads from the injected client, two `withClient` instances stay independent (the override is an instance field, not static), and the default `ApiClient()` constructor still falls back to the global (which throws when `Supabase.initialize` hasn't run — the throw is the test value, confirming the seam only fires for `withClient`).
 
 ### `packages/api_client/test/api_client_codecs_test.dart` — 24 tests
 
@@ -741,11 +767,11 @@ Full reference for the generators, workflow, and troubleshooting in [schema_code
 
 ## What's *not* covered (honest)
 
-- **`RunScreen` recording-loop and finish flow.** Idle-state widget tests cover the activity-type ChoiceChip row, the Walk-chip swap, the Start affordance, and the invariant that `LiveRunMap` does NOT mount until `begin()` runs (`run_screen_test.dart`, 4 tests). The recording-state branches (countdown overlay, GPS-lost banner, finish summary, save flow) still need `GeolocatorPlatform.instance` + pedometer channel replacements to drive — none of those exist yet.
-- **Integration tests.** No tests exercise the full GPS → recording → save → sync → display flow end-to-end. `integration_test` package + a mock location provider would be the right approach. None exist today.
-- **`ApiClient` wire-level methods.** The DI seam exists — `ApiClient.withClient(SupabaseClient)` named constructor lets tests inject a fake without booting `Supabase.initialize` (4 tests in `api_client_di_test.dart`). The wire methods themselves (`saveRun`, `getRuns`, `fetchTrack`, `signIn`, `_uploadTrack`, etc.) still need a mock framework like `pkg:mocktail` (or local-Supabase integration tests against `127.0.0.1:54321`) to drive — the chained `from(...).select(...).eq(...).maybeSingle()` builders are too deep to roll by hand.
+- **`RunScreen` recording-loop UI flow.** Idle-state widget tests cover the activity-type ChoiceChip row, the Walk-chip swap, the Start affordance, and the invariant that `LiveRunMap` does NOT mount until `begin()` runs (`run_screen_test.dart`, 4 tests). The data pipeline behind the screen — recorder + LocalRunStore + SyncService — is fully covered by `recording_integration_test.dart`. What's left is driving `RunScreen` itself through countdown → recording → finish via the UI; that needs additional platform-channel mocks (Pedometer EventChannel, WakelockPlus, flutter_tts, flutter_local_notifications) on top of the existing `GeolocatorPlatform` fake. Documented as a follow-up — the regression risk in the data pipeline is the higher-value catch and is now covered.
+- **Device-instrumented integration_test (`flutter_test integration_test/`).** No `integration_test`-package tests yet. `recording_integration_test.dart` covers the same golden path as a heavy widget test, which catches the same regressions cheaper. A true device-driven `integration_test` would add value for tile-cache, foreground-service, and background-sync paths that need real Android primitives.
+- **`ApiClient` wire-level methods.** The DI seam exists — `ApiClient.withClient(SupabaseClient)` named constructor lets tests inject a fake without booting `Supabase.initialize` (4 tests in `api_client_di_test.dart`). The wire methods themselves (`saveRun`, `getRuns`, `fetchTrack`, `signIn`, `_uploadTrack`, etc.) still need a mock framework like `pkg:mocktail` (or local-Supabase integration tests against `127.0.0.1:54321`) to drive — the chained `from(...).select(...).eq(...).maybeSingle()` builders are too deep to roll by hand. The codec layer (`_runFromRow`, `_routeFromRow`, waypoint round-trip) is covered by `api_client_codecs_test.dart`, which is where the bug-yield is highest; the wire layer is mostly thin "build query, send, deserialize" code where the codec is the meaningful part.
 
-If you want to expand coverage, the best targets in priority order: (1) bring in `mocktail` and add wire-level `ApiClient` tests through the DI seam; (2) replace `GeolocatorPlatform.instance` to drive `RunScreen`'s recording-state branches; (3) stand up an `integration_test` harness for the GPS → save → sync golden path.
+If you want to expand coverage, the best targets in priority order: (1) bring in `mocktail` and add wire-level `ApiClient` tests through the DI seam; (2) extend `recording_integration_test.dart` to drive `RunScreen` via additional platform-channel mocks (Pedometer / WakelockPlus / flutter_tts); (3) stand up a true `integration_test` harness for the device-led paths.
 
 ---
 
