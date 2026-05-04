@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:core_models/core_models.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/local_run_store.dart';
@@ -216,6 +218,157 @@ void main() {
           reason:
               'second call must short-circuit on the _syncing guard so the '
               'same batch is not pushed twice');
+    });
+  });
+
+  group('SyncService — lifecycle wiring', () {
+    test('didChangeAppLifecycleState(resumed) triggers a sync', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      // _trySync is fire-and-forget from the observer; let microtasks drain.
+      await Future<void>.delayed(Duration.zero);
+      // The sync future itself is async; let one more macrotask round trip.
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 1);
+    });
+
+    test('didChangeAppLifecycleState(paused) does NOT trigger a sync',
+        () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.didChangeAppLifecycleState(AppLifecycleState.paused);
+      svc.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      svc.didChangeAppLifecycleState(AppLifecycleState.detached);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 0);
+    });
+  });
+
+  group('SyncService — connectivity wiring', () {
+    test('debugOnConnectivity([wifi]) triggers a sync', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.debugOnConnectivity([ConnectivityResult.wifi]);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 1);
+    });
+
+    test('debugOnConnectivity([mobile]) and [ethernet] also trigger', () async {
+      await store.save(makeRun('r-mobile'));
+      await store.save(makeRun('r-ethernet'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.debugOnConnectivity([ConnectivityResult.mobile]);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      // The first sync drained both runs in one batch; mark them so a
+      // second connectivity event has fresh work to do.
+      await store.save(makeRun('r-after-mobile'));
+
+      svc.debugOnConnectivity([ConnectivityResult.ethernet]);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      // Two distinct sync cycles → two batch pushes.
+      expect(api.saveBatchCallCount, 2);
+    });
+
+    test('debugOnConnectivity([none]) does NOT trigger a sync', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.debugOnConnectivity([ConnectivityResult.none]);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 0);
+    });
+
+    test('debugOnConnectivity with ANY online result in the list triggers',
+        () async {
+      // Multi-result is the common shape on Android — connectivity_plus
+      // can report `[wifi, vpn]` or similar. The guard uses .any, so a
+      // mixed list with at least one online entry should fire.
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.debugOnConnectivity([ConnectivityResult.bluetooth, ConnectivityResult.wifi]);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 1);
+    });
+
+    test('debugOnConnectivity([bluetooth]) alone does NOT trigger', () async {
+      // Bluetooth tethering isn't routed as wifi/mobile/ethernet by
+      // connectivity_plus; the guard intentionally excludes it.
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.debugOnConnectivity([ConnectivityResult.bluetooth]);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 0);
+    });
+  });
+
+  group('SyncService — start / stop', () {
+    test('start() fires an initial sync and registers as a binding observer',
+        () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      svc.start();
+      // Wait for the startup _trySync future.
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 1, reason: 'startup _trySync should fire');
+
+      // Sanity check: lifecycle events now route through the registered
+      // observer. Save a fresh run, simulate a resume.
+      await store.save(makeRun('r-2'));
+      svc.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      expect(api.saveBatchCallCount, 2);
+
+      svc.stop();
+    });
+
+    test('stop() cancels the connectivity subscription and removes the observer',
+        () async {
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+      svc.start();
+      // Allow startup _trySync to settle (no runs to push, so it's a
+      // no-op anyway).
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      svc.stop();
+
+      // After stop, lifecycle events on the binding don't route to us
+      // anymore. We can't directly observe the unsubscription state,
+      // but we can confirm a freshly-saved run and a resume DON'T fire
+      // a sync via the observer (since we removed ourselves).
+      await store.save(makeRun('r-1'));
+      // Send a state change through the binding (not on us — we're
+      // detached). The binding still calls handlers on registered
+      // observers, but svc isn't one anymore.
+      WidgetsBinding.instance
+          .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+
+      expect(api.saveBatchCallCount, 0,
+          reason: 'svc unregistered itself in stop()');
     });
   });
 }

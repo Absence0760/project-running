@@ -58,6 +58,13 @@ class SyncService with WidgetsBindingObserver {
   @visibleForTesting
   Future<void> debugTrySync(String reason) => _trySync(reason);
 
+  /// Test-only: drives the connectivity branch directly without the
+  /// `Connectivity().onConnectivityChanged` stream subscription.
+  /// Production calls land here via [_onConnectivity].
+  @visibleForTesting
+  void debugOnConnectivity(List<ConnectivityResult> results) =>
+      _onConnectivity(results);
+
   Future<void> _trySync(String reason) async {
     if (_syncing) return;
     final api = apiClient;
