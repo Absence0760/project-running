@@ -70,6 +70,31 @@ void main() {
     });
   });
 
+  group('thresholdPaceSecPerKmFromVdot', () {
+    test('null / non-positive VDOT returns null', () {
+      expect(thresholdPaceSecPerKmFromVdot(null), isNull);
+      expect(thresholdPaceSecPerKmFromVdot(0), isNull);
+      expect(thresholdPaceSecPerKmFromVdot(-5), isNull);
+    });
+
+    test('matches Daniels T-pace tables across the meaningful VDOT band', () {
+      // Daniels publishes: VDOT 50 → 4:15/km (255 s/km),
+      // VDOT 60 → 3:40/km (220 s/km), VDOT 70 → 3:14/km (194 s/km).
+      // Allow ±10 s of slack.
+      expect(thresholdPaceSecPerKmFromVdot(50)!, closeTo(255, 10));
+      expect(thresholdPaceSecPerKmFromVdot(60)!, closeTo(220, 10));
+      expect(thresholdPaceSecPerKmFromVdot(70)!, closeTo(194, 10));
+    });
+
+    test('higher VDOT yields a faster (smaller) threshold pace', () {
+      final beginner = thresholdPaceSecPerKmFromVdot(30)!;
+      final intermediate = thresholdPaceSecPerKmFromVdot(50)!;
+      final elite = thresholdPaceSecPerKmFromVdot(70)!;
+      expect(intermediate, lessThan(beginner));
+      expect(elite, lessThan(intermediate));
+    });
+  });
+
   group('runTss', () {
     test('returns 0 for tiny inputs', () {
       expect(runTss(50, 60, 300), 0);

@@ -1076,6 +1076,32 @@ IAM role (s3:PutObject on artifacts bucket, cloudfront:CreateInvalidation,
 
 ---
 
+## 54. Fix `thresholdPaceSecPerKmFromVdot` formula
+
+The original `thresholdPaceSecPerKmFromVdot` in `apps/web/src/lib/fitness.ts` (and its Dart twin in `apps/mobile_android/lib/fitness.dart`) computed T-pace via a hand-fit cubic-quadratic-linear-constant:
+
+```
+mps = 0.0003 × VDOT³ - 0.021 × VDOT² + 0.6 × VDOT + 2.0
+```
+
+The coefficients are wrong — at VDOT 50 they yield 17 m/s (≈60 s/km), well past Eliud Kipchoge territory. Daniels' published table puts T-pace at VDOT 50 around 4:15/km (≈255 s/km). The bug silently distorted every CTL / ATL / TSB number on the dashboard's FitnessCard (TSS values came out ~1/25 of correct, so users essentially always saw "Sweet spot" recovery advice regardless of actual training load). The 90-day TrainingLoadChart was unaffected — it uses `lib/training_load.ts`, a different TSS implementation that doesn't depend on threshold pace.
+
+**Fix:** invert Daniels' VO2 demand quadratic at the 88% rule of thumb (T-pace velocity ≈ 88% of vVO2max):
+
+```
+demand(v) = -4.6 + 0.182258 v + 0.000104 v² = 0.88 × VDOT
+```
+
+Solve for the positive root, convert m/min → s/km. Spot checks: VDOT 50 → 4:15/km, VDOT 60 → 3:40/km, VDOT 70 → 3:14/km. Matches Daniels' published tables within a couple of seconds across the meaningful range (VDOT 30-70).
+
+**Trade-off:** existing `fitness_snapshots` rows persisted under the old formula are now stale. After deploy, the FitnessCard's `liveSnap` will jump (correctly) by ~25x; the historical chart will show a discontinuity around the deploy date. Acceptable — every snapshot from this point forward is correct, and the recovery-advice ladder finally has the dynamic range to discriminate between "loaded" / "sweet spot" / "fresh."
+
+**Don't re-litigate unless:** Daniels publishes an updated formula or we add sex/elevation-specific calibration.
+
+Pinned in place by `apps/mobile_android/test/fitness_test.dart#thresholdPaceSecPerKmFromVdot` (3 tests against the Daniels table) and `apps/web/src/lib/fitness.test.ts#thresholdPaceSecPerKmFromVdot`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

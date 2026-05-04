@@ -114,17 +114,26 @@ export function runTss(
 	return durationH * intensity * intensity * 100;
 }
 
-/// Threshold pace (s/km) from VDOT — Daniels T-pace. Rough inversion
-/// of his pace tables: T-pace ≈ 1000 / (0.0003 × VDOT³ − 0.021 ×
-/// VDOT² + 0.6 × VDOT + 2.0) in m/s. Returns null when VDOT is null.
+/// Threshold pace (s/km) from VDOT — Daniels T-pace. Solve the VO2
+/// demand quadratic at 88% of VDOT (Daniels' "T-pace ≈ 88% vVO2max"
+/// rule of thumb) for velocity in m/min, then convert to s/km:
+///
+///     demand(v) = -4.6 + 0.182258 v + 0.000104 v² = 0.88 × VDOT
+///
+/// Spot checks against Daniels' published table — VDOT 50 → 4:15/km,
+/// VDOT 60 → 3:40/km, VDOT 70 → 3:14/km — match within a couple of
+/// seconds across VDOT 30-70. Returns null for null / non-positive
+/// input.
 export function thresholdPaceSecPerKmFromVdot(vdot: number | null): number | null {
-	if (vdot == null) return null;
-	const mps =
-		0.0003 * vdot * vdot * vdot -
-		0.021 * vdot * vdot +
-		0.6 * vdot +
-		2.0;
-	if (mps <= 0) return null;
+	if (vdot == null || vdot <= 0) return null;
+	const target = 0.88 * vdot + 4.6;
+	const a = 0.000104;
+	const b = 0.182258;
+	const disc = b * b + 4 * a * target;
+	if (disc < 0) return null;
+	const vMpm = (-b + Math.sqrt(disc)) / (2 * a);
+	if (vMpm <= 0) return null;
+	const mps = vMpm / 60;
 	return 1000 / mps;
 }
 
