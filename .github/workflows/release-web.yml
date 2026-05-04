@@ -61,10 +61,18 @@ jobs:
 
       # ──────────────────── Build static site ────────────────────
 
-      - name: Write apps/web/.env.production from secrets
+      - name: Write apps/web/.env from secrets
         # PUBLIC_* vars are inlined into the static build — they're
         # stripped after the build step so they don't leak into the
         # uploaded build zip's source artifacts.
+        #
+        # We write `.env` (not `.env.production`) because the preceding
+        # `npm run check` step runs `svelte-kit sync` in default
+        # (development) mode, which loads `.env` and `.env.local` but
+        # NOT `.env.production`. Without `.env`, the env-typegen produces
+        # an empty `$env/static/public` and svelte-check fails on every
+        # PUBLIC_* import. `vite build` reads `.env` in either mode too,
+        # so the build step picks the values up the same way.
         env:
           PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
           PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
@@ -73,7 +81,7 @@ jobs:
           PUBLIC_SENTRY_DSN: ${{ secrets.PUBLIC_SENTRY_DSN }}
           PUBLIC_APP_RELEASE: web@${{ steps.env.outputs.version }}
         run: |
-          cat <<EOF > apps/web/.env.production
+          cat <<EOF > apps/web/.env
           PUBLIC_SUPABASE_URL=${PUBLIC_SUPABASE_URL}
           PUBLIC_SUPABASE_ANON_KEY=${PUBLIC_SUPABASE_ANON_KEY}
           PUBLIC_MAPTILER_KEY=${PUBLIC_MAPTILER_KEY}
@@ -86,8 +94,8 @@ jobs:
 
       - run: npm run build --workspace=apps/web
 
-      - name: Strip .env.production after build
-        run: rm -f apps/web/.env.production
+      - name: Strip .env after build
+        run: rm -f apps/web/.env
 
       # ──────────────────── Build Lambda zip ────────────────────
 
