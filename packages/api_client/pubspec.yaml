@@ -10,6 +10,7 @@ environment:
 dependencies:
   core_models:
     path: ../core_models
+  meta: ^1.10.0
   supabase_flutter: ^2.3.0
 
 dev_dependencies:

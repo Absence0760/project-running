@@ -9,8 +9,30 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Typed client for the Supabase REST API.
 ///
 /// Must call [initialize] before using any methods.
+///
+/// In production every callsite uses the unnamed `ApiClient()`
+/// constructor and the instance reads through the global
+/// `Supabase.instance.client`. Tests can use [ApiClient.withClient]
+/// to inject a fake `SupabaseClient` so the wire-level methods can
+/// be driven without booting a real Supabase backend.
 class ApiClient {
-  static SupabaseClient get _client => Supabase.instance.client;
+  /// Test-only override. When non-null, [_client] returns this
+  /// instead of `Supabase.instance.client`. Always null on the
+  /// production code path.
+  final SupabaseClient? _overrideClient;
+
+  /// Default constructor — uses the global `Supabase.instance.client`.
+  /// Every production callsite uses this form.
+  ApiClient() : _overrideClient = null;
+
+  /// Test-only constructor. Inject a fake `SupabaseClient` so wire-
+  /// level methods can be driven without booting a real backend or
+  /// touching `Supabase.initialize`. Production code must not use
+  /// this.
+  @visibleForTesting
+  ApiClient.withClient(SupabaseClient client) : _overrideClient = client;
+
+  SupabaseClient get _client => _overrideClient ?? Supabase.instance.client;
 
   /// Initialize Supabase. Call once at app startup.
   static Future<void> initialize({
