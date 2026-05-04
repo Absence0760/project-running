@@ -14,6 +14,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { hmac } from 'https://deno.land/x/hmac@v2.0.1/mod.ts';
 import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import {
+  isAnonymousAppUserId,
+  isValidUuid,
+  timingSafeEqual,
+  validateFreshness,
+} from '../_shared/webhook_security.ts';
+import {
+  DEACTIVATING_EVENTS,
+  mapEventToTier,
+} from './lib.ts';
 
 serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (req.method !== 'POST') {
@@ -63,27 +73,13 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   //      already processed this delivery, so skip the side effect
   //      and return 200 so RevenueCat doesn't keep retrying.
   //
-  // The freshness window must be wider than RC's retry envelope
-  // (~3 days of exponential backoff while the original
-  // event_timestamp_ms is preserved on retry) AND narrower than the
-  // dedupe-row TTL (30 days, set by the cleanup-stale-webhook-events
-  // cron in 20260623_001). 7 days threads both: a delivery that
-  // failed for ~6 days of cold-start outage still ingests cleanly,
-  // and an attacker can't replay a captured event past the dedupe
-  // table's pruning horizon. Without the dedupe table this would
-  // need to be much tighter; with it, the window only has to bound
-  // the replay-after-prune window. CLOCK_SKEW_MS handles a future-
-  // dated event_timestamp_ms from clock drift.
-  const REPLAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-  const CLOCK_SKEW_MS = 60 * 1000;
   const eventTsMs = typeof event.event_timestamp_ms === 'number'
     ? event.event_timestamp_ms
     : null;
   if (eventTsMs === null) {
     return Response.json({ error: 'missing_event_timestamp_ms' }, { status: 400 });
   }
-  const ageMs = Date.now() - eventTsMs;
-  if (ageMs > REPLAY_WINDOW_MS || ageMs < -CLOCK_SKEW_MS) {
+  if (validateFreshness(eventTsMs, Date.now()) !== 'ok') {
     return Response.json({ error: 'event_outside_freshness_window' }, { status: 400 });
   }
   const eventId = typeof event.id === 'string' ? event.id : null;
@@ -94,19 +90,10 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // The `app_user_id` RevenueCat sends is the Supabase user id — we
   // set it on the client when configuring the RevenueCat SDK.
   const userId = event.app_user_id;
-  if (!userId || (typeof userId === 'string' && userId.startsWith('$RCAnonymousID'))) {
-    // Anonymous users can't map to a Supabase profile. This happens
-    // when someone subscribes before signing in; RevenueCat will fire
-    // another event when they log in and the alias resolves.
+  if (!userId || isAnonymousAppUserId(userId)) {
     return Response.json({ ok: true, skipped: 'anonymous_user' });
   }
-  // RevenueCat won't normally send a malformed app_user_id, but if a
-  // misconfiguration ships their Customer-ID format here it would
-  // become a Postgres `22P02 invalid_input_syntax` on the .eq lookup
-  // below and bounce as a 500, sending RC into retry storms. Validate
-  // the UUID shape and skip cleanly so RC stops retrying.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (typeof userId !== 'string' || !UUID_RE.test(userId)) {
+  if (!isValidUuid(userId)) {
     return Response.json({ ok: true, skipped: 'invalid_app_user_id' });
   }
 
@@ -133,41 +120,20 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
     return Response.json({ ok: false, error: 'dedupe failed' }, { status: 500 });
   }
 
-  // Map event type to a tier change. RevenueCat's event taxonomy:
-  // https://www.revenuecat.com/docs/integrations/webhooks/event-types
-  const activating = [
-    'INITIAL_PURCHASE',
-    'RENEWAL',
-    'UNCANCELLATION',
-    'NON_RENEWING_PURCHASE',
-    'PRODUCT_CHANGE',
-  ];
-  const deactivating = [
-    'EXPIRATION',
-    'CANCELLATION',  // at the end of the billing period
-  ];
-
-  let newTier: string | null = null;
-
-  if (activating.includes(event.type)) {
-    // A non-renewing purchase with a product-id containing "lifetime"
-    // maps to the `lifetime` tier rather than `pro`. Everything else
-    // is monthly/annual → `pro`.
-    const productId = event.product_id ?? '';
-    newTier = productId.includes('lifetime') ? 'lifetime' : 'pro';
-  } else if (deactivating.includes(event.type)) {
-    // Only downgrade to `free` if the user doesn't have `lifetime`.
-    // A lifetime holder might also have had a monthly sub for another
-    // entitlement; cancelling that shouldn't reset them.
+  // Resolve the user's current tier so the deactivating-event branch
+  // can avoid demoting a `lifetime` holder. We look it up only when
+  // the event is deactivating; activating events don't need it.
+  let currentTier: string | null = null;
+  if ((DEACTIVATING_EVENTS as readonly string[]).includes(event.type)) {
     const { data } = await supabase
       .from('user_profiles')
       .select('subscription_tier')
       .eq('id', userId)
       .single();
-    if (data?.subscription_tier !== 'lifetime') {
-      newTier = 'free';
-    }
+    currentTier = (data?.subscription_tier as string | null) ?? null;
   }
+
+  const newTier = mapEventToTier(event.type, event.product_id ?? null, currentTier);
 
   if (newTier !== null) {
     const { error } = await supabase
@@ -192,15 +158,3 @@ interface RevenueCatEvent {
   [key: string]: unknown;
 }
 
-/// Constant-time string compare. Returns false on length mismatch
-/// without short-circuiting on content. The length check itself is
-/// observable, but the digest length is fixed (sha256 hex = 64 chars)
-/// and known to anyone reading this source — no new information.
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
-}

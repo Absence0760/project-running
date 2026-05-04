@@ -40,6 +40,7 @@ import {
 } from '../_shared/strava.ts';
 import { enforceBodyLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
 
 serve(withSentry('strava-webhook', async (req: Request) => {
 	// Strava activity event payloads are tiny — a few hundred bytes
@@ -125,13 +126,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	//      replayed POST with the same body inserts the same key and
 	//      raises 23505, which we map to 200 ok-skipped.
 	//
-	// REPLAY_WINDOW_MS must be wider than Strava's retry envelope
-	// (hours) and narrower than the dedupe-row TTL (30 days). 7 days
-	// matches revenuecat-webhook for one-knob consistency.
-	const REPLAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-	const CLOCK_SKEW_MS = 60 * 1000;
-	const ageMs = Date.now() - eventTime * 1000;
-	if (ageMs > REPLAY_WINDOW_MS || ageMs < -CLOCK_SKEW_MS) {
+	if (validateFreshness(eventTime * 1000, Date.now()) !== 'ok') {
 		return Response.json({ error: 'event_outside_freshness_window' }, { status: 400 });
 	}
 
@@ -232,17 +227,3 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	return new Response('OK');
 }));
 
-/// Constant-time string compare so an attacker can't tease out the
-/// secret one character at a time via response-timing differences.
-/// Returns false on length mismatch without short-circuiting on
-/// content (the length check itself is observable, but that's the
-/// length of the secret which is fixed and known to anyone who reads
-/// this source, not new information).
-function timingSafeEqual(a: string, b: string): boolean {
-	if (a.length !== b.length) return false;
-	let mismatch = 0;
-	for (let i = 0; i < a.length; i++) {
-		mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-	}
-	return mismatch === 0;
-}
