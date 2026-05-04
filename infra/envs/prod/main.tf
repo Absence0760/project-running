@@ -5,7 +5,8 @@
 #   terraform apply
 #
 # First-apply expectations:
-#   - `infra/bootstrap` has been applied (state bucket + DDB table)
+#   - `infra/bootstrap` has been applied (S3 state bucket — locking is
+#     S3-native via `use_lockfile = true`, so no DDB table is needed)
 #   - `infra/dns` has been applied (hosted zone + ACM cert)
 #   - The `secrets.enc.yaml` file in this directory does NOT exist yet
 #     on the very first apply. The KMS key is created here, then the

@@ -75,15 +75,19 @@ resource "aws_cloudwatch_metric_alarm" "lambda_p95_duration" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
-  alarm_name          = "${local.resource_prefix}-coach-lambda-throttles"
-  alarm_description   = "Coach Lambda is being throttled — concurrent execution cap hit."
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  threshold           = 0
+  alarm_name        = "${local.resource_prefix}-coach-lambda-throttles"
+  alarm_description = "Coach Lambda throttled (≥5 throttles across two 5-min windows). Concurrent execution cap is being hit."
+  # Sustained signal, not a single-data-point trigger. Preview's
+  # reserved concurrency is 5; a single noisy demo session can briefly
+  # touch the cap and clear inside 60 s — alarming on that would be
+  # pure noise. Two consecutive 5-min periods at ≥5 throttles is real.
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  threshold           = 5
   treat_missing_data  = "notBreaching"
   metric_name         = "Throttles"
   namespace           = "AWS/Lambda"
-  period              = 60
+  period              = 300
   statistic           = "Sum"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]

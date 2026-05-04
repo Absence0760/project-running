@@ -244,6 +244,14 @@ resource "aws_lambda_permission" "cloudfront_invoke" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  # Pair with create_before_destroy on any future qualifier rotation —
+  # avoids a brief window where the new permission isn't attached yet
+  # but the old one has already been deleted, which would 403 every
+  # in-flight CloudFront → Lambda call.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ──────────────────────────── CloudFront ────────────────────────────
