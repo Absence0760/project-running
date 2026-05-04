@@ -18,6 +18,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { buildContext } from './context';
+import {
+	clampRunsLimit,
+	jsonError as buildJsonError,
+	parseAuthHeader,
+	personalityAddendum,
+	rateLimitHeaders,
+} from './limits';
 import { streamAnthropic, streamOpenAI } from './providers';
 import { COACH_SYSTEM_PROMPT } from './system_prompt';
 import {
@@ -32,8 +39,6 @@ import {
 	type Tier,
 } from './types';
 
-const DEFAULT_RUNS_LIMIT = 20;
-
 export async function handleCoach(
 	authHeader: string | null,
 	rawBody: unknown,
@@ -46,7 +51,7 @@ export async function handleCoach(
 		);
 	}
 
-	const accessToken = authHeader?.replace(/^Bearer\s+/i, '');
+	const accessToken = parseAuthHeader(authHeader);
 	if (!accessToken) return jsonError(401, 'not authenticated');
 
 	let body: CoachRequestBody;
@@ -106,10 +111,7 @@ export async function handleCoach(
 
 	const limits = TIER_LIMITS[tier];
 
-	const requestedLimit = Number(body.recent_runs_limit ?? DEFAULT_RUNS_LIMIT);
-	const runsLimit = Number.isFinite(requestedLimit)
-		? Math.min(limits.maxRunsLimit, Math.max(1, Math.trunc(requestedLimit)))
-		: DEFAULT_RUNS_LIMIT;
+	const runsLimit = clampRunsLimit(body.recent_runs_limit, tier);
 
 	const context = await buildContext(supabase, authUser.id, body.plan_id ?? null, runsLimit);
 
@@ -117,16 +119,7 @@ export async function handleCoach(
 		| Record<string, unknown>
 		| undefined;
 	const coachStyle = personality?.coach_personality as string | undefined;
-	let personalityAddendum = '';
-	if (coachStyle === 'drill_sergeant') {
-		personalityAddendum =
-			'\n\nTone override: be blunt, demanding, and no-nonsense. Push the runner hard. Short sentences. No coddling. Think military coach.';
-	} else if (coachStyle === 'analytical') {
-		personalityAddendum =
-			'\n\nTone override: be data-driven and precise. Lead with numbers, percentages, and trends. Cite specific paces, distances, and dates. Think sports scientist.';
-	}
-
-	const systemText = COACH_SYSTEM_PROMPT + personalityAddendum;
+	const systemText = COACH_SYSTEM_PROMPT + personalityAddendum(coachStyle);
 	const contextPayload =
 		'CONTEXT (runner profile, active plan, recent runs):\n' +
 		JSON.stringify(context.data, null, 2);
@@ -284,25 +277,5 @@ function jsonError(
 	error: string,
 	extra: Record<string, unknown> = {},
 ): CoachResult {
-	return {
-		kind: 'json',
-		status,
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ error, ...extra }),
-	};
-}
-
-function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, string> {
-	const limits = TIER_LIMITS[tier];
-	const limitStr = Number.isFinite(limits.dailyLimit) ? String(limits.dailyLimit) : 'unlimited';
-	const remainingStr = Number.isFinite(limits.dailyLimit)
-		? String(Math.max(0, limits.dailyLimit - usedToday))
-		: 'unlimited';
-	return {
-		'X-Coach-Tier': tier,
-		'X-RateLimit-Limit': limitStr,
-		'X-RateLimit-Remaining': remainingStr,
-		'X-RateLimit-MaxTokens': String(limits.maxTokens),
-		'X-RateLimit-MaxRuns': String(limits.maxRunsLimit),
-	};
+	return buildJsonError(status, error, extra) as CoachResult;
 }
