@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { effective, type LoadedSettings, type PrefsBag } from './settings_overlay';
 
 /// Typed accessor for `user_settings` + `user_device_settings`.
 ///
@@ -9,7 +10,14 @@ import { supabase } from './supabase';
 ///   2. universal value (`user_settings.prefs`)
 ///   3. fallback supplied by the caller
 ///
-/// Known keys are registered in `docs/settings.md`.
+/// Known keys are registered in `docs/settings.md`. The pure overlay
+/// helpers (`effective`, `LoadedSettings`, `PrefsBag`) live in
+/// `./settings_overlay` and are re-exported below so existing
+/// `import { loadSettings, effective } from '$lib/settings'` callers
+/// keep working unchanged.
+
+export { effective };
+export type { LoadedSettings, PrefsBag };
 
 const DEVICE_ID_KEY = 'run_app.device_id';
 
@@ -27,13 +35,6 @@ export function getDeviceId(): string {
 	const minted = crypto.randomUUID();
 	localStorage.setItem(DEVICE_ID_KEY, minted);
 	return minted;
-}
-
-export type PrefsBag = Record<string, unknown>;
-
-export interface LoadedSettings {
-	universal: PrefsBag;
-	device: PrefsBag;
 }
 
 export async function loadSettings(userId: string): Promise<LoadedSettings> {
@@ -72,19 +73,6 @@ export async function loadSettings(userId: string): Promise<LoadedSettings> {
 		universal: (universalRes.data?.prefs as PrefsBag | null) ?? {},
 		device: (deviceRes.data?.prefs as PrefsBag | null) ?? {},
 	};
-}
-
-/// device → universal → fallback. Null/undefined fall through.
-export function effective<T>(
-	settings: LoadedSettings,
-	key: string,
-	fallback?: T
-): T | undefined {
-	const fromDevice = settings.device[key];
-	if (fromDevice !== undefined && fromDevice !== null) return fromDevice as T;
-	const fromUniversal = settings.universal[key];
-	if (fromUniversal !== undefined && fromUniversal !== null) return fromUniversal as T;
-	return fallback;
 }
 
 export async function updateUniversal(
