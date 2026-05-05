@@ -16,6 +16,12 @@ import 'local_run_store.dart';
 /// Sync attempts are silent and best-effort — failures are logged but don't
 /// surface to the UI. The user can still trigger an explicit sync from the
 /// Runs screen.
+///
+/// After a failure the service enters an exponential backoff window (60 s,
+/// 2 min, 4 min, … capped at 30 min) so a flaky upstream doesn't see N×
+/// the request volume on every connectivity flap. The 'manual' reason
+/// bypasses backoff so a user-initiated retry from the Runs screen always
+/// fires. A successful cycle resets the counter.
 class SyncService with WidgetsBindingObserver {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
@@ -23,12 +29,17 @@ class SyncService with WidgetsBindingObserver {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _syncing = false;
 
+  DateTime? _lastFailureAt;
+  int _consecutiveFailures = 0;
+
+  static const Duration _baseBackoff = Duration(seconds: 60);
+  static const Duration _maxBackoff = Duration(minutes: 30);
+
   SyncService({required this.apiClient, required this.runStore});
 
   void start() {
     WidgetsBinding.instance.addObserver(this);
     _connectivitySub = Connectivity().onConnectivityChanged.listen(_onConnectivity);
-    // Initial attempt in case we're already online with pending runs.
     _trySync('startup');
   }
 
@@ -65,8 +76,61 @@ class SyncService with WidgetsBindingObserver {
   void debugOnConnectivity(List<ConnectivityResult> results) =>
       _onConnectivity(results);
 
+  /// Test-only: read the current backoff state for assertions.
+  @visibleForTesting
+  ({int failures, DateTime? lastFailureAt, Duration backoff}) debugBackoffState() =>
+      (
+        failures: _consecutiveFailures,
+        lastFailureAt: _lastFailureAt,
+        backoff: _currentBackoff(),
+      );
+
+  /// Test-only: zero the backoff window without touching anything else.
+  @visibleForTesting
+  void debugClearBackoff() {
+    _lastFailureAt = null;
+    _consecutiveFailures = 0;
+  }
+
+  Duration _currentBackoff() {
+    if (_consecutiveFailures == 0) return Duration.zero;
+    final shift = _consecutiveFailures - 1;
+    // Cap the shift before it overflows 32-bit ints (1 << 30 ≈ 1.1 G secs);
+    // the _maxBackoff clamp below would catch it anyway, but the explicit
+    // ceiling keeps the math obvious.
+    final cappedShift = shift.clamp(0, 20);
+    final secs = _baseBackoff.inSeconds * (1 << cappedShift);
+    return Duration(
+      seconds: secs.clamp(0, _maxBackoff.inSeconds).toInt(),
+    );
+  }
+
+  bool _isInBackoff() {
+    final last = _lastFailureAt;
+    if (last == null || _consecutiveFailures == 0) return false;
+    return DateTime.now().isBefore(last.add(_currentBackoff()));
+  }
+
+  void _onCycleSuccess() {
+    _lastFailureAt = null;
+    _consecutiveFailures = 0;
+  }
+
+  void _onCycleFailure() {
+    _consecutiveFailures += 1;
+    _lastFailureAt = DateTime.now();
+    debugPrint(
+      'SyncService: backoff active for ${_currentBackoff().inSeconds}s '
+      '(failure #$_consecutiveFailures)',
+    );
+  }
+
   Future<void> _trySync(String reason) async {
     if (_syncing) return;
+    if (reason != 'manual' && _isInBackoff()) {
+      debugPrint('SyncService: in backoff, skipping ($reason)');
+      return;
+    }
     final api = apiClient;
     if (api == null || api.userId == null) return;
     final unsynced = runStore.unsyncedRuns;
@@ -74,26 +138,30 @@ class SyncService with WidgetsBindingObserver {
     if (unsynced.isEmpty && !hasPendingDeletes) return;
 
     _syncing = true;
+    var anyFailure = false;
     try {
       if (unsynced.isNotEmpty) {
         debugPrint('SyncService: pushing ${unsynced.length} runs ($reason)');
         try {
-          // saveRunsBatch uploads tracks 8-in-parallel and upserts rows in
-          // chunks of 100. Used to be a serial per-run saveRun call with
-          // per-run markSynced rewrite — an order of magnitude more
-          // round-trips on a user with many offline runs.
           await api.saveRunsBatch(unsynced);
           await runStore.markManySynced(unsynced.map((r) => r.id));
           debugPrint('SyncService: pushed ${unsynced.length}');
         } catch (e) {
           debugPrint('SyncService: batch push failed ($reason): $e');
+          anyFailure = true;
         }
       }
       if (hasPendingDeletes) {
-        await _drainPendingDeletes(reason);
+        final ok = await _drainPendingDeletes(reason);
+        if (!ok) anyFailure = true;
       }
     } finally {
       _syncing = false;
+      if (anyFailure) {
+        _onCycleFailure();
+      } else {
+        _onCycleSuccess();
+      }
     }
   }
 
@@ -105,15 +173,18 @@ class SyncService with WidgetsBindingObserver {
   /// around precisely so the local list stayed consistent with the
   /// cloud, and now that the cloud row is gone the local row should
   /// follow.
-  Future<void> _drainPendingDeletes(String reason) async {
+  ///
+  /// Returns `true` iff every pending id was drained without error.
+  Future<bool> _drainPendingDeletes(String reason) async {
     final api = apiClient;
-    if (api == null) return;
+    if (api == null) return true;
     final ids = runStore.pendingRemoteDeleteIds.toList();
-    if (ids.isEmpty) return;
+    if (ids.isEmpty) return true;
     debugPrint(
       'SyncService: retrying ${ids.length} pending remote deletes ($reason)',
     );
     var ok = 0;
+    var failed = 0;
     for (final id in ids) {
       try {
         await api.deleteRunById(id);
@@ -122,8 +193,10 @@ class SyncService with WidgetsBindingObserver {
         ok++;
       } catch (e) {
         debugPrint('SyncService: retry delete failed for $id: $e');
+        failed++;
       }
     }
     debugPrint('SyncService: drained $ok / ${ids.length} pending deletes');
+    return failed == 0;
   }
 }

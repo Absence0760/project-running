@@ -371,4 +371,129 @@ void main() {
           reason: 'svc unregistered itself in stop()');
     });
   });
+
+  group('SyncService — backoff after failure', () {
+    test('successful cycle leaves backoff state at zero', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      final s = svc.debugBackoffState();
+      expect(s.failures, 0);
+      expect(s.lastFailureAt, isNull);
+      expect(s.backoff, Duration.zero);
+    });
+
+    test('failure increments the counter and arms a 60 s backoff', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      final s = svc.debugBackoffState();
+      expect(s.failures, 1);
+      expect(s.lastFailureAt, isNotNull);
+      expect(s.backoff, const Duration(seconds: 60));
+    });
+
+    test('automatic retry inside the backoff window is short-circuited',
+        () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+      expect(api.saveBatchCallCount, 1);
+
+      // Same connectivity flap fires twice in quick succession; backoff
+      // should swallow the second.
+      await svc.debugTrySync('connectivity');
+      expect(api.saveBatchCallCount, 1,
+          reason: 'in-backoff retry must NOT hit the API');
+    });
+
+    test('manual retry bypasses the backoff window', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+      expect(api.saveBatchCallCount, 1);
+
+      await svc.debugTrySync('manual');
+      expect(api.saveBatchCallCount, 2,
+          reason: 'manual reason must bypass backoff');
+    });
+
+    test('consecutive failures double the backoff up to a 30 min cap',
+        () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      // Drive five failures using 'manual' to bypass the in-backoff guard.
+      for (var i = 0; i < 5; i++) {
+        await svc.debugTrySync('manual');
+      }
+      // 60s, 120s, 240s, 480s, 960s — fifth failure → 960s.
+      expect(svc.debugBackoffState().failures, 5);
+      expect(svc.debugBackoffState().backoff, const Duration(seconds: 960));
+
+      // Now drive enough additional failures that the doubling would
+      // exceed 30 min; the clamp should hold it at exactly 30 min.
+      for (var i = 0; i < 20; i++) {
+        await svc.debugTrySync('manual');
+      }
+      expect(svc.debugBackoffState().backoff,
+          const Duration(minutes: 30),
+          reason: 'backoff must clamp at the 30 min ceiling');
+    });
+
+    test('a successful cycle after failures clears backoff', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+      expect(svc.debugBackoffState().failures, 1);
+
+      api.throwOnSaveBatch = false;
+      await svc.debugTrySync('manual');
+
+      final s = svc.debugBackoffState();
+      expect(s.failures, 0);
+      expect(s.lastFailureAt, isNull);
+      expect(s.backoff, Duration.zero);
+    });
+
+    test('a failed delete drain also arms backoff', () async {
+      await store.save(makeRun('r-bad'));
+      await store.markSynced('r-bad');
+      await store.markPendingRemoteDelete('r-bad');
+      final api = _FakeApiClient()..deleteFailFor.add('r-bad');
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(svc.debugBackoffState().failures, 1,
+          reason: 'a failed delete should count as a cycle failure');
+    });
+
+    test('debugClearBackoff resets the window to zero', () async {
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+      expect(svc.debugBackoffState().failures, 1);
+
+      svc.debugClearBackoff();
+      final s = svc.debugBackoffState();
+      expect(s.failures, 0);
+      expect(s.lastFailureAt, isNull);
+    });
+  });
 }
