@@ -67,6 +67,20 @@ variable "lambda_reserved_concurrency" {
   default     = 5
 }
 
+# ─────────────────── WAF ───────────────────
+
+variable "waf_enabled" {
+  description = "Whether to attach an AWS WAF v2 web ACL with a per-IP rate limit on /api/coach* to the CloudFront distribution. Default true. Set false on a env where load tests / e2e suites need to hit the coach endpoint hard."
+  type        = bool
+  default     = true
+}
+
+variable "waf_rate_limit" {
+  description = "Per-IP rate limit applied to /api/coach* requests across a 5-minute rolling window (the WAF v2 default). 100 is generous against the per-user daily cap of 5/day — a single legitimate user can never approach it from one IP."
+  type        = number
+  default     = 100
+}
+
 # ─────────────────── Tagging ───────────────────
 
 variable "tags" {

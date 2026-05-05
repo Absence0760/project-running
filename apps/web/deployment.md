@@ -242,7 +242,8 @@ The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-laun
 | Secrets Manager | $0.40/secret/mo × ~3 secrets (Anthropic, Sentry, Sentry DSN) | $1.20 |
 | Anthropic API | Coach usage at launch | ~$15 |
 | Sentry | Free tier (5k errors/month) | $0 |
-| **Subtotal — launch** | | **~$17–20** |
+| AWS WAF v2 | Web ACL $5 + rule $1 + ~$0.60/M requests | ~$6 |
+| **Subtotal — launch** | | **~$23–26** |
 
 **Egress is the variable that grows with users.** 1k users × 5 sessions/month × ~300 KB each ≈ 1.5 GB — far below the free tier. Once we're past 1 TB/month (≈ 3M sessions depending on cache hit rate), CloudFront billing kicks in at ~$0.085/GB.
 

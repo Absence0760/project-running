@@ -373,6 +373,7 @@ resource "aws_cloudfront_distribution" "this" {
   price_class         = "PriceClass_100"
   aliases             = concat([var.domain_name], var.aliases)
   tags                = var.tags
+  web_acl_id          = var.waf_enabled ? aws_wafv2_web_acl.coach[0].arn : null
 
   origin {
     origin_id                = "s3-site"
