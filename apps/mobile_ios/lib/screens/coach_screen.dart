@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../backend_timeout.dart';
 import '../training_service.dart';
@@ -663,6 +664,32 @@ class _CoachScreenState extends State<CoachScreen> {
     showTopBanner(context, 'Copied to clipboard', duration: Duration(seconds: 1));
   }
 
+  /// flutter_markdown's default `onTapLink` calls `url_launcher` on every
+  /// scheme it parses, including `javascript:`, `file:`, and `data:` —
+  /// vectors a model-authored response can carry through. The web path
+  /// goes through DOMPurify which strips them; mobile does not. Whitelist
+  /// http(s) and mailto schemes only; everything else is silently dropped
+  /// (the markdown still renders the link's TEXT, the user just can't
+  /// tap it).
+  Future<void> _onCoachLinkTap(String text, String? href, String title) async {
+    if (href == null || href.isEmpty) return;
+    final Uri? uri = Uri.tryParse(href);
+    if (uri == null) return;
+    final scheme = uri.scheme.toLowerCase();
+    const allowedSchemes = {'http', 'https', 'mailto'};
+    if (!allowedSchemes.contains(scheme) && scheme.isNotEmpty) {
+      // Relative URLs (no scheme) are inline run / route links like
+      // /runs/{id}; treat them as in-app navigation candidates rather
+      // than launching externally.
+      return;
+    }
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('coach link tap failed: $e');
+    }
+  }
+
   void _onPlanChanged(String? next) {
     setState(() => _planId = (next ?? '').isEmpty ? null : next);
     _streamSub?.cancel();
@@ -1055,6 +1082,7 @@ class _CoachScreenState extends State<CoachScreen> {
                                   : MarkdownBody(
                                       data: content,
                                       selectable: true,
+                                      onTapLink: _onCoachLinkTap,
                                       styleSheet:
                                           MarkdownStyleSheet.fromTheme(theme)
                                               .copyWith(
