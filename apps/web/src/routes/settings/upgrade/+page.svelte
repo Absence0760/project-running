@@ -111,7 +111,7 @@
 				<span class="check">✓</span>
 				<div>
 					<strong>Unlimited AI Coach</strong>
-					<span class="feat-sub">No 10 / day cap on coach chat.</span>
+					<span class="feat-sub">No 5 / day cap on coach chat.</span>
 				</div>
 			</li>
 			<li>

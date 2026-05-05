@@ -263,7 +263,7 @@ The gate infrastructure stays in place — `GATED_FEATURES` registry, `ProGate` 
 
 **Why:** A paid tier before product-market fit creates friction that slows user acquisition. Donation funding lets early adopters use everything while signalling what the app costs to run. If the user base grows large enough that donation income can't cover API costs, re-gating specific features is a one-line change in `isLocked()`.
 
-**Trade-off:** No revenue guarantee. Donations are unpredictable and the Claude API bill scales with usage. The 10-message daily cap on the coach is the cost-control mechanism — if it proves insufficient, either lower the cap or re-gate the coach behind Pro.
+**Trade-off:** No revenue guarantee. Donations are unpredictable and the Claude API bill scales with usage. The 5-message daily cap on the coach is the cost-control mechanism — if it proves insufficient, either lower the cap or re-gate the coach behind Pro.
 
 **Don't re-litigate unless:** (a) monthly API costs consistently exceed donation income by >2x, or (b) the user base is large enough that even a small conversion rate would meaningfully outperform donations.
 
