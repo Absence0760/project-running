@@ -4,6 +4,14 @@
 -- users, so any authenticated caller could pass an arbitrary p_user_id to
 -- read or exhaust another user's daily quota. The guard below rejects any
 -- call where the JWT subject does not match the requested user id.
+--
+-- HISTORY: The `auth.uid() != p_user_id` form below evaluates to NULL
+-- (falsy) for an anon-role caller because `null != <uuid>` returns NULL
+-- under three-valued logic. The guard is reinforced by migration
+-- `20260709_001_coach_usage_null_guard_fix.sql` which switches to
+-- `auth.uid() is null or auth.uid() is distinct from p_user_id` plus a
+-- service-role escape hatch. Read both files together — this migration
+-- preserves the original shape for git-blame continuity.
 
 create or replace function increment_coach_usage(p_user_id uuid)
 returns integer

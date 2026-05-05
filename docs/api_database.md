@@ -126,6 +126,8 @@ create index idx_routes_user_starred on routes (user_id, updated_at desc) where 
 
 **`is_starred`** is the owner's "what I actually run" flag. The watch's route picker fetches `is_starred=eq.true&order=updated_at.desc&limit=30` so a 1.4-inch round screen never has to scroll through every saved route. When the starred query returns nothing (first-launch / un-curated user), the watch falls back to the 10 most-recently-updated owned routes so the picker isn't empty. Toggleable from web (`/routes` cards + `/routes/[id]` header) and mobile (routes list + detail screen); read-only from the watch. Backed by a partial index keyed on `(user_id, updated_at desc)` so the watch fetch is index-only.
 
+**Public reads go through the `public_routes` view, not the base table.** Migration `20260703_001_drop_routes_public_select_policy.sql` drops the bare-table public-read RLS; non-owner reads (anon + authenticated) consume `public_routes` instead. The view is a thin projection over `routes` filtered to `is_public = true` with `geom` cast back to `unknown`/`dynamic` for the row-type generators. Cross-references the same shape used by `public_runs` (decisions §33). Every public-routes reader on web (`fetchPublicRoutes`, `searchPublicRoutes`, `fetchPublicRouteById`) and mobile (`api_client.fetchRouteById` for non-owners) reads the view. Owner-context reads keep the bare-table path because they need the unredacted columns.
+
 ---
 
 ### `saved_routes`
