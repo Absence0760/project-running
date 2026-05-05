@@ -41,7 +41,14 @@ values (
 
 -- User B has no zone configured (no user_settings row).
 
--- ── privacy_distance_m ──
+-- ── privacy_distance_m + privacy_in_any_zone (helper internals) ──
+-- These helpers are no longer granted to anon / authenticated
+-- (migration 20260711_001 — the only legitimate caller is
+-- clip_track_for_user, which runs SECURITY DEFINER). Tests of the
+-- pure-math behaviour run as the test runner (postgres) so they can
+-- still validate correctness without re-granting the helpers.
+reset role;
+
 -- 1. Same point → ~0 m.
 select cmp_ok(
   privacy_distance_m(47.37, 8.54, 47.37, 8.54)::numeric,
@@ -89,6 +96,10 @@ select is(
   false,
   'privacy_in_any_zone with null zones returns false'
 );
+
+-- Re-enter the authenticated context for clip_track_for_user calls.
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000c101"}';
 
 -- ── clip_track_for_user ──
 -- 6. User without zones → input returned unchanged.

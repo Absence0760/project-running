@@ -13,6 +13,20 @@ import '../widgets/live_run_map.dart';
 /// to new INSERTs via Supabase Realtime. RLS gates visibility (a
 /// public run's pings are world-readable; a private run's pings are
 /// owner-only).
+///
+/// Privacy-zone trust contract: this client renders pings verbatim. It
+/// does NOT have the broadcaster's privacy zones (fetching them client-
+/// side would defeat the point — anyone watching a public live run
+/// could read off the broadcaster's home / work coordinates). The
+/// single line of defence is the `live_run_pings_drop_in_zone`
+/// BEFORE-INSERT trigger from migration
+/// `20260618_001_clip_live_run_pings_to_privacy_zones.sql`, which
+/// silently drops any ping whose (lat, lng) falls inside a zone before
+/// the row reaches Realtime. If that trigger is dropped, weakened, or
+/// renamed, this screen will start surfacing zone coordinates to every
+/// spectator. The pgtap regression in
+/// `apps/backend/supabase/tests/rls_live_run_pings_trigger_test.sql`
+/// pins the trigger so a future migration can't silently undo it.
 class LiveSpectatorScreen extends StatefulWidget {
   final ApiClient api;
   final String runId;

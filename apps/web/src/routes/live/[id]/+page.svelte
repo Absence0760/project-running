@@ -88,6 +88,16 @@
 	}
 
 	function subscribeLive() {
+		// Privacy-zone trust contract: pings are rendered verbatim. The
+		// broadcaster's privacy zones are NOT fetched here (doing so
+		// would defeat the purpose — anyone watching a public live run
+		// could read off the broadcaster's home / work coordinates).
+		// The single line of defence is the
+		// `live_run_pings_drop_in_zone` BEFORE-INSERT trigger from
+		// migration `20260618_001_clip_live_run_pings_to_privacy_zones.sql`,
+		// which silently drops in-zone pings before they reach Realtime.
+		// Pinned by `apps/backend/supabase/tests/rls_live_run_pings_trigger_test.sql`
+		// so a future migration can't silently undo it.
 		realtimeChannel = supabase
 			.channel(`live-run:${data.id}`)
 			.on(
