@@ -40,6 +40,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 |---|---|
 | [/audit/deps](deps.md) | Cross-toolchain dependency CVEs (npm, flutter pub, Deno, Actions) |
 | [/audit/infra](infra.md) | AWS Terraform stacks under `infra/` — IAM least-privilege, encryption, drift hygiene, cost + DR guardrails |
+| [/audit/cost-controls](cost-controls.md) | Per-user + global spend ceilings across coach, AWS, Supabase, Anthropic; no single failure can produce a runaway bill |
 
 ### Dispatcher
 
