@@ -21,13 +21,45 @@ infra/
 
 Each stack has its own remote state in the bucket created by `bootstrap`. State locking is S3-native via `use_lockfile = true` (Terraform ≥ 1.10) — no DynamoDB table required. The `dns` and `github-oidc` outputs are consumed by per-env stacks via `terraform_remote_state`.
 
+**Region.** Everything sits in `us-east-1`. The ACM cert for CloudFront *has* to live there regardless, and putting the rest of the stack alongside it avoids cross-region complexity. The per-env stacks still expose a `us_east_1` provider alias so a future region move only touches the primary region. To deploy somewhere else, change the default in every `aws_region` variable + every `region` field in the `backend.tf` files + the `AWS_REGION` env in `.github/workflows/release-web.yml`.
+
+**Cost.** Idle monthly: hosted zone $0.50 + 2 KMS keys $2 + S3 / CloudFront / Lambda well under $1 = **~$3/month**. Plus domain registration if you don't already own one (~$15/year for a `.app`).
+
 ## First-time deploy
 
-Prereqs on the workstation:
+### 0. Phase-0 prereqs (skip what you already have)
+
+Working from zero — no AWS account, no domain, no AWS CLI:
+
+**0.1 — AWS account.** Sign up at https://aws.amazon.com/. Enable MFA on the root account, create an Identity Center user with `AdministratorAccess` (we tighten later), and assign it to the account. Note the **AWS access portal URL** Identity Center gives you (`https://d-xxxxxx.awsapps.com/start`). Set up billing alerts at $50 / $200 / $500 from the Billing console.
+
+**0.2 — Domain.** Either register one fresh (Porkbun, Namecheap, Cloudflare Registrar — all fine; you don't need Route 53 to register, only to host DNS) or pick an apex you already own. The default examples use `runonward.app` — search the repo for it and swap if you're using something else. The places that hardcode it are:
+- `infra/dns/` — pass `-var "apex_domain=<yours>"` on apply
+- `infra/envs/{preview,prod}/terraform.tfvars` — set `apex_domain` there
+- `infra/envs/preview/variables.tf` + `infra/envs/prod/variables.tf` — `default = "runonward.app"` if you want a fallback
+
+**0.3 — Workstation tooling.**
 
 - Terraform ≥ 1.13 (`dnf install terraform`)
-- sops + `~/.aws/config` SSO profile that resolves via `aws sts get-caller-identity`
-- AWS CLI v2 with the SSO session active (`aws sso login --profile <name>`)
+- AWS CLI v2 (already installed per workstation conventions)
+- sops (already installed; uses age locally + AWS KMS for shared)
+
+**0.4 — AWS CLI SSO.**
+
+```bash
+aws configure sso
+# SSO start URL: <your access portal URL from 0.1>
+# SSO Region: us-east-1
+# default region: us-east-1
+# default output: json
+# profile name: runonward     (or whatever you want)
+
+aws sso login --profile runonward
+aws sts get-caller-identity --profile runonward   # proves it works
+
+# Persist the profile choice for future shells:
+echo 'export AWS_PROFILE=runonward' > ~/.bashrc.d/26-aliases-aws.sh
+```
 
 ### 1. Bootstrap (one-time — S3 state bucket)
 
@@ -65,6 +97,18 @@ terraform output deploy_role_arn_preview
 ```
 
 Add both to **GitHub Settings → Secrets and variables → Actions** as `AWS_DEPLOY_ROLE_ARN_PROD` and `AWS_DEPLOY_ROLE_ARN_PREVIEW`.
+
+While you're in the GitHub Secrets UI, add the **build-input** secrets too. These are different from the role ARNs — they're inlined into the static SvelteKit build at compile time (Vite reads them from `apps/web/.env`, written by the workflow before `npm run build`):
+
+| Secret name | Source | Required? |
+|---|---|---|
+| `PUBLIC_SUPABASE_URL` | Supabase project settings → API → URL | yes |
+| `PUBLIC_SUPABASE_ANON_KEY` | Supabase project settings → API → `anon` `publishable` key (NOT `service_role`) | yes |
+| `PUBLIC_MAPTILER_KEY` | maptiler.com → Account → Keys | yes (maps don't render without it) |
+| `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat dashboard → API keys → Public web | optional (paywall UI degrades gracefully) |
+| `PUBLIC_SENTRY_DSN` | Sentry → Settings → Projects → Client Keys (DSN) | optional |
+
+If a secret is unset, the workflow writes an empty string into `.env` and `svelte-check` errors with `Module '$env/static/public' has no exported member 'PUBLIC_X'`. Set the required three before the first deploy.
 
 ### 4. Preview env (apply first to flush out config issues against a non-prod blast radius)
 
@@ -115,7 +159,13 @@ terraform apply
 
 ### 6. First code deploy
 
-Now push a `web@*` tag (or push to `main` for preview) — `.github/workflows/release-web.yml` builds the Lambda zip + the SvelteKit static build, OIDC-assumes the deploy role, and uploads everything.
+Push a no-op commit to `main` (or push a `web@*` tag for prod) — `.github/workflows/release-web.yml` builds the Lambda zip + the SvelteKit static build, OIDC-assumes the deploy role, and uploads everything. Watch the run at https://github.com/<owner>/<repo>/actions.
+
+If the workflow fails with `Could not load credentials from any providers` on the `aws-actions/configure-aws-credentials` step, the GitHub secret for that env's role ARN is missing — re-check step 3.
+
+If it fails on `npm run check` with `Module '$env/static/public' has no exported member 'PUBLIC_X'`, the corresponding `PUBLIC_*` GitHub secret from step 3 is missing.
+
+Once green: visit `preview.<your-apex>` (or `<your-apex>` for prod) and confirm the SvelteKit static site renders.
 
 ## Rotation
 
