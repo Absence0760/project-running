@@ -29,7 +29,7 @@ data "terraform_remote_state" "dns" {
   config = {
     bucket = "runonward-tfstate"
     key    = "dns/terraform.tfstate"
-    region = "eu-west-2"
+    region = "us-east-1"
   }
 }
 

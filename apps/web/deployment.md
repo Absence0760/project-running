@@ -17,7 +17,7 @@ The web app has two parts:
 
 Same domain, same CORS posture for both halves. No API Gateway in front of the Lambda — Function URLs are free, support response streaming, and skip the per-request API Gateway cost. ACM cert lives in `us-east-1` (CloudFront only reads from there, regardless of where the rest of the stack runs).
 
-**Region:** `eu-west-2` (London) for everything except the cert. CloudFront is global; the cert region is fixed.
+**Region:** `us-east-1` (N. Virginia) for everything, including the cert. CloudFront is global. The cert *must* live in `us-east-1` regardless of where the rest sits — the per-env stacks expose a `us_east_1` provider alias for that, which collapses to a no-op when the primary region is also `us-east-1`.
 
 ---
 
@@ -118,7 +118,7 @@ terraform apply                              # creates the prod web stack
 
 The `dns` stack outputs the hosted zone ID and cert ARN; per-env stacks read those via `terraform_remote_state`. Same pattern for the OIDC role ARN (consumed at GitHub Actions runtime, not at Terraform-apply time, so this is just for surfacing the value).
 
-**Two regions in play.** Most resources go to `eu-west-2` (London — close to Supabase EU). The ACM cert for CloudFront has to live in `us-east-1` regardless of where the rest sits — `dns/main.tf` declares two AWS providers aliased by region.
+**Region.** Everything sits in `us-east-1`. The ACM cert for CloudFront *has* to live there regardless of where the rest of the stack runs, so `dns/main.tf` declares an explicit `us_east_1` provider alias — that's a no-op while the primary region is also `us-east-1`, but it's load-bearing if the stack ever moves.
 
 **Runtime secrets via sops + AWS KMS.** `infra/envs/<env>/secrets.enc.yaml` is sops-encrypted with that env's KMS key (created by `web-stack`). Terraform reads it via the [`carlpett/sops`](https://registry.terraform.io/providers/carlpett/sops/latest) provider at apply time and writes the values into the Lambda's `environment.variables` block. Rotation is `sops infra/envs/prod/secrets.enc.yaml` → save → `terraform apply` — the Lambda config update happens in seconds.
 
@@ -175,7 +175,7 @@ The only SSR route in the app, and the only one that costs money to run.
 
 **Cost model.** Each chat turn is a streaming call to `claude-haiku-4-5` (or Opus per request). At ~3k input tokens + 1k output per turn × ~5k turns/month at launch ≈ $15. The hard ceiling lives in `check_rate_limit_tiered` (default 4/hour for free, 16/hour for pro per [paywall.md](../../docs/paywall.md)) — adjust the limits if Anthropic costs spike.
 
-**Latency.** First-token latency is ~600 ms from `eu-west-2` Lambda → Anthropic. Lambda response streaming is enabled (`InvokeMode = RESPONSE_STREAM` on the Function URL); CloudFront passes the stream through without buffering on the `/api/coach/*` behaviour by setting `OriginRequestPolicy.AllViewerExceptHostHeader` and disabling response buffering on the cache policy.
+**Latency.** First-token latency is ~300-500 ms from `us-east-1` Lambda → Anthropic. Lambda response streaming is enabled (`InvokeMode = RESPONSE_STREAM` on the Function URL); CloudFront passes the stream through without buffering on the `/api/coach/*` behaviour by setting `OriginRequestPolicy.AllViewerExceptHostHeader` and disabling response buffering on the cache policy.
 
 **Cold starts.** Node 20 Lambda cold start at 1 GB memory is ~400 ms. For a chat endpoint that's already streaming a multi-second response, cold-start overhead is barely visible. Provisioned concurrency is *not* configured — the cost isn't justified at pre-launch traffic.
 
@@ -285,7 +285,7 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 
 - [ ] AWS account created (or sub-account in an org), root MFA enabled, billing alerts at $50 / $200 / $500
 - [ ] `infra/bootstrap` applied (S3 state bucket created; locking is S3-native)
-- [ ] AWS provider configured for `eu-west-2` and `us-east-1` (the latter for the cert only)
+- [ ] AWS provider configured for `us-east-1` (the cert provider alias resolves to the same region; harmless)
 - [ ] Domain `runonward.app` registered (Route 53 or external + delegated)
 - [ ] Route 53 hosted zone live, NS records propagated
 - [ ] ACM cert issued in `us-east-1`, DNS-validated

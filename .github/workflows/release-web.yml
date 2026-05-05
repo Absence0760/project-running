@@ -33,7 +33,7 @@ jobs:
       contents: write    # softprops/action-gh-release writes a Release
 
     env:
-      AWS_REGION: eu-west-2
+      AWS_REGION: us-east-1
 
     steps:
       - uses: actions/checkout@v4
