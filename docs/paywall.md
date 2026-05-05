@@ -122,10 +122,12 @@ server-side with the `is_pro()` RPC.
    `$lib/components/ProGate.svelte`.
 
 4. **Android gate.** In the Flutter app, read the tier from the
-   profile and show a locked-state card:
+   profile and gate the feature on it. **Do not branch on
+   `BYPASS_PAYWALL` in mobile code** — see the BYPASS_PAYWALL section
+   below for why mobile has no env-flag bypass.
    ```dart
    final tier = api.userProfile?.subscriptionTier ?? 'free';
-   if (tier == 'free' && !dotenv.env['BYPASS_PAYWALL'] == 'true') {
+   if (tier == 'free') {
      // Show upgrade prompt
    }
    ```
@@ -135,19 +137,49 @@ server-side with the `is_pro()` RPC.
 
 ## BYPASS_PAYWALL
 
-Every surface reads a `BYPASS_PAYWALL` env flag. When set to `'true'`:
+A dev-only escape hatch on the **web `/api/coach` endpoint only**.
+There is no equivalent flag on mobile, the watch, or any other web
+endpoint — server-side enforcement on `/api/coach` is the only
+surface that currently checks subscription_tier, so it's the only
+surface a bypass needs to model.
 
-- Server endpoints skip the tier check.
-- Client-side `isLocked()` could also be overridden, but today it reads
-  the user's actual tier from the profile, so the way to bypass on the
-  client during dev is to set the seed user's `subscription_tier` to
-  `'pro'` in `seed.sql`.
+### Web — `/api/coach` only
 
-This flag exists in:
-- `apps/web/.env.example` → read by `+server.ts` endpoints via `$env/dynamic/private`
-- `apps/mobile_android/.env.example` → read at build time via `flutter_dotenv`
+The flag is honoured *only when all three conditions are
+simultaneously true*:
 
-Never set this flag in production.
+1. `NODE_ENV !== 'production'` — i.e. running under `npm run dev`,
+   never in a build artifact.
+2. `PUBLIC_SUPABASE_URL` contains `127.0.0.1` or `localhost` — i.e.
+   the dev wrapper is talking to a local Supabase stack, not a real
+   project.
+3. `BYPASS_PAYWALL === 'true'` (the literal string).
+
+Logic lives in `apps/web/src/routes/api/coach/+server.ts`. The
+production AWS Lambda (`apps/web/lambda/coach/src/index.ts`)
+hardcodes `bypassPaywallEnabled: false` regardless of process env, so
+even if the flag leaked into the Lambda's runtime environment it
+would not flip the gate. The shared handler logs a `console.warn` on
+every bypass-enabled request so any prod accident shows up
+immediately in CloudWatch.
+
+The flag is intentionally **not exported** in `apps/web/.env.example`
+— it should never be set in a checked-in template. Add it ad-hoc to
+your own `.env.local` if you need it.
+
+### Mobile / watch / other web endpoints
+
+No bypass. The mobile app reads `subscription_tier` from the user's
+profile and gates accordingly; for dev work flip the seed user's
+tier in `apps/backend/supabase/seed.sql` to `'pro'` instead of
+inventing a client-side override. The watch has no paywalled
+surfaces at all.
+
+Never re-introduce a BYPASS_PAYWALL read in mobile / watch code —
+without the prod-env trio above, a stray `.env` containing
+`BYPASS_PAYWALL=true` would silently disable the check in a release
+build. The audit pass-2 report flagged this as a documentation gap;
+this section is the corrected guidance.
 
 ## RevenueCat integration
 

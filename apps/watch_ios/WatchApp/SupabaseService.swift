@@ -12,8 +12,16 @@ actor SupabaseService {
     // Defaults used only by the DEBUG seed sign-in fallback in `ContentView`.
     // In production the paired iPhone hands over baseURL + anonKey + token
     // over `WCSession.updateApplicationContext(_:)`.
+    //
+    // No anon key is hardcoded: the audit pass flagged the previous
+    // literal because it baked the publishable key into git history.
+    // Set the value via `applyCredentials(...)` from the WCSession
+    // callback before any direct sign-in attempt; an empty default
+    // means a watch-sim-alone DEBUG run that hasn't received a
+    // handover gets a clear `apikey` rejection rather than silently
+    // hitting the dev project.
     private var baseURL = "http://127.0.0.1:54321"
-    private var anonKey = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+    private var anonKey = ""
 
     private var accessToken: String?
     private var userId: String?

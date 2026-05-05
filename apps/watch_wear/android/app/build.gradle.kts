@@ -48,14 +48,20 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Defaults match the local Supabase stack so `./gradlew installDebug`
-        // Just Works on a dev machine. Override via
-        //   `-PSUPABASE_URL=... -PSUPABASE_ANON_KEY=...`
-        // to point at staging / prod.
+        // Override via `-PSUPABASE_URL=... -PSUPABASE_ANON_KEY=...`.
+        // The release workflow injects production values from
+        // `secrets.SUPABASE_*`. For local dev set them in
+        // `~/.gradle/gradle.properties` or pass on the command line.
+        // No default key is hardcoded here — a previous version
+        // embedded the local-stack publishable key as a fallback,
+        // which the audit pass flagged because it baked the key into
+        // git history. The empty-string default fails the OkHttp
+        // request loudly so a misconfigured local build is obvious
+        // rather than silently posting to the dev server.
         val supabaseUrl: String = (project.findProperty("SUPABASE_URL") as String?)
             ?: "http://10.0.2.2:54321"
         val supabaseAnonKey: String = (project.findProperty("SUPABASE_ANON_KEY") as String?)
-            ?: "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+            ?: ""
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
