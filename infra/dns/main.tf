@@ -20,7 +20,22 @@ provider "aws" {
 
 resource "aws_route53_zone" "apex" {
   name = var.apex_domain
-  tags = var.tags
+  tags = merge(
+    {
+      Project   = "run-app"
+      Stack     = "dns"
+      ManagedBy = "terraform"
+    },
+    var.tags,
+  )
+
+  # Destroying the hosted zone wipes every NS-delegation chain
+  # anchored at the registrar — recovery requires updating NS at the
+  # registrar within the SOA TTL window. prevent_destroy forces a
+  # manual `terraform state rm` first.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # ─────────────────── ACM cert (us-east-1, for CloudFront) ───────────────────

@@ -57,11 +57,85 @@ locals {
 
 # ──────────────────────────── KMS key for sops ────────────────────────────
 
+# Explicit key policy. The AWS-default policy grants the account root
+# all KMS actions, which means anyone with `AdministratorAccess`
+# through Identity Center could decrypt sops-encrypted secrets via
+# the console — defeating the workflow-driven access posture.
+#
+# This policy:
+#   - Lets the account root manage the key (revoke / re-grant), but
+#     not call Decrypt directly without going through a delegated
+#     principal.
+#   - Lets the Lambda execution role call Decrypt at cold-start
+#     (sops in the deployment env decrypts secrets.enc.yaml into the
+#     Lambda environment).
+#   - Lets the GitHub OIDC deploy role call Decrypt at terraform-apply
+#     time so `data.sops_file` resolves the encrypted .yaml.
+data "aws_iam_policy_document" "kms_secrets" {
+  statement {
+    sid    = "AllowKeyAdministrationByAccountRoot"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions = [
+      "kms:Create*",
+      "kms:Describe*",
+      "kms:Enable*",
+      "kms:List*",
+      "kms:Put*",
+      "kms:Update*",
+      "kms:Revoke*",
+      "kms:Disable*",
+      "kms:Get*",
+      "kms:Delete*",
+      "kms:TagResource",
+      "kms:UntagResource",
+      "kms:ScheduleKeyDeletion",
+      "kms:CancelKeyDeletion",
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid    = "AllowLambdaAndDeployRolesToDecrypt"
+    effect = "Allow"
+    principals {
+      type = "AWS"
+      identifiers = compact([
+        # Lambda execution role — created below in this stack; the
+        # ARN is built deterministically from the resource_prefix to
+        # avoid a key→role→key reference cycle.
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-lambda",
+        # Deploy role(s) that need to decrypt at terraform-apply time.
+        # Optional — empty list means deploys decrypt out-of-band.
+        var.kms_decrypt_principal_arn,
+      ])
+    }
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey",
+      "kms:GenerateDataKey",
+    ]
+    resources = ["*"]
+  }
+}
+
 resource "aws_kms_key" "secrets" {
   description             = "Encrypts sops secrets for runonward-web-${var.env}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.kms_secrets.json
   tags                    = var.tags
+
+  # Losing this key during a careless `terraform destroy` makes every
+  # secrets.enc.yaml for the env permanently undecryptable. The
+  # 30-day deletion window doesn't help when Terraform is the thing
+  # initiating the destroy — prevent_destroy forces a manual
+  # `terraform state rm` step before deletion.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_kms_alias" "secrets" {
@@ -75,6 +149,15 @@ resource "aws_s3_bucket" "site" {
   bucket        = "${local.resource_prefix}-site"
   force_destroy = false
   tags          = var.tags
+
+  # `terraform destroy` on a non-empty bucket already errors thanks
+  # to force_destroy=false, but a fresh `aws s3 rm --recursive`
+  # followed by destroy would silently take the bucket. prevent_destroy
+  # forces a manual `terraform state rm` step before deletion is
+  # possible from Terraform.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "site" {
@@ -307,7 +390,12 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     content_security_policy {
       content_security_policy = join("; ", [
         "default-src 'self'",
-        "img-src 'self' data: https://*.maptiler.com",
+        # OAuth avatar origins (lh3.googleusercontent.com from Google
+        # sign-in, Apple's id.apple.com variants) plus Supabase
+        # Storage signed URLs (run-photos bucket bytes) plus MapTiler
+        # tile previews. data: is needed for the SvelteKit
+        # icon-component inline SVGs.
+        "img-src 'self' data: https://*.supabase.co https://*.maptiler.com https://lh3.googleusercontent.com https://*.appleid.apple.com",
         "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self' data:",
@@ -317,7 +405,10 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         # it errors are silently CSP-blocked. `*.supabase.{co,io}`
         # covers REST + Realtime + Storage; `*.maptiler.com` covers
         # tile fetches.
-        "connect-src 'self' https://*.supabase.co https://*.supabase.io https://api.runonward.app https://*.maptiler.com https://*.ingest.sentry.io",
+        # Drop the unused .supabase.io alias — the project is on
+        # *.supabase.co. Wildcards across two TLDs widen the
+        # exfiltration surface for no win.
+        "connect-src 'self' https://*.supabase.co https://api.runonward.app https://*.maptiler.com https://*.ingest.sentry.io",
         "worker-src 'self' blob:",
         "manifest-src 'self'",
         "object-src 'none'",
@@ -335,8 +426,12 @@ resource "aws_cloudfront_response_headers_policy" "security" {
   # this as a custom header, not as part of security_headers_config.
   custom_headers_config {
     items {
-      header   = "Permissions-Policy"
-      value    = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+      header = "Permissions-Policy"
+      # geolocation is allowed for the first-party origin only —
+      # RouteBuilder, PrivacyZonePicker, RouteExplorer, and
+      # /routes/new all call navigator.geolocation. Everything else
+      # the app doesn't use stays denied.
+      value    = "accelerometer=(), camera=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
       override = true
     }
   }

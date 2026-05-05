@@ -81,6 +81,12 @@ variable "waf_rate_limit" {
   default     = 100
 }
 
+variable "kms_decrypt_principal_arn" {
+  description = "Optional principal ARN that needs kms:Decrypt on the env's secrets KMS key (e.g. the GitHub OIDC deploy role). Empty string omits — deploys must then decrypt sops files out-of-band."
+  type        = string
+  default     = ""
+}
+
 # ─────────────────── Tagging ───────────────────
 
 variable "tags" {

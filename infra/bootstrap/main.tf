@@ -29,6 +29,13 @@ resource "aws_s3_bucket" "state" {
     Component = "tfstate"
     ManagedBy = "terraform"
   }
+
+  # State bucket destruction is catastrophic — every other stack
+  # depends on it for remote state. Forces a manual
+  # `terraform state rm` before any destroy can succeed.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "state" {

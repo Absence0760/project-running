@@ -67,9 +67,13 @@ module "web" {
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 
+  # PascalCase to match the bootstrap + github-oidc stacks; AWS treats
+  # tag keys as case-sensitive so a single Cost Explorer / Resource
+  # Groups query can group across all run-app resources.
   tags = {
-    project = "runonward"
-    env     = "prod"
-    managed = "terraform"
+    Project     = "run-app"
+    Stack       = "web"
+    Environment = "prod"
+    ManagedBy   = "terraform"
   }
 }

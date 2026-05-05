@@ -47,9 +47,12 @@ module "web" {
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 
+  # PascalCase to match the other stacks. See envs/prod/main.tf for
+  # rationale.
   tags = {
-    project = "runonward"
-    env     = "preview"
-    managed = "terraform"
+    Project     = "run-app"
+    Stack       = "web"
+    Environment = "preview"
+    ManagedBy   = "terraform"
   }
 }
