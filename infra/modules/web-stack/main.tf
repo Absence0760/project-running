@@ -111,6 +111,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "site" {
       noncurrent_days = 30
     }
   }
+  # Sweep partial uploads abandoned by interrupted CI runs / aborted
+  # browser uploads. Each pending multipart costs $0.005/GB/month
+  # indefinitely; without this rule, broken deploys leak storage
+  # forever.
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    filter {}
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
 }
 
 resource "aws_s3_bucket_policy" "site" {
@@ -285,15 +297,18 @@ resource "aws_cloudfront_response_headers_policy" "security" {
       frame_option = "DENY"
       override     = true
     }
-    # Permissive CSP — the app loads MapTiler tiles, calls Supabase,
-    # streams from itself. Tighten as the surface stabilises; for now
-    # `default-src 'self'` plus listed origins is the minimum that
-    # doesn't break the app.
+    # CSP — the app loads MapTiler tiles, calls Supabase, streams from
+    # itself. `unsafe-eval` was dropped in this pass: SvelteKit's
+    # production build does not eval; it was carried forward from a
+    # development-stage policy. `unsafe-inline` on script-src remains
+    # because the static build inlines the page-data hydration script;
+    # nonce-based tightening is the next step but requires a dynamic
+    # response path we don't have on adapter-static.
     content_security_policy {
       content_security_policy = join("; ", [
         "default-src 'self'",
         "img-src 'self' data: https://*.maptiler.com",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self' data:",
         # `connect-src` covers fetch / XHR / EventSource / WebSocket —
@@ -305,7 +320,23 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         "connect-src 'self' https://*.supabase.co https://*.supabase.io https://api.runonward.app https://*.maptiler.com https://*.ingest.sentry.io",
         "worker-src 'self' blob:",
         "manifest-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
       ])
+      override = true
+    }
+  }
+
+  # Disable powerful browser APIs the app doesn't use — closes
+  # opportunistic-XSS payloads from reaching the device sensor /
+  # autofill / payment / clipboard surfaces. CloudFront only models
+  # this as a custom header, not as part of security_headers_config.
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
       override = true
     }
   }

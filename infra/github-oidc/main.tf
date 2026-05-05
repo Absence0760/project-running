@@ -54,6 +54,20 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
+# Baseline tags applied to every IAM resource in this stack. Caller
+# overrides via `var.tags`; default keys ensure cost-allocation +
+# stack ownership are visible without configuration.
+locals {
+  oidc_tags = merge(
+    {
+      Project   = "run-app"
+      Stack     = "github-oidc"
+      ManagedBy = "terraform"
+    },
+    var.tags,
+  )
+}
+
 # ─────────────────── OIDC provider ───────────────────
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -65,7 +79,7 @@ resource "aws_iam_openid_connect_provider" "github" {
     "6938fd4d98bab03faadb97b34396831e3780aea1",
     "1c58a3a8518e8759bf075b76b750d4f2df264fcd",
   ]
-  tags = var.tags
+  tags = local.oidc_tags
 }
 
 # ─────────────────── Deploy role: prod ───────────────────
@@ -88,7 +102,7 @@ resource "aws_iam_role" "deploy_prod" {
       }
     }]
   })
-  tags = var.tags
+  tags = merge(local.oidc_tags, { Environment = "prod" })
 }
 
 resource "aws_iam_role_policy" "deploy_prod" {
@@ -148,7 +162,7 @@ resource "aws_iam_role" "deploy_preview" {
       }
     }]
   })
-  tags = var.tags
+  tags = merge(local.oidc_tags, { Environment = "preview" })
 }
 
 resource "aws_iam_role_policy" "deploy_preview" {

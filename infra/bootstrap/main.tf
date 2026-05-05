@@ -22,6 +22,13 @@ provider "aws" {
 resource "aws_s3_bucket" "state" {
   bucket        = var.state_bucket_name
   force_destroy = false
+
+  tags = {
+    Project   = "run-app"
+    Stack     = "bootstrap"
+    Component = "tfstate"
+    ManagedBy = "terraform"
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "state" {
@@ -44,6 +51,27 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Versioning is mandatory for state safety, but every `terraform
+# apply` writes a new version of every state file — without expiry,
+# the bucket bloats forever at $0.023/GB/month. 90 days of history is
+# more than enough to recover from a bad apply; older versions go.
+# Also abort partial multipart uploads (interrupted uploads from
+# disconnected `terraform apply` sessions) after 7 days.
+resource "aws_s3_bucket_lifecycle_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+    filter {}
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }
