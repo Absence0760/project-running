@@ -974,15 +974,33 @@ class ApiClient {
   }
 
   /// Public profile lookup by user ID. Returns null when the row
-  /// doesn't exist or RLS hides it.
+  /// doesn't exist or RLS hides it. Returns only the public-safe columns
+  /// — `subscription_tier`, `subscription_at`, and `parkrun_number` are
+  /// column-level revoked from `authenticated` callers (migration
+  /// 20260707_001), so cross-user reads must not request them. Self-reads
+  /// of those columns go through [fetchMyProfile].
   Future<UserProfileRow?> fetchPublicProfile(String userId) async {
     final row = await _client
         .from(UserProfileRow.table)
-        .select()
+        .select('id, display_name, avatar_url, preferred_unit, created_at')
         .eq(UserProfileRow.colId, userId)
         .maybeSingle();
     if (row == null) return null;
     return UserProfileRow.fromJson(row);
+  }
+
+  /// Self-read of the full `user_profiles` row, including
+  /// `subscription_tier`, `subscription_at`, `parkrun_number`. Backed by
+  /// the `get_my_profile()` SECURITY DEFINER RPC because those columns
+  /// are revoked from direct SELECT (migration 20260707_001).
+  Future<UserProfileRow?> fetchMyProfile() async {
+    final result = await _client.rpc('get_my_profile');
+    if (result == null) return null;
+    if (result is List) {
+      if (result.isEmpty) return null;
+      return UserProfileRow.fromJson(result.first as Map<String, dynamic>);
+    }
+    return UserProfileRow.fromJson(result as Map<String, dynamic>);
   }
 
   /// Follower / following counts via `count: 'exact', head: true`.

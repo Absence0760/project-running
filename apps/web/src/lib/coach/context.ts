@@ -50,11 +50,17 @@ export async function buildContext(
 		.order('started_at', { ascending: false })
 		.limit(runsLimit);
 
-	const { data: profile } = await supabase
-		.from('user_profiles')
-		.select('display_name, preferred_unit, subscription_tier')
-		.eq('id', userId)
-		.maybeSingle();
+	// Use the SECURITY DEFINER `get_my_profile` RPC because
+	// `subscription_tier` is column-level revoked from authenticated callers
+	// (see migration 20260707_001).
+	const { data: profileRow } = await supabase.rpc('get_my_profile');
+	const profile = profileRow
+		? {
+				display_name: profileRow.display_name,
+				preferred_unit: profileRow.preferred_unit,
+				subscription_tier: profileRow.subscription_tier,
+			}
+		: null;
 
 	const { data: userSettings } = await supabase
 		.from('user_settings')

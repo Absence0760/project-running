@@ -1923,6 +1923,25 @@ export type Database = {
           token_expiry: string
         }[]
       }
+      get_my_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string
+          parkrun_number: string | null
+          preferred_unit: string | null
+          subscription_at: string | null
+          subscription_tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }

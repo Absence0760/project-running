@@ -47,11 +47,10 @@ export async function createBackup(
 		.eq('user_id', userId);
 
 	onProgress?.({ stage: 'profile', current: 0, total: 1 });
-	const { data: profile } = await supabase
-		.from('user_profiles')
-		.select('*')
-		.eq('id', userId)
-		.maybeSingle();
+	// Use the get_my_profile RPC because subscription_tier / parkrun_number
+	// / subscription_at are column-level revoked from authenticated direct
+	// reads (migration 20260707_001).
+	const { data: profile } = await supabase.rpc('get_my_profile');
 	const { data: userSettings } = await supabase
 		.from('user_settings')
 		.select('prefs')

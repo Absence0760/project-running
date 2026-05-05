@@ -912,10 +912,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (api == null || api.userId == null) return;
 
     // Pre-fill from user_profiles.parkrun_number when available so a
-    // returning user doesn't have to re-type it.
+    // returning user doesn't have to re-type it. Use the self-read RPC
+    // path because parkrun_number is column-level revoked from direct
+    // SELECT (migration 20260707_001).
     String existing = '';
     try {
-      final profile = await api.fetchPublicProfile(api.userId!);
+      final profile = await api.fetchMyProfile();
       existing = profile?.parkrunNumber ?? '';
     } catch (_) {}
 

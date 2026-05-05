@@ -54,11 +54,9 @@ class BackupService {
     final routes = (routesData as List).cast<Map<String, dynamic>>();
 
     onProgress?.call(const BackupProgress.stage('profile'));
-    final profile = await _client
-        .from('user_profiles')
-        .select()
-        .eq('id', userId)
-        .maybeSingle();
+    // Self-read via RPC — sensitive columns are column-level revoked from
+    // direct SELECT (migration 20260707_001).
+    final profile = await _client.rpc('get_my_profile');
     final userSettings = await _client
         .from('user_settings')
         .select('prefs')

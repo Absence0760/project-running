@@ -59,12 +59,11 @@ function createAuthStore() {
 			email = session.user.email ?? '';
 		}
 
-		// Try to fetch profile, create if missing
-		const { data: profile } = await supabase
-			.from('user_profiles')
-			.select('*')
-			.eq('id', userId)
-			.single();
+		// Self-read goes through the `get_my_profile` SECURITY DEFINER RPC
+		// because `subscription_tier`, `subscription_at`, and
+		// `parkrun_number` are column-level revoked from authenticated
+		// callers on `user_profiles` (migration 20260707_001).
+		const { data: profile } = await supabase.rpc('get_my_profile');
 
 		if (profile) {
 			user = {
