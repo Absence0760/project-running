@@ -331,6 +331,13 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 	// nulls route_id / event_id when the joined target isn't public.
 	// The view's where clause is `is_public = true` so the dropped
 	// `.eq('is_public', true)` filter is redundant.
+	//
+	// Track is *not* fetched here: the audit (storage High) flagged that
+	// loading raw bytes inline meant a future maintainer using `r.track`
+	// for non-owners would bypass the privacy-zone clipping required by
+	// decisions §33. RunShareView already branches on owner — owner takes
+	// the direct Storage path via fetchTrack(); non-owner takes
+	// fetchClippedTrackForRun(). This function only returns the row.
 	const { data } = await supabase
 		.from('public_runs')
 		.select('*')
@@ -338,16 +345,7 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 		.single();
 
 	if (!data) return null;
-
-	let track = null;
-	if (data.track_url) {
-		try {
-			track = await fetchTrack(data.track_url);
-		} catch (e) {
-			console.warn('Failed to fetch public run track', e);
-		}
-	}
-	return { ...data, track } as Run;
+	return { ...data, track: null } as Run;
 }
 
 export async function deleteRun(id: string): Promise<void> {
