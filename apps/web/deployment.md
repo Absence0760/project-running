@@ -173,7 +173,7 @@ Preview environment fires on every push to `main` against the `preview` env's bu
 
 The only SSR route in the app, and the only one that costs money to run.
 
-**Cost model.** Each chat turn is a streaming call to `claude-haiku-4-5` (or Opus per request). At ~3k input tokens + 1k output per turn × ~5k turns/month at launch ≈ $15. The hard ceiling lives in `check_rate_limit_tiered` (default 4/hour for free, 16/hour for pro per [paywall.md](../../docs/paywall.md)) — adjust the limits if Anthropic costs spike.
+**Cost model.** Each chat turn is a streaming call to `claude-sonnet-4-5` (`apps/web/src/lib/coach/providers.ts:49`). At ~3k input tokens + 1k output per turn × ~5k turns/month at launch ≈ $15. The hard ceiling is the per-user daily cap in `TIER_LIMITS.free.dailyLimit` (5/day for free, unlimited for pro per [paywall.md](../../docs/paywall.md)), enforced server-side in the Lambda via `is_pro()` + `increment_coach_usage` before any provider call streams. Per-turn token spend is bounded by `TIER_LIMITS.{free,pro}.maxTokens` (768 / 2048). Adjust either knob in `apps/web/src/lib/coach/types.ts` if Anthropic costs spike.
 
 **Latency.** First-token latency is ~300-500 ms from `us-east-1` Lambda → Anthropic. Lambda response streaming is enabled (`InvokeMode = RESPONSE_STREAM` on the Function URL); CloudFront passes the stream through without buffering on the `/api/coach/*` behaviour by setting `OriginRequestPolicy.AllViewerExceptHostHeader` and disabling response buffering on the cache policy.
 
