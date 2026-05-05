@@ -434,7 +434,13 @@ class _CoachScreenState extends State<CoachScreen> {
       try {
         final req = await client.postUrl(uri);
         req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        // Production Lambda reads `x-supabase-authorization` only —
+        // CloudFront's Lambda OAC sigv4-signs every origin request in
+        // the `Authorization` header, so forwarding the viewer's
+        // bearer token in that slot would collide with IAM auth on the
+        // Function URL. The SvelteKit dev wrapper accepts the same
+        // header for parity. See apps/web/lambda/coach/src/index.ts.
+        req.headers.set('x-supabase-authorization', 'Bearer $token');
         req.add(utf8.encode(body));
         final res = await req.close();
         final ct = res.headers.value(HttpHeaders.contentTypeHeader) ?? '';

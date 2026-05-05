@@ -1,0 +1,28 @@
+-- Restore the anon EXECUTE grant on `is_run_visible_to(uuid, uuid)`.
+--
+-- Pass-1 remediation `20260701_001_drop_runs_public_select_policy.sql`
+-- created the function and granted it to `authenticated, service_role`
+-- only. The same migration replaced the `runs` SELECT policy with a
+-- view-based public-read path, but did NOT update five sibling
+-- policies on `run_kudos` / `run_comments` / `run_photos` /
+-- `segment_efforts` / `live_run_pings`, which apply to `anon,
+-- authenticated` and call `is_run_visible_to(...)` inline. The
+-- `run-photos` Storage policy from `20260705_001` has the same shape.
+--
+-- Net effect of the missing grant: every anonymous viewer of
+-- `/share/run/<id>` got `42501 permission denied for function
+-- is_run_visible_to` on every request that touched one of those
+-- tables — kudos counts, comments, photo bytes, segment efforts, live
+-- pings. The share page renders the run row (via `public_runs`) but
+-- every social affordance fails noisily.
+--
+-- The fix is the missing GRANT. Existence-oracle concern (see audit
+-- pass 2) is intentionally accepted: `anon` callers can call the
+-- function via PostgREST RPC and observe `true`/`false` for any run
+-- UUID. The information disclosed is identical to what the
+-- `public_runs` view already publishes (whether a run is public).
+-- Closing the oracle without breaking the share page would require
+-- either inlining the visibility logic into every dependent policy
+-- or moving the function to a non-PostgREST-exposed schema.
+
+grant execute on function is_run_visible_to(uuid, uuid) to anon;

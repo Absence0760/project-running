@@ -1894,6 +1894,7 @@ export type Database = {
           payload: Json
         }[]
       }
+      cleanup_stale_export_blobs: { Args: never; Returns: number }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       clip_route_for_viewer: { Args: { p_route_id: string }; Returns: Json }

@@ -1405,11 +1405,15 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
--- ───────── routes_run_count_trigger visibility gate (migration 20260628_001) ─────────
--- Inserting a run that points at a route the runner cannot see
--- (private foreign route) must NOT bump that route's run_count.
--- Inserting against a public foreign route, or the runner's own
--- route, must still bump it. UPDATE/DELETE mirror the same rule.
+-- ───────── routes_run_count_trigger visibility gate (migrations 20260628_001 + 20260716_001) ─────────
+-- Two layered rules:
+--   (1) Inserting a run that points at a route the runner cannot see
+--       (private foreign route) must NOT bump that route's run_count.
+--   (2) Even on a public route the runner CAN see, a private run
+--       (`is_public = false`) must NOT bump the counter — that gate
+--       was added in 20260716_001 to stop public_routes.run_count
+--       leaking signal that someone is privately running the route.
+-- A *public* run pointing at a public foreign route DOES bump.
 DO $$
 DECLARE
   test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';  -- runner@test.com
@@ -1458,14 +1462,27 @@ BEGIN
       v_count_priv_before, v_count_priv_after;
   END IF;
 
-  -- Public foreign route: trigger MUST bump.
-  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, route_id, metadata)
+  -- Public foreign route + private run: trigger must NOT bump
+  -- (20260716_001 gate — private runs are invisible to the counter).
+  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, route_id, metadata, is_public)
     VALUES (gen_random_uuid(), test_user, now(), 600, 5000, 'app', v_public_route_id,
-            jsonb_build_object('activity_type', 'run'))
+            jsonb_build_object('activity_type', 'run'), false)
+    RETURNING id INTO v_run_id;
+  SELECT run_count INTO v_count_pub_after FROM routes WHERE id = v_public_route_id;
+  IF v_count_pub_after <> v_count_pub_before THEN
+    RAISE EXCEPTION 'routes_run_count_trigger: private run on public foreign route should NOT bump (% -> %)',
+      v_count_pub_before, v_count_pub_after;
+  END IF;
+  DELETE FROM runs WHERE id = v_run_id;
+
+  -- Public foreign route + public run: trigger MUST bump.
+  INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, route_id, metadata, is_public)
+    VALUES (gen_random_uuid(), test_user, now(), 600, 5000, 'app', v_public_route_id,
+            jsonb_build_object('activity_type', 'run'), true)
     RETURNING id INTO v_run_id;
   SELECT run_count INTO v_count_pub_after FROM routes WHERE id = v_public_route_id;
   IF v_count_pub_after <> v_count_pub_before + 1 THEN
-    RAISE EXCEPTION 'routes_run_count_trigger: public foreign route should bump by 1 (% -> %)',
+    RAISE EXCEPTION 'routes_run_count_trigger: public run on public foreign route should bump by 1 (% -> %)',
       v_count_pub_before, v_count_pub_after;
   END IF;
   -- And DELETE decrements it back.
