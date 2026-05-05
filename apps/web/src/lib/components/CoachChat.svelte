@@ -361,12 +361,37 @@
 
 	marked.setOptions({ breaks: true, gfm: true });
 
+	// Explicit allowlist of tags marked emits for the formatting we use
+	// (paragraphs, headings, lists, code blocks, blockquotes, tables,
+	// emphasis, links, br/hr). Defence-in-depth on top of DOMPurify's
+	// own JS-execution scrubbing — keeps the surface bounded so a
+	// future marked upgrade that emits a tag we don't expect doesn't
+	// silently widen the rendered HTML.
+	const COACH_ALLOWED_TAGS = [
+		'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3',
+		'h4', 'h5', 'h6', 'hr', 'i', 'li', 'ol', 'p', 'pre', 's', 'span',
+		'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th', 'thead', 'tr',
+		'u', 'ul',
+	];
+	const COACH_ALLOWED_ATTR = ['href', 'class', 'lang', 'title'];
+
+	// Force every rendered <a> through target=_blank + rel=noopener so a
+	// link in a model response cannot reach back into window.opener and
+	// rewrite the parent (a phishing vector even on sanitized HTML).
+	DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+		if (node.tagName === 'A') {
+			node.setAttribute('target', '_blank');
+			node.setAttribute('rel', 'noopener noreferrer');
+		}
+	});
+
 	function renderMarkdown(content: string): string {
 		const raw = marked.parse(content, { async: false }) as string;
-		// DOMPurify drops anything that could execute (script, on*
-		// handlers, javascript: URLs). We still get the formatting we want
-		// from marked: paragraphs, lists, code blocks, **bold**.
-		return DOMPurify.sanitize(raw);
+		return DOMPurify.sanitize(raw, {
+			ALLOWED_TAGS: COACH_ALLOWED_TAGS,
+			ALLOWED_ATTR: COACH_ALLOWED_ATTR,
+			ALLOW_DATA_ATTR: false,
+		});
 	}
 
 	// ─────────────────────── Send / regenerate / edit ───────────────────────

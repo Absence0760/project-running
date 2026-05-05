@@ -39,10 +39,12 @@ export interface CoachConfig {
 	publicSupabaseUrl: string;
 	publicSupabaseAnonKey: string;
 
-	// Pre-computed by the caller from env (VERCEL_ENV, NODE_ENV,
-	// BYPASS_PAYWALL). True iff the bypass is honoured. The handler
-	// trusts this — it does NOT re-read env. The caller is responsible
-	// for the prod-env gate.
+	// Pre-computed by the caller. True iff the bypass is honoured. The
+	// caller is responsible for the prod-env gate (NODE_ENV check +
+	// localhost-Supabase check in the SvelteKit dev wrapper; hardcoded
+	// `false` in the production Lambda). The handler does not re-read
+	// env, but it logs a loud warning when this is true so any
+	// accidental prod activation shows up immediately in CloudWatch.
 	bypassPaywallEnabled: boolean;
 }
 

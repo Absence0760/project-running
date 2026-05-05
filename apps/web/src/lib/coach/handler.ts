@@ -45,9 +45,17 @@ export async function handleCoach(
 	config: CoachConfig,
 ): Promise<CoachResult> {
 	if (config.provider === 'anthropic' && !config.anthropicApiKey) {
-		return jsonError(
-			503,
-			'Coach is not configured — set ANTHROPIC_API_KEY in the web app env, or set COACH_PROVIDER=openai for a local Ollama-compatible backend.',
+		console.error(
+			'[coach] missing ANTHROPIC_API_KEY — set it in the web app env, ' +
+				'or set COACH_PROVIDER=openai for a local Ollama-compatible backend.',
+		);
+		return jsonError(503, 'Coach is not configured.');
+	}
+
+	if (config.bypassPaywallEnabled) {
+		console.warn(
+			'[coach] BYPASS_PAYWALL active — this MUST only run in local dev. ' +
+				'If you see this in production logs, the prod-env gate failed.',
 		);
 	}
 

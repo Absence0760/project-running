@@ -34,14 +34,24 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 	}
 
-	// BYPASS_PAYWALL is a dev-only escape hatch. Refuse to honour it
-	// when the deployment env reports production — VERCEL_ENV is set to
-	// 'production' on Vercel prod, NODE_ENV is set to 'production' on
-	// most adapters. .env hygiene is the primary defence; this is the
-	// code-level backstop so a stray `BYPASS_PAYWALL=true` in a prod
-	// env cannot silently disable the coach quota.
-	const isProdEnv = env.VERCEL_ENV === 'production' || env.NODE_ENV === 'production';
-	const bypassPaywallEnabled = !isProdEnv && env.BYPASS_PAYWALL === 'true';
+	// BYPASS_PAYWALL is a dev-only escape hatch. The production code
+	// path is the AWS Lambda (apps/web/lambda/coach/src/index.ts), which
+	// hardcodes `bypassPaywallEnabled: false`; this `+server.ts` is
+	// dev-only because adapter-static drops it from the static build.
+	// The defence-in-depth gates here exist purely for "in case the
+	// adapter changes later":
+	//   1. NODE_ENV must NOT be production.
+	//   2. The Supabase URL MUST point at the local stack — bypassing
+	//      the paywall against a real project would be an operational
+	//      incident.
+	//   3. BYPASS_PAYWALL must be the literal string 'true'.
+	// Any one of these failing forces the bypass off.
+	const isLocalSupabase =
+		PUBLIC_SUPABASE_URL.includes('127.0.0.1') ||
+		PUBLIC_SUPABASE_URL.includes('localhost');
+	const isProdEnv = env.NODE_ENV === 'production';
+	const bypassPaywallEnabled =
+		!isProdEnv && isLocalSupabase && env.BYPASS_PAYWALL === 'true';
 
 	// Mirrors the production Lambda: read the user JWT from
 	// `X-Supabase-Authorization` so dev and prod clients send the same

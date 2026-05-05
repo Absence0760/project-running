@@ -23,8 +23,8 @@ String extensionForFilename(String filename) {
 }
 
 /// Storage `Content-Type` to send for a given extension. Keeps the
-/// browser-served preview correct on web run-share pages — the
-/// `run-photos` bucket is public-read, so the type round-trips.
+/// browser-served preview correct on web run-share pages — signed-URL
+/// access carries the stored Content-Type to the viewer.
 String contentTypeForExtension(String ext) {
   switch (ext) {
     case 'png':
@@ -65,6 +65,12 @@ class _RunPhotosState extends State<RunPhotos> {
   final _pendingCaptionCtrl = TextEditingController();
   XFile? _pending;
   List<RunPhotoRow> _photos = const [];
+  // storage_path → signed URL with TTL. Populated at _load() and after
+  // _uploadPending(). The bucket is private (migration 20260712_001
+  // closed the public-CDN bypass), so getPublicUrl no longer returns
+  // bytes — every render path goes through createSignedUrl.
+  final Map<String, String> _signedUrls = <String, String>{};
+  static const int _signedUrlTtlSeconds = 60 * 60;
 
   bool get _canManage => widget.api.userId == widget.runOwnerId;
 
@@ -85,6 +91,7 @@ class _RunPhotosState extends State<RunPhotos> {
     setState(() => _loading = true);
     try {
       final ps = await widget.api.fetchRunPhotos(widget.runId);
+      await _signPaths(ps.map((p) => p.storagePath).toList(growable: false));
       if (!mounted) return;
       setState(() {
         _photos = ps;
@@ -96,8 +103,24 @@ class _RunPhotosState extends State<RunPhotos> {
     }
   }
 
-  String _publicUrl(String storagePath) =>
-      Supabase.instance.client.storage.from('run-photos').getPublicUrl(storagePath);
+  Future<void> _signPaths(List<String> paths) async {
+    final missing = paths.where((p) => !_signedUrls.containsKey(p)).toList();
+    if (missing.isEmpty) return;
+    try {
+      final signed = await Supabase.instance.client.storage
+          .from('run-photos')
+          .createSignedUrls(missing, _signedUrlTtlSeconds);
+      for (final s in signed) {
+        if (s.path.isNotEmpty) {
+          _signedUrls[s.path] = s.signedUrl;
+        }
+      }
+    } catch (e) {
+      debugPrint('run-photos signed-url batch failed: $e');
+    }
+  }
+
+  String _photoUrl(String storagePath) => _signedUrls[storagePath] ?? '';
 
   Future<void> _pickPhoto() async {
     try {
@@ -134,6 +157,7 @@ class _RunPhotosState extends State<RunPhotos> {
             : _pendingCaptionCtrl.text.trim(),
         positionIdx: _photos.length,
       );
+      await _signPaths([added.storagePath]);
       if (!mounted) return;
       setState(() {
         _photos = [..._photos, added];
@@ -226,7 +250,7 @@ class _RunPhotosState extends State<RunPhotos> {
           children: [
             InteractiveViewer(
               child: Image.network(
-                _publicUrl(p.storagePath),
+                _photoUrl(p.storagePath),
                 fit: BoxFit.contain,
               ),
             ),
@@ -392,7 +416,7 @@ class _RunPhotosState extends State<RunPhotos> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
-                    _publicUrl(p.storagePath),
+                    _photoUrl(p.storagePath),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: cs.surfaceContainerHighest,

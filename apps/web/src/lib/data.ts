@@ -3016,6 +3016,29 @@ const PHOTO_MIME_TO_EXT: Record<string, string> = {
 
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
+// `run-photos` is a private bucket (migration 20260712_001 — closed the
+// public-CDN bypass on the visibility gate). Signed URLs carry their own
+// TTL; an hour is comfortable for a gallery render and short enough that
+// a run flipped from public → private won't keep serving stale bytes
+// long after the visibility change.
+const PHOTO_SIGNED_URL_TTL_S = 60 * 60;
+
+async function signRunPhotoPaths(paths: string[]): Promise<Record<string, string>> {
+	if (paths.length === 0) return {};
+	const { data, error } = await supabase.storage
+		.from('run-photos')
+		.createSignedUrls(paths, PHOTO_SIGNED_URL_TTL_S);
+	if (error || !data) {
+		console.error('signRunPhotoPaths failed', error);
+		return {};
+	}
+	const out: Record<string, string> = {};
+	for (const row of data) {
+		if (row.path && row.signedUrl) out[row.path] = row.signedUrl;
+	}
+	return out;
+}
+
 export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhoto[]> {
 	const { data, error } = await supabase
 		.from('run_photos')
@@ -3028,9 +3051,11 @@ export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhot
 		console.error('fetchRunPhotos failed', error);
 		return [];
 	}
-	return (data ?? []).map((r) => ({
+	const rows = data ?? [];
+	const signed = await signRunPhotoPaths(rows.map((r) => r.storage_path));
+	return rows.map((r) => ({
 		...r,
-		url: supabase.storage.from('run-photos').getPublicUrl(r.storage_path).data.publicUrl,
+		url: signed[r.storage_path] ?? '',
 	}));
 }
 
@@ -3083,9 +3108,12 @@ export async function addRunPhoto(input: {
 		await supabase.storage.from('run-photos').remove([storagePath]);
 		throw error ?? new Error('Insert failed');
 	}
+	const { data: signed } = await supabase.storage
+		.from('run-photos')
+		.createSignedUrl(storagePath, PHOTO_SIGNED_URL_TTL_S);
 	return {
 		...data,
-		url: supabase.storage.from('run-photos').getPublicUrl(storagePath).data.publicUrl,
+		url: signed?.signedUrl ?? '',
 	};
 }
 
