@@ -293,12 +293,21 @@ async function backfill(
 		if (sid) seen.add(String(sid));
 	}
 
+	let rateLimited = false;
 	while (true) {
 		const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterEpoch}&per_page=${pageSize}&page=${page}`;
 		const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+		if (resp.status === 429 || resp.status === 503) {
+			// Strava rate-limit / maintenance — surface to the caller so
+			// the client can show "Strava is rate-limiting us, try again
+			// in 15 minutes" rather than treating partial as success.
+			console.warn('strava backfill rate-limited', { page, status: resp.status });
+			rateLimited = true;
+			break;
+		}
 		if (!resp.ok) {
-			// Bail silently on the first failure rather than looping forever —
-			// partial imports are still useful.
+			// Bail silently on the first non-rate-limit failure rather
+			// than looping forever — partial imports are still useful.
 			break;
 		}
 		const activities = (await resp.json()) as StravaActivity[];
@@ -332,5 +341,5 @@ async function backfill(
 		.eq('user_id', userId)
 		.eq('provider', 'strava');
 
-	return { imported, skipped, failed };
+	return { imported, skipped, failed, rate_limited: rateLimited };
 }

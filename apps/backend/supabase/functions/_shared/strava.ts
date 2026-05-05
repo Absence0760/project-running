@@ -73,15 +73,34 @@ export async function refreshStravaToken(
 /// hydrate the activity object after Strava notifies us about a new
 /// upload — the webhook payload only carries the activity id, not the
 /// detail.
+///
+/// Three-state return so callers can distinguish:
+///   - { status: 'ok', activity } — successful fetch
+///   - { status: 'rate_limited' } — Strava returned 429 / 503; the
+///     caller should propagate this so a webhook returns 500 (Strava
+///     retries) rather than 200 (Strava drops the event).
+///   - { status: 'not_found' } — anything else (404, auth fail, etc.).
+export type StravaFetchResult =
+	| { status: 'ok'; activity: StravaActivity }
+	| { status: 'rate_limited' }
+	| { status: 'not_found' };
+
 export async function fetchStravaActivity(
 	accessToken: string,
 	activityId: number,
-): Promise<StravaActivity | null> {
+): Promise<StravaFetchResult> {
 	const resp = await fetch(`https://www.strava.com/api/v3/activities/${activityId}`, {
 		headers: { Authorization: `Bearer ${accessToken}` },
 	});
-	if (!resp.ok) return null;
-	return (await resp.json()) as StravaActivity;
+	if (resp.status === 429 || resp.status === 503) {
+		console.warn('strava activity fetch rate-limited / unavailable', {
+			activityId,
+			status: resp.status,
+		});
+		return { status: 'rate_limited' };
+	}
+	if (!resp.ok) return { status: 'not_found' };
+	return { status: 'ok', activity: (await resp.json()) as StravaActivity };
 }
 
 /// Has this user already imported this Strava activity? Cheap dedupe

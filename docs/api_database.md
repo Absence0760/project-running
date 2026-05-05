@@ -256,7 +256,7 @@ Threading is one level deep, enforced by the INSERT policy: `parent_comment_id i
 
 ### `run_photos`
 
-Photos attached to a run (decisions §36). Metadata in Postgres, bytes in the public-read `run-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}`. Visibility tracks the parent run via EXISTS — same shape as `run_kudos` / `run_comments`.
+Photos attached to a run (decisions §36). Metadata in Postgres, bytes in the **private** `run-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}` (migration `20260712_001` flipped the bucket public flag; the previous "public-read with policy gate" model didn't actually work — Supabase routes public-bucket reads through an unauthenticated CDN endpoint that bypasses RLS on `storage.objects`). Visibility tracks the parent run via EXISTS — same shape as `run_kudos` / `run_comments` — and is now properly enforced by the storage SELECT policy from `20260705_001`. Clients access bytes via `createSignedUrl(s)` with a 1-hour TTL.
 
 ```sql
 create table run_photos (
@@ -270,7 +270,7 @@ create table run_photos (
 );
 ```
 
-In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies allow public-read on the bucket and per-user-folder INSERT/DELETE. Known gaps: no server-side thumbnail generation and no EXIF stripping.
+In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies gate SELECT on `is_run_visible_to(rp.run_id, auth.uid())` (joining through `run_photos`) and INSERT/DELETE on the per-user folder. The bucket is private; clients use signed URLs with a 1 h TTL. Known gaps: no server-side thumbnail generation and no EXIF stripping.
 
 ### `notifications`
 
@@ -1247,7 +1247,7 @@ Two buckets in the live schema:
 | Bucket | Access | Purpose |
 |---|---|---|
 | `runs` | Private (RLS, owner-scoped) | **Two content classes** under different path prefixes — see below. The bare-table public-read RLS that used to gate this on `runs.is_public` was dropped in `20260619_001_drop_public_runs_storage_policy.sql`; non-owner reads now go through the `clip-public-track` Edge Function. |
-| `run-photos` | Public read (uuid-unguessable paths) | Photos attached to runs at `{owner_id}/{photo_id}.{ext}`. Per-user-folder INSERT/DELETE; storage SELECT joins through `run_photos` → `is_run_visible_to`. See `decisions.md § 36`. |
+| `run-photos` | Private (RLS, parent-run-visibility join) | Photos attached to runs at `{owner_id}/{photo_id}.{ext}`. Per-user-folder INSERT/DELETE; storage SELECT joins through `run_photos` → `is_run_visible_to`. Bucket is private (migration `20260712_001`); clients use signed URLs with 1 h TTL. See `decisions.md § 36`. |
 
 The `routes`, `exports`, `avatars` buckets shown in older revisions of this doc were never created — `routes.waypoints` is stored inline (jsonb on the `routes` table), exports live under the `runs` bucket's `exports/` prefix, and avatar URLs are free-text columns sourced from OAuth providers or pasted URLs (no upload helper).
 

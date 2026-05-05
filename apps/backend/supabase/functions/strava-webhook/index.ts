@@ -196,12 +196,23 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 		}
 	}
 
-	const activity = await fetchStravaActivity(accessToken, activityId);
-	if (!activity) {
+	const fetchResult = await fetchStravaActivity(accessToken, activityId);
+	if (fetchResult.status === 'rate_limited') {
+		// Strava returned 429 / 503 on the detail fetch. Returning 500
+		// signals Strava to retry the event (their backoff is up to 3
+		// days). A 200 here would silently drop the activity. The
+		// dedupe row in webhook_events is already inserted, so a
+		// retried event with the same payload will hit our 23505
+		// dedupe path and skip — but if Strava retries with a fresh
+		// event_id (some races), we'll re-attempt the detail fetch.
+		return Response.json({ error: 'upstream_rate_limited' }, { status: 500 });
+	}
+	if (fetchResult.status === 'not_found') {
 		// Activity vanished between webhook + fetch (deleted within
 		// seconds, very unusual but possible). 200 prevents retries.
 		return new Response('OK');
 	}
+	const activity = fetchResult.activity;
 
 	// Drop activities Strava records but we don't surface — rides etc.
 	// `ingestActivity` itself doesn't filter, so the gate lives here.

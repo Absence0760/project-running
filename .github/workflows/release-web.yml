@@ -107,12 +107,24 @@ jobs:
 
       - name: Pick deploy role ARN
         id: role
+        env:
+          ARN_PROD: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}
+          ARN_PREVIEW: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PREVIEW }}
         run: |
           if [[ "${{ steps.env.outputs.is_prod }}" == "true" ]]; then
-            echo "arn=${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}" >> "$GITHUB_OUTPUT"
+            ARN="$ARN_PROD"
           else
-            echo "arn=${{ secrets.AWS_DEPLOY_ROLE_ARN_PREVIEW }}" >> "$GITHUB_OUTPUT"
+            ARN="$ARN_PREVIEW"
           fi
+          # Mask the ARN before writing it to a step output so the
+          # account ID embedded in it doesn't appear in subsequent
+          # step logs (configure-aws-credentials masks the value
+          # itself, but a step running `${{ steps.role.outputs.arn }}`
+          # would otherwise leak it). The ARN itself is not a
+          # credential — OIDC assumes the role — but the account ID
+          # is identifying information.
+          echo "::add-mask::$ARN"
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

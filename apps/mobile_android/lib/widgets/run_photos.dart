@@ -65,12 +65,18 @@ class _RunPhotosState extends State<RunPhotos> {
   final _pendingCaptionCtrl = TextEditingController();
   XFile? _pending;
   List<RunPhotoRow> _photos = const [];
-  // storage_path → signed URL with TTL. Populated at _load() and after
+  // storage_path → (url, signedAtMs). Populated at _load() and after
   // _uploadPending(). The bucket is private (migration 20260712_001
   // closed the public-CDN bypass), so getPublicUrl no longer returns
   // bytes — every render path goes through createSignedUrl.
-  final Map<String, String> _signedUrls = <String, String>{};
+  // Cached entries older than `_signedUrlTtlSeconds` are evicted on
+  // re-sign so a screen kept in the foreground past the TTL doesn't
+  // start showing broken images.
+  final Map<String, _SignedEntry> _signedUrls = <String, _SignedEntry>{};
   static const int _signedUrlTtlSeconds = 60 * 60;
+  // Refresh anything older than (TTL - 5 min) so a render mid-fetch
+  // never lands on a URL that expires before the image bytes arrive.
+  static const int _signedUrlRefreshAheadSeconds = 5 * 60;
 
   bool get _canManage => widget.api.userId == widget.runOwnerId;
 
@@ -104,7 +110,14 @@ class _RunPhotosState extends State<RunPhotos> {
   }
 
   Future<void> _signPaths(List<String> paths) async {
-    final missing = paths.where((p) => !_signedUrls.containsKey(p)).toList();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final refreshIfOlderMs =
+        (_signedUrlTtlSeconds - _signedUrlRefreshAheadSeconds) * 1000;
+    final missing = paths.where((p) {
+      final entry = _signedUrls[p];
+      if (entry == null) return true;
+      return nowMs - entry.signedAtMs > refreshIfOlderMs;
+    }).toList();
     if (missing.isEmpty) return;
     try {
       final signed = await Supabase.instance.client.storage
@@ -112,7 +125,7 @@ class _RunPhotosState extends State<RunPhotos> {
           .createSignedUrls(missing, _signedUrlTtlSeconds);
       for (final s in signed) {
         if (s.path.isNotEmpty) {
-          _signedUrls[s.path] = s.signedUrl;
+          _signedUrls[s.path] = _SignedEntry(s.signedUrl, nowMs);
         }
       }
     } catch (e) {
@@ -120,7 +133,8 @@ class _RunPhotosState extends State<RunPhotos> {
     }
   }
 
-  String _photoUrl(String storagePath) => _signedUrls[storagePath] ?? '';
+  String _photoUrl(String storagePath) =>
+      _signedUrls[storagePath]?.url ?? '';
 
   Future<void> _pickPhoto() async {
     try {
@@ -517,4 +531,11 @@ class _RunPhotosState extends State<RunPhotos> {
       ),
     );
   }
+}
+
+
+class _SignedEntry {
+  final String url;
+  final int signedAtMs;
+  const _SignedEntry(this.url, this.signedAtMs);
 }

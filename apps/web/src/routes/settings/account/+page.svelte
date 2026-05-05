@@ -5,6 +5,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { supabase } from '$lib/supabase';
+	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/gpx';
 	import { fetchRuns } from '$lib/data';
 	import {
@@ -60,7 +61,7 @@
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not signed in');
-			const url = `${import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/parkrun-import`;
+			const url = `${PUBLIC_SUPABASE_URL}/functions/v1/parkrun-import`;
 			const resp = await fetch(url, {
 				method: 'POST',
 				headers: {
@@ -379,7 +380,7 @@
 			const { data: { session } } = await supabase.auth.getSession();
 			if (!session) throw new Error('Not signed in');
 			const resp = await fetch(
-				`${import.meta.env.VITE_SUPABASE_URL ?? import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
+				`${PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
 				{
 					method: 'POST',
 					headers: {

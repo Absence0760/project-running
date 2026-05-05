@@ -66,15 +66,20 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+  // Fail-closed because the anon path is the abuse surface and a DB
+  // blip on the rate-limit RPC would otherwise remove the only IP-
+  // level guard. Each request can drive 1 PostgREST query + up to
+  // 5 MB Storage download + a 50k-point clip walk; the failure mode
+  // we want is a 503 retry, not unbounded throughput.
   if (callerId) {
     const denied = await checkRateLimit(
-      userClient, callerId, 'clip-public-track', 600, 3600,
+      userClient, callerId, 'clip-public-track', 600, 3600, { failClosed: true },
     );
     if (denied) return denied;
   } else {
     const anonKey = await ipBucketKey(req);
     const denied = await checkRateLimit(
-      adminClient, anonKey, 'clip-public-track:anon', 60, 3600,
+      adminClient, anonKey, 'clip-public-track:anon', 60, 3600, { failClosed: true },
     );
     if (denied) return denied;
   }
