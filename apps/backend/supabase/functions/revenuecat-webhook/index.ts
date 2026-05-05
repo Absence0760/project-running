@@ -12,7 +12,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { hmac } from 'https://deno.land/x/hmac@v2.0.1/mod.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
   isAnonymousAppUserId,
@@ -32,9 +32,11 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
 
   // RevenueCat webhook payloads are typically 2-4 KB. 32 KB is a
   // generous ceiling that still rejects anything pathological before
-  // we run the HMAC over it.
-  const tooBig = enforceBodyLimit(req, 32 * 1024);
-  if (tooBig) return tooBig;
+  // we run the HMAC over it. The streamed reader closes the chunked-
+  // transfer-encoding bypass that the bare header check left open.
+  const guarded = await readTextWithLimit(req, 32 * 1024);
+  if ('tooLarge' in guarded) return guarded.tooLarge;
+  const body = guarded.text;
 
   const secret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET');
   if (!secret) {
@@ -44,7 +46,6 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // Verify HMAC signature with a constant-time compare so an attacker
   // can't tease the digest out one byte at a time via response-timing
   // (low practical risk over a network, but free to do correctly).
-  const body = await req.text();
   const sig = req.headers.get('x-revenuecat-hmac');
   if (!sig) {
     return Response.json({ error: 'missing_signature' }, { status: 401 });
@@ -117,7 +118,7 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
       return Response.json({ ok: true, skipped: 'duplicate_event' });
     }
     console.error('Webhook dedupe insert failed:', dedupeErr);
-    return Response.json({ ok: false, error: 'dedupe failed' }, { status: 500 });
+    return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
   }
 
   // Resolve the user's current tier so the deactivating-event branch

@@ -33,7 +33,7 @@ import {
 	ZipWriter,
 } from 'https://deno.land/x/zipjs@v2.7.45/index.js';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 const MAX_RUNS = 5000;
@@ -70,8 +70,8 @@ serve(withSentry('export-data', async (req: Request) => {
 	}
 
 	// Body is `{ format: 'csv' | 'gpx' }` — 1 KB is plenty.
-	const tooBig = enforceBodyLimit(req, 1024);
-	if (tooBig) return tooBig;
+	const guarded = await readJsonWithLimit<{ format?: unknown }>(req, 1024);
+	if ('tooLarge' in guarded) return guarded.tooLarge;
 
 	const authHeader = req.headers.get('Authorization');
 	if (!authHeader) return new Response('Unauthorized', { status: 401 });
@@ -102,7 +102,7 @@ serve(withSentry('export-data', async (req: Request) => {
 	});
 	if (denied) return denied;
 
-	const body = await req.json().catch(() => ({}));
+	const body = (guarded.body ?? {}) as { format?: unknown };
 	const format = (body.format ?? 'csv') as string;
 	if (format !== 'csv' && format !== 'gpx') {
 		return new Response('format must be "csv" or "gpx"', { status: 400 });
@@ -154,7 +154,9 @@ serve(withSentry('export-data', async (req: Request) => {
 		.from('runs')
 		.createSignedUrl(path, SIGNED_URL_TTL_S);
 	if (signErr || !signed) {
-		console.error('export-data: createSignedUrl failed:', signErr);
+		// Log message only — the full error object can carry storage
+		// path / internal codes into the shared log aggregator.
+		console.error('export-data: createSignedUrl failed:', signErr?.message);
 		return new Response('Signed URL failed', { status: 500 });
 	}
 
@@ -273,6 +275,15 @@ async function buildGpxZip(
 		// Skip tracks for runs that don't have one; they still appear in
 		// the manifest, just without a per-run GPX. Saves the round-trip.
 		if (!r.track_url) continue;
+
+		// Path-shape assertion mirrors the one in clip-public-track. RLS
+		// guarantees the user owns these rows, but a corrupt or legacy
+		// row with a malformed track_url would otherwise feed an
+		// unconstrained string into the service-role downloader. The
+		// CHECK constraint in 20260621_001 means new writes always match
+		// this shape; the assertion is the runtime backstop.
+		const expectedTrackUrl = `${r.user_id}/${r.id}.json.gz`;
+		if (r.track_url !== expectedTrackUrl) continue;
 
 		let track: TrackPoint[] | null = null;
 		try {

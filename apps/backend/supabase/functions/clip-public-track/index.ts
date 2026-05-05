@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 // Serves a privacy-zone-clipped track for a public run. Replaces
@@ -25,9 +25,11 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  // Body is just `{ run_id: uuid }` — 1 KB is plenty.
-  const tooBig = enforceBodyLimit(req, 1024);
-  if (tooBig) return tooBig;
+  // Body is just `{ run_id: uuid }` — 1 KB is plenty. The streamed
+  // reader closes the chunked-transfer-encoding bypass that the bare
+  // header check left open.
+  const guarded = await readJsonWithLimit<{ run_id?: unknown }>(req, 1024);
+  if ('tooLarge' in guarded) return guarded.tooLarge;
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
@@ -43,16 +45,11 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   const { data: { user } } = await userClient.auth.getUser();
   const callerId = user?.id ?? null;
 
-  // Parse + validate body BEFORE rate-limiting so malformed requests
-  // don't drain the IP bucket. An anon attacker who fires 60 empty
-  // POSTs in quick succession would otherwise lock everyone behind
-  // the same shared NAT out for the rest of the hour.
-  let body: { run_id?: unknown };
-  try {
-    body = await req.json();
-  } catch (_) {
-    return Response.json({ error: 'invalid json body' }, { status: 400 });
-  }
+  // Validate body BEFORE rate-limiting so malformed requests don't
+  // drain the IP bucket. An anon attacker who fires 60 empty POSTs in
+  // quick succession would otherwise lock everyone behind the same
+  // shared NAT out for the rest of the hour.
+  const body = (guarded.body ?? {}) as { run_id?: unknown };
   const runId = body.run_id;
   if (typeof runId !== 'string' || runId.length === 0) {
     return Response.json({ error: 'run_id required' }, { status: 400 });

@@ -4,7 +4,7 @@ import {
   type SupabaseClient,
 } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 const PAGE = 1000;
@@ -64,9 +64,11 @@ serve(withSentry('delete-account', async (req: Request) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  // delete-account takes no body — clamp tightly.
-  const tooBig = enforceBodyLimit(req, 256);
-  if (tooBig) return tooBig;
+  // delete-account takes no body — clamp tightly. The streamed reader
+  // closes the chunked-transfer-encoding bypass that the bare header
+  // check left open.
+  const guarded = await readJsonWithLimit(req, 256);
+  if ('tooLarge' in guarded) return guarded.tooLarge;
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
 	type StravaActivity,
@@ -36,8 +36,8 @@ serve(withSentry('strava-import', async (req: Request) => {
 	// 4 KB is plenty for both action shapes — `connect` carries a code
 	// (~40 chars), scope (~40 chars) and a redirect_uri (~80 chars);
 	// `sync` carries action + lookbackDays.
-	const tooBig = enforceBodyLimit(req, 4096);
-	if (tooBig) return tooBig;
+	const guarded = await readJsonWithLimit<Record<string, unknown>>(req, 4096);
+	if ('tooLarge' in guarded) return guarded.tooLarge;
 
 	const authHeader = req.headers.get('Authorization');
 	if (!authHeader) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -52,8 +52,17 @@ serve(withSentry('strava-import', async (req: Request) => {
 	const user = userData.user;
 	if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-	const body = await req.json().catch(() => ({}));
-	const action = body.action ?? (body.code ? 'connect' : 'sync');
+	const body = (guarded.body ?? {}) as Record<string, unknown>;
+	// audit/edge-functions Low: require an explicit action. Falling back
+	// to 'sync' on missing field made the route dispatch implicit; an
+	// empty {} would silently route into handleSync. Now an empty body
+	// with no `code` either is rejected as invalid_action. Legacy
+	// behaviour for the OAuth code path (no `action` but a `code`) is
+	// preserved because that's what the OAuth callback actually sends.
+	const action = (body.action as string | undefined) ?? (body.code ? 'connect' : null);
+	if (action !== 'connect' && action !== 'sync') {
+		return Response.json({ error: 'invalid_action', expected: ['connect', 'sync'] }, { status: 400 });
+	}
 
 	// Validate body shape per action before any side effects. The
 	// later helpers cast straight from `body.<field>` and we don't

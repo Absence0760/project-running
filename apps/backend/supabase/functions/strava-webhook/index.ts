@@ -38,18 +38,14 @@ import {
 	isAlreadyImported,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
 
 serve(withSentry('strava-webhook', async (req: Request) => {
-	// Strava activity event payloads are tiny — a few hundred bytes
-	// of identifiers + state — but cap at 4 KB so a malicious caller
-	// who guessed the URL secret can't force a multi-MB allocation.
-	if (req.method === 'POST') {
-		const tooBig = enforceBodyLimit(req, 4096);
-		if (tooBig) return tooBig;
-	}
+	// Body cap is enforced in the POST branch below via readJsonWithLimit
+	// — closes the chunked-transfer-encoding bypass that the bare header
+	// check left open. GET has no body.
 
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
@@ -65,9 +61,14 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	// GET: Strava webhook subscription handshake.
 	if (req.method === 'GET') {
 		const challenge = url.searchParams.get('hub.challenge');
-		const verifyToken = url.searchParams.get('hub.verify_token');
+		const verifyToken = url.searchParams.get('hub.verify_token') ?? '';
+		const expectedToken = Deno.env.get('STRAVA_VERIFY_TOKEN') ?? '';
 
-		if (verifyToken !== Deno.env.get('STRAVA_VERIFY_TOKEN')) {
+		// Timing-safe comparison: a plain `!==` would let an attacker who
+		// has the URL secret probe the verify token byte-by-byte via
+		// response-latency differences. The two secrets are independent;
+		// hardening this one closes the side-channel.
+		if (!expectedToken || !timingSafeEqual(verifyToken, expectedToken)) {
 			return Response.json({ error: 'forbidden' }, { status: 403 });
 		}
 
@@ -83,18 +84,15 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	//     event_time, updates }
 	// We only handle 'activity' / 'create' — updates and deletes are
 	// ignored (the backfill picks up edits on the next manual sync).
-	let event: {
+	const guarded = await readJsonWithLimit<{
 		object_type?: string;
 		object_id?: number;
 		aspect_type?: string;
 		owner_id?: number;
 		event_time?: number;
-	};
-	try {
-		event = await req.json();
-	} catch (_) {
-		return Response.json({ error: 'invalid_json' }, { status: 400 });
-	}
+	}>(req, 4096);
+	if ('tooLarge' in guarded) return guarded.tooLarge;
+	const event = guarded.body ?? {};
 
 	if (event.object_type !== 'activity' || event.aspect_type !== 'create') {
 		// Strava expects a 200 within 2s for any POST; logging 'OK' for
@@ -144,7 +142,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 			return Response.json({ ok: true, skipped: 'duplicate_event' });
 		}
 		console.error('Webhook dedupe insert failed:', dedupeErr);
-		return Response.json({ ok: false, error: 'dedupe failed' }, { status: 500 });
+		return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
 	}
 
 	// Look up user by Strava athlete ID.

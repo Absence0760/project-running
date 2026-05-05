@@ -2,12 +2,12 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
-import { enforceBodyLimit } from '../_shared/body_limit.ts';
+import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 
 serve(withSentry('parkrun-import', async (req: Request) => {
-  const tooBig = enforceBodyLimit(req, 1024);
-  if (tooBig) return tooBig;
+  const guarded = await readJsonWithLimit<{ athleteNumber?: unknown }>(req, 1024);
+  if ('tooLarge' in guarded) return guarded.tooLarge;
 
   // Authenticate before parsing the body. Malformed JSON from an
   // unauthenticated caller would otherwise produce a 500 distinguishable
@@ -35,7 +35,7 @@ serve(withSentry('parkrun-import', async (req: Request) => {
   const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import', 4, 16, 3600);
   if (denied) return denied;
 
-  const { athleteNumber } = await req.json();
+  const { athleteNumber } = (guarded.body ?? {}) as { athleteNumber?: unknown };
 
   // Validate athlete number format. parkrun's real numbers top out at
   // 7-8 digits today; cap the regex at 12 so an attacker can't post
