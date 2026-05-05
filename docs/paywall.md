@@ -6,7 +6,7 @@
 `features.ts` always returns `false`, so no screen is hidden behind a
 paywall. What the Pro tier changes is behaviour *inside* two features:
 
-- **AI Coach.** Free users get 10 messages / day (cost-control for the
+- **AI Coach.** Free users get 5 messages / day (cost-control for the
   Claude API bill). Pro users get no cap.
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
@@ -32,7 +32,7 @@ dropped); reviving transparent funding later is a one-page revert.
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Every feature. AI coach capped at 10 messages / day. Standard request priority. |
+| `free` | Default for every new account | Every feature. AI coach capped at 5 messages / day. Standard request priority. |
 | `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + unlimited AI coach + priority processing. |
 | `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 

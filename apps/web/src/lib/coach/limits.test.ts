@@ -113,8 +113,8 @@ test('jsonError — `error` field cannot be overridden by extra', () => {
 test('rateLimitHeaders — free tier reports finite limit and remaining', () => {
 	const headers = rateLimitHeaders('free', 3);
 	assert.equal(headers['X-Coach-Tier'], 'free');
-	assert.equal(headers['X-RateLimit-Limit'], '10');
-	assert.equal(headers['X-RateLimit-Remaining'], '7');
+	assert.equal(headers['X-RateLimit-Limit'], '5');
+	assert.equal(headers['X-RateLimit-Remaining'], '2');
 	assert.equal(headers['X-RateLimit-MaxTokens'], '768');
 	assert.equal(headers['X-RateLimit-MaxRuns'], '30');
 });

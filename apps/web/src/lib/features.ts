@@ -10,7 +10,7 @@ import { auth } from './stores/auth.svelte';
 ///
 /// - **Pro perks** — benefits that aren't hidden behind a gate but change
 ///   shape based on tier. The current perks are **unlimited AI coach
-///   messages** (free is capped at 10 / day, enforced server-side in
+///   messages** (free is capped at 5 / day, enforced server-side in
 ///   `/api/coach/+server.ts`) and **priority processing** (routing
 ///   preference during heavy load; marketing claim with per-endpoint
 ///   enforcement landing over time). These are not keyed in this
@@ -33,7 +33,7 @@ export const GATED_FEATURES: Record<
 	ai_coach: {
 		label: 'AI Coach',
 		description:
-			'Personalised training advice from Claude, grounded in your plan and runs. Free users get 10 messages per day; Pro users get unlimited.',
+			'Personalised training advice from Claude, grounded in your plan and runs. Free users get 5 messages per day; Pro users get unlimited.',
 	},
 	priority_processing: {
 		label: 'Priority Processing',

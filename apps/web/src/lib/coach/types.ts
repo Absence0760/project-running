@@ -77,7 +77,7 @@ export interface ProviderStream {
 }
 
 export const TIER_LIMITS = {
-	free: { dailyLimit: 10, maxTokens: 768, maxRunsLimit: 30 },
+	free: { dailyLimit: 5, maxTokens: 768, maxRunsLimit: 30 },
 	pro: { dailyLimit: Number.POSITIVE_INFINITY, maxTokens: 2048, maxRunsLimit: 200 },
 } as const;
 
