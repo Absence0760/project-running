@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { marked } from 'marked';
-	import DOMPurify from 'isomorphic-dompurify';
+	import { renderCoachMarkdown } from '$lib/coach/markdown';
 	import { supabase } from '$lib/supabase';
 	import { isLocked } from '$lib/features';
 	import { fmtKm } from '$lib/units.svelte';
@@ -241,7 +240,10 @@
 
 	let lastCache = $state<{ read: number; create: number; in: number; out: number } | null>(null);
 
-	const DEFAULT_DAILY_LIMIT = 10;
+	// Pre-handshake placeholder. Real value lands on the SSE `meta`
+	// event from the server (TIER_LIMITS.free.dailyLimit = 5,
+	// apps/web/src/lib/coach/types.ts).
+	const DEFAULT_DAILY_LIMIT = 5;
 	let tier = $state<'free' | 'pro' | null>(null);
 	let dailyLimit = $state<number | null>(DEFAULT_DAILY_LIMIT);
 	let usedToday = $state(0);
@@ -357,42 +359,9 @@
 	];
 	let suggestions = $derived(hasPlan ? PLAN_SUGGESTIONS : NO_PLAN_SUGGESTIONS);
 
-	// ─────────────────────── Markdown rendering ───────────────────────
-
-	marked.setOptions({ breaks: true, gfm: true });
-
-	// Explicit allowlist of tags marked emits for the formatting we use
-	// (paragraphs, headings, lists, code blocks, blockquotes, tables,
-	// emphasis, links, br/hr). Defence-in-depth on top of DOMPurify's
-	// own JS-execution scrubbing — keeps the surface bounded so a
-	// future marked upgrade that emits a tag we don't expect doesn't
-	// silently widen the rendered HTML.
-	const COACH_ALLOWED_TAGS = [
-		'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3',
-		'h4', 'h5', 'h6', 'hr', 'i', 'li', 'ol', 'p', 'pre', 's', 'span',
-		'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th', 'thead', 'tr',
-		'u', 'ul',
-	];
-	const COACH_ALLOWED_ATTR = ['href', 'class', 'lang', 'title'];
-
-	// Force every rendered <a> through target=_blank + rel=noopener so a
-	// link in a model response cannot reach back into window.opener and
-	// rewrite the parent (a phishing vector even on sanitized HTML).
-	DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-		if (node.tagName === 'A') {
-			node.setAttribute('target', '_blank');
-			node.setAttribute('rel', 'noopener noreferrer');
-		}
-	});
-
-	function renderMarkdown(content: string): string {
-		const raw = marked.parse(content, { async: false }) as string;
-		return DOMPurify.sanitize(raw, {
-			ALLOWED_TAGS: COACH_ALLOWED_TAGS,
-			ALLOWED_ATTR: COACH_ALLOWED_ATTR,
-			ALLOW_DATA_ATTR: false,
-		});
-	}
+	// Markdown rendering hoisted to $lib/coach/markdown so the DOMPurify
+	// hook registers exactly once at module load.
+	const renderMarkdown = renderCoachMarkdown;
 
 	// ─────────────────────── Send / regenerate / edit ───────────────────────
 

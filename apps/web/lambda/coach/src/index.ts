@@ -40,13 +40,16 @@ interface ResponseStream {
 	setContentType?: (ct: string) => void;
 }
 
+// Mirror of COACH_BODY_LIMIT_BYTES in the SvelteKit dev wrapper. See
+// apps/web/src/routes/api/coach/+server.ts.
+const COACH_BODY_LIMIT_BYTES = 256 * 1024;
+
 export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	async (event, responseStream) => {
 		const provider = (process.env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
 		if (provider !== 'anthropic' && provider !== 'openai') {
-			writeJson(responseStream, 503, {
-				error: `Unknown COACH_PROVIDER='${provider}'. Use 'anthropic' or 'openai'.`,
-			});
+			console.error(`[coach lambda] invalid COACH_PROVIDER value: '${provider}'`);
+			writeJson(responseStream, 503, { error: 'Coach is not configured.' });
 			return;
 		}
 
@@ -58,6 +61,10 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 			const bodyStr = event.isBase64Encoded
 				? Buffer.from(event.body ?? '', 'base64').toString('utf8')
 				: (event.body ?? '');
+			if (bodyStr.length > COACH_BODY_LIMIT_BYTES) {
+				writeJson(responseStream, 413, { error: 'request too large' });
+				return;
+			}
 			rawBody = bodyStr ? JSON.parse(bodyStr) : null;
 		} catch {
 			writeJson(responseStream, 400, { error: 'invalid JSON' });

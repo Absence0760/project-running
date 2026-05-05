@@ -15,18 +15,35 @@ import { handleCoach } from '$lib/coach/handler';
 
 export const prerender = false;
 
+// Bound on the inbound coach request body. The handler builds the
+// full prompt (system + context + messages) and forwards to Anthropic
+// — without a cap, a single Pro request could submit megabytes of
+// message text per call. 256 KB is comfortable for a long
+// conversation history at typical token sizes; legitimate replies
+// from the assistant cost the same regardless.
+const COACH_BODY_LIMIT_BYTES = 256 * 1024;
+
 export const POST: RequestHandler = async ({ request }) => {
 	const provider = (env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
 	if (provider !== 'anthropic' && provider !== 'openai') {
+		console.error(`[coach] invalid COACH_PROVIDER value: '${provider}'`);
 		return new Response(
-			JSON.stringify({ error: `Unknown COACH_PROVIDER='${provider}'. Use 'anthropic' or 'openai'.` }),
+			JSON.stringify({ error: 'Coach is not configured.' }),
 			{ status: 503, headers: { 'content-type': 'application/json' } },
 		);
 	}
 
+	const rawText = await request.text();
+	if (rawText.length > COACH_BODY_LIMIT_BYTES) {
+		return new Response(JSON.stringify({ error: 'request too large' }), {
+			status: 413,
+			headers: { 'content-type': 'application/json' },
+		});
+	}
+
 	let rawBody: unknown;
 	try {
-		rawBody = await request.json();
+		rawBody = rawText.length === 0 ? null : JSON.parse(rawText);
 	} catch {
 		return new Response(JSON.stringify({ error: 'invalid JSON' }), {
 			status: 400,

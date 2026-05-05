@@ -123,7 +123,10 @@ class _ContextSummary {
 
 class _CoachScreenState extends State<CoachScreen> {
   static const _runLimitOptions = [10, 20, 50, 100];
-  static const _defaultDailyLimit = 10;
+  // Pre-handshake placeholder. Real value lands on the SSE `meta`
+  // event from the server (TIER_LIMITS.free.dailyLimit = 5,
+  // apps/web/src/lib/coach/types.ts).
+  static const _defaultDailyLimit = 5;
   static const _planSuggestions = [
     "Should I run tomorrow or take a rest day?",
     "Am I on track for my goal time?",

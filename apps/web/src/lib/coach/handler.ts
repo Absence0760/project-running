@@ -69,6 +69,21 @@ export async function handleCoach(
 		return jsonError(400, 'invalid JSON');
 	}
 
+	// Bound the message-list size in addition to the byte cap on the
+	// raw payload. Caps `messages.length` and per-message `content`
+	// length so a malicious caller can't smuggle a single 250 KB
+	// message past the wrapper-level byte cap (which is mostly an
+	// overall sanity check) and force the provider call to spend
+	// unbounded tokens on a per-request basis.
+	if (Array.isArray(body.messages) === false || body.messages.length > 100) {
+		return jsonError(400, 'invalid messages');
+	}
+	for (const m of body.messages) {
+		if (typeof m?.content !== 'string' || m.content.length > 16_000) {
+			return jsonError(400, 'invalid messages');
+		}
+	}
+
 	const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
 		global: { headers: { Authorization: `Bearer ${accessToken}` } },
 	});
@@ -76,13 +91,15 @@ export async function handleCoach(
 	const userRes = await supabase.auth.getUser(accessToken);
 	const authUser = userRes.data.user;
 	if (!authUser) {
+		// GoTrue's error message can carry internal identifiers and
+		// JWT-shape details that give an attacker an oracle for
+		// probing token formats. Log them server-side; surface a
+		// generic 401 to the client.
 		console.error('[coach] auth failed', {
 			tokenPrefix: accessToken.slice(0, 20) + '...',
 			error: userRes.error?.message ?? 'no user returned',
 		});
-		return jsonError(401, 'not authenticated', {
-			detail: userRes.error?.message ?? null,
-		});
+		return jsonError(401, 'not authenticated');
 	}
 
 	let tier: Tier = 'free';
