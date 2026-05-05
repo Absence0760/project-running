@@ -31,7 +31,7 @@ Each stack has its own remote state in the bucket created by `bootstrap`. State 
 
 Working from zero — no AWS account, no domain, no AWS CLI:
 
-**0.1 — AWS account.** Sign up at https://aws.amazon.com/. Enable MFA on the root account, create an Identity Center user with `AdministratorAccess` (we tighten later), and assign it to the account. Note the **AWS access portal URL** Identity Center gives you (`https://d-xxxxxx.awsapps.com/start`). Set up billing alerts at $50 / $200 / $500 from the Billing console.
+**0.1 — AWS account.** Sign up at https://aws.amazon.com/. Enable MFA on the root account, create an Identity Center user with `AdministratorAccess` (we tighten later), and assign it to the account. Note the **AWS access portal URL** Identity Center gives you (`https://d-xxxxxx.awsapps.com/start`). Account-wide spend alerts are Terraformed in `infra/envs/prod/budgets.tf` (50 % / 100 % ACTUAL + 100 % FORECASTED notifications); set `monthly_budget_limit_usd` and `budget_alert_emails` in `terraform.tfvars` before the prod apply.
 
 **0.2 — Domain.** Either register one fresh (Porkbun, Namecheap, Cloudflare Registrar — all fine; you don't need Route 53 to register, only to host DNS) or pick an apex you already own. The default examples use `runonward.app` — search the repo for it and swap if you're using something else. The places that hardcode it are:
 - `infra/dns/` — pass `-var "apex_domain=<yours>"` on apply

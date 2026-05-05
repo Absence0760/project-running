@@ -283,7 +283,8 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 
 ## Production readiness checklist
 
-- [ ] AWS account created (or sub-account in an org), root MFA enabled, billing alerts at $50 / $200 / $500
+- [ ] AWS account created (or sub-account in an org), root MFA enabled
+- [ ] `infra/envs/prod/terraform.tfvars` sets `monthly_budget_limit_usd` + `budget_alert_emails` (Terraformed in `infra/envs/prod/budgets.tf`; fires at 50 % / 100 % ACTUAL + 100 % FORECASTED)
 - [ ] `infra/bootstrap` applied (S3 state bucket created; locking is S3-native)
 - [ ] AWS provider configured for `us-east-1` (the cert provider alias resolves to the same region; harmless)
 - [ ] Domain `runonward.app` registered (Route 53 or external + delegated)

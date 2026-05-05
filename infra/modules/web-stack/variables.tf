@@ -62,9 +62,9 @@ variable "lambda_zip_path" {
 }
 
 variable "lambda_reserved_concurrency" {
-  description = "Reserved concurrent executions for the coach Lambda — caps the function's worst-case concurrency so a burst can't rack up unbounded Anthropic spend. The lambda_throttles alarm fires when the cap is hit. Default null = no reservation. Recommended: 50 for prod, 5 for preview."
+  description = "Reserved concurrent executions for the coach Lambda — caps the function's worst-case concurrency so a burst can't rack up unbounded Anthropic spend. The lambda_throttles alarm fires when the cap is hit. Default 5 = safe-by-default ceiling; raise to ~50 for prod once real traffic is observed. Set explicitly in env stacks rather than relying on the default."
   type        = number
-  default     = null
+  default     = 5
 }
 
 # ─────────────────── Tagging ───────────────────

@@ -12,3 +12,8 @@ extra_lambda_env = {
   # COACH_PROVIDER = "anthropic"   # default
   # APP_RELEASE    = "web@1.0.0"   # set by CI on tag deploys
 }
+
+# AWS Budgets — account-wide spend ceiling. See infra/envs/prod/budgets.tf.
+# At least one email address is required.
+monthly_budget_limit_usd = 200
+budget_alert_emails      = ["you@example.com"]

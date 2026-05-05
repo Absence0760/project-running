@@ -25,3 +25,18 @@ variable "extra_lambda_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "monthly_budget_limit_usd" {
+  description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick something a few times the projected baseline (~$70/mo at launch per docs/deployment.md)."
+  type        = number
+  default     = 200
+}
+
+variable "budget_alert_emails" {
+  description = "Email addresses that receive every budget notification. At least one is required; the budget resource silently does nothing useful otherwise."
+  type        = list(string)
+  validation {
+    condition     = length(var.budget_alert_emails) > 0
+    error_message = "Provide at least one address in budget_alert_emails — a budget with no subscribers is just an expensive no-op."
+  }
+}
