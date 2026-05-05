@@ -1797,7 +1797,7 @@ class ApiClient {
   }
 
   /// RPC for the per-user-per-day usage counter. Free tier capped at
-  /// 10/day server-side; `is_pro()` lifts the cap.
+  /// 5/day server-side; `is_pro()` lifts the cap.
   Future<int> getCoachUsage() async {
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) return 0;

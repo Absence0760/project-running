@@ -44,7 +44,7 @@ A static site with poor cache-hit ratio can be drained by a bot. The protections
 - **S3 bucket is private + OAC-only.** No `Principal: "*"` policy, all four Public Access Block flags `true`. (Cross-references `/audit/infra` § 4 — if that audit is clean, this one is too.)
 - **Lifecycle rule on non-current versions.** `aws_s3_bucket_lifecycle_configuration` on the site bucket expires old versions; missing = unbounded version growth at $0.023/GB/month forever.
 - **CloudWatch log retention.** Every `aws_cloudwatch_log_group` has `retention_in_days` ≤ 90. Default = forever = $0.50/GB/month forever.
-- **AWS WAF / rate-limit rule on the Lambda Function URL.** Today there's none — the Function URL is fronted by CloudFront's `/api/coach/*` behaviour but has no per-IP rate limit. Note in the report: this is the cheapest gap to close (~$5/mo for a managed rule + 100 req/5 min per IP). **Medium** until added.
+- **AWS WAF / rate-limit rule on the coach path.** `infra/modules/web-stack/waf.tf` declares an `aws_wafv2_web_acl` (CLOUDFRONT scope, `us_east_1` provider) with a single `rate_based_statement` (default 100 req / 5 min / IP) scope-down-statement-filtered to `/api/coach*`. Verify it's still attached via `web_acl_id` on `aws_cloudfront_distribution.this` (gated by `var.waf_enabled`, default `true`). If the resource is missing, the toggle is `false` in prod, or the scope-down filter is gone (so the rule rate-limits static-asset traffic too): **Medium**.
 
 ### 5. Supabase — quota overrun
 
@@ -75,7 +75,7 @@ This audit's value depends on the docs being honest:
 
 - **Critical** — a known credential or token leak path with no monthly spend ceiling at the provider (e.g. Anthropic key in a sops file with no console-side cap), `lambda_reserved_concurrency` unbounded in prod, no `aws_budgets_budget` declared anywhere.
 - **High** — `TIER_LIMITS.free.dailyLimit` removed or set to `Infinity`, daily cap not server-enforced (UI-only), AWS budget exists but `budget_alert_emails` empty / placeholder, no FORECASTED notification (only ACTUAL — fires too late), CloudFront `PriceClass_All` without justification, log retention infinite.
-- **Medium** — no AWS WAF rate-limit on the Function URL, mobile retry loop without backoff, Supabase storage egress alert not configured, missing S3 lifecycle for non-current versions.
+- **Medium** — WAF web ACL missing or detached from the distribution, scope-down filter gone (whole-site rate-limit), mobile retry loop without backoff, Supabase storage egress alert not configured, missing S3 lifecycle for non-current versions.
 - **Low** — doc drift between `paywall.md` / `deployment.md` and the configured value, missing `validation` block enforcing non-empty `budget_alert_emails`, alarm exists but not subscribed to a real email.
 
 For each finding: file:line + the concrete change. Don't apply fixes without explicit confirmation.

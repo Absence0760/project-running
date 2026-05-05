@@ -139,8 +139,8 @@ create materialized view mv_weekly_mileage as
 
 create unique index mv_weekly_mileage_idx on mv_weekly_mileage (user_id, week_start);
 
--- Refresh every 5 minutes
-select cron.schedule('refresh-weekly-mileage', '*/5 * * * *',
+-- Refresh every 15 minutes
+select cron.schedule('refresh-weekly-mileage', '*/15 * * * *',
   'refresh materialized view concurrently mv_weekly_mileage');
 
 -- IMPORTANT: matviews can't have RLS in PostgreSQL. Supabase's default

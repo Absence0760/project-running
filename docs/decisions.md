@@ -259,7 +259,7 @@ We picked (c). The architecture is:
 
 The roadmap originally described a $6/month Pro tier via RevenueCat gating premium features (AI Coach, priority sync, training plans, advanced analytics). Before shipping any paid tier, we pivoted to a "free with donations" model: every feature is free, and a transparent funding page at `/settings/upgrade` shows the real monthly costs (Supabase, Claude API, MapTiler, domain, etc.) alongside a progress bar tracking how much of the monthly target is covered by donations.
 
-The gate infrastructure stays in place — `GATED_FEATURES` registry, `ProGate` component, `isLocked()` function, `subscription_tier` column, `is_pro()` SQL helper, and the RevenueCat webhook. But `isLocked()` always returns `false` so nothing is actually locked. The AI Coach's cost is managed via a daily usage limit (10 messages/user/day, enforced by `increment_coach_usage` RPC) instead of a paywall.
+The gate infrastructure stays in place — `GATED_FEATURES` registry, `ProGate` component, `isLocked()` function, `subscription_tier` column, `is_pro()` SQL helper, and the RevenueCat webhook. But `isLocked()` always returns `false` so nothing is actually locked. The AI Coach's cost is managed via a daily usage limit (5 messages/user/day, enforced by `increment_coach_usage` RPC) instead of a paywall.
 
 **Why:** A paid tier before product-market fit creates friction that slows user acquisition. Donation funding lets early adopters use everything while signalling what the app costs to run. If the user base grows large enough that donation income can't cover API costs, re-gating specific features is a one-line change in `isLocked()`.
 
@@ -340,7 +340,7 @@ Decision #18 pivoted the app to "everything free, funded by donations" with a tr
 
 The new model is a **Pro tier at $9.99 / month** that unlocks two things:
 
-- **Unlimited AI Coach.** The 10 / day cap still applies to the free tier (cost control); Pro users bypass it. Server-side enforcement lives in `/api/coach/+server.ts` via the no-arg `is_pro()` RPC (the predecessor `is_user_pro(uuid)` was dropped in `20260516_001` because it took a user-id argument and let any authenticated caller probe another user's tier).
+- **Unlimited AI Coach.** The 5 / day cap still applies to the free tier (cost control); Pro users bypass it. Server-side enforcement lives in `/api/coach/+server.ts` via the no-arg `is_pro()` RPC (the predecessor `is_user_pro(uuid)` was dropped in `20260516_001` because it took a user-id argument and let any authenticated caller probe another user's tier).
 - **Priority processing.** Pro requests are routed ahead of the free queue at rate-limit boundaries. Today this is a marketing claim with no enforcement beyond the unlimited-coach bypass; concrete enforcement (Edge Function queue priority, client throttle hints) lands as needed.
 
 The `/settings/upgrade` page replaces the transparent funding page with a two-card layout: a Pro plan card ($9.99/mo, feature bullets, "Get Pro" CTA) and a single "Donate" card linking to an external one-off payment provider. Cost breakdown, per-month progress bars, donor count, and the tiered donation buttons are gone — those stats were a nice-to-have that didn't move conversion.

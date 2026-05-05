@@ -307,7 +307,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] `mv_weekly_mileage` materialized view
 - [x] Full-text search index on `routes.name`
 - [x] Composite indexes for dashboard queries (runs by source, distance range)
-- [x] `pg_cron` job to refresh materialized view (every 5 min) — migration `20260602_001_pg_cron_schedules.sql` schedules `refresh materialized view concurrently mv_weekly_mileage` at `*/5 * * * *` plus a 15-minute `cleanup_stale_live_run_pings()` sweep that the `20260509_001` follow-up note had pending.
+- [x] `pg_cron` job to refresh materialized view (every 15 min) — migration `20260602_001_pg_cron_schedules.sql` schedules `refresh materialized view concurrently mv_weekly_mileage` (later bumped from `*/5` to `*/15` in `20260706_001_pg_cron_mv_refresh_15min.sql` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw) plus a 15-minute `cleanup_stale_live_run_pings()` sweep that the `20260509_001` follow-up note had pending.
 - [ ] Verify dashboard queries perform under 2 seconds for users with 200+ runs
 
 ### Milestone: web app live at `app.runapp.com`
@@ -366,7 +366,7 @@ Claude-powered training advisor embedded in the web app. Reviews the runner's pl
 
 - [x] Server endpoint (`/api/coach/+server.ts`) with prompt-cached system prompt + context dump
 - [x] `CoachChat.svelte` UI with suggestion chips and cache-hit stats
-- [x] Daily usage limit of 10 messages per user (`user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
+- [x] Daily usage limit of 5 messages per user (`user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
 - [x] Personality tones — `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) fed into the system prompt
 - [x] User preferences (date of birth, HR zones, resting/max HR, weekly mileage goal) fed into context for personalised advice
 - [x] Top-level `/coach` page with plan switcher (`?plan=<id>`), graceful plan-less fallback, and dashboard "Ask the coach" deep-link card
@@ -386,7 +386,7 @@ The original free-with-donations pivot (`decisions.md #18`) was superseded by th
 
 - [x] Core gate infrastructure — `isLocked()` still returns `false` for every registered key (see `decisions.md #18` for why we retained the scaffolding)
 - [x] `/settings/upgrade` page rewritten as a two-card layout: Pro plan ($9.99 / mo) + one-off Donate button (see `decisions.md #23`)
-- [x] `/api/coach/+server.ts` skips the 10 / day rate limit for users where `is_pro()` is true
+- [x] `/api/coach/+server.ts` skips the 5 / day rate limit for users where `is_pro()` is true
 - [x] `features.ts` — `isPro()` helper + `priority_processing` feature-registry entry
 - [x] `monthly_funding` table retained but no longer read by the UI
 - [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)

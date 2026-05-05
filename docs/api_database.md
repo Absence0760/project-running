@@ -755,7 +755,7 @@ Materialized view that pre-aggregates `runs` into `(user_id, week_start) → (to
 
 | Job | Schedule | What it does |
 |---|---|---|
-| `refresh-mv-weekly-mileage` | `*/5 * * * *` | `refresh materialized view concurrently mv_weekly_mileage`. |
+| `refresh-mv-weekly-mileage` | `*/15 * * * *` | `refresh materialized view concurrently mv_weekly_mileage`. Original schedule was `*/5`; bumped to `*/15` in `20260706_001` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw. |
 | `cleanup-stale-live-run-pings` | every minute | Deletes `race_pings` older than the configured retention window — keeps the table from growing unbounded during a multi-hour event. |
 | `cleanup-stale-rate-limits` | hourly | Calls `cleanup_stale_rate_limits()` to GC old `rate_limits` rows so the table stays small for the per-user check. |
 

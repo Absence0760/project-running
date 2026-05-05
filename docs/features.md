@@ -384,11 +384,11 @@ Price: **$9.99 / month**. Managed via RevenueCat (abstracts App Store + Play Sto
 
 **Free forever:**
 - Every feature. Recording, routes, plans, clubs, sync, imports, dashboard, public share pages.
-- AI Coach — capped at 10 messages / day (enforced server-side via `increment_coach_usage`).
+- AI Coach — capped at 5 messages / day (enforced server-side via `increment_coach_usage`).
 - Standard processing priority.
 
 **Pro:**
-- **Unlimited AI Coach** — no 10 / day cap. Server skips the rate-limit block when `is_pro()` returns true.
+- **Unlimited AI Coach** — no 5 / day cap. Server skips the rate-limit block when `is_pro()` returns true.
 - **Priority processing** — Pro requests routed ahead of the free queue when the service is under heavy load. Today this is a marketing claim implemented via the coach-cap bypass; tier-aware rate-limiting on other endpoints lands over time.
 
 **Donations:** a one-off "Donate" button on `/settings/upgrade` links to an external payment provider (GitHub Sponsors placeholder today). Donations are kept alongside the subscription because a chunk of users will want to chip in without committing to a recurring charge.
@@ -437,7 +437,7 @@ Chat surface delivered two ways: as a top-level `/coach` page (with a plan switc
 
 **Personality tones:** The `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) injects a tone override into the system prompt. Default is `supportive`.
 
-**Usage limits:** Free users get 10 messages per user per day, enforced server-side by `increment_coach_usage` RPC. Pro users (`is_pro()` → `true`) bypass the cap entirely. The UI shows "N of M remaining" for free users; Pro users see "Unlimited". `BYPASS_PAYWALL=true` skips the limit in dev.
+**Usage limits:** Free users get 5 messages per user per day, enforced server-side by `increment_coach_usage` RPC. Pro users (`is_pro()` → `true`) bypass the cap entirely. The UI shows "N of M remaining" for free users; Pro users see "Unlimited". `BYPASS_PAYWALL=true` skips the limit in dev.
 
 **Conversation history (cross-device):** Messages persist to `coach_messages` (RLS owner-only, scoped per `user × plan`). "Start new" archives the current thread by setting `archived_at = now()` rather than deleting; the sidebar lists each archive titled by its first user message and lets the runner view (read-only) or delete an archive. Pre-existing localStorage threads migrate once on first read and the legacy key is removed.
 

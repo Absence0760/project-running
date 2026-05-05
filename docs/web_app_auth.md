@@ -191,7 +191,7 @@ Email confirmations and rate limits are configured in the same dashboard.
 
 `subscription_tier` is read from `user_profiles` and exposed as `auth.user?.subscription_tier`. Two helpers wrap the gating:
 
-- Server side: the `is_pro()` SQL RPC (no args, gates internally on `auth.uid()`), used by `/api/coach/+server.ts` to bypass the 10/day cap. The earlier `is_user_pro(uuid)` variant was dropped in migration `20260516_001_drop_is_user_pro.sql` — it took a user-id parameter and let any authenticated caller probe another user's tier.
+- Server side: the `is_pro()` SQL RPC (no args, gates internally on `auth.uid()`), used by `/api/coach/+server.ts` to bypass the 5/day cap. The earlier `is_user_pro(uuid)` variant was dropped in migration `20260516_001_drop_is_user_pro.sql` — it took a user-id parameter and let any authenticated caller probe another user's tier.
 - Client side: `apps/web/src/lib/features.ts` reads the tier and exposes `isLocked(featureName)`. `<ProGate feature="..." />` renders an upsell when locked.
 
 For local development, set `BYPASS_PAYWALL=true` in `apps/web/.env.local` to skip every tier check server-side without flipping `subscription_tier` in the database.
