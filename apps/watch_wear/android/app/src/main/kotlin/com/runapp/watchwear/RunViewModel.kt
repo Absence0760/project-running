@@ -198,6 +198,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// as a "not authenticated" error.
     private val authReady = MutableStateFlow(false)
 
+    /// Exponential-backoff window for drainQueue. Mirrors the shape of
+    /// the Dart `SyncService` on phones — see `DrainBackoff` for details.
+    private val drainBackoff = DrainBackoff()
+
     private var queueWatchJob: Job? = null
     private var recordingObserverJob: Job? = null
     private var connectivityJob: Job? = null
@@ -440,7 +444,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 thisRunId = cp.runId,
                 thisRunSynced = false,
             )
-            drainQueue()
+            drainQueue(force = true)
         }
     }
 
@@ -748,7 +752,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
             RecordingRepository.reset()
-            drainQueue()
+            drainQueue(force = true)
             if (race != null) {
                 val token = supabase.currentAccessToken
                 val uid = supabase.authedUserId
@@ -779,7 +783,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     fun sync() {
         viewModelScope.launch {
             _state.value = _state.value.copy(syncing = true, syncError = null)
-            drainQueue()
+            drainQueue(force = true)
             _state.value = _state.value.copy(syncing = false)
         }
     }
@@ -862,7 +866,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         )
         sessionStore.save(stored)
         applySession(stored)
-        drainQueue()
+        drainQueue(force = true)
     }
 
     // ----- Queue drain -----
@@ -878,10 +882,17 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         } != null
     }
 
-    private suspend fun drainQueue() {
+    private suspend fun drainQueue(force: Boolean = false) {
         if (!awaitAuth()) return
+        if (!force && drainBackoff.isInBackoff()) {
+            // Auto-trigger (network-flap, auth-bootstrap) inside the backoff
+            // window — don't hammer the backend. User-initiated drains pass
+            // force=true so a manual Sync chip always fires.
+            return
+        }
         val snapshot = store.queue.first()
         var lastError: String? = null
+        var anyTransientFailure = false
         for (run in snapshot) {
             try {
                 pushRun(run)
@@ -909,6 +920,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             lastError = null
                         } catch (inner: Throwable) {
                             lastError = inner.message ?: lastError
+                            anyTransientFailure = true
                             break  // refresh failed → stop, next auth signal retries
                         }
                     }
@@ -923,16 +935,25 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                         // Transient: timeouts, 5xx, network loss. Stop
                         // iterating so we don't hammer the backend, but keep
                         // the queue intact. Next drain trigger
-                        // (network-back-online, manual sync) retries.
+                        // (network-back-online, manual sync) retries — but
+                        // backoff bites first.
+                        anyTransientFailure = true
                         break
                     }
                     DrainAction.SkipAndContinue -> {
                         // Permanent-ish (400/404/422) or unknown — skip
                         // to next; this one is stuck. The user can
-                        // Discard from the UI if they want.
+                        // Discard from the UI if they want. Doesn't count
+                        // as a transient failure for backoff purposes —
+                        // retrying would just re-skip.
                     }
                 }
             }
+        }
+        if (anyTransientFailure) {
+            drainBackoff.onFailure()
+        } else {
+            drainBackoff.onSuccess()
         }
         _state.value = _state.value.copy(syncError = lastError)
     }
