@@ -1038,6 +1038,35 @@ void main() {
             'prevent.',
       );
     });
+
+    test('race_controller relies on the DB trigger, not client-side filter', () {
+      // Reason: race_pings are clipped server-side by the
+      // `race_pings_drop_in_zone` BEFORE-INSERT trigger
+      // (migration 20260704_001, pinned by
+      // `apps/backend/supabase/tests/rls_race_pings_trigger_test.sql`).
+      // The mobile race controller must not introduce a parallel
+      // client-side privacy_in_any_zone / clipPointsToZones pass —
+      // doing so would either leak the broadcaster's zones to the
+      // device (defeating the purpose) or produce a second clip
+      // pass that drifts from the trigger semantics. Same trust
+      // contract documented on `live_spectator_screen.dart` and the
+      // web equivalents.
+      final source =
+          File('lib/race_controller.dart').readAsStringSync();
+      expect(
+        source.contains('privacy_in_any_zone'),
+        isFalse,
+        reason: 'race_controller.dart must not call privacy_in_any_zone — '
+            'the DB trigger is the single line of defence; see '
+            'apps/backend/supabase/migrations/20260704_001_clip_race_pings_to_privacy_zones.sql.',
+      );
+      expect(
+        source.contains('clipPointsToZones'),
+        isFalse,
+        reason: 'race_controller.dart must not call clipPointsToZones — '
+            'the DB trigger is the single line of defence.',
+      );
+    });
   });
 
   group('top banner is the canonical notification primitive', () {

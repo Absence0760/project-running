@@ -104,6 +104,19 @@
 	}
 
 	function subscribe() {
+		// Privacy-zone trust contract: pings are rendered verbatim. The
+		// broadcaster's privacy zones are NOT fetched here (doing so
+		// would defeat the purpose — anyone watching a public-club race
+		// could read off a participant's home / work coordinates).
+		// The single line of defence is the
+		// `race_pings_drop_in_zone` BEFORE-INSERT trigger from
+		// migration `20260704_001_clip_race_pings_to_privacy_zones.sql`,
+		// which silently drops in-zone pings before they reach
+		// Realtime. Pinned by
+		// `apps/backend/supabase/tests/rls_race_pings_trigger_test.sql`
+		// so a future migration can't silently undo it. Mirrors the
+		// trust contract in `apps/web/src/routes/live/[id]/+page.svelte`
+		// for plain-run pings.
 		channel = supabase
 			.channel(`live-event-${eventId}-${instance}`)
 			.on(
