@@ -7,10 +7,12 @@
 	import { supabase } from '$lib/supabase';
 
 	let error = $state('');
+	let info = $state('');
 	let loading = $state(false);
 	let email = $state('');
 	let password = $state('');
 	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
+	let isReset = $state($page.url.searchParams.get('reset') === '1');
 	// `hydrated` flips after the first onMount fires — i.e. once the
 	// Svelte 5 `onsubmit` binding on the email form is wired up. Until
 	// then the submit button stays disabled, so a fast-clicking user
@@ -54,20 +56,36 @@
 	async function handleEmailSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
+		info = '';
 		loading = true;
 		try {
-			if (isSignUp) {
+			if (isReset) {
+				// Trigger Supabase's password-recovery email. The redirect
+				// target is /auth/reset; Supabase tacks the recovery token
+				// onto the URL hash on click. We don't reveal whether the
+				// email exists — the toast wording is intentionally
+				// non-committal so this isn't a user-enumeration oracle.
+				const redirectTo = `${window.location.origin}/auth/reset`;
+				const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+					redirectTo
+				});
+				if (resetError) throw resetError;
+				info = "If that email is registered, we've sent a password reset link.";
+				email = '';
+			} else if (isSignUp) {
 				const { error: signUpError } = await supabase.auth.signUp({ email, password });
 				if (signUpError) throw signUpError;
+				await auth.refreshSession();
+				goto(safeReturnTo());
 			} else {
 				const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 				if (signInError) throw signInError;
+				await auth.refreshSession();
+				goto(safeReturnTo());
 			}
-			// Wait for onAuthStateChange to set loggedIn, then navigate
-			await auth.refreshSession();
-			goto(safeReturnTo());
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Authentication failed';
+		} finally {
 			loading = false;
 		}
 	}
@@ -79,13 +97,31 @@
 			Run Onward
 		</a>
 
-		<h1>{isSignUp ? 'Create an account' : 'Sign in to your account'}</h1>
-		<p class="subtitle">Track your runs across all your devices.</p>
+		<h1>
+			{#if isReset}
+				Reset your password
+			{:else if isSignUp}
+				Create an account
+			{:else}
+				Sign in to your account
+			{/if}
+		</h1>
+		<p class="subtitle">
+			{#if isReset}
+				Enter your email and we'll send you a reset link.
+			{:else}
+				Track your runs across all your devices.
+			{/if}
+		</p>
 
 		{#if error}
 			<div class="error">{error}</div>
 		{/if}
+		{#if info}
+			<div class="info">{info}</div>
+		{/if}
 
+		{#if !isReset}
 		<div class="login-buttons">
 			<button class="btn btn-google" onclick={handleGoogleSignIn} disabled={loading}>
 				<svg class="oauth-icon" viewBox="0 0 24 24" width="20" height="20">
@@ -109,6 +145,7 @@
 		<div class="divider">
 			<span>or continue with email</span>
 		</div>
+		{/if}
 
 		<form class="email-form" onsubmit={handleEmailSubmit}>
 			<input
@@ -118,33 +155,52 @@
 				required
 				autocomplete="email"
 			/>
-			<input
-				type="password"
-				bind:value={password}
-				placeholder="Password"
-				required
-				minlength="6"
-				autocomplete={isSignUp ? 'new-password' : 'current-password'}
-			/>
+			{#if !isReset}
+				<input
+					type="password"
+					bind:value={password}
+					placeholder="Password"
+					required
+					minlength="6"
+					autocomplete={isSignUp ? 'new-password' : 'current-password'}
+				/>
+			{/if}
 			<button
 				type="submit"
 				class="btn btn-email"
 				disabled={!hydrated || loading}
 			>
 				{#if loading}
-					Signing {isSignUp ? 'up' : 'in'}...
+					{#if isReset}Sending...{:else}Signing {isSignUp ? 'up' : 'in'}...{/if}
+				{:else if isReset}
+					Send reset link
 				{:else}
 					{isSignUp ? 'Sign Up' : 'Sign In'}
 				{/if}
 			</button>
 		</form>
 
-		<p class="toggle-mode">
-			{isSignUp ? 'Already have an account?' : "Don't have an account?"}
-			<button class="link-btn" onclick={() => { isSignUp = !isSignUp; error = ''; }}>
-				{isSignUp ? 'Sign in' : 'Sign up'}
-			</button>
-		</p>
+		{#if isReset}
+			<p class="toggle-mode">
+				<button type="button" class="link-btn" onclick={() => { isReset = false; error = ''; info = ''; }}>
+					Back to sign in
+				</button>
+			</p>
+		{:else}
+			<p class="toggle-mode">
+				{isSignUp ? 'Already have an account?' : "Don't have an account?"}
+				<button type="button" class="link-btn" onclick={() => { isSignUp = !isSignUp; error = ''; }}>
+					{isSignUp ? 'Sign in' : 'Sign up'}
+				</button>
+			</p>
+			{#if !isSignUp}
+				<p class="toggle-mode">
+					<button type="button" class="link-btn" onclick={() => { isReset = true; error = ''; password = ''; }}>
+						Forgot your password?
+					</button>
+				</p>
+			{/if}
+		{/if}
 
 		<p class="terms">
 			By signing in, you agree to our Terms of Service and Privacy Policy.
@@ -237,6 +293,16 @@
 		background: var(--color-danger-light);
 		border: 1px solid rgba(229, 57, 53, 0.3);
 		color: var(--color-danger);
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+		margin-bottom: var(--space-md);
+		text-align: left;
+	}
+	.info {
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
 		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;

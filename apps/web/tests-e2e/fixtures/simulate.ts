@@ -255,6 +255,39 @@ export async function setClubMemberStatus(
 	}
 }
 
+export async function insertLivePings(opts: {
+	run_id: string;
+	user_id: string;
+	points: Array<{
+		lat: number;
+		lng: number;
+		distance_m?: number;
+		elapsed_s?: number;
+		at?: string;
+	}>;
+}): Promise<void> {
+	// Plant a sequence of live_run_pings rows for the spectator page to
+	// hydrate from. The /live/[id] page calls fetchBacklog on mount and
+	// renders the trace + status='live' as soon as any pings exist.
+	// Inserts go through the service-role client to bypass RLS, but the
+	// `live_run_pings_drop_in_zone` BEFORE-INSERT trigger still fires —
+	// keep test points well clear of any seeded privacy zones (the seed
+	// puts a 200 m zone around runner's home in Sydney CBD).
+	const rows = opts.points.map((p, i) => ({
+		run_id: opts.run_id,
+		user_id: opts.user_id,
+		lat: p.lat,
+		lng: p.lng,
+		distance_m: p.distance_m ?? null,
+		elapsed_s: p.elapsed_s ?? null,
+		at: p.at ?? new Date(Date.now() - (opts.points.length - i) * 1000).toISOString()
+	}));
+	const { error } = await getAdminClient().from('live_run_pings').insert(rows);
+	if (error) {
+		throw new Error(`simulate.insertLivePings failed: ${error.message}`);
+	}
+}
+
 export async function clearNotifications(userId: string): Promise<void> {
 	// Wipe the user's notifications. Tests that need a deterministic
 	// starting state (bell-badge tests asserting exact counts, inbox
