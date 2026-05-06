@@ -286,7 +286,7 @@
 						/>
 					</label>
 				{/if}
-				<label>
+				<label id="weekly-mileage-goal">
 					<span class="label-text">Weekly Mileage Goal (m)</span>
 					<input type="number" bind:value={weeklyMileageGoal} placeholder="e.g. 40000 (40 km)" />
 				</label>
@@ -294,7 +294,7 @@
 		</section>
 
 		<!-- Heart Rate Zones -->
-		<section class="card">
+		<section class="card" id="heart-rate-zones">
 			<h2>Heart Rate Zones</h2>
 			<p class="section-desc">Upper bound in bpm for each zone. Leave blank if you don't know.</p>
 			<div class="form-grid zones">

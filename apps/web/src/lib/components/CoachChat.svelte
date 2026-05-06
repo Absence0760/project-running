@@ -6,11 +6,21 @@
 	import { fmtKm } from '$lib/units.svelte';
 	import ProGate from '$lib/components/ProGate.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
+	import type { TrainingPlan } from '$lib/types';
 
 	interface Props {
 		planId: string | null;
+		/// Optional list of the user's plans for the in-strip plan
+		/// switcher. When omitted the chip falls back to read-only.
+		plans?: TrainingPlan[];
+		/// Called with the next plan id (or '' for "no plan") when the
+		/// strip's plan-select changes. The host owns the URL + reload
+		/// dance — see /coach/+page.svelte. Omitted on embedded surfaces
+		/// (e.g. /plans/[id] inline coach) where the plan is fixed.
+		onPlanChange?: (next: string) => void;
 	}
-	let { planId }: Props = $props();
+	let { planId, plans = [], onPlanChange }: Props = $props();
 	let locked = $derived(isLocked('ai_coach'));
 	let hasPlan = $derived(planId != null);
 
@@ -764,41 +774,86 @@
 				</h3>
 				{#if contextSummary}
 					{@const c = contextSummary}
-					<div class="context-strip" title="What the coach has loaded for this conversation">
-						{#if c.planName}
-							<span class="chip">
+					{@const planOptions = [
+						{ value: '', label: 'No plan', sub: 'recent runs only' },
+						...plans.map((p) => ({
+							value: p.id,
+							label: p.name,
+							sub:
+								p.status === 'active'
+									? 'Active plan'
+									: p.status === 'completed'
+										? 'Completed'
+										: p.status,
+						})),
+					]}
+					{@const runOptions = RUN_LIMIT_OPTIONS.map((n) => ({
+						value: String(n),
+						label: `Last ${n}`,
+					}))}
+					<div class="context-strip" title="What the coach has loaded for this conversation. Click an editable chip to change it.">
+						{#if onPlanChange && plans.length > 0}
+							<ChipDropdown
+								value={planId ?? ''}
+								options={planOptions}
+								onChange={onPlanChange}
+								icon="calendar_month"
+								ariaLabel="Plan context"
+								title="Switch which plan grounds the coach's answers"
+								suffix={c.planWeeks ? `· ${c.planWeeks}w` : undefined}
+							/>
+						{:else if c.planName}
+							<span class="chip" title="Plan loaded for this conversation">
 								<span class="material-symbols">calendar_month</span>
 								{c.planName}{#if c.planWeeks}<span class="chip-meta"> · {c.planWeeks}w</span>{/if}
 							</span>
 						{:else}
-							<span class="chip chip-muted">
+							<span class="chip chip-muted" title="No active plan; coach is grounded in recent runs only">
 								<span class="material-symbols">calendar_month</span>
 								No plan
 							</span>
 						{/if}
-						<label class="chip chip-select" title="How many recent runs to feed the coach">
-							<span class="material-symbols">directions_run</span>
-							{#if c.runCount === 0}
-								<span>No runs</span>
-							{:else}
-								<span>Last</span>
-								<select class="chip-select-input" bind:value={runsLimit} aria-label="Recent runs to include">
-									{#each RUN_LIMIT_OPTIONS as n}
-										<option value={n}>{n}</option>
-									{/each}
-								</select>
-							{/if}
-						</label>
-						{#if c.hrZonesLoaded}
-							<span class="chip" title="HR zones loaded from your settings">
-								<span class="material-symbols">monitor_heart</span>
+						{#if c.runCount === 0}
+							<span class="chip chip-muted" title="No runs available to feed the coach">
+								<span class="material-symbols">directions_run</span>
+								No runs
 							</span>
+						{:else}
+							<ChipDropdown
+								value={String(runsLimit)}
+								options={runOptions}
+								onChange={(v) => (runsLimit = parseInt(v, 10))}
+								icon="directions_run"
+								ariaLabel="Recent runs to include"
+								title="How many recent runs to feed the coach"
+							/>
+						{/if}
+						{#if c.hrZonesLoaded}
+							<a
+								class="chip chip-link"
+								href="/settings/preferences#heart-rate-zones"
+								title="HR zones loaded from your settings — tap to edit"
+							>
+								<span class="material-symbols">monitor_heart</span>
+							</a>
+						{:else}
+							<a
+								class="chip chip-muted chip-link"
+								href="/settings/preferences#heart-rate-zones"
+								title="No HR zones set — tap to add them so the coach can interpret intensity"
+							>
+								<span class="material-symbols">monitor_heart</span>
+							</a>
 						{/if}
 						{#if c.weeklyGoalMetres}
-							<span class="chip" title="Weekly mileage goal">
+							<a
+								class="chip chip-link"
+								href="/settings/preferences#weekly-mileage-goal"
+								title="Weekly mileage goal — tap to edit"
+							>
 								<span class="material-symbols">flag</span>
 								{fmtKm(c.weeklyGoalMetres)}
-							</span>
+							</a>
 						{/if}
 					</div>
 				{/if}
@@ -1182,11 +1237,16 @@
 	.chip-muted { background: var(--color-bg-tertiary); color: var(--color-text-tertiary); }
 	.chip .material-symbols { font-size: 0.85rem; line-height: 1; }
 	.chip-meta { color: inherit; opacity: 0.75; font-weight: 400; }
-	.chip-select { cursor: pointer; padding-right: 0.4rem; }
-	.chip-select-input {
-		appearance: none; background: transparent; border: none; color: inherit; font: inherit;
-		font-weight: 600; padding: 0 0.15rem; cursor: pointer;
+	/* Settings shortcuts (HR zones, weekly goal) render as anchors so
+	   tapping the chip jumps to /settings/preferences with the right
+	   anchor. Match .chip styling exactly — no link-default underline,
+	   same colours, focus-visible outline for keyboard users. */
+	.chip-link {
+		text-decoration: none; cursor: pointer;
+		transition: filter var(--transition-fast);
 	}
+	.chip-link:hover { filter: brightness(1.05); }
+	.chip-link:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 	.scroll {
 		flex: 1; overflow-y: auto; padding: var(--space-md);

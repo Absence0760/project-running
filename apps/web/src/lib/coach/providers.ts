@@ -119,7 +119,7 @@ export function streamOpenAI(
 		if (!res.ok || !res.body) {
 			const errText = await res.text().catch(() => '');
 			finalUsageDeferred.resolve(usage);
-			throw new Error(`coach upstream ${res.status}: ${errText.slice(0, 400)}`);
+			throw new Error(humaniseUpstreamError(res.status, errText, model, baseUrl));
 		}
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
@@ -161,4 +161,72 @@ export function streamOpenAI(
 		tokens: tokens(),
 		finalUsage: () => finalUsagePromise,
 	};
+}
+
+/// Turn an OpenAI-compatible upstream error response into a sentence
+/// the chat can show without the raw JSON. Keeps the original
+/// `coach upstream <status>: …` shape for unrecognised errors so the
+/// caller still sees the raw payload during local debugging, but
+/// substitutes a friendly explanation for the cases that come up
+/// often: model-not-found (Ollama / OpenRouter when COACH_MODEL is
+/// stale) and 401 (bad / missing key).
+///
+/// Exported so the unit test in `providers.test.ts` can pin every
+/// branch without spinning up a real fetch.
+export function humaniseUpstreamError(
+	status: number,
+	rawBody: string,
+	model: string,
+	baseUrl: string,
+): string {
+	let parsedMessage: string | null = null;
+	try {
+		const parsed = JSON.parse(rawBody) as {
+			error?: { message?: string; type?: string };
+		};
+		const m = parsed?.error?.message;
+		if (typeof m === 'string' && m.length > 0) parsedMessage = m;
+	} catch {
+		/* not JSON — fall back to the raw text below */
+	}
+
+	// Model-not-found is the recurring local-Ollama footgun: COACH_MODEL
+	// is set to something that hasn't been pulled, or the env was
+	// switched without the operator pulling the new tag. Detect by
+	// status (404) AND the error message mentioning the model name.
+	const isLocal = /127\.0\.0\.1|localhost/.test(baseUrl);
+	const looksModelMissing =
+		status === 404 &&
+		parsedMessage != null &&
+		/model.*\b(not\s+found|does\s+not\s+exist|unknown)\b/i.test(parsedMessage);
+	if (looksModelMissing) {
+		const cmd = isLocal
+			? `\`ollama pull ${model}\``
+			: `your provider's model catalogue (current value: ${model})`;
+		return (
+			`Coach can't reach model "${model}". ` +
+			(isLocal
+				? `Pull it locally with ${cmd}, or unset COACH_PROVIDER (or set COACH_MODEL to one you've already pulled — \`ollama list\`).`
+				: `Check ${cmd} and update COACH_MODEL accordingly.`)
+		);
+	}
+
+	if (status === 401) {
+		return (
+			`Coach upstream rejected the request (401 unauthorized). ` +
+			`Check OPENAI_API_KEY (or whichever key your provider expects) and that it has access to model "${model}".`
+		);
+	}
+
+	if (status === 429) {
+		return (
+			`Coach upstream is rate-limiting (429). ` +
+			(parsedMessage ?? 'Wait a moment and try again, or switch provider.')
+		);
+	}
+
+	// Unrecognised — keep the original shape so a developer can still
+	// see the upstream payload. Cap to keep the chat-error bar tight.
+	const summary = parsedMessage ?? rawBody;
+	return `Coach upstream ${status}: ${summary.slice(0, 300)}`;
 }
