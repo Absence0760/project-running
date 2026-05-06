@@ -488,15 +488,21 @@
 
 		{#if selecting && selected.size > 0}
 			<div class="bulk-bar" role="toolbar" aria-label="Selection actions">
-				<span>{selected.size} selected</span>
-				<button
-					type="button"
-					class="bulk-delete"
-					disabled={deleting}
-					onclick={() => (showBulkConfirm = true)}
-				>
-					{deleting ? 'Deleting…' : 'Delete'}
-				</button>
+				<span class="bulk-count">{selected.size} selected</span>
+				<div class="bulk-actions">
+					<button type="button" class="bulk-cancel" onclick={clearSelection}>
+						Clear
+					</button>
+					<button
+						type="button"
+						class="bulk-delete"
+						disabled={deleting}
+						onclick={() => (showBulkConfirm = true)}
+					>
+						<span class="material-symbols">delete</span>
+						{deleting ? 'Deleting…' : 'Delete'}
+					</button>
+				</div>
 			</div>
 		{/if}
 
@@ -884,22 +890,39 @@
 		color: #FFFFFF;
 	}
 	.bulk-bar {
-		position: sticky;
-		bottom: 16px;
-		margin: 1rem auto 0;
+		position: fixed;
+		bottom: 1.5rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 50;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.75rem 1rem;
+		gap: 1.5rem;
+		padding: 0.75rem 1rem 0.75rem 1.25rem;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-		max-width: 32rem;
-		font-size: 0.9rem;
+		border-radius: var(--radius-lg, 12px);
+		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.08);
+		font-size: 0.95rem;
+		min-width: min(28rem, calc(100vw - 2rem));
 	}
+	.bulk-count { font-weight: 600; }
+	.bulk-actions { display: flex; align-items: center; gap: 0.5rem; }
+	.bulk-cancel {
+		padding: 0.5rem 0.9rem;
+		background: transparent;
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-weight: 500;
+		cursor: pointer;
+	}
+	.bulk-cancel:hover { background: var(--color-surface-hover, rgba(0, 0, 0, 0.04)); }
 	.bulk-delete {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 		padding: 0.5rem 1rem;
 		background: #d32f2f;
 		color: white;
@@ -908,7 +931,9 @@
 		font-weight: 600;
 		cursor: pointer;
 	}
+	.bulk-delete:hover:not(:disabled) { background: #b71c1c; }
 	.bulk-delete:disabled { opacity: 0.55; cursor: not-allowed; }
+	.bulk-delete .material-symbols { font-size: 1.1rem; }
 
 	/* .modal-* classes live in app.css. */
 </style>
