@@ -84,8 +84,18 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     if (denied) return denied;
   }
 
+  // Look the row up via the column-redacted `public_runs` view rather
+  // than the base `runs` table. The base-table SELECT policy
+  // `public runs are readable by anyone` was dropped in 20260701_001,
+  // so a non-owner querying `runs.id = ?` now returns zero rows and
+  // every clip request would 404. The view's underlying definer-owned
+  // query bypasses runs RLS, returns only `is_public = true` rows,
+  // and exposes the three columns we need (user_id, track_url,
+  // is_public). Owner reads still return the row because the view is
+  // is-public-filtered and the EF only ever runs on public runs (the
+  // share page renders nothing for a private run).
   const { data: run, error: runErr } = await userClient
-    .from('runs')
+    .from('public_runs')
     .select('user_id, track_url, is_public')
     .eq('id', runId)
     .maybeSingle();
