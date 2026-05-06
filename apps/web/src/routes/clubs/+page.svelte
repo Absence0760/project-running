@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browseClubs, fetchMyClubs } from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { ClubWithMeta } from '$lib/types';
@@ -27,10 +28,18 @@
 		loading = false;
 	}
 
-	onMount(() => {
+	onMount(async () => {
 		// Snapshot restore (below) repopulates these synchronously when
 		// navigating back. Skip the fetch in that case — re-running it
 		// flashes "loading" over the restored list and breaks scroll.
+		// fetchMyClubs() returns [] silently when auth.user is null,
+		// so a hard reload during the auth race would render the empty
+		// "You haven't joined a club yet" state forever. Poll briefly
+		// before kicking off loadMine. Same shape as /settings/account
+		// + /settings/preferences + /settings/devices.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		if (myClubs.length === 0) loadMine();
 		if (browseResults.length === 0) loadBrowse();
 	});
