@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
@@ -10,6 +11,15 @@
 	let email = $state('');
 	let password = $state('');
 	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
+	// `hydrated` flips after the first onMount fires — i.e. once the
+	// Svelte 5 `onsubmit` binding on the email form is wired up. Until
+	// then the submit button stays disabled, so a fast-clicking user
+	// (or a Playwright test) can't trigger the native form GET before
+	// the JS handler can call preventDefault().
+	let hydrated = $state(false);
+	onMount(() => {
+		hydrated = true;
+	});
 
 	function safeReturnTo(): string {
 		const raw = $page.url.searchParams.get('return_to');
@@ -116,7 +126,11 @@
 				minlength="6"
 				autocomplete={isSignUp ? 'new-password' : 'current-password'}
 			/>
-			<button type="submit" class="btn btn-email" disabled={loading}>
+			<button
+				type="submit"
+				class="btn btn-email"
+				disabled={!hydrated || loading}
+			>
 				{#if loading}
 					Signing {isSignUp ? 'up' : 'in'}...
 				{:else}
