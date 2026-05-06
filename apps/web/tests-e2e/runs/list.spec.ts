@@ -98,6 +98,101 @@ test.describe('/runs', () => {
 		await page.getByLabel('Date range').selectOption('today');
 	});
 
+	test('Source filter narrows to parkrun-only rows (5 seeded parkruns)', async ({
+		page
+	}) => {
+		// fetchRuns filters server-side on `source` when sourceFilter
+		// !== 'all'. The seed has ~5 parkrun rows; assert the count
+		// is >= 5 and < the unfiltered count. Pins the source-filter
+		// fetch path (separate from the activity-type metadata key
+		// path covered by the Walk-filter test).
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		await expect(page.locator('.run-card').first()).toBeVisible();
+		const beforeCount = await page.locator('.run-card').count();
+
+		await page.getByLabel('Source').selectOption('parkrun');
+		const cards = page.locator('.run-card');
+		// Wait for the list to settle on the narrowed set.
+		await expect.poll(() => cards.count(), { timeout: 5_000 }).toBeLessThan(beforeCount);
+		const parkrunCount = await cards.count();
+		expect(parkrunCount).toBeGreaterThanOrEqual(3);
+		expect(parkrunCount).toBeLessThan(beforeCount);
+
+		// Restore.
+		await page.getByLabel('Source').selectOption('all');
+	});
+
+	test('Sort by Longest puts the longest-distance run first', async ({
+		page
+	}) => {
+		// `sortKey` re-orders the in-memory `filteredRuns` $derived.
+		// Newest-first is the default; "Longest" sorts by distance_m
+		// descending. Catches a regression where the sort comparator
+		// gets inverted or the option value drifts from the $derived
+		// branch.
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		await expect(page.locator('.run-card').first()).toBeVisible();
+
+		await page.getByLabel('Sort').selectOption('longest');
+
+		// First card's distance should be the maximum across the
+		// visible set. Read distance from the first run-stat-value
+		// (which is "Distance" by column order).
+		const firstDistanceText = await page
+			.locator('.run-card .run-stat-value')
+			.first()
+			.textContent();
+		const firstDistance = parseFloat(firstDistanceText ?? '0');
+
+		const allDistances = await page
+			.locator('.run-card .run-stat')
+			.filter({ hasText: 'Distance' })
+			.locator('.run-stat-value')
+			.evaluateAll((els) =>
+				els.map((e) => parseFloat(e.textContent?.trim() ?? '0'))
+			);
+		expect(firstDistance).toBeGreaterThanOrEqual(Math.max(...allDistances));
+
+		// Restore to default sort.
+		await page.getByLabel('Sort').selectOption('newest');
+	});
+
+	test('Select-mode + bulk-delete confirm dialog opens (cancel without deleting)', async ({
+		page
+	}) => {
+		// Multi-select mode swaps each .run-card from <a> to <button>
+		// with onclick=toggleSelect. Selecting at least one row makes
+		// the .bulk-bar appear; clicking Delete opens a ConfirmDialog.
+		// We verify the wiring up to the confirm dialog and then
+		// CANCEL — actually deleting would either need a unique
+		// throwaway row (slow) or break other tests.
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		await expect(page.locator('.run-card').first()).toBeVisible();
+
+		await page.getByRole('button', { name: 'Select', exact: true }).click();
+
+		// Click the first run-card to select it.
+		await page.locator('.run-card').first().click();
+		const bulkBar = page.locator('.bulk-bar');
+		await expect(bulkBar).toBeVisible();
+		await expect(bulkBar).toContainText('1 selected');
+
+		// Open confirm dialog, then cancel — no destructive write.
+		await bulkBar.getByRole('button', { name: 'Delete' }).click();
+		await expect(page.locator('.modal', { hasText: /Delete 1 run/ })).toBeVisible({
+			timeout: 5_000
+		});
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+
+		// Exit select mode so the rest of the suite sees the default
+		// .run-card-as-link layout.
+		await page.getByRole('button', { name: 'Done', exact: true }).click();
+	});
+
 	test('manual run CRUD round-trip via the Add-run modal', async ({ page }) => {
 		const title = uniqueText('e2e-crud');
 

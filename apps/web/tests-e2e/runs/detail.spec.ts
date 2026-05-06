@@ -81,6 +81,44 @@ test.describe('/runs/[id]', () => {
 		).toBeVisible();
 	});
 
+	test('inline edit notes — save persists across reload, restore', async ({
+		page
+	}) => {
+		// Companion to the title test: same updateRunMetadata path,
+		// different field. The metadata jsonb merge has independent
+		// risks per key — a save that drops the notes field would
+		// pass the title test but fail this one.
+		const newNotes = uniqueText('e2e-notes');
+
+		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
+		await page.waitForLoadState('networkidle');
+
+		// The pinned public run has no seeded notes — the .run-notes
+		// paragraph is absent. Open the editor.
+		await page.locator('button[title="Edit"]').first().click();
+		const notesArea = page.locator('textarea.edit-textarea');
+		await expect(notesArea).toBeVisible();
+		await notesArea.fill(newNotes);
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.locator('input.edit-input')).toHaveCount(0);
+
+		// Reload — notes must persist via the metadata jsonb.
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('p.run-notes')).toHaveText(newNotes, {
+			timeout: 10_000
+		});
+
+		// Restore to empty notes so the seed shape is preserved.
+		await page.locator('button[title="Edit"]').first().click();
+		await page.locator('textarea.edit-textarea').fill('');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.locator('input.edit-input')).toHaveCount(0);
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('p.run-notes')).toHaveCount(0);
+	});
+
 	test('inline edit title — Cancel reverts unsaved changes', async ({
 		page
 	}) => {

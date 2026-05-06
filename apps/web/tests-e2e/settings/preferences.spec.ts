@@ -16,6 +16,43 @@ import { USER_A } from '../fixtures/users';
 test.describe('/settings/preferences', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('distance unit toggle: km → mi propagates to /runs after save', async ({
+		page
+	}) => {
+		// Distance unit is stored in user_profiles.preferred_unit (and
+		// mirrored to the user_settings prefs bag for cross-device
+		// sync). The reactive `unit.value` signal in units.svelte.ts
+		// drives `formatDistance(metres)` everywhere. Save → reload
+		// /runs → assert distances render with " mi" suffix instead
+		// of " km". Catches regressions in the auth store's setUnit
+		// fan-out OR the Save handler dropping preferredUnit.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		// Switch to Miles.
+		await page.getByRole('button', { name: 'Miles', exact: true }).click();
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(
+			page.getByRole('button', { name: /Saved!/ })
+		).toBeVisible({ timeout: 5_000 });
+
+		// Visit /runs; distances on the cards should now read in mi.
+		await page.goto('/runs');
+		await page.getByLabel('Date range').selectOption('all');
+		const firstStat = page.locator('.run-card .run-stat-value').first();
+		await expect(firstStat).toBeVisible({ timeout: 10_000 });
+		await expect(firstStat).toContainText('mi');
+
+		// Restore to km so subsequent tests render against the default.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+		await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(
+			page.getByRole('button', { name: /Saved!/ })
+		).toBeVisible({ timeout: 5_000 });
+	});
+
 	test('theme toggle: Dark applies html[data-theme] + survives reload', async ({
 		page
 	}) => {

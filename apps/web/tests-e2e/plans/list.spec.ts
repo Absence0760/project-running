@@ -12,6 +12,27 @@ import { USER_A } from '../fixtures/users';
 test.describe('/plans', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('clicking "New plan" opens the wizard', async ({ page }) => {
+		// The plan-creation flow is a heavyweight wizard (goal race,
+		// distance, weeks, week-by-week edit). Fully creating a plan
+		// is a multi-step saga to be added later. For now, just
+		// assert the modal opens — catches regressions in the
+		// `showPlanModal` wiring + the editor's mount.
+		await page.goto('/plans');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByRole('button', { name: /New plan/ }).first().click();
+
+		// PlanEditor mounts inside a Modal; the modal-header h2 reads
+		// "New plan" (or similar). The plan-name input + the goal-
+		// race controls are inside the modal.
+		await expect(page.locator('.modal')).toBeVisible({ timeout: 5_000 });
+
+		// Close without creating.
+		await page.locator('.modal-close').click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+	});
+
 	test('seeded Sydney Half 2026 plan renders + drill into detail', async ({
 		page
 	}) => {

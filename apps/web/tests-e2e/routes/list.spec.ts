@@ -15,6 +15,40 @@ import { USER_A } from '../fixtures/users';
 test.describe('/routes', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('tab switch My routes ↔ Explore shows different result sets', async ({
+		page
+	}) => {
+		// The Routes page has two tabs — My routes (owned + cloned)
+		// and Explore (community-public discovery). The Explore tab
+		// fetches via searchPublicRoutes; the My tab fetches via
+		// fetchMyRoutes. Both can be empty independently. Asserts
+		// the active class flips and at least the My tab has the
+		// seeded routes.
+		await page.goto('/routes');
+		await expect(page.locator('.route-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+		const myCount = await page.locator('.route-card').count();
+
+		// My tab is the default; switch to Explore.
+		const exploreTab = page.getByRole('button', { name: /Explore/ });
+		await exploreTab.click();
+		await expect(exploreTab).toHaveClass(/active/);
+
+		// Explore renders different rows (or none, if no community
+		// routes exist). Either way, the My tab's count should
+		// differ from Explore's after pagination — assert tab class
+		// flipped, that's the load-bearing assertion. Explore
+		// sometimes empty in this seed; don't pin a count.
+		await expect(
+			page.getByRole('button', { name: /My routes/ })
+		).not.toHaveClass(/active/);
+
+		// Switch back so subsequent tests see My-routes default.
+		await page.getByRole('button', { name: /My routes/ }).click();
+		await expect(page.locator('.route-card')).toHaveCount(myCount);
+	});
+
 	test('search box narrows the My-routes list to a name match', async ({
 		page
 	}) => {

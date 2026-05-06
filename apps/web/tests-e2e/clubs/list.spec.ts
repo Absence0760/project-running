@@ -15,6 +15,32 @@ import { USER_A } from '../fixtures/users';
 test.describe('/clubs', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('Browse tab shows public clubs + hides private "Friends of Jared"', async ({
+		page
+	}) => {
+		// Seeded clubs: Sydney Run Club (public open), Tempo Tuesday
+		// (public request), Friends of Jared (private invite). Browse
+		// fetches via browseClubs(search) which filters on
+		// is_public=true — private clubs must NOT appear here even
+		// for the owner. (My clubs tab IS the place owners see their
+		// private clubs.)
+		await page.goto('/clubs');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByRole('button', { name: /Browse/, exact: true }).click();
+		// Wait for the browse fetch to settle.
+		await expect(
+			page.getByRole('heading', { name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.getByRole('heading', { name: 'Tempo Tuesday' })
+		).toBeVisible();
+		// Private club must NOT surface in Browse.
+		await expect(
+			page.getByRole('heading', { name: 'Friends of Jared' })
+		).toHaveCount(0);
+	});
+
 	test('seeded Sydney Run Club renders + drill into slug detail', async ({
 		page
 	}) => {

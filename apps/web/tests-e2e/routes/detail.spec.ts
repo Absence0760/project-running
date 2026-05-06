@@ -14,6 +14,47 @@ import { USER_A } from '../fixtures/users';
 test.describe('/routes/[id]', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('public toggle: Public → Private, reload persists, back to Public', async ({
+		page
+	}) => {
+		// `togglePublic` calls setRoutePublic which updates `is_public`
+		// on the routes row. Owner-only button — gated on `isOwner`.
+		// The button text flips between "Public" / "Private". Catches
+		// regressions in either the write (RLS dropping the update)
+		// or the optimistic rollback (button text reverts on error).
+		// Pinned route starts public; cleanup leaves it public.
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await page.waitForLoadState('networkidle');
+
+		// The button text content is "public Public" (icon ligature +
+		// label) so a plain text regex pulls in the icon span. Target
+		// by the `title` attribute which is unique to this button —
+		// "Public — tap to make private" / "Private — tap to make
+		// public".
+		const toggleBtn = () =>
+			page.locator('button[title^="Public"], button[title^="Private"]');
+		await expect(toggleBtn()).toBeVisible({ timeout: 10_000 });
+		await expect(toggleBtn()).toHaveAttribute('title', /^Public/);
+
+		await toggleBtn().click();
+		await expect(toggleBtn()).toHaveAttribute('title', /^Private/, {
+			timeout: 5_000
+		});
+
+		// Reload — server-side state must agree.
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(toggleBtn()).toHaveAttribute('title', /^Private/, {
+			timeout: 10_000
+		});
+
+		// Restore.
+		await toggleBtn().click();
+		await expect(toggleBtn()).toHaveAttribute('title', /^Public/, {
+			timeout: 5_000
+		});
+	});
+
 	test('star + reload + starred-only filter shows it + unstar restores', async ({
 		page
 	}) => {

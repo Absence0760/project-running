@@ -13,6 +13,36 @@ import { USER_A } from './fixtures/users';
 test.describe('/feed', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('activity-type filter narrows feed to matching runs (Cycle = empty)', async ({
+		page
+	}) => {
+		// fetchFollowingFeed accepts an activityType filter that maps
+		// to `metadata->>activity_type=<val>`. The seeded follows
+		// (alex + morgan) only have `activity_type='run'` rows;
+		// filtering to Cycle should collapse the feed to "No matches"
+		// empty state. Pins both the filter wiring AND the empty-
+		// state branch (we hit the "filters too narrow" variant, not
+		// the "no follows" variant).
+		await page.goto('/feed');
+		await page.waitForLoadState('networkidle');
+
+		// Click the Cycle activity button (aria-label="Cycle").
+		await page.getByRole('button', { name: 'Cycle', exact: true }).click();
+
+		// "No matches" empty state should appear (no cycle runs).
+		await expect(
+			page.getByRole('heading', { name: 'No matches' })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Click Clear filters → returns to default (All) → entries
+		// reappear. (`Clear filters` is a button inside the empty
+		// state.)
+		await page.getByRole('button', { name: 'Clear filters' }).click();
+		await expect(
+			page.getByText(/Alex Chen|Morgan Lee/).first()
+		).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('User A sees a non-empty feed (seeded follows have public runs)', async ({
 		page
 	}) => {
