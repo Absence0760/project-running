@@ -180,7 +180,7 @@
 		// goals out of localStorage — otherwise auth.user.id is null on
 		// first paint and `loadGoals` returns []. The /coach route uses
 		// the same pattern.
-		for (let i = 0; i < 20 && auth.loading; i++) {
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		goals = loadGoals(auth.user?.id);

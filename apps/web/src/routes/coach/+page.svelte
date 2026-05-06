@@ -18,7 +18,7 @@
 
 	onMount(async () => {
 		// Wait for auth so the RLS-scoped fetches return the right rows.
-		for (let i = 0; i < 20 && auth.loading; i++) {
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		try {
