@@ -260,6 +260,21 @@ Capture the heaviest stateful arrays (the items list, pagination cursors), not d
 
 Every change that affects documented behaviour updates the docs **in the same turn as the code change**. See the root [`CLAUDE.md`](../CLAUDE.md) § "Docs hygiene" for the full rule and checklist. Shortest version: if a doc describes the old behaviour, it is wrong the moment you change the code — fix it now, not later.
 
+## Test hygiene — review, then unit, then e2e
+
+Every non-trivial dev change goes through three gates before it's "done." Skipping any of them is allowed only when the change is trivial (typo, comment, single-property style change, dependency-version bump without behaviour change).
+
+1. **Review** — does the change make sense against the project's invariants? Use the `code-reviewer` agent or `/safe-edit` for security-sensitive / migration / recording-stack / parity-helper changes. For everyday work the in-session reviewer pass + `/check` is enough.
+2. **Unit tests** — pure logic, codecs, helpers, value classes, validation guards. The patterns are in [testing.md](testing.md). A change that adds or modifies a pure function should land with the test in the same diff. Bug fixes should land with a regression test that fails without the fix. **No mocks for things we own** still applies.
+3. **End-to-end tests — web and backend only.**
+   - **Web:** Playwright spec in [`apps/web/tests-e2e/`](../apps/web/tests-e2e/). Smoke + security + data-flow split. Sign-in / cross-user isolation / privacy clipping / CRUD round-trips are the load-bearing categories. Don't add an e2e test for a pure helper — that belongs as a unit test.
+   - **Backend:** pgtap in [`apps/backend/supabase/tests/`](../apps/backend/supabase/tests/) for RLS / SECURITY DEFINER / trigger / view contracts; Deno tests next to the Edge Function for security-critical helpers (HMAC, replay window, identity validation, tier transition). Inline DO-blocks in `seed.sql` are fine for SECURITY DEFINER + `vault.*` paths that need the same `request.jwt.claim.*` simulation.
+   - **Mobile / watch:** **no e2e equivalent** — Flutter `integration_test` is too slow + flaky on CI and the existing widget tests + cross-platform fixture tests already cover the high-blast paths. The honest discussion is in [testing.md § What's not covered](testing.md#whats-not-covered-honest).
+
+Use the `/check` command to run review + test-gap-checker + doc-hygiene-checker in parallel against the working diff. It reports gaps; the human decides what to apply. The `test-gap-checker` agent walks the diff, classifies each modified file, and flags missing test surface — it doesn't write tests, it just makes the gap visible.
+
+When a Playwright / pgtap test surfaces a real bug in the app code, fix the bug **first** (separate commit from the test), then make sure the test exists to catch regressions. The order matters: test-without-fix fails CI; fix-without-test means the next regression slips through silently.
+
 ## Exceptions
 
 Every rule here has escape hatches for the cases where it genuinely doesn't fit. If you're about to violate one of these rules:

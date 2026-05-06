@@ -49,6 +49,18 @@ Project-curated slash commands for security / privacy / invariant audits live un
 
 For security-sensitive, schema, or recording-stack changes — anything where a second pass of "did the diff actually honour the project's invariants" is worth ~2-3x the token cost — use `/safe-edit <task>`. It implements the change, then runs the `code-reviewer` agent against the working diff (cross-checking decisions ADRs, layering contract, twin invariant, paywall gates, fail-closed defaults, comment / abstraction discipline), applies any concrete findings, re-reviews once, and hands off to the user for the commit decision. Hard cap at 2 review cycles. Don't use it on typos, doc tweaks, or any < ~10-line diff that touches no invariant — just edit those directly.
 
+## /check — review + test-gap + doc-hygiene before declaring done
+
+Every non-trivial dev change goes through **review → unit tests → e2e tests** before it's done. The `/check` slash command runs the three relevant agents in parallel against the working diff and reports gaps:
+
+- `code-reviewer` — does the change honour project invariants? (same agent `/safe-edit` uses)
+- `test-gap-checker` — did the diff add unit tests + e2e tests where the rule says it should? Web e2e = Playwright (`apps/web/tests-e2e/`). Backend e2e = pgtap (`apps/backend/supabase/tests/`) or Deno tests next to the Edge Function. Mobile / watch have **no e2e equivalent** by design — see `docs/testing.md § What's not covered`.
+- `doc-hygiene-checker` — same as the Docs hygiene rule below.
+
+Cheaper than `/safe-edit` (single pass, no review-and-fix loop), advisory only — the user decides which findings to apply. Use it before every commit on a non-trivial change. Skip on typos / comment edits / dep bumps.
+
+The full rule + per-source-type test surface is in [`docs/conventions.md` § Test hygiene](docs/conventions.md#test-hygiene--review-then-unit-then-e2e).
+
 ## Branches & PRs
 
 - `dev` is the working branch. `main` is the PR target.

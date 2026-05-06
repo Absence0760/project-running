@@ -60,7 +60,8 @@ The cost of this loop is real (~2-3x tokens, ~30-60s extra latency, one or two `
 
 ## What this command does NOT replace
 
-- The existing diff-time agents (`mobile-twin-mirror`, `metadata-key-keeper`, `schema-change-coordinator`, `doc-hygiene-checker`, `shared-library-syncer`) still fire as part of the coder pass. The reviewer is **on top of** them, not instead of them.
+- The existing diff-time agents (`mobile-twin-mirror`, `metadata-key-keeper`, `schema-change-coordinator`, `doc-hygiene-checker`, `shared-library-syncer`, `test-gap-checker`) still fire as part of the coder pass. The reviewer is **on top of** them, not instead of them.
+- `/check` is the lighter pre-commit gate — review + test-gap + doc-hygiene, single pass, advisory. Use it for everyday changes that don't warrant `/safe-edit`'s 2-3x cost. The two commands are complementary; neither replaces the other.
 - Architecture-guard tests still run as part of the regular test suite when you'd normally run them.
 - `dart analyze` / `npm run check` / type-check still run when you'd normally run them.
 - `/audit/*` is still the right tool for periodic broad sweeps. `/safe-edit` is per-change.
