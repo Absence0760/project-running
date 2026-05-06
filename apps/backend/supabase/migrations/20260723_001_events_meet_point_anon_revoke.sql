@@ -1,0 +1,26 @@
+-- Restrict `events.meet_lat` / `events.meet_lng` to authenticated
+-- readers only.
+--
+-- Audit pass 3 finding (deferred from pass 2): the events table's
+-- SELECT policy lets anon read public-club events. The two
+-- numeric-coordinate columns leak precise meeting-point coordinates
+-- to anyone hitting `/rest/v1/events?club_id=eq.<public_club_id>`,
+-- including the corner case where an organiser uses their home
+-- address as the meet point.
+--
+-- Column-level revoke pattern from `20260707_001_user_profiles_column_lockdown.sql`:
+-- the row-level visibility (events SELECT policy) is unchanged, but
+-- anon callers can no longer read these two columns. `meet_label`
+-- (the human-readable text the UI typically renders) is still
+-- visible to anon — that's the canonical display field; the
+-- numeric coordinates are an organiser-set map seed.
+--
+-- Authenticated callers (any signed-in user, not just members) still
+-- see the columns. This is a calculated trade-off — narrowing
+-- further would require a SECURITY DEFINER RPC and refactoring
+-- every event-detail render. The leak is narrowed from "every anon
+-- on the internet" to "every signed-in user", and the seed-event
+-- fixtures that previously had no `meet_lat` / `meet_lng` continue
+-- to work (the values are nullable).
+
+revoke select (meet_lat, meet_lng) on events from anon;

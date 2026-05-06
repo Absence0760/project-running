@@ -23,10 +23,13 @@ resource "aws_s3_bucket" "state" {
   bucket        = var.state_bucket_name
   force_destroy = false
 
+  # Stack key normalised to match every other stack's tagging shape.
+  # AWS treats tag keys as case-sensitive — using `Component = tfstate`
+  # alongside `Stack = web` elsewhere broke Cost Explorer queries that
+  # group by `Stack`.
   tags = {
     Project   = "run-app"
     Stack     = "bootstrap"
-    Component = "tfstate"
     ManagedBy = "terraform"
   }
 

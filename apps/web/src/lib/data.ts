@@ -1691,8 +1691,10 @@ export interface EventResultRow {
 	note: string | null;
 	created_at: string;
 	organiser_approved: boolean;
-	organiser_approved_by: string | null;
-	organiser_approved_at: string | null;
+	// organiser_approved_by / organiser_approved_at are admin-side
+	// columns; intentionally omitted from `fetchEventResults`'s public
+	// read path. Add them back via a service-role-only fetcher if/when
+	// an admin moderation UI needs them.
 }
 
 export interface EventResultWithUser extends EventResultRow {
@@ -1704,10 +1706,15 @@ export async function fetchEventResults(
 	eventId: string,
 	instanceStart: string
 ): Promise<EventResultWithUser[]> {
+	// Don't request organiser_approved_by / organiser_approved_at on
+	// the public read path — those are admin-operational fields with
+	// no UI consumer here. The boolean `organiser_approved` is what
+	// the leaderboard actually shows. Audit pass 3 caught the wider
+	// projection leaking the approving admin's UUID to anon.
 	const { data: results } = await supabase
 		.from('event_results')
 		.select(
-			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved, organiser_approved_by, organiser_approved_at'
+			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved'
 		)
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)

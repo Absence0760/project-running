@@ -1283,7 +1283,9 @@ BEGIN
               'bib', 'A1234',
               'overall_place', 142,
               'chip_time', '1:47:23',
-              'perceived_effort', 7
+              'perceived_effort', 7,
+              -- 20260724_001 strip-list addition:
+              'run_number', 17
             ))
     RETURNING id INTO v_run_id;
 
@@ -1328,7 +1330,8 @@ BEGIN
      OR v_public_metadata ? 'bib'
      OR v_public_metadata ? 'overall_place'
      OR v_public_metadata ? 'chip_time'
-     OR v_public_metadata ? 'perceived_effort' THEN
+     OR v_public_metadata ? 'perceived_effort'
+     OR v_public_metadata ? 'run_number' THEN
     RAISE EXCEPTION 'public_runs: metadata strip list incomplete — leaked at least one denylisted key';
   END IF;
 

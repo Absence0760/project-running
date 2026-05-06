@@ -54,8 +54,14 @@ resource "aws_acm_certificate" "apex" {
   validation_method         = "DNS"
   tags                      = var.tags
 
+  # Destroying the cert breaks CloudFront → DNS for both envs until
+  # ACM revalidates (~30 min after re-issue + DNS propagation).
+  # `create_before_destroy` already mitigates rotation-driven
+  # destruction; `prevent_destroy` blocks `terraform destroy` on the
+  # whole stack from taking the cert. The two are compatible.
   lifecycle {
     create_before_destroy = true
+    prevent_destroy       = true
   }
 }
 
