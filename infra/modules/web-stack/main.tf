@@ -103,10 +103,12 @@ data "aws_iam_policy_document" "kms_secrets" {
     principals {
       type = "AWS"
       identifiers = compact([
-        # Lambda execution role — created below in this stack; the
-        # ARN is built deterministically from the resource_prefix to
-        # avoid a key→role→key reference cycle.
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-lambda",
+        # Lambda execution role — created below in this stack as
+        # `${prefix}-coach-lambda`. The ARN is built deterministically
+        # from the resource_prefix to avoid a key→role→key reference
+        # cycle. Audit pass 3 caught a name mismatch (was `-lambda`,
+        # actual role is `-coach-lambda`); keep these in lockstep.
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-coach-lambda",
         # Deploy role(s) that need to decrypt at terraform-apply time.
         # Optional — empty list means deploys decrypt out-of-band.
         var.kms_decrypt_principal_arn,

@@ -198,13 +198,21 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 
 	const fetchResult = await fetchStravaActivity(accessToken, activityId);
 	if (fetchResult.status === 'rate_limited') {
-		// Strava returned 429 / 503 on the detail fetch. Returning 500
-		// signals Strava to retry the event (their backoff is up to 3
-		// days). A 200 here would silently drop the activity. The
-		// dedupe row in webhook_events is already inserted, so a
-		// retried event with the same payload will hit our 23505
-		// dedupe path and skip — but if Strava retries with a fresh
-		// event_id (some races), we'll re-attempt the detail fetch.
+		// Strava returned 429 / 503 on the detail fetch. We need to
+		// signal Strava to retry (Strava retries up to 3 attempts on
+		// non-200), but the `webhook_events` dedupe row was inserted
+		// at line 137-146 — a retry with the same payload would hit
+		// the 23505 path and silently 200 ok-skipped, dropping the
+		// activity. So delete the dedupe row before returning 500 so
+		// the retry path actually re-fetches.
+		const { error: undoErr } = await supabase
+			.from('webhook_events')
+			.delete()
+			.eq('provider', 'strava')
+			.eq('event_id', eventId);
+		if (undoErr) {
+			console.error('strava-webhook: failed to roll back dedupe row before retry', undoErr);
+		}
 		return Response.json({ error: 'upstream_rate_limited' }, { status: 500 });
 	}
 	if (fetchResult.status === 'not_found') {

@@ -33,6 +33,19 @@ data "terraform_remote_state" "dns" {
   }
 }
 
+# Read the OIDC deploy role ARNs so the KMS key policy can authorise
+# the GitHub Actions runner to call kms:Decrypt at terraform-apply
+# time (sops_file data source needs it). Audit pass 3 found this
+# variable was added in pass 2 but never wired through.
+data "terraform_remote_state" "github_oidc" {
+  backend = "s3"
+  config = {
+    bucket = "runonward-tfstate"
+    key    = "github-oidc/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
 locals {
   secrets_path = "${path.module}/secrets.enc.yaml"
 }
@@ -66,6 +79,11 @@ module "web" {
   # the Lambda gets the real env vars.
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
+
+  # Lets the prod deploy role decrypt sops at `terraform apply` time
+  # from the GitHub Actions runner. Without this, only the AWS
+  # account root could re-apply the stack post first-deploy.
+  kms_decrypt_principal_arn = data.terraform_remote_state.github_oidc.outputs.deploy_role_arn_prod
 
   # PascalCase to match the bootstrap + github-oidc stacks; AWS treats
   # tag keys as case-sensitive so a single Cost Explorer / Resource

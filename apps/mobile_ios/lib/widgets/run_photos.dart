@@ -56,7 +56,7 @@ class RunPhotos extends StatefulWidget {
   State<RunPhotos> createState() => _RunPhotosState();
 }
 
-class _RunPhotosState extends State<RunPhotos> {
+class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
   final _picker = ImagePicker();
   bool _loading = true;
   bool _uploading = false;
@@ -83,14 +83,27 @@ class _RunPhotosState extends State<RunPhotos> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _captionCtrl.dispose();
     _pendingCaptionCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-sign on app foreground so a screen kept open past the
+    // refresh-ahead threshold (TTL - 5 min) refreshes before the
+    // user sees broken images. _signPaths is idempotent — entries
+    // still inside the freshness window are a no-op.
+    if (state == AppLifecycleState.resumed && _photos.isNotEmpty) {
+      _signPaths(_photos.map((p) => p.storagePath).toList(growable: false));
+    }
   }
 
   Future<void> _load() async {

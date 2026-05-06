@@ -33,13 +33,23 @@ export const POST: RequestHandler = async ({ request }) => {
 		);
 	}
 
-	const rawText = await request.text();
-	if (rawText.length > COACH_BODY_LIMIT_BYTES) {
+	// Read as ArrayBuffer first so the byte cap is on the actual
+	// decoded body (post-Content-Encoding decompression). Using
+	// `request.text().length` would count UTF-16 code units, allowing
+	// a multibyte-Unicode body through the cap; using it after
+	// implicit gzip decompression (Node HTTP server decompresses
+	// before handing to handler) would still measure decoded chars,
+	// which means a 3 KB gzip frame decompressing to 768 KB sails
+	// past `length > 256*1024`. ArrayBuffer.byteLength is the true
+	// post-decompress byte count. Mirrors the Lambda handler shape.
+	const rawArr = await request.arrayBuffer();
+	if (rawArr.byteLength > COACH_BODY_LIMIT_BYTES) {
 		return new Response(JSON.stringify({ error: 'request too large' }), {
 			status: 413,
 			headers: { 'content-type': 'application/json' },
 		});
 	}
+	const rawText = new TextDecoder('utf-8').decode(rawArr);
 
 	let rawBody: unknown;
 	try {

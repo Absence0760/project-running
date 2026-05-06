@@ -16,6 +16,16 @@ data "terraform_remote_state" "dns" {
   }
 }
 
+# Read the OIDC deploy role ARN — see envs/prod/main.tf for rationale.
+data "terraform_remote_state" "github_oidc" {
+  backend = "s3"
+  config = {
+    bucket = "runonward-tfstate"
+    key    = "github-oidc/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
 locals {
   domain_name  = "${var.preview_subdomain}.${var.apex_domain}"
   secrets_path = "${path.module}/secrets.enc.yaml"
@@ -46,6 +56,8 @@ module "web" {
 
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
+
+  kms_decrypt_principal_arn = data.terraform_remote_state.github_oidc.outputs.deploy_role_arn_preview
 
   # PascalCase to match the other stacks. See envs/prod/main.tf for
   # rationale.
