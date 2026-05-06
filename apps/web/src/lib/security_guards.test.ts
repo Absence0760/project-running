@@ -297,6 +297,164 @@ test('KMS Decrypt principal ARN matches the Lambda role name', () => {
 	);
 });
 
+test('CoachChat DOMPurify config disallows the `class` attribute', () => {
+	// Reason: an LLM-emitted `<span class="modal-backdrop">` would
+	// otherwise pick up the global app.css class and overlay the page,
+	// a clickjacking vector flagged in audit pass-2 (commit a2ea656).
+	// `class` must NOT appear in COACH_ALLOWED_ATTR; ALLOW_DATA_ATTR
+	// must be false. The afterSanitizeAttributes hook must force
+	// target=_blank + rel=noopener on every <a> so an LLM-emitted link
+	// can't reach back into window.opener (reverse-tab phishing).
+	const source = read('src/lib/coach/markdown.ts');
+	const attrMatch = source.match(/COACH_ALLOWED_ATTR\s*=\s*\[([^\]]*)\]/);
+	assert.ok(
+		attrMatch,
+		'Could not locate COACH_ALLOWED_ATTR — has it been renamed? See coach/markdown.ts.',
+	);
+	assert.doesNotMatch(
+		attrMatch![1],
+		/['"]class['"]/,
+		'COACH_ALLOWED_ATTR must NOT include "class" — LLM-controlled class names can hijack global app.css selectors. See decisions audit pass-2.',
+	);
+	assert.match(
+		source,
+		/ALLOW_DATA_ATTR\s*:\s*false/,
+		'CoachChat sanitiser must set ALLOW_DATA_ATTR=false — data-* attributes are a class-equivalent escape hatch.',
+	);
+	assert.match(
+		source,
+		/afterSanitizeAttributes[\s\S]{0,400}target['"\s,:=]+_blank/,
+		'CoachChat sanitiser must force target=_blank on every <a> via afterSanitizeAttributes.',
+	);
+	assert.match(
+		source,
+		/afterSanitizeAttributes[\s\S]{0,400}noopener/,
+		'CoachChat sanitiser must force rel="noopener" on every <a> — closes the window.opener reverse-tab phishing vector.',
+	);
+});
+
+test('BYPASS_PAYWALL gate requires three independent conditions', () => {
+	// Reason: BYPASS_PAYWALL is a dev-only escape hatch on the
+	// /api/coach SvelteKit endpoint. Production runs in the AWS Lambda
+	// wrapper which hardcodes false; this dev path is defence-in-depth
+	// "in case the adapter changes." Each of the three conditions
+	// closes a different shipped-bypass-by-mistake vector:
+	//   1. NODE_ENV != 'production' guards a misbuilt prod artefact.
+	//   2. Local Supabase URL guards a dev build pointed at prod.
+	//   3. Literal 'true' guards an empty-string env var being truthy.
+	// Loosening any one to "OR" rather than "AND" reintroduces the
+	// risk and produces a release-build paywall bypass.
+	const source = read('src/routes/api/coach/+server.ts');
+	const fnMatch = source.match(
+		/bypassPaywallEnabled\s*=\s*[^;]*?;/,
+	);
+	assert.ok(fnMatch, 'Could not locate bypassPaywallEnabled assignment in /api/coach/+server.ts.');
+	const expr = fnMatch![0];
+	assert.match(expr, /!isProdEnv/, 'BYPASS_PAYWALL must check NODE_ENV != production.');
+	assert.match(expr, /isLocalSupabase/, 'BYPASS_PAYWALL must check the Supabase URL is local.');
+	assert.match(
+		expr,
+		/BYPASS_PAYWALL\s*===\s*['"]true['"]/,
+		'BYPASS_PAYWALL must check the env var is the literal string "true" — empty / "1" / "yes" must be off.',
+	);
+	// `&&` joins all three. Reject any `||` between the gates.
+	assert.doesNotMatch(
+		expr,
+		/\|\|/,
+		'BYPASS_PAYWALL gate must AND its three conditions, not OR — any single check passing alone is unsafe.',
+	);
+});
+
+test('Mobile coach screen sends `x-supabase-authorization`, not `Authorization`', () => {
+	// Reason: production Lambda's Function URL is AWS_IAM-auth — CloudFront
+	// signs `Authorization` via sigv4, so forwarding the viewer JWT in
+	// that slot collides with the signature. The pass-2 fix (commit
+	// 46ea5b5) flipped the mobile client to send `x-supabase-authorization`
+	// matching the dev SvelteKit endpoint. Pinned because reverting to
+	// `Authorization` fails for every production user with no local-dev
+	// signal.
+	for (const path of [
+		'../mobile_android/lib/screens/coach_screen.dart',
+		'../mobile_ios/lib/screens/coach_screen.dart',
+	]) {
+		const source = read(path);
+		assert.match(
+			source,
+			/['"]x-supabase-authorization['"]/,
+			`${path} must send the user JWT in the x-supabase-authorization header — production Lambda OAC signs Authorization.`,
+		);
+	}
+});
+
+test('Mobile coach markdown allowlists http(s) + mailto schemes only', () => {
+	// Reason: flutter_markdown's default onTapLink calls url_launcher on
+	// every URI including `javascript:`, `file:`, `data:`. The web path
+	// strips those via DOMPurify; mobile didn't until pass-2 (commit
+	// 54ef7ce). The allowlist must include http + https + mailto only —
+	// adding `tel:` etc. would silently widen the surface.
+	for (const path of [
+		'../mobile_android/lib/screens/coach_screen.dart',
+		'../mobile_ios/lib/screens/coach_screen.dart',
+	]) {
+		const source = read(path);
+		const allowMatch = source.match(/allowedSchemes\s*=\s*\{([^}]*)\}/);
+		assert.ok(
+			allowMatch,
+			`${path} must declare an explicit allowedSchemes set for the coach onTapLink handler.`,
+		);
+		const set = allowMatch![1];
+		assert.match(set, /['"]http['"]/, `${path}: allowedSchemes must include 'http'.`);
+		assert.match(set, /['"]https['"]/, `${path}: allowedSchemes must include 'https'.`);
+		assert.match(set, /['"]mailto['"]/, `${path}: allowedSchemes must include 'mailto'.`);
+		// Hard rules — none of these may appear.
+		for (const banned of ['javascript', 'file', 'data', 'tel']) {
+			assert.doesNotMatch(
+				set,
+				new RegExp(`['"]${banned}['"]`),
+				`${path}: allowedSchemes must NOT include '${banned}' — see audit pass-2 commit 54ef7ce.`,
+			);
+		}
+	}
+});
+
+test('Watch clients carry no hardcoded SUPABASE_ANON_KEY default', () => {
+	// Reason: pass-2 hardening (commit 51046c2) cleared the local-stack
+	// publishable key out of both watch fallbacks. The literal still
+	// lives in git history, so a reverted "convenience default" lets
+	// an unprovisioned debug build silently authenticate against
+	// whichever stack the literal pointed at — including production
+	// after the value rotates. Empty defaults fail the network call
+	// loudly, which is the desired behaviour for a misconfigured build.
+	//
+	// Wear OS: build.gradle.kts must default SUPABASE_ANON_KEY to "".
+	// watchOS: SupabaseService.swift's `private var anonKey` must
+	// default to "".
+	const wearGradle = read('../watch_wear/android/app/build.gradle.kts');
+	assert.match(
+		wearGradle,
+		/SUPABASE_ANON_KEY['"\s)]+as\s+String\?\)\s*\n?\s*\?\:\s*""/,
+		'Wear OS build.gradle.kts must default SUPABASE_ANON_KEY to "" — see audit pass-2 commit 51046c2.',
+	);
+	// And no JWT-shaped literal anywhere in the file (catches a
+	// drive-by paste that re-introduces the hardcoded key).
+	assert.doesNotMatch(
+		wearGradle,
+		/eyJ[A-Za-z0-9_-]{20,}/,
+		'Wear OS build.gradle.kts must not contain any JWT-shaped literal — that pattern is a hardcoded supabase anon key.',
+	);
+	const watchSwift = read('../watch_ios/WatchApp/SupabaseService.swift');
+	assert.match(
+		watchSwift,
+		/private\s+var\s+anonKey\s*=\s*""/,
+		'watchOS SupabaseService.swift must default `anonKey` to "" — see audit pass-2 commit 51046c2.',
+	);
+	assert.doesNotMatch(
+		watchSwift,
+		/eyJ[A-Za-z0-9_-]{20,}/,
+		'watchOS SupabaseService.swift must not contain any JWT-shaped literal — that pattern is a hardcoded supabase anon key.',
+	);
+});
+
 test('backup restore strips server-managed profile fields', () => {
 	// Reason: 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
 	// trigger reject any write that touches subscription_tier /
