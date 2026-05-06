@@ -90,7 +90,19 @@
 	}
 
 	onMount(async () => {
+		// `auth.svelte.ts` flips loading=false before the async fetchUser
+		// resolves, so a hard reload onto /settings/account can mount
+		// with auth.user still null. The $state declarations above
+		// initialised from `auth.user?.X ?? ''` at module-evaluate time
+		// — empty if auth wasn't ready yet. Poll briefly so the form
+		// hydrates with the saved profile values before the user can
+		// type into an empty field and clobber them on save.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		if (!auth.user) return;
+		displayName = auth.user.display_name ?? '';
+		parkrunNumber = auth.user.parkrun_number ?? '';
 		// Load settings bag for DOB / HR fields.
 		const { data } = await supabase
 			.from('user_settings')
