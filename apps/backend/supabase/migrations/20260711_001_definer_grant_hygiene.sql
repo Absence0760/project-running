@@ -17,9 +17,16 @@
 --    with no independent security purpose. The Edge Function uses only
 --    `clip_track_for_user`; the helpers don't need to be callable.
 
-revoke execute on function is_route_visible_to(uuid, uuid) from public;
+-- Revoke from anon explicitly: Postgres treats `public` (the default
+-- role group meaning "all roles") and `anon` as independent grant
+-- targets. Supabase pre-grants EXECUTE on every function in the
+-- `public` schema to anon as a project-wide default; revoking from
+-- `public` alone leaves the explicit anon grant intact (regression
+-- caught by `rls_function_hygiene_test.sql` after this migration was
+-- written). Same for recompute_event_ranks.
+revoke execute on function is_route_visible_to(uuid, uuid) from public, anon;
 
-revoke execute on function recompute_event_ranks(uuid, timestamptz) from public;
+revoke execute on function recompute_event_ranks(uuid, timestamptz) from public, anon;
 
 revoke execute on function privacy_distance_m(float, float, float, float) from public, anon, authenticated;
 revoke execute on function privacy_in_any_zone(float, float, jsonb) from public, anon, authenticated;

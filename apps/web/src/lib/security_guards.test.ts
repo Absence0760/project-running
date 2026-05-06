@@ -455,6 +455,298 @@ test('Watch clients carry no hardcoded SUPABASE_ANON_KEY default', () => {
 	);
 });
 
+test('CloudFront CSP drops unsafe-eval and bounds XSS gadget surface', () => {
+	// Reason: pass-2 hardening (commit 624bc00) tightened the CSP on
+	// the CloudFront response-headers policy. unsafe-eval is gone (the
+	// static SvelteKit build does not eval); object-src 'none',
+	// base-uri 'self', form-action 'self', frame-ancestors 'none' all
+	// bound the surface an XSS gadget could reach. Reverting any one
+	// reopens a class of attack:
+	//   - object-src: SVG-embedded scripts via <object>/<embed>
+	//   - base-uri: <base href> redirect of every relative URL
+	//   - form-action: form data exfiltration to attacker-origin
+	//   - frame-ancestors: clickjack via <iframe> embed
+	const tf = read('../../infra/modules/web-stack/main.tf');
+	// Find the content_security_policy block.
+	const cspMatch = tf.match(
+		/content_security_policy\s*=\s*join\([^)]*?\[([\s\S]*?)\]\s*\)/m,
+	);
+	assert.ok(
+		cspMatch,
+		'Could not locate content_security_policy in infra/modules/web-stack/main.tf — has it been restructured?',
+	);
+	const csp = cspMatch![1];
+	assert.doesNotMatch(
+		csp,
+		/'unsafe-eval'/,
+		"CSP must not include 'unsafe-eval' — the static SvelteKit build does not eval. Pass-2 commit 624bc00.",
+	);
+	for (const directive of [
+		'object-src',
+		'base-uri',
+		'form-action',
+		'frame-ancestors',
+	]) {
+		assert.match(
+			csp,
+			new RegExp(directive),
+			`CSP must include the ${directive} directive — pass-2 commit 624bc00.`,
+		);
+	}
+	// Sentry browser SDK posts errors here — without this connect-src
+	// entry, every Sentry breadcrumb is silently CSP-blocked
+	// (regression caught by /audit/infra M2).
+	assert.match(
+		csp,
+		/\*\.ingest\.sentry\.io/,
+		'CSP connect-src must include https://*.ingest.sentry.io — Sentry browser SDK posts errors there.',
+	);
+});
+
+test('CloudFront Permissions-Policy disables sensors / payment / FLoC + Privacy Sandbox', () => {
+	// Reason: pass-2 commit 624bc00 added a Permissions-Policy header
+	// disabling APIs the app doesn't use. An XSS-injected
+	// `document.browsingTopics()` would otherwise execute and leak the
+	// user's interest cohort; same for accelerometer / geolocation
+	// (cross-origin contexts) / payment-request-API-driven phishing.
+	const tf = read('../../infra/modules/web-stack/main.tf');
+	const ppMatch = tf.match(
+		/header\s*=\s*"Permissions-Policy"[\s\S]*?value\s*=\s*"([^"]+)"/m,
+	);
+	assert.ok(
+		ppMatch,
+		'Could not locate the Permissions-Policy custom header in infra/modules/web-stack/main.tf.',
+	);
+	const policy = ppMatch![1];
+	for (const directive of [
+		'accelerometer',
+		'attribution-reporting',
+		'browsing-topics',
+		'camera',
+		'gyroscope',
+		'interest-cohort',
+		'magnetometer',
+		'microphone',
+		'payment',
+		'usb',
+	]) {
+		assert.match(
+			policy,
+			new RegExp(`${directive}=\\(\\)`),
+			`Permissions-Policy must disable ${directive} — pass-2 commit 624bc00.`,
+		);
+	}
+});
+
+test('Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only', () => {
+	// Reason: pass-1 /audit/infra H3 (commit 6614d89) flipped the
+	// Function URL from authorization_type=NONE to AWS_IAM and added
+	// a CloudFront OAC of type "lambda" that signs every request.
+	// Reverting any of these makes the .lambda-url.* hostname directly
+	// reachable by anyone — bypasses CloudFront, the WAF tier, and
+	// every CSP / per-IP guard the distribution applies.
+	const tf = read('../../infra/modules/web-stack/main.tf');
+	assert.match(
+		tf,
+		/aws_lambda_function_url[\s\S]*?authorization_type\s*=\s*"AWS_IAM"/,
+		'Lambda Function URL must use authorization_type=AWS_IAM — pass-1 /audit/infra H3.',
+	);
+	assert.match(
+		tf,
+		/aws_cloudfront_origin_access_control[\s\S]*?origin_access_control_origin_type\s*=\s*"lambda"/,
+		'CloudFront must have an origin_access_control of type "lambda" so it sigv4-signs every Function URL request.',
+	);
+	assert.match(
+		tf,
+		/aws_lambda_permission[\s\S]*?principal\s*=\s*"cloudfront\.amazonaws\.com"/,
+		'aws_lambda_permission must restrict principal to cloudfront.amazonaws.com (was * before pass-1 /audit/infra H3).',
+	);
+	assert.match(
+		tf,
+		/aws_lambda_permission[\s\S]*?function_url_auth_type\s*=\s*"AWS_IAM"/,
+		'aws_lambda_permission must declare function_url_auth_type=AWS_IAM.',
+	);
+});
+
+test('S3 site bucket lifecycle aborts incomplete multipart uploads', () => {
+	// Reason: pass-2 commit 624bc00 added an abort-incomplete-multipart
+	// lifecycle rule. Without it an interrupted deploy (CI killed
+	// mid-upload) leaks storage forever — multipart parts don't show
+	// in `aws s3 ls` so they're invisible to operators but accrue cost.
+	const tf = read('../../infra/modules/web-stack/main.tf');
+	assert.match(
+		tf,
+		/abort_incomplete_multipart_upload[\s\S]*?days_after_initiation\s*=\s*\d+/,
+		'site bucket must have an abort_incomplete_multipart_upload lifecycle rule — pass-2 commit 624bc00.',
+	);
+});
+
+test('OIDC deploy roles carry default Project / Stack / ManagedBy tags', () => {
+	// Reason: pass-2 commit 624bc00 synthesised default tags via a
+	// `oidc_tags` local so callers don't have to remember to set them.
+	// Cost-allocation reports + blast-radius audits depend on every
+	// resource in the OIDC stack carrying these — silent drift is the
+	// regression to catch.
+	const tf = read('../../infra/github-oidc/main.tf');
+	const localsMatch = tf.match(/locals\s*\{[\s\S]*?oidc_tags\s*=\s*merge\(\s*\{([\s\S]*?)\}/);
+	assert.ok(localsMatch, 'Could not locate oidc_tags merge() in infra/github-oidc/main.tf.');
+	const tags = localsMatch![1];
+	for (const key of ['Project', 'Stack', 'ManagedBy']) {
+		assert.match(
+			tags,
+			new RegExp(`${key}\\s*=`),
+			`oidc_tags local must include the ${key} default — pass-2 commit 624bc00.`,
+		);
+	}
+	// Each deploy role must apply Environment via merge so prod /
+	// preview spend is distinguishable.
+	assert.match(
+		tf,
+		/aws_iam_role"\s+"deploy_prod"[\s\S]*?tags\s*=\s*merge\(local\.oidc_tags,\s*\{\s*Environment\s*=\s*"prod"/,
+		'deploy_prod role must merge oidc_tags with Environment="prod".',
+	);
+	assert.match(
+		tf,
+		/aws_iam_role"\s+"deploy_preview"[\s\S]*?tags\s*=\s*merge\(local\.oidc_tags,\s*\{\s*Environment\s*=\s*"preview"/,
+		'deploy_preview role must merge oidc_tags with Environment="preview".',
+	);
+});
+
+test('Coach endpoint enforces a 256 KB body cap on both wrappers', () => {
+	// Reason: pass-2 commit a2ea656 added COACH_BODY_LIMIT_BYTES at both
+	// wrappers — SvelteKit dev /api/coach/+server.ts AND the production
+	// Lambda lambda/coach/src/index.ts. Pinned because the two wrappers
+	// are textually independent and a future writer might mirror the
+	// cap on one but not the other.
+	//
+	// The dev wrapper checks `arrayBuffer.byteLength` (true post-
+	// decompression byte count); the Lambda checks `bodyStr.length` on
+	// the already-decoded string. The discrepancy is intentional:
+	// Function URL events arrive with `body` already decoded by the
+	// runtime, so byteLength has no meaning at that layer. What
+	// matters is that BOTH wrappers fail-fast before the request
+	// reaches the streaming handler.
+	for (const path of [
+		'src/routes/api/coach/+server.ts',
+		'lambda/coach/src/index.ts',
+	]) {
+		const source = read(path);
+		assert.match(
+			source,
+			/COACH_BODY_LIMIT_BYTES\s*=\s*256\s*\*\s*1024/,
+			`${path} must declare COACH_BODY_LIMIT_BYTES = 256 * 1024 — pass-2 commit a2ea656.`,
+		);
+		assert.match(
+			source,
+			/>\s*COACH_BODY_LIMIT_BYTES/,
+			`${path} must compare an incoming-body size against COACH_BODY_LIMIT_BYTES.`,
+		);
+	}
+});
+
+test('Coach 401 / 503 error responses don\'t leak provider / GoTrue internals', () => {
+	// Reason: pass-2 commits 2d2a24a + a2ea656 stripped operator hints
+	// from the user-visible 401 / 503 messages. The 503 used to echo
+	// the raw COACH_PROVIDER env-var name to any unauthenticated
+	// caller; the 401 used to return GoTrue's error string which can
+	// carry JWT-shape details an attacker can use as a probe oracle.
+	// Both are now generic on the wire and verbose only in
+	// console.error / CloudWatch.
+	const handler = read('src/lib/coach/handler.ts');
+	// 503: must NOT contain a string-template that interpolates the
+	// provider name into the user-facing error.
+	assert.doesNotMatch(
+		handler,
+		/jsonError\(503,\s*[`'"][^'"`]*\$\{[^}]*provider[^}]*\}/,
+		'503 user-facing message must not interpolate the provider value (operator hint goes to console.error).',
+	);
+	// 401: the user-facing string must be the static "not
+	// authenticated" — no GoTrue error spread into the body.
+	assert.match(
+		handler,
+		/jsonError\(401,\s*['"]not authenticated['"]\s*\)/,
+		'401 must return the static "not authenticated" — pass-2 commit a2ea656 closed the GoTrue oracle.',
+	);
+});
+
+test('Coach pre-handshake daily-limit placeholder matches the server free cap', () => {
+	// Reason: pass-2 commit a2ea656 fixed a drift where the web placeholder
+	// said "10 of 10 remaining" while the server returned "5". The
+	// placeholder matters because users see it for the half-second
+	// before the SSE meta event lands. Pinned so a future tier change
+	// (5→8) updates both surfaces in lockstep with the server.
+	// Source of truth: TIER_LIMITS.free.dailyLimit in coach/types.ts.
+	const types = read('src/lib/coach/types.ts');
+	const tierMatch = types.match(/free:\s*\{[^}]*dailyLimit:\s*(\d+)/);
+	assert.ok(tierMatch, 'Could not extract TIER_LIMITS.free.dailyLimit from coach/types.ts.');
+	const serverCap = tierMatch![1];
+	assert.equal(serverCap, '5', 'Free dailyLimit should be 5 (audit cost-controls baseline).');
+	// Web placeholder.
+	const chat = read('src/lib/components/CoachChat.svelte');
+	assert.match(
+		chat,
+		new RegExp(`DEFAULT_DAILY_LIMIT\\s*=\\s*${serverCap}\\b`),
+		`CoachChat.svelte DEFAULT_DAILY_LIMIT must match the server cap (${serverCap}) — pass-2 commit a2ea656.`,
+	);
+	// Mobile placeholder, both Dart twins.
+	for (const p of [
+		'../mobile_android/lib/screens/coach_screen.dart',
+		'../mobile_ios/lib/screens/coach_screen.dart',
+	]) {
+		const dart = read(p);
+		assert.match(
+			dart,
+			new RegExp(`_defaultDailyLimit\\s*=\\s*${serverCap}\\b`),
+			`${p} _defaultDailyLimit must match the server cap (${serverCap}).`,
+		);
+	}
+});
+
+test('clip-public-track rate-limit calls fail closed on RPC error', () => {
+	// Reason: pass-3 commit d10deeb flipped both buckets (per-user and
+	// per-IP-anon) to failClosed: true. The anon path is the abuse
+	// surface — a transient DB blip on the rate-limit RPC must not
+	// remove the only IP-level guard. fail-open here would let an
+	// attacker bypass the cap during any DB hiccup.
+	const ef = read('../backend/supabase/functions/clip-public-track/index.ts');
+	// Find every checkRateLimit call and assert each carries
+	// failClosed: true. Use a regex that captures the option block.
+	const calls = [...ef.matchAll(/checkRateLimit\([\s\S]*?\)/g)];
+	assert.ok(
+		calls.length >= 2,
+		'Expected at least two checkRateLimit calls in clip-public-track (per-user + anon).',
+	);
+	for (const m of calls) {
+		assert.match(
+			m[0],
+			/failClosed:\s*true/,
+			'Every checkRateLimit call in clip-public-track must pass failClosed: true — pass-3 commit d10deeb.',
+		);
+	}
+});
+
+test('export-data validates track_url against the canonical Storage path', () => {
+	// Reason: pass-2 commit 978b4c9 added a runtime backstop ahead of
+	// the service-role Storage download. RLS already prevents cross-
+	// user reads, but a corrupt or legacy row would have fed an
+	// unconstrained string into the downloader (path traversal via
+	// `../../other-user/...` if the bucket-prefix policy regressed).
+	// 20260621_001 added a CHECK constraint on the column shape — this
+	// assertion is the runtime backstop that catches a row that
+	// somehow bypasses the CHECK.
+	const ef = read('../backend/supabase/functions/export-data/index.ts');
+	assert.match(
+		ef,
+		/expectedTrackUrl\s*=\s*`\$\{[^}]*user_id[^}]*\}\/\$\{[^}]*\.id[^}]*\}\.json\.gz`/,
+		'export-data must build expectedTrackUrl as `${user_id}/${run_id}.json.gz` — pass-2 commit 978b4c9.',
+	);
+	assert.match(
+		ef,
+		/track_url\s*!==\s*expectedTrackUrl/,
+		'export-data must skip rows whose track_url does not match the canonical pattern.',
+	);
+});
+
 test('backup restore strips server-managed profile fields', () => {
 	// Reason: 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
 	// trigger reject any write that touches subscription_tier /

@@ -1103,9 +1103,15 @@ Pinned in place by `apps/mobile_android/test/fitness_test.dart#thresholdPaceSecP
 
 ---
 
-## 55. Column-level `revoke select` requires also revoking the table-level grant
+## 55. Column- and role-level `revoke` is wider than it looks: explicit grants survive
 
-Two migrations — `20260707_001_user_profiles_column_lockdown.sql` and `20260723_001_events_meet_point_anon_revoke.sql` — were originally written as `revoke select (col1, col2, …) on <table> from <role>`. Both were silent no-ops: when the role still holds a table-level `select` grant, Postgres applies the broadest grant available, so a column-level revoke has nothing to bite. The bug was caught by the regression-test pass that introduced `rls_events_meet_point_test.sql`; the same pattern in the older user_profiles migration was discovered by inspection and fixed alongside.
+Three migrations across pass-2 and pass-3 had to be rewritten because the original `revoke` shape was too narrow:
+
+- `20260707_001_user_profiles_column_lockdown.sql` — `revoke select (col1, col2, …) on <table> from <role>`. Silent no-op: the role still held a table-level SELECT, which Postgres applies as the broadest available grant.
+- `20260723_001_events_meet_point_anon_revoke.sql` — same shape, same outcome.
+- `20260711_001_definer_grant_hygiene.sql` — `revoke execute on function <fn> from public`. Silent no-op for anon / authenticated: Supabase pre-grants EXECUTE on every function in the `public` schema to those two roles as a project-wide default. Revoking from `public` (the catch-all role group meaning "all roles by default") leaves the explicit role grants intact.
+
+Each was caught by adding a regression test that asserted the negative invariant (anon SELECT on the column raises 42501 / `has_function_privilege('anon', …)` is false), then fixed by widening the revoke / re-shaping the grant.
 
 **The correct shape** for selectively hiding columns from a role:
 
