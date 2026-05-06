@@ -9,6 +9,7 @@
 		sourceColor,
 	} from '$lib/mock-data';
 	import { fetchRuns, deleteRuns } from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { goto } from '$app/navigation';
@@ -247,6 +248,12 @@
 	}
 
 	$effect(() => {
+		// Don't fetch before the auth store has hydrated. fetchRuns
+		// reads `auth.user?.id` and returns [] if it's null — which
+		// would race on cold loads where the page mounts before the
+		// auth cookie is processed and produce a permanent "No runs
+		// found" state. Same pattern the dashboard's onMount uses.
+		if (auth.loading) return;
 		if (fetchMode !== lastFetchMode) {
 			lastFetchMode = fetchMode;
 			loadInitial();
