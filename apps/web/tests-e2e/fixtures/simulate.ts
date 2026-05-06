@@ -142,6 +142,13 @@ export async function setUserSetting(
 	}
 }
 
+export async function deleteRoute(routeId: string): Promise<void> {
+	const { error } = await getAdminClient().from('routes').delete().eq('id', routeId);
+	if (error) {
+		throw new Error(`simulate.deleteRoute failed: ${error.message}`);
+	}
+}
+
 export async function insertEvent(opts: {
 	club_id: string;
 	created_by: string;
