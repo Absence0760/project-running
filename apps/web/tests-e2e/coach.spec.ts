@@ -153,4 +153,67 @@ test.describe('/coach', () => {
 		await expect(popover).toHaveCount(0);
 		await expect(planTrigger).toContainText('Sydney Half 2026');
 	});
+
+	test('send → mocked SSE response streams into an assistant bubble', async ({
+		page
+	}) => {
+		// The headline AI feature: type a question → Send → POST
+		// /api/coach → SSE stream → assistant bubble fills with the
+		// streamed text. The real handler hits Anthropic / OpenAI which
+		// would be flaky + costly in CI, so intercept the POST and
+		// reply with a hand-rolled SSE body matching the meta / token /
+		// done events that handleSseEvent in CoachChat.svelte expects.
+		// Pins the read-stream + bubble-update pipeline against
+		// regressions in the parser, the optimistic placeholder, or
+		// the meta-id stitching.
+		const ASSISTANT_REPLY = 'Run easy today, target 5:30/km for 6 km.';
+
+		await page.route('**/api/coach', async (route) => {
+			const body = [
+				'event: meta',
+				`data: ${JSON.stringify({
+					user_message_id: 'e2e-user-msg',
+					tier: 'free',
+					limits: { daily_limit: 20 }
+				})}`,
+				'',
+				'event: token',
+				`data: ${JSON.stringify({ text: ASSISTANT_REPLY })}`,
+				'',
+				'event: done',
+				`data: ${JSON.stringify({ assistant_message_id: 'e2e-assistant-msg' })}`,
+				''
+			].join('\n');
+
+			await route.fulfill({
+				status: 200,
+				headers: {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache'
+				},
+				body
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+
+		const userText = `e2e-coach ${Date.now()} pace?`;
+		await composer.fill(userText);
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// The streamed token lands in a `.bubble` (the assistant one
+		// — non-user). Constrain to .bubble so the conversation-history
+		// sidebar's `.thread-title` (which mirrors the user message)
+		// doesn't confuse the locator.
+		await expect(
+			page.locator('.bubble', { hasText: ASSISTANT_REPLY })
+		).toBeVisible({ timeout: 10_000 });
+
+		// User's bubble (the one with .user class) holds the prompt.
+		await expect(
+			page.locator('.bubble.user', { hasText: userText })
+		).toBeVisible();
+	});
 });

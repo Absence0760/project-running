@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchIntegrations, connectIntegration, disconnectIntegration } from '$lib/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import {
@@ -46,6 +47,14 @@
 	}
 
 	onMount(async () => {
+		// fetchIntegrations returns [] silently when auth.user is null,
+		// so a hard reload during the auth race rendered every row as
+		// "Connect" (unconnected) even for runner who has parkrun +
+		// strava connected per seed. Same poll pattern as /settings/
+		// preferences + /settings/devices + /settings/account.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		await refreshIntegrations();
 
 		// OAuth callback: Strava redirects back to this page with a

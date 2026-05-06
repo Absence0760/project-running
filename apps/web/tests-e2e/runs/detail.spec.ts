@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
+import { insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -153,5 +154,52 @@ test.describe('/runs/[id]', () => {
 		await expect(
 			page.getByRole('heading', { name: originalTitle, level: 1 })
 		).toBeVisible();
+	});
+
+	test('delete-from-detail: trash icon → confirm → redirect to /runs, row gone', async ({
+		page
+	}) => {
+		// runs/list.spec.ts pins the bulk-delete from the list page.
+		// This pins the single-run delete from the detail page —
+		// distinct UI (the .icon-btn.danger trash next to the share /
+		// edit affordances), distinct callsite for deleteRun, distinct
+		// post-delete navigation (goto('/runs') instead of staying on
+		// the list).
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 4_000,
+			duration_s: 1_200,
+			is_public: false
+		});
+
+		await page.goto(`/runs/${planted}`);
+		await page.waitForLoadState('networkidle');
+		await expect(page.getByRole('heading', { level: 1 }))
+			.toBeVisible({ timeout: 10_000 });
+
+		// Trash button is icon-only with title="Delete".
+		await page.locator('button[title="Delete"]').click();
+		const dialog = page.locator('.modal');
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		// confirmDelete() calls deleteRun + goto('/runs').
+		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
+
+		// Sanity: the run's storage row is gone in the DB. Re-listing
+		// would require driving the date filter to All-time which is
+		// flaky here (the runs-list filter UI is exercised in
+		// runs/list.spec.ts already). The DB state is the contract —
+		// deleteRun under the hood deletes the row, and the goto to
+		// /runs proves the handler completed without throwing.
+		const adminCheck = await import('../fixtures/local-supabase').then((m) =>
+			m.getAdminClient()
+		);
+		const { data: stillThere } = await adminCheck
+			.from('runs')
+			.select('id')
+			.eq('id', planted)
+			.maybeSingle();
+		expect(stillThere).toBeNull();
 	});
 });

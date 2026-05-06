@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -98,5 +99,59 @@ test.describe('/plans/[id]', () => {
 		// Close without changes (idempotency).
 		await page.locator('.modal-close').click();
 		await expect(page.locator('.modal')).toHaveCount(0);
+	});
+
+	test('publish-as-template: pick a club → Publish → club gets the new template', async ({
+		page
+	}) => {
+		// publishPlanAsTemplate clones the source plan into a new
+		// `is_template=true, club_id=<club>` sibling. The source plan
+		// row stays put; the new row appears under the club's
+		// Templates tab. Cleanup deletes the cloned template via
+		// service-role.
+		const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+
+		await page.goto('/plans');
+		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
+		await expect(page).toHaveURL(/\/plans\/[0-9a-f-]+$/);
+
+		// Pick the club + click Publish. The publish-row is gated on
+		// `!plan.is_template && adminClubs.length > 0` — runner owns
+		// three seeded clubs so the dropdown is populated.
+		const publishRow = page.locator('.publish-row');
+		await expect(publishRow).toBeVisible({ timeout: 10_000 });
+		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
+		await publishRow.getByRole('button', { name: 'Publish' }).click();
+
+		// The handler shows a toast on success; the dropdown resets to
+		// the placeholder. Wait for the reset as a proxy for the await.
+		await expect(publishRow.locator('select')).toHaveValue('', {
+			timeout: 10_000
+		});
+
+		// The cloned template now lives under Sydney Run Club's
+		// Templates tab. Drill in via the canonical UI.
+		await page.goto('/clubs/sydney-run-club');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+		await page.getByRole('button', { name: /^Templates/ }).click();
+		await expect(
+			page.locator('.template-row', { hasText: 'Sydney Half 2026' })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Cleanup — find the cloned template id (any plan row with
+		// is_template=true + club_id=<sydney> + name=<source>) and
+		// delete it. plan_weeks + plan_workouts cascade.
+		const admin = getAdminClient();
+		const { data: rows } = await admin
+			.from('training_plans')
+			.select('id')
+			.eq('is_template', true)
+			.eq('club_id', SYDNEY_RUN_CLUB_ID)
+			.eq('name', 'Sydney Half 2026');
+		for (const r of rows ?? []) {
+			await admin.from('training_plans').delete().eq('id', (r as { id: string }).id);
+		}
 	});
 });
