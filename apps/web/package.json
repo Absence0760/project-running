@@ -10,10 +10,13 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"check:check-constraints": "node scripts/check_constraint_unions.mjs",
-		"test:unit": "tsx --test src/lib/*.test.ts"
+		"test:unit": "tsx --test src/lib/*.test.ts",
+		"test:e2e": "playwright test --config=tests-e2e/playwright.config.ts",
+		"test:e2e:ui": "playwright test --config=tests-e2e/playwright.config.ts --ui"
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "1.2.69",
+		"@playwright/test": "^1.59.1",
 		"@sveltejs/adapter-static": "3.0.10",
 		"@sveltejs/adapter-vercel": "6.3.3",
 		"@sveltejs/kit": "2.59.0",

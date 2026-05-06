@@ -20,6 +20,13 @@ out/
 # from package-lock.json — CI uses npm.
 apps/web/pnpm-lock.yaml
 
+# Playwright (apps/web/tests-e2e)
+apps/web/tests-e2e/.auth/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+apps/web/playwright/.cache/
+
 # Environment
 .env
 .env.local
