@@ -21,26 +21,32 @@ export type SeededUser = {
 
 const STORAGE_DIR = '.auth';
 
+// All three users + their UUIDs are pre-existing in seed.sql — User B
+// is alex@test.com (joined club fixtures, two-way follow with runner),
+// User C is morgan@test.com (mutual follow with runner). The e2e seed
+// extension ensures alex has both a public and a private run, upgrades
+// morgan's tier to pro, and configures a privacy zone on runner. Keep
+// these literals in lockstep with seed.sql.
 export const USER_A: SeededUser = {
 	email: 'runner@test.com',
 	password: 'testtest',
-	id: '11111111-1111-1111-1111-111111111111',
+	id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
 	tier: 'free',
 	storageStatePath: `${STORAGE_DIR}/user-a.json`
 };
 
 export const USER_B: SeededUser = {
-	email: 'friend@test.com',
+	email: 'alex@test.com',
 	password: 'testtest',
-	id: '22222222-2222-2222-2222-222222222222',
+	id: 'b2c3d4e5-f6a7-8901-bcde-f23456789012',
 	tier: 'free',
 	storageStatePath: `${STORAGE_DIR}/user-b.json`
 };
 
 export const USER_C_PRO: SeededUser = {
-	email: 'pro@test.com',
+	email: 'morgan@test.com',
 	password: 'testtest',
-	id: '33333333-3333-3333-3333-333333333333',
+	id: 'c3d4e5f6-a7b8-9012-cdef-345678901234',
 	tier: 'pro',
 	storageStatePath: `${STORAGE_DIR}/user-c-pro.json`
 };

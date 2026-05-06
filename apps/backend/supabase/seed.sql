@@ -604,6 +604,86 @@ INSERT INTO user_follows (follower_id, followee_id) VALUES
   ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
 ON CONFLICT DO NOTHING;
 
+-- ─────────────────────── e2e fixtures ───────────────────────
+--
+-- Additions for the Playwright e2e suite (apps/web/tests-e2e/).
+-- The three users runner / alex / morgan and their public runs are
+-- already seeded above; this section only fills the gaps the suite
+-- needs:
+--
+--   1. A private run on alex's account so the cross-user-isolation
+--      test has a target to assert "non-owner cannot see this".
+--   2. A privacy_zones entry on runner's settings so the zones-picker
+--      UI has content + non-owner share-page tests have something to
+--      assert clipping against.
+--   3. Morgan upgraded from 'free' to 'pro' so paywall-tier tests
+--      have a positive control. The lock_subscription_columns trigger
+--      bypasses on the empty-role context that seed.sql runs in
+--      (request.jwt.claim.role is unset → bypasses; see migration
+--      20260429_001).
+--   4. A kudos + comment from alex on one of runner's public runs so
+--      the cross-user engagement-chain UI surfaces have content
+--      without needing to drive the action through the app.
+--
+-- All `ON CONFLICT DO NOTHING` so the section is idempotent — re-runs
+-- via `supabase db reset` don't trip unique-constraint errors.
+
+-- 1. Alex's private run.
+INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, metadata)
+VALUES (
+  'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+  'b2c3d4e5-f6a7-8901-bcde-f23456789012',
+  '2026-04-25T07:00:00Z',
+  2400, 7500, 'app',
+  false,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 156,
+    'perceived_effort', 5,
+    'title', 'Recovery jog (private)'
+  )
+) ON CONFLICT (id) DO NOTHING;
+
+-- 2. Privacy zone on runner's settings. The existing INSERT at the top
+-- of seed.sql sets the rest of runner's prefs; we merge the zone in
+-- via prefs || jsonb_build_object so we don't lose date_of_birth /
+-- HR config / etc.
+UPDATE user_settings
+   SET prefs = prefs || jsonb_build_object(
+     'privacy_zones', jsonb_build_array(
+       jsonb_build_object(
+         'lat', -37.8136, 'lng', 144.9631, 'radius_m', 200,
+         'label', 'home'
+       )
+     )
+   )
+ WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+-- 3. Morgan upgraded to pro.
+UPDATE user_profiles
+   SET subscription_tier = 'pro'
+ WHERE id = 'c3d4e5f6-a7b8-9012-cdef-345678901234';
+
+-- 4. Cross-user engagement on one of runner's public runs. Pick the
+-- most recent so the kudos / comment surface on the runner's profile
+-- + on the public share page.
+INSERT INTO run_kudos (user_id, run_id)
+SELECT 'b2c3d4e5-f6a7-8901-bcde-f23456789012', id
+  FROM runs
+ WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+   AND is_public = true
+ ORDER BY started_at DESC
+ LIMIT 1
+ON CONFLICT DO NOTHING;
+
+INSERT INTO run_comments (run_id, author_id, body)
+SELECT id, 'b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Strong work — that pace looked easy at the end!'
+  FROM runs
+ WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+   AND is_public = true
+ ORDER BY started_at DESC
+ LIMIT 1;
+
 -- ─────────────────────── Regression tests ───────────────────────
 --
 -- Inline assertions that fire on every `supabase db reset`. These
