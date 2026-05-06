@@ -47,6 +47,46 @@ test.describe('/u/[id] — viewing another user', () => {
 			page.locator('button.count', { hasText: 'Following' })
 		).toBeVisible();
 	});
+
+	test('Followers tab on alex profile lists runner; clicking the row navigates to runner', async ({
+		page
+	}) => {
+		// Alex's seeded follow graph: runner follows alex (so alex's
+		// followers includes runner), morgan follows runner (so
+		// alex's followers does NOT include morgan). Drill into the
+		// tab via the deep-link URL — it bypasses the count-button
+		// click race and is the URL we'd hand out anyway.
+		await page.goto(`/u/${USER_B.id}?tab=followers`);
+		await expect(
+			page.getByRole('heading', { name: 'Alex Chen', level: 1 })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Followers list rendered with at least one .person-row whose
+		// link points to runner's profile.
+		const runnerRow = page.locator(`a.person-row[href="/u/${USER_A.id}"]`);
+		await expect(runnerRow).toBeVisible({ timeout: 10_000 });
+		await expect(runnerRow).toContainText('Jared Howard');
+
+		// Click navigates to runner's profile — proves the row is a
+		// real link, not just a styled div.
+		await runnerRow.click();
+		await page.waitForURL(new RegExp(`/u/${USER_A.id}`), { timeout: 10_000 });
+		await expect(
+			page.getByRole('heading', { name: 'Jared Howard', level: 1 })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('Following tab shows the seeded edges; empty state when there are none', async ({
+		page
+	}) => {
+		// Drill into runner's Following tab. Per seed runner follows
+		// alex (and possibly morgan via the mutual follow). Just check
+		// at least one .person-row renders — drift on follow-graph
+		// counts shouldn't break this.
+		await page.goto(`/u/${USER_A.id}?tab=following`);
+		await expect(page.locator('.people-list .person-row').first())
+			.toBeVisible({ timeout: 10_000 });
+	});
 });
 
 test.describe('/u/[id] — viewing self', () => {

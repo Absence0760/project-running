@@ -11,6 +11,15 @@
 	let errorMsg = $state<string | null>(null);
 
 	onMount(async () => {
+		// Auth-race shape: a hard reload onto the invite URL races
+		// auth.loading → false vs auth.user populating. Without the
+		// poll, an authenticated user clicking an invite link from
+		// email landed on the "Sign in to accept this invite" branch
+		// even though they were signed in. Same poll pattern as the
+		// other settings / dashboard / clubs pages.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		if (!auth.loggedIn) {
 			status = 'not-authed';
 			return;
