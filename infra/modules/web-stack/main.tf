@@ -395,9 +395,11 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         # OAuth avatar origins (lh3.googleusercontent.com from Google
         # sign-in, Apple's id.apple.com variants) plus Supabase
         # Storage signed URLs (run-photos bucket bytes) plus MapTiler
-        # tile previews. data: is needed for the SvelteKit
-        # icon-component inline SVGs.
-        "img-src 'self' data: https://*.supabase.co https://*.maptiler.com https://lh3.googleusercontent.com https://*.appleid.apple.com",
+        # tile previews. `data:image/svg+xml` covers the SvelteKit
+        # icon-component inline SVGs without enabling
+        # `data:text/html` (which a future {@html} regression could
+        # smuggle through into a navigation context).
+        "img-src 'self' data:image/svg+xml https://*.supabase.co https://*.maptiler.com https://lh3.googleusercontent.com https://*.appleid.apple.com",
         "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self' data:",
@@ -432,8 +434,13 @@ resource "aws_cloudfront_response_headers_policy" "security" {
       # geolocation is allowed for the first-party origin only —
       # RouteBuilder, PrivacyZonePicker, RouteExplorer, and
       # /routes/new all call navigator.geolocation. Everything else
-      # the app doesn't use stays denied.
-      value    = "accelerometer=(), camera=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+      # the app doesn't use stays denied. The `interest-cohort=()`
+      # directive is the FLoC original; the rest disable the Privacy
+      # Sandbox successors (Topics API, Protected Audience,
+      # Attribution Reporting, Private Aggregation). Without these,
+      # an XSS-injected `document.browsingTopics()` call would
+      # execute and exfiltrate the user's interest cohort.
+      value    = "accelerometer=(), attribution-reporting=(), browsing-topics=(), camera=(), geolocation=(self), gyroscope=(), interest-cohort=(), join-ad-interest-group=(), magnetometer=(), microphone=(), payment=(), private-aggregation=(), run-ad-auction=(), usb=()"
       override = true
     }
   }

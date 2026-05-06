@@ -1066,6 +1066,19 @@ void main() {
         reason: 'race_controller.dart must not call clipPointsToZones — '
             'the DB trigger is the single line of defence.',
       );
+      // Audit pass 3 widened this check: lib/privacy.dart exposes both
+      // `isInAnyZone` (point-membership) and `clipPointsToZones`
+      // (clipping). Both client-side calls would pull zones onto the
+      // device, which is exactly what the trigger-only contract
+      // forbids.
+      expect(
+        source.contains('isInAnyZone'),
+        isFalse,
+        reason: 'race_controller.dart must not call isInAnyZone — '
+            'fetching the broadcaster\'s zones to the client (which is '
+            'what isInAnyZone requires) defeats the trigger-only '
+            'trust contract documented in decisions §33.',
+      );
     });
   });
 

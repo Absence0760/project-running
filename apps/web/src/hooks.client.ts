@@ -17,12 +17,46 @@ function redactSignedUrl(url: string): string {
 	return q === -1 ? url : url.slice(0, q) + '?<redacted>';
 }
 
-function redactBreadcrumb<T extends { data?: Record<string, unknown> }>(b: T): T {
+function redactBreadcrumb<T extends { category?: string; message?: string; data?: Record<string, unknown> }>(b: T): T {
 	const u = b.data?.url;
 	if (typeof u === 'string') {
 		b.data!.url = redactSignedUrl(u);
 	}
+	// `console` breadcrumbs carry the log message in `message` and
+	// `data.arguments`. apps/web/src/lib/data.ts:369,384 log Storage
+	// paths via console.warn on delete-failure paths; redact any
+	// occurrence of a signed-URL substring.
+	if (b.category === 'console' && typeof b.message === 'string') {
+		b.message = redactSignedUrl(b.message);
+	}
 	return b;
+}
+
+interface SentrySpanLike {
+	data?: Record<string, unknown>;
+}
+interface SentryEventWithSpans {
+	transaction?: string;
+	spans?: SentrySpanLike[];
+	request?: { url?: string };
+}
+
+function redactEventSignedUrls(event: SentryEventWithSpans): SentryEventWithSpans {
+	if (typeof event.transaction === 'string') {
+		event.transaction = redactSignedUrl(event.transaction);
+	}
+	if (event.request?.url) {
+		event.request.url = redactSignedUrl(event.request.url);
+	}
+	if (Array.isArray(event.spans)) {
+		for (const s of event.spans) {
+			const u = s.data?.url;
+			if (typeof u === 'string') {
+				s.data!.url = redactSignedUrl(u);
+			}
+		}
+	}
+	return event;
 }
 
 if (!dev && dsn) {
@@ -33,15 +67,18 @@ if (!dev && dsn) {
 		tracesSampleRate: 0.1,
 		replaysSessionSampleRate: 0,
 		replaysOnErrorSampleRate: 0,
-		beforeBreadcrumb: (breadcrumb) =>
-			breadcrumb.category === 'fetch' || breadcrumb.category === 'xhr'
-				? redactBreadcrumb(breadcrumb)
-				: breadcrumb,
-		beforeSendTransaction: (event) => {
-			const tx = event.transaction;
-			if (typeof tx === 'string') event.transaction = redactSignedUrl(tx);
-			return event;
+		beforeBreadcrumb: (breadcrumb) => {
+			if (
+				breadcrumb.category === 'fetch' ||
+				breadcrumb.category === 'xhr' ||
+				breadcrumb.category === 'console'
+			) {
+				return redactBreadcrumb(breadcrumb);
+			}
+			return breadcrumb;
 		},
+		beforeSend: (event) => redactEventSignedUrls(event as SentryEventWithSpans) as typeof event,
+		beforeSendTransaction: (event) => redactEventSignedUrls(event as SentryEventWithSpans) as typeof event,
 	});
 }
 
