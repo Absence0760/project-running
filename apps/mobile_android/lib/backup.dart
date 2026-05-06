@@ -190,6 +190,16 @@ class BackupService {
       try {
         if (profile['profile'] is Map<String, dynamic>) {
           final row = Map<String, dynamic>.from(profile['profile'] as Map);
+          // Strip server-managed fields. subscription_tier /
+          // subscription_at are managed by the RevenueCat webhook;
+          // parkrun_number is bound to the live integration row. The
+          // 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
+          // trigger reject these for non-service-role callers anyway,
+          // but stripping here means the rest of the profile
+          // restores cleanly instead of the upsert silently failing.
+          row.remove('subscription_tier');
+          row.remove('subscription_at');
+          row.remove('parkrun_number');
           row['id'] = uid;
           await _client.from('user_profiles').upsert(row);
           result.profileRestored = true;

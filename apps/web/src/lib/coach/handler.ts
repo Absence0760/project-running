@@ -28,6 +28,7 @@ import {
 import { streamAnthropic, streamOpenAI } from './providers';
 import { COACH_SYSTEM_PROMPT } from './system_prompt';
 import {
+	PRO_HOURLY_RATE_LIMIT,
 	TIER_LIMITS,
 	emptyUsage,
 	type CoachConfig,
@@ -70,18 +71,36 @@ export async function handleCoach(
 	}
 
 	// Bound the message-list size in addition to the byte cap on the
-	// raw payload. Caps `messages.length` and per-message `content`
-	// length so a malicious caller can't smuggle a single 250 KB
-	// message past the wrapper-level byte cap (which is mostly an
-	// overall sanity check) and force the provider call to spend
-	// unbounded tokens on a per-request basis.
-	if (Array.isArray(body.messages) === false || body.messages.length > 100) {
+	// raw payload. Per-message caps differ by role:
+	//   - user input is bounded tightly (anti-abuse); legitimate
+	//     planning prompts rarely exceed 4 KB.
+	//   - assistant output is bounded loosely; the model can emit a
+	//     full 16-week plan as one message that exceeds 4 KB
+	//     trivially. Conflating them caused conversation resumption
+	//     to break for power users (audit pass 3 finding).
+	//
+	// The list-length and aggregate-content caps still bound the
+	// total prompt token cost regardless of role mix.
+	const MAX_MESSAGES = 100;
+	const MAX_USER_CONTENT_BYTES = 8 * 1024;
+	const MAX_ASSISTANT_CONTENT_BYTES = 64 * 1024;
+	const MAX_TOTAL_CONTENT_BYTES = 512 * 1024;
+	if (Array.isArray(body.messages) === false || body.messages.length > MAX_MESSAGES) {
 		return jsonError(400, 'invalid messages');
 	}
+	let totalContent = 0;
 	for (const m of body.messages) {
-		if (typeof m?.content !== 'string' || m.content.length > 16_000) {
+		if (typeof m?.content !== 'string') {
 			return jsonError(400, 'invalid messages');
 		}
+		const cap = m.role === 'assistant' ? MAX_ASSISTANT_CONTENT_BYTES : MAX_USER_CONTENT_BYTES;
+		if (m.content.length > cap) {
+			return jsonError(400, 'invalid messages');
+		}
+		totalContent += m.content.length;
+	}
+	if (totalContent > MAX_TOTAL_CONTENT_BYTES) {
+		return jsonError(400, 'invalid messages');
 	}
 
 	const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
@@ -112,6 +131,13 @@ export async function handleCoach(
 				p_user_id: authUser.id,
 			});
 			usedToday = typeof newCount === 'number' ? newCount : 0;
+			// `increment_coach_usage` returns the count AFTER incrementing.
+			// `> dailyLimit` means messages 1..5 (= dailyLimit) all ran;
+			// the 6th increment lands at `usedToday = 6`, fails this gate,
+			// and no provider call streams. The counter ends at 6 on a
+			// rejected attempt — cosmetic, but the rejection semantics
+			// match the "5 messages per day" contract documented in
+			// paywall.md.
 			if (usedToday > TIER_LIMITS.free.dailyLimit) {
 				return {
 					kind: 'json',
@@ -128,6 +154,44 @@ export async function handleCoach(
 						tier,
 					}),
 				};
+			}
+		} else {
+			// Pro tier: per-user-id hourly rate limit. dailyLimit is
+			// unlimited so a stolen session token could otherwise sustain
+			// max-concurrency saturation against Anthropic's API. Per
+			// audit pass 3 — bounds spend at ~60 turns / hour / Pro
+			// account.
+			//
+			// check_rate_limit returns SETOF (allowed, retry_after_seconds)
+			// → supabase-js delivers an array of one row. Fail open on
+			// RPC error so a transient DB blip doesn't 429-storm Pro
+			// users; the WAF + reserved-concurrency caps still bound
+			// the abuse case.
+			const { data: rl, error: rlErr } = await supabase.rpc('check_rate_limit', {
+				p_user_id: authUser.id,
+				p_bucket: 'coach:pro',
+				p_max: PRO_HOURLY_RATE_LIMIT,
+				p_window_seconds: 3600,
+			});
+			if (rlErr) {
+				console.warn('[coach] check_rate_limit RPC failed; allowing request', rlErr);
+			} else {
+				const row = Array.isArray(rl) ? rl[0] : rl;
+				if (row && row.allowed === false) {
+					return {
+						kind: 'json',
+						status: 429,
+						headers: {
+							'content-type': 'application/json',
+							'Retry-After': String(row.retry_after_seconds ?? 60),
+						},
+						body: JSON.stringify({
+							error: 'rate_limit',
+							message: 'Too many requests, slow down. Try again in a minute.',
+							tier,
+						}),
+					};
+				}
 			}
 		}
 	} else {

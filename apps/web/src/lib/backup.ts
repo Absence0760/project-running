@@ -177,8 +177,24 @@ export async function restoreBackup(
 		try {
 			const parsed = JSON.parse(await profileFile.async('string'));
 			if (parsed.profile) {
+				// Strip server-managed fields before the upsert. These
+				// are derived from the user's actual subscription /
+				// linked-account state on the server and must not
+				// round-trip through a client-controlled archive — the
+				// 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
+				// trigger reject these for non-service-role callers
+				// anyway, but stripping here means the rest of the
+				// profile (display_name, avatar_url, preferred_unit,
+				// etc.) restores cleanly instead of failing the upsert.
+				const {
+					subscription_tier: _ignoreTier,
+					subscription_at: _ignoreSubAt,
+					parkrun_number: _ignoreParkrun,
+					...portableProfile
+				} = parsed.profile as Record<string, unknown>;
+				void _ignoreTier; void _ignoreSubAt; void _ignoreParkrun;
 				await supabase.from('user_profiles').upsert({
-					...parsed.profile,
+					...portableProfile,
 					id: userId,
 				});
 				result.profileRestored = true;

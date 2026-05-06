@@ -78,10 +78,25 @@ export interface ProviderStream {
 	finalUsage: () => Promise<ProviderUsage>;
 }
 
+// Pro `maxRunsLimit` was lowered from 200 to 75 in audit pass 3.
+// 200 runs JSON-serialised in the runner-profile context dump
+// dominated input-token cost on every Pro turn — a sustained-abuse
+// scenario (50 turns/day × ~500k input tokens) projected to ~$75/day
+// per stolen account. 75 runs is enough for an experienced coach
+// session to reason about a 12-week training block.
 export const TIER_LIMITS = {
 	free: { dailyLimit: 5, maxTokens: 768, maxRunsLimit: 30 },
-	pro: { dailyLimit: Number.POSITIVE_INFINITY, maxTokens: 2048, maxRunsLimit: 200 },
+	pro: { dailyLimit: Number.POSITIVE_INFINITY, maxTokens: 2048, maxRunsLimit: 75 },
 } as const;
+
+// Per-user-id rate limit applied to Pro callers, decoupled from the
+// daily cap (which is unlimited for Pro). 60 turns / hour is well
+// above legitimate use (a sustained chat is ~6 turns / hour at most)
+// but bounds a stolen Pro session token to one Lambda execution every
+// minute — within the WAF rate limit and the reserved concurrency
+// cap. Free callers are already capped at 5/day so this gate doesn't
+// fire for them; the hourly window plus the daily cap is the floor.
+export const PRO_HOURLY_RATE_LIMIT = 60;
 
 export type Tier = keyof typeof TIER_LIMITS;
 
