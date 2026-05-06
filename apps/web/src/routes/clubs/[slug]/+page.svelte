@@ -28,6 +28,7 @@
 		deleteClub
 	} from '$lib/data';
 	import { formatDistance } from '$lib/mock-data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { Route, TrainingPlan } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -154,6 +155,16 @@
 	let channel: RealtimeChannel | null = null;
 
 	onMount(async () => {
+		// fetchClubBySlug uses supabase.auth.getSession() to populate
+		// `viewer_role`, which `isMember` / `isAdmin` derive from. A hard
+		// reload during the auth race would resolve the club row without
+		// a viewer_role, hiding the post composer + admin affordances
+		// indefinitely (no reactive re-fetch when auth lifts later).
+		// Poll briefly before kicking off load(). Same shape as /clubs,
+		// /dashboard, /coach, /runs/[id], /settings/*.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		await load();
 		subscribeRealtime();
 	});

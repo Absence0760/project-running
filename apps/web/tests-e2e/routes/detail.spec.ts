@@ -6,9 +6,11 @@ import { USER_A } from '../fixtures/users';
 /**
  * /routes/[id] — owner-only route detail page.
  *
- * Operations covered: star toggle (with /routes filter round-trip).
- * Future depth: public toggle, tags edit, route reviews, GPX export.
- * The anon /share/route/[id] view is in share/route.spec.ts.
+ * Operations covered: public toggle, star toggle (with /routes filter
+ * round-trip), tag add + remove. The anon /share/route/[id] view is
+ * in share/route.spec.ts. Routes have NO UI delete affordance — the
+ * only delete path is service-role / SQL — so there's no
+ * "delete via UI" test here.
  */
 
 test.describe('/routes/[id]', () => {
@@ -103,5 +105,45 @@ test.describe('/routes/[id]', () => {
 		await page.waitForLoadState('networkidle');
 		await page.locator('button.star-btn').click();
 		await expect(page.locator('button.star-btn')).not.toHaveClass(/starred/);
+	});
+
+	test('tag add → reload persists → remove restores', async ({ page }) => {
+		// Tags live as `routes.tags text[]`. addTag pushes to the
+		// array via updateRouteTags; the .tag-add input is a text
+		// field that submits on Enter via the wrapping form.
+		// removeTag is wired to the per-chip "×" button with
+		// aria-label "Remove tag <name>".
+		const tag = `e2e-${Date.now().toString().slice(-6)}`;
+
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await expect(page.locator('.tags-row')).toBeVisible({ timeout: 10_000 });
+
+		// Capture starting tag count so the test is robust to seed
+		// drift (the pinned route currently has 0 tags but a future
+		// seed change could add some).
+		const startCount = await page.locator('.tag-chip').count();
+
+		// Add tag — fill the .tag-add input and submit via Enter
+		// (the form submit handler calls addTag).
+		const tagInput = page.locator('.tag-add input[type="text"]');
+		await tagInput.fill(tag);
+		await tagInput.press('Enter');
+		await expect(page.locator('.tag-chip', { hasText: tag })).toBeVisible({
+			timeout: 5_000
+		});
+		expect(await page.locator('.tag-chip').count()).toBe(startCount + 1);
+
+		// Reload — server-side state must agree.
+		await page.reload();
+		await expect(page.locator('.tag-chip', { hasText: tag })).toBeVisible({
+			timeout: 10_000
+		});
+
+		// Remove via the per-chip × button (aria-label "Remove tag <name>").
+		await page.getByRole('button', { name: `Remove tag ${tag}` }).click();
+		await expect(page.locator('.tag-chip', { hasText: tag })).toHaveCount(0, {
+			timeout: 5_000
+		});
+		expect(await page.locator('.tag-chip').count()).toBe(startCount);
 	});
 });

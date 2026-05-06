@@ -18,6 +18,53 @@ import { USER_A } from '../fixtures/users';
 test.describe('/plans/[id]', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('Edit-plan meta dialog: rename → Save persists across reload, restore', async ({
+		page
+	}) => {
+		// Edit-plan opens PlanMetaEditor (Modal-hosted) which exposes
+		// name / days-per-week / goal-time / notes / rules. We pin the
+		// rename round-trip — change Name, Save, reload, assert the
+		// h1 reflects the new name, then restore. updatePlan in
+		// data.ts is the write path.
+		await page.goto('/plans');
+		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
+		await expect(page.getByRole('heading', { level: 1, name: /Sydney Half 2026/ }))
+			.toBeVisible({ timeout: 10_000 });
+
+		const restored = 'Sydney Half 2026';
+		const renamed = `e2e-renamed ${Date.now()}`;
+
+		// Open the editor.
+		await page.getByRole('button', { name: /Edit plan/ }).click();
+		const modal = page.locator('.modal');
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+		// First text input in the modal is Name.
+		const nameInput = modal.locator('input[type="text"]').first();
+		await expect(nameInput).toHaveValue(restored);
+		await nameInput.fill(renamed);
+		await modal.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(modal).toHaveCount(0);
+
+		// h1 reflects the new name immediately (load() ran in onSaved).
+		await expect(page.getByRole('heading', { level: 1, name: renamed }))
+			.toBeVisible({ timeout: 10_000 });
+
+		// Reload — the new value persisted server-side, not just in
+		// memory.
+		await page.reload();
+		await expect(page.getByRole('heading', { level: 1, name: renamed }))
+			.toBeVisible({ timeout: 10_000 });
+
+		// Restore the seeded name so the rest of the suite sees it.
+		await page.getByRole('button', { name: /Edit plan/ }).click();
+		await expect(page.locator('.modal')).toBeVisible({ timeout: 5_000 });
+		await page.locator('.modal input[type="text"]').first().fill(restored);
+		await page.locator('.modal').getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+		await expect(page.getByRole('heading', { level: 1, name: restored }))
+			.toBeVisible({ timeout: 10_000 });
+	});
+
 	test('Sydney Half plan renders multi-week grid + clicking a day opens the workout editor', async ({
 		page
 	}) => {

@@ -149,6 +149,37 @@ export async function deleteRoute(routeId: string): Promise<void> {
 	}
 }
 
+export async function deletePlan(planId: string): Promise<void> {
+	// plan_weeks → plan_workouts cascade via FK ON DELETE CASCADE; the
+	// plans row delete sweeps everything beneath. Used by tests that
+	// drove a plan create through the wizard but don't want to walk
+	// the abandon → delete UI path just to clean up.
+	const { error } = await getAdminClient().from('training_plans').delete().eq('id', planId);
+	if (error) {
+		throw new Error(`simulate.deletePlan failed: ${error.message}`);
+	}
+}
+
+export async function deleteClub(clubId: string): Promise<void> {
+	const { error } = await getAdminClient().from('clubs').delete().eq('id', clubId);
+	if (error) {
+		throw new Error(`simulate.deleteClub failed: ${error.message}`);
+	}
+}
+
+export async function setPlanStatus(
+	planId: string,
+	status: 'active' | 'abandoned' | 'completed' | 'draft',
+): Promise<void> {
+	const { error } = await getAdminClient()
+		.from('training_plans')
+		.update({ status })
+		.eq('id', planId);
+	if (error) {
+		throw new Error(`simulate.setPlanStatus failed: ${error.message}`);
+	}
+}
+
 export async function insertEvent(opts: {
 	club_id: string;
 	created_by: string;
