@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
-import { USER_A } from '../fixtures/users';
+import { USER_A, USER_B } from '../fixtures/users';
 
 /**
  * Inter-feature interaction tests — surfaces where two product
@@ -153,5 +154,120 @@ test.describe('runs ↔ plans on /plans/[id]', () => {
 			completedBefore + 1,
 			{ timeout: 10_000 }
 		);
+	});
+
+	test('Mark-as-done in /plans/[id] propagates to the progress circle (.pct)', async ({
+		page
+	}) => {
+		// The plan-detail page renders a progress ring with
+		// `<span class="pct">{pct}%</span>` and `<span class="done">
+		// {completed} / {totalActive}</span>`. Both are derived from
+		// the same workouts array the day-grid renders from, BUT
+		// they live in a different component (the hero block, not
+		// the week-grid `.day` cells). Pins the load → render →
+		// reload flow that ties the two views together.
+		//
+		// Tried writing this against the dashboard's `.plan-progress`
+		// span instead, but that span only mounts inside the
+		// `{#if planOverview?.todayWorkout}` branch — there's no
+		// today-workout in the seed for the current wall-clock, so
+		// the span doesn't render and the test had no signal to read.
+		// Same-page is still cross-component (week-grid + progress
+		// ring), and the same `markWorkoutCompleted` → `load()`
+		// pipeline is what would feed the dashboard if a today-
+		// workout were present.
+		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+		await expect(page.locator('.pct')).toBeVisible({ timeout: 10_000 });
+		const beforeText = (await page.locator('.pct').textContent()) ?? '';
+		const beforePct = parseInt(beforeText.match(/(\d+)/)?.[1] ?? '-1', 10);
+		expect(beforePct).toBeGreaterThanOrEqual(0);
+
+		await page
+			.locator('.day:not(.rest):not(.completed) .day-link')
+			.first()
+			.click();
+		const modal = page.locator('.modal');
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+		await modal.getByRole('button', { name: 'Mark as done' }).click();
+		await expect(modal).toHaveCount(0);
+
+		// Same-page re-fetch: load() in /plans/[id] runs after the
+		// editor's onSaved callback. The .pct value should be strictly
+		// higher than before — exact +N% varies with plan size, so
+		// the contract is "more than before."
+		await expect
+			.poll(async () => {
+				const txt = (await page.locator('.pct').textContent()) ?? '';
+				return parseInt(txt.match(/(\d+)/)?.[1] ?? '-1', 10);
+			}, { timeout: 10_000 })
+			.toBeGreaterThan(beforePct);
+	});
+});
+
+/**
+ * Cross-user kudos → owner-side count refresh on /runs/[id].
+ *
+ * `cross-user/kudos.spec.ts` covers alex's write + reload-persists +
+ * rescind on the SHARE page. This test covers the OTHER side: runner
+ * (the owner) navigating to their own /runs/[id] sees the kudos
+ * count alex just wrote. Pins:
+ *   - run_kudos visibility crosses the owner / non-owner boundary
+ *     (RLS via is_run_visible_to allows the owner to read kudos a
+ *     non-owner gave).
+ *   - The same `fetchRunKudos` call resolves the same number on
+ *     /runs/[id] as on /share/run/[id], so the kudos count isn't a
+ *     surface-specific quirk.
+ */
+test.describe('runs ↔ cross-user kudos', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('alex kudos on /share/run/[id] surfaces as count=1 on runner\'s /runs/[id]', async ({
+		page,
+		browser
+	}) => {
+		// Alex writes the kudos in a separate browser context. The
+		// share page is the canonical non-owner kudos surface; owner
+		// /runs/[id] would be RLS-blocked for alex anyway.
+		const alexCtx = await browser.newContext({
+			storageState: USER_B.storageStatePath
+		});
+		const alexPage = await alexCtx.newPage();
+		try {
+			await alexPage.route('**/functions/v1/clip-public-track', (route) =>
+				route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ points: [] })
+				})
+			);
+			await alexPage.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+			const alexBtn = alexPage.locator('.kudos-btn');
+			await expect(alexBtn).toBeVisible({ timeout: 10_000 });
+			// Pinned run starts at 0 kudos (seed excludes it from the
+			// cross-user-engagement inserts via the `id != '...'` filter).
+			await expect(alexPage.locator('.kudos-count')).toHaveText('0');
+			await alexBtn.click();
+			// Wait for the optimistic + DB-confirmed state to settle —
+			// proves the row is actually written before runner reads.
+			await expect(alexBtn).toHaveClass(/given/);
+			await expect(alexPage.locator('.kudos-count')).toHaveText('1');
+
+			// Now runner reads. /runs/[id] is the owner-only detail page;
+			// fetchRunById gates on user_id, RunSocial mounts and calls
+			// fetchRunKudos which reads run_kudos via is_run_visible_to.
+			await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
+			await expect(page.getByRole('heading', { level: 1 })).toBeVisible({
+				timeout: 10_000
+			});
+			await expect(page.locator('.kudos-count')).toHaveText('1', {
+				timeout: 10_000
+			});
+
+			// Cleanup — alex rescinds so the suite stays idempotent.
+			await alexPage.locator('.kudos-btn').click();
+			await expect(alexPage.locator('.kudos-count')).toHaveText('0');
+		} finally {
+			await alexCtx.close();
+		}
 	});
 });
