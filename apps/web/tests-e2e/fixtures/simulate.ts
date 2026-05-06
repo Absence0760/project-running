@@ -142,6 +142,41 @@ export async function setUserSetting(
 	}
 }
 
+export async function insertEvent(opts: {
+	club_id: string;
+	created_by: string;
+	title: string;
+	starts_at?: string;
+	duration_min?: number;
+	description?: string;
+}): Promise<string> {
+	const { data, error } = await getAdminClient()
+		.from('events')
+		.insert({
+			club_id: opts.club_id,
+			created_by: opts.created_by,
+			title: opts.title,
+			starts_at:
+				opts.starts_at ??
+				new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+			duration_min: opts.duration_min ?? 60,
+			description: opts.description ?? null
+		})
+		.select('id')
+		.single();
+	if (error || !data) {
+		throw new Error(`simulate.insertEvent failed: ${error?.message ?? 'no row'}`);
+	}
+	return data.id as string;
+}
+
+export async function deleteEvent(eventId: string): Promise<void> {
+	const { error } = await getAdminClient().from('events').delete().eq('id', eventId);
+	if (error) {
+		throw new Error(`simulate.deleteEvent failed: ${error.message}`);
+	}
+}
+
 export async function clearUserSettingKey(userId: string, key: string): Promise<void> {
 	const admin = getAdminClient();
 	const { data: existing } = await admin
