@@ -2181,6 +2181,12 @@ export async function publishPlanAsTemplate(
 	}
 	const src = source.plan;
 
+	// vdot + current_5k_seconds are the publisher's private fitness
+	// measurements — derived proxies for age, fitness, and recent 5 km
+	// performance. They aren't template-design values; copying them
+	// into a row that every club member can SELECT leaks personal
+	// fitness data. Strip on publish; the cloning RPC also strips on
+	// the read side as defence-in-depth (migration 20260721_001).
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
@@ -2192,8 +2198,8 @@ export async function publishPlanAsTemplate(
 			start_date: src.start_date,
 			end_date: src.end_date,
 			days_per_week: src.days_per_week,
-			vdot: src.vdot,
-			current_5k_seconds: src.current_5k_seconds,
+			vdot: null,
+			current_5k_seconds: null,
 			status: 'completed',
 			source: src.source ?? 'manual',
 			notes: src.notes,

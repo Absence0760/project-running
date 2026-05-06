@@ -1243,6 +1243,11 @@ BEGIN
   END;
 
   -- (1) Insert one public + one private run for the seed user.
+  -- Every owner-only metadata key the public_runs view denylists
+  -- (per docs/metadata.md classification + the 20260714_001 strip
+  -- additions) is included here so the assertion below can verify
+  -- each one is actually scrubbed by the view. Keep this block in
+  -- lockstep with the strip chain in the public_runs view migration.
   INSERT INTO runs (user_id, started_at, duration_s, distance_m, source,
                     external_id, is_public, metadata)
     VALUES (test_user, now(), 1800, 5000, 'app',
@@ -1268,10 +1273,17 @@ BEGIN
               'workout_adherence', 'completed',
               'last_modified_at', '2026-05-01T00:00:00Z',
               'recovered_from_crash', true,
+              'in_progress_saved_at', '2026-05-01T00:00:00Z',
               'in_progress', false,
               'manual_entry', true,
               'indoor_estimated', true,
-              'distance_source', 'pedometer'
+              'distance_source', 'pedometer',
+              -- 20260714_001 strip-list additions:
+              'race_name', 'Richmond Half Marathon',
+              'bib', 'A1234',
+              'overall_place', 142,
+              'chip_time', '1:47:23',
+              'perceived_effort', 7
             ))
     RETURNING id INTO v_run_id;
 
@@ -1307,10 +1319,16 @@ BEGIN
      OR v_public_metadata ? 'workout_adherence'
      OR v_public_metadata ? 'last_modified_at'
      OR v_public_metadata ? 'recovered_from_crash'
+     OR v_public_metadata ? 'in_progress_saved_at'
      OR v_public_metadata ? 'in_progress'
      OR v_public_metadata ? 'manual_entry'
      OR v_public_metadata ? 'indoor_estimated'
-     OR v_public_metadata ? 'distance_source' THEN
+     OR v_public_metadata ? 'distance_source'
+     OR v_public_metadata ? 'race_name'
+     OR v_public_metadata ? 'bib'
+     OR v_public_metadata ? 'overall_place'
+     OR v_public_metadata ? 'chip_time'
+     OR v_public_metadata ? 'perceived_effort' THEN
     RAISE EXCEPTION 'public_runs: metadata strip list incomplete — leaked at least one denylisted key';
   END IF;
 
