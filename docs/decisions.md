@@ -1103,6 +1103,31 @@ Pinned in place by `apps/mobile_android/test/fitness_test.dart#thresholdPaceSecP
 
 ---
 
+## 55. Column-level `revoke select` requires also revoking the table-level grant
+
+Two migrations — `20260707_001_user_profiles_column_lockdown.sql` and `20260723_001_events_meet_point_anon_revoke.sql` — were originally written as `revoke select (col1, col2, …) on <table> from <role>`. Both were silent no-ops: when the role still holds a table-level `select` grant, Postgres applies the broadest grant available, so a column-level revoke has nothing to bite. The bug was caught by the regression-test pass that introduced `rls_events_meet_point_test.sql`; the same pattern in the older user_profiles migration was discovered by inspection and fixed alongside.
+
+**The correct shape** for selectively hiding columns from a role:
+
+```sql
+revoke select on <table> from <role>;
+grant select (<safe_col1>, <safe_col2>, …) on <table> to <role>;
+```
+
+That guarantees:
+
+- The role can read only the listed columns; `select *` and any unlisted column raise `42501`.
+- New columns added to the table are deny-by-default for that role — a future writer must touch this migration deliberately to expose them.
+- RLS still applies on top: rows the role can't see are still hidden.
+
+**Cost:** every caller that uses `select('*')` against the locked-down table must enumerate columns explicitly. Both the events and user_profiles cases were already enumerating safe columns at every call site (web, Dart, Edge Functions), so the fix landed without code changes elsewhere — but a future "lock down columns of table X" migration must audit `from('X').select('*')` first.
+
+**Don't re-litigate unless:** Postgres column-privilege semantics change (they won't), or the project adopts a "read everything via SECURITY DEFINER RPC" approach that makes column grants moot for these tables specifically.
+
+Pinned in place by `apps/backend/supabase/tests/rls_events_meet_point_test.sql` (4 tests) and `apps/backend/supabase/tests/rls_user_profiles_column_lockdown_test.sql` (5 tests).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

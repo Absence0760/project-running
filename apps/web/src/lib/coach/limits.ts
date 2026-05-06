@@ -69,6 +69,45 @@ export function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, 
 	};
 }
 
+/// Per-message size cap, split by role. Pre-pass-3 the cap was a
+/// single 16 KB ceiling for every role, which broke conversation
+/// resumption when the assistant emitted a full plan as one message.
+/// User input is bounded tightly (anti-abuse — legitimate planning
+/// prompts rarely exceed 4 KB); assistant output is bounded loosely.
+/// The list-length and aggregate-content caps still bound the total
+/// prompt token cost regardless of role mix.
+export const MAX_COACH_MESSAGES = 100;
+export const MAX_COACH_USER_CONTENT_BYTES = 8 * 1024;
+export const MAX_COACH_ASSISTANT_CONTENT_BYTES = 64 * 1024;
+export const MAX_COACH_TOTAL_CONTENT_BYTES = 512 * 1024;
+
+/// Validate the messages array off the coach request body. Returns
+/// `{ ok: true }` if the array is well-formed and within every cap;
+/// otherwise `{ ok: false, reason }` with a short tag identifying which
+/// cap fired. The handler turns any non-ok return into a 400
+/// "invalid messages" — the reason tag is for tests + future telemetry,
+/// not the wire response.
+export function validateCoachMessages(
+	messages: unknown,
+): { ok: true } | { ok: false; reason: string } {
+	if (!Array.isArray(messages)) return { ok: false, reason: 'not-array' };
+	if (messages.length > MAX_COACH_MESSAGES) return { ok: false, reason: 'too-many' };
+	let total = 0;
+	for (const m of messages) {
+		const content = (m as { content?: unknown } | null | undefined)?.content;
+		if (typeof content !== 'string') return { ok: false, reason: 'content-not-string' };
+		const role = (m as { role?: unknown }).role;
+		const cap =
+			role === 'assistant'
+				? MAX_COACH_ASSISTANT_CONTENT_BYTES
+				: MAX_COACH_USER_CONTENT_BYTES;
+		if (content.length > cap) return { ok: false, reason: 'per-message-too-long' };
+		total += content.length;
+	}
+	if (total > MAX_COACH_TOTAL_CONTENT_BYTES) return { ok: false, reason: 'aggregate-too-long' };
+	return { ok: true };
+}
+
 /// Build the personality addendum appended to the system prompt when
 /// the runner has set a non-default `coach_personality` preference.
 /// Empty string for the default / unknown styles so the system prompt

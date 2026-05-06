@@ -24,6 +24,7 @@ import {
 	parseAuthHeader,
 	personalityAddendum,
 	rateLimitHeaders,
+	validateCoachMessages,
 } from './limits';
 import { streamAnthropic, streamOpenAI } from './providers';
 import { COACH_SYSTEM_PROMPT } from './system_prompt';
@@ -70,36 +71,12 @@ export async function handleCoach(
 		return jsonError(400, 'invalid JSON');
 	}
 
-	// Bound the message-list size in addition to the byte cap on the
-	// raw payload. Per-message caps differ by role:
-	//   - user input is bounded tightly (anti-abuse); legitimate
-	//     planning prompts rarely exceed 4 KB.
-	//   - assistant output is bounded loosely; the model can emit a
-	//     full 16-week plan as one message that exceeds 4 KB
-	//     trivially. Conflating them caused conversation resumption
-	//     to break for power users (audit pass 3 finding).
-	//
-	// The list-length and aggregate-content caps still bound the
-	// total prompt token cost regardless of role mix.
-	const MAX_MESSAGES = 100;
-	const MAX_USER_CONTENT_BYTES = 8 * 1024;
-	const MAX_ASSISTANT_CONTENT_BYTES = 64 * 1024;
-	const MAX_TOTAL_CONTENT_BYTES = 512 * 1024;
-	if (Array.isArray(body.messages) === false || body.messages.length > MAX_MESSAGES) {
-		return jsonError(400, 'invalid messages');
-	}
-	let totalContent = 0;
-	for (const m of body.messages) {
-		if (typeof m?.content !== 'string') {
-			return jsonError(400, 'invalid messages');
-		}
-		const cap = m.role === 'assistant' ? MAX_ASSISTANT_CONTENT_BYTES : MAX_USER_CONTENT_BYTES;
-		if (m.content.length > cap) {
-			return jsonError(400, 'invalid messages');
-		}
-		totalContent += m.content.length;
-	}
-	if (totalContent > MAX_TOTAL_CONTENT_BYTES) {
+	// Bound the message-list size + per-message + aggregate content.
+	// The constants live in `limits.ts` so the validator can be unit-
+	// tested without booting Supabase. Per-message caps differ by role
+	// — see `validateCoachMessages` for the rationale.
+	const validation = validateCoachMessages(body.messages);
+	if (!validation.ok) {
 		return jsonError(400, 'invalid messages');
 	}
 

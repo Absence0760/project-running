@@ -262,3 +262,66 @@ test('clipTrackForUser fails closed on RPC error', () => {
 		'clipTrackForUser must not fall back to the input track on RPC error — that is the leak this helper exists to prevent.',
 	);
 });
+
+test('KMS Decrypt principal ARN matches the Lambda role name', () => {
+	// Reason: the kms_secrets policy in infra/modules/web-stack/main.tf
+	// builds the Lambda role ARN as a deterministic string
+	// (`${prefix}-coach-lambda`) instead of referencing aws_iam_role.lambda
+	// — the reference would create a key→role→key cycle. Audit pass 3
+	// caught a regression where the policy said `-lambda` but the actual
+	// role is named `-coach-lambda`, leaving the running Lambda unable
+	// to decrypt secrets at cold-start. Pin the suffix on both sides so
+	// a future rename of the role forces a deliberate edit on the
+	// policy too.
+	const source = read('../../infra/modules/web-stack/main.tf');
+	const policySuffixMatch = source.match(
+		/identifiers\s*=\s*compact\(\[[\s\S]*?role\/\$\{local\.resource_prefix\}-([a-z0-9-]+)/m,
+	);
+	assert.ok(
+		policySuffixMatch,
+		'Could not extract the role-name suffix from the kms_secrets policy in infra/modules/web-stack/main.tf — has the AllowLambdaAndDeployRolesToDecrypt statement moved?',
+	);
+	const policySuffix = policySuffixMatch![1];
+	const roleNameMatch = source.match(
+		/resource\s+"aws_iam_role"\s+"lambda"\s*\{[\s\S]*?name\s*=\s*"\$\{local\.resource_prefix\}-([a-z0-9-]+)"/m,
+	);
+	assert.ok(
+		roleNameMatch,
+		'Could not extract the Lambda role name from infra/modules/web-stack/main.tf — has aws_iam_role.lambda moved?',
+	);
+	const roleSuffix = roleNameMatch![1];
+	assert.equal(
+		policySuffix,
+		roleSuffix,
+		`KMS policy ARN suffix (${policySuffix}) must match aws_iam_role.lambda name suffix (${roleSuffix}). A mismatch leaves the Lambda unable to call kms:Decrypt at cold-start. See infra/modules/web-stack/main.tf and the audit-pass-3 commit ${'8424dec'}.`,
+	);
+});
+
+test('backup restore strips server-managed profile fields', () => {
+	// Reason: 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
+	// trigger reject any write that touches subscription_tier /
+	// subscription_at / parkrun_number from a non-service-role context.
+	// Without an explicit strip, the upsert in restoreBackup silently
+	// errors and the rest of the profile (display_name, avatar_url,
+	// preferred_unit) never lands. Pinned because the strip is invisible
+	// happy-path behaviour — a future writer that drops it won't see a
+	// failed test, just a silent restore regression.
+	for (const path of [
+		'src/lib/backup.ts',
+		'../mobile_android/lib/backup.dart',
+		'../mobile_ios/lib/backup.dart',
+	]) {
+		const source = read(path);
+		for (const field of [
+			'subscription_tier',
+			'subscription_at',
+			'parkrun_number',
+		]) {
+			assert.match(
+				source,
+				new RegExp(field),
+				`${path} must reference ${field} (the restore strip) — the 20260718_001 / 20260624_001 server-side rejects fail silently otherwise.`,
+			);
+		}
+	}
+});

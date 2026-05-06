@@ -2,11 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	DEFAULT_RUNS_LIMIT,
+	MAX_COACH_ASSISTANT_CONTENT_BYTES,
+	MAX_COACH_MESSAGES,
+	MAX_COACH_TOTAL_CONTENT_BYTES,
+	MAX_COACH_USER_CONTENT_BYTES,
 	clampRunsLimit,
 	jsonError,
 	parseAuthHeader,
 	personalityAddendum,
 	rateLimitHeaders,
+	validateCoachMessages,
 } from './limits';
 
 // ─────────────── parseAuthHeader ───────────────
@@ -55,9 +60,11 @@ test('clampRunsLimit — non-finite input returns the default', () => {
 	assert.equal(clampRunsLimit(Number.POSITIVE_INFINITY, 'free'), DEFAULT_RUNS_LIMIT);
 });
 
-test('clampRunsLimit — caps at the tier max (free=30, pro=200)', () => {
+test('clampRunsLimit — caps at the tier max (free=30, pro=75)', () => {
+	// Pro cap was 200 pre-pass-3; lowered to 75 to bound input-token
+	// cost on a stolen Pro session token. See coach/types.ts.
 	assert.equal(clampRunsLimit(500, 'free'), 30);
-	assert.equal(clampRunsLimit(500, 'pro'), 200);
+	assert.equal(clampRunsLimit(500, 'pro'), 75);
 });
 
 test('clampRunsLimit — floors at 1 (zero-runs context is never useful)', () => {
@@ -75,7 +82,7 @@ test('clampRunsLimit — string-typed integer is coerced', () => {
 });
 
 test('clampRunsLimit — pro tier honours larger requests up to its cap', () => {
-	assert.equal(clampRunsLimit(150, 'pro'), 150);
+	assert.equal(clampRunsLimit(70, 'pro'), 70);
 	assert.equal(clampRunsLimit(50, 'pro'), 50);
 });
 
@@ -130,7 +137,7 @@ test('rateLimitHeaders — pro tier reports unlimited daily', () => {
 	assert.equal(headers['X-RateLimit-Limit'], 'unlimited');
 	assert.equal(headers['X-RateLimit-Remaining'], 'unlimited');
 	assert.equal(headers['X-RateLimit-MaxTokens'], '2048');
-	assert.equal(headers['X-RateLimit-MaxRuns'], '200');
+	assert.equal(headers['X-RateLimit-MaxRuns'], '75');
 });
 
 // ─────────────── personalityAddendum ───────────────
@@ -154,4 +161,95 @@ test('personalityAddendum — default / unknown / null styles return empty', () 
 	assert.equal(personalityAddendum(undefined), '');
 	assert.equal(personalityAddendum(''), '');
 	assert.equal(personalityAddendum('encouraging'), ''); // unknown style
+});
+
+// ─────────────── validateCoachMessages ───────────────
+//
+// Pinned because the per-message cap split by role is the regression fix
+// that lets long assistant messages flow through while keeping a tight
+// anti-abuse cap on user input. Conflating them again (single 8 KB cap
+// for everything) silently breaks conversation resumption.
+
+test('validateCoachMessages — rejects non-array body.messages', () => {
+	assert.deepEqual(validateCoachMessages(null), { ok: false, reason: 'not-array' });
+	assert.deepEqual(validateCoachMessages(undefined), { ok: false, reason: 'not-array' });
+	assert.deepEqual(validateCoachMessages('hi'), { ok: false, reason: 'not-array' });
+	assert.deepEqual(validateCoachMessages({ length: 0 }), { ok: false, reason: 'not-array' });
+});
+
+test('validateCoachMessages — accepts a normal multi-turn conversation', () => {
+	const messages = [
+		{ role: 'user', content: 'plan my next 4 weeks' },
+		{ role: 'assistant', content: 'Sure — here is a 4-week base plan…' },
+		{ role: 'user', content: 'swap thursday for a long run' },
+	];
+	assert.deepEqual(validateCoachMessages(messages), { ok: true });
+});
+
+test('validateCoachMessages — caps the total list length', () => {
+	const messages = Array.from({ length: MAX_COACH_MESSAGES + 1 }, (_, i) => ({
+		role: i % 2 === 0 ? 'user' : 'assistant',
+		content: 'x',
+	}));
+	assert.deepEqual(validateCoachMessages(messages), { ok: false, reason: 'too-many' });
+});
+
+test('validateCoachMessages — rejects a non-string message.content', () => {
+	assert.deepEqual(
+		validateCoachMessages([{ role: 'user', content: 123 }]),
+		{ ok: false, reason: 'content-not-string' },
+	);
+	assert.deepEqual(
+		validateCoachMessages([{ role: 'user' }]),
+		{ ok: false, reason: 'content-not-string' },
+	);
+});
+
+test('validateCoachMessages — long assistant message OK (the pass-3 regression fix)', () => {
+	// 32 KB is well above the 8 KB user cap but under the 64 KB
+	// assistant cap. Pre-fix, this would have been rejected uniformly.
+	const longAssistant = 'a'.repeat(32 * 1024);
+	assert.ok(longAssistant.length > MAX_COACH_USER_CONTENT_BYTES);
+	assert.ok(longAssistant.length < MAX_COACH_ASSISTANT_CONTENT_BYTES);
+	const messages = [
+		{ role: 'user', content: 'give me a full plan' },
+		{ role: 'assistant', content: longAssistant },
+	];
+	assert.deepEqual(validateCoachMessages(messages), { ok: true });
+});
+
+test('validateCoachMessages — rejects an oversized user message (anti-abuse)', () => {
+	const tooLongUser = 'a'.repeat(MAX_COACH_USER_CONTENT_BYTES + 1);
+	const messages = [{ role: 'user', content: tooLongUser }];
+	assert.deepEqual(validateCoachMessages(messages), {
+		ok: false,
+		reason: 'per-message-too-long',
+	});
+});
+
+test('validateCoachMessages — rejects an oversized assistant message', () => {
+	const tooLongAssistant = 'a'.repeat(MAX_COACH_ASSISTANT_CONTENT_BYTES + 1);
+	const messages = [{ role: 'assistant', content: tooLongAssistant }];
+	assert.deepEqual(validateCoachMessages(messages), {
+		ok: false,
+		reason: 'per-message-too-long',
+	});
+});
+
+test('validateCoachMessages — rejects when aggregate exceeds the total cap', () => {
+	// Each assistant chunk is just under the per-message cap; together
+	// they push past the aggregate cap.
+	const chunkSize = MAX_COACH_ASSISTANT_CONTENT_BYTES - 1;
+	const chunkCount = Math.ceil(MAX_COACH_TOTAL_CONTENT_BYTES / chunkSize) + 1;
+	const messages = Array.from({ length: chunkCount }, () => ({
+		role: 'assistant',
+		content: 'a'.repeat(chunkSize),
+	}));
+	// Sanity-check we are still under the list-length cap so the
+	// failure mode is the aggregate cap, not 'too-many'.
+	assert.ok(messages.length <= MAX_COACH_MESSAGES);
+	assert.deepEqual(validateCoachMessages(messages), {
+		ok: false,
+		reason: 'aggregate-too-long',
+	});
 });

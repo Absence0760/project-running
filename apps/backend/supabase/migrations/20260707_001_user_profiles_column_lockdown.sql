@@ -6,17 +6,35 @@
 -- broad-SELECT trade-off when those columns weren't sensitive; that
 -- rationale is now stale.
 --
--- Fix shape: keep the row-level cross-user SELECT (so existing display-name
--- joins continue to work) but use a column-level REVOKE to hide the three
--- sensitive columns from every authenticated caller, then add a
--- SECURITY DEFINER RPC that returns the full self row for paths that
--- need to read them (auth bootstrap, coach context, parkrun-import prefill).
+-- Implementation note: the earlier shape of this migration was
+--   `revoke select (subscription_tier, …) on user_profiles from authenticated, anon;`
+-- That is a no-op when the role still has table-level SELECT (Postgres
+-- uses the broadest grant). The correct shape — and the one applied
+-- here — is to revoke the table-level SELECT for both anon and
+-- authenticated, then re-grant SELECT only on the public-safe columns.
+-- New columns added to this table will be deny-by-default for both
+-- roles; if a future column is meant to be authenticated-readable, this
+-- migration must be amended.
+--
+-- Self-read path: `get_my_profile()` SECURITY DEFINER RPC returns the
+-- full self row (auth bootstrap, coach context, parkrun-import prefill,
+-- backup export). Cross-user reads (display-name + avatar joins) keep
+-- working because every existing caller already enumerates safe
+-- columns; `select('*')` from these tables had no callers when this
+-- was written.
 --
 -- Service role keeps full table access via its own grants — RevenueCat
 -- webhooks, Edge Functions, and admin scripts continue working.
 
-revoke select (subscription_tier, subscription_at, parkrun_number)
-  on user_profiles from authenticated, anon;
+revoke select on user_profiles from authenticated, anon;
+
+grant select (
+  id,
+  display_name,
+  avatar_url,
+  preferred_unit,
+  created_at
+) on user_profiles to authenticated, anon;
 
 create or replace function get_my_profile()
 returns user_profiles

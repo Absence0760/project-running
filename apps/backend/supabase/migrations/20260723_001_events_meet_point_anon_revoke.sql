@@ -8,19 +8,45 @@
 -- including the corner case where an organiser uses their home
 -- address as the meet point.
 --
--- Column-level revoke pattern from `20260707_001_user_profiles_column_lockdown.sql`:
--- the row-level visibility (events SELECT policy) is unchanged, but
--- anon callers can no longer read these two columns. `meet_label`
--- (the human-readable text the UI typically renders) is still
--- visible to anon — that's the canonical display field; the
--- numeric coordinates are an organiser-set map seed.
+-- Implementation note: column-level REVOKE is a no-op when the role
+-- still has table-level SELECT (Postgres uses the broadest grant).
+-- The earlier shape of this migration was just `revoke select
+-- (meet_lat, meet_lng) on events from anon;` — column-level revoke
+-- under a still-present table-level grant — and behaved as a no-op
+-- (caught by `rls_events_meet_point_test.sql` after it was added).
+-- The correct shape is: revoke the table-level SELECT for anon, then
+-- re-grant SELECT only on the safe columns. New columns added to
+-- this table will be deny-by-default for anon — that is the intended
+-- behaviour; if a future column is meant to be anon-readable, this
+-- migration must be amended.
 --
 -- Authenticated callers (any signed-in user, not just members) still
--- see the columns. This is a calculated trade-off — narrowing
--- further would require a SECURITY DEFINER RPC and refactoring
--- every event-detail render. The leak is narrowed from "every anon
--- on the internet" to "every signed-in user", and the seed-event
--- fixtures that previously had no `meet_lat` / `meet_lng` continue
--- to work (the values are nullable).
+-- see every column. Narrowing further would require a SECURITY
+-- DEFINER RPC and refactoring every event-detail render.
+--
+-- Anon-side cost: web `select('*')` on `events` would have erred
+-- 42501; the four caller sites in `apps/web/src/lib/data.ts` were
+-- updated alongside this migration to enumerate the safe columns.
 
-revoke select (meet_lat, meet_lng) on events from anon;
+revoke select on events from anon;
+
+grant select (
+  id,
+  club_id,
+  title,
+  description,
+  starts_at,
+  duration_min,
+  meet_label,
+  route_id,
+  distance_m,
+  pace_target_sec,
+  capacity,
+  created_by,
+  created_at,
+  updated_at,
+  recurrence_freq,
+  recurrence_byday,
+  recurrence_until,
+  recurrence_count
+) on events to anon;

@@ -95,14 +95,19 @@ begin
       select * from plan_workouts where week_id = week_record.id
     loop
       insert into plan_workouts (
-        week_id, kind, scheduled_date, target_distance_m, target_pace_sec_per_km,
-        target_intervals, notes
+        week_id, scheduled_date, kind, target_distance_m, target_duration_seconds,
+        target_pace_sec_per_km, target_pace_tolerance_sec, structure, notes
       )
       values (
-        new_week_id, workout_record.kind,
+        new_week_id,
         workout_record.scheduled_date + date_offset_days,
-        workout_record.target_distance_m, workout_record.target_pace_sec_per_km,
-        workout_record.target_intervals, workout_record.notes
+        workout_record.kind,
+        workout_record.target_distance_m,
+        workout_record.target_duration_seconds,
+        workout_record.target_pace_sec_per_km,
+        workout_record.target_pace_tolerance_sec,
+        workout_record.structure,
+        workout_record.notes
       );
     end loop;
   end loop;
