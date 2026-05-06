@@ -50,7 +50,7 @@ pnpm test:e2e:ui       # interactive picker
 
 ## What's covered today
 
-Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **37 Playwright e2e tests across 25 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **38 Playwright e2e tests across 26 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -610,7 +610,7 @@ Pure-helper tests for the webhook security primitives that gate `revenuecat-webh
 
 The handler bodies themselves (HTTP envelope, `createClient`, `webhook_events` insert / `23505` dedupe path, side-effect writes) are not unit-tested in isolation — that surface is end-to-end and currently exercised manually via the workflow described in [apps/backend/CLAUDE.md § Testing without real credentials](../apps/backend/CLAUDE.md#testing-without-real-credentials). The pure helpers above cover the security-critical decision points: signature comparison, replay window, identity validation, tier transition. Anything load-bearing on those four lives in tested code now.
 
-### `apps/web/tests-e2e/` — Playwright suite (37 tests across 25 files)
+### `apps/web/tests-e2e/` — Playwright suite (38 tests across 26 files)
 
 End-to-end browser tests that drive the real SvelteKit app against a real local Supabase. Unit tests pin pure helpers and SQL pins RLS at the database; this suite catches the next failure mode — **a UI fetch path that bypasses or misuses an otherwise-correct policy** (a wrong join, a dropped filter, a client-side lookup that trusts the URL, an optimistic update that never round-trips). Browser-only on purpose — mobile / watch don't have an equivalent harness (Flutter `integration_test` is too slow + flaky on CI to be worth the cycles right now).
 
@@ -664,7 +664,21 @@ tests-e2e/
     auth-walls.spec.ts         — RLS leak checks, anon redirects
     sign-in-out.spec.ts        — form sign-in + popover sign-out (uses ephemeral session, see preamble)
     navigation.spec.ts         — sidebar collapse persistence
+  cross-user/sagas/            — multi-step multi-user journeys with ephemeral users
+    club-join.spec.ts          — alice creates club, bob+carl join, alice sees members, alice deletes
 ```
+
+**Saga infrastructure** (`fixtures/saga-users.ts` + `fixtures/simulate.ts`). Sagas are multi-step multi-user journeys that need more users than the three pinned in `seed.sql` and/or actions only mobile/watch can do on the canonical web stack. Two helpers make sagas tractable:
+
+- **`createSagaUsers(n, opts?)` / `deleteSagaUsers(users)`** — admin-creates `n` ephemeral auth.users rows + matching `user_profiles`, signs each in via the real form once to capture storage state (parallel, single browser process). `deleteSagaUsers` sweeps non-cascading owner tables (`clubs`, `events`, `club_posts`, `route_reviews`, `training_plans`, `routes`, `runs`) before the auth.users delete, then unlinks the storage-state files. Uses the service-role key from `supabase status -o env` (cached for the test process). Cost: ~5-7 s setup for 3 users; sign-in dominates.
+- **`simulate.insertRun(...)`** — service-role helper for actions only mobile/watch can do on the canonical web stack ([decisions § 24](decisions.md)). Today: just `insertRun` + `deleteRun`. Future helpers as sagas demand them — `startLiveBroadcast` (insert `live_run_pings` so /live/[id] receives data without a real broadcaster), `insertEvent`, `insertClubMember`. Each helper bypasses RLS via the service-role client; keep the surface narrow — anything a real user could do via the web UI should go through the UI in the saga, not here.
+
+**Saga conventions** (validated by `cross-user/sagas/club-join.spec.ts`):
+1. Mint users in `beforeAll`, delete in `afterAll`. Per-test creation is too slow.
+2. One `test()` per saga journey — the saga IS the assertion; splitting it would re-run setup repeatedly AND leak shared state.
+3. One browser context per user. Same browser process, separate cookies + localStorage so each context acts as an isolated session.
+4. **Don't use `waitForLoadState('networkidle')` on pages with a Supabase realtime subscription** (e.g. `/clubs/[slug]` subscribes for member-count updates). The websocket keeps the network busy and `networkidle` never fires. Wait for the concrete element you need to interact with via `expect(locator).toBeVisible()` instead.
+5. **Tighten URL-match regexes when waiting for slug navigation** — Playwright's `waitForURL` returns the instant the regex matches the current URL. A permissive `\/clubs\/[a-z0-9-]+$/` matches `/clubs/new` (where alice already is) before the create-and-navigate completes. Anchor on something only the destination URL has — e.g. require a digit in the slug.
 
 The page-mirror layout makes "what tests do I have for `/runs/[id]`?" trivial (one file) and "where does my new test go?" obvious (matching folder, or `cross-user/` if the test needs a second context, or `cross-cutting/` if it spans pages). Add new files as the depth grows — e.g., `routes/builder.spec.ts` when `/routes/new` gets coverage, or `cross-user/sagas/club-event-run.spec.ts` for the multi-step multi-user flows that need ephemeral users.
 
