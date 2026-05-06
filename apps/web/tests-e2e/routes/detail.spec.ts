@@ -146,4 +146,23 @@ test.describe('/routes/[id]', () => {
 		});
 		expect(await page.locator('.tag-chip').count()).toBe(startCount);
 	});
+
+	test('not-found: visiting a missing route id shows "Route not found" with a way back', async ({
+		page
+	}) => {
+		// Stale link landing protection — same shape as the runs/[id]
+		// not-found test. Without this branch the {:else if route}
+		// fall-through rendered an empty SplitPane and a blank
+		// stats-panel, which looks broken.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/routes/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Route not found' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.getByRole('link', { name: 'Back to your routes' })
+		).toBeVisible();
+	});
 });

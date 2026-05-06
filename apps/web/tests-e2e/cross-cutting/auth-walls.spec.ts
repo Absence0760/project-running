@@ -45,13 +45,14 @@ test.describe('cross-user run isolation', () => {
 		await expect(
 			page.getByRole('heading', { name: 'Recovery jog (private)' })
 		).toHaveCount(0);
-		// Positive assertion: the run-detail layout's distinctive
-		// "All runs" back-link only renders when `run` is non-null —
-		// its absence proves the page hit the not-found branch, not
-		// the loaded-run branch.
+		// Positive assertion: the page lands on the not-found branch
+		// (RLS turned the row read into null → /runs/[id] renders the
+		// "Run not found" page instead of the detail layout). This is
+		// the same UX a user would see for a deleted run, by design —
+		// no information leak about whether the row exists.
 		await expect(
-			page.getByRole('link', { name: /All runs/i })
-		).toHaveCount(0);
+			page.getByRole('heading', { name: 'Run not found' })
+		).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("User B's /runs list excludes runner's runs (own list filter)", async ({
@@ -134,5 +135,31 @@ test.describe('anonymous walls', () => {
 	test('anon /runs redirects to /login', async ({ page }) => {
 		await page.goto('/runs');
 		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+	});
+
+	test('anon /runs/<id> bounces to /login?return_to=<path>; signing in lands back there', async ({
+		page
+	}) => {
+		// Stale-link recovery: a user clicking an emailed /runs/<id>
+		// link while signed out shouldn't land on /dashboard after
+		// sign-in — they should land on the URL they originally
+		// wanted. The auth guard in /+layout.svelte encodes the
+		// pathname into ?return_to and /login's safeReturnTo() reads
+		// it on a successful sign-in.
+		const target = `/runs/${RUNNER_PUBLIC_RUN_ID}`;
+		await page.goto(target);
+		await expect(page).toHaveURL(
+			new RegExp(`/login\\?return_to=${encodeURIComponent(target).replace(/\//g, '\\/')}`),
+			{ timeout: 10_000 }
+		);
+
+		// Now sign in via the form — the safeReturnTo() helper should
+		// route the user back to /runs/<id>, not the dashboard.
+		await page.getByPlaceholder('Email address').fill(USER_A.email);
+		await page.getByPlaceholder('Password').fill(USER_A.password);
+		await page.getByRole('button', { name: 'Sign In' }).click();
+		await expect(page).toHaveURL(new RegExp(target.replace(/\//g, '\\/') + '$'), {
+			timeout: 15_000
+		});
 	});
 });

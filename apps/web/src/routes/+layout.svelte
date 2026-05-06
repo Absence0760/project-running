@@ -75,10 +75,17 @@
 		return path.startsWith(href);
 	}
 
-	// Auth guard — redirect to /login if not authenticated on protected routes
+	// Auth guard — redirect to /login if not authenticated on protected routes.
+	// Preserve the original destination via ?return_to so the user lands back
+	// where they wanted after signing in (matches the safeReturnTo() helper
+	// already in /login). Without this, a user clicking a stale email link
+	// to /runs/<id> gets bounced to the dashboard after sign-in and has to
+	// hunt for the destination.
 	$effect(() => {
 		if (browser && !auth.loading && !auth.loggedIn && !isPublic($page.url.pathname)) {
-			goto('/login');
+			const returnTo = $page.url.pathname + $page.url.search;
+			const isDefault = returnTo === '/dashboard' || returnTo === '/';
+			goto(isDefault ? '/login' : `/login?return_to=${encodeURIComponent(returnTo)}`);
 		}
 	});
 

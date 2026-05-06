@@ -202,4 +202,24 @@ test.describe('/runs/[id]', () => {
 			.maybeSingle();
 		expect(stillThere).toBeNull();
 	});
+
+	test('not-found: visiting a missing run id shows "Run not found" with a way back', async ({
+		page
+	}) => {
+		// A user clicking a stale email/Slack link to a deleted run
+		// shouldn't see a blank shell — they should land on a page that
+		// says what happened and gives them a way out. Without this
+		// branch the {:else if run} fall-through rendered nothing,
+		// which feels broken and is a leave-the-app moment.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/runs/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Run not found' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.getByRole('link', { name: 'Back to your runs' })
+		).toBeVisible();
+	});
 });

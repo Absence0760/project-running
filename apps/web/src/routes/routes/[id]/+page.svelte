@@ -245,7 +245,18 @@
 
 {#if loading}
 	<div class="route-detail"><p class="loading">&nbsp;</p></div>
-{:else if route}
+{:else if !route}
+	<div class="route-detail">
+		<a href="/routes" class="back-link page-back">
+			<span class="material-symbols">arrow_back</span> Routes
+		</a>
+		<div class="not-found">
+			<h1>Route not found</h1>
+			<p>This route may have been deleted, or you may not have access to it.</p>
+			<a href="/routes" class="btn btn-primary">Back to your routes</a>
+		</div>
+	</div>
+{:else}
 <div class="route-detail">
 	<a href={backHref} class="back-link page-back">
 		<span class="material-symbols">arrow_back</span>
@@ -529,6 +540,16 @@
 		color: var(--color-text-tertiary);
 		padding: var(--space-2xl);
 	}
+	.not-found {
+		text-align: center;
+		padding: var(--space-2xl);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-md);
+		color: var(--color-text-secondary);
+	}
+	.not-found h1 { color: var(--color-text); margin: 0; }
 
 	.back-link {
 		display: inline-flex;

@@ -661,7 +661,18 @@
 
 {#if loading}
 	<div class="run-detail"><p class="loading-text">&nbsp;</p></div>
-{:else if run}
+{:else if !run}
+	<div class="run-detail">
+		<a href="/runs" class="back-link page-back">
+			<span class="material-symbols">arrow_back</span> All runs
+		</a>
+		<div class="not-found">
+			<h1>Run not found</h1>
+			<p>This run may have been deleted, or you may not have access to it.</p>
+			<a href="/runs" class="btn btn-primary">Back to your runs</a>
+		</div>
+	</div>
+{:else}
 <div class="run-detail">
 	<a href="/runs" class="back-link page-back">
 		<span class="material-symbols">arrow_back</span> All runs
@@ -1157,6 +1168,16 @@
 		color: var(--color-text-tertiary);
 		padding: var(--space-2xl);
 	}
+	.not-found {
+		text-align: center;
+		padding: var(--space-2xl);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-md);
+		color: var(--color-text-secondary);
+	}
+	.not-found h1 { color: var(--color-text); margin: 0; }
 
 	.run-detail {
 		display: flex;

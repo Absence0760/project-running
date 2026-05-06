@@ -154,6 +154,44 @@ test.describe('/coach', () => {
 		await expect(planTrigger).toContainText('Sydney Half 2026');
 	});
 
+	test('429 daily-limit response surfaces the retry message instead of failing silently', async ({
+		page
+	}) => {
+		// Free users have a daily message cap. When the server returns
+		// 429 with { used, tier, limit, message }, the client must
+		// surface a clear message so the user knows what happened —
+		// otherwise the assistant bubble vanishes mid-flight and the
+		// composer feels broken (a leave-the-app moment).
+		await page.route('**/api/coach', async (route) => {
+			await route.fulfill({
+				status: 429,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					error: 'rate_limited',
+					used: 5,
+					limit: 5,
+					tier: 'free',
+					message: 'Daily limit reached (5 messages). Come back tomorrow!'
+				})
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+
+		await composer.fill('What pace today?');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// Surfaced as the .error banner inside CoachChat, OR the daily-
+		// limit "no messages left" empty-state in the composer area.
+		// Either is acceptable — both communicate "nothing's broken,
+		// you've used your allowance" rather than silent failure.
+		await expect(
+			page.getByText(/Daily limit reached/i)
+		).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('send → mocked SSE response streams into an assistant bubble', async ({
 		page
 	}) => {
