@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
+import { clearNotifications } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
 
 /**
@@ -19,6 +20,16 @@ import { USER_A, USER_B } from '../fixtures/users';
  */
 
 test.describe('cross-user notifications', () => {
+	test.beforeEach(async () => {
+		// Reset runner's notifications so the badge starts at 0. The
+		// notifications table has no automatic cleanup and accumulates
+		// across test runs — once unread count crosses 9 the bell shows
+		// "9+" instead of the literal number, breaking the +1 assert
+		// below. A clear at the start guarantees `before=0` and
+		// `after=1` deterministically.
+		await clearNotifications(USER_A.id);
+	});
+
 	test('alex kudos runner → runner sees bell badge increment + popover entry', async ({
 		browser
 	}) => {

@@ -215,6 +215,74 @@ export async function deleteEvent(eventId: string): Promise<void> {
 	}
 }
 
+export async function insertKudos(runId: string, userId: string): Promise<void> {
+	const { error } = await getAdminClient()
+		.from('run_kudos')
+		.insert({ run_id: runId, user_id: userId });
+	if (error) {
+		throw new Error(`simulate.insertKudos failed: ${error.message}`);
+	}
+}
+
+export async function insertComment(opts: {
+	run_id: string;
+	author_id: string;
+	body: string;
+}): Promise<string> {
+	const { data, error } = await getAdminClient()
+		.from('run_comments')
+		.insert({ run_id: opts.run_id, author_id: opts.author_id, body: opts.body })
+		.select('id')
+		.single();
+	if (error || !data) {
+		throw new Error(`simulate.insertComment failed: ${error?.message ?? 'no row'}`);
+	}
+	return data.id as string;
+}
+
+export async function setClubMemberStatus(
+	clubId: string,
+	userId: string,
+	status: 'active' | 'pending' | 'banned',
+): Promise<void> {
+	const { error } = await getAdminClient()
+		.from('club_members')
+		.update({ status })
+		.eq('club_id', clubId)
+		.eq('user_id', userId);
+	if (error) {
+		throw new Error(`simulate.setClubMemberStatus failed: ${error.message}`);
+	}
+}
+
+export async function clearNotifications(userId: string): Promise<void> {
+	// Wipe the user's notifications. Tests that need a deterministic
+	// starting state (bell-badge tests asserting exact counts, inbox
+	// tests planting fresh items) call this in beforeEach. Real
+	// behaviour: notifications accumulate from kudos / comment / follow
+	// triggers, so cross-test leakage is the default unless cleared.
+	const { error } = await getAdminClient()
+		.from('notifications')
+		.delete()
+		.eq('user_id', userId);
+	if (error) {
+		throw new Error(`simulate.clearNotifications failed: ${error.message}`);
+	}
+}
+
+export async function setNotificationsUnread(userId: string): Promise<void> {
+	// Restore unread state across the user's notifications. Used as an
+	// afterEach safety net by the inbox test so the bell-badge test
+	// downstream still sees something to count.
+	const { error } = await getAdminClient()
+		.from('notifications')
+		.update({ read_at: null })
+		.eq('user_id', userId);
+	if (error) {
+		throw new Error(`simulate.setNotificationsUnread failed: ${error.message}`);
+	}
+}
+
 export async function clearUserSettingKey(userId: string, key: string): Promise<void> {
 	const admin = getAdminClient();
 	const { data: existing } = await admin
