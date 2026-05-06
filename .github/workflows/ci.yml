@@ -88,3 +88,70 @@ jobs:
             echo "Run 'dart run scripts/gen_dart_models.dart' locally and commit the result."
             exit 1
           fi
+
+  e2e-web:
+    name: Web e2e (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      # `supabase start` brings the stack up but does NOT run seed.sql
+      # (seed.sql only runs on `supabase db reset`). The e2e suite
+      # depends on the pinned UUIDs + seeded users, so we reset
+      # immediately after start.
+      - name: Start local Supabase stack
+        working-directory: apps/backend
+        run: supabase start
+      - name: Apply migrations + seed (db reset)
+        working-directory: apps/backend
+        run: supabase db reset --local
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      # The dev server reads PUBLIC_* keys from apps/web/.env. Write the
+      # local-stack URL + anon key from `supabase status` so the in-test
+      # browser hits the same DB the seed populated.
+      - name: Write apps/web/.env from supabase status
+        working-directory: apps/backend
+        run: |
+          ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
+          API_URL=$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '"')
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}"
+            echo "PUBLIC_MAPTILER_KEY="
+            echo "PUBLIC_STRAVA_CLIENT_ID="
+            echo "PUBLIC_REVENUECAT_WEB_API_KEY="
+            echo "PUBLIC_VAPID_PUBLIC_KEY="
+          } > ../web/.env
+      - name: Run Playwright suite
+        working-directory: apps/web
+        run: pnpm test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7

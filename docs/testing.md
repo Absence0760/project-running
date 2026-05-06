@@ -30,6 +30,11 @@ flutter test --name "^position filter chain"
 
 # Web (TypeScript) tests — from apps/web
 npx tsx --test src/lib/training.test.ts
+
+# Web e2e (Playwright) — from apps/web. Requires local Supabase
+# running with seed.sql applied: cd apps/backend && supabase db reset.
+pnpm test:e2e          # headless run
+pnpm test:e2e:ui       # interactive picker
 ```
 
 `flutter test` has no built-in `--watch` flag. For a tight edit-save-test loop, either rerun the single file manually (sub-second) or wire up an editor integration — the Flutter plugin for VS Code and Android Studio both support running individual tests from gutter icons and auto-re-running on save.
@@ -848,6 +853,10 @@ Tests run in CI via `melos exec` directly — the per-script lookup that `melos 
 ```
 
 The scopes pin coverage to the two packages that own meaningful test bodies; widening the glob doesn't add coverage and slows the runner. `melos exec -- dart analyze` walks every Flutter package and gates on the analyzer. See [architecture.md — CI/CD](architecture.md#cicd-pipeline) for the rest of the pipeline wiring.
+
+Five jobs run on every PR + push to `main`: `test-packages` (Flutter), `parity-types` (TS schema drift + web TS unit tests), `build-watch-wear` (Wear OS Kotlin assemble + unit tests), `schema-codegen-drift` (Dart + Kotlin row-class regen + diff), and `e2e-web` (Playwright). The `e2e-web` job stands up the local Supabase stack (`supabase start` + `supabase db reset --local` to apply seed.sql — `supabase start` alone does NOT run the seed file), installs workspace deps with `pnpm`, caches the Chromium download keyed on `pnpm-lock.yaml`, writes `apps/web/.env` from `supabase status -o env`, and runs `pnpm test:e2e`. On failure it uploads `playwright-report/` + `test-results/` (traces + screenshots + videos for retried tests) for 7 days. Total wall-clock: ~3-4 minutes on the free runner.
+
+The pgtap RLS suite is **not yet wired into CI**. Run it locally with `cd apps/backend && supabase test db --local` before opening a PR that touches an RLS policy or a SECURITY DEFINER function. CI gating is on the [`testing.md` follow-up list](#whats-not-covered-honest).
 
 ---
 
