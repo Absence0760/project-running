@@ -684,13 +684,17 @@ UPDATE user_profiles
  WHERE id = 'c3d4e5f6-a7b8-9012-cdef-345678901234';
 
 -- 4. Cross-user engagement on one of runner's public runs. Pick the
--- most recent so the kudos / comment surface on the runner's profile
--- + on the public share page.
+-- most recent UNLESS it's the pinned RUNNER_PUBLIC_RUN_ID — that one
+-- is reserved for the data-flow Playwright spec which toggles kudos
+-- on/off and needs a clean starting state. Filtering it out leaves
+-- engagement on a different runner run, so the engagement-chain UI
+-- still has content to render on share pages + run-detail.
 INSERT INTO run_kudos (user_id, run_id)
 SELECT 'b2c3d4e5-f6a7-8901-bcde-f23456789012', id
   FROM runs
  WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
    AND is_public = true
+   AND id != '11112222-3333-4444-5555-666677778888'
  ORDER BY started_at DESC
  LIMIT 1
 ON CONFLICT DO NOTHING;
@@ -700,6 +704,7 @@ SELECT id, 'b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Strong work — that pace lo
   FROM runs
  WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
    AND is_public = true
+   AND id != '11112222-3333-4444-5555-666677778888'
  ORDER BY started_at DESC
  LIMIT 1;
 
