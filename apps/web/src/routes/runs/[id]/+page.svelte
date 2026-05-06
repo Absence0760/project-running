@@ -36,6 +36,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { isInAnyZone, PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/privacy';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
@@ -52,6 +53,7 @@
 	let editTitle = $state('');
 	let editNotes = $state('');
 	let showDeleteConfirm = $state(false);
+	let showShareConfirm = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
 	/// Map-matched track + status from run_matched_tracks. Populated on
 	/// mount in parallel with the main run fetch. Failure here is L4
@@ -282,7 +284,36 @@
 	}
 
 	async function handleShare() {
+		if (!run || !auth.user) return;
+		// Privacy-zone guard: if the run's track passes through any of
+		// the owner's saved zones, warn before flipping is_public. The
+		// non-owner share view clips the start/end of the track via
+		// `clip-public-track` (decisions §33), but the owner has no
+		// way to know clipping will happen unless we tell them.
+		// Skip the warning when the run is already public (Share is a
+		// re-copy in that case) or has no track (nothing to clip).
+		if (!run.is_public && run.track && run.track.length > 0) {
+			try {
+				const { loadSettings, effective } = await import('$lib/settings');
+				const settings = await loadSettings(auth.user.id);
+				const zones =
+					effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
+				if (zones.length > 0 && run.track.some((p) => isInAnyZone(p, zones))) {
+					showShareConfirm = true;
+					return;
+				}
+			} catch (_) {
+				// Settings load failure shouldn't block sharing — fall
+				// through to the unguarded path so the user can still
+				// share.
+			}
+		}
+		await proceedShare();
+	}
+
+	async function proceedShare() {
 		if (!run) return;
+		showShareConfirm = false;
 		try {
 			await makeRunPublic(run.id);
 			const url = `${window.location.origin}/share/run/${run.id}`;
@@ -1072,6 +1103,15 @@
 	onconfirm={confirmDelete}
 	oncancel={() => showDeleteConfirm = false}
 	danger
+/>
+
+<ConfirmDialog
+	open={showShareConfirm}
+	title="Share through a privacy zone?"
+	message="This run starts or ends inside one of your privacy zones. Viewers will see a clipped track with the in-zone segments hidden. Continue?"
+	confirmLabel="Share anyway"
+	onconfirm={proceedShare}
+	oncancel={() => (showShareConfirm = false)}
 />
 
 <!-- Off-screen share card. 1080 square, rendered to PNG by
