@@ -252,8 +252,14 @@
 		// reads `auth.user?.id` and returns [] if it's null — which
 		// would race on cold loads where the page mounts before the
 		// auth cookie is processed and produce a permanent "No runs
-		// found" state. Same pattern the dashboard's onMount uses.
-		if (auth.loading) return;
+		// found" state.
+		//
+		// Gate on BOTH `auth.loading` and `auth.user` because there's
+		// a window where auth.svelte.ts has flipped loading=false
+		// (session check is done) but `user` is still null
+		// (fetchUser is in flight, profile not yet loaded). The
+		// $effect re-fires when auth.user becomes set.
+		if (auth.loading || !auth.user) return;
 		if (fetchMode !== lastFetchMode) {
 			lastFetchMode = fetchMode;
 			loadInitial();
