@@ -97,7 +97,13 @@ function createAuthStore() {
 	}
 
 	async function logout() {
-		await supabase.auth.signOut();
+		// `scope: 'local'` only invalidates this browser context. The
+		// default ('global') would also revoke refresh tokens on the
+		// user's mobile + watch sessions, which is rarely what the
+		// user means when they click Sign out on the web — sign-out-
+		// everywhere belongs on a separate "sign out of all devices"
+		// affordance, not the default Sign out button.
+		await supabase.auth.signOut({ scope: 'local' });
 		user = null;
 		loggedIn = false;
 	}
