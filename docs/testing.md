@@ -50,7 +50,7 @@ pnpm test:e2e:ui       # interactive picker
 
 ## What's covered today
 
-Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **58 Playwright e2e tests across 27 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **63 Playwright e2e tests across 31 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -610,7 +610,7 @@ Pure-helper tests for the webhook security primitives that gate `revenuecat-webh
 
 The handler bodies themselves (HTTP envelope, `createClient`, `webhook_events` insert / `23505` dedupe path, side-effect writes) are not unit-tested in isolation — that surface is end-to-end and currently exercised manually via the workflow described in [apps/backend/CLAUDE.md § Testing without real credentials](../apps/backend/CLAUDE.md#testing-without-real-credentials). The pure helpers above cover the security-critical decision points: signature comparison, replay window, identity validation, tier transition. Anything load-bearing on those four lives in tested code now.
 
-### `apps/web/tests-e2e/` — Playwright suite (58 tests across 27 files)
+### `apps/web/tests-e2e/` — Playwright suite (63 tests across 31 files)
 
 End-to-end browser tests that drive the real SvelteKit app against a real local Supabase. Unit tests pin pure helpers and SQL pins RLS at the database; this suite catches the next failure mode — **a UI fetch path that bypasses or misuses an otherwise-correct policy** (a wrong join, a dropped filter, a client-side lookup that trusts the URL, an optimistic update that never round-trips). Browser-only on purpose — mobile / watch don't have an equivalent harness (Flutter `integration_test` is too slow + flaky on CI to be worth the cycles right now).
 
@@ -644,13 +644,17 @@ tests-e2e/
     list.spec.ts               — /routes (search, filter, tab switch)
     detail.spec.ts             — /routes/[id] (star, public toggle; future: tags, reviews)
   plans/
-    list.spec.ts               — /plans (drills into /plans/[id])
+    list.spec.ts               — /plans (list + drill into /plans/[id])
+    detail.spec.ts             — /plans/[id] (week grid, workout-day modal)
   clubs/
     list.spec.ts               — /clubs (My + Browse tabs)
+    detail.spec.ts             — /clubs/[slug] (Members tab, create/delete CRUD via /clubs/new)
   settings/
     account.spec.ts            — display name, parkrun number, password
     preferences.spec.ts        — theme, units, map style, privacy zones
     integrations.spec.ts       — Strava, parkrun, Garmin
+    devices.spec.ts            — current-browser row + "This device" badge
+    licenses.spec.ts           — open-source license list
     upgrade.spec.ts            — Pro pricing, RevenueCat checkout
   share/
     run.spec.ts                — /share/run/[id] anon + authed-non-owner view
