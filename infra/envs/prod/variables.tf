@@ -6,11 +6,11 @@ variable "aws_region" {
 variable "apex_domain" {
   description = "Should match the apex configured in `infra/dns`."
   type        = string
-  default     = "runonward.app"
+  default     = "runonward.com"
 }
 
 variable "public_supabase_url" {
-  description = "Production Supabase REST URL. Once `api.runonward.app` is wired, switch to that."
+  description = "Production Supabase REST URL. Once `api.runonward.com` is wired, switch to that."
   type        = string
 }
 

@@ -106,7 +106,7 @@ The iOS toolchain doesn't accept Supabase's `sb_publishable_...` keys via inline
 
 ```json
 {
-  "SUPABASE_URL": "https://api.runonward.app",
+  "SUPABASE_URL": "https://api.runonward.com",
   "SUPABASE_ANON_KEY": "sb_publishable_...",
   "MAPTILER_KEY": "...",
   "REVENUECAT_API_KEY": "appl_...",
@@ -276,7 +276,7 @@ Apple's appeal process is faster than Google's but still painful. Mitigations:
 - [ ] Bundle IDs registered at developer.apple.com (iOS + Watch)
 - [ ] Capabilities enabled on both bundle IDs (HealthKit, Sign in with Apple, Push, Background Modes, App Groups)
 - [ ] App Store Connect listing created (description, keywords, support URL, screenshots — required at iPhone 6.7", iPhone 5.5", iPad 12.9", Apple Watch screen sizes)
-- [ ] Privacy policy live at `runonward.app/privacy`
+- [ ] Privacy policy live at `runonward.com/privacy`
 - [ ] App Privacy nutrition label completed, matches policy
 - [ ] Distribution certificate generated, in 1Password and GitHub Secrets
 - [ ] Provisioning profiles for both bundle IDs in GitHub Secrets

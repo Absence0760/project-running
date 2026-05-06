@@ -5,7 +5,7 @@ variable "aws_region" {
 
 variable "apex_domain" {
   type    = string
-  default = "runonward.app"
+  default = "runonward.com"
 }
 
 variable "preview_subdomain" {

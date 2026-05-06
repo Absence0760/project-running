@@ -15,7 +15,7 @@ This file is the operational counterpart of [`apps/backend/CLAUDE.md`](CLAUDE.md
 **Tier: Pro ($25/month).** Required for:
 
 - Daily Point-In-Time Recovery (free tier is project-only snapshots with a 7-day window)
-- Custom domain (`api.runonward.app`)
+- Custom domain (`api.runonward.com`)
 - Larger compute (4 GB RAM minimum) — the materialized-view refresh + the run-write trigger fan-out push the free tier's 1 GB instance into swap fast as soon as bulk Strava imports run
 - 8 GB Storage included (raw track gzips are ~10 KB each; 1k users × 200 runs ≈ 2 GB → fits Pro for the foreseeable)
 - Removal of the 1-week pause on inactive projects
@@ -78,7 +78,7 @@ done
 cd apps/backend
 
 supabase secrets set --project-ref <ref> \
-  PARKRUN_USER_AGENT="run-app/1.0 (+https://runonward.app/bot)" \
+  PARKRUN_USER_AGENT="run-app/1.0 (+https://runonward.com/bot)" \
   STRAVA_CLIENT_ID="..." \
   STRAVA_CLIENT_SECRET="..." \
   STRAVA_VERIFY_TOKEN="$(openssl rand -hex 16)" \
@@ -90,7 +90,7 @@ supabase secrets set --project-ref <ref> \
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by the platform — you don't `supabase secrets set` those.
 
-**Strava OAuth callback URL.** Once the project is live, set the Strava developer dashboard's redirect URL to `https://runonward.app/auth/strava/callback`. The `strava-import` EF expects to receive the OAuth `code` from a client-side POST after the redirect lands on the web app.
+**Strava OAuth callback URL.** Once the project is live, set the Strava developer dashboard's redirect URL to `https://runonward.com/auth/strava/callback`. The `strava-import` EF expects to receive the OAuth `code` from a client-side POST after the redirect lands on the web app.
 
 **RevenueCat webhook URL.** In the RevenueCat dashboard → Project → Integrations → Webhooks, set:
 - URL: `https://<ref>.supabase.co/functions/v1/revenuecat-webhook`
@@ -100,17 +100,17 @@ supabase secrets set --project-ref <ref> \
 
 ---
 
-## Custom domain — `api.runonward.app`
+## Custom domain — `api.runonward.com`
 
 Optional but recommended; lets us migrate Supabase projects (region change, account swap) without invalidating every client's stored URL.
 
 In the Supabase dashboard → Settings → Custom Domains:
 
-1. Add `api.runonward.app`.
+1. Add `api.runonward.com`.
 2. Supabase prints a CNAME target (`<ref>.supabase.co`) and a TXT verification record.
 3. Add both to Cloudflare DNS (or whichever registrar you use). TTL 300.
 4. Wait for verification (usually a few minutes; can take up to an hour).
-5. Once verified, every client's `SUPABASE_URL` becomes `https://api.runonward.app` instead of `https://<ref>.supabase.co`.
+5. Once verified, every client's `SUPABASE_URL` becomes `https://api.runonward.com` instead of `https://<ref>.supabase.co`.
 
 Update the value in:
 - Vercel env (`PUBLIC_SUPABASE_URL`)
@@ -168,7 +168,7 @@ The schema is what local `supabase db reset` builds — see [api_database.md](..
 | Realtime | Supabase dashboard → Realtime → Channels | active subscribers, message rate |
 | Custom queries | `select * from postgres_log;` from the SQL editor | one-off forensics |
 
-**External uptime probe** (Better Stack or UptimeRobot): hit `https://api.runonward.app/rest/v1/runs?select=count&limit=0`. It's a cheap PostgREST call that returns 200 only if Postgres is up + PostgREST is up + RLS still permits the anon role to read the table count. Set the alarm threshold at 2 consecutive failures (60 s gap).
+**External uptime probe** (Better Stack or UptimeRobot): hit `https://api.runonward.com/rest/v1/runs?select=count&limit=0`. It's a cheap PostgREST call that returns 200 only if Postgres is up + PostgREST is up + RLS still permits the anon role to read the table count. Set the alarm threshold at 2 consecutive failures (60 s gap).
 
 **Sentry on the EF side:** every EF wraps its `serve` handler in `withSentry('<ef-name>', ...)` from `functions/_shared/sentry.ts`. Unhandled errors are captured with the EF name as a tag, then a 500 is returned so the caller still gets a clean response. Init is gated on `SENTRY_DSN` — set it via `supabase secrets set SENTRY_DSN=... APP_RELEASE=<tag>` against the linked project; an unset DSN makes the wrapper a passthrough so local `supabase functions serve` doesn't need a Sentry account.
 
@@ -231,7 +231,7 @@ If production Postgres is corrupt / lost / wedged:
 2. Open the dashboard → Settings → Database → Backups. Pick the most recent good backup.
 3. **Point In Time Recovery** lets you restore to any minute in the last 7 days. Use it if the corruption has a known timestamp; use the daily backup otherwise.
 4. The restore goes to a new project (Supabase doesn't restore-in-place). The new project gets a new `<ref>`.
-5. Update the `api.runonward.app` CNAME to the new project. Within 5 min DNS propagates and clients resume.
+5. Update the `api.runonward.com` CNAME to the new project. Within 5 min DNS propagates and clients resume.
 6. Edge Functions don't migrate automatically — re-run `supabase functions deploy` for each.
 7. Once the new project has been smoke-tested, archive the old one (don't delete for 7 days in case you need to grab additional data).
 
@@ -273,7 +273,7 @@ Before flipping the row in [`docs/deployment.md`](../../docs/deployment.md) from
 - [ ] `supabase db push` ran clean against the live project
 - [ ] All seven Edge Functions deployed; each logs a successful test invocation
 - [ ] EF secrets set (`PARKRUN_USER_AGENT`, Strava env, RevenueCat env)
-- [ ] Custom domain `api.runonward.app` verified
+- [ ] Custom domain `api.runonward.com` verified
 - [ ] `pg_cron` schedules confirmed (`SELECT * FROM cron.job;` from SQL editor)
 - [ ] Storage versioning on for `runs`
 - [ ] External uptime probe live

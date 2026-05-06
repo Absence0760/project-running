@@ -44,7 +44,7 @@ Per-service deep dives:
               ┌─────────────┴─────────────┐
               │                           │
               ▼                           ▼
-      runonward.app                  app stores
+      runonward.com                  app stores
       ─────────────                  ──────────
       Route 53 → CloudFront          Play Store (Android)
         ├── default → S3 (static)    Play Store (Wear OS)
@@ -52,7 +52,7 @@ Per-service deep dives:
             │
             ├────► api.anthropic.com (or self-hosted via OPENAI_BASE_URL)
             │
-            └────► Supabase Cloud (api.runonward.app)
+            └────► Supabase Cloud (api.runonward.com)
                    ├── Postgres + PostGIS
                    ├── Auth (email + Google + Apple)
                    ├── Storage (runs/, route-files/, run-photos/)
@@ -85,21 +85,21 @@ Per-service deep dives:
 
 ## Domain and DNS
 
-Buy `runonward.app` (or whatever the brand ends up as) at one registrar. Recommended: Cloudflare Registrar (no markup, free DNSSEC) or Porkbun.
+Buy `runonward.com` (or whatever the brand ends up as) at one registrar. Recommended: Cloudflare Registrar (no markup, free DNSSEC) or Porkbun.
 
 Subdomain map:
 
 | Subdomain | Points at | TTL |
 |---|---|---|
-| `runonward.app` | Route 53 ALIAS → CloudFront distribution | 300 |
-| `www.runonward.app` | Route 53 ALIAS → CloudFront distribution | 300 |
-| `api.runonward.app` | Supabase project URL (CNAME or A — depends on plan) | 300 |
-| `worker.runonward.app` | Not exposed publicly — internal Fly.io 6PN address only | — |
-| `osrm.runonward.app` | Same — never publicly resolvable | — |
+| `runonward.com` | Route 53 ALIAS → CloudFront distribution | 300 |
+| `www.runonward.com` | Route 53 ALIAS → CloudFront distribution | 300 |
+| `api.runonward.com` | Supabase project URL (CNAME or A — depends on plan) | 300 |
+| `worker.runonward.com` | Not exposed publicly — internal Fly.io 6PN address only | — |
+| `osrm.runonward.com` | Same — never publicly resolvable | — |
 
-The Coach endpoint lives under `runonward.app/api/coach`; CloudFront routes that path to a Lambda Function URL while everything else hits the S3 origin. Same domain, same CORS posture as the static site — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages).
+The Coach endpoint lives under `runonward.com/api/coach`; CloudFront routes that path to a Lambda Function URL while everything else hits the S3 origin. Same domain, same CORS posture as the static site — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages).
 
-**Email-from domain** (for transactional email — password resets, magic links): `noreply@runonward.app` via SendGrid or Resend. Configure SPF + DKIM + DMARC at the same DNS provider. Supabase's default `noreply@mail.app.supabase.io` works in dev but ends up in spam folders for half the population in prod.
+**Email-from domain** (for transactional email — password resets, magic links): `noreply@runonward.com` via SendGrid or Resend. Configure SPF + DKIM + DMARC at the same DNS provider. Supabase's default `noreply@mail.app.supabase.io` works in dev but ends up in spam folders for half the population in prod.
 
 ---
 
@@ -136,13 +136,13 @@ The bar for v1 is: **someone gets paged when the site is down, can read the rele
 | Backend (Supabase) | Supabase Dashboard → Logs | Postgres slow queries, EF invocations, Auth events | included |
 | Worker + OSRM (Fly.io) | `fly logs -a job_worker` / `fly logs -a osrm` + native metrics | per-machine CPU/RAM, restart history, log stream | included |
 | Cross-service errors | **Sentry** — single org, separate projects per service | grouped exceptions, release tagging, breadcrumb trail on mobile | $0 (free tier) → $26 (team) |
-| Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `api.runonward.app/health`, `runonward.app/api/coach` (HEAD-only) | $0 (free tier) |
+| Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `api.runonward.com/health`, `runonward.com/api/coach` (HEAD-only) | $0 (free tier) |
 | RevenueCat / Stripe events | dashboards on each | subscription lifecycle, churn signals | included |
 
 **Alerts that page someone** (Better Stack → email + push):
 
-1. `runonward.app/` returns non-200 for >2 min
-2. `api.runonward.app/rest/v1/runs?select=count` returns non-200 for >2 min (proxy for "PostgREST is up + DB reachable + RLS still permits reads")
+1. `runonward.com/` returns non-200 for >2 min
+2. `api.runonward.com/rest/v1/runs?select=count` returns non-200 for >2 min (proxy for "PostgREST is up + DB reachable + RLS still permits reads")
 3. Worker hasn't claimed a job in >10 min while `jobs.status='queued'` count > 0 (worker stuck)
 4. OSRM `/health` non-200 for >5 min
 5. Sentry: any new error class with >10 events in 5 min

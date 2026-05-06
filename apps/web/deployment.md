@@ -24,7 +24,7 @@ Same domain, same CORS posture for both halves. No API Gateway in front of the L
 ## Architecture
 
 ```
-Route 53 (runonward.app, www.runonward.app)
+Route 53 (runonward.com, www.runonward.com)
    │  ALIAS / A
    ▼
 CloudFront distribution (one per env: prod, preview)
@@ -52,13 +52,13 @@ IAM role  s3:PutObject       on the env's artifacts bucket prefix
 
 | Hostname | Routed to | TTL |
 |---|---|---|
-| `runonward.app` | Route 53 ALIAS → CloudFront (prod distribution) | 300 |
-| `www.runonward.app` | Route 53 ALIAS → CloudFront (prod distribution) | 300 |
-| `preview.runonward.app` | Route 53 ALIAS → CloudFront (preview distribution) | 300 |
+| `runonward.com` | Route 53 ALIAS → CloudFront (prod distribution) | 300 |
+| `www.runonward.com` | Route 53 ALIAS → CloudFront (prod distribution) | 300 |
+| `preview.runonward.com` | Route 53 ALIAS → CloudFront (preview distribution) | 300 |
 
-ACM provisions the cert via DNS validation against Route 53 — no email validation, no manual cert renewal. Cert covers `runonward.app`, `www.runonward.app`, `preview.runonward.app`.
+ACM provisions the cert via DNS validation against Route 53 — no email validation, no manual cert renewal. Cert covers `runonward.com`, `www.runonward.com`, `preview.runonward.com`.
 
-**Domain registration.** Either register `runonward.app` directly in Route 53 (~$12/year for `.app`), or register at Cloudflare Registrar / Porkbun and delegate the NS records to Route 53. Both are fine; Route-53-native is simpler since DNS + cert renewal use the same hosted zone.
+**Domain registration.** Either register `runonward.com` directly in Route 53 (~$12/year for `.app`), or register at Cloudflare Registrar / Porkbun and delegate the NS records to Route 53. Both are fine; Route-53-native is simpler since DNS + cert renewal use the same hosted zone.
 
 ---
 
@@ -130,7 +130,7 @@ The static SvelteKit build inlines `PUBLIC_*` vars at build time. The CI workflo
 
 | Variable | Source (GitHub Secrets) | Notes |
 |---|---|---|
-| `PUBLIC_SUPABASE_URL` | `PUBLIC_SUPABASE_URL` | once custom domain is live, use `https://api.runonward.app` |
+| `PUBLIC_SUPABASE_URL` | `PUBLIC_SUPABASE_URL` | once custom domain is live, use `https://api.runonward.com` |
 | `PUBLIC_SUPABASE_ANON_KEY` | `PUBLIC_SUPABASE_ANON_KEY` | the **publishable** key, not service-role |
 | `PUBLIC_MAPTILER_KEY` | `PUBLIC_MAPTILER_KEY` | shared with mobile + Wear OS |
 | `PUBLIC_REVENUECAT_WEB_API_KEY` | `PUBLIC_REVENUECAT_WEB_API_KEY` | client-side web SDK key |
@@ -165,7 +165,7 @@ Triggered by tagging `web@*`. The workflow at `.github/workflows/release-web.yml
 10. `aws cloudfront create-invalidation --distribution-id <id> --paths "/*"` — invalidate the cache.
 11. Attach the build zip to a GitHub Release for rollback.
 
-Preview environment fires on every push to `main` against the `preview` env's bucket / distribution / Lambda, scoped to `preview.runonward.app`. Tags only deploy to `prod`.
+Preview environment fires on every push to `main` against the `preview` env's bucket / distribution / Lambda, scoped to `preview.runonward.com`. Tags only deploy to `prod`.
 
 ---
 
@@ -220,12 +220,12 @@ The `Notifications` row in the database carries the user's subscription endpoint
 - 4xx rate at the CloudFront distribution >5% over 5 min → same topic (catches mass auth failures, SPA fallback misconfig, etc.)
 - 5xx rate at the distribution >1% over 5 min → same topic
 
-The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-launch a single email subscription is enough; route to `oncall@runonward.app` once the team is real.
+The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-launch a single email subscription is enough; route to `oncall@runonward.com` once the team is real.
 
 **Other alerts:**
 
 - Sentry: any new error class with >10 events in 5 min
-- Better Stack probe of `https://runonward.app/` returning non-200 for >2 min
+- Better Stack probe of `https://runonward.com/` returning non-200 for >2 min
 - Anthropic cost above $X/day (Console → Usage → Alerts)
 
 ---
@@ -290,14 +290,14 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 - [ ] `infra/envs/prod/terraform.tfvars` sets `monthly_budget_limit_usd` + `budget_alert_emails` (Terraformed in `infra/envs/prod/budgets.tf`; fires at 50 % / 100 % ACTUAL + 100 % FORECASTED)
 - [ ] `infra/bootstrap` applied (S3 state bucket created; locking is S3-native)
 - [ ] AWS provider configured for `us-east-1` (the cert provider alias resolves to the same region; harmless)
-- [ ] Domain `runonward.app` registered (Route 53 or external + delegated)
+- [ ] Domain `runonward.com` registered (Route 53 or external + delegated)
 - [ ] Route 53 hosted zone live, NS records propagated
 - [ ] ACM cert issued in `us-east-1`, DNS-validated
 - [ ] Terraform applied (in order): `infra/dns`, `infra/github-oidc`, `infra/envs/preview`, `infra/envs/prod`
 - [ ] GitHub OIDC role trust policy verified (only the repo + ref scopes intended can assume it)
 - [ ] sops file populated: `infra/envs/prod/secrets.enc.yaml` (with `ANTHROPIC_API_KEY`, `SENTRY_DSN`); same for `preview/`
 - [ ] GitHub Secrets populated: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_API_KEY`, `PUBLIC_SENTRY_DSN`, `AWS_DEPLOY_ROLE_ARN_PROD`, `AWS_DEPLOY_ROLE_ARN_PREVIEW`
-- [ ] First preview deploy green; smoke test sign-in + dashboard + run detail at `preview.runonward.app`
+- [ ] First preview deploy green; smoke test sign-in + dashboard + run detail at `preview.runonward.com`
 - [ ] First prod deploy green via tag `web@0.1.0`
 - [ ] Coach endpoint responds (try a free user → expect a successful streamed reply, then a 4th request → expect 429)
 - [ ] Push notification flow verified end-to-end (subscribe in Settings, trigger via a kudos on another account)

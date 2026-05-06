@@ -1,8 +1,8 @@
 name: Release Web
 
 # Two triggers, two environments:
-#   - tag `web@*`     →  prod  →  runonward.app + www.runonward.app
-#   - push to `main`  →  preview  →  preview.runonward.app
+#   - tag `web@*`     →  prod  →  runonward.com + www.runonward.com
+#   - push to `main`  →  preview  →  preview.runonward.com
 #
 # Hosted on AWS (S3 + CloudFront + Lambda + Route 53). Provisioned by
 # Terraform (infra/) — see decisions.md § 53 and apps/web/deployment.md.
@@ -144,7 +144,7 @@ jobs:
           echo "bucket=runonward-web-${ENV}-site" >> "$GITHUB_OUTPUT"
           echo "lambda=runonward-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
 
-          if [[ "$ENV" == "prod" ]]; then ALIAS="runonward.app"; else ALIAS="preview.runonward.app"; fi
+          if [[ "$ENV" == "prod" ]]; then ALIAS="runonward.com"; else ALIAS="preview.runonward.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \
             --query "DistributionList.Items[?Aliases.Items != null && contains(Aliases.Items, '${ALIAS}')] | [0].Id" \
             --output text)

@@ -78,7 +78,7 @@ Plus build-time secrets injected via Gradle properties:
 
 | Secret | Source |
 |---|---|
-| `SUPABASE_URL` | `https://api.runonward.app` (production) |
+| `SUPABASE_URL` | `https://api.runonward.com` (production) |
 | `SUPABASE_ANON_KEY` | publishable key |
 | `PUBLIC_MAPTILER_KEY` | shared MapTiler key |
 

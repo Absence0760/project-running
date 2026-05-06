@@ -28,10 +28,10 @@ The release workflow always lands at the **Internal track**. Manual promotion to
 
 ## One-time Play Console setup
 
-1. **Pay the $25 developer registration fee.** One time, per Google account. Use a long-lived account that isn't tied to a single person's identity (e.g. `dev@runonward.app`).
+1. **Pay the $25 developer registration fee.** One time, per Google account. Use a long-lived account that isn't tied to a single person's identity (e.g. `dev@runonward.com`).
 2. **Create the app.** Play Console → Create app. Name, default language (en-GB), Type: App, Free.
 3. **Fill the Store listing.** Short description, long description, screenshots (need at least 2 phone screenshots, 1 7"+ tablet, 1 10"+ tablet for newer Play guidelines), feature graphic (1024×500 PNG), app icon (512×512 PNG).
-4. **Privacy policy URL.** Required for any app that touches location. Host at `runonward.app/privacy` — see § Privacy policy below.
+4. **Privacy policy URL.** Required for any app that touches location. Host at `runonward.com/privacy` — see § Privacy policy below.
 5. **App content questionnaire.** Click through every "Privacy", "Ads", "Target audience", "Data safety" form. **Data safety is non-trivial** — see § Data safety below.
 6. **App access.** Provide test credentials (`runner@test.com` / `testtest` against a *staging* Supabase project — never production seed). The Play review team uses these to access functionality behind sign-in.
 7. **Content rating.** Complete the IARC questionnaire. Running app should land at "Everyone".
@@ -106,7 +106,7 @@ The production flavour reads from `--dart-define`s (passed by the workflow):
 
 | Define | Value |
 |---|---|
-| `SUPABASE_URL` | `https://api.runonward.app` |
+| `SUPABASE_URL` | `https://api.runonward.com` |
 | `SUPABASE_ANON_KEY` | publishable key from Supabase |
 | `MAPTILER_KEY` | from MapTiler dashboard |
 | `REVENUECAT_API_KEY` | RevenueCat Android key |
@@ -131,14 +131,14 @@ The `BACKGROUND_LOCATION` permission is the most scrutinized at review time. The
 
 ## Privacy policy
 
-Required for the Play listing. Host at `https://runonward.app/privacy` — a static SvelteKit route in `apps/web/src/routes/privacy/+page.svelte`. Must cover, at minimum:
+Required for the Play listing. Host at `https://runonward.com/privacy` — a static SvelteKit route in `apps/web/src/routes/privacy/+page.svelte`. Must cover, at minimum:
 
 - What we collect (location, optional HR, optional photos, account email)
 - How we use it (display in app, sync to user's account, optional sharing)
 - Who we share with (third parties: Strava if connected, Garmin if connected, RevenueCat for subscriptions, Anthropic for Coach prompts)
 - Retention (lifetime of account; export available; deletion via `/settings/account`)
 - User rights (GDPR-ish — data export, deletion, correction)
-- Contact (`privacy@runonward.app`)
+- Contact (`privacy@runonward.com`)
 
 Also link the same URL from the Play Console under "Data safety → Privacy policy URL". Mismatch between the two = automatic review rejection.
 
@@ -255,7 +255,7 @@ Rare, but if it happens (usually for ToS violations the team didn't realise appl
 - [ ] Play Console developer account paid + verified
 - [ ] App created with target `applicationId`
 - [ ] Store listing complete (short + long description, screenshots, icon, feature graphic)
-- [ ] Privacy policy live at `runonward.app/privacy`
+- [ ] Privacy policy live at `runonward.com/privacy`
 - [ ] Data safety questionnaire submitted, matches policy
 - [ ] Content rating done
 - [ ] App access test creds provided (staging, not prod seed)

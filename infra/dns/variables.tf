@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "apex_domain" {
-  description = "The apex domain we own. e.g. 'runonward.app'."
+  description = "The apex domain we own. e.g. 'runonward.com'."
   type        = string
 }
 

@@ -412,7 +412,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         # Drop the unused .supabase.io alias — the project is on
         # *.supabase.co. Wildcards across two TLDs widen the
         # exfiltration surface for no win.
-        "connect-src 'self' https://*.supabase.co https://api.runonward.app https://*.maptiler.com https://*.ingest.sentry.io",
+        "connect-src 'self' https://*.supabase.co https://api.runonward.com https://*.maptiler.com https://*.ingest.sentry.io",
         "worker-src 'self' blob:",
         "manifest-src 'self'",
         "object-src 'none'",

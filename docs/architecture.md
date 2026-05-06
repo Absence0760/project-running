@@ -598,7 +598,7 @@ jobs:
     needs: [test-packages, build-web]
 ```
 
-Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHub OIDC to assume an IAM role and runs `aws s3 sync` + `aws lambda update-function-code` + `aws cloudfront create-invalidation` against the `prod` environment on tag `web@*`. Pushes to `main` deploy to the `preview` environment at `preview.runonward.app`. See [`apps/web/deployment.md`](../apps/web/deployment.md).
+Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHub OIDC to assume an IAM role and runs `aws s3 sync` + `aws lambda update-function-code` + `aws cloudfront create-invalidation` against the `prod` environment on tag `web@*`. Pushes to `main` deploy to the `preview` environment at `preview.runonward.com`. See [`apps/web/deployment.md`](../apps/web/deployment.md).
 
 ---
 

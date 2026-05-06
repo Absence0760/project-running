@@ -66,7 +66,7 @@ success — creates a GitHub Release with the built artifact(s) attached.
 | `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.runapp.watchwear`) | `.aab` + `.apk` |
 | `mobile_ios@*` | macos-latest | *unsigned today* (skeleton until app ships) | — | `.ipa` |
 | `watch_ios@*` | macos-latest | — | — | build log |
-| `web@*` | ubuntu-latest | — | AWS S3 + CloudFront + Lambda (`prod` env at `runonward.app` / `www.runonward.app`) | build zip |
+| `web@*` | ubuntu-latest | — | AWS S3 + CloudFront + Lambda (`prod` env at `runonward.com` / `www.runonward.com`) | build zip |
 | `backend@*` | ubuntu-latest | — | Supabase (migrations + functions on linked project) | — |
 | `worker@*` | ubuntu-latest | — | Fly.io `job_worker` app via `flyctl deploy --remote-only` | — |
 | `osrm@*` | ubuntu-latest | — | Fly.io `osrm` app (image only — graph on the volume rides along) | — |
@@ -155,7 +155,7 @@ The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_AC
 |---|---|
 | `AWS_DEPLOY_ROLE_ARN_PROD` | IAM role ARN assumed via OIDC for prod deploys (tag `web@*`). Trust policy scoped to `repo:<owner>/<repo>:ref:refs/tags/web@*`. |
 | `AWS_DEPLOY_ROLE_ARN_PREVIEW` | Same shape for the preview env (push to `main`). Trust policy scoped to `:ref:refs/heads/main`. |
-| `PUBLIC_SUPABASE_URL` | Production Supabase REST URL (`https://api.runonward.app` once the custom domain is live). Inlined into the build. |
+| `PUBLIC_SUPABASE_URL` | Production Supabase REST URL (`https://api.runonward.com` once the custom domain is live). Inlined into the build. |
 | `PUBLIC_SUPABASE_ANON_KEY` | Supabase **publishable** key. Inlined into the build. |
 | `PUBLIC_MAPTILER_KEY` | MapTiler key shared with mobile + Wear OS. Inlined into the build. |
 | `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat web SDK key. Inlined into the build. |

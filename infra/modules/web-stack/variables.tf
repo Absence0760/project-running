@@ -8,12 +8,12 @@ variable "env" {
 }
 
 variable "domain_name" {
-  description = "Public domain for this env's CloudFront distribution. e.g. 'runonward.app' for prod, 'preview.runonward.app' for preview."
+  description = "Public domain for this env's CloudFront distribution. e.g. 'runonward.com' for prod, 'preview.runonward.com' for preview."
   type        = string
 }
 
 variable "aliases" {
-  description = "Additional CloudFront aliases (e.g. ['www.runonward.app'] for prod). The cert in `acm_certificate_arn` must cover all of these."
+  description = "Additional CloudFront aliases (e.g. ['www.runonward.com'] for prod). The cert in `acm_certificate_arn` must cover all of these."
   type        = list(string)
   default     = []
 }
