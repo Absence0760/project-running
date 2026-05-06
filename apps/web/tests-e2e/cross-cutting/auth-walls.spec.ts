@@ -1,36 +1,36 @@
 import { expect, test } from '@playwright/test';
 
-import { switchRunsToAllTime } from './fixtures/helpers';
+import { switchRunsToAllTime } from '../fixtures/helpers';
 import {
 	ALEX_PRIVATE_RUN_ID,
 	RUNNER_PUBLIC_RUN_ID
-} from './fixtures/seeded-data';
-import { USER_A, USER_B } from './fixtures/users';
+} from '../fixtures/seeded-data';
+import { USER_A, USER_B } from '../fixtures/users';
 
 /**
- * Security spec — RLS / authorization regressions that reach the UI.
+ * Authorization regressions that reach the UI.
  *
- * pgtap covers the SQL layer (rls_runs_test.sql, rls_engagement_chain_test.sql,
- * rls_privacy_clipping_test.sql, etc.) — those tests assert the policies
- * themselves are wired right. This spec catches the next failure mode:
- * an RLS policy that's correct at the database level but reaches the UI
- * via a fetch path that bypasses or misuses it (bad join, dropped filter,
- * client-side lookup that trusts the URL).
+ * pgtap covers the SQL layer (rls_runs_test.sql,
+ * rls_engagement_chain_test.sql, rls_privacy_clipping_test.sql, etc.)
+ * — those tests assert the policies themselves are wired right. This
+ * file catches the next failure mode: an RLS policy that's correct
+ * at the database level but reaches the UI via a fetch path that
+ * bypasses or misuses it (bad join, dropped filter, client-side
+ * lookup that trusts the URL).
  *
- * Five tests across three describe blocks:
- *   - Cross-user isolation (User A ↛ User B's data, and vice-versa).
- *   - Anonymous walls (anon ↛ private content).
- *   - Storage-state walls (unauthenticated ↛ authenticated routes).
+ * Tests are grouped by failure mode rather than by page:
+ *   - Cross-user run isolation (User A ↛ User B's data, vice versa).
+ *   - Anonymous walls (anon ↛ private content / authed routes).
  *
- * The cross-user pairs use both directions — A→B isolation could be
- * one-sided (e.g. an RLS policy with a typo on the "or" branch) and
- * we want to catch that.
+ * Future depth: club-private content visibility (members ↛ non-
+ * members), private routes invisible to non-owners, owner-locked
+ * profile columns (subscription_tier / parkrun_number) hidden.
  */
 
-test.describe('Cross-user run isolation', () => {
+test.describe('cross-user run isolation', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('User A cannot see User B\'s private run via /runs/[id]', async ({
+	test("User A cannot see User B's private run via /runs/[id]", async ({
 		page
 	}) => {
 		// Alex's private run UUID is pinned in seed.sql. RLS on the
@@ -54,7 +54,7 @@ test.describe('Cross-user run isolation', () => {
 		).toHaveCount(0);
 	});
 
-	test('User B cannot see User A\'s public-run-detail surface (own list excludes others\' rows)', async ({
+	test("User B's /runs list excludes runner's runs (own list filter)", async ({
 		page,
 		browser
 	}) => {
@@ -95,13 +95,13 @@ test.describe('Cross-user run isolation', () => {
 	});
 });
 
-test.describe('Anonymous walls', () => {
+test.describe('anonymous walls', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
 	test('anon /share/run/<private-id> shows not-found, not the run', async ({
 		page
 	}) => {
-		// Stub the EF — same reason as the smoke spec.
+		// Stub the EF — same reason as the other share/run tests.
 		await page.route('**/functions/v1/clip-public-track', (route) =>
 			route.fulfill({
 				status: 200,
