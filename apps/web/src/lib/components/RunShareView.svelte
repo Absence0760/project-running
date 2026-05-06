@@ -41,7 +41,18 @@
 					track = [];
 				}
 			} else if (!isOwner) {
-				track = (await fetchClippedTrackForRun(r.id)) as TrackPoint[];
+				// Symmetric to the owner branch — without try/catch, an EF
+				// outage / throttle / transient 503 throws past `loading
+				// = false` and the share page hangs on "Loading…" with
+				// no recovery short of a reload. Empty track here matches
+				// the "run with no track" graceful state: run-meta still
+				// renders, the map just doesn't mount.
+				try {
+					track = (await fetchClippedTrackForRun(r.id)) as TrackPoint[];
+				} catch (e) {
+					console.warn('Failed to fetch clipped track', e);
+					track = [];
+				}
 			}
 		} else {
 			notFound = true;
