@@ -63,6 +63,63 @@ test.describe('/dashboard', () => {
 		await expect(weekBtn).toHaveClass(/active/);
 	});
 
+	test('goal create + delete round-trip: + Add goal → fill distance → Save → goal-card visible → Delete', async ({
+		page
+	}) => {
+		// Goals live in user_settings.prefs.goals (a jsonb array).
+		// The dashboard surfaces them as goal-cards with a progress
+		// ring. "+ Add goal" opens the editor modal; filling
+		// distance + clicking Save persists to user_settings + makes
+		// a card appear; clicking the card re-opens the editor;
+		// Delete inside the editor removes it.
+		await page.goto('/dashboard');
+		await page.waitForLoadState('networkidle');
+
+		// runner's seed has `weekly_mileage_goal_m=50000` which the
+		// dashboard surfaces as a synthetic week-period goal-card.
+		// IMPORTANT: creating a *real* week-period distance goal would
+		// REPLACE the synthetic one (see `displayGoals` derived in
+		// dashboard/+page.svelte), so we create a Month-period goal —
+		// the synthetic stays + the real one is added → count goes
+		// from 1 → 2.
+		const initialCount = await page.locator('.goal-card').count();
+
+		// ── Create ──
+		await page.getByRole('button', { name: /\+ Add goal/ }).click();
+		await expect(page.locator('.modal-header h2', { hasText: 'Edit goal' }))
+			.toBeVisible({ timeout: 5_000 });
+
+		// Switch period to Month (synthetic-replacement guard).
+		await page
+			.locator('.modal')
+			.getByRole('button', { name: 'Month', exact: true })
+			.click();
+
+		// Fill distance (km — runner's preferred_unit). 100 km/month.
+		await page.locator('.modal input[type="number"]').first().fill('100');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+
+		// New goal-card visible (initial + 1).
+		await expect(page.locator('.goal-card')).toHaveCount(initialCount + 1);
+
+		// ── Delete via the editor ──
+		// Two cards visible (synthetic Week + new Month). Click the
+		// Month one — clicking the synthetic instead navigates to
+		// /settings/preferences (it's its only edit affordance).
+		await page
+			.locator('.goal-card')
+			.filter({ hasText: 'Month' })
+			.click();
+		await expect(page.locator('.modal-header h2', { hasText: 'Edit goal' }))
+			.toBeVisible({ timeout: 5_000 });
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+
+		// Card count returns to baseline.
+		await expect(page.locator('.goal-card')).toHaveCount(initialCount);
+	});
+
 	test('clicking "This Week" stat tile opens the period summary modal', async ({
 		page
 	}) => {

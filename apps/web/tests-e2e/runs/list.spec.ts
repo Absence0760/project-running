@@ -98,6 +98,34 @@ test.describe('/runs', () => {
 		await page.getByLabel('Date range').selectOption('today');
 	});
 
+	test('Date range filter "Today" narrows the list relative to "All time"', async ({
+		page
+	}) => {
+		// `dateRange` is a client-side $derived filter on
+		// `started_at` against rangeBounds(). Switching from "all" →
+		// "today" must shrink the list to today's runs only. The
+		// seed runs are dated in March-April 2026; "today" (real
+		// wall-clock at test time) likely intersects 0 runs, so the
+		// list shrinks. We assert the count drops without pinning a
+		// number — robust to seed dates drifting.
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		await expect(page.locator('.run-card').first()).toBeVisible();
+		const allCount = await page.locator('.run-card').count();
+		expect(allCount).toBeGreaterThan(2);
+
+		await page.getByLabel('Date range').selectOption('today');
+		// Wait for the filter to settle — count strictly less.
+		await expect
+			.poll(() => page.locator('.run-card').count(), { timeout: 5_000 })
+			.toBeLessThan(allCount);
+
+		// Restore default ("today" is the default per code, but the
+		// cards count goes down — restore via "all" so subsequent
+		// tests in this file see the wide set).
+		await page.getByLabel('Date range').selectOption('all');
+	});
+
 	test('Source filter narrows to parkrun-only rows (5 seeded parkruns)', async ({
 		page
 	}) => {

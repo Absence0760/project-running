@@ -49,6 +49,78 @@ test.describe('/routes', () => {
 		await expect(page.locator('.route-card')).toHaveCount(myCount);
 	});
 
+	test('Surface filter narrows by surface (road)', async ({ page }) => {
+		// Surface is a per-route enum (road / trail / mixed). The
+		// seed has multiple surfaces; selecting "road" should
+		// collapse to the road-surface subset. Hidden behind a
+		// `<select aria-label="Surface">`.
+		await page.goto('/routes');
+		await expect(page.locator('.route-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+		const allCount = await page.locator('.route-card').count();
+		expect(allCount).toBeGreaterThan(2);
+
+		await page.getByLabel('Surface').selectOption('road');
+		await expect
+			.poll(() => page.locator('.route-card').count(), { timeout: 5_000 })
+			.toBeLessThan(allCount);
+
+		// Restore.
+		await page.getByLabel('Surface').selectOption('any');
+		await expect(page.locator('.route-card')).toHaveCount(allCount);
+	});
+
+	test('Distance bucket filter narrows by distance range', async ({ page }) => {
+		// `distanceFilter` buckets are client-side $derived: any /
+		// lt5 / 5to10 / 10to20 / gt20. Pinned route is 10000m → in
+		// the 5to10 bucket. Selecting 5to10 must include it.
+		await page.goto('/routes');
+		await expect(page.locator('.route-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+		const allCount = await page.locator('.route-card').count();
+
+		await page.getByLabel('Distance').selectOption('5to10');
+		// Should narrow.
+		await expect
+			.poll(() => page.locator('.route-card').count(), { timeout: 5_000 })
+			.toBeLessThan(allCount);
+
+		// Restore.
+		await page.getByLabel('Distance').selectOption('any');
+	});
+
+	test('Sort by Longest puts the longest route first', async ({ page }) => {
+		// `sortKey` re-orders the in-memory `filteredRoutes`. Newest
+		// is the default; Longest sorts by distance_m desc. Read
+		// each .route-card's distance text + assert the first is the
+		// max.
+		await page.goto('/routes');
+		await expect(page.locator('.route-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByLabel('Sort').selectOption('longest');
+		// Distance text inside .route-card includes a "X.X km" /
+		// "X.X mi" string. Read all of them; the first should be the
+		// max numerically.
+		const distances = await page
+			.locator('.route-card')
+			.evaluateAll((cards) =>
+				cards.map((c) => {
+					const txt = c.textContent ?? '';
+					const m = txt.match(/(\d+(?:\.\d+)?)\s*(?:km|mi)/);
+					return m ? parseFloat(m[1]) : 0;
+				})
+			);
+		expect(distances.length).toBeGreaterThan(1);
+		expect(distances[0]).toBe(Math.max(...distances));
+
+		// Restore.
+		await page.getByLabel('Sort').selectOption('newest');
+	});
+
 	test('search box narrows the My-routes list to a name match', async ({
 		page
 	}) => {

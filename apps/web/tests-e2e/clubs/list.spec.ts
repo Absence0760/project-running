@@ -15,6 +15,36 @@ import { USER_A } from '../fixtures/users';
 test.describe('/clubs', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('Browse search narrows public clubs to a name match', async ({
+		page
+	}) => {
+		// Browse search filters via browseClubs(search) — server-side
+		// ilike on name + location. Typing "Tempo" should leave only
+		// "Tempo Tuesday" visible from the seeded public clubs.
+		await page.goto('/clubs');
+		await page.waitForLoadState('networkidle');
+		await page.getByRole('button', { name: /Browse/, exact: true }).click();
+
+		// Wait for browse to settle with multiple cards.
+		await expect(
+			page.getByRole('heading', { name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.getByPlaceholder(/Search by name/).fill('Tempo');
+
+		// Tempo Tuesday remains; Sydney Run Club gone (no match for Tempo).
+		await expect(
+			page.getByRole('heading', { name: 'Tempo Tuesday' })
+		).toBeVisible({ timeout: 5_000 });
+		await expect(
+			page.getByRole('heading', { name: 'Sydney Run Club' })
+		).toHaveCount(0);
+
+		// Clear the search so the rest of the suite sees the full
+		// browse list.
+		await page.getByPlaceholder(/Search by name/).fill('');
+	});
+
 	test('Browse tab shows public clubs + hides private "Friends of Jared"', async ({
 		page
 	}) => {
