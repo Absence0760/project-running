@@ -21,6 +21,13 @@
 	let confirmingRemove = $state<string | null>(null);
 
 	onMount(async () => {
+		// Same auth-race fix as /settings/account + /settings/preferences:
+		// loading=false flips before fetchUser resolves, so a hard reload
+		// can land here with auth.user still null. Poll briefly so the
+		// devices list actually loads instead of stalling on "Loading…".
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		if (!auth.user) return;
 		currentDeviceId = getDeviceId();
 		const { data } = await supabase

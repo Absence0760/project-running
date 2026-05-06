@@ -20,3 +20,8 @@ export const RUNNER_PUBLIC_RUN_ID = '11112222-3333-4444-5555-666677778888';
  *  cross-user-isolation security tests to assert that USER_A
  *  navigating to /runs/<this> sees the not-found state, not the run. */
 export const ALEX_PRIVATE_RUN_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+/** A public route owned by USER_A (runner@test.com). Used by anon
+ *  /share/route/<id> tests so they don't have to scrape /routes for
+ *  the first public id. Test name: "E2E demo public route". */
+export const RUNNER_PUBLIC_ROUTE_ID = '22223333-4444-5555-6666-777788889999';

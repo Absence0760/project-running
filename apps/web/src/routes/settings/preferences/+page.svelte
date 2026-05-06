@@ -69,6 +69,14 @@
 		// Theme is local-only so it's available even before the bag loads.
 		theme = loadTheme();
 
+		// `auth.svelte.ts` flips loading=false before the async fetchUser
+		// resolves, so a hard reload lands here with auth.user still
+		// null. Poll briefly so the form actually renders — without
+		// this the user sees "Loading..." forever and the entire
+		// preferences page silently fails.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		if (!auth.user) return;
 		try {
 			settings = await loadSettings(auth.user.id);
@@ -181,13 +189,13 @@
 		<section class="card">
 			<h2>Units & Display</h2>
 			<div class="form-grid">
-				<label>
+				<div class="field">
 					<span class="label-text">Distance Unit</span>
-					<div class="toggle-row">
-						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => pickDistanceUnit('km')}>Kilometres</button>
-						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => pickDistanceUnit('mi')}>Miles</button>
+					<div class="toggle-row" role="group" aria-label="Distance Unit">
+						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => pickDistanceUnit('km')} type="button">Kilometres</button>
+						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => pickDistanceUnit('mi')} type="button">Miles</button>
 					</div>
-				</label>
+				</div>
 				<label>
 					<span class="label-text">Pace Format</span>
 					<select bind:value={paceFormat}>
@@ -213,9 +221,9 @@
 						<option value="sunday">Sunday</option>
 					</select>
 				</label>
-				<label>
+				<div class="field">
 					<span class="label-text">Theme</span>
-					<div class="toggle-row">
+					<div class="toggle-row" role="group" aria-label="Theme">
 						<button
 							class="toggle-btn"
 							class:active={theme === 'auto'}
@@ -235,7 +243,7 @@
 							type="button"
 						>Dark</button>
 					</div>
-				</label>
+				</div>
 			</div>
 		</section>
 

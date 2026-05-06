@@ -663,6 +663,18 @@ VALUES (
   )
 ) ON CONFLICT (id) DO NOTHING;
 
+-- 1c. A pinned runner public route so /share/route/<id> anon tests
+-- have a known target. Mirrors 1b's shape — explicit UUID so the test
+-- doesn't have to scrape /routes first to find a public one.
+INSERT INTO routes (id, user_id, name, distance_m, elevation_m, surface, is_public, waypoints)
+VALUES (
+  '22223333-4444-5555-6666-777788889999',
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  'E2E demo public route',
+  10000, 50, 'road', true,
+  '[{"lat":-37.8200,"lng":144.9700,"ele":20},{"lat":-37.8180,"lng":144.9720,"ele":25},{"lat":-37.8160,"lng":144.9740,"ele":30},{"lat":-37.8140,"lng":144.9760,"ele":35},{"lat":-37.8120,"lng":144.9780,"ele":40},{"lat":-37.8100,"lng":144.9800,"ele":45}]'::jsonb
+) ON CONFLICT (id) DO NOTHING;
+
 -- 2. Privacy zone on runner's settings. The existing INSERT at the top
 -- of seed.sql sets the rest of runner's prefs; we merge the zone in
 -- via prefs || jsonb_build_object so we don't lose date_of_birth /
