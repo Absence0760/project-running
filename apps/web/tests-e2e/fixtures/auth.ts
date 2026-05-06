@@ -1,8 +1,9 @@
 import type { FullConfig } from '@playwright/test';
 import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname } from 'node:path';
 
+import { signIn } from './helpers';
 import { ALL_USERS, type SeededUser } from './users';
 
 /**
@@ -27,7 +28,7 @@ import { ALL_USERS, type SeededUser } from './users';
  */
 export default async function globalSetup(config: FullConfig) {
 	const baseURL =
-		config.projects[0]?.use?.baseURL ?? 'http://127.0.0.1:8888';
+		config.projects[0]?.use?.baseURL ?? 'http://localhost:7777';
 
 	for (const user of ALL_USERS) {
 		await signInAndSaveState(baseURL, user);
@@ -36,26 +37,36 @@ export default async function globalSetup(config: FullConfig) {
 
 async function signInAndSaveState(baseURL: string, user: SeededUser) {
 	const browser = await chromium.launch();
-	const ctx = await browser.newContext();
+	const ctx = await browser.newContext({ baseURL });
 	const page = await ctx.newPage();
 
 	try {
-		await page.goto(`${baseURL}/login`);
-		// The login form uses placeholders + type attributes, no <label>
-		// elements (apps/web/src/routes/login/+page.svelte). Select by
-		// type so the fixture survives placeholder copy changes.
-		await page.locator('input[type="email"]').fill(user.email);
-		await page.locator('input[type="password"]').fill(user.password);
-		await page.getByRole('button', { name: /sign in|sign up/i }).click();
+		await signIn(page, user);
 
 		// Wait for the post-login navigation to settle. The login flow
 		// redirects to /dashboard on success; on failure the form
 		// re-renders with the same /login URL and an error banner.
-		await page.waitForURL(/\/(dashboard|runs|coach)$/, { timeout: 10_000 });
+		try {
+			await page.waitForURL(/\/(dashboard|runs|coach)$/, { timeout: 10_000 });
+		} catch (err) {
+			if (process.env.E2E_SKIP_AUTH_FAILURES) {
+				console.warn(
+					`[auth fixture] Sign-in for ${user.email} did not redirect — final URL ${page.url()}. ` +
+						`Skipping due to E2E_SKIP_AUTH_FAILURES.`
+				);
+				return;
+			}
+			const errorText = await page.locator('.error-banner, .alert-error, [role="alert"]').textContent().catch(() => '<no error banner>');
+			throw new Error(
+				`auth fixture: ${user.email} did not redirect after sign-in. ` +
+					`Final URL: ${page.url()}. Error banner: "${errorText}".`
+			);
+		}
 
-		const targetPath = resolve(__dirname, '..', user.storageStatePath);
-		await mkdir(dirname(targetPath), { recursive: true });
-		await ctx.storageState({ path: targetPath });
+		// storageStatePath is already absolute (resolved at module-load
+		// in users.ts).
+		await mkdir(dirname(user.storageStatePath), { recursive: true });
+		await ctx.storageState({ path: user.storageStatePath });
 	} finally {
 		await ctx.close();
 		await browser.close();

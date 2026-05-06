@@ -3,16 +3,26 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright e2e config for apps/web.
  *
- * Boot order (the suite assumes both are already running):
- *   1. cd apps/backend && supabase start          (PostgREST on :54321)
- *   2. apps/web preview server on :8888           (npm run build && npm run preview)
+ * Prereq: local Supabase up via `cd apps/backend && supabase start`.
+ * The dev server is auto-started by the webServer block below.
  *
- * Local dev: `cd apps/web && pnpm exec playwright test` (or `--ui` for the picker).
+ * Why `vite dev` instead of `vite build && vite preview`:
+ *   adapter-static + `fallback: "index.html"` returns the SPA shell
+ *   for any unmatched route (e.g. /runs/<id>). The fallback HTML
+ *   computes its asset base via `new URL("..", location).pathname` —
+ *   for /runs/<id> that resolves to /runs, breaking _app/ asset URLs.
+ *   Production fixes this with a CloudFront viewer-request rewrite;
+ *   `vite preview` doesn't have that, so dev mode is the right
+ *   server for e2e. The trade-off (HMR + slower first-paint) doesn't
+ *   matter for headless tests.
  *
- * The fixtures/auth.ts globalSetup signs each seeded user in once via the
- * UI and saves their storage state to .auth/<user>.json. Spec files attach
- * the storage state via test.use({ storageState: '.auth/<user>.json' }) so
- * later tests skip the form submit. .auth/ is gitignored.
+ * Local dev: `cd apps/web && pnpm test:e2e` (auto-boots dev server).
+ * Or `pnpm test:e2e:ui` for the UI picker.
+ *
+ * The fixtures/auth.ts globalSetup signs each seeded user in once via
+ * the UI and saves their storage state to .auth/<user>.json. Spec
+ * files attach the storage state via test.use({ storageState: ... }).
+ * .auth/ is gitignored.
  */
 export default defineConfig({
 	testDir: '.',
@@ -24,20 +34,35 @@ export default defineConfig({
 	expect: { timeout: 10_000 },
 
 	// One retry on CI absorbs incidental flake (Supabase realtime warmup,
-	// CloudFront-style caching from Vite preview); no retries locally so
-	// flakes are visible during development.
+	// dev-server transient HMR errors); no retries locally so flakes are
+	// visible during development.
 	retries: process.env.CI ? 1 : 0,
 
 	// Fail fast in CI — a failure usually means the seed is mis-stated and
 	// every dependent test will fail the same way. Locally, run them all.
 	forbidOnly: !!process.env.CI,
-	workers: process.env.CI ? 2 : undefined,
-	fullyParallel: true,
+	// Single worker — the dev server doesn't isolate per-page state and
+	// concurrent tests against shared Supabase data can race. Set higher
+	// after the suite is stable.
+	workers: 1,
+	fullyParallel: false,
 
 	reporter: process.env.CI ? [['github'], ['list']] : 'list',
 
+	// Auto-start the dev server. `reuseExistingServer` lets a manually
+	// started server (e.g. for `playwright test --ui`) take precedence.
+	webServer: {
+		command: 'pnpm run dev',
+		url: 'http://localhost:7777',
+		reuseExistingServer: !process.env.CI,
+		timeout: 60_000,
+		// Vite logs are noisy; only surface them on failure.
+		stdout: 'ignore',
+		stderr: 'pipe'
+	},
+
 	use: {
-		baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:8888',
+		baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777',
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
 		video: 'retain-on-failure',

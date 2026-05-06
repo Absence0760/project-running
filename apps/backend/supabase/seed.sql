@@ -644,6 +644,25 @@ VALUES (
   )
 ) ON CONFLICT (id) DO NOTHING;
 
+-- 1b. A pinned runner public run so e2e specs can navigate to a known
+-- /runs/<id> and /share/run/<id> URL without first scraping the runs
+-- list. Dated newest so it sorts to the top of /runs and /feed without
+-- displacing the auto-id'd 12.
+INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, metadata)
+VALUES (
+  '11112222-3333-4444-5555-666677778888',
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  '2026-04-28T08:00:00Z',
+  2700, 9000, 'app',
+  true,
+  jsonb_build_object(
+    'activity_type', 'run',
+    'avg_bpm', 152,
+    'perceived_effort', 4,
+    'title', 'E2E demo public run'
+  )
+) ON CONFLICT (id) DO NOTHING;
+
 -- 2. Privacy zone on runner's settings. The existing INSERT at the top
 -- of seed.sql sets the rest of runner's prefs; we merge the zone in
 -- via prefs || jsonb_build_object so we don't lose date_of_birth /

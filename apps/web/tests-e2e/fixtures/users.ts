@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 /**
  * Seeded users referenced by Playwright specs.
  *
@@ -16,10 +18,15 @@ export type SeededUser = {
 	password: string;
 	id: string; // auth.users.id
 	tier: 'free' | 'pro' | 'lifetime';
-	storageStatePath: string; // gets populated by globalSetup
+	/// Absolute path; populated by globalSetup, then read by spec
+	/// files via test.use({ storageState }). Absolute so the path
+	/// resolves identically regardless of Playwright's cwd.
+	storageStatePath: string;
 };
 
-const STORAGE_DIR = '.auth';
+// .auth/ lives next to playwright.config.ts (one level up from this
+// fixtures/ directory). Resolve once at module-load.
+const STORAGE_DIR = resolve(import.meta.dirname, '..', '.auth');
 
 // All three users + their UUIDs are pre-existing in seed.sql — User B
 // is alex@test.com (joined club fixtures, two-way follow with runner),
@@ -32,7 +39,7 @@ export const USER_A: SeededUser = {
 	password: 'testtest',
 	id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
 	tier: 'free',
-	storageStatePath: `${STORAGE_DIR}/user-a.json`
+	storageStatePath: resolve(STORAGE_DIR, 'user-a.json')
 };
 
 export const USER_B: SeededUser = {
@@ -40,7 +47,7 @@ export const USER_B: SeededUser = {
 	password: 'testtest',
 	id: 'b2c3d4e5-f6a7-8901-bcde-f23456789012',
 	tier: 'free',
-	storageStatePath: `${STORAGE_DIR}/user-b.json`
+	storageStatePath: resolve(STORAGE_DIR, 'user-b.json')
 };
 
 export const USER_C_PRO: SeededUser = {
@@ -48,7 +55,7 @@ export const USER_C_PRO: SeededUser = {
 	password: 'testtest',
 	id: 'c3d4e5f6-a7b8-9012-cdef-345678901234',
 	tier: 'pro',
-	storageStatePath: `${STORAGE_DIR}/user-c-pro.json`
+	storageStatePath: resolve(STORAGE_DIR, 'user-c-pro.json')
 };
 
 export const ALL_USERS: SeededUser[] = [USER_A, USER_B, USER_C_PRO];
