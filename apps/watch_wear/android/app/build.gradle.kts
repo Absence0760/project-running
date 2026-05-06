@@ -52,14 +52,14 @@ android {
         // The release workflow injects production values from
         // `secrets.SUPABASE_*`. For local dev set them in
         // `~/.gradle/gradle.properties` or pass on the command line.
-        // No default key is hardcoded here — a previous version
-        // embedded the local-stack publishable key as a fallback,
-        // which the audit pass flagged because it baked the key into
-        // git history. The empty-string default fails the OkHttp
-        // request loudly so a misconfigured local build is obvious
-        // rather than silently posting to the dev server.
+        // No default URL or key is hardcoded — a misconfigured build
+        // fails the OkHttp request loudly rather than silently
+        // hitting the emulator address (which the URL fallback used
+        // to be) or the local-stack publishable key (which the anon
+        // key fallback used to be — both flagged in the audit
+        // because they baked dev defaults into release artifacts).
         val supabaseUrl: String = (project.findProperty("SUPABASE_URL") as String?)
-            ?: "http://10.0.2.2:54321"
+            ?: ""
         val supabaseAnonKey: String = (project.findProperty("SUPABASE_ANON_KEY") as String?)
             ?: ""
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")

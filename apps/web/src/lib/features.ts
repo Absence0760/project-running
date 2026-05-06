@@ -1,4 +1,5 @@
 import { auth } from './stores/auth.svelte';
+import { TIER_LIMITS } from './coach/types';
 
 /// Registry of gated / tier-aware features. Two kinds of entries live
 /// here today:
@@ -32,8 +33,11 @@ export const GATED_FEATURES: Record<
 > = {
 	ai_coach: {
 		label: 'AI Coach',
+		// Build the daily-cap number from TIER_LIMITS so this string
+		// can't drift from the server enforcement value (`handler.ts`
+		// reads the same constant).
 		description:
-			'Personalised training advice from Claude, grounded in your plan and runs. Free users get 5 messages per day; Pro users get unlimited.',
+			`Personalised training advice from Claude, grounded in your plan and runs. Free users get ${TIER_LIMITS.free.dailyLimit} messages per day; Pro users get unlimited.`,
 	},
 	priority_processing: {
 		label: 'Priority Processing',

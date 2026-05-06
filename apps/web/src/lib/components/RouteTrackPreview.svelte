@@ -33,6 +33,13 @@
 		/// when ownerUserId !== viewerId.
 		routeId: string;
 		waypoints: Waypoint[];
+		/// `routes.user_id` is `NOT NULL` (every route has an owner), so
+		/// this prop is intentionally non-nullable. The shouldClip
+		/// expression below relies on that — `viewerId == null && ownerUserId == null`
+		/// would otherwise evaluate to "owner" and skip the clip. If the
+		/// schema ever permits a nullable `user_id` (e.g. for fully-anon
+		/// club routes), update the gate to
+		/// `viewerId === null || ownerUserId !== viewerId`.
 		ownerUserId: string;
 	} = $props();
 

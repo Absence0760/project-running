@@ -366,7 +366,12 @@ export async function deleteRun(id: string): Promise<void> {
 		try {
 			await supabase.storage.from('runs').remove([run.track_url]);
 		} catch (e) {
-			console.warn('deleteRun: track storage removal failed (orphaned file)', run.track_url, e);
+			// Don't log the storage path — it embeds the user's auth
+			// UUID and would land in Sentry breadcrumbs. The Sentry
+			// hook redacts known signed-URL patterns but the row's
+			// storage path doesn't match those. The run id is
+			// sufficient to triangulate from server logs.
+			console.warn('deleteRun: track storage removal failed (orphaned file)', { run_id: id, error: e });
 		}
 	}
 	const { data: photos } = await supabase
@@ -381,7 +386,7 @@ export async function deleteRun(id: string): Promise<void> {
 			try {
 				await supabase.storage.from('run-photos').remove(paths);
 			} catch (e) {
-				console.warn('deleteRun: photo storage removal failed (orphaned files)', paths, e);
+				console.warn('deleteRun: photo storage removal failed (orphaned files)', { run_id: id, count: paths.length, error: e });
 			}
 		}
 	}

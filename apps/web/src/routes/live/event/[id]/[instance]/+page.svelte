@@ -122,7 +122,10 @@
 			.on(
 				'postgres_changes',
 				{
-					event: '*',
+					// INSERT-only — race_pings are append-only; spectator
+					// page only needs to see new arrivals. UPDATE/DELETE on
+					// race_pings is admin-side and not relevant here.
+					event: 'INSERT',
 					schema: 'public',
 					table: 'race_pings',
 					// Also filter by instance_start so pings from a different

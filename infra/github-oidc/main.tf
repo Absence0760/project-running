@@ -153,10 +153,11 @@ resource "aws_iam_role" "deploy_preview" {
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
+        # Pin to literal `refs/heads/main` — no wildcard, so
+        # StringEquals expresses the intent precisely (preview can
+        # only assume from the main-branch workflow).
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
           "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
         }
       }

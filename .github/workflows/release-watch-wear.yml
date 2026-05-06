@@ -80,9 +80,13 @@ jobs:
       - name: Build AAB + APK (signed)
         working-directory: apps/watch_wear/android
         run: |
+          # Use the same PUBLIC_SUPABASE_* secret names the web release
+          # workflow reads — keeps a single pair of GitHub secrets in
+          # sync with the Supabase project's anon key + URL across all
+          # client deploys.
           ./gradlew bundleRelease assembleRelease \
-            -PSUPABASE_URL='${{ secrets.SUPABASE_URL }}' \
-            -PSUPABASE_ANON_KEY='${{ secrets.SUPABASE_ANON_KEY }}' \
+            -PSUPABASE_URL='${{ secrets.PUBLIC_SUPABASE_URL }}' \
+            -PSUPABASE_ANON_KEY='${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}' \
             --no-daemon
 
       - name: Upload to Play Internal

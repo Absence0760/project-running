@@ -112,9 +112,11 @@ select
   case when is_public_route_by_id(r.route_id) then r.route_id else null end as route_id,
   case when is_public_event_by_id(r.event_id) then r.event_id else null end as event_id,
   -- Metadata redaction. Public-safe keys (activity_type, steps, laps,
-  -- cadence, title, notes, event, position, age_grade, avg_bpm,
-  -- elevation_m) survive. Audit-only / private-linkage / internal
-  -- keys are stripped.
+  -- title, notes, event, position, age_grade, avg_bpm, elevation_m)
+  -- survive. Audit-only / private-linkage / internal keys are
+  -- stripped. (`cadence` was in this list historically but is not
+  -- written by any code path — derived client-side from steps /
+  -- moving_time; removed from the comment in audit pass 3.)
   coalesce(r.metadata, '{}'::jsonb)
     - 'strava_id'
     - 'garmin_id'

@@ -24,6 +24,11 @@
 
 drop policy if exists race_pings_visible_when_race_is on race_pings;
 
+-- `events.club_id` is NOT NULL (20260416_001), so the LEFT JOIN
+-- branch with `c.id is null` is unreachable. 20260519_001 already
+-- cleaned up the same dead branch in race_sessions /
+-- event_results — using a plain JOIN here for the same reason
+-- (audit pass 3 caught the regression).
 create policy race_pings_visible_when_race_is
   on race_pings for select
   using (
@@ -31,12 +36,11 @@ create policy race_pings_visible_when_race_is
       select 1
       from race_sessions rs
       join events e on e.id = rs.event_id
-      left join clubs c on c.id = e.club_id
+      join clubs c on c.id = e.club_id
       where rs.event_id = race_pings.event_id
         and rs.instance_start = race_pings.instance_start
         and (
-          c.id is null
-          or c.is_public = true
+          c.is_public = true
           or c.owner_id = auth.uid()
           or is_club_member(c.id)
         )
