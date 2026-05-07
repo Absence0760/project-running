@@ -277,6 +277,15 @@
 	let channel: RealtimeChannel | null = null;
 
 	onMount(async () => {
+		// Wait for auth.user before loading. The event page derives
+		// `isAdmin` from `club.viewer_role` which is fetched against
+		// the caller's identity; if `auth.user` hasn't resolved when
+		// load() fires, viewer_role can come back null even for the
+		// real owner, which collapses every admin affordance.
+		// Same shape we patch on every authed page.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		await load();
 		subscribeRealtime();
 	});
