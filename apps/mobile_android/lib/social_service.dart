@@ -4,6 +4,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'recurrence.dart';
 
+// Column-level grant lockdown: `clubs.invite_token` is revoked from
+// anon + authenticated (migration 20260801_001 + 20260818_001 redo).
+// Selecting `*` (i.e. `.select()` with no args) raises 42501. Every
+// read enumerates these safe columns; admin reads of `invite_token`
+// go through the `get_club_invite_token` SECURITY DEFINER RPC. The
+// arch-guard test scans for `from('clubs').select()` to keep this in
+// lockstep.
+const String _clubSelectCols =
+    'id, owner_id, name, slug, description, avatar_url, location_label, '
+    'is_public, join_policy, created_at, updated_at';
+
+// Column-level grant lockdown: `events.meet_lat` / `meet_lng` are
+// revoked from anon + authenticated (migrations 20260723_001 +
+// 20260806_001 + 20260818_001 redo). Same `select('*')` constraint
+// as clubs above; same arch-guard discipline.
+const String _eventSelectCols =
+    'id, club_id, title, description, starts_at, duration_min, '
+    'meet_label, route_id, distance_m, pace_target_sec, capacity, '
+    'created_by, created_at, updated_at, recurrence_freq, '
+    'recurrence_byday, recurrence_until, recurrence_count';
+
 /// Parse the `events.recurrence_byday` jsonb array (a list of weekday
 /// short-codes like `['MO','WE']`) into a list of `Weekday`s. Returns
 /// null when the input isn't an array or when no code parses — the
@@ -154,7 +175,7 @@ class SocialService extends ChangeNotifier {
 
   /// Public clubs matching an optional search term.
   Future<List<ClubView>> browseClubs({String? query}) async {
-    var q = _c.from('clubs').select().eq('is_public', true);
+    var q = _c.from('clubs').select(_clubSelectCols).eq('is_public', true);
     if (query != null && query.trim().isNotEmpty) {
       final term = query.trim();
       q = q.or('name.ilike.%$term%,location_label.ilike.%$term%');
@@ -169,7 +190,7 @@ class SocialService extends ChangeNotifier {
     if (uid == null) return const [];
     final rows = await _c
         .from('club_members')
-        .select('club_id, role, status, clubs!inner(*)')
+        .select('club_id, role, status, clubs!inner($_clubSelectCols)')
         .eq('user_id', uid)
         .order('joined_at', ascending: false);
     final clubs = <Map<String, dynamic>>[];
@@ -183,7 +204,7 @@ class SocialService extends ChangeNotifier {
   Future<ClubView?> fetchClubBySlug(String slug) async {
     try {
       final row =
-          await _c.from('clubs').select().eq('slug', slug).maybeSingle();
+          await _c.from('clubs').select(_clubSelectCols).eq('slug', slug).maybeSingle();
       if (row == null) {
         debugPrint('fetchClubBySlug: no row for slug=$slug');
         return null;
@@ -435,7 +456,7 @@ class SocialService extends ChangeNotifier {
           if (recurrenceUntil != null)
             'recurrence_until': recurrenceUntil.toIso8601String(),
         })
-        .select()
+        .select(_eventSelectCols)
         .single();
     notifyListeners();
     return EventRow.fromJson(inserted);
@@ -444,7 +465,7 @@ class SocialService extends ChangeNotifier {
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async {
     final rows = await _c
         .from('events')
-        .select()
+        .select(_eventSelectCols)
         .eq('club_id', clubId)
         .order('starts_at', ascending: true);
     final events = await _enrichEvents(rows as List);
@@ -456,7 +477,7 @@ class SocialService extends ChangeNotifier {
   }
 
   Future<EventView?> fetchEventById(String eventId) async {
-    final row = await _c.from('events').select().eq('id', eventId).maybeSingle();
+    final row = await _c.from('events').select(_eventSelectCols).eq('id', eventId).maybeSingle();
     if (row == null) return null;
     final xs = await _enrichEvents([row]);
     return xs.isEmpty ? null : xs.first;
@@ -471,7 +492,7 @@ class SocialService extends ChangeNotifier {
     final end = now.add(window);
     final rsvps = await _c
         .from('event_attendees')
-        .select('event_id, instance_start, status, events(*)')
+        .select('event_id, instance_start, status, events($_eventSelectCols)')
         .eq('user_id', uid)
         .eq('status', 'going')
         .gte('instance_start', now.toIso8601String())

@@ -1159,6 +1159,28 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 
 // --- Clubs ---
 
+// Column-level grant lockdown: `invite_token` is revoked from anon +
+// authenticated (migration 20260801_001 + 20260818_001 redo). Selecting
+// `*` raises 42501. Every read enumerates these safe columns; admin
+// reads of `invite_token` go through the SECURITY DEFINER RPC
+// `get_club_invite_token`. The arch-guard test
+// `tests-e2e/cross-cutting/select-star-discipline.spec.ts` greps to
+// keep this in lockstep.
+const CLUB_SELECT_COLS =
+	'id, owner_id, name, slug, description, avatar_url, location_label, ' +
+	'is_public, join_policy, created_at, updated_at';
+
+// Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
+// from anon + authenticated (migrations 20260723_001 + 20260806_001 +
+// 20260818_001 redo). Selecting `*` raises 42501. Every read
+// enumerates these safe columns; the two coords are write-only
+// today (no UI consumer).
+const EVENT_SELECT_COLS =
+	'id, club_id, title, description, starts_at, duration_min, ' +
+	'meet_label, route_id, distance_m, pace_target_sec, capacity, ' +
+	'created_by, created_at, updated_at, recurrence_freq, ' +
+	'recurrence_byday, recurrence_until, recurrence_count';
+
 function slugify(name: string): string {
 	return name
 		.toLowerCase()
@@ -1170,7 +1192,7 @@ function slugify(name: string): string {
 
 /** Browse public clubs. Most recently created first. */
 export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
-	let query = supabase.from('clubs').select('*').eq('is_public', true);
+	let query = supabase.from('clubs').select(CLUB_SELECT_COLS).eq('is_public', true);
 	if (search && search.trim()) {
 		const term = search.trim();
 		query = query.or(`name.ilike.%${term}%,location_label.ilike.%${term}%`);
@@ -1186,7 +1208,7 @@ export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 	if (!userId) return [];
 	const { data } = await supabase
 		.from('club_members')
-		.select('club_id, role, clubs!inner(*)')
+		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})`)
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
 	if (!data) return [];
@@ -1195,7 +1217,7 @@ export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 }
 
 export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null> {
-	const { data } = await supabase.from('clubs').select('*').eq('slug', slug).maybeSingle();
+	const { data } = await supabase.from('clubs').select(CLUB_SELECT_COLS).eq('slug', slug).maybeSingle();
 	if (!data) return null;
 	const [enriched] = await enrichClubs([data]);
 	if (!enriched) return null;
@@ -1277,7 +1299,7 @@ export async function createClub(input: {
 				join_policy: input.join_policy,
 				invite_token: inviteToken
 			})
-			.select()
+			.select(CLUB_SELECT_COLS)
 			.single();
 		if (!error && data) {
 			return {
@@ -1499,7 +1521,7 @@ export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta
 	// of interest is far smaller; the client filter discards the rest.
 	const { data } = await supabase
 		.from('events')
-		.select('*')
+		.select(EVENT_SELECT_COLS)
 		.eq('club_id', clubId)
 		.order('starts_at', { ascending: true })
 		.limit(200);
@@ -1518,7 +1540,7 @@ export async function fetchPastEvents(clubId: string, limit = 12): Promise<Event
 	const nowIso = new Date().toISOString();
 	const { data } = await supabase
 		.from('events')
-		.select('*')
+		.select(EVENT_SELECT_COLS)
 		.eq('club_id', clubId)
 		.lt('starts_at', nowIso)
 		.order('starts_at', { ascending: false })
@@ -1527,7 +1549,7 @@ export async function fetchPastEvents(clubId: string, limit = 12): Promise<Event
 }
 
 export async function fetchEventById(id: string): Promise<EventWithMeta | null> {
-	const { data } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
+	const { data } = await supabase.from('events').select(EVENT_SELECT_COLS).eq('id', id).maybeSingle();
 	if (!data) return null;
 	const [enriched] = await enrichEvents([data as Event]);
 	return enriched ?? null;
@@ -1644,7 +1666,7 @@ export async function createEvent(input: {
 			recurrence_count: input.recurrence_count ?? null,
 			created_by: userId
 		})
-		.select()
+		.select(EVENT_SELECT_COLS)
 		.single();
 	if (error) throw error;
 	return normaliseEvent(data as Event);

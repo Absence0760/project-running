@@ -6,6 +6,22 @@ import 'package:core_models/core_models.dart';
 import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Column-level grant lockdowns: see migrations 20260801_001 +
+// 20260818_001 (clubs.invite_token) and 20260723_001 + 20260806_001 +
+// 20260818_001 (events.meet_lat / meet_lng). PostgREST `select('*')`
+// raises 42501 because the role lacks SELECT on the revoked columns.
+// Every read site enumerates the safe columns. The mobile arch-guard
+// test grep-asserts no `from('clubs').select()` / `from('events').select()`.
+const String _clubSafeCols =
+    'id, owner_id, name, slug, description, avatar_url, location_label, '
+    'is_public, join_policy, created_at, updated_at';
+
+const String _eventSafeCols =
+    'id, club_id, title, description, starts_at, duration_min, '
+    'meet_label, route_id, distance_m, pace_target_sec, capacity, '
+    'created_by, created_at, updated_at, recurrence_freq, '
+    'recurrence_byday, recurrence_until, recurrence_count';
+
 /// Typed client for the Supabase REST API.
 ///
 /// Must call [initialize] before using any methods.
@@ -1865,7 +1881,7 @@ class ApiClient {
           ClubRow.colIsPublic: isPublic,
           ClubRow.colJoinPolicy: joinPolicy,
         })
-        .select()
+        .select(_clubSafeCols)
         .single();
     return ClubRow.fromJson(inserted);
   }
@@ -1990,7 +2006,7 @@ class ApiClient {
           if (recurrenceUntil != null)
             'recurrence_until': recurrenceUntil.toIso8601String(),
         })
-        .select()
+        .select(_eventSafeCols)
         .single();
     return EventRow.fromJson(inserted);
   }

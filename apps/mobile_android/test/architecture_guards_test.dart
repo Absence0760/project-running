@@ -1245,4 +1245,69 @@ void main() {
       );
     });
   });
+
+  group('column-grant lockdown discipline (clubs + events)', () {
+    // Reason: `clubs.invite_token` and `events.meet_lat` / `meet_lng`
+    // are revoked from anon + authenticated at the column level
+    // (migrations 20260801_001 + 20260723_001 + 20260806_001 +
+    // 20260818_001). PostgREST's `select('*')` (i.e. supabase-dart's
+    // `.select()` with no args, OR a nested `<table>(*)` embed)
+    // expands to all columns at the SQL layer and raises 42501 because
+    // the role lacks SELECT on the revoked columns. CI surfaced this
+    // as widespread Playwright failure when the audit migration
+    // landed without the call-site fix.
+    //
+    // Pin the discipline statically so the next regression fails the
+    // `Test Flutter packages` job in PR CI before it reaches Postgres.
+    // The fix at any failing call site is "enumerate the columns
+    // explicitly via the constants in social_service.dart /
+    // api_client.dart", or for nested embeds use the `($_safeCols)`
+    // form.
+
+    final mobileSources = <String>[
+      'lib/social_service.dart',
+      'lib/race_controller.dart',
+      'lib/backup.dart',
+    ];
+    final apiClientPath =
+        '../../packages/api_client/lib/src/api_client.dart';
+
+    for (final path in [...mobileSources, apiClientPath]) {
+      test('$path enumerates columns on clubs/events reads', () {
+        final source = File(path).readAsStringSync();
+        // Strip line comments + block comments so the regex can't
+        // false-positive on documentation that mentions the pattern.
+        final stripped = source
+            .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+            .replaceAll(RegExp(r'//.*'), '');
+        // a. `.from('clubs').select()` (no arg = `*`) is forbidden.
+        // b. `.from('events').select()` (no arg) is forbidden.
+        // c. nested `clubs(*)` / `events(*)` via PostgREST embed is
+        //    forbidden. The arg form `clubs($_clubSafeCols)` is fine.
+        // Note: `from(ClubRow.table)` and `from(EventRow.table)` are
+        // covered too — both expand to the literal table name in the
+        // wire request.
+        final patterns = <RegExp>[
+          RegExp(r'''\.from\(['"]clubs['"]\)\.select\(\s*\)'''),
+          RegExp(r'''\.from\(['"]events['"]\)\.select\(\s*\)'''),
+          RegExp(r'''\.from\(ClubRow\.table\)\.[^.]*\.select\(\s*\)'''),
+          RegExp(r'''\.from\(EventRow\.table\)\.[^.]*\.select\(\s*\)'''),
+          RegExp(r'''['"`]clubs\(\*\)'''),
+          RegExp(r'''['"`]events\(\*\)'''),
+        ];
+        for (final p in patterns) {
+          expect(
+            p.hasMatch(stripped),
+            isFalse,
+            reason: 'Pattern ${p.pattern} matched in $path. '
+                'PostgREST `*` expansion raises 42501 against the '
+                'column-grant lockdown on clubs / events — enumerate '
+                'columns via `_clubSafeCols` / `_eventSafeCols` (or '
+                'the equivalent in the calling file). See migration '
+                '20260818_001_redo_column_grant_lockdowns.sql.',
+          );
+        }
+      });
+    }
+  });
 }

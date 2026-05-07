@@ -186,4 +186,43 @@ test.describe('architecture guards', () => {
 		// what we actually shipped.
 		expect(body).toMatch(/if\s*\(!map\)\s*return/);
 	});
+
+	test('column-grant lockdown discipline: no select(*) on clubs / events', () => {
+		// Reason: `clubs.invite_token` and `events.meet_lat` /
+		// `meet_lng` are revoked from anon + authenticated at the
+		// column level (migrations 20260801_001 + 20260723_001 +
+		// 20260806_001 + 20260818_001). PostgREST `select('*')`
+		// expands to all columns at the SQL layer and raises 42501
+		// because the role lacks SELECT on the revoked columns. A
+		// nested `clubs(*)` / `events(*)` embed has the same problem
+		// (the embed materialises every column of the joined row).
+		//
+		// CI surfaced this as widespread Playwright failure when the
+		// audit migration landed without the call-site fix on `events`.
+		// Pin the discipline statically: future regressions fail this
+		// test instead of `clubs/event-create.spec.ts` flaking with
+		// "Event not found".
+		//
+		// Fix at any failing call site is "enumerate columns via
+		// `CLUB_SELECT_COLS` / `EVENT_SELECT_COLS` from data.ts", or
+		// for nested embeds use `clubs(${CLUB_SELECT_COLS})`.
+		const data = readFileSync('src/lib/data.ts', 'utf-8');
+		// Strip block + line comments so doc strings can mention the
+		// pattern without false-positive.
+		const stripped = data
+			.replace(/\/\*[\s\S]*?\*\//g, '')
+			.replace(/\/\/.*$/gm, '');
+		const banned = [
+			/\.from\(['"]clubs['"]\)\.select\(['"]\*['"]\)/,
+			/\.from\(['"]events['"]\)\.select\(['"]\*['"]\)/,
+			// Post-insert / post-update `.select()` no-arg = `*` too.
+			// Only flag when it follows from('clubs' | 'events').
+			/\.from\(['"](clubs|events)['"]\)[\s\S]*?\.select\(\s*\)\.single\(\)/,
+			/['"`]clubs\(\*\)/,
+			/['"`]events\(\*\)/
+		];
+		for (const pat of banned) {
+			expect(stripped).not.toMatch(pat);
+		}
+	});
 });
