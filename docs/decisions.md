@@ -1134,6 +1134,22 @@ Pinned in place by `apps/backend/supabase/tests/rls_events_meet_point_test.sql` 
 
 ---
 
+## 56. Account deletion cascades through every public FK to `auth.users`
+
+Eight tables held a `references auth.users` without `on delete cascade`: `runs.user_id`, `routes.user_id`, `integrations.user_id`, `user_profiles.id`, `route_reviews.user_id`, `clubs.owner_id`, `events.created_by`, `club_posts.author_id`. The `delete-account` Edge Function calls `auth.admin.deleteUser(user.id)` after draining Storage; Postgres raised `23503` on the first cascading FK and the EF returned `{"error":"delete failed"}`. Every authenticated user has a `user_profiles` row by virtue of `auth.svelte.ts`'s upsert-on-first-sign-in, so this 500'd for **every** user — denying the GDPR / CCPA right-to-erasure the EF exists to satisfy.
+
+Migration `20260728_001_cascade_auth_users_fks.sql` re-creates each FK with `on delete cascade`. The semantic is **the user owns the rows; deleting their account deletes the rows.** That covers their personal data (runs, routes, integrations, profile), their authored content in shared spaces (route reviews, club posts they wrote, events they created), and clubs they own. Pre-launch this matches what saga-users.ts already had to do manually: sweep the eight tables before `auth.admin.deleteUser`. The CASCADE makes the EF correct without the workaround.
+
+The clubs/events/club_posts cases need a one-line caveat: when a sole-admin of a club deletes their account, the club dies with them (club CASCADE → club_members + posts + events all cascade away). For an active community-owned club this is harsh — a follow-up could either (a) require ownership transfer in the UI before delete-account succeeds, or (b) flip those three FKs to `set null` plus relax the `not null` on the columns. Both are post-launch concerns; for Phase 1 the simple semantic wins.
+
+The discovery path was the e2e `cross-user/sagas/account-deletion.spec.ts` saga: plant a saga user, plant a run with track, drive the /settings/account UI flow, capture the EF response, assert 200. The saga-users.ts fixture had been masking this for months by sweeping the eight tables itself before its own teardown — so the unit-test surface and the saga's own setup never hit the path the EF actually takes.
+
+**Don't re-litigate unless:** product wants club-ownership-transfer semantics (then flip clubs.owner_id to `set null` + add a require-transfer step in the danger-zone UI), or any of these tables grows fields the user wouldn't want CASCADE-deleted (audit logs, etc.).
+
+Pinned by `apps/web/tests-e2e/cross-user/sagas/account-deletion.spec.ts` — runs the full UI flow + asserts the auth row, the runs row, the user_profiles row, and the gzipped track in Storage are all gone after the click.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

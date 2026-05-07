@@ -120,9 +120,17 @@ serve(withSentry('delete-account', async (req: Request) => {
     );
   }
 
-  // Row data cascades from auth.users via ON DELETE CASCADE on most
-  // tables (runs, routes, user_profiles, user_settings, etc.). Deleting
-  // the auth user triggers those cascades automatically.
+  // Row data cascades from auth.users via ON DELETE CASCADE on every
+  // table that references it (runs, routes, integrations,
+  // user_profiles, user_settings, route_reviews, clubs.owner_id,
+  // events.created_by, club_posts.author_id, plus the already-
+  // cascading club_members / event_attendees / training_plans /
+  // user_device_settings / event_results / race_pings / kudos /
+  // comments / photos / notifications). Deleting the auth user
+  // triggers the full chain. Migration 20260728_001 closed the gap
+  // where eight tables had `references auth.users` without
+  // `on delete cascade`, which used to make this admin.deleteUser
+  // call 23503 for any user with even a user_profiles row.
 
   const { error } = await adminClient.auth.admin.deleteUser(user.id);
   if (error) {
