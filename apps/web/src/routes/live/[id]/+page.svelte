@@ -54,6 +54,15 @@
 		elapsed_s?: number | null;
 	}) {
 		traceCoords.push([ping.lng, ping.lat]);
+		// Stat-strip values update regardless of map readiness — a slow or
+		// failing map style fetch (e.g. MapTiler down, missing key) must
+		// not stall the LIVE badge or the distance / elapsed / pace
+		// readout. Map-touching calls below are individually guarded.
+		if (ping.distance_m != null) distance = ping.distance_m;
+		if (ping.elapsed_s != null) elapsed = ping.elapsed_s;
+		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
+
+		if (!map) return;
 		ensureMarker(ping.lat, ping.lng);
 		if (!centred) {
 			map.jumpTo({ center: [ping.lng, ping.lat], zoom: 15 });
@@ -61,10 +70,6 @@
 		} else {
 			map.panTo([ping.lng, ping.lat], { animate: true });
 		}
-		if (ping.distance_m != null) distance = ping.distance_m;
-		if (ping.elapsed_s != null) elapsed = ping.elapsed_s;
-		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
-
 		const source = map.getSource('live-trace') as maplibregl.GeoJSONSource | undefined;
 		source?.setData({
 			type: 'Feature',
@@ -129,8 +134,10 @@
 		// looks alive. Badge flips to "demo" so it's obvious this isn't
 		// a real feed.
 		status = 'demo';
-		ensureMarker(fallbackLat, fallbackLng);
-		map.jumpTo({ center: [fallbackLng, fallbackLat], zoom: 15 });
+		if (map) {
+			ensureMarker(fallbackLat, fallbackLng);
+			map.jumpTo({ center: [fallbackLng, fallbackLat], zoom: 15 });
+		}
 		let angle = 0;
 		demoTicker = setInterval(() => {
 			angle += 0.02;
@@ -143,6 +150,27 @@
 	}
 
 	onMount(() => {
+		// Kick off the data path FIRST and independently of the map.
+		// hydrateBacklog + subscribeLive don't need the map to be ready;
+		// gating them behind `map.on('load')` means a slow (or failing)
+		// MapTiler style fetch silently stalls the LIVE badge and the
+		// stat strip. Pings that arrive before the map's source/layer
+		// exist are buffered in `traceCoords` by pushPing; the map's
+		// `load` handler below replays them once the source is added.
+		(async () => {
+			const hadBacklog = await hydrateBacklog();
+			subscribeLive();
+			if (hadBacklog) {
+				status = 'live';
+			} else {
+				setTimeout(() => {
+					if (status === 'connecting' && traceCoords.length === 0) {
+						startDemo();
+					}
+				}, 5000);
+			}
+		})();
+
 		map = new maplibregl.Map({
 			container: mapContainer,
 			style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
@@ -151,10 +179,14 @@
 		});
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-		map.on('load', async () => {
+		map.on('load', () => {
 			map.addSource('live-trace', {
 				type: 'geojson',
-				data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } },
+				data: {
+					type: 'Feature',
+					properties: {},
+					geometry: { type: 'LineString', coordinates: traceCoords },
+				},
 			});
 			map.addLayer({
 				id: 'live-trace-line',
@@ -163,20 +195,14 @@
 				paint: { 'line-color': '#3b82f6', 'line-width': 3 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
-
-			const hadBacklog = await hydrateBacklog();
-			subscribeLive();
-
-			if (hadBacklog) {
-				status = 'live';
-			} else {
-				// No data yet — give the recorder a short grace period to
-				// emit a ping before falling back to the demo animation.
-				setTimeout(() => {
-					if (status === 'connecting' && traceCoords.length === 0) {
-						startDemo();
-					}
-				}, 5000);
+			// Pings that arrived before map readiness already filled
+			// `traceCoords`; centre + marker if we have any so the user
+			// doesn't see the fallback Sydney CBD on first paint.
+			if (traceCoords.length > 0) {
+				const last = traceCoords[traceCoords.length - 1];
+				ensureMarker(last[1], last[0]);
+				map.jumpTo({ center: [last[0], last[1]], zoom: 15 });
+				centred = true;
 			}
 		});
 	});
