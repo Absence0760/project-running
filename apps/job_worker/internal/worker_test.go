@@ -52,6 +52,12 @@ type fakeBackend struct {
 	finishErr     error
 	deferErr      error
 
+	// downloadDelay, when non-zero, makes DownloadTrack block for
+	// that duration OR until the caller's context is cancelled.
+	// Used by the HandleTimeout test to simulate a wedged Storage
+	// download that exceeds the worker's per-job deadline.
+	downloadDelay time.Duration
+
 	// Outputs
 	finished []finishCall
 	deferred []deferCall
@@ -128,7 +134,22 @@ func (f *fakeBackend) DeferJob(_ context.Context, jobID int64, delay int, msg *s
 	return nil
 }
 
-func (f *fakeBackend) DownloadTrack(_ context.Context, path string) ([]TrackPoint, error) {
+func (f *fakeBackend) DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error) {
+	f.mu.Lock()
+	delay := f.downloadDelay
+	f.mu.Unlock()
+	if delay > 0 {
+		// Honour ctx.Done so a per-job HandleTimeout can interrupt
+		// a wedged download. This is the property the worker's
+		// `context.WithTimeout` is supposed to enforce — pin it
+		// via the timeout test below.
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.downloadErr != nil {
@@ -699,6 +720,78 @@ func TestIsTransient(t *testing.T) {
 				t.Errorf("isTransient(%v) = %v, want %v", tc.err, got, tc.want)
 			}
 		})
+	}
+}
+
+// ---- HandleTimeout -----------------------------------------------------
+
+// TestWorker_HandleTimeoutDefersStuckJob — pins the per-job timeout
+// contract: when a job's runtime exceeds Config.HandleTimeout, the
+// jobCtx is cancelled, the in-flight Backend call propagates
+// context.DeadlineExceeded, isTransient classifies that as transient,
+// and the worker calls defer_job (NOT finish_job(failed)).
+//
+// Why this matters: round-9 (`20260730_001_tier_aware_job_scheduling
+// .sql`) made map-match priority depend on `scheduled_at` ordering,
+// which only holds if no single job runs long enough to starve the
+// queue. The HandleTimeout is the ceiling enforcement — if a Matcher
+// hangs (wedged OSRM call, slow Storage download), the worker MUST
+// cancel and defer rather than holding the worker slot indefinitely.
+// Without this test a future refactor that dropped
+// `context.WithTimeout` from worker.handle would silently break
+// the run-to-completion-OR-cancel contract.
+func TestWorker_HandleTimeoutDefersStuckJob(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
+		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001},
+	}
+	// Make DownloadTrack block longer than the worker's per-job
+	// timeout. The fake's select honours ctx.Done so when
+	// HandleTimeout fires the jobCtx cancels and DownloadTrack
+	// returns ctx.Err() = context.DeadlineExceeded.
+	be.downloadDelay = 200 * time.Millisecond
+	be.jobs = []*Job{{
+		ID: 42, Kind: "map_match", Attempts: 1,
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	w := newTestWorker(be, PassthroughMatcher{})
+	// 50 ms per-job timeout vs 200 ms download delay → timeout
+	// always fires first.
+	w.Config.HandleTimeout = 50 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.finished) != 0 {
+		t.Errorf(
+			"timeout was finish_job'd (should defer for retry): %+v",
+			be.finished,
+		)
+	}
+	if len(be.deferred) != 1 {
+		t.Fatalf(
+			"expected exactly 1 defer_job call (the timeout path); got %d: %+v",
+			len(be.deferred), be.deferred,
+		)
+	}
+	if be.deferred[0].JobID != 42 {
+		t.Errorf("deferred job_id=%d, want 42", be.deferred[0].JobID)
+	}
+	if be.deferred[0].DelayS != 5 {
+		t.Errorf(
+			"deferred delay_s=%d, want 5 (TransientDelay default in newTestWorker)",
+			be.deferred[0].DelayS,
+		)
+	}
+	if be.deferred[0].ErrMsg == nil ||
+		!strings.Contains(strings.ToLower(*be.deferred[0].ErrMsg), "deadline") {
+		t.Errorf(
+			"defer error msg should mention deadline; got %v",
+			be.deferred[0].ErrMsg,
+		)
 	}
 }
 
