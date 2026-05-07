@@ -131,6 +131,8 @@ create index idx_routes_user_starred on routes (user_id, updated_at desc) where 
 
 **Public reads go through the `public_routes` view, not the base table.** Migration `20260703_001_drop_routes_public_select_policy.sql` drops the bare-table public-read RLS; non-owner reads (anon + authenticated) consume `public_routes` instead. The view is a thin projection over `routes` filtered to `is_public = true` with `geom` cast back to `unknown`/`dynamic` for the row-type generators. Cross-references the same shape used by `public_runs` (decisions §33). Every public-routes reader on web (`fetchPublicRoutes`, `searchPublicRoutes`, `fetchPublicRouteById`) and mobile (`api_client.fetchRouteById` for non-owners) reads the view. Owner-context reads keep the bare-table path because they need the unredacted columns.
 
+**`public_routes.user_id` is intentionally exposed.** Combined with `public_runs.user_id`, it makes `auth.users.id` (UUID) a stable cross-link between a public route, the public runs that ran on it, and the runner's `/u/[id]` profile page. That linkage is the entire point of the social surface — followers click through from a friend's run to the route they used, then to their profile. The trade-off is that a runner can't share a single public route or run without publishing their auth UUID as a durable identifier; if/when handles ship (decisions §31), the UUID will be aliased but the cross-link will still be present at the schema layer.
+
 ---
 
 ### `saved_routes`
@@ -743,6 +745,8 @@ Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_i
 ### `training_plans` / `plan_weeks` / `plan_workouts`
 
 Generated training plans + week phasing + scheduled workouts. Owner-only RLS, deep cascading on plan delete. Plans can be cloned from a club-shared template via `clone_plan_template` (decisions §35); workouts link back to the run that completed them via `plan_workouts.completed_run_id`. Migrations `20260419_001_training_plans.sql` (schema), `20260420_001_plan_workouts_workout_kind.sql`, `20260421_001_plan_workouts_structure.sql`, `20260524_001_plan_template_sharing.sql`, `20260510_001_plan_workout_completion.sql`. Engine + week-grid UI: [docs/training.md](training.md). Live execution: [docs/workout_execution.md](workout_execution.md).
+
+**`training_plans.notes` on club templates** (`is_template = true` AND `club_id` is set): when a member adopts a template via `clone_plan_template`, the template's `notes` field is copied verbatim onto the new plan. On a private (owner-only) plan, `notes` is the runner's own free-text scratchpad. On a club template it becomes member-readable — anyone in the club who can `select * from training_plans where is_template = true and club_id = <X>` sees it. **Public-template-safe** is the documented contract: don't write a runner-private note onto a template. The publish flow (`publishPlanAsTemplate` in `data.ts`) explicitly nulls `vdot` and `current_5k_seconds` per migration `20260721_001`; a future tightening could add `notes` to that null-list, but until a template author writes a private note in production we keep the field carryable for legitimate "warm-up note" content.
 
 ### `event_results`
 
