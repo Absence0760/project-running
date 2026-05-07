@@ -144,6 +144,15 @@ jobs:
       # The dev server reads PUBLIC_* keys from apps/web/.env. Write the
       # local-stack URL + anon key from `supabase status` so the in-test
       # browser hits the same DB the seed populated.
+      #
+      # ANTHROPIC_API_KEY is set to a dummy non-empty value so the
+      # `/api/coach` handler's early-503 gate (handler.ts:49 — "Coach
+      # is not configured") doesn't fire ahead of the auth + daily-cap
+      # branches that paywall-wire.spec.ts and tier-cache-resilience
+      # .spec.ts pin. The dummy is never used to actually call
+      # Anthropic — those tests assert 401 (anon) and 429 (free-cap),
+      # both of which the handler returns BEFORE reaching the
+      # provider stream call.
       - name: Write apps/web/.env from supabase status
         working-directory: apps/backend
         run: |
@@ -156,6 +165,7 @@ jobs:
             echo "PUBLIC_STRAVA_CLIENT_ID="
             echo "PUBLIC_REVENUECAT_WEB_API_KEY="
             echo "PUBLIC_VAPID_PUBLIC_KEY="
+            echo "ANTHROPIC_API_KEY=ci-test-key-not-actually-called"
           } > ../web/.env
       - name: Run Playwright suite
         working-directory: apps/web
