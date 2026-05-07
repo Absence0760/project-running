@@ -39,7 +39,7 @@ jobs:
       AWS_REGION: us-east-1
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -56,7 +56,7 @@ jobs:
             echo "is_prod=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           # Node 24 (current Active LTS). Must match the Lambda
           # runtime in infra/modules/web-stack/main.tf so the bundle
@@ -134,7 +134,7 @@ jobs:
           echo "::add-mask::$ARN"
           echo "arn=$ARN" >> "$GITHUB_OUTPUT"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ steps.role.outputs.arn }}
           aws-region: ${{ env.AWS_REGION }}
@@ -209,7 +209,7 @@ jobs:
 
       - name: Create GitHub Release + attach build zip
         if: steps.env.outputs.is_prod == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Web ${{ steps.env.outputs.version }}
           tag_name: ${{ github.ref_name }}

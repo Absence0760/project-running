@@ -134,6 +134,24 @@ Don't paginate when the bound is intrinsic and small (members of a club ≤ a fe
 - Don't add a dependency without checking that it's maintained. "Last updated 3 years ago" is a red flag; "no tests" is a red flag; "single maintainer on a personal account" is a red flag. Combine them and it's a veto.
 - `melos bootstrap` / `npm install` at the workspace root after changing `pubspec.yaml` / `package.json`. Commit the lockfile updates.
 
+### GitHub Actions: pin to commit SHAs, not tags
+
+Every `uses:` line in `.github/workflows/*.yml` pins the action to a 40-character commit SHA, with a trailing `# vN` comment for human readability:
+
+```yaml
+- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+```
+
+Tag-based refs (`@v4`, `@main`) are mutable — the publisher can force-push a malicious version under the same tag and every workflow that uses it pulls the malicious code on the next run. SHAs are immutable. This applies to ALL workflows, not just secret-touching ones, because `actions/checkout@<sha>` runs with `GITHUB_TOKEN` and a malicious checkout step can read repo contents + write commits.
+
+When upgrading an action: resolve the new SHA via
+
+```bash
+git ls-remote https://github.com/<owner>/<repo>.git refs/tags/v5
+```
+
+and update both the SHA and the `# vN` comment together. Don't update one without the other.
+
 ## Preemptive abstractions — don't
 
 Three similar lines is better than a premature helper. A "generic" wrapper written when only one caller exists is worse than the caller's own inline code. Extract when the third caller arrives, not before.

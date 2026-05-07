@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: write   # needed to create the GitHub Release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0   # git rev-list --count needs full history
 
@@ -47,7 +47,7 @@ jobs:
           echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
 
@@ -84,7 +84,7 @@ jobs:
         run: flutter build appbundle --release
 
       - name: Upload to Play Internal
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.betterrunner.app
@@ -96,7 +96,7 @@ jobs:
           # via the Play Console once tested.
 
       - name: Create GitHub Release + attach AAB
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Android ${{ steps.version.outputs.name }}
           tag_name: ${{ github.ref_name }}

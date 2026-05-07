@@ -867,6 +867,17 @@
 			<div class="edit-form">
 				<input type="text" bind:value={editTitle} placeholder="Run title" class="edit-input" />
 				<textarea bind:value={editNotes} placeholder="Notes" class="edit-textarea" rows="2"></textarea>
+				{#if run.is_public}
+					<p class="edit-public-hint">
+						Heads up: this run is public. Your title and notes are
+						visible to anyone with the share link.
+					</p>
+				{:else}
+					<p class="edit-public-hint edit-public-hint-muted">
+						Notes stay private until you share this run. If you do,
+						anyone with the link can read them.
+					</p>
+				{/if}
 				<div class="edit-actions">
 					<button class="btn-sm btn-outline-sm" onclick={() => editing = false}>Cancel</button>
 					<button class="btn-sm btn-primary-sm" onclick={saveEdit}>Save</button>
@@ -1730,6 +1741,16 @@
 		display: flex;
 		gap: var(--space-sm);
 		justify-content: flex-end;
+	}
+
+	.edit-public-hint {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--color-warning, #b45309);
+	}
+
+	.edit-public-hint-muted {
+		color: var(--color-text-muted);
 	}
 
 	.btn-sm {
