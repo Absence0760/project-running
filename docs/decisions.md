@@ -1168,6 +1168,37 @@ Pinned by 3 e2e tests in `apps/web/tests-e2e/cross-cutting/job-tier-priority.spe
 
 ---
 
+## 58. Job-queue priority is `scheduled_at` offset, not preemption — and every kind must be short
+
+Companion to §57. Round-9 made `map_match` jobs Pro-prioritised by offsetting `scheduled_at`. This decision pins the rest of the contract — the run-to-completion semantic, the single-queue model, and the **<30 s job-runtime convention** that keeps the priority gain meaningful.
+
+**Run-to-completion, never preemption.** Once `claim_next_job` flips a row to `status='running'`, the worker processes it until `finish_job` or `defer_job`. A higher-priority job arriving mid-flight waits for the in-flight job to finish — at most one job-duration of latency. We don't kill in-flight work because preemption requires state checkpointing, resumable matching, partial-result handling, and idempotency under retry — all complexity for a problem we don't have when jobs are short.
+
+**Single queue, not two.** A `jobs_pro` / `jobs_free` split (or a `priority` column with two claim functions) only earns its complexity if (a) free jobs run long enough to starve Pro, (b) you want parallel-per-tier workers (we have one), or (c) you want preemption (see above). The single `(scheduled_at, id)` index already gives the right ordering for free; a separate column or table would cost an index rebuild + a worker rewrite for zero behavioural improvement.
+
+**The <30 s convention.** Pro starvation only becomes a real risk when an in-flight job runs long enough that the wait dominates the priority gain. The rule:
+
+> Every `jobs.kind` must complete in **< 30 seconds**. Anything longer is **chunked** at enqueue time into N smaller jobs that each respect the budget.
+
+A Strava 90-day backfill is N `strava_backfill_page` jobs (50 activities each, ~5 s of work), not one job-per-90-days. A bulk re-match is N `map_match` jobs, not one bulk job. Priority is re-evaluated at each chunk boundary so a Pro user's request slots in between chunks, not after the whole thing.
+
+**Worker enforcement: HandleTimeout.** `worker.go` wraps every `dispatch` call in `context.WithTimeout(ctx, w.Config.HandleTimeout)` (default 5 minutes — defence in depth, well above the 30 s convention). When the deadline fires, the in-flight Backend call returns `context.DeadlineExceeded`, `isTransient` classifies that as transient, and the worker calls `defer_job` rather than holding the slot. Pinned by `TestWorker_HandleTimeoutDefersStuckJob` in `apps/job_worker/internal/worker_test.go`.
+
+**Stuck-job alerting.** The worker timeout is the in-process safety net; for jobs that survived the timeout (or were locked by a worker that crashed before reporting back), migration `20260731_001` adds two SQL functions:
+
+- `find_stuck_jobs(p_stuck_after interval default '5 minutes')` — returns the rows still `status='running'` with `now() - locked_at > p_stuck_after`.
+- `jobs_stuck_summary(p_stuck_after interval default '5 minutes')` — returns a single jsonb with `stuck_count`, `oldest_age_s`, and a 5-row sample, suitable for log scraping or a `select count(*)` alert rule.
+
+A `pg_cron` schedule `jobs-stuck-alert` runs the summary every 10 minutes; the result lands in `cron.job_run_details` and is grep-able by an operator. **Neither function auto-fails stuck jobs** — that would race a worker about to call `finish_job` for the same row. Operator-driven remediation only.
+
+**Don't re-litigate unless:** product wants a real-time SLA-bound job kind that can't be chunked into <30 s units (rare in this codebase — even bulk imports chunk naturally per page). At that point you'd add either (a) a second worker process dedicated to short jobs, or (b) `for update skip locked`-based per-kind worker partitioning, both of which are `main.go` changes, not architectural rewrites.
+
+Pinned by:
+- `apps/web/tests-e2e/cross-cutting/jobs-stuck-alert.spec.ts` — 4 tests: idle queue → empty sample, planted 6-min-old job → surfaces, custom threshold honours its arg, `pg_cron` schedule registered + active.
+- `apps/job_worker/internal/worker_test.go::TestWorker_HandleTimeoutDefersStuckJob` — pins the per-job timeout → defer_job path with a synthetic 200 ms download against a 50 ms HandleTimeout.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
