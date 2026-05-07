@@ -28,4 +28,13 @@ test.describe('/ (landing)', () => {
 			page.getByRole('link', { name: 'Get Started' })
 		).toBeVisible();
 	});
+
+	test('Get Started link sends anon visitor to /login', async ({ page }) => {
+		// Click-through pin. A regression that wired the CTA to a
+		// nonexistent route would surface as a hard 404 here.
+		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+		await page.getByRole('link', { name: 'Get Started' }).click();
+		await page.waitForURL(/\/login/, { timeout: 10_000 });
+	});
 });

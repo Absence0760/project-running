@@ -112,4 +112,32 @@ test.describe('/clubs', () => {
 			)
 		).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('Browse search clearing the box restores the full club list', async ({
+		page
+	}) => {
+		// Companion to the search-narrows test above. The reactive
+		// $effect on the search box re-runs browseClubs(search='') when
+		// the input clears. A regression that left a stale memoised
+		// result would surface here as a list that doesn't grow back
+		// when the user clears their query.
+		await page.goto('/clubs');
+		await page.getByRole('button', { name: /Browse/, exact: true }).click();
+
+		await expect(
+			page.getByRole('heading', { name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.getByPlaceholder(/Search by name/).fill('Tempo');
+		// Sydney Run Club is hidden under the Tempo filter.
+		await expect(
+			page.getByRole('heading', { name: 'Sydney Run Club' })
+		).toHaveCount(0);
+
+		// Clear the search; Sydney Run Club returns.
+		await page.getByPlaceholder(/Search by name/).fill('');
+		await expect(
+			page.getByRole('heading', { name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+	});
 });

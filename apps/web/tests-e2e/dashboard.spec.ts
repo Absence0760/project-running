@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { deleteRun, insertRun } from './fixtures/simulate';
 import { USER_A } from './fixtures/users';
 
 /**
@@ -178,5 +179,98 @@ test.describe('/dashboard', () => {
 		await page.getByRole('button', { name: 'Year', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Year', exact: true }))
 			.toHaveClass(/active/);
+	});
+
+	test('inserting a new run via service-role bumps Total Runs and updates Longest Run on reload', async ({
+		page
+	}) => {
+		// Pin "data → dashboard" reactivity. Total Runs is `filteredRuns.length`
+		// and Longest Run is `max(distance_m)`. Plant a run that is 1 km
+		// longer than any seed (the seed's longest is the 18 km long run,
+		// so 50 km wins by a wide margin) and reload — both stats must
+		// reflect it. A regression that broke fetchRuns wiring or the
+		// derived stat would show up here.
+		await page.goto('/dashboard');
+		await page.waitForLoadState('networkidle');
+
+		const totalRunsCard = page
+			.locator('.stat-card')
+			.filter({ has: page.locator('.stat-label', { hasText: 'Total Runs' }) });
+		const longestCard = page
+			.locator('.stat-card')
+			.filter({ has: page.locator('.stat-label', { hasText: 'Longest Run' }) });
+
+		const initialTotalText = await totalRunsCard.locator('.stat-value').innerText();
+		const initialTotal = parseInt(initialTotalText.trim(), 10);
+		expect(Number.isFinite(initialTotal)).toBe(true);
+
+		// 50 km — well above any seeded distance. preferred_unit is km
+		// for runner so the card formats as "50.0 km".
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 50_000,
+			duration_s: 18_000,
+			is_public: false
+		});
+
+		try {
+			await page.reload();
+			await page.waitForLoadState('networkidle');
+
+			// Total Runs incremented.
+			await expect(totalRunsCard.locator('.stat-value')).toHaveText(
+				String(initialTotal + 1),
+				{ timeout: 10_000 }
+			);
+
+			// Longest Run reflects the 50 km — formatDistance prints
+			// "50.0 km" with one decimal.
+			await expect(longestCard.locator('.stat-value')).toContainText('50.0', {
+				timeout: 5_000
+			});
+		} finally {
+			await deleteRun(planted);
+		}
+	});
+
+	test('deleting a planted run via service-role decrements Total Runs on reload', async ({
+		page
+	}) => {
+		// Companion to the insert test above. Pins the inverse direction:
+		// data removed → stat decrements. Catches a regression where
+		// fetchRuns aggressively caches and a deletion isn't reflected
+		// until the next session.
+		await page.goto('/dashboard');
+		await page.waitForLoadState('networkidle');
+
+		const totalRunsCard = page
+			.locator('.stat-card')
+			.filter({ has: page.locator('.stat-label', { hasText: 'Total Runs' }) });
+		const baselineTotal = parseInt(
+			(await totalRunsCard.locator('.stat-value').innerText()).trim(),
+			10
+		);
+
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 3_000,
+			duration_s: 900,
+			is_public: false
+		});
+
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(totalRunsCard.locator('.stat-value')).toHaveText(
+			String(baselineTotal + 1),
+			{ timeout: 10_000 }
+		);
+
+		await deleteRun(planted);
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(totalRunsCard.locator('.stat-value')).toHaveText(
+			String(baselineTotal),
+			{ timeout: 10_000 }
+		);
 	});
 });

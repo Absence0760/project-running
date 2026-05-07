@@ -147,6 +147,91 @@ test.describe('/routes/[id]', () => {
 		expect(await page.locator('.tag-chip').count()).toBe(startCount);
 	});
 
+	test('star icon toggle: clicking flips the title between Star/Unstar', async ({
+		page
+	}) => {
+		// Fast pin on the star toggle title flip — the deeper round-trip
+		// lives in the existing "star + reload" test above. This pins
+		// the button is interactable + reactive without a navigation,
+		// catching a regression where toggleStar swallowed errors and
+		// the title stuck on the old value.
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		const star = page.locator('button.star-btn');
+		await expect(star).toBeVisible({ timeout: 10_000 });
+		const initial = (await star.getAttribute('title')) ?? '';
+		await star.click();
+		await expect(star).not.toHaveAttribute('title', initial, {
+			timeout: 10_000
+		});
+		// Restore the seed state by toggling back.
+		await star.click();
+		await expect(star).toHaveAttribute('title', initial, { timeout: 10_000 });
+	});
+
+	test('route review submit → DB upsert lands → review row visible in list', async ({
+		page
+	}) => {
+		// Logged-in viewers can rate any public route via the Reviews
+		// section. The handler upserts on (route_id, user_id) so a
+		// re-rate replaces the old row. Pin the canonical UI write
+		// path against route_reviews — covers both the submit click
+		// and the post-submit list refresh that fetches via
+		// getRouteReviews.
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const { USER_A } = await import('../fixtures/users');
+		const admin = getAdminClient();
+		const comment = `e2e-review ${Date.now()}`;
+
+		// Make sure no prior review exists (re-runs of this spec on a
+		// dirty DB would otherwise see "submit" path as an upsert).
+		await admin
+			.from('route_reviews')
+			.delete()
+			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+			.eq('user_id', USER_A.id);
+
+		try {
+			await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+			await page.waitForLoadState('networkidle');
+
+			// Open the review form via the Rate button.
+			await page.getByRole('button', { name: 'Rate', exact: true }).click();
+
+			// Click the 4th star (default rating is 4 — pick a different
+			// one to prove the click actually mutated the state).
+			const stars = page.locator('.review-form .star-row .star-btn');
+			await stars.nth(2).click(); // 3-star
+
+			await page.locator('.review-textarea').fill(comment);
+			await page
+				.locator('.review-form')
+				.getByRole('button', { name: 'Submit' })
+				.click();
+
+			// New review-card surfaces in the list.
+			await expect(
+				page.locator('.review-card', { hasText: comment })
+			).toBeVisible({ timeout: 10_000 });
+
+			// Backend confirms the row.
+			const { data: row } = await admin
+				.from('route_reviews')
+				.select('rating, comment')
+				.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+				.eq('user_id', USER_A.id)
+				.single();
+			expect((row as { rating: number }).rating).toBe(3);
+			expect((row as { comment: string }).comment).toBe(comment);
+		} finally {
+			// Sweep so subsequent runs see a clean state.
+			await admin
+				.from('route_reviews')
+				.delete()
+				.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+				.eq('user_id', USER_A.id);
+		}
+	});
+
 	test('not-found: visiting a missing route id shows "Route not found" with a way back', async ({
 		page
 	}) => {

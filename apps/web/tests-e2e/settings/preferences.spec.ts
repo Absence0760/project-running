@@ -123,6 +123,78 @@ test.describe('/settings/preferences', () => {
 		).toBeVisible({ timeout: 5_000 });
 	});
 
+	test('Pace Format <select> save round-trip persists across reload', async ({
+		page
+	}) => {
+		// pace_format is a separate prefs key (currently used by chart
+		// axes + workout/coach surfaces). The Save handler stitches it
+		// into the same upsert as theme/unit/map_style; pin the round-
+		// trip here so a regression that dropped the field from the
+		// payload would surface as the dropdown reverting on reload.
+		// The propagation to formatPace currently goes through
+		// preferred_unit (not pace_format) — see units.svelte.ts.
+		// Pinning the persistence is the load-bearing assertion.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const sel = page
+			.locator('label', { has: page.getByText('Pace Format', { exact: true }) })
+			.locator('select');
+		const before = await sel.inputValue();
+		await sel.selectOption('min_per_mi');
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
+			timeout: 5_000
+		});
+
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(sel).toHaveValue('min_per_mi');
+
+		// Restore.
+		await sel.selectOption(before);
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
+			timeout: 5_000
+		});
+	});
+
+	test('map style picker — selecting Satellite saves and survives reload', async ({
+		page
+	}) => {
+		// `map_style` is stored in user_settings.prefs.map_style and read
+		// by map-style.svelte.ts. The Settings select is a <select> with
+		// 3 options. Pin Save → reload → option still selected. A
+		// regression that dropped map_style from the saved prefs blob
+		// (it shares a single Save handler with theme + unit) would
+		// surface here.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		// Pick Satellite via the labelled <select>.
+		const sel = page
+			.locator('label', { has: page.getByText('Map Style', { exact: true }) })
+			.locator('select');
+		await expect(sel).toBeVisible({ timeout: 10_000 });
+		const before = await sel.inputValue();
+		await sel.selectOption('satellite');
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(
+			page.getByRole('button', { name: /Saved!/ })
+		).toBeVisible({ timeout: 5_000 });
+
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(sel).toHaveValue('satellite');
+
+		// Restore.
+		await sel.selectOption(before);
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(
+			page.getByRole('button', { name: /Saved!/ })
+		).toBeVisible({ timeout: 5_000 });
+	});
+
 	test('theme toggle: Dark applies html[data-theme] + survives reload', async ({
 		page
 	}) => {

@@ -50,7 +50,7 @@ pnpm test:e2e:ui       # interactive picker
 
 ## What's covered today
 
-Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **203 Playwright e2e tests across 57 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **259 Playwright e2e tests across 65 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -610,7 +610,7 @@ Pure-helper tests for the webhook security primitives that gate `revenuecat-webh
 
 The handler bodies themselves (HTTP envelope, `createClient`, `webhook_events` insert / `23505` dedupe path, side-effect writes) are not unit-tested in isolation — that surface is end-to-end and currently exercised manually via the workflow described in [apps/backend/CLAUDE.md § Testing without real credentials](../apps/backend/CLAUDE.md#testing-without-real-credentials). The pure helpers above cover the security-critical decision points: signature comparison, replay window, identity validation, tier transition. Anything load-bearing on those four lives in tested code now.
 
-### `apps/web/tests-e2e/` — Playwright suite (203 tests across 57 files)
+### `apps/web/tests-e2e/` — Playwright suite (250 tests across 62 files)
 
 End-to-end browser tests that drive the real SvelteKit app against a real local Supabase. Unit tests pin pure helpers and SQL pins RLS at the database; this suite catches the next failure mode — **a UI fetch path that bypasses or misuses an otherwise-correct policy** (a wrong join, a dropped filter, a client-side lookup that trusts the URL, an optimistic update that never round-trips). Browser-only on purpose — mobile / watch don't have an equivalent harness (Flutter `integration_test` is too slow + flaky on CI to be worth the cycles right now).
 
@@ -632,20 +632,25 @@ The suite mirrors `apps/web/src/routes/`, with two flat concern folders for thin
 tests-e2e/
   fixtures/                    — globalSetup, helpers, seeded constants, users
   landing.spec.ts              — /
+  explore.spec.ts              — /explore (redirects to /routes?tab=explore)
+  dashboard-period.spec.ts     — /dashboard/period/[type]/[date] (week + month deep links + invalid-date fallback)
+  live-event.spec.ts           — /live/event/[id]/[instance] (no-race-session empty state)
   login.spec.ts                — /login (failed sign-in; sign-up: ?signup=1; forgot-password full round-trip via Mailpit; happy sign-in path in cross-cutting/sign-in-out)
   dashboard.spec.ts            — /dashboard
   feed.spec.ts                 — /feed
   coach.spec.ts                — /coach (mount, dropdowns, send → mocked SSE assistant bubble)
   live.spec.ts                 — /live/[id] (anon spectator: mount + planted-pings backlog hydrate → status flips to LIVE + stat strip fills)
   runs/
-    list.spec.ts               — /runs (filter, sort, search, multi-select, create, delete)
+    list.spec.ts               — /runs (filter, sort, search, multi-select, create, delete; bulk-delete actually-deletes round-trip)
+    new.spec.ts                — /runs/new standalone create form (RunEditor → land on /runs/[new])
     detail.spec.ts             — /runs/[id] (edit, cancel, single-run delete via the trash icon)
-    cascade.spec.ts            — backend boundary: deleting a run sweeps every cascading child (kudos, comments, photos, segment_efforts, live_run_pings, run_matched_tracks, notifications) + the Storage object
+    cascade.spec.ts            — backend boundary: deleting a run sweeps every cascading child (kudos, comments, photos, segment_efforts, live_run_pings, run_matched_tracks, notifications) + the Storage object; run_photos cascade
+    photos.spec.ts             — /runs/[id] RunPhotos: owner upload + caption edit + delete (with DB + Storage assertions)
     save-as-route.spec.ts      — /runs/[id] Save-as-route CRUD (prompt → /routes/[new])
-    social.spec.ts             — /runs/[id] owner sees kudos count + comment list (RunSocial mounts for own runs)
+    social.spec.ts             — /runs/[id] owner sees kudos count + comment list (RunSocial mounts for own runs); owner posts comment on own run
   routes/
     list.spec.ts               — /routes (search, filter, tab switch)
-    detail.spec.ts             — /routes/[id] (star, public toggle, tag add+remove)
+    detail.spec.ts             — /routes/[id] (star, public toggle, tag add+remove, review submit + DB upsert)
     import.spec.ts             — /routes Import-route modal: drop a GPX → preview → Save → land on /routes/[new]
   plans/
     list.spec.ts               — /plans (list + drill into /plans/[id])
@@ -666,14 +671,15 @@ tests-e2e/
     post-delete.spec.ts        — /clubs/[slug] admin posts to feed → deletes via row icon
     posts.spec.ts              — /clubs/[slug] threaded reply: top-level post by runner → reply by alex → both render
   settings/
-    account.spec.ts            — display name, parkrun number, password
-    preferences.spec.ts        — theme, units, map style, privacy zones
+    account.spec.ts            — display name + parkrun number + Resting HR save round-trips
+    export.spec.ts             — /settings/account Data Export: CSV + JSON button downloads + Backup ZIP magic-bytes check
+    preferences.spec.ts        — theme, units, pace format, map style, privacy zones (each save round-trip)
     integrations.spec.ts       — Strava, parkrun, Garmin (list render + parkrun connect/disconnect round-trip + Strava OAuth-redirect path)
-    devices.spec.ts            — current-browser row + "This device" badge
+    devices.spec.ts            — current-browser row + "This device" badge + inline label edit round-trip
     licenses.spec.ts           — open-source license list
     upgrade.spec.ts            — Pro pricing, RevenueCat checkout
   share/
-    run.spec.ts                — /share/run/[id] anon + authed-non-owner view
+    run.spec.ts                — /share/run/[id] anon + authed-non-owner view; private-run not-found for anon; sign-up CTA click-through; run-meta render
     route.spec.ts              — /share/route/[id] anon view
   u/
     profile.spec.ts            — /u/[id] (self vs cross-user view, Followers + Following tab list rendering + click-through)
@@ -686,7 +692,7 @@ tests-e2e/
   cross-cutting/               — span >1 page or >1 session
     auth-walls.spec.ts         — RLS leak checks (cross-user run + private-club isolation), anon-redirect walks (/dashboard, /runs, /coach, /plans, /clubs, /settings/account), ?return_to round-trip
     behaviors.spec.ts          — small focused checks: kudos+rescind UNIQUE round-trip, display-name UI edit verified at the DB layer, club post round-trip shape pinned via DB read, public_runs view contract (anon visibility limited to is_public=true rows)
-    db-constraints.spec.ts     — UNIQUE / CHECK / partial-index walks (training_plans_one_active, run_kudos PK, user_follows PK, club_members PK, clubs.slug, runs.source enum, routes.surface enum, club_members.role enum, subscription_tier narrow union, plan date-range CHECKs) + lock_subscription_columns paywall-bypass guard
+    db-constraints.spec.ts     — UNIQUE / CHECK / partial-index / FK walks (training_plans_one_active, run_kudos PK, user_follows PK, club_members PK, clubs.slug, runs.source enum, routes.surface enum, club_members.role enum, subscription_tier narrow union, plan date-range CHECKs, route_reviews.rating range, event_results.finisher_status / duration_s, training_plans.status, notifications.kind, device_tokens.platform, plan_workouts.week_id FK, club_members.user_id FK to auth.users) + lock_subscription_columns paywall-bypass guard
     realtime.spec.ts           — service-role INSERT into club_posts pushes through Realtime to a subscribed /clubs/[slug] page (postgres_changes filter + debounced reload)
     smoke.spec.ts              — surface smoke: every key page mounts past its loading shell with one stable selector visible (dashboard / feed / runs / routes / plans / clubs / coach / all settings tabs / detail pages / anon landing+login variants)
     surfaces.spec.ts           — detail-surface checks (back-link nav, owner-only affordances, tab switches, sidebar nav round-trips)

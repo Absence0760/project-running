@@ -18,6 +18,101 @@ import { USER_B } from '../fixtures/users';
 test.describe('/share/run/[id] — anon', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
+	test('anon viewer: RunSocial does not mount; sign-up CTA shown instead', async ({
+		page
+	}) => {
+		// RunShareView gates the entire RunSocial card on auth.loggedIn:
+		// authed visitors get kudos + comments, anon visitors get a
+		// "Sign up for Free" CTA card. Pin the anon negative — kudos
+		// and the composer are absent, the CTA link to /login?signup=1
+		// is visible. A regression that exposed RunSocial to anon
+		// could leak kudos / comment writes past the RLS write policy
+		// and surface a confusing 401 toast.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+		await page.waitForLoadState('networkidle');
+
+		// Run meta visible (anon read path works).
+		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
+
+		// Negative: RunSocial absent → kudos button + composer absent.
+		await expect(page.locator('.run-social')).toHaveCount(0);
+		await expect(page.locator('.kudos-btn')).toHaveCount(0);
+		await expect(page.locator('form.composer')).toHaveCount(0);
+
+		// Positive: anon CTA card visible.
+		await expect(
+			page.locator('a[href="/login?signup=1"]', { hasText: 'Sign up' })
+		).toBeVisible({ timeout: 5_000 });
+	});
+
+	test('Sign up CTA on the anon share page lands on /login?signup=1', async ({
+		page
+	}) => {
+		// The CTA is the only call-to-action available to an anon
+		// visitor on a public-share page. Pin the click target — a
+		// regression that wired it to a wrong route would surface
+		// here as a 404 or as the page bouncing back to the share
+		// view in a loop.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+		await page.waitForLoadState('networkidle');
+
+		await page.locator('a[href="/login?signup=1"]', { hasText: 'Sign up' }).click();
+		await page.waitForURL(/\/login\?signup=1/, { timeout: 10_000 });
+	});
+
+	test('anon visit to /share/run/[id] of a private run renders not-found', async ({
+		page
+	}) => {
+		// `public_runs` view filters on is_public=true, so a private run
+		// id returns no row to anon. Pin the negative path so a
+		// regression that exposed private runs to anon would surface
+		// here as a successful body render. Plant a private run, hit
+		// the share path anon, expect "Run not found." copy.
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const { USER_A } = await import('../fixtures/users');
+		const { insertRun } = await import('../fixtures/simulate');
+		const admin = getAdminClient();
+
+		const plantedId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		try {
+			await page.route('**/functions/v1/clip-public-track', (route) =>
+				route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ points: [] })
+				})
+			);
+			await page.goto(`/share/run/${plantedId}`);
+			await page.waitForLoadState('networkidle');
+			await expect(
+				page.getByText('Run not found.')
+			).toBeVisible({ timeout: 10_000 });
+		} finally {
+			await admin.from('runs').delete().eq('id', plantedId);
+		}
+	});
+
 	test('public run loads without auth', async ({ page }) => {
 		// Stub the clip-public-track Edge Function — we don't run
 		// `supabase functions serve` alongside tests, and RunShareView

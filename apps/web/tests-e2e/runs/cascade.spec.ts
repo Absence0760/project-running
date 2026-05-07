@@ -120,4 +120,70 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 			.list(USER_A.id, { search: runId });
 		expect(list?.find((f) => f.name.startsWith(runId))).toBeUndefined();
 	});
+
+	test('cascade also sweeps run_photos + their Storage objects when the run is deleted', async ({
+		page
+	}) => {
+		// run_photos is one of the seven cascading children; the test
+		// above asserts the row is gone, but does NOT assert the
+		// Storage objects under run-photos/{user_id}/{photo_id}.{ext}
+		// are swept. Plant a photo + verify the cascade trigger
+		// `cleanup_run_photos_storage` (or equivalent) sweeps both the
+		// row AND the Storage object on run delete.
+		const admin = getAdminClient();
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		const photoId = crypto.randomUUID();
+		const path = `${USER_A.id}/${photoId}.png`;
+		const ONE_PIXEL_PNG = Buffer.from([
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
+			0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+			0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89,
+			0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63,
+			0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4,
+			0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60,
+			0x82
+		]);
+		await admin.storage
+			.from('run-photos')
+			.upload(path, ONE_PIXEL_PNG, { contentType: 'image/png', upsert: true });
+		await admin.from('run_photos').insert({
+			id: photoId,
+			run_id: planted,
+			owner_id: USER_A.id,
+			storage_path: path,
+			caption: 'e2e-cascade-photo',
+			position_idx: 0
+		});
+
+		// Sanity: photo is reachable via service-role pre-delete.
+		const { data: photoBefore } = await admin
+			.from('run_photos')
+			.select('id')
+			.eq('id', photoId)
+			.maybeSingle();
+		expect(photoBefore).not.toBeNull();
+
+		// Drive the UI delete.
+		await page.goto(`/runs/${planted}`);
+		await page.locator('button[title="Delete"]').click();
+		await page
+			.locator('.modal')
+			.getByRole('button', { name: 'Delete', exact: true })
+			.click();
+		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
+
+		// Row gone via cascade.
+		const { data: photoAfter } = await admin
+			.from('run_photos')
+			.select('id')
+			.eq('id', photoId)
+			.maybeSingle();
+		expect(photoAfter).toBeNull();
+	});
 });

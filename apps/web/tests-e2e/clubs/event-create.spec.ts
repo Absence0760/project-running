@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { deleteEvent } from '../fixtures/simulate';
+import { getAdminClient } from '../fixtures/local-supabase';
+import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -74,5 +75,47 @@ test.describe('/clubs/[slug] — admin event create', () => {
 		// Capture the id from the row's href for cleanup.
 		const href = (await eventRow.getAttribute('href')) ?? '';
 		eventId = href.match(/\/events\/([0-9a-f-]+)$/)![1];
+	});
+
+	test('admin "Delete event" button opens confirmation dialog (cancel preserves event)', async ({
+		page
+	}) => {
+		// /events/[id] exposes a "Delete event" button to admins only.
+		// Clicking it opens a ConfirmDialog. Pin both the admin gate
+		// + the dialog open, then Cancel out so the seed event
+		// survives for the afterEach cleanup. The actual delete path
+		// is exercised by clubs/event-delete.spec.ts.
+		const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+		const title = `e2e-event-delete-confirm ${Date.now()}`;
+		eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			created_by: USER_A.id,
+			title,
+			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
+		});
+
+		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await expect(
+			page.getByRole('heading', { name: title })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: /Delete event/ }).click();
+		// ConfirmDialog mounts as a .modal; its title carries the
+		// "Delete event" copy.
+		const dialog = page.locator('.modal', { hasText: /Delete event/i });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+		// Cancel — event must remain.
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+
+		// DB confirms the event is still there.
+		const admin = getAdminClient();
+		const { data: row } = await admin
+			.from('events')
+			.select('id')
+			.eq('id', eventId)
+			.maybeSingle();
+		expect(row).not.toBeNull();
 	});
 });

@@ -262,6 +262,146 @@ test.describe('database constraints', () => {
 		expect(error?.code).toBe('23514');
 	});
 
+	test('route_reviews.rating CHECK rejects ratings outside 1..5', async () => {
+		// route_reviews.rating is a smallint with check (rating between
+		// 1 and 5). The 5-star widget can't emit anything outside that
+		// range, but a curl-from-devtools attack could. Pin the DB
+		// guard.
+		const admin = getAdminClient();
+		const { data: route } = await admin
+			.from('routes')
+			.select('id')
+			.eq('user_id', USER_A.id)
+			.limit(1)
+			.single();
+		const routeId = (route as { id: string }).id;
+		const { error } = await admin.from('route_reviews').insert({
+			route_id: routeId,
+			user_id: USER_A.id,
+			rating: 10,
+			comment: 'e2e bad-rating attempt'
+		});
+		expect(error?.code).toBe('23514');
+	});
+
+	test('event_results.finisher_status CHECK rejects unknown status values', async () => {
+		// finisher_status narrow union: finished / dnf / dns. A
+		// regression that wrote 'dq' (disqualified) or any other
+		// label outside the union must reject. Find any seeded
+		// event id to anchor the FK.
+		const admin = getAdminClient();
+		const { data: ev } = await admin
+			.from('events')
+			.select('id')
+			.limit(1)
+			.maybeSingle();
+		if (!ev) return; // no seeded event — skip
+		const { error } = await admin.from('event_results').insert({
+			event_id: (ev as { id: string }).id,
+			instance_start: new Date().toISOString(),
+			user_id: USER_A.id,
+			duration_s: 1500,
+			distance_m: 5000,
+			finisher_status: 'dq'
+		});
+		expect(error?.code).toBe('23514');
+	});
+
+	test('event_results.duration_s CHECK rejects negative durations', async () => {
+		// duration_s has CHECK (duration_s >= 0). A negative value
+		// would silently flip lap-time signs across the leaderboard.
+		const admin = getAdminClient();
+		const { data: ev } = await admin
+			.from('events')
+			.select('id')
+			.limit(1)
+			.maybeSingle();
+		if (!ev) return;
+		const { error } = await admin.from('event_results').insert({
+			event_id: (ev as { id: string }).id,
+			instance_start: new Date().toISOString(),
+			user_id: USER_A.id,
+			duration_s: -1,
+			distance_m: 5000,
+			finisher_status: 'finished'
+		});
+		expect(error?.code).toBe('23514');
+	});
+
+	test('training_plans.status CHECK rejects an unknown status value', async () => {
+		// training_plans.status narrow union (per migration 20260421_001):
+		// active / completed / abandoned. Pin the DB guard against any
+		// label outside that set.
+		const admin = getAdminClient();
+		const { error } = await admin.from('training_plans').insert({
+			user_id: USER_A.id,
+			name: 'e2e bad-status attempt',
+			goal_event: 'distance_5k',
+			goal_distance_m: 5000,
+			start_date: '2026-09-01',
+			end_date: '2026-12-01',
+			days_per_week: 4,
+			status: 'pending' // not one of active/completed/abandoned
+		});
+		expect(error?.code).toBe('23514');
+	});
+
+	test('notifications.kind CHECK rejects an unknown notification kind', async () => {
+		// notifications.kind narrow union per migration 20260528_001:
+		// kudos / comment / comment_reply / follow. A trigger that
+		// fan-outs with the wrong label must hit 23514.
+		const admin = getAdminClient();
+		const { error } = await admin.from('notifications').insert({
+			user_id: USER_A.id,
+			kind: 'unknown',
+			actor_id: USER_A.id
+		});
+		expect(error?.code).toBe('23514');
+	});
+
+	test('device_tokens.platform CHECK rejects an unknown platform value', async () => {
+		// device_tokens.platform narrow union per migration 20260506_001:
+		// ios / android / web. A regression that let 'desktop' through
+		// would let push-fan-out write to the wrong queue.
+		const admin = getAdminClient();
+		const { error } = await admin.from('device_tokens').insert({
+			user_id: USER_A.id,
+			platform: 'desktop',
+			token: `e2e-token-${Date.now()}`
+		});
+		expect(error?.code).toBe('23514');
+	});
+
+	test('plan_workouts FK to plan_weeks rejects an orphaned week_id', async () => {
+		// plan_workouts.week_id references plan_weeks(id). Inserting a
+		// workout with a bogus parent week must 23503 (foreign_key_
+		// violation). Pin the integrity rule — a regression that
+		// dropped the FK would let zombie workouts accumulate.
+		const admin = getAdminClient();
+		const { error } = await admin.from('plan_workouts').insert({
+			week_id: '00000000-0000-0000-0000-000000000bad',
+			scheduled_date: '2026-09-01',
+			kind: 'easy'
+		});
+		expect(error?.code).toBe('23503');
+	});
+
+	test('club_members.user_id FK rejects an orphaned user_id (auth.users does not exist)', async () => {
+		// club_members.user_id references auth.users(id). Plant against
+		// a bogus user ID — the FK must 23503. Pin the integrity rule
+		// against a regression that downgraded the FK to a soft
+		// reference (e.g. removed REFERENCES auth.users).
+		const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+		const admin = getAdminClient();
+		const { error } = await admin.from('club_members').insert({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			user_id: '00000000-0000-0000-0000-000000000bad',
+			role: 'member',
+			status: 'active'
+		});
+		expect(error?.code).toBe('23503');
+	});
+
 	test('user_profiles.subscription_tier CHECK rejects an unknown tier value (narrow union enforcement)', async () => {
 		// SubscriptionTier is a TS narrow-union pinned in CHECK
 		// constraints. A regression that tried to write 'gold' or

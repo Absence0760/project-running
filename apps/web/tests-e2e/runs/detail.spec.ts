@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
-import { insertRun } from '../fixtures/simulate';
+import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -201,6 +202,75 @@ test.describe('/runs/[id]', () => {
 			.eq('id', planted)
 			.maybeSingle();
 		expect(stillThere).toBeNull();
+	});
+
+	test('Share link button on a private run flips is_public=true and opens /share/run for anon', async ({
+		page,
+		context
+	}) => {
+		// Private runs return 404 from /share/run for anon. Clicking the
+		// "Share link" icon-btn calls makeRunPublic() which sets
+		// runs.is_public=true and copies a shareable URL. After that the
+		// /share/run/[id] page must mount for an unauthenticated viewer.
+		// Pin the round-trip so a regression in makeRunPublic (or its
+		// underlying RLS policy) shows up as a 404 against /share.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		try {
+			// Grant clipboard perms so navigator.clipboard.writeText
+			// inside makeRunPublic doesn't reject.
+			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+			await page.goto(`/runs/${planted}`);
+			await page.waitForLoadState('networkidle');
+			await page.locator('button[title="Share link"]').click();
+
+			// Toast confirms success — the makeRunPublic call resolved.
+			await expect(page.locator('.toast', { hasText: /Share link copied/ }))
+				.toBeVisible({ timeout: 10_000 });
+
+			// Backend assertion: runs.is_public flipped.
+			const admin = getAdminClient();
+			const { data: row } = await admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', planted)
+				.single();
+			expect(row?.is_public).toBe(true);
+
+			// Anon /share/run/[id] now resolves (vs the 404 it would
+			// have hit while is_public=false). Use a fresh anon context
+			// so we don't carry runner's auth.
+			const anonContext = await context.browser()!.newContext({
+				storageState: { cookies: [], origins: [] }
+			});
+			const anonPage = await anonContext.newPage();
+			try {
+				await anonPage.route('**/functions/v1/clip-public-track', (route) =>
+					route.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						body: JSON.stringify({ points: [] })
+					})
+				);
+				await anonPage.goto(`/share/run/${planted}`);
+				await anonPage.waitForLoadState('networkidle');
+				// Share-page mounts RunShareView with .run-meta — same
+				// signal share/run.spec.ts uses to confirm the page
+				// rendered for anon (vs. the 404 path).
+				await expect(anonPage.locator('.run-meta'))
+					.toBeVisible({ timeout: 10_000 });
+			} finally {
+				await anonContext.close();
+			}
+		} finally {
+			await deleteRun(planted);
+		}
 	});
 
 	test('not-found: visiting a missing run id shows "Run not found" with a way back', async ({

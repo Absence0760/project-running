@@ -60,4 +60,31 @@ test.describe('cross-user kudos', () => {
 		await expect(page.locator('.kudos-btn')).not.toHaveClass(/given/);
 		await expect(page.locator('.kudos-count')).toHaveText('0');
 	});
+
+	test('alex sees kudos disabled on a non-public run page (RLS hides the row)', async ({
+		page
+	}) => {
+		// /share/run/<bogus> for any non-public run ID returns the
+		// "Run not found" state via the public_runs view's RLS-equivalent
+		// filter. Pin the negative path so a regression that exposed
+		// private runs to /share would surface here.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+		await page.goto(`/share/run/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+
+		// RunShareView renders "Run not found." as a status paragraph
+		// (no heading) when the run can't be loaded. No kudos button
+		// surfaces.
+		await expect(
+			page.getByText('Run not found.')
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.kudos-btn')).toHaveCount(0);
+	});
 });

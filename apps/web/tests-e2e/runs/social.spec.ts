@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import {
 	deleteRun,
 	insertComment,
@@ -81,5 +82,47 @@ test.describe('/runs/[id] — owner-side engagement panel', () => {
 		await expect(
 			social.locator('article.comment', { hasText: 'e2e-owner-social' })
 		).toHaveCount(0, { timeout: 5_000 });
+	});
+
+	test('owner posts a comment on own run via composer → DB row created with author = owner', async ({
+		page
+	}) => {
+		// The composer is rendered to any logged-in user (only kudos is
+		// owner-disabled — see the prior test). Pin that the owner can
+		// reply to their own run via the composer and the DB row lands
+		// with author_id = owner. A regression that conflated isOwn with
+		// "no composer at all" would land here.
+		runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 6_000,
+			duration_s: 1_800,
+			is_public: true
+		});
+
+		const body = `e2e-owner-self-comment ${Date.now()}`;
+		await page.goto(`/runs/${runId}`);
+
+		const social = page.locator('.run-social');
+		await expect(social).toBeVisible({ timeout: 10_000 });
+
+		const composer = social.locator('form.composer');
+		await expect(composer).toBeVisible();
+		await composer.locator('textarea').fill(body);
+		await composer.getByRole('button', { name: /^Post$/ }).click();
+
+		// New comment article appears in the list.
+		await expect(
+			social.locator('article.comment', { hasText: body })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Backend assertion: author_id is the owner, run_id is right.
+		const admin = getAdminClient();
+		const { data: row } = await admin
+			.from('run_comments')
+			.select('id, run_id, author_id, body')
+			.eq('run_id', runId)
+			.eq('author_id', USER_A.id)
+			.single();
+		expect(row?.body).toBe(body);
 	});
 });

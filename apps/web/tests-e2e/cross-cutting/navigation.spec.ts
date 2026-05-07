@@ -51,4 +51,23 @@ test.describe('sidebar collapse', () => {
 		await page.getByRole('button', { name: 'Expand sidebar' }).click();
 		await expect(page.locator('nav.sidebar')).not.toHaveClass(/collapsed/);
 	});
+
+	test('sidebar nav highlights the active route with the .active class', async ({
+		page
+	}) => {
+		// The layout marks the active sidebar link with `class="active"`.
+		// Pin one route — /runs — so a regression that dropped the
+		// active wiring (e.g. a refactor that swapped the matcher) is
+		// caught.
+		await page.goto('/runs');
+		await page.waitForLoadState('networkidle');
+
+		const navHistory = page.locator('nav.sidebar a', { hasText: 'History' });
+		await expect(navHistory).toBeVisible();
+		await expect(navHistory).toHaveClass(/active/);
+
+		// Other nav items do NOT carry the active class.
+		const navDashboard = page.locator('nav.sidebar a', { hasText: 'Dashboard' });
+		await expect(navDashboard).not.toHaveClass(/active/);
+	});
 });

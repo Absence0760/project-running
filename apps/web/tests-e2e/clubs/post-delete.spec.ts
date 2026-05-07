@@ -19,6 +19,56 @@ import { USER_A } from '../fixtures/users';
 test.describe('/clubs/[slug] — post delete', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('a member without admin powers does not see the Delete-post icon on others\' posts', async ({
+		browser
+	}) => {
+		// Pin the negative side of the admin-gate: a normal member who
+		// did NOT author a post must NOT see the Delete-post icon on
+		// it. The icon-btn renders only when canDelete (post author OR
+		// club admin). A regression that exposed the icon to all
+		// members would let any member nuke any other member's posts.
+		const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+		const body = `e2e-post-gating ${Date.now()}`;
+
+		// Owner posts via service-role to skip the composer race.
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const admin = getAdminClient();
+		const { data: planted, error } = await admin
+			.from('club_posts')
+			.insert({
+				club_id: SYDNEY_RUN_CLUB_ID,
+				author_id: USER_A.id,
+				body
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		const postId = (planted as { id: string }).id;
+
+		try {
+			// Visit as alex (USER_B) — alex is an active member of
+			// Sydney Run Club per seed but NOT an admin/owner.
+			const { USER_B } = await import('../fixtures/users');
+			const ctxAlex = await browser.newContext({
+				storageState: USER_B.storageStatePath
+			});
+			const alex = await ctxAlex.newPage();
+			try {
+				await alex.goto('/clubs/sydney-run-club');
+				const post = alex.locator('article.post', { hasText: body });
+				await expect(post).toBeVisible({ timeout: 10_000 });
+				// Delete-post button absent for the non-author non-admin.
+				await expect(
+					post.getByRole('button', { name: 'Delete post' })
+				).toHaveCount(0);
+			} finally {
+				await ctxAlex.close();
+			}
+		} finally {
+			await admin.from('club_posts').delete().eq('id', postId);
+		}
+	});
+
 	test('post → delete via the admin icon → confirm → post gone', async ({
 		page
 	}) => {

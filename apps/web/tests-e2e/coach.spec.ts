@@ -266,6 +266,67 @@ test.describe('/coach', () => {
 		await expect(runsTrigger).toContainText('Last 50');
 	});
 
+	test('401 from /api/coach surfaces a non-empty error banner instead of stalling on "Thinking…"', async ({
+		page
+	}) => {
+		// When the streaming endpoint rejects with 401 (e.g. the
+		// session expired upstream), CoachChat falls through to the
+		// generic-error branch (line 475) and surfaces j.error or
+		// `Coach error (401)`. Pin that the banner is visible — a
+		// regression that swallowed the error would leave the
+		// optimistic assistant bubble in a "Thinking…" spinner.
+		const errorMessage = 'Session expired. Please refresh.';
+		await page.route('**/api/coach', async (route) => {
+			await route.fulfill({
+				status: 401,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: errorMessage })
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+		await composer.fill('e2e 401 path');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		await expect(
+			page.getByText(errorMessage)
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('500 upstream error surfaces a banner instead of leaving the user staring at "Thinking…"', async ({
+		page
+	}) => {
+		// When the LLM provider 500s the streaming endpoint, the SSE
+		// reader throws and CoachChat must surface a non-empty error
+		// banner. A regression that swallowed the error would leave
+		// the optimistic assistant bubble in a "Thinking…" state
+		// indefinitely — a leave-the-app moment.
+		await page.route('**/api/coach', async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					error: 'Coach is temporarily unavailable. Try again shortly.'
+				})
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+		await composer.fill('e2e 500 path');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// CoachChat reads j.error first for non-401/429 responses
+		// (line 475 in CoachChat.svelte), so the banner surfaces the
+		// upstream `error` field as the user-facing message.
+		await expect(
+			page.getByText(/Coach is temporarily unavailable|temporarily unavailable/i)
+		).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('chat history sidebar mounts (the conversation-history scaffold is reachable)', async ({
 		page
 	}) => {

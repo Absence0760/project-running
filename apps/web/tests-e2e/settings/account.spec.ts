@@ -55,4 +55,66 @@ test.describe('/settings/account', () => {
 		await page.waitForLoadState('networkidle');
 		await expect(page.getByLabel('Display Name')).toHaveValue(originalName);
 	});
+
+	test('parkrun athlete number save persists across reload', async ({
+		page
+	}) => {
+		// parkrun_number is a text column on user_profiles that the
+		// parkrun importer uses to find the user's results page. A
+		// regression that dropped the field from the save payload
+		// would surface here. Use a placeholder-style value (no real
+		// athletes hit by leaking it) and restore.
+		await page.goto('/settings/account');
+		await page.waitForLoadState('networkidle');
+
+		const input = page.getByLabel(/parkrun Athlete Number/);
+		const before = await input.inputValue();
+		const next = `A${Date.now()}`.slice(0, 9);
+
+		await input.fill(next);
+		await page.getByRole('button', { name: /Save Profile/ }).click();
+		await expect(page.getByRole('button', { name: 'Saved!' })).toBeVisible({
+			timeout: 5_000
+		});
+
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(page.getByLabel(/parkrun Athlete Number/)).toHaveValue(next);
+
+		// Restore.
+		await page.getByLabel(/parkrun Athlete Number/).fill(before);
+		await page.getByRole('button', { name: /Save Profile/ }).click();
+		await expect(page.getByRole('button', { name: 'Saved!' })).toBeVisible({
+			timeout: 5_000
+		});
+	});
+
+	test('Resting HR save persists across reload', async ({ page }) => {
+		// resting_hr_bpm lives in user_settings.prefs, not user_profiles.
+		// The Save handler stitches the two writes together; a regression
+		// that dropped the prefs branch would let HR slip while
+		// display_name persisted.
+		await page.goto('/settings/account');
+		await page.waitForLoadState('networkidle');
+
+		const hr = page.getByLabel(/Resting HR/);
+		const before = await hr.inputValue();
+		const next = '54';
+
+		await hr.fill(next);
+		await page.getByRole('button', { name: /Save Profile/ }).click();
+		await expect(page.getByRole('button', { name: 'Saved!' })).toBeVisible({
+			timeout: 5_000
+		});
+
+		await page.reload();
+		await page.waitForLoadState('networkidle');
+		await expect(page.getByLabel(/Resting HR/)).toHaveValue(next);
+
+		await page.getByLabel(/Resting HR/).fill(before);
+		await page.getByRole('button', { name: /Save Profile/ }).click();
+		await expect(page.getByRole('button', { name: 'Saved!' })).toBeVisible({
+			timeout: 5_000
+		});
+	});
 });

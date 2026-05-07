@@ -30,4 +30,20 @@ test.describe('/share/route/[id] — anon', () => {
 		await expect(page.locator('.surface-tag')).toContainText('road');
 		await expect(page.locator('.route-meta')).toContainText('10');
 	});
+
+	test('not-found: visiting a missing route id renders the not-found state', async ({
+		page
+	}) => {
+		// Stale-link landing protection — same shape as /runs/[id] +
+		// /routes/[id] not-found tests but on the public-share path
+		// (anon viewer hitting a deleted route URL).
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/share/route/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+		// /share/route renders the not-found copy as a status paragraph
+		// rather than a heading. Match the literal copy.
+		await expect(
+			page.getByText('Route not found or is private.')
+		).toBeVisible({ timeout: 10_000 });
+	});
 });

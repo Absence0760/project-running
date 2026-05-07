@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { clearNotifications } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
@@ -118,6 +119,109 @@ test.describe('cross-user notifications', () => {
 			await expect(alex.locator('.kudos-btn')).not.toHaveClass(/given/);
 		} finally {
 			await ctxAlex.close();
+			await ctxRunner.close();
+		}
+	});
+
+	test('alex comments → runner sees a comment notification with the right verb', async ({
+		browser
+	}) => {
+		// Companion to the kudos test: pins the `notify_run_comment`
+		// trigger path. A regression in the trigger or the
+		// notifications-list verb would surface here as a missing or
+		// mis-rendered popover entry.
+		const ctxRunner = await browser.newContext({
+			storageState: USER_A.storageStatePath
+		});
+		const runner = await ctxRunner.newPage();
+		const admin = getAdminClient();
+		let commentId: string | null = null;
+
+		try {
+			// Plant the comment via service-role — we already test the
+			// /share writer path elsewhere.
+			const { data, error } = await admin
+				.from('run_comments')
+				.insert({
+					run_id: RUNNER_PUBLIC_RUN_ID,
+					author_id: USER_B.id,
+					body: 'e2e-notify-comment ' + Date.now()
+				})
+				.select('id')
+				.single();
+			if (error) throw error;
+			commentId = data.id as string;
+
+			await runner.goto('/dashboard');
+			await runner.waitForLoadState('networkidle');
+			const badge = runner.locator('.bell-wrap .badge');
+			await expect(badge).toBeVisible({ timeout: 10_000 });
+
+			await runner.locator('.bell-wrap .bell-btn').click();
+			const popover = runner.locator('.bell-wrap [role="dialog"]');
+			await expect(popover).toBeVisible({ timeout: 5_000 });
+			// verb for kind='comment' is "Alex Chen commented on your <km>".
+			await expect(popover).toContainText(
+				/Alex Chen commented on your/i
+			);
+		} finally {
+			if (commentId) {
+				await admin.from('run_comments').delete().eq('id', commentId);
+			}
+			await ctxRunner.close();
+		}
+	});
+
+	test('alex follows runner → runner sees a follow notification', async ({
+		browser
+	}) => {
+		// Migration 20260528_001 also installs `notify_user_follow` —
+		// inserting into user_follows fans out to the followee. Pin the
+		// popover entry shape ("X started following you").
+		const ctxRunner = await browser.newContext({
+			storageState: USER_A.storageStatePath
+		});
+		const runner = await ctxRunner.newPage();
+		const admin = getAdminClient();
+
+		// Seed already has alex(USER_B) following runner(USER_A) — remove
+		// the edge first so we can re-insert and trigger a fresh
+		// notification.
+		await admin
+			.from('user_follows')
+			.delete()
+			.eq('follower_id', USER_B.id)
+			.eq('followee_id', USER_A.id);
+
+		try {
+			const { error } = await admin.from('user_follows').insert({
+				follower_id: USER_B.id,
+				followee_id: USER_A.id
+			});
+			if (error) throw error;
+
+			await runner.goto('/dashboard');
+			await runner.waitForLoadState('networkidle');
+			const badge = runner.locator('.bell-wrap .badge');
+			await expect(badge).toBeVisible({ timeout: 10_000 });
+
+			await runner.locator('.bell-wrap .bell-btn').click();
+			const popover = runner.locator('.bell-wrap [role="dialog"]');
+			await expect(popover).toBeVisible({ timeout: 5_000 });
+			await expect(popover).toContainText(
+				/Alex Chen started following you/i
+			);
+		} finally {
+			// Re-establish the seeded follow edge (idempotent due to PK).
+			await admin
+				.from('user_follows')
+				.delete()
+				.eq('follower_id', USER_B.id)
+				.eq('followee_id', USER_A.id);
+			await admin.from('user_follows').insert({
+				follower_id: USER_B.id,
+				followee_id: USER_A.id
+			});
 			await ctxRunner.close();
 		}
 	});

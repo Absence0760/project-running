@@ -45,6 +45,52 @@ test.describe('/clubs/[slug]', () => {
 		await expect(memberList.getByText('owner', { exact: true })).toBeVisible();
 	});
 
+	test('Routes tab on Sydney Run Club: admin sees "+ New route" + "Transfer" affordances', async ({
+		page
+	}) => {
+		// The Routes tab is admin-gated for the management affordances:
+		// "New route" deeplinks to /routes/new?club=<id>, "Transfer" opens
+		// a modal that lets the admin re-home one of their personal
+		// routes. Pin both surfaces are visible for the owner so a
+		// regression in the isAdmin guard surfaces here.
+		await page.goto('/clubs/sydney-run-club');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: /^Routes/ }).click();
+
+		// Both admin affordances mount.
+		await expect(
+			page.locator('.routes-actions a[href*="/routes/new?club="]')
+		).toBeVisible({ timeout: 5_000 });
+		await expect(
+			page.getByRole('button', { name: /Transfer from My routes/ })
+		).toBeVisible();
+	});
+
+	test('Events tab on Sydney Run Club: admin "New event" button opens the EventEditor modal', async ({
+		page
+	}) => {
+		// Admin gating: the "New event" button at the top of /clubs/[slug]
+		// is rendered only when isAdmin. Clicking it sets showEventModal
+		// = true which mounts the EventEditor modal. Pin both the
+		// affordance and the modal launch — a regression that broke
+		// isAdmin or the showEventModal binding would surface here.
+		await page.goto('/clubs/sydney-run-club');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: /New event/ }).first().click();
+		await expect(
+			page.locator('.modal-header h2', { hasText: 'New event' })
+		).toBeVisible({ timeout: 5_000 });
+		// Cancel out of the modal so subsequent tests start clean.
+		await page.locator('.modal-close').click();
+		await expect(page.locator('.modal')).toHaveCount(0);
+	});
+
 	test('club CRUD round-trip via /clubs/new → /clubs/[slug] → Delete club', async ({
 		page
 	}) => {

@@ -24,6 +24,40 @@ const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
 test.describe('realtime fan-out', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('reload after a service-role DELETE drops the post (load() picks up the new state)', async ({
+		page
+	}) => {
+		// Realtime DELETE events on a filtered postgres_changes channel
+		// require REPLICA IDENTITY FULL to surface the matched row;
+		// /clubs/[slug] doesn't currently flip the table to FULL, so
+		// DELETEs only land via load() on the next refresh. Pin the
+		// reload-then-fetch path so a regression that broke load()
+		// would surface here even though we don't pin instant
+		// realtime DELETE fan-out.
+		const admin = getAdminClient();
+		const body = `e2e-realtime-delete ${Date.now()}`;
+		const { data: planted, error } = await admin
+			.from('club_posts')
+			.insert({
+				club_id: SYDNEY_RUN_CLUB_ID,
+				author_id: USER_A.id,
+				body
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		const plantedId = (planted as { id: string }).id;
+
+		await page.goto('/clubs/sydney-run-club');
+		await expect(page.locator('article.post', { hasText: body }))
+			.toBeVisible({ timeout: 10_000 });
+
+		await admin.from('club_posts').delete().eq('id', plantedId);
+		await page.reload();
+		await expect(page.locator('article.post', { hasText: body }))
+			.toHaveCount(0, { timeout: 10_000 });
+	});
+
 	test('service-role INSERT into club_posts pushes to a subscribed /clubs/[slug] page', async ({
 		page
 	}) => {

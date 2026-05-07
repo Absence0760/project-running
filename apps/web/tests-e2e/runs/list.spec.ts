@@ -221,6 +221,66 @@ test.describe('/runs', () => {
 		await page.getByRole('button', { name: 'Done', exact: true }).click();
 	});
 
+	test('Select-mode + bulk-delete actually removes a planted run from the DB', async ({
+		page
+	}) => {
+		// Companion to the cancel-test above. Pin the destructive write
+		// path: plant a throwaway run via service-role, navigate /runs,
+		// enter select mode, pick the planted card, Delete → Confirm,
+		// row is gone server-side. A regression in deleteRuns or its
+		// optimistic update would fail here.
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const { insertRun } = await import('../fixtures/simulate');
+		const admin = getAdminClient();
+
+		// Plant with a unique, very-distinctive distance (12345 m) so we
+		// can locate the exact card in the list by its rendered text.
+		const plantedId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 12_345,
+			duration_s: 4_321,
+			is_public: false,
+			started_at: new Date().toISOString()
+		});
+
+		try {
+			await page.goto('/runs');
+			await switchRunsToAllTime(page);
+			// Sort by Newest so our just-planted run is the first row.
+			await page.locator('select[aria-label="Sort"]').selectOption('newest');
+			await expect(page.locator('.run-card').first())
+				.toBeVisible({ timeout: 10_000 });
+
+			await page.getByRole('button', { name: 'Select', exact: true }).click();
+
+			// Click the first card (most recent — our planted row).
+			await page.locator('.run-card').first().click();
+			const bulkBar = page.locator('.bulk-bar');
+			await expect(bulkBar).toContainText('1 selected');
+
+			await bulkBar.getByRole('button', { name: 'Delete' }).click();
+			const dialog = page.locator('.modal', { hasText: /Delete 1 run/ });
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+			await expect(dialog).toHaveCount(0, { timeout: 10_000 });
+
+			// Backend: the row is gone (poll briefly — the optimistic UI
+			// closes the dialog before the await on deleteRuns resolves).
+			await expect.poll(async () => {
+				const { data } = await admin
+					.from('runs')
+					.select('id')
+					.eq('id', plantedId)
+					.maybeSingle();
+				return data;
+			}, { timeout: 5_000 }).toBeNull();
+		} finally {
+			// Best-effort sweep in case the test failed before the UI
+			// delete fired.
+			await admin.from('runs').delete().eq('id', plantedId);
+		}
+	});
+
 	test('manual run CRUD round-trip via the Add-run modal', async ({ page }) => {
 		const title = uniqueText('e2e-crud');
 
@@ -316,6 +376,30 @@ test.describe('/runs', () => {
 		await expect(page.locator('.run-card').first()).toBeVisible({
 			timeout: 10_000
 		});
+	});
+
+	test('combined filters: Source=parkrun + Activity=Run narrows to parkrun-source run rows only', async ({
+		page
+	}) => {
+		// The page composes filters AND-style — Activity, Source, Date,
+		// search box are all $derived together. A regression that
+		// dropped one of them on combined paths would show up here as
+		// a count that reflects only one filter. Seed has 5 parkruns
+		// (all activity_type=run); combining Source=parkrun + Run
+		// stays at 5.
+		await page.goto('/runs');
+		await page.getByLabel('Date range').selectOption('all');
+		await expect(page.locator('.run-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByRole('button', { name: 'Run', exact: true }).click();
+		await page.locator('select[aria-label="Source"]').selectOption('parkrun');
+		await expect(page.locator('.run-card')).toHaveCount(5);
+
+		// Restore so subsequent tests start clean.
+		await page.locator('select[aria-label="Source"]').selectOption('all');
+		await page.getByRole('button', { name: 'All', exact: true }).click();
 	});
 
 	test('Select-all visible covers every run-card in the filtered set', async ({

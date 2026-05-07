@@ -155,6 +155,56 @@ test.describe('/plans/[id]', () => {
 		}
 	});
 
+	test('day-modal mounts WorkoutEditor with the Mark/Save/Cancel actions', async ({
+		page
+	}) => {
+		// WorkoutEditor (mounted by clicking a .day-link on /plans/[id])
+		// exposes three actions in its footer: Cancel / Mark as done /
+		// Save. Pin that all three render so a regression that drops
+		// any of them surfaces here. The actual round-trip on
+		// manually_completed is sensitive to whether the chosen day has
+		// a linked run (Mark gets disabled if so), so we only assert
+		// presence here. The Save round-trip is exercised by the
+		// adjacent "Sydney Half plan renders multi-week grid" test.
+		const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
+		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+		await expect(
+			page.getByRole('heading', { level: 1, name: /Sydney Half 2026/ })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.locator('.day-link').first().click();
+		const modal = page.locator('.modal');
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+
+		await expect(modal.getByRole('button', { name: 'Cancel' }))
+			.toBeVisible();
+		await expect(
+			modal.getByRole('button', { name: /Mark as done|Mark not done/ })
+		).toBeVisible();
+		await expect(modal.getByRole('button', { name: /^Save/ }))
+			.toBeVisible();
+
+		await modal.locator('.modal-close').click();
+		await expect(modal).toHaveCount(0);
+	});
+
+	test('plan-not-found: visiting a missing plan id renders the not-found state', async ({
+		page
+	}) => {
+		// Symmetry with /runs/[id] and /routes/[id] not-found tests —
+		// stale-link landing protection. A regression that left the
+		// page rendering an empty shell would surface here.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/plans/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+
+		// PlanDetail's not-found branch renders an h2 (not h1) with
+		// "Plan not found".
+		await expect(
+			page.getByRole('heading', { name: 'Plan not found', level: 2 })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('publish-as-template deep clone: plan_weeks + plan_workouts copied, completion fields reset', async ({
 		page
 	}) => {

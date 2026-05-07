@@ -71,4 +71,17 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 		await page.getByRole('link', { name: /Back to plan/i }).first().click();
 		await expect(page).toHaveURL(new RegExp(`/plans/${SEED_PLAN_ID}$`));
 	});
+
+	test('not-found: visiting a missing workout id renders "Workout not found"', async ({
+		page
+	}) => {
+		// Stale-link landing protection — same shape as /runs/[id] +
+		// /routes/[id] + /plans/[id] not-found tests.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/plans/${SEED_PLAN_ID}/workouts/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+		await expect(
+			page.getByRole('heading', { name: /Workout not found/i })
+		).toBeVisible({ timeout: 10_000 });
+	});
 });

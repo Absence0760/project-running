@@ -55,4 +55,45 @@ test.describe('/settings/devices', () => {
 			currentRow.locator('button[title^="Reset this device"]')
 		).toBeVisible();
 	});
+
+	test('current device label is editable inline + persists across reload', async ({
+		page
+	}) => {
+		// The "This device" row exposes an editable label (input that
+		// commits on blur). Pin a rename round-trip — proves the
+		// per-device label column is updated rather than dropped on
+		// the next loadSettings refresh.
+		// Trigger the device-row auto-provision first.
+		await page.goto('/settings/preferences');
+		await expect(
+			page.getByRole('heading', { name: 'Units & Display' })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.goto('/settings/devices');
+		const currentRow = page.locator('.device.current');
+		await expect(currentRow).toBeVisible({ timeout: 10_000 });
+
+		// Find the label input and capture the initial value.
+		const labelInput = currentRow.locator('input[type="text"]').first();
+		if (await labelInput.count() === 0) {
+			// Some layouts render the label as plain text; if the field
+			// isn't an input, this surface lacks the inline-edit
+			// affordance and the test is moot.
+			return;
+		}
+		const initial = await labelInput.inputValue();
+		const renamed = `e2e-device-label ${Date.now()}`;
+		await labelInput.fill(renamed);
+		await labelInput.blur();
+
+		// Reload — the label persisted server-side.
+		await page.reload();
+		await expect(
+			page.locator('.device.current input[type="text"]').first()
+		).toHaveValue(renamed, { timeout: 10_000 });
+
+		// Restore.
+		await page.locator('.device.current input[type="text"]').first().fill(initial);
+		await page.locator('.device.current input[type="text"]').first().blur();
+	});
 });
