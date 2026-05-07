@@ -50,7 +50,7 @@ pnpm test:e2e:ui       # interactive picker
 
 ## What's covered today
 
-Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **112 Playwright e2e tests across 51 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
+Total: **~687 unique Dart mobile tests across 85 test files, executed by both mobile targets** (mobile_android and mobile_ios share a byte-for-byte identical Dart codebase — see the iOS / android `CLAUDE.md` files), plus 78 tests in run_recorder (across 5 files), 28 in api_client, 2 in core_models, **253 TypeScript unit tests across 20 files** in the web app, and **117 Playwright e2e tests across 53 files** that drive the real web app against a local Supabase. Both mobile apps run the same 85 test files; `flutter test` compiles them once per target, so end-to-end CI exercises ~1,374 mobile test runs. `recording_integration_test.dart` covers the data-pipeline golden path (GPS → recorder → LocalRunStore → SyncService → API) and `run_screen_recording_flow_test.dart` drives the corresponding UI flow (tap START → countdown → recording state with LiveRunMap mounted). No `integration_test`-package tests (device-instrumented) yet, no golden tests. Counts here are point-in-time — they drift fast. Run `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` for the live per-target count and `diff -rq apps/mobile_android/test apps/mobile_ios/test` to confirm the trees stay in lockstep.
 
 Test files use **relative imports** (`import '../lib/widgets/run_photos.dart'`) instead of `package:mobile_android/...` so the same file resolves on both targets — both apps' pubspecs differ only in `name`, and the Dart analyzer would reject `package:mobile_android/...` when building the iOS target.
 
@@ -610,7 +610,7 @@ Pure-helper tests for the webhook security primitives that gate `revenuecat-webh
 
 The handler bodies themselves (HTTP envelope, `createClient`, `webhook_events` insert / `23505` dedupe path, side-effect writes) are not unit-tested in isolation — that surface is end-to-end and currently exercised manually via the workflow described in [apps/backend/CLAUDE.md § Testing without real credentials](../apps/backend/CLAUDE.md#testing-without-real-credentials). The pure helpers above cover the security-critical decision points: signature comparison, replay window, identity validation, tier transition. Anything load-bearing on those four lives in tested code now.
 
-### `apps/web/tests-e2e/` — Playwright suite (112 tests across 51 files)
+### `apps/web/tests-e2e/` — Playwright suite (117 tests across 53 files)
 
 End-to-end browser tests that drive the real SvelteKit app against a real local Supabase. Unit tests pin pure helpers and SQL pins RLS at the database; this suite catches the next failure mode — **a UI fetch path that bypasses or misuses an otherwise-correct policy** (a wrong join, a dropped filter, a client-side lookup that trusts the URL, an optimistic update that never round-trips). Browser-only on purpose — mobile / watch don't have an equivalent harness (Flutter `integration_test` is too slow + flaky on CI to be worth the cycles right now).
 
@@ -640,6 +640,7 @@ tests-e2e/
   runs/
     list.spec.ts               — /runs (filter, sort, search, multi-select, create, delete)
     detail.spec.ts             — /runs/[id] (edit, cancel, single-run delete via the trash icon)
+    cascade.spec.ts            — backend boundary: deleting a run sweeps every cascading child (kudos, comments, photos, segment_efforts, live_run_pings, run_matched_tracks, notifications) + the Storage object
     save-as-route.spec.ts      — /runs/[id] Save-as-route CRUD (prompt → /routes/[new])
     social.spec.ts             — /runs/[id] owner sees kudos count + comment list (RunSocial mounts for own runs)
   routes/
@@ -657,7 +658,7 @@ tests-e2e/
     approval.spec.ts           — /clubs/[slug] admin approves OR rejects a pending join request
     event-create.spec.ts       — /clubs/[slug] admin creates event via the in-page modal (EventEditor)
     event-delete.spec.ts       — /clubs/[slug]/events/[id] admin deletes event → navigates back to club
-    event-rsvp.spec.ts         — /clubs/[slug]/events/[id] RSVP round-trip on a planted event
+    event-rsvp.spec.ts         — /clubs/[slug]/events/[id] RSVP round-trip + UPSERT contract (status changes overwrite the same row, never duplicate)
     invite.spec.ts             — /clubs/join/[token] redeems a Friends-of-Jared invite link → lands on the private club
     join.spec.ts               — /clubs/[slug] open-policy join from Browse → post on feed → leave
     members.spec.ts            — /clubs/[slug] Members tab: admin role-change dropdown + admin Remove-member kick
@@ -683,6 +684,8 @@ tests-e2e/
     notifications.spec.ts      — kudos → bell badge update + popover entry
   cross-cutting/               — span >1 page or >1 session
     auth-walls.spec.ts         — RLS leak checks, anon redirects, ?return_to round-trip
+    realtime.spec.ts           — backend boundary: service-role INSERT into club_posts pushes through Realtime to a subscribed /clubs/[slug] page (postgres_changes filter + debounced reload)
+    triggers.spec.ts           — backend boundary: enroll_club_owner planting an owner row on club INSERT, and notify_run_kudos planting a kudos notifications row on kudos INSERT (both verified via service-role read after a UI action)
     sign-in-out.spec.ts        — form sign-in + popover sign-out (uses ephemeral session, see preamble)
     navigation.spec.ts         — sidebar collapse persistence
     privacy-zones.spec.ts      — owner Share guardrail when track crosses a zone (cancel + confirm paths) + cross-user clipping via the clip-public-track EF
