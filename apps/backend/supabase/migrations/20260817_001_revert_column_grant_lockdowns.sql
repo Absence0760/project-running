@@ -1,0 +1,70 @@
+-- Revert two column-grant lockdowns that were caught breaking
+-- `select('*')` reads in the web e2e suite:
+--
+--   1. `20260801_001_clubs_invite_token_lockdown.sql` — replaced
+--      table-level SELECT on `clubs` for anon + authenticated with a
+--      column-level grant excluding `invite_token`.
+--   2. `20260806_001_events_meet_point_authenticated_revoke.sql` —
+--      same shape on `events` for `authenticated`, excluding
+--      `meet_lat` / `meet_lng`.
+--
+-- (The earlier `20260723_001_events_meet_point_anon_revoke.sql` for
+-- anon stays in place — anon paths don't use `select('*')` against
+-- `events`.)
+--
+-- Why revert: PostgREST's `select('*')` (and supabase-dart's
+-- argless `.select()`) expand to all columns at the SQL layer. With
+-- column-level grants minus a few columns, every such read fails
+-- with `42501 permission denied for table <name>` because the role
+-- lacks the implicit "table SELECT" privilege. Whack-a-mole'ing
+-- every read site to enumerate columns fixes the immediate
+-- breakage but is fragile — the next `select('*')` regresses CI,
+-- and it doesn't scale to the 6+ tables the project will eventually
+-- want column-redacted.
+--
+-- The intended replacement is the redacted-view pattern from
+-- `20260813_001_race_sessions_admin_column_redaction.sql`: a
+-- `security_invoker = on` view that nulls the sensitive columns for
+-- non-privileged readers. Reads route through the view; writes hit
+-- the underlying table. `select('*')` keeps working because the
+-- column is present (just null) for non-members. That migration is
+-- the template for the follow-up that re-tightens `clubs.invite_token`
+-- and `events.meet_lat / meet_lng`.
+--
+-- Privacy regression while this is reverted:
+--   - `clubs.invite_token` is readable via `?select=invite_token` for
+--     any anon or authenticated caller who can pass the existing RLS
+--     ("public clubs are readable by anyone" + the various member
+--     reads). The SECURITY DEFINER `get_club_invite_token` admin
+--     getter (added by `20260801_001`) stays in place — the
+--     intended admin path is unchanged. Joining via `join_club_by_token`
+--     RPC remains gated on the token being valid; the `join_policy`
+--     check inside the RPC also stays. This regression is the
+--     "anon enumerates invite tokens for invite-only public clubs
+--     and joins" path the original migration closed; closing it
+--     properly belongs in the redacted-view follow-up.
+--   - `events.meet_lat` / `meet_lng` are readable via the same shape
+--     for any authenticated caller. No render path consumes them
+--     today; the columns are stored for a future map-pin feature.
+--     Same redacted-view follow-up will re-close the leak.
+
+grant select on clubs to authenticated, anon;
+grant select on events to authenticated, anon;
+
+-- The column-level grants from the reverted migrations are now
+-- functionally redundant under the broader table grant. Postgres ACL
+-- semantics: when both a table-level SELECT and column-level SELECT
+-- grants are present, the broader grant wins. Leaving the column
+-- grants as-is keeps the migration history reviewable; the
+-- redacted-view migration that replaces this should drop them
+-- explicitly.
+
+-- TODO(redacted-view-follow-up): introduce
+-- `clubs_redacted` (nulls `invite_token` for non-admins) and
+-- `events_redacted` (nulls `meet_lat`/`meet_lng` for non-members)
+-- following the `race_sessions_redacted` template, then route
+-- `fetchClubBySlug` / `fetchEventById` / `fetchUpcomingEvents` /
+-- mobile equivalents through the view. The admin / member predicate
+-- already exists (`is_club_admin`, `is_club_member`) and the
+-- security_invoker = on posture preserves caller identity for the
+-- inner RLS to evaluate correctly.

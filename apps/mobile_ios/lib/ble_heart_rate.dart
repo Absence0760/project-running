@@ -37,7 +37,12 @@ class BleHeartRate {
   static final Uuid _heartRateMeasurement =
       Uuid.parse('00002a37-0000-1000-8000-00805f9b34fb');
 
-  final FlutterReactiveBle _ble = FlutterReactiveBle();
+  // Lazy: `FlutterReactiveBle()` opens a MethodChannel in its
+  // constructor and throws under flutter_test (no platform impl).
+  // Keeping the field `late` defers that to the first scan / connect
+  // call, which production hits and the widget-test surface (which
+  // only builds BleHeartRate, never calls into it) does not.
+  late final FlutterReactiveBle _ble = FlutterReactiveBle();
 
   StreamSubscription<ConnectionStateUpdate>? _connectionSub;
   StreamSubscription<List<int>>? _notifySub;
