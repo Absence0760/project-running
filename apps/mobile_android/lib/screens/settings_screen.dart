@@ -1598,7 +1598,7 @@ class _HeartRateTileState extends State<_HeartRateTile> {
   }
 
   Future<void> _pair() async {
-    final device = await showModalBottomSheet<dynamic>(
+    final device = await showModalBottomSheet<BleDeviceCandidate>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _HeartRateScanSheet(heartRate: widget.heartRate),
@@ -1646,9 +1646,10 @@ class _HeartRateTileState extends State<_HeartRateTile> {
 }
 
 /// Modal bottom sheet that scans for BLE straps advertising the Heart
-/// Rate Service and returns the selected `BluetoothDevice` via `pop`.
-/// Re-imports `flutter_blue_plus` dynamically so the public surface of
-/// `BleHeartRate` can keep the dep hidden from UI callers.
+/// Rate Service and returns the selected `BleDeviceCandidate` via `pop`.
+/// `BleDeviceCandidate` is a plain value type defined in `BleHeartRate`,
+/// so this sheet doesn't depend on the underlying flutter_reactive_ble
+/// types.
 class _HeartRateScanSheet extends StatefulWidget {
   final BleHeartRate heartRate;
   const _HeartRateScanSheet({required this.heartRate});
@@ -1658,9 +1659,9 @@ class _HeartRateScanSheet extends StatefulWidget {
 }
 
 class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
-  List<dynamic> _results = const [];
+  List<BleDeviceCandidate> _results = const [];
   bool _scanning = true;
-  StreamSubscription<List<dynamic>>? _sub;
+  StreamSubscription<List<BleDeviceCandidate>>? _sub;
 
   @override
   void initState() {
@@ -1718,15 +1719,11 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
                 child: Text('No straps found. Make sure it\'s nearby and awake.'),
               ),
             ..._results.map((r) {
-              final device = r.device;
-              final name = device.platformName.isNotEmpty
-                  ? device.platformName
-                  : device.remoteId.str;
               return ListTile(
                 leading: const Icon(Icons.bluetooth),
-                title: Text(name),
+                title: Text(r.name),
                 subtitle: Text('RSSI ${r.rssi} dBm'),
-                onTap: () => Navigator.of(context).pop(device),
+                onTap: () => Navigator.of(context).pop(r),
               );
             }),
             const SizedBox(height: 8),

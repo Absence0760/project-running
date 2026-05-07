@@ -33,12 +33,13 @@ dependencies:
   shared_preferences: ^2.3.0
   permission_handler: ^12.0.0
   # Held at 12.x because share_plus 13 needs win32 ^6.0.0 but file_picker
-  # (latest 11.0.2) still constrains win32 to ^5.9.0. We don't ship a
-  # desktop build, but the workspace must resolve a single win32 — and
-  # forcing 6 with a dependency_overrides cascades into win32_registry
-  # 2.x and file_picker 11.x compile errors against win32 5 symbols
-  # (e.g. COINIT_DISABLE_OLE1DDE). Revisit once file_picker bumps to
-  # win32 6.
+  # (latest 11.0.2 as of /audit/all 2026-05-07; pub.dev API confirmed) still
+  # constrains win32 to ^5.9.0. We don't ship a desktop build, but the
+  # workspace must resolve a single win32 — and forcing 6 with a
+  # dependency_overrides cascades into win32_registry 2.x and file_picker
+  # 11.x compile errors against win32 5 symbols (e.g. COINIT_DISABLE_OLE1DDE).
+  # Revisit once file_picker bumps to win32 6 — there is no file_picker
+  # release we can bump to today that would unstick this.
   share_plus: ^12.0.0
   uuid: ^4.5.0
   wakelock_plus: ^1.2.8
@@ -55,13 +56,12 @@ dependencies:
   # Bluetooth LE chest-strap HR during live runs. Uses the standard BLE
   # Heart Rate Service (UUID 0x180D) + Heart Rate Measurement
   # characteristic (0x2A37). See `lib/ble_heart_rate.dart`.
-  # Held at 1.36.x because flutter_blue_plus 2.x switched from MIT to a
-  # custom license that requires every `device.connect(...)` call to pass
-  # License.free (personal/nonprofit/edu) or License.commercial (paid). For
-  # a commercial app that's a project-licensing decision the maintainer
-  # needs to make, not a silent change. Revisit if the package returns to
-  # an OSI license, or after the project chooses a path.
-  flutter_blue_plus: ^1.36.8
+  # `flutter_reactive_ble` is BSD-3-Clause — chosen over flutter_blue_plus
+  # 2.x to avoid the per-call License.free / License.commercial gate the
+  # latter introduced. The reactive (Stream-first) API is also a better
+  # fit for the long-lived "subscribe to one notification stream" shape
+  # of an HR strap. /audit/all 2026-05-07.
+  flutter_reactive_ble: ^5.4.2
   image_picker: ^1.1.2
   url_launcher: ^6.3.1
   flutter_markdown: ^0.7.4

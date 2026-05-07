@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// BLE chest-strap heart-rate reader.
@@ -13,22 +13,35 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// exposes these exact UUIDs — `service discovery → subscribe → notify`
 /// is identical across vendors.
 ///
-/// The strap's MAC address is persisted in SharedPreferences after the
-/// user pairs once, so subsequent runs auto-reconnect silently.
+/// Backed by `flutter_reactive_ble` (BSD-3-Clause). The previous
+/// `flutter_blue_plus` 1.x backend was MIT but its 2.x release switched
+/// to a custom license requiring per-call License.free / License.commercial,
+/// which is a project-licensing decision rather than a dep bump. Switching
+/// packages here removes the licensing surface entirely. /audit/all
+/// 2026-05-07.
 ///
-/// `stream()` emits on every notification (usually 1Hz) while connected.
+/// The strap's id is persisted in SharedPreferences after the user pairs
+/// once, so subsequent runs auto-reconnect silently.
+///
+/// `stream` emits on every notification (usually 1Hz) while connected.
 /// Callers collect into a running list for `avg_bpm` computation and
 /// render `current` in the live run UI. If the connection drops mid-run
-/// we emit nothing until it's restored — distance/pace keep going.
+/// we stop forwarding bytes until it's restored — distance/pace keep
+/// going.
 class BleHeartRate {
   static const String _prefsDeviceId = 'ble_hr_device_id';
   static const String _prefsDeviceName = 'ble_hr_device_name';
 
-  static final Guid _heartRateService = Guid('0000180d-0000-1000-8000-00805f9b34fb');
-  static final Guid _heartRateMeasurement = Guid('00002a37-0000-1000-8000-00805f9b34fb');
+  static final Uuid _heartRateService =
+      Uuid.parse('0000180d-0000-1000-8000-00805f9b34fb');
+  static final Uuid _heartRateMeasurement =
+      Uuid.parse('00002a37-0000-1000-8000-00805f9b34fb');
 
-  BluetoothDevice? _device;
-  StreamSubscription<List<int>>? _sub;
+  final FlutterReactiveBle _ble = FlutterReactiveBle();
+
+  StreamSubscription<ConnectionStateUpdate>? _connectionSub;
+  StreamSubscription<List<int>>? _notifySub;
+  String? _deviceId;
   final StreamController<int> _controller = StreamController<int>.broadcast();
 
   /// Live stream of BPM readings. Open-ended — stays subscribed until
@@ -39,52 +52,60 @@ class BleHeartRate {
   /// Emits a de-duplicated list as more devices are discovered. Stops
   /// scanning after [timeout]. Caller typically shows a bottom sheet
   /// with the list and lets the user tap the one they want.
-  Stream<List<ScanResult>> scan({Duration timeout = const Duration(seconds: 8)}) {
-    final controller = StreamController<List<ScanResult>>.broadcast();
-    final found = <DeviceIdentifier, ScanResult>{};
-    late StreamSubscription<List<ScanResult>> sub;
+  Stream<List<BleDeviceCandidate>> scan({
+    Duration timeout = const Duration(seconds: 8),
+  }) {
+    final controller = StreamController<List<BleDeviceCandidate>>.broadcast();
+    final found = <String, BleDeviceCandidate>{};
+    StreamSubscription<DiscoveredDevice>? sub;
+    Timer? timer;
 
-    sub = FlutterBluePlus.scanResults.listen((results) {
-      for (final r in results) {
-        if (r.advertisementData.serviceUuids.contains(_heartRateService) ||
-            r.device.platformName.isNotEmpty) {
-          found[r.device.remoteId] = r;
-        }
+    sub = _ble.scanForDevices(
+      withServices: [_heartRateService],
+      scanMode: ScanMode.lowLatency,
+    ).listen((d) {
+      // The platform layer already filters by service UUID. Some
+      // straps advertise a missing-name beacon between bonded packets;
+      // include them keyed by id so the user can still see the rssi
+      // and pick (we'll use the id as the display name fallback).
+      found[d.id] = BleDeviceCandidate(
+        id: d.id,
+        name: d.name.isNotEmpty ? d.name : d.id,
+        rssi: d.rssi,
+      );
+      if (!controller.isClosed) {
+        controller.add(found.values.toList()
+          ..sort((a, b) => b.rssi.compareTo(a.rssi)));
       }
-      controller.add(found.values.toList()
-        ..sort((a, b) => b.rssi.compareTo(a.rssi)));
     }, onError: (Object e) {
       // The scan stream emits errors when the user toggles BT off
       // mid-scan or revokes the runtime BT permission. Without an
       // onError handler, the rejection becomes an unhandled async
       // error. Forward to the broadcast controller so the caller's
       // bottom-sheet can dismiss cleanly.
-      debugPrint('BLE scanResults error: $e');
+      debugPrint('BLE scanForDevices error: $e');
       if (!controller.isClosed) controller.addError(e);
     });
 
-    FlutterBluePlus.startScan(
-      withServices: [_heartRateService],
-      timeout: timeout,
-    ).then((_) async {
-      await sub.cancel();
-      await controller.close();
-    }).catchError((Object e) async {
-      debugPrint('BLE scan failed: $e');
-      await sub.cancel();
-      await controller.close();
+    timer = Timer(timeout, () async {
+      await sub?.cancel();
+      if (!controller.isClosed) await controller.close();
     });
+    controller.onCancel = () async {
+      timer?.cancel();
+      await sub?.cancel();
+    };
     return controller.stream;
   }
 
   /// Pair with [device] — stores its id for auto-reconnect + connects
   /// immediately. Subsequent app launches will call [connectCached]
   /// without user interaction.
-  Future<void> pair(BluetoothDevice device) async {
+  Future<void> pair(BleDeviceCandidate device) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsDeviceId, device.remoteId.str);
-    await prefs.setString(_prefsDeviceName, device.platformName);
-    await _connect(device);
+    await prefs.setString(_prefsDeviceId, device.id);
+    await prefs.setString(_prefsDeviceName, device.name);
+    await _connect(device.id);
   }
 
   /// Last-paired strap's display name, or null if never paired. The
@@ -101,9 +122,8 @@ class BleHeartRate {
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getString(_prefsDeviceId);
     if (id == null) return false;
-    final device = BluetoothDevice.fromId(id);
     try {
-      await _connect(device);
+      await _connect(id);
       return true;
     } catch (e) {
       debugPrint('BLE cached reconnect failed: $e');
@@ -111,40 +131,70 @@ class BleHeartRate {
     }
   }
 
-  Future<void> _connect(BluetoothDevice device) async {
+  Future<void> _connect(String deviceId) async {
     await disconnect();
-    _device = device;
-    await device.connect(autoConnect: false, timeout: const Duration(seconds: 10));
-    final services = await device.discoverServices();
-    final hrService = services.firstWhere(
-      (s) => s.serviceUuid == _heartRateService,
-      orElse: () => throw StateError('Heart Rate Service not found on ${device.platformName}'),
-    );
-    final hrChar = hrService.characteristics.firstWhere(
-      (c) => c.characteristicUuid == _heartRateMeasurement,
-      orElse: () => throw StateError('HR Measurement characteristic not found'),
-    );
-    await hrChar.setNotifyValue(true);
-    _sub = hrChar.lastValueStream.listen((bytes) {
-      final bpm = _parseHeartRate(bytes);
-      if (bpm != null && bpm >= 30 && bpm <= 230) {
-        _controller.add(bpm);
-      }
-    });
-  }
+    _deviceId = deviceId;
+    final completer = Completer<void>();
 
-  int? _parseHeartRate(List<int> raw) => parseBleHeartRateMeasurement(raw);
+    // flutter_reactive_ble models the connection as a long-lived
+    // stream: cancelling the subscription disconnects, the stream
+    // emits ConnectionStateUpdate on every transition. We resolve
+    // [_connect]'s future on the first `connected` event (so callers
+    // can `await pair()` and have a working stream by the time it
+    // returns), and rely on the subscription staying open for the
+    // recording session.
+    _connectionSub = _ble.connectToDevice(
+      id: deviceId,
+      connectionTimeout: const Duration(seconds: 10),
+    ).listen((update) {
+      if (update.connectionState == DeviceConnectionState.connected) {
+        final char = QualifiedCharacteristic(
+          serviceId: _heartRateService,
+          characteristicId: _heartRateMeasurement,
+          deviceId: deviceId,
+        );
+        _notifySub?.cancel();
+        _notifySub = _ble.subscribeToCharacteristic(char).listen((bytes) {
+          final bpm = parseBleHeartRateMeasurement(bytes);
+          if (bpm != null && bpm >= 30 && bpm <= 230) {
+            _controller.add(bpm);
+          }
+        }, onError: (Object e) {
+          debugPrint('BLE notify error: $e');
+        });
+        if (!completer.isCompleted) completer.complete();
+      } else if (update.connectionState == DeviceConnectionState.disconnected) {
+        // Connection lost mid-recording. flutter_reactive_ble does
+        // NOT auto-reconnect on its own — `connectToDevice` is a
+        // single-attempt stream, so a drop ends the session. Cancel
+        // the notify subscription; the caller can call connectCached
+        // again to start a fresh attempt.
+        _notifySub?.cancel();
+        _notifySub = null;
+        if (update.failure != null && !completer.isCompleted) {
+          completer.completeError(
+            StateError('Connection failed: ${update.failure}'),
+          );
+        }
+      }
+    }, onError: (Object e) {
+      debugPrint('BLE connectToDevice error: $e');
+      if (!completer.isCompleted) completer.completeError(e);
+    });
+
+    await completer.future;
+  }
 
   /// Drop the current connection. Safe to call when not connected.
   Future<void> disconnect() async {
-    await _sub?.cancel();
-    _sub = null;
-    try {
-      await _device?.disconnect();
-    } catch (e) {
-      debugPrint('[BleHeartRate.disconnect] $e');
-    }
-    _device = null;
+    await _notifySub?.cancel();
+    _notifySub = null;
+    // Cancelling the connection-state subscription is what tells
+    // flutter_reactive_ble to actually disconnect — there is no
+    // explicit `disconnect()` API.
+    await _connectionSub?.cancel();
+    _connectionSub = null;
+    _deviceId = null;
   }
 
   /// Forget the paired strap entirely. Disconnects + clears the stored id.
@@ -159,6 +209,21 @@ class BleHeartRate {
     await disconnect();
     await _controller.close();
   }
+}
+
+/// Discovered candidate during a [BleHeartRate.scan]. Plain value type
+/// so the UI sheet doesn't need to depend on flutter_reactive_ble's
+/// internal `DiscoveredDevice` shape.
+@immutable
+class BleDeviceCandidate {
+  final String id;
+  final String name;
+  final int rssi;
+  const BleDeviceCandidate({
+    required this.id,
+    required this.name,
+    required this.rssi,
+  });
 }
 
 /// Parse the BLE Heart Rate Measurement characteristic per the Bluetooth
