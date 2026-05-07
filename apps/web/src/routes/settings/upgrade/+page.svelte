@@ -117,8 +117,8 @@
 			<li>
 				<span class="check">✓</span>
 				<div>
-					<strong>Priority processing</strong>
-					<span class="feat-sub">Faster responses when the service is under heavy load.</span>
+					<strong>Priority map-matching</strong>
+					<span class="feat-sub">Your GPS tracks get snapped to roads in seconds, not minutes — even under load.</span>
 				</div>
 			</li>
 			<li>
