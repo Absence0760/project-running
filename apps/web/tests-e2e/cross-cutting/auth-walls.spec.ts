@@ -199,4 +199,24 @@ test.describe('anonymous walls', () => {
 			timeout: 15_000
 		});
 	});
+
+	test('anon /coach redirects to /login', async ({ page }) => {
+		await page.goto('/coach');
+		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+	});
+
+	test('anon /plans redirects to /login', async ({ page }) => {
+		await page.goto('/plans');
+		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+	});
+
+	test('anon /clubs redirects to /login', async ({ page }) => {
+		await page.goto('/clubs');
+		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+	});
+
+	test('anon /settings/account redirects to /login', async ({ page }) => {
+		await page.goto('/settings/account');
+		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+	});
 });

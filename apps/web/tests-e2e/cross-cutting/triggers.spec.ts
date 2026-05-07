@@ -132,4 +132,145 @@ test.describe('database triggers via UI', () => {
 			await ctxAlex.close();
 		}
 	});
+
+	test('notify_run_comment fires on a service-role-planted comment row', async () => {
+		// Migration 20260528_001 registers a trigger on run_comments
+		// AFTER INSERT — the run owner gets a kind='comment'
+		// notification with comment_id set. Plant directly via
+		// service-role to isolate the trigger from the UI; the
+		// notification row should appear regardless of how the
+		// comment got there.
+		const admin = getAdminClient();
+		await clearNotifications(USER_A.id);
+		const commentId: string = await (async () => {
+			const { data } = await admin
+				.from('run_comments')
+				.insert({
+					run_id: RUNNER_PUBLIC_RUN_ID,
+					author_id: USER_B.id,
+					body: 'e2e-trigger-comment'
+				})
+				.select('id')
+				.single();
+			return (data as { id: string }).id;
+		})();
+		try {
+			await expect.poll(async () => {
+				const { data } = await admin
+					.from('notifications')
+					.select('kind, run_id, comment_id, actor_id, user_id')
+					.eq('user_id', USER_A.id)
+					.eq('kind', 'comment');
+				return data?.length ?? 0;
+			}, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
+
+			const { data: rows } = await admin
+				.from('notifications')
+				.select('comment_id, actor_id, run_id')
+				.eq('user_id', USER_A.id)
+				.eq('kind', 'comment');
+			const row = rows?.[0];
+			expect(row?.comment_id).toBe(commentId);
+			expect(row?.actor_id).toBe(USER_B.id);
+			expect(row?.run_id).toBe(RUNNER_PUBLIC_RUN_ID);
+		} finally {
+			// Comment delete cascades the notification (comment_id is
+			// on delete cascade per the migration).
+			await admin.from('run_comments').delete().eq('id', commentId);
+		}
+	});
+
+	test('notify_user_follow fires when a user_follows row is INSERTed', async () => {
+		// notify_user_follow plants a kind='follow' notification on
+		// the followee. Test by service-role-INSERTing morgan->alex
+		// (a follow that doesn't exist in the seed) and asserting the
+		// row appears for alex.
+		const admin = getAdminClient();
+		await clearNotifications(USER_B.id);
+		const MORGAN = 'c3d4e5f6-a7b8-9012-cdef-345678901234';
+		// Ensure morgan isn't already following alex (defensive).
+		await admin
+			.from('user_follows')
+			.delete()
+			.eq('follower_id', MORGAN)
+			.eq('followee_id', USER_B.id);
+
+		const { error } = await admin
+			.from('user_follows')
+			.insert({ follower_id: MORGAN, followee_id: USER_B.id });
+		expect(error).toBeNull();
+
+		try {
+			await expect.poll(async () => {
+				const { data } = await admin
+					.from('notifications')
+					.select('kind, actor_id, user_id')
+					.eq('user_id', USER_B.id)
+					.eq('kind', 'follow');
+				return data?.length ?? 0;
+			}, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
+
+			const { data: rows } = await admin
+				.from('notifications')
+				.select('kind, actor_id, user_id')
+				.eq('user_id', USER_B.id)
+				.eq('kind', 'follow');
+			expect(rows?.[0]?.actor_id).toBe(MORGAN);
+		} finally {
+			await admin
+				.from('user_follows')
+				.delete()
+				.eq('follower_id', MORGAN)
+				.eq('followee_id', USER_B.id);
+		}
+	});
+
+	test('notify_run_comment_reply fires on a nested comment reply (parent author notified)', async () => {
+		// When alex replies to runner's comment, runner is the run
+		// owner AND the parent comment's author. The trigger sends
+		// 'comment_reply' to the parent author distinct from the
+		// 'comment' notification it sends to the run owner.
+		const admin = getAdminClient();
+		// Plant the parent: runner comments on their OWN run (no
+		// cross-user notification — owner commenting on own run).
+		const { data: parent } = await admin
+			.from('run_comments')
+			.insert({
+				run_id: RUNNER_PUBLIC_RUN_ID,
+				author_id: USER_A.id,
+				body: 'e2e parent'
+			})
+			.select('id')
+			.single();
+		const parentId = (parent as { id: string }).id;
+		await clearNotifications(USER_A.id);
+		// Plant the reply: alex replies to runner's comment.
+		const { data: reply } = await admin
+			.from('run_comments')
+			.insert({
+				run_id: RUNNER_PUBLIC_RUN_ID,
+				author_id: USER_B.id,
+				body: 'e2e reply',
+				parent_comment_id: parentId
+			})
+			.select('id')
+			.single();
+		const replyId = (reply as { id: string }).id;
+
+		try {
+			// Runner should now have a 'comment_reply' notification,
+			// distinct from 'comment'. Both arms of the trigger fire.
+			await expect.poll(async () => {
+				const { data } = await admin
+					.from('notifications')
+					.select('kind')
+					.eq('user_id', USER_A.id)
+					.eq('kind', 'comment_reply');
+				return data?.length ?? 0;
+			}, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
+		} finally {
+			await admin.from('run_comments').delete().eq('id', replyId);
+			await admin.from('run_comments').delete().eq('id', parentId);
+		}
+	});
 });

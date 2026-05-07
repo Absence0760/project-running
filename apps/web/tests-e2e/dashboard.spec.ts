@@ -152,4 +152,31 @@ test.describe('/dashboard', () => {
 			page.locator('.modal').getByRole('button', { name: 'Week' })
 		).toBeVisible();
 	});
+
+	test('the four stat cards (This Week / Total Runs / Longest Run / Pace) render', async ({
+		page
+	}) => {
+		await page.goto('/dashboard');
+		const labels = page.locator('.stat-label');
+		await expect(labels.filter({ hasText: 'This Week' }).first())
+			.toBeVisible({ timeout: 10_000 });
+		await expect(labels.filter({ hasText: 'Total Runs' }).first()).toBeVisible();
+		await expect(labels.filter({ hasText: 'Longest Run' }).first()).toBeVisible();
+		await expect(labels.filter({ hasText: /Pace/ }).first()).toBeVisible();
+	});
+
+	test('Activity heatmap renders below the Mileage chart', async ({ page }) => {
+		await page.goto('/dashboard');
+		await expect(page.getByRole('heading', { level: 2, name: 'Activity' }))
+			.toBeVisible({ timeout: 10_000 });
+	});
+
+	test('Mileage chart Year toggle is reachable and stays selected', async ({
+		page
+	}) => {
+		await page.goto('/dashboard');
+		await page.getByRole('button', { name: 'Year', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Year', exact: true }))
+			.toHaveClass(/active/);
+	});
 });

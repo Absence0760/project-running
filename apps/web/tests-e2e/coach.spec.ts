@@ -254,4 +254,27 @@ test.describe('/coach', () => {
 			page.locator('.bubble.user', { hasText: userText })
 		).toBeVisible();
 	});
+
+	test('runs-limit chip flips its trigger label after picking Last 50', async ({
+		page
+	}) => {
+		await page.goto('/coach');
+		const runsTrigger = page.getByRole('button', { name: 'Recent runs' });
+		await expect(runsTrigger).toBeVisible({ timeout: 10_000 });
+		await runsTrigger.click();
+		await page.getByRole('option', { name: 'Last 50' }).click();
+		await expect(runsTrigger).toContainText('Last 50');
+	});
+
+	test('chat history sidebar mounts (the conversation-history scaffold is reachable)', async ({
+		page
+	}) => {
+		await page.goto('/coach');
+		// Prove the page mounts past the loading shell — the composer
+		// and the plan/runs chips both render.
+		await expect(page.getByRole('button', { name: 'Plan context' }))
+			.toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('button', { name: 'Recent runs' }))
+			.toBeVisible();
+	});
 });

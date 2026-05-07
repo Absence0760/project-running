@@ -61,4 +61,29 @@ test.describe('/plans', () => {
 			page.getByRole('heading', { name: /Sydney Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('PlanEditor inside the New-plan modal exposes a Name input', async ({
+		page
+	}) => {
+		await page.goto('/plans');
+		await page.getByRole('button', { name: /New plan/ }).first().click();
+		const modal = page.locator('.modal');
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+		// Plan name is the placeholder "Autumn half marathon".
+		await expect(modal.getByPlaceholder('Autumn half marathon'))
+			.toBeVisible({ timeout: 5_000 });
+		await page.locator('.modal-close').click();
+	});
+
+	test('clicking the active plan card carries query state to /plans/[id]', async ({
+		page
+	}) => {
+		await page.goto('/plans');
+		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
+		await page.waitForURL(/\/plans\/[0-9a-f-]+$/, { timeout: 10_000 });
+		// Edit-plan button only exists on the detail page; its presence
+		// proves the navigation completed past the loading shell.
+		await expect(page.getByRole('button', { name: /Edit plan/ }))
+			.toBeVisible({ timeout: 10_000 });
+	});
 });

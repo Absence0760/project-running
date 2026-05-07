@@ -67,4 +67,21 @@ test.describe('/feed', () => {
 		const authorLabels = page.getByText(/Alex Chen|Morgan Lee/);
 		await expect(authorLabels.first()).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('activity-type "Run" filter still shows entries (default activity)', async ({
+		page
+	}) => {
+		await page.goto('/feed');
+		await page.getByRole('button', { name: 'Run', exact: true }).first().click();
+		await expect(page.getByText(/Alex Chen|Morgan Lee/).first())
+			.toBeVisible({ timeout: 10_000 });
+	});
+
+	test('feed window-hint label is visible (last 14 days)', async ({ page }) => {
+		await page.goto('/feed');
+		// The toolbar shows a small window hint — match the literal
+		// "14 days" string which is part of the FEED_WINDOW_DAYS label.
+		await expect(page.getByText(/14 days/i).first())
+			.toBeVisible({ timeout: 10_000 });
+	});
 });

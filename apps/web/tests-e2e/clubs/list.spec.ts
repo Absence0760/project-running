@@ -90,4 +90,26 @@ test.describe('/clubs', () => {
 		await expect(page).toHaveURL(/\/clubs\/sydney-run-club/);
 		await page.waitForLoadState('networkidle');
 	});
+
+	test('My-clubs tab lists Friends of Jared (owner sees their private clubs here)', async ({
+		page
+	}) => {
+		// Inverse of the Browse-hides-private test: in My clubs, the
+		// owner sees their own private clubs. Pinning this catches a
+		// regression that filtered private clubs out of My clubs too.
+		await page.goto('/clubs');
+		await page.waitForLoadState('networkidle');
+		await expect(
+			page.getByRole('heading', { name: 'Friends of Jared' })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('Create club button is reachable from /clubs', async ({ page }) => {
+		await page.goto('/clubs');
+		await expect(
+			page.getByRole('link', { name: /Create club/ }).or(
+				page.getByRole('button', { name: /Create club/ })
+			)
+		).toBeVisible({ timeout: 10_000 });
+	});
 });

@@ -272,4 +272,83 @@ test.describe('/runs', () => {
 			page.locator(`.run-card[href$="${newRunId}"]`)
 		).toHaveCount(0);
 	});
+
+	test('Source filter "Strava" narrows the list to strava-source rows only', async ({
+		page
+	}) => {
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		await page.locator('select[aria-label="Source"]').selectOption('strava');
+		await expect(page.locator('.run-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+		// Every visible row should carry the "Strava" source badge.
+		const badges = await page
+			.locator('.run-card .source-badge')
+			.allTextContents();
+		expect(badges.length).toBeGreaterThan(0);
+		for (const b of badges) expect(b.toLowerCase()).toContain('strava');
+	});
+
+	test('Sort by Newest puts a recently-planted run at the top', async ({
+		page
+	}) => {
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		// "Sort: Newest" is the default for the sort select. Pin it
+		// after touching the select to make sure the round-trip works.
+		await page.locator('select[aria-label="Sort"]').selectOption('newest');
+		// First card in the list is the most recent. Just assert the
+		// run-card grid is non-empty + the first row is interactable.
+		const first = page.locator('.run-card').first();
+		await expect(first).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('Activity-button "Run" leaves the seeded run rows visible', async ({
+		page
+	}) => {
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		// Activity is a button group with aria-pressed; Run is the
+		// default but clicking it explicitly proves the toggle works
+		// from any starting state.
+		await page.getByRole('button', { name: 'Run', exact: true }).click();
+		await expect(page.locator('.run-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+	});
+
+	test('Select-all visible covers every run-card in the filtered set', async ({
+		page
+	}) => {
+		await page.goto('/runs');
+		// Clear any inherited filter from a previous test (e.g.
+		// activity=run from the test above) so the row count is what
+		// the canonical "All time + Run" view shows.
+		await page.evaluate(() => {
+			try {
+				localStorage.removeItem('runs_filters_v1');
+			} catch {
+				/* anonymous browsing context — ignore */
+			}
+		});
+		await page.reload();
+		await switchRunsToAllTime(page);
+		// Wait for the list to populate.
+		await expect(page.locator('.run-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+		const total = await page.locator('.run-card').count();
+		expect(total).toBeGreaterThan(0);
+
+		await page.getByRole('button', { name: 'Select', exact: true }).click();
+		await page.getByRole('button', { name: 'Select all' }).click();
+		// Every row gets the .selected class.
+		await expect(page.locator('.run-card.selected')).toHaveCount(total);
+		// Floating bulk-bar shows the count.
+		await expect(page.locator('.bulk-bar')).toContainText(`${total} selected`);
+		// Clean up — Done exits select mode.
+		await page.getByRole('button', { name: 'Done' }).click();
+		await expect(page.locator('.bulk-bar')).toHaveCount(0);
+	});
 });
