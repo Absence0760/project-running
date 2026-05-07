@@ -19,6 +19,7 @@
 		setPlanIsTemplate,
 		approveMember,
 		rejectMember,
+		removeMember,
 		setMemberRole,
 		regenerateInviteToken,
 		joinClub,
@@ -74,6 +75,9 @@
 	let showRegenConfirm = $state(false);
 	let showDeleteClubConfirm = $state(false);
 	let showDeletePostConfirm = $state<string | null>(null);
+	/** When non-null, the user_id of the member the admin is about to
+	 *  remove. Drives the kick ConfirmDialog. */
+	let removingMemberId = $state<string | null>(null);
 
 	/** Thread state. Key is parent post id. */
 	let expandedThreads = $state<Record<string, ClubPostWithAuthor[] | null>>({});
@@ -254,6 +258,18 @@
 		if (!club) return;
 		await rejectMember(club.id, userId);
 		await load();
+	}
+
+	async function confirmRemoveMember() {
+		const userId = removingMemberId;
+		removingMemberId = null;
+		if (!club || !userId) return;
+		try {
+			await removeMember(club.id, userId);
+			await load();
+		} catch (e) {
+			showToast(`Failed to remove member: ${e}`, 'error');
+		}
 	}
 
 	async function copyInvite() {
@@ -866,6 +882,16 @@
 									<option value="race_director">Race director</option>
 									<option value="member">Member</option>
 								</select>
+								{#if m.user_id !== auth.user?.id}
+									<button
+										class="icon-btn danger"
+										title="Remove from club"
+										aria-label="Remove member"
+										onclick={() => (removingMemberId = m.user_id)}
+									>
+										<span class="material-symbols">person_remove</span>
+									</button>
+								{/if}
 							{:else}
 								<span class="role">{m.role.replace('_', ' ')}</span>
 							{/if}
@@ -912,6 +938,16 @@
 	confirmLabel="Delete"
 	onconfirm={confirmDeleteClub}
 	oncancel={() => showDeleteClubConfirm = false}
+	danger
+/>
+
+<ConfirmDialog
+	open={removingMemberId !== null}
+	title="Remove member"
+	message={`Remove ${members.find((m) => m.user_id === removingMemberId)?.display_name ?? 'this member'} from ${club?.name ?? 'the club'}?`}
+	confirmLabel="Remove"
+	onconfirm={confirmRemoveMember}
+	oncancel={() => (removingMemberId = null)}
 	danger
 />
 

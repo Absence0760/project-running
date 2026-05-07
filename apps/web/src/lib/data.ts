@@ -1380,6 +1380,23 @@ export async function rejectMember(clubId: string, userId: string): Promise<void
 	if (error) throw error;
 }
 
+/// Admin-only: remove an active member from a club. Mechanically a
+/// duplicate of rejectMember (both delete the row, both rely on the
+/// `admins can manage members` RLS policy), but kept as a separate
+/// export so the calling UI can speak in terms of intent — the
+/// "kick a member" affordance lives next to the role selector on
+/// the Members tab; the "reject a request" affordance lives on the
+/// pending-requests admin panel. Either RLS check or the trigger
+/// rejecting an owner-row delete will block a misuse.
+export async function removeMember(clubId: string, userId: string): Promise<void> {
+	const { error } = await supabase
+		.from('club_members')
+		.delete()
+		.eq('club_id', clubId)
+		.eq('user_id', userId);
+	if (error) throw error;
+}
+
 export async function leaveClub(clubId: string): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');

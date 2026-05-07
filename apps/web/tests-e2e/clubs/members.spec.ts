@@ -76,4 +76,47 @@ test.describe('/clubs/[slug] — admin role change', () => {
 		await expect(morganAfter.locator('select.role-select'))
 			.toHaveValue('admin', { timeout: 10_000 });
 	});
+
+	test('owner kicks a member via the Remove button → ConfirmDialog → row gone', async ({
+		page
+	}) => {
+		// removeMember calls the same delete-against-club_members RLS
+		// admins-can-manage-members policy that rejectMember relies on,
+		// just from the active-members surface instead of the
+		// pending-requests panel. Pins the kick affordance + the
+		// ConfirmDialog gate (a misclick on the trash icon shouldn't
+		// silently boot a member).
+		await page.goto('/clubs/sydney-run-club');
+		await page.getByRole('button', { name: /^Members/ }).click();
+
+		const morganRow = page.locator('.member-list .member', {
+			hasText: 'Morgan'
+		});
+		await expect(morganRow).toBeVisible({ timeout: 10_000 });
+
+		// The Remove button is admin-only, hidden for the owner row +
+		// the viewer's own row. Morgan is neither, so it shows.
+		await morganRow.getByRole('button', { name: 'Remove member' }).click();
+
+		// ConfirmDialog mounts with a destructive-style Remove button.
+		const dialog = page.locator('.modal', { hasText: 'Remove member' });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+
+		// Row is gone from the list (handler reloads members after the
+		// delete succeeds; with no morgan row, the locator resolves to
+		// 0 elements).
+		await expect(
+			page.locator('.member-list .member', { hasText: 'Morgan' })
+		).toHaveCount(0, { timeout: 10_000 });
+
+		// DB sanity: the row really was deleted, not just hidden.
+		const { data: stillThere } = await getAdminClient()
+			.from('club_members')
+			.select('user_id')
+			.eq('club_id', SYDNEY_RUN_CLUB_ID)
+			.eq('user_id', USER_C_PRO.id)
+			.maybeSingle();
+		expect(stillThere).toBeNull();
+	});
 });
