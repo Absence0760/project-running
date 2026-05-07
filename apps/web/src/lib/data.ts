@@ -1198,6 +1198,13 @@ export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null
 	const { data } = await supabase.from('clubs').select('*').eq('slug', slug).maybeSingle();
 	if (!data) return null;
 	const [enriched] = await enrichClubs([data]);
+	if (!enriched) return null;
+	if (enriched.viewer_role === 'owner' || enriched.viewer_role === 'admin') {
+		const { data: token } = await supabase.rpc('get_club_invite_token', {
+			target_club: enriched.id
+		});
+		return { ...enriched, invite_token: (token as string | null) ?? null };
+	}
 	return enriched;
 }
 
@@ -1273,7 +1280,11 @@ export async function createClub(input: {
 			.select()
 			.single();
 		if (!error && data) {
-			return { ...data, join_policy: (data.join_policy ?? 'open') as JoinPolicy };
+			return {
+				...data,
+				invite_token: inviteToken,
+				join_policy: (data.join_policy ?? 'open') as JoinPolicy
+			};
 		}
 		if (error && error.code !== '23505') throw error;
 	}
@@ -1733,8 +1744,13 @@ export async function fetchEventResults(
 	// no UI consumer here. The boolean `organiser_approved` is what
 	// the leaderboard actually shows. Audit pass 3 caught the wider
 	// projection leaking the approving admin's UUID to anon.
+	//
+	// Read from the redaction view rather than the base table —
+	// `event_results_redacted` nulls `run_id` for non-owner rows so
+	// the public leaderboard can't bridge to a participant's private
+	// run via the linked run_id. (Migration 20260805_001.)
 	const { data: results } = await supabase
-		.from('event_results')
+		.from('event_results_redacted')
 		.select(
 			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved'
 		)

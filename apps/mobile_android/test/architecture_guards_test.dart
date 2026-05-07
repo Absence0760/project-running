@@ -1187,4 +1187,51 @@ void main() {
       );
     });
   });
+
+  group('release builds never load .env.local', () {
+    // Reason: pubspec.yaml ships .env.local as a Flutter asset for
+    // local development convenience. A developer building a release
+    // APK locally without first overwriting their .env.local would
+    // bake real SUPABASE_ANON_KEY, MAPTILER_KEY, dev creds, and any
+    // BYPASS_PAYWALL=true into the APK assets. The runtime guard is
+    // the kDebugMode gate around the dotenv.load call in main.dart —
+    // release builds skip the load entirely so the asset bytes,
+    // even if extractable from the APK, are never read by the app.
+    // /audit/all High (secrets agent, 2026-05-07).
+    test('main.dart only calls dotenv.load(\'.env.local\') under kDebugMode',
+        () {
+      final source = File('lib/main.dart').readAsStringSync();
+      final loadIdx = source.indexOf("dotenv.load(fileName: '.env.local'");
+      expect(
+        loadIdx,
+        greaterThan(0),
+        reason:
+            'Expected dotenv.load(fileName: \'.env.local\', ...) in main.dart. '
+            'If the call has been replaced or removed, update this guard.',
+      );
+      // Walk backwards to find the nearest `if (` opening — the load
+      // must sit inside an `if (kDebugMode) { ... }` block.
+      final preceding = source.substring(0, loadIdx);
+      final guardIdx = preceding.lastIndexOf('if (kDebugMode)');
+      expect(
+        guardIdx,
+        greaterThan(0),
+        reason:
+            'dotenv.load(\'.env.local\', ...) must sit inside an '
+            '`if (kDebugMode) { ... }` block. Removing the guard re-opens '
+            'the audit/secrets High where release-built APKs leak the '
+            'developer\'s local secrets via the bundled asset.',
+      );
+      // Sanity check: no other `if (` clause must intercede between
+      // the kDebugMode guard and the load — otherwise the kDebugMode
+      // block could be empty while the load lives elsewhere.
+      final between = source.substring(guardIdx, loadIdx);
+      expect(
+        between.indexOf('if (', 'if (kDebugMode)'.length),
+        -1,
+        reason: 'The kDebugMode guard must directly wrap the dotenv.load '
+            'call — no intermediate conditional.',
+      );
+    });
+  });
 }

@@ -87,6 +87,28 @@ variable "kms_decrypt_principal_arn" {
   default     = ""
 }
 
+# ─────────────────── Alarm fan-out ───────────────────
+
+variable "alert_emails" {
+  description = "Email addresses subscribed to the per-env SNS alerts topic. Empty list = no SNS subscription is created (the topic still exists; alarms still publish to it; nothing reads). Empty list is wrong for prod — the audit/cost-controls Medium called out that an unsubscribed throttle alarm is functionally identical to no alarm. Per-address opt-in confirmation email lands the first time terraform apply runs."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for e in var.alert_emails :
+      can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))
+    ])
+    error_message = "alert_emails must be RFC-shaped email addresses. Placeholder rejection (@example.com / you@) lives in the per-env root's stricter validation block."
+  }
+}
+
+variable "lambda_throttle_alarm_threshold" {
+  description = "Number of Lambda throttles across two 5-min windows that fires the alarm. Default 5 is fine for preview's noisy demo traffic; prod should override to 1 so a single throttle pages immediately (the reserved concurrency is the cost ceiling — hitting it should be a loud signal). audit/cost-controls Medium 2026-05-07."
+  type        = number
+  default     = 5
+}
+
 # ─────────────────── Tagging ───────────────────
 
 variable "tags" {

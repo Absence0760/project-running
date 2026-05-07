@@ -15,5 +15,14 @@
   },
   "dependencies": {
     "html-to-image": "^1.11.13"
-  }
+  },
+  "overrides": {
+    "cookie": "^1.0.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "cookie": "^1.0.2"
+    }
+  },
+  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Force the transitive to 1.x via npm AND pnpm overrides — the API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop this once @sveltejs/kit ships its own bump."
 }

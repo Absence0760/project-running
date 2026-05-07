@@ -1714,6 +1714,62 @@ export type Database = {
       }
     }
     Views: {
+      event_results_redacted: {
+        Row: {
+          age_grade_pct: number | null
+          created_at: string | null
+          distance_m: number | null
+          duration_s: number | null
+          event_id: string | null
+          finisher_status: string | null
+          instance_start: string | null
+          note: string | null
+          organiser_approved: boolean | null
+          rank: number | null
+          run_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          age_grade_pct?: never
+          created_at?: string | null
+          distance_m?: number | null
+          duration_s?: number | null
+          event_id?: string | null
+          finisher_status?: string | null
+          instance_start?: string | null
+          note?: never
+          organiser_approved?: boolean | null
+          rank?: number | null
+          run_id?: never
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          age_grade_pct?: never
+          created_at?: string | null
+          distance_m?: number | null
+          duration_s?: number | null
+          event_id?: string | null
+          finisher_status?: string | null
+          instance_start?: string | null
+          note?: never
+          organiser_approved?: boolean | null
+          rank?: number | null
+          run_id?: never
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_results_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mv_weekly_mileage: {
         Row: {
           run_count: number | null
@@ -1790,7 +1846,6 @@ export type Database = {
           source: string | null
           started_at: string | null
           track_url: string | null
-          updated_at: string | null
           user_id: string | null
         }
         Insert: {
@@ -1805,7 +1860,6 @@ export type Database = {
           source?: string | null
           started_at?: string | null
           track_url?: string | null
-          updated_at?: string | null
           user_id?: string | null
         }
         Update: {
@@ -1820,7 +1874,6 @@ export type Database = {
           source?: string | null
           started_at?: string | null
           track_url?: string | null
-          updated_at?: string | null
           user_id?: string | null
         }
         Relationships: []
@@ -1930,6 +1983,7 @@ export type Database = {
         Args: { err?: string; job_id: number; result_status: string }
         Returns: undefined
       }
+      get_club_invite_token: { Args: { target_club: string }; Returns: string }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
       get_integration_tokens: {
         Args: { p_provider: string; p_user_id: string }

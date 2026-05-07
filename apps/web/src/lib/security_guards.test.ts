@@ -333,6 +333,21 @@ test('CoachChat DOMPurify config disallows the `class` attribute', () => {
 	);
 });
 
+test('CoachChat DOMPurify config locks ALLOWED_URI_REGEXP to https/http/mailto', () => {
+	// Reason: DOMPurify's default URI regexp is permissive — it accepts
+	// `tel:`, `sms:`, `xmpp:`, `cid:`, `matrix:`, `callto:` on hrefs.
+	// A coach response containing `[call](tel:+1...)` would otherwise
+	// open the OS dialer on mobile browsers. This guard pins the
+	// allow-list to the same scheme set as the mobile `_onCoachLinkTap`
+	// (http, https, mailto). /audit/all xss Medium 2026-05-07.
+	const source = read('src/lib/coach/markdown.ts');
+	assert.match(
+		source,
+		/ALLOWED_URI_REGEXP\s*:\s*\/\^[^/]*https?[^/]*mailto[^/]*\//i,
+		'CoachChat sanitiser must set ALLOWED_URI_REGEXP to /^(?:https?|mailto):/i. Removing it re-opens the tel:/sms:/xmpp: surface.',
+	);
+});
+
 test('BYPASS_PAYWALL gate requires three independent conditions', () => {
 	// Reason: BYPASS_PAYWALL is a dev-only escape hatch on the
 	// /api/coach SvelteKit endpoint. Production runs in the AWS Lambda

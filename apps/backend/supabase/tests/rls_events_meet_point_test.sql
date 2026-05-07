@@ -1,14 +1,20 @@
 -- Pin the column-level revoke on `events.meet_lat` / `events.meet_lng`
--- from migration 20260723_001_events_meet_point_anon_revoke.sql.
+-- from migration 20260723_001_events_meet_point_anon_revoke.sql AND
+-- the follow-up tightening 20260806_001_events_meet_point_authenticated_revoke.sql.
 --
--- The deferred-from-pass-2 finding: an organiser using their home
--- as the meet point would leak those coordinates to anon viewers of
--- a public-club event. The fix narrows the leak to authenticated
--- callers only via column-level revoke. This test pins the contract:
+-- The original (pass-2) finding: an organiser using their home as
+-- the meet point would leak those coordinates to anon viewers of a
+-- public-club event. 20260723_001 closed the anon side. /audit/all
+-- pass 4 surfaced that authenticated non-members could still scrape
+-- the same columns, so 20260806_001 extended the same revoke shape
+-- to `authenticated` (no render path reads meet_lat/meet_lng today —
+-- they were stored for a future map-pin feature, so the wire-format
+-- tightening has no UI dependency).
+--
+-- This test pins the post-tightening contract:
 --   - anon SELECT on (meet_lat, meet_lng) raises 42501
---   - authenticated SELECT on the same columns succeeds
---   - anon SELECT on `meet_label` (the canonical text display field)
---     still works — only the precise numeric coords are gated
+--   - authenticated SELECT on (meet_lat, meet_lng) raises 42501 too
+--   - both roles still read meet_label (canonical display field)
 
 begin;
 
@@ -39,15 +45,18 @@ values ('55555555-5555-5555-5555-555555555502',
         'Trafalgar Square fountain',
         '00000000-0000-0000-0000-00000000ee01');
 
--- 1. Authenticated callers can read the coordinates (the leak is
---    accepted at this scope; the seed event was created above).
-select results_eq(
-  $$ select count(*)::int from events
-     where id = '55555555-5555-5555-5555-555555555502'
-       and meet_lat is not null
-       and meet_lng is not null $$,
-  $$ values (1) $$,
-  'authenticated callers read meet_lat / meet_lng for public-club events'
+-- 1. Authenticated SELECT on meet_lat / meet_lng raises 42501 —
+--    the 20260806_001 tightening closed the non-member leak.
+--    Re-authenticate as a non-organiser to cover the public-club
+--    "non-member authenticated viewer" case.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000ee02","role":"authenticated"}';
+
+select throws_ok(
+  $$ select meet_lat, meet_lng from events
+     where id = '55555555-5555-5555-5555-555555555502' $$,
+  '42501',
+  null,
+  'authenticated non-member SELECT on meet_lat / meet_lng raises permission denied'
 );
 
 -- 2. Authenticated callers still see meet_label too.

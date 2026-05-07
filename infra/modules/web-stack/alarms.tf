@@ -1,12 +1,26 @@
 # CloudWatch alarms for the coach Lambda + the CloudFront distribution.
 #
-# All alarms route to the same SNS topic per env. Subscribe an email
-# address (or PagerDuty endpoint) to the topic out-of-band; the alarm
-# definitions themselves stay in Terraform.
+# All alarms route to the same SNS topic per env. Email subscribers are
+# managed in Terraform via `var.alert_emails` (per-env tfvars) so a
+# topic without a subscriber is impossible to ship — the audit/cost-
+# controls Medium flagged that the previous "subscribe out of band"
+# step was operationally fragile (an unsubscribed throttle alarm is
+# functionally identical to no alarm).
+#
+# The first apply per address sends an opt-in confirmation email; the
+# subscription stays in `pending_confirmation` until the recipient
+# clicks the link. Subsequent applies are idempotent.
 
 resource "aws_sns_topic" "alerts" {
   name = "${local.resource_prefix}-alerts"
   tags = var.tags
+}
+
+resource "aws_sns_topic_subscription" "alerts_email" {
+  for_each  = toset(var.alert_emails)
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = each.value
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
@@ -76,14 +90,16 @@ resource "aws_cloudwatch_metric_alarm" "lambda_p95_duration" {
 
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   alarm_name        = "${local.resource_prefix}-coach-lambda-throttles"
-  alarm_description = "Coach Lambda throttled (≥5 throttles across two 5-min windows). Concurrent execution cap is being hit."
-  # Sustained signal, not a single-data-point trigger. Preview's
-  # reserved concurrency is 5; a single noisy demo session can briefly
-  # touch the cap and clear inside 60 s — alarming on that would be
-  # pure noise. Two consecutive 5-min periods at ≥5 throttles is real.
+  alarm_description = "Coach Lambda throttled (≥${var.lambda_throttle_alarm_threshold} throttles across two 5-min windows). Concurrent execution cap is being hit."
+  # Threshold parameterised per-env: preview keeps the default 5
+  # (single noisy demo session can briefly touch the cap and clear
+  # inside 60 s — alarming on that would be pure noise). Prod should
+  # set it to 1 so a single throttle pages immediately — the reserved
+  # concurrency is the cost ceiling, hitting it must be a loud signal.
+  # /audit/all cost-controls Medium 2026-05-07.
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 2
-  threshold           = 5
+  threshold           = var.lambda_throttle_alarm_threshold
   treat_missing_data  = "notBreaching"
   metric_name         = "Throttles"
   namespace           = "AWS/Lambda"

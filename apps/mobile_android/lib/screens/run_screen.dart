@@ -344,7 +344,14 @@ class _RunScreenState extends State<RunScreen> {
         'interval': tp.interval,
         'repetition': tp.repetition,
       };
-    } catch (_) {
+    } catch (e, st) {
+      // L4 (auxiliary): pace-bag derivation is a hint for the workout
+      // runner; if it throws (NaN goal pace, divide-by-zero on a
+      // 0-distance plan), the runner falls back to step-local
+      // targets. Log so the failure surfaces in `flutter logs`
+      // without masking a deeper bug, but never let this block the
+      // recording layer below.
+      debugPrint('run_screen: _pacesFromPlan failed: $e\n$st');
       return const {};
     }
   }

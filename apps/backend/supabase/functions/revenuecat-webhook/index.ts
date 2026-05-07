@@ -11,10 +11,10 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
-import { hmac } from 'https://deno.land/x/hmac@v2.0.1/mod.ts';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
+  hmacHex,
   isAnonymousAppUserId,
   isValidUuid,
   timingSafeEqual,
@@ -51,7 +51,7 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (!sig) {
     return Response.json({ error: 'missing_signature' }, { status: 401 });
   }
-  const expected = hmac('sha256', secret, body, 'utf8', 'hex');
+  const expected = await hmacHex(secret, body);
   if (!timingSafeEqual(sig, expected)) {
     return Response.json({ error: 'bad_signature' }, { status: 401 });
   }

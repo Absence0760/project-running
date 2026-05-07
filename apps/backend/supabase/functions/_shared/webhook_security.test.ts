@@ -6,11 +6,59 @@ import {
   assertStrictEquals,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+  hmacHex,
   isAnonymousAppUserId,
   isValidUuid,
   timingSafeEqual,
   validateFreshness,
 } from './webhook_security.ts';
+
+// Reference vector pinned by RFC 4868 §2.7.2 (SHA-256 case 4): a key
+// of 0x0102…0x19 (25 bytes) over body 'cdcdcdcd' × 50 produces
+// 82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b.
+// Generating new vectors at home is straightforward (`openssl dgst
+// -sha256 -hmac …`); RFC vectors mean the test catches a digest
+// regression even if the new HMAC ever needed re-validating.
+Deno.test(
+  'hmacHex — RFC 4868 §2.7.2 case 4 SHA-256 reference vector',
+  async () => {
+    const keyBytes = Array.from({ length: 25 }, (_, i) =>
+      String.fromCharCode(0x01 + i),
+    ).join('');
+    const body = 'cd'.repeat(50);
+    const bodyBytes = body.match(/.{2}/g)!
+      .map((h) => String.fromCharCode(parseInt(h, 16)))
+      .join('');
+    const result = await hmacHex(keyBytes, bodyBytes);
+    assertEquals(
+      result,
+      '82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b',
+    );
+  },
+);
+
+Deno.test('hmacHex — empty body produces a stable digest', async () => {
+  const result = await hmacHex('shared-secret', '');
+  // Cross-checked once with `printf '' | openssl dgst -sha256 -hmac
+  // shared-secret -hex`; the value will never change unless this
+  // function changes its input encoding.
+  assertEquals(
+    result,
+    '7b044c3dd799953a630dbe15e3ff5b35c73270a81761044546851aa97a54bd17',
+  );
+});
+
+Deno.test('hmacHex — known-different keys produce different digests', async () => {
+  const a = await hmacHex('key-a', 'payload');
+  const b = await hmacHex('key-b', 'payload');
+  assertEquals(a.length, 64);
+  assertEquals(b.length, 64);
+  // Just guard against the trivial accidental degenerate case
+  // where the function ignores the key.
+  if (a === b) {
+    throw new Error('hmacHex must vary by key — got identical digests');
+  }
+});
 
 Deno.test('timingSafeEqual — equal strings return true', () => {
   assertStrictEquals(timingSafeEqual('abc123', 'abc123'), true);

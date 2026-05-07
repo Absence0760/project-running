@@ -17,3 +17,10 @@ extra_lambda_env = {
 # At least one email address is required.
 monthly_budget_limit_usd = 200
 budget_alert_emails      = ["you@example.com"]
+
+# SNS subscribers for the per-env alerts topic the coach Lambda
+# alarms (errors, p95 duration, throttles) route to. At least one
+# address is required for prod — see infra/modules/web-stack/alarms.tf
+# and the /audit/all cost-controls Medium (2026-05-07). The validation
+# rejects @example.com placeholders, so replace this before applying.
+alert_emails = ["you@example.com"]

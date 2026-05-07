@@ -5,6 +5,27 @@
 /// Keep this file pure — no `Deno.env`, no `serve`, no network. It must
 /// stay importable from a `deno test` that runs in milliseconds.
 
+/// HMAC-SHA256 over `body` with `secret`, returned as lowercase hex.
+/// Uses the runtime's built-in Web Crypto API — replaces the
+/// `deno.land/x/hmac@v2.0.1` library that revenuecat-webhook used to
+/// pull (deno.land/x tags aren't immutable, so a tag rewrite would
+/// silently substitute the digest). FIPS-aligned, zero supply-chain
+/// surface. /audit/all edge-functions Medium 2026-05-07.
+export async function hmacHex(secret: string, body: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(body));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 /// Constant-time string compare. Returns false on length mismatch
 /// without short-circuiting on content. The length check itself is
 /// observable, but the digest length is fixed (sha256 hex = 64 chars,

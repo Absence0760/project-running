@@ -39,4 +39,27 @@ variable "budget_alert_emails" {
     condition     = length(var.budget_alert_emails) > 0
     error_message = "Provide at least one address in budget_alert_emails — a budget with no subscribers is just an expensive no-op."
   }
+  validation {
+    condition = alltrue([
+      for e in var.budget_alert_emails :
+      !can(regex("(?i)@example\\.com$|^you@", e))
+    ])
+    error_message = "budget_alert_emails contains an @example.com / you@ placeholder — replace with a real address. /audit/all cost-controls Low caught a copied-from-example fall-through."
+  }
+}
+
+variable "alert_emails" {
+  description = "Email addresses subscribed to the SNS topic that the Lambda error / p95 / throttle CloudWatch alarms route to. At least one is required for prod — the audit/cost-controls Medium called out that the throttle alarm with no subscribers is functionally identical to no alarm. Each address gets an opt-in confirmation email on first apply."
+  type        = list(string)
+  validation {
+    condition     = length(var.alert_emails) > 0
+    error_message = "Provide at least one address in alert_emails — prod alarms must page somewhere."
+  }
+  validation {
+    condition = alltrue([
+      for e in var.alert_emails :
+      !can(regex("(?i)@example\\.com$|^you@", e))
+    ])
+    error_message = "alert_emails contains an @example.com / you@ placeholder — replace with a real address."
+  }
 }

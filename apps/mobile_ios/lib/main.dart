@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
@@ -75,38 +74,40 @@ void main() async {
   }
 
   // `dotenv` must resolve first because the Supabase URL/key come from it,
-  // and Supabase.initialize is one of the parallel tasks below. Android
-  // ships `.env.local` as an asset; iOS uses `--dart-define-from-file=
-  // dart_defines.json` and we bridge the same keys into dotenv so the
-  // verbatim libraries that read `dotenv.env['X']` keep working
-  // unchanged. See [docs/decisions.md § 13].
-  if (Platform.isIOS) {
-    const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
-    const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
-    const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
-    const supabaseUrlDef = String.fromEnvironment('SUPABASE_URL');
-    const supabaseAnonKeyDef = String.fromEnvironment('SUPABASE_ANON_KEY');
-    const devEmailDef = String.fromEnvironment('DEV_USER_EMAIL');
-    const devPasswordDef = String.fromEnvironment('DEV_USER_PASSWORD');
-    dotenv.loadFromString(
-      envString: [
-        if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
-        if (supabaseAnonKeyDef.isNotEmpty) 'SUPABASE_ANON_KEY=$supabaseAnonKeyDef',
-        if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
-        if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
-        if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
-        if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
-        if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
-      ].join('\n'),
-      isOptional: true,
-    );
-    // Best-effort .env.local load too, so a contributor who created one
-    // for parity with Android still gets it.
+  // and Supabase.initialize is one of the parallel tasks below.
+  //
+  // Two paths run for every platform: a `String.fromEnvironment` block
+  // that picks up `--dart-define`s (production CI passes these for
+  // both iOS and Android), and a debug-only `.env.local` load that
+  // gives local development a frictionless path. Release builds NEVER
+  // read `.env.local` even though pubspec.yaml ships it as an asset —
+  // this closes the audit High where a developer-built release APK
+  // would otherwise embed their real local SUPABASE_ANON_KEY,
+  // MAPTILER_KEY, dev creds, and BYPASS_PAYWALL=true. See decisions
+  // §13 for the iOS counterpart.
+  const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
+  const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
+  const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
+  const supabaseUrlDef = String.fromEnvironment('SUPABASE_URL');
+  const supabaseAnonKeyDef = String.fromEnvironment('SUPABASE_ANON_KEY');
+  const devEmailDef = String.fromEnvironment('DEV_USER_EMAIL');
+  const devPasswordDef = String.fromEnvironment('DEV_USER_PASSWORD');
+  dotenv.loadFromString(
+    envString: [
+      if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
+      if (supabaseAnonKeyDef.isNotEmpty) 'SUPABASE_ANON_KEY=$supabaseAnonKeyDef',
+      if (mapTilerKey.isNotEmpty) 'MAPTILER_KEY=$mapTilerKey',
+      if (webBaseUrl.isNotEmpty) 'WEB_BASE_URL=$webBaseUrl',
+      if (stravaClientId.isNotEmpty) 'STRAVA_CLIENT_ID=$stravaClientId',
+      if (devEmailDef.isNotEmpty) 'DEV_USER_EMAIL=$devEmailDef',
+      if (devPasswordDef.isNotEmpty) 'DEV_USER_PASSWORD=$devPasswordDef',
+    ].join('\n'),
+    isOptional: true,
+  );
+  if (kDebugMode) {
     try {
       await dotenv.load(fileName: '.env.local', mergeWith: dotenv.env);
     } catch (_) {}
-  } else {
-    await dotenv.load(fileName: '.env.local');
   }
 
   // Construct stores synchronously so we can kick off their `init()`s in

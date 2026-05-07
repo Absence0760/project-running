@@ -39,6 +39,7 @@ import {
 	refreshStravaToken,
 } from '../_shared/strava.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
 
@@ -50,6 +51,34 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
 		return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
+	}
+
+	// IP-keyed rate limit BEFORE the secret check — closes the
+	// brute-force surface from /audit/all edge-functions Medium. A
+	// caller that has discovered the function URL (semi-public — it's
+	// registered with Strava's API) could otherwise grind the secret
+	// at network rate; `timingSafeEqual` closes the per-byte channel
+	// but doesn't slow the offline guess rate. 60 hits/hour/IP is
+	// generous for legitimate Strava traffic (a single subscription
+	// emits maybe 1-10 events/hour for an active user) and brutal
+	// for an attacker. Service-role client is required because
+	// `ipBucketKey` returns a synthetic UUID that can't satisfy the
+	// `auth.uid()` guard in `check_rate_limit`.
+	const adminClient = createClient(
+		Deno.env.get('SUPABASE_URL')!,
+		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+	);
+	{
+		const anonKey = await ipBucketKey(req);
+		const denied = await checkRateLimit(
+			adminClient,
+			anonKey,
+			'strava-webhook:anon',
+			60,
+			3600,
+			{ failClosed: true },
+		);
+		if (denied) return denied;
 	}
 
 	const url = new URL(req.url);

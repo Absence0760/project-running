@@ -1092,6 +1092,19 @@ class _CoachScreenState extends State<CoachScreen> {
                                       data: content,
                                       selectable: true,
                                       onTapLink: _onCoachLinkTap,
+                                      // imageBuilder: deny everything.
+                                      // flutter_markdown's default
+                                      // builder happily decodes
+                                      // `data:image/...` URIs and
+                                      // even fetches `http://` URLs
+                                      // — both vectors a model can
+                                      // carry. Web's DOMPurify strips
+                                      // <img> via ALLOWED_TAGS; mirror
+                                      // that posture here.
+                                      // /audit/all xss Medium.
+                                      imageBuilder:
+                                          (uri, title, alt) =>
+                                              const SizedBox.shrink(),
                                       styleSheet:
                                           MarkdownStyleSheet.fromTheme(theme)
                                               .copyWith(

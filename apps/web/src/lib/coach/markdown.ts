@@ -15,6 +15,12 @@
 // emit class-based styling; an LLM-controlled `<span class="modal-backdrop">`
 // would otherwise pick up the global class and overlay the page (a
 // clickjacking vector documented in the audit pass-2 report).
+//
+// `ALLOWED_URI_REGEXP` is locked down to https/http/mailto. DOMPurify's
+// default allow-list also includes `tel:`, `sms:`, `xmpp:`, `cid:`,
+// `matrix:`, `callto:` — none of which a running-app coach should
+// emit. Matches the mobile `flutter_markdown` `_onCoachLinkTap`
+// allow-list. /audit/all xss Medium.
 
 import { marked } from 'marked';
 import DOMPurify from 'isomorphic-dompurify';
@@ -42,5 +48,6 @@ export function renderCoachMarkdown(content: string): string {
 		ALLOWED_TAGS: COACH_ALLOWED_TAGS,
 		ALLOWED_ATTR: COACH_ALLOWED_ATTR,
 		ALLOW_DATA_ATTR: false,
+		ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
 	});
 }

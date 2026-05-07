@@ -45,11 +45,23 @@ serve(withSentry('parkrun-import', async (req: Request) => {
     return Response.json({ error: 'Invalid athlete number' }, { status: 400 });
   }
 
-  // Fetch parkrun results page
+  // Fetch parkrun results page. Fail loudly on a non-2xx upstream
+  // (parkrun outage, bot-detection block, 429 rate-limit response)
+  // rather than feeding the error-page HTML into Cheerio and silently
+  // returning `{ imported: 0 }` 200 — the original silent-failure mode
+  // masked outages and let an attacker drain our IP reputation with
+  // parkrun without any signal. /audit/all edge-functions Medium.
   const url = `https://www.parkrun.org.uk/parkrunner/${athleteNumber}/all/`;
-  const html = await fetch(url, {
+  const upstream = await fetch(url, {
     headers: { 'User-Agent': Deno.env.get('PARKRUN_USER_AGENT') || 'RunApp/1.0' },
-  }).then((r) => r.text());
+  });
+  if (!upstream.ok) {
+    return Response.json(
+      { error: `parkrun upstream ${upstream.status}` },
+      { status: 502 },
+    );
+  }
+  const html = await upstream.text();
 
   const $ = cheerio.load(html);
   const runs: Record<string, unknown>[] = [];

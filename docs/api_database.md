@@ -85,7 +85,10 @@ when `bpm` is absent.
 - omits `external_id` (which leaks third-party activity ids — `strava:<id>`, `parkrun:<event>:<date>`, `garmin:<file_id>`),
 - strips audit/sync/training-plan-linkage keys from `metadata` (denylist in lockstep with [metadata.md](metadata.md)'s "Public-safe?" column — `imported_from`, `*_id`, `*_activity_type`, `last_modified_at`, `recovered_from_crash`, `in_progress*`, `manual_entry`, `indoor_estimated`, `distance_source`, `plan_workout_id`, `workout_step_results`, `workout_adherence`, `source_file`, `max_bpm`),
 - nulls `route_id` / `event_id` when the joined route or event isn't itself public (via SECURITY DEFINER helpers `is_public_route_by_id` / `is_public_event_by_id`),
-- restricts to `is_public = true`.
+- restricts to `is_public = true`,
+- omits `updated_at` — same signal as `metadata.last_modified_at` (already stripped); leaks last-edit / last-sync timestamps to anyone with the share link (`20260807_001`).
+
+**`source` is intentionally kept** in the view: `RunShareView.svelte` renders it as a source badge ("Strava", "Garmin", "parkrun") so a follower can tell where the run came from. The trade-off is provider-context disclosure (a Strava-tagged badge implies the user has a Strava account) vs. UX recognisability — UX wins because the user opted into sharing. If you ever drop the badge, also drop `r.source` from the view.
 
 Granted to `anon` + `authenticated`. Every public-runs reader (`fetchPublicRun`, `fetchPublicRunsByUser`, `fetchFollowingFeed` on web; `fetchPublicRunById`, `fetchPublicRunsByUser`, `fetchFollowingFeed` on mobile) reads the view, not the base table — architecture-guard tests on both platforms enforce this. Owner-context reads (`select * from runs where user_id = auth.uid()`) keep the bare-table path because they need the unredacted columns. Decisions §33's wire-leak follow-up entry has the full motivation.
 

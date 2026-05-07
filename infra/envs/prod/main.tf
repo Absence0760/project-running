@@ -74,6 +74,18 @@ module "web" {
   # traffic data.
   lambda_reserved_concurrency = 50
 
+  # Email subscribers for the per-env SNS alerts topic. Validated as
+  # RFC-shaped in the module — the validation rejects @example.com
+  # placeholders so a copy-pasted tfvars can't slip an alarm into the
+  # void. /audit/all cost-controls Medium 2026-05-07.
+  alert_emails = var.alert_emails
+
+  # Prod tightens the Lambda throttle alarm: a single throttle pages
+  # immediately. The reserved concurrency cap is the cost ceiling and
+  # hitting it must not be a quiet event. Preview keeps the default 5
+  # (noisy demo traffic).
+  lambda_throttle_alarm_threshold = 1
+
   # Null on first apply (file doesn't exist yet). The user encrypts a
   # secrets file against the KMS key created here, then re-applies and
   # the Lambda gets the real env vars.
