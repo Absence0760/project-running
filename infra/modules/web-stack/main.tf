@@ -259,7 +259,14 @@ resource "aws_lambda_function" "coach" {
   function_name                  = "${local.resource_prefix}-coach"
   role                           = aws_iam_role.lambda.arn
   handler                        = "index.handler"
-  runtime                        = "nodejs20.x"
+  # Node 24 (current Active LTS). Must be 22+: @supabase/realtime-js
+  # >=2.105 needs native WebSocket support, which only landed in Node
+  # 22. The coach handler calls createClient() per request; on Node
+  # 20 it would crash at construction with "Node.js 20 detected
+  # without native WebSocket support". Bumping the runtime here also
+  # requires updating the esbuild target in apps/web/lambda/coach/
+  # build.mjs to match.
+  runtime                        = "nodejs24.x"
   architectures                  = ["arm64"]
   memory_size                    = 1024
   timeout                        = 30

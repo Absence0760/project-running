@@ -100,12 +100,13 @@ jobs:
           version: 10
       - uses: actions/setup-node@v4
         with:
-          # Must be 22+: @supabase/realtime-js >=2.105 requires native
-          # WebSocket support, which only landed in Node 22. On Node 20
-          # `createClient(...)` crashes at construction with
-          # "Node.js 20 detected without native WebSocket support",
-          # which kills the Vite dev server before Playwright connects.
-          node-version: 22
+          # Node 24 (current Active LTS). Must be 22+ regardless:
+          # @supabase/realtime-js >=2.105 dropped the ws-package
+          # fallback and now needs native WebSocket support, which
+          # only landed in Node 22. On older runtimes
+          # `createClient(...)` crashes at construction and the Vite
+          # dev server dies before Playwright's webServer connects.
+          node-version: 24
           cache: pnpm
       - uses: supabase/setup-cli@v1
         with:

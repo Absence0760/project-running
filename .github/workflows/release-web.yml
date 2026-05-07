@@ -55,7 +55,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Node 24 (current Active LTS). Must match the Lambda
+          # runtime in infra/modules/web-stack/main.tf so the bundle
+          # esbuild produces actually runs in Lambda. Node 22+ is
+          # also a hard requirement for @supabase/realtime-js >=2.105
+          # which the coach Lambda transitively imports.
+          node-version: "24"
 
       - run: npm ci
 

@@ -27,7 +27,11 @@ await build({
 	entryPoints: [resolve(here, 'src/index.ts')],
 	bundle: true,
 	platform: 'node',
-	target: 'node20',
+	// Match the Lambda runtime (`runtime = "nodejs24.x"` in
+	// infra/modules/web-stack/main.tf). Must be node22+ regardless:
+	// @supabase/realtime-js >=2.105 needs native WebSocket support,
+	// which only landed in Node 22.
+	target: 'node24',
 	format: 'esm',
 	outfile: resolve(distDir, 'index.mjs'),
 	// Bundle everything — Lambda's managed Node.js runtime ships with
