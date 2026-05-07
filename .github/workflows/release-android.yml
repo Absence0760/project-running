@@ -21,6 +21,9 @@ on:
     tags:
       - 'mobile_android@*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   release:
     name: Build, sign, upload to Play Internal

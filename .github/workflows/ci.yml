@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Opt every JS-based action (actions/checkout, actions/cache,
+# supabase/setup-cli, …) into Node 24 ahead of GitHub's 2026-06-02
+# forced upgrade. Without this, the runner emits a deprecation
+# warning per action invocation because each one's action.yml still
+# declares `runs.using: node20`.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test-packages:
     name: Test Flutter packages

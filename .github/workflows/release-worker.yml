@@ -18,6 +18,9 @@ on:
     tags:
       - 'worker@*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   release:
     name: flyctl deploy + GitHub Release
