@@ -12,6 +12,7 @@ import '../race_controller.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../widgets/billing_issue_banner.dart';
 import '../widgets/top_banner.dart';
 import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
@@ -216,11 +217,26 @@ class _HomeScreenState extends State<HomeScreen> {
       // of a tab (scroll position, live run recorder, in-flight fetches)
       // survives being swiped off-screen — the same guarantee IndexedStack
       // gave us for free.
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: _onPageChanged,
-        physics: const PageScrollPhysics(),
-        children: _pages,
+      //
+      // BillingIssueBanner sits above the PageView so it surfaces on
+      // every authed tab when a Pro user has a failed renewal payment
+      // sitting in the store's grace period. Cleared automatically
+      // when the revenuecat-webhook fires RENEWAL / EXPIRATION /
+      // CANCELLATION. Mirrors web's root-layout banner; renders
+      // nothing when the flag is null or the user is on the free
+      // tier — zero footprint in the common case.
+      body: Column(
+        children: [
+          BillingIssueBanner(apiClient: widget.apiClient),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: _onPageChanged,
+              physics: const PageScrollPhysics(),
+              children: _pages,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: _currentIndex,
