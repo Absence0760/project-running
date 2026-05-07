@@ -22,6 +22,7 @@ import {
 } from '../_shared/webhook_security.ts';
 import {
   DEACTIVATING_EVENTS,
+  mapEventToBillingIssue,
   mapEventToTier,
 } from './lib.ts';
 
@@ -135,19 +136,32 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
   }
 
   const newTier = mapEventToTier(event.type, event.product_id ?? null, currentTier);
+  const billingIssueAt = mapEventToBillingIssue(event.type);
 
-  if (newTier !== null) {
+  // Build the patch — at most one round trip per webhook. Tier and
+  // billing flag are decoupled (BILLING_ISSUE writes the flag without
+  // touching tier; RENEWAL / EXPIRATION write both). `undefined` means
+  // "this event doesn't move that field".
+  const patch: Record<string, unknown> = {};
+  if (newTier !== null) patch.subscription_tier = newTier;
+  if (billingIssueAt !== undefined) patch.billing_issue_at = billingIssueAt;
+
+  if (Object.keys(patch).length > 0) {
     const { error } = await supabase
       .from('user_profiles')
-      .update({ subscription_tier: newTier })
+      .update(patch)
       .eq('id', userId);
     if (error) {
-      console.error('Tier update failed:', error);
-      return Response.json({ ok: false, error: 'tier update failed' }, { status: 500 });
+      console.error('user_profiles patch failed:', error);
+      return Response.json({ ok: false, error: 'profile update failed' }, { status: 500 });
     }
   }
 
-  return Response.json({ ok: true, new_tier: newTier });
+  return Response.json({
+    ok: true,
+    new_tier: newTier,
+    billing_issue_at: billingIssueAt ?? undefined,
+  });
 }));
 
 interface RevenueCatEvent {

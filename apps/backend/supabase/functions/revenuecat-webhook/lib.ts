@@ -22,6 +22,38 @@ export const DEACTIVATING_EVENTS = [
   'CANCELLATION',
 ] as const;
 
+/// Decide what `billing_issue_at` should become for the given event.
+/// Returns:
+///   - a Date string when the renewal payment failed (set the flag).
+///   - `null` when the payment story resolved one way or the other
+///     (clear the flag — recovered via RENEWAL / UNCANCELLATION, or
+///     ended via EXPIRATION / CANCELLATION; in either case the flag
+///     is no longer informative).
+///   - `undefined` for events that don't move the billing-issue
+///     dimension (no write).
+///
+/// This is decoupled from `mapEventToTier` because BILLING_ISSUE
+/// must NOT change the tier — RC's grace period keeps the user on
+/// Pro until EXPIRATION fires. The two functions answer two
+/// independent questions; pinning that separation in code (and in
+/// tests) prevents a future refactor from accidentally collapsing
+/// them and downgrading users mid-grace-period.
+export function mapEventToBillingIssue(
+  eventType: string,
+  now: Date = new Date(),
+): string | null | undefined {
+  if (eventType === 'BILLING_ISSUE') return now.toISOString();
+  if (
+    eventType === 'RENEWAL' ||
+    eventType === 'UNCANCELLATION' ||
+    eventType === 'EXPIRATION' ||
+    eventType === 'CANCELLATION'
+  ) {
+    return null;
+  }
+  return undefined;
+}
+
 /// Decide what tier (if any) an event should drive the user to.
 ///
 /// `currentTier` is the user's tier at the time the event arrives —

@@ -1934,6 +1934,7 @@ class UserProfileRow {
   static const String colSubscriptionTier = 'subscription_tier';
   static const String colSubscriptionAt = 'subscription_at';
   static const String colCreatedAt = 'created_at';
+  static const String colBillingIssueAt = 'billing_issue_at';
 
   final String id;
   final String? displayName;
@@ -1943,6 +1944,7 @@ class UserProfileRow {
   final String? subscriptionTier;
   final DateTime? subscriptionAt;
   final DateTime? createdAt;
+  final DateTime? billingIssueAt;
 
   const UserProfileRow({
     required this.id,
@@ -1953,6 +1955,7 @@ class UserProfileRow {
     this.subscriptionTier,
     this.subscriptionAt,
     this.createdAt,
+    this.billingIssueAt,
   });
 
   factory UserProfileRow.fromJson(Map<String, dynamic> json) => UserProfileRow(
@@ -1964,6 +1967,7 @@ class UserProfileRow {
     subscriptionTier: json['subscription_tier'] as String?,
     subscriptionAt: json['subscription_at'] == null ? null : DateTime.parse(json['subscription_at'] as String),
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
+    billingIssueAt: json['billing_issue_at'] == null ? null : DateTime.parse(json['billing_issue_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1975,6 +1979,7 @@ class UserProfileRow {
     colSubscriptionTier: subscriptionTier,
     colSubscriptionAt: subscriptionAt?.toIso8601String(),
     colCreatedAt: createdAt?.toIso8601String(),
+    colBillingIssueAt: billingIssueAt?.toIso8601String(),
   };
 }
 

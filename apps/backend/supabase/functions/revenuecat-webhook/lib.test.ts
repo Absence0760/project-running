@@ -7,6 +7,7 @@ import {
 import {
   ACTIVATING_EVENTS,
   DEACTIVATING_EVENTS,
+  mapEventToBillingIssue,
   mapEventToTier,
 } from './lib.ts';
 
@@ -75,6 +76,76 @@ Deno.test('mapEventToTier — unknown event type → null', () => {
   assertStrictEquals(mapEventToTier('TRANSFER', null, null), null);
   assertStrictEquals(mapEventToTier('SUBSCRIBER_ALIAS', null, 'pro'), null);
   assertStrictEquals(mapEventToTier('', null, null), null);
+});
+
+Deno.test('mapEventToTier — BILLING_ISSUE → null (NO tier change during grace period)', () => {
+  // The contract: a failed renewal must NOT downgrade the user
+  // mid-grace-period. RC keeps trying the card for ~16-30 days; only
+  // when the grace exhausts does EXPIRATION fire. A regression that
+  // collapsed BILLING_ISSUE into the deactivating set would pull
+  // access from users with a temporarily declined card. Pin the
+  // null-return at the lib level so any future refactor that
+  // unifies the "money trouble" events into one branch will fail
+  // here.
+  assertStrictEquals(mapEventToTier('BILLING_ISSUE', null, 'pro'), null);
+  assertStrictEquals(mapEventToTier('BILLING_ISSUE', 'pro_monthly', 'pro'), null);
+  assertStrictEquals(mapEventToTier('BILLING_ISSUE', null, 'lifetime'), null);
+});
+
+Deno.test('mapEventToTier — SUBSCRIPTION_PAUSED / TRANSFER → null (no tier change)', () => {
+  // SUBSCRIPTION_PAUSED is Play Store's "I want to pause my sub for
+  // a few months" flow — RC keeps the entitlement active per Play's
+  // policy, so the tier stays. TRANSFER is RC's user-merge — the
+  // tier carries over with the entitlement and our handler shouldn't
+  // touch it. Both are no-ops by design.
+  assertStrictEquals(mapEventToTier('SUBSCRIPTION_PAUSED', null, 'pro'), null);
+  assertStrictEquals(mapEventToTier('TRANSFER', null, 'pro'), null);
+});
+
+Deno.test('mapEventToBillingIssue — BILLING_ISSUE → ISO timestamp string', () => {
+  const fixed = new Date('2026-04-30T12:00:00Z');
+  assertStrictEquals(
+    mapEventToBillingIssue('BILLING_ISSUE', fixed),
+    '2026-04-30T12:00:00.000Z',
+  );
+});
+
+Deno.test('mapEventToBillingIssue — recovery + ended events clear the flag', () => {
+  // RENEWAL = the retried payment went through; UNCANCELLATION = user
+  // came back. Either way the billing issue is resolved.
+  // EXPIRATION / CANCELLATION = the access has ended; the flag is
+  // moot at that point (the user is now free).
+  assertStrictEquals(mapEventToBillingIssue('RENEWAL'), null);
+  assertStrictEquals(mapEventToBillingIssue('UNCANCELLATION'), null);
+  assertStrictEquals(mapEventToBillingIssue('EXPIRATION'), null);
+  assertStrictEquals(mapEventToBillingIssue('CANCELLATION'), null);
+});
+
+Deno.test('mapEventToBillingIssue — events that don\'t move the dimension → undefined', () => {
+  // INITIAL_PURCHASE / PRODUCT_CHANGE / NON_RENEWING_PURCHASE all
+  // create-or-keep-active a sub but don't say anything about a
+  // payment failure. SUBSCRIPTION_PAUSED is Play-side state that
+  // doesn't imply a card problem. TRANSFER / SUBSCRIBER_ALIAS are
+  // RC-side metadata. None of these should write the flag (clearing
+  // a pending billing-issue on INITIAL_PURCHASE would be wrong if
+  // the original sub still has a billing problem, etc.).
+  assertStrictEquals(mapEventToBillingIssue('INITIAL_PURCHASE'), undefined);
+  assertStrictEquals(mapEventToBillingIssue('PRODUCT_CHANGE'), undefined);
+  assertStrictEquals(mapEventToBillingIssue('NON_RENEWING_PURCHASE'), undefined);
+  assertStrictEquals(mapEventToBillingIssue('SUBSCRIPTION_PAUSED'), undefined);
+  assertStrictEquals(mapEventToBillingIssue('TRANSFER'), undefined);
+  assertStrictEquals(mapEventToBillingIssue('SUBSCRIBER_ALIAS'), undefined);
+  assertStrictEquals(mapEventToBillingIssue(''), undefined);
+});
+
+Deno.test('billing-issue + tier branches are independent for BILLING_ISSUE', () => {
+  // The whole point of the split: BILLING_ISSUE moves the flag but
+  // NOT the tier. A future refactor that re-couples them would slip
+  // through if we didn't have a test that asserts both at once.
+  const tier = mapEventToTier('BILLING_ISSUE', 'pro_monthly', 'pro');
+  const flag = mapEventToBillingIssue('BILLING_ISSUE');
+  assertStrictEquals(tier, null);
+  assertStrictEquals(typeof flag, 'string');
 });
 
 Deno.test('event taxonomy lists are disjoint', () => {
