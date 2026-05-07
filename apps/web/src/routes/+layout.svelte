@@ -7,6 +7,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { initTheme } from '$lib/theme';
 	import { setMapStyle, type MapStyle } from '$lib/map-style.svelte';
+	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import NotificationBell from '$lib/components/NotificationBell.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
@@ -189,6 +190,7 @@
 		</nav>
 
 		<main class="main-content">
+			<BillingIssueBanner />
 			<slot />
 		</main>
 	</div>

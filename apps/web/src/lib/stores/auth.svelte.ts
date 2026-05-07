@@ -10,6 +10,13 @@ interface User {
 	parkrun_number: string | null;
 	preferred_unit: 'km' | 'mi';
 	subscription_tier: 'free' | 'pro' | 'lifetime';
+	/// Set to an ISO timestamp when RevenueCat fires `BILLING_ISSUE`
+	/// (a renewal payment failed but the entitlement is still live
+	/// during the store's grace period). Cleared on RENEWAL,
+	/// UNCANCELLATION, EXPIRATION, or CANCELLATION. Drives the
+	/// global "Update your card to keep Pro" banner so the user can
+	/// fix the card before the grace period exhausts.
+	billing_issue_at: string | null;
 }
 
 function createAuthStore() {
@@ -74,6 +81,7 @@ function createAuthStore() {
 				parkrun_number: profile.parkrun_number,
 				preferred_unit: profile.preferred_unit ?? 'km',
 				subscription_tier: profile.subscription_tier ?? 'free',
+				billing_issue_at: profile.billing_issue_at ?? null,
 			};
 			setUnit(user.preferred_unit);
 		} else {
@@ -91,6 +99,7 @@ function createAuthStore() {
 				parkrun_number: null,
 				preferred_unit: 'km',
 				subscription_tier: 'free',
+				billing_issue_at: null,
 			};
 			setUnit('km');
 		}
