@@ -48,6 +48,57 @@ test.describe('/settings/account — data export', () => {
 		expect(body.split('\n').length).toBeGreaterThan(1);
 	});
 
+	test('Backup ZIP contains runs.json + manifest.json + profile.json (interior shape)', async ({
+		page
+	}) => {
+		// The magic-bytes test below pins the wrapper. This pins the
+		// CONTENT — every entry the backup needs to be re-importable
+		// must be inside. createBackup writes:
+		//   - manifest.json (versioning)
+		//   - profile.json
+		//   - runs.json (one row per run, no track inline)
+		//   - tracks/<run_id>.json.gz (per-run gzipped tracks)
+		//   - routes.json
+		// A regression that dropped any of these would silently break
+		// restore on another device; magic-bytes alone wouldn't catch
+		// it.
+		const JSZip = (await import('jszip')).default;
+
+		await page.goto('/settings/account');
+		const downloadPromise = page.waitForEvent('download');
+		await page
+			.getByRole('button', { name: /Download full backup/ })
+			.click();
+		const download = await downloadPromise;
+
+		const stream = await download.createReadStream();
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) {
+			chunks.push(Buffer.from(chunk));
+		}
+		const zip = await JSZip.loadAsync(Buffer.concat(chunks));
+
+		// Required top-level entries.
+		expect(zip.file('manifest.json'), 'manifest.json must exist')
+			.not.toBeNull();
+		expect(zip.file('profile.json'), 'profile.json must exist')
+			.not.toBeNull();
+		expect(zip.file('runs.json'), 'runs.json must exist').not.toBeNull();
+		expect(zip.file('routes.json'), 'routes.json must exist').not.toBeNull();
+
+		// runs.json must parse + carry the seeded rows.
+		const runsTxt = await zip.file('runs.json')!.async('string');
+		const runs = JSON.parse(runsTxt) as Array<Record<string, unknown>>;
+		expect(Array.isArray(runs)).toBe(true);
+		expect(runs.length).toBeGreaterThan(0);
+
+		// Manifest carries a version key so future restore paths can
+		// version-gate.
+		const manifestTxt = await zip.file('manifest.json')!.async('string');
+		const manifest = JSON.parse(manifestTxt) as Record<string, unknown>;
+		expect(manifest).toHaveProperty('version');
+	});
+
 	test('Download full backup → emits a non-empty .zip with the timestamped filename', async ({
 		page
 	}) => {
