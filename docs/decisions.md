@@ -1150,6 +1150,24 @@ Pinned by `apps/web/tests-e2e/cross-user/sagas/account-deletion.spec.ts` — run
 
 ---
 
+## 57. Map-matching is free; queue priority is the Pro perk
+
+OSRM map-matching cleans the GPS-jitter output of every recorded run into a road-snapped track. We considered gating it entirely behind Pro and rejected that — Strava, Garmin Connect, Nike Run Club, Apple Fitness all show snapped tracks on their free tier; locking the feature would make the free experience feel broken on the most basic correctness dimension. The free tier needs to feel complete; Pro is for *more*, not for *less broken*.
+
+Instead, **priority** is what's paywalled. Migration `20260730_001_tier_aware_job_scheduling.sql` introduces a single helper `job_scheduled_at_for_user(uuid)` that returns `now()` for pro / lifetime users and `now() + 30 s` for free / unknown users. Both `map_match` enqueue sites — the auto-trigger `runs_enqueue_match_job` and the manual-rematch RPC `enqueue_run_rematch` — thread that helper into the `scheduled_at` column. The worker's `claim_next_job` already filters `scheduled_at <= now()` and orders by `(scheduled_at, id)`, so a Pro job is always claimable strictly before a free job enqueued at the same wall-clock moment.
+
+**Why `scheduled_at` offset and not a `priority` integer column:** the existing `jobs_queued` partial index on `(scheduled_at, kind)` already gives the right ordering. A new column would cost an index rebuild + a worker change for zero behavioural improvement. The existing semantic of `scheduled_at` (claimable when `≥ now()`) extends cleanly to "and Pro users get a smaller value at the same wall-clock instant".
+
+**Why 30 seconds:** short enough that free users still see "matched track" within a minute under nominal load; long enough that Pro users measurably jump the queue under contention. One migration to tune if real-world numbers want a different number.
+
+**Convention for future job kinds:** any new `kind` (strava_backfill, photo_transform, bulk_rematch, …) calls `job_scheduled_at_for_user(uuid)` at enqueue time. Don't inline `case ... subscription_tier ...` at enqueue sites — the helper is the single source of truth so a tier-policy change lands in one place. The TS-side EF rate-limits already follow the same shape (free / pro tiers via `checkRateLimitTiered`, e.g. `parkrun-import` 4/16 per hour, `strava-import:sync` 4/16 per hour, `export-data` 2/8 per hour); the job-queue helper completes the picture for async work.
+
+**Don't re-litigate unless:** product wants a different model — e.g. capping free users to N map-matches per day instead of slowing them, or putting a different feature behind the paywall entirely. Each of those is a one-migration change to either the helper or the trigger.
+
+Pinned by 3 e2e tests in `apps/web/tests-e2e/cross-cutting/job-tier-priority.spec.ts`: end-to-end via the auto-trigger (gap ≥ 25 s between free and pro), helper unit-style RPC test (pro / free / unknown-user fallback), and a manual-rematch test that pins the rematch RPC also threads the helper.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
