@@ -267,7 +267,14 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 	} catch (err) {
 		// Log but ack 200 so Strava doesn't retry — a retried import
 		// would create a duplicate before the dedupe can catch it.
-		console.error('strava-webhook ingest failed', { activityId, userId, err });
+		// Log the message only — Postgrest `err.details` / `err.hint`
+		// can leak schema-adjacent data into the log aggregator.
+		// /audit/all edge-functions Low.
+		console.error('strava-webhook ingest failed', {
+			activityId,
+			userId,
+			error: err instanceof Error ? err.message : String(err),
+		});
 	}
 
 	return new Response('OK');

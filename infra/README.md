@@ -122,11 +122,12 @@ terraform apply
 
 The first apply creates the KMS key, S3 bucket, CloudFront distribution, and Lambda **with a placeholder zip and no `ANTHROPIC_API_KEY`** (because the secrets file doesn't exist yet). The coach endpoint will return 503 — that's expected. Static site already works.
 
-Now encrypt the secrets file against the env's KMS key:
+Now encrypt the secrets file against the env's KMS key. **Stop and verify the substitution worked** before running `sops --encrypt` — if `REPLACE_*` survived (sed mismatched the file path on macOS BSD-sed, or `terraform output` returned empty), sops will fall back to whatever default backend is in your local config and silently encrypt against the wrong key:
 
 ```bash
 ARN=$(terraform output -raw kms_key_arn)
 sed -i "s|REPLACE_PREVIEW_KMS_ARN|$ARN|" ../../.sops.yaml
+grep -q 'REPLACE_' ../../.sops.yaml && { echo 'ERROR: .sops.yaml still has placeholder ARNs'; exit 1; }
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
 echo 'SENTRY_DSN: ...' >> /tmp/coach.yaml      # optional
 sops --encrypt /tmp/coach.yaml > secrets.enc.yaml
@@ -151,6 +152,7 @@ terraform init
 terraform apply
 ARN=$(terraform output -raw kms_key_arn)
 sed -i "s|REPLACE_PROD_KMS_ARN|$ARN|" ../../.sops.yaml
+grep -q 'REPLACE_' ../../.sops.yaml && { echo 'ERROR: .sops.yaml still has placeholder ARNs'; exit 1; }
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
 sops --encrypt /tmp/coach.yaml > secrets.enc.yaml
 shred -u /tmp/coach.yaml

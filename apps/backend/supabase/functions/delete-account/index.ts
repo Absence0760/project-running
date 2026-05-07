@@ -113,7 +113,13 @@ serve(withSentry('delete-account', async (req: Request) => {
       await deletePrefix(adminClient, bucket, user.id);
     }
   } catch (err) {
-    console.error('delete-account: Storage drain failed:', err);
+    // Log message only — `err` from `deletePrefix` may carry the
+    // upstream Storage error's `details` / `hint` (bucket / path
+    // internal codes). /audit/all edge-functions Low.
+    console.error(
+      'delete-account: Storage drain failed:',
+      err instanceof Error ? err.message : String(err),
+    );
     return Response.json(
       { error: 'storage drain failed' },
       { status: 500, headers: { 'content-type': 'application/json' } },
@@ -138,7 +144,10 @@ serve(withSentry('delete-account', async (req: Request) => {
     // bounce it back to the client — Supabase / GoTrue error text can
     // expose internal identifiers and schema names that are useless
     // to legitimate callers.
-    console.error('delete-account: admin.deleteUser failed:', error);
+    console.error(
+      'delete-account: admin.deleteUser failed:',
+      error?.message ?? String(error),
+    );
     return Response.json(
       { error: 'delete failed' },
       { status: 500, headers: { 'content-type': 'application/json' } },

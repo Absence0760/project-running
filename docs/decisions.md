@@ -525,6 +525,8 @@ We ship three things together:
 
 **Don't re-litigate unless:** users start asking for handles (then add `user_profiles.handle` with a normalisation function), private profiles become a real ask (single-column toggle plus an RLS predicate on the public-read policy), or someone needs the feed instant (then enable realtime on `runs` with a `is_public` filter). Each of those is a forward-additive change — none requires undoing what we ship now.
 
+**`user_follows` SELECT scope (re-affirmed 2026-05-07).** /audit/all flagged that the SELECT policy `auth.role() = 'authenticated'` makes the entire follow graph + every `followed_at` timestamp readable by any signed-in user. This is **intentional** and matches how Strava / Nike Run Club / Garmin Connect ship the same surface — followers / following lists on a profile page are the canonical "who is this runner" affordance. The trade-off cost is that someone harvesting the graph can reconstruct social-formation timelines (when X followed Y); the benefit is the entire `/u/[id]` follower-list UI works without a SECURITY DEFINER fan-out RPC. **First gate to flip if private profiles are ever added** — the new RLS predicate on the SELECT policy is `using (auth.role() = 'authenticated' and not is_private(followee_id))` plus the symmetric branch for the follower. Until then, leave it open.
+
 ---
 
 ## 32. Kudos + comments on runs; visibility tracks runs' own RLS

@@ -1235,9 +1235,13 @@ class ApiClient {
 
   // ──────────────────── Run photos (P1.B) ────────────────────
   //
-  // Metadata in `run_photos`; bytes in the public-read `run-photos`
-  // Storage bucket at `{owner_id}/{photo_id}.{ext}`. Owner gates
-  // upload + delete; visibility on the metadata row tracks the run.
+  // Metadata in `run_photos`; bytes in the private `run-photos`
+  // Storage bucket at `{owner_id}/{photo_id}.{ext}` (bucket flipped
+  // from public to private in 20260712_001 to close the CDN bypass
+  // around the visibility gate). Owner gates upload + delete; the
+  // Storage SELECT policy joins through `run_photos.storage_path` →
+  // `is_run_visible_to(rp.run_id, auth.uid())` so a flip from public
+  // to private on the parent run propagates within signed-URL TTL.
 
   /// Photos for a run, ordered by position then created_at. Capped.
   Future<List<RunPhotoRow>> fetchRunPhotos(

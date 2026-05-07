@@ -39,7 +39,17 @@ export function withSentry(
     try {
       return await handler(req);
     } catch (err) {
-      console.error(`[${efName}] unhandled:`, err);
+      // Console path: log only the message string. Postgrest errors
+      // carry `details` + `hint` fields that can leak column names,
+      // constraint names, or partial row values into the log
+      // aggregator. Sentry below captures the full exception object
+      // for in-Sentry triage where the audit trail is access-gated;
+      // the console path is the broader-readable surface and stays
+      // narrow. /audit/all edge-functions Low.
+      console.error(
+        `[${efName}] unhandled:`,
+        err instanceof Error ? err.message : String(err),
+      );
       if (enabled) {
         Sentry.withScope((scope) => {
           scope.setTag('ef', efName);
@@ -57,7 +67,11 @@ export function withSentry(
 
 export function captureException(err: unknown, efName: string, ctx?: Record<string, unknown>) {
   if (!ensureInit()) {
-    console.error(`[${efName}]`, err, ctx);
+    console.error(
+      `[${efName}]`,
+      err instanceof Error ? err.message : String(err),
+      ctx,
+    );
     return;
   }
   Sentry.withScope((scope) => {

@@ -214,7 +214,7 @@ export function humaniseUpstreamError(
 	if (status === 401) {
 		return (
 			`Coach upstream rejected the request (401 unauthorized). ` +
-			`Check OPENAI_API_KEY (or whichever key your provider expects) and that it has access to model "${model}".`
+			`Check the upstream API key configuration and that it has access to model "${model}".`
 		);
 	}
 

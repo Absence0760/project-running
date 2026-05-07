@@ -160,9 +160,14 @@ serve(withSentry('export-data', async (req: Request) => {
 		return new Response('Signed URL failed', { status: 500 });
 	}
 
+	// Don't echo the Storage `path` — clients only need the signed URL
+	// + TTL to download. Returning the path leaked the
+	// `{user_id}/exports/<ts>.{csv,zip}` shape into the JSON response,
+	// where it could land in browser history / dev-tools / logs and
+	// later be re-used (within owner-folder Storage SELECT) without
+	// the time-bounded signed URL. /audit/all storage Low.
 	return Response.json({
 		url: signed.signedUrl,
-		path,
 		expires_in: SIGNED_URL_TTL_S,
 		count: runs?.length ?? 0,
 		format,
@@ -188,7 +193,13 @@ function buildCsv(runs: RunRow[]): string {
 		'event_id',
 		'external_id',
 		'is_public',
-		'track_url',
+		// `track_url` deliberately omitted: the GPX export already
+		// includes the actual track bytes per run; the CSV consumer
+		// needs the run shape, not the Storage path. Removing it
+		// closes a leak path where the CSV (which the user might
+		// share or store off-device) carries the raw owner-folder
+		// Storage path that bypasses the clip-public-track EF for any
+		// active session JWT. /audit/all storage Low.
 		'metadata',
 		'created_at',
 		'updated_at',
@@ -213,7 +224,6 @@ function buildCsv(runs: RunRow[]): string {
 				csvEscape(r.event_id ?? ''),
 				csvEscape(r.external_id ?? ''),
 				csvEscape(String(r.is_public ?? false)),
-				csvEscape(r.track_url ?? ''),
 				csvEscape(JSON.stringify(md)),
 				csvEscape(r.created_at),
 				csvEscape(r.updated_at),

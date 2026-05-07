@@ -53,13 +53,12 @@ serve(withSentry('strava-import', async (req: Request) => {
 	if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
 	const body = (guarded.body ?? {}) as Record<string, unknown>;
-	// audit/edge-functions Low: require an explicit action. Falling back
-	// to 'sync' on missing field made the route dispatch implicit; an
-	// empty {} would silently route into handleSync. Now an empty body
-	// with no `code` either is rejected as invalid_action. Legacy
-	// behaviour for the OAuth code path (no `action` but a `code`) is
-	// preserved because that's what the OAuth callback actually sends.
-	const action = (body.action as string | undefined) ?? (body.code ? 'connect' : null);
+	// audit/edge-functions Low: require an explicit action. Both the
+	// web OAuth callback (`apps/web/src/lib/strava.ts:73`) and the
+	// mobile sync caller (`packages/api_client/.../api_client.dart:2511`)
+	// now send `action` explicitly, so the prior `body.code ? 'connect'`
+	// implicit-routing fallback was retired in /audit/all 2026-05-07.
+	const action = body.action as string | undefined;
 	if (action !== 'connect' && action !== 'sync') {
 		return Response.json({ error: 'invalid_action', expected: ['connect', 'sync'] }, { status: 400 });
 	}

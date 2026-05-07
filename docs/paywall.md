@@ -10,7 +10,7 @@ paywall. What the Pro tier changes is behaviour *inside* two features:
   Claude API bill). Pro users get no cap.
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
-  longer / more thorough answers, and up to 200 runs of context per
+  longer / more thorough answers, and up to 75 runs of context per
   turn (vs 30 for free). Coupled with the unlimited daily cap above,
   these are concrete tier-aware budgets enforced server-side on
   `/api/coach/+server.ts` and surfaced in `X-Coach-Tier` /
@@ -60,7 +60,7 @@ flow requires an admin SQL session; from a client there is no way.
 | Perk | Feature key | Enforcement point |
 |---|---|---|
 | Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_pro()` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
-| Priority processing — coach context | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 200-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
+| Priority processing — coach context | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 75-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 | Priority map-matching | `priority_processing` | DB: every enqueue site for `kind='map_match'` jobs (the auto-trigger `runs_enqueue_match_job` and the manual-rematch RPC `enqueue_run_rematch`) calls `job_scheduled_at_for_user(uuid)` from migration `20260730_001`. Pro / lifetime → `now()` (front of queue); free → `now() + 30 s` (defers behind Pro). The worker's `claim_next_job` orders by `(scheduled_at, id)` so Pro jobs are always claimable strictly before free jobs enqueued at the same instant. **Future job kinds follow the same pattern** — call the helper at enqueue time; don't inline `case ... subscription_tier ...`. See [decisions.md § 57](decisions.md#57-map-matching-is-free-queue-priority-is-the-pro-perk). |
 
 These perks are **behaviour changes**, not gated screens, so they do
