@@ -19,13 +19,24 @@
 	// (or a Playwright test) can't trigger the native form GET before
 	// the JS handler can call preventDefault().
 	let hydrated = $state(false);
+	// Snapshot return_to at mount, BEFORE either the post-sign-in
+	// $effect or the explicit handler goto can fire. The previous
+	// version re-read $page.url.searchParams every call, but the
+	// $effect's `goto(..., { replaceState: true })` mutates the URL
+	// to the return_to target on the same tick. The handler's
+	// follow-up `goto(safeReturnTo())` then read an already-rewritten
+	// URL with no `return_to` param and fell through to /dashboard,
+	// silently overriding the correct redirect. Caching the raw
+	// value once removes that race.
+	let returnToOnMount = $state<string>('/dashboard');
 	onMount(() => {
 		hydrated = true;
+		const raw = $page.url.searchParams.get('return_to');
+		returnToOnMount = raw && raw.startsWith('/') ? raw : '/dashboard';
 	});
 
 	function safeReturnTo(): string {
-		const raw = $page.url.searchParams.get('return_to');
-		return raw && raw.startsWith('/') ? raw : '/dashboard';
+		return returnToOnMount;
 	}
 
 	$effect(() => {
