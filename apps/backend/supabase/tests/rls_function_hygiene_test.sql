@@ -27,7 +27,7 @@
 
 begin;
 
-select plan(7);
+select plan(8);
 
 -- 1. weekly_mileage has search_path = public pinned.
 select results_eq(
@@ -76,13 +76,27 @@ select is(
   'authenticated can EXECUTE is_route_visible_to (sibling policies depend on it)'
 );
 
--- 5. is_run_visible_to IS executable by anon (20260713_001 restored
---    the grant pass-1 dropped). Without this every social affordance
---    on the public share page returns 42501.
+-- 5. is_run_visible_to IS executable by anon AND has been moved to
+--    the `private` schema (20260812_001) so PostgREST can't expose
+--    it as an RPC oracle. Anon EXECUTE grant is required because
+--    every share-page RLS evaluation calls the qualified
+--    `private.is_run_visible_to(...)`.
 select is(
-  has_function_privilege('anon', 'is_run_visible_to(uuid, uuid)', 'execute'),
+  has_function_privilege('anon', 'private.is_run_visible_to(uuid, uuid)', 'execute'),
   true,
-  'anon CAN EXECUTE is_run_visible_to (anonymous /share/run/<id> needs it for kudos / comments / photos / segments / pings)'
+  'anon CAN EXECUTE private.is_run_visible_to (anonymous /share/run/<id> needs it for kudos / comments / photos / segments / pings)'
+);
+
+-- 5b. The public-schema version must be GONE — that's the
+--     PostgREST RPC oracle the schema move closed. If a future
+--     migration recreates `public.is_run_visible_to`, this fails.
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'is_run_visible_to'
+  ),
+  'public.is_run_visible_to has been dropped (PostgREST RPC oracle closed by 20260812_001)'
 );
 
 -- 6. recompute_event_ranks is NOT executable by PUBLIC. Today this

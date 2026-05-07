@@ -183,10 +183,10 @@ select throws_ok(
 --     true for the public run regardless of the caller — it's
 --     SECURITY DEFINER and bypasses RLS by design.
 select is(
-  is_run_visible_to('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02',
+  private.is_run_visible_to('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02',
                     '00000000-0000-0000-0000-00000000000b'),
   true,
-  'is_run_visible_to() returns true for any caller on a public run'
+  'private.is_run_visible_to() returns true for any caller on a public run'
 );
 
 select * from finish();

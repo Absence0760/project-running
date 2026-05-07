@@ -1,5 +1,5 @@
 -- RLS suite for the engagement tables that gate visibility through
--- the `is_run_visible_to(run_id, caller)` SECURITY DEFINER helper:
+-- the `private.is_run_visible_to(run_id, caller)` SECURITY DEFINER helper:
 --
 --   - run_kudos
 --   - run_comments
@@ -110,7 +110,7 @@ select results_eq(
 -- ── Non-owner writes ──
 
 -- 4. Kudos INSERT on the public run: allowed (auth.uid()=user_id AND
---    is_run_visible_to(run_id, caller) is true for public runs).
+--    private.is_run_visible_to(run_id, caller) is true for public runs).
 insert into run_kudos (user_id, run_id) values
   ('00000000-0000-0000-0000-00000000e002', '33333333-3333-3333-3333-333333333302');
 select results_eq(
@@ -282,10 +282,10 @@ select is_empty(
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000e001"}';
 select is(
-  is_run_visible_to('33333333-3333-3333-3333-333333333301',
+  private.is_run_visible_to('33333333-3333-3333-3333-333333333301',
                     '00000000-0000-0000-0000-00000000e001'),
   true,
-  'is_run_visible_to(private_run, owner) = true'
+  'private.is_run_visible_to(private_run, owner) = true'
 );
 
 select * from finish();

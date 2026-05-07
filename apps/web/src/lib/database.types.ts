@@ -1878,6 +1878,50 @@ export type Database = {
         }
         Relationships: []
       }
+      race_sessions_redacted: {
+        Row: {
+          auto_approve: boolean | null
+          created_at: string | null
+          event_id: string | null
+          finished_at: string | null
+          instance_start: string | null
+          started_at: string | null
+          started_by: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_approve?: never
+          created_at?: string | null
+          event_id?: string | null
+          finished_at?: string | null
+          instance_start?: string | null
+          started_at?: string | null
+          started_by?: never
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_approve?: never
+          created_at?: string | null
+          event_id?: string | null
+          finished_at?: string | null
+          instance_start?: string | null
+          started_at?: string | null
+          started_by?: never
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "race_sessions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _run_comment_parent_is_top_level: {
@@ -2024,10 +2068,6 @@ export type Database = {
       is_race_director: { Args: { target_club: string }; Returns: boolean }
       is_route_visible_to: {
         Args: { p_route_id: string; p_user_id: string }
-        Returns: boolean
-      }
-      is_run_visible_to: {
-        Args: { p_run_id: string; p_user_id: string }
         Returns: boolean
       }
       job_scheduled_at_for_user: {

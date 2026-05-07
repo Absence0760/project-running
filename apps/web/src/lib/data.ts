@@ -1877,8 +1877,14 @@ export async function fetchRaceSession(
 	eventId: string,
 	instanceStart: string
 ): Promise<RaceSessionRow | null> {
+	// Read from the redaction view rather than the base table —
+	// `race_sessions_redacted` masks `started_by` + `auto_approve`
+	// for non-admin viewers (decisions per /audit/all 2026-05-07,
+	// migration 20260813_001). Admin row-level mutations
+	// (armRace / startRace / endRace) below keep writing the base
+	// table so the columns reach Postgres unmasked.
 	const { data } = await supabase
-		.from('race_sessions')
+		.from('race_sessions_redacted')
 		.select('*')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
