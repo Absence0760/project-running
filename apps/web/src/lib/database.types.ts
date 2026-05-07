@@ -1909,11 +1909,23 @@ export type Database = {
         Args: { new_start_date: string; template_id: string }
         Returns: string
       }
+      cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
       defer_job: {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: undefined
       }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
+      find_stuck_jobs: {
+        Args: { p_stuck_after?: string }
+        Returns: {
+          age: string
+          attempts: number
+          id: number
+          kind: string
+          locked_at: string
+          locked_by: string
+        }[]
+      }
       finish_job: {
         Args: { err?: string; job_id: number; result_status: string }
         Returns: undefined
@@ -1964,6 +1976,11 @@ export type Database = {
         Args: { p_run_id: string; p_user_id: string }
         Returns: boolean
       }
+      job_scheduled_at_for_user: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      jobs_stuck_summary: { Args: { p_stuck_after?: string }; Returns: Json }
       join_club_by_token: { Args: { token: string }; Returns: string }
       latest_fitness_snapshot: {
         Args: never
