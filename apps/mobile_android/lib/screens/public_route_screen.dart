@@ -57,17 +57,21 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
       // Privacy-zone clipping for non-owner viewers (decisions §33).
       // Owners see the full route — anon (`api.userId == null`) is
       // treated as non-owner so unauthenticated `/share/route/[id]`
-      // hits also honour zones. The RPC fails closed (returns []) on
-      // outage, so a transient blip renders an empty map for non-
-      // owners instead of leaking the start/end home location.
+      // hits also honour zones. `clipRouteForViewer` is the route-
+      // specific RPC: it visibility-gates server-side (owner / public /
+      // club member) and applies the owner's privacy zones in one
+      // SECURITY DEFINER call. Fails closed (returns []) on outage so
+      // a transient blip renders an empty map for non-owners instead
+      // of leaking the start / end home location. Run-bound
+      // `clipTrackForUser` would be wrong here — it doesn't do route
+      // visibility.
       final viewerId = widget.api.userId;
       final ownerId = fetched.ownerId;
       final isOwner =
           viewerId != null && ownerId != null && viewerId == ownerId;
-      final waypoints =
-          (isOwner || ownerId == null || route.waypoints.isEmpty)
-              ? route.waypoints
-              : await _clipForViewer(route.waypoints, ownerId);
+      final waypoints = (isOwner || route.waypoints.isEmpty)
+          ? route.waypoints
+          : await widget.api.clipRouteForViewer(widget.routeId);
       if (!mounted) return;
       setState(() {
         _route = route;
@@ -81,29 +85,6 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
         _loading = false;
       });
     }
-  }
-
-  Future<List<cm.Waypoint>> _clipForViewer(
-    List<cm.Waypoint> track,
-    String ownerUserId,
-  ) async {
-    final clipped = await widget.api.clipTrackForUser(
-      targetUserId: ownerUserId,
-      points: track
-          .map((w) => {
-                'lat': w.lat,
-                'lng': w.lng,
-                if (w.elevationMetres != null) 'ele': w.elevationMetres,
-              })
-          .toList(),
-    );
-    return clipped
-        .map((p) => cm.Waypoint(
-              lat: (p['lat'] as num).toDouble(),
-              lng: (p['lng'] as num).toDouble(),
-              elevationMetres: (p['ele'] as num?)?.toDouble(),
-            ))
-        .toList();
   }
 
   @override

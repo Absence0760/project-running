@@ -817,20 +817,31 @@ void main() {
       );
     });
 
-    test('public_route_screen routes non-owner waypoints through clipTrackForUser',
+    test('public_route_screen routes non-owner waypoints through clipRouteForViewer',
         () {
       // Reason: /share/route/[id] is reachable by anyone with the
       // link, including unauthenticated viewers. Routes own a planned
       // polyline that leaks the same start / end / interior locations
       // a recorded run would. Same gate as public_run_screen — clip
-      // unless the viewer is the route owner.
+      // unless the viewer is the route owner. Use the route-specific
+      // RPC `clipRouteForViewer`, NOT the run-bound `clipTrackForUser`
+      // (which downloads from the runs Storage bucket and skips route
+      // visibility entirely).
       final source =
           File('lib/screens/public_route_screen.dart').readAsStringSync();
       expect(
         source,
-        contains('clipTrackForUser'),
+        contains('clipRouteForViewer'),
         reason: 'public_route_screen must clip non-owner waypoints '
-            'through the privacy-zone RPC. See decisions §33.',
+            'through `clipRouteForViewer`, the route-specific RPC. '
+            'See decisions §33.',
+      );
+      expect(
+        source,
+        isNot(matches(RegExp(r'\.clipTrackForUser\s*\('))),
+        reason: 'public_route_screen must not call `clipTrackForUser` — '
+            'that helper is for runs (Storage-backed) and skips route '
+            'visibility / club-member checks. Use clipRouteForViewer.',
       );
       expect(
         source,

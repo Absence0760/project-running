@@ -85,6 +85,11 @@ actor SupabaseService {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
+        // `runs_metadata_activity_type_check` (migration 20260507_001) requires
+        // every row to carry `metadata.activity_type`. The phone-proxy path
+        // sets it from `WCSession.transferFile` metadata; this DEBUG-only
+        // direct path has no phone in the loop, so default to "run" — the
+        // Apple Watch app only records runs today.
         let runPayload = RunPayload(
             id: run.id,
             user_id: userId,
@@ -92,7 +97,8 @@ actor SupabaseService {
             duration_s: run.durationSeconds,
             distance_m: run.distanceMetres,
             track_url: objectPath,
-            source: "watch"
+            source: "watch",
+            metadata: ["activity_type": "run"]
         )
 
         let url = URL(string: "\(baseURL)/rest/v1/runs")!
@@ -151,6 +157,7 @@ actor SupabaseService {
         let distance_m: Double
         let track_url: String
         let source: String
+        let metadata: [String: String]
     }
 
     enum SupabaseError: LocalizedError {

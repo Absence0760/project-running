@@ -85,7 +85,7 @@ The phone-side receiver is **built**: `WatchIngestBridge.swift` in `apps/mobile_
 
 `SupabaseService.swift` still exists but is wrapped in `#if DEBUG` — it gives watch-sim-alone developers a direct upload path via the "DEBUG: Sync Direct" button, signing in with seed creds against `http://127.0.0.1:54321`. Release builds compile that file out entirely: the watch binary ships without any Supabase client, anon key, or credential-handling code. Rationale: [decisions.md § 14](../../docs/decisions.md).
 
-Metadata dict sent with each run file: `{id, started_at, duration_s, distance_m, source, avg_bpm?}` — the phone supplies `user_id` from its own authenticated session when inserting the row. `activity_type` is read on the phone side if present but is not currently sent by the watch (see `reviews/data-sync-audit/watches.md` — low priority). The file contents are a raw JSON array of `{lat, lng, ele, ts}` points; the phone compresses before upload.
+Metadata dict sent with each run file: `{id, started_at, duration_s, distance_m, source, activity_type, avg_bpm?}` — the phone supplies `user_id` from its own authenticated session when inserting the row. `activity_type` is hardcoded to `"run"` (the watch only records runs) so the row passes the `runs_metadata_activity_type_check` CHECK constraint without depending on the phone's defaulting. The DEBUG-only direct path in `SupabaseService.swift` populates the same key on its `RunPayload.metadata`. The file contents are a raw JSON array of `{lat, lng, ele, ts}` points; the phone compresses before upload.
 
 ## Building and testing
 

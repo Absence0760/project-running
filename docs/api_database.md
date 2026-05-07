@@ -1183,7 +1183,7 @@ SECURITY DEFINER recompute of `event_results.rank` for the given (event, instanc
 
 ### `approve_event_result(result_event_id, result_instance_start, result_user_id, approved boolean)`
 
-SECURITY DEFINER. Lets a club admin or event organiser flip an `event_results` row between approved + pending visibility. Permission is checked via `is_event_organiser(uuid)`. Granted to `authenticated`. Migration `20260428_001_role_permissions.sql`.
+SECURITY DEFINER. Lets a club admin or event organiser flip an `event_results` row between approved + pending visibility. Permission is checked via `is_event_organiser(uuid)`. EXECUTE revoked from `public, anon` and granted only to `authenticated` (migration `20260814_001_definer_grant_hygiene_pt2.sql` — Supabase grants implicit PUBLIC EXECUTE on every new public-schema function, so the original targeted `authenticated` grant didn't actually narrow anything; the body's organiser guard would still reject anon callers but defence-in-depth wants the EXECUTE narrowed too). Migration `20260428_001_role_permissions.sql`.
 
 ### `is_event_organiser(event_uuid uuid)` / `is_race_director(event_uuid uuid)`
 
@@ -1253,7 +1253,7 @@ Two buckets in the live schema:
 
 | Bucket | Access | Purpose |
 |---|---|---|
-| `runs` | Private (RLS, owner-scoped) | **Two content classes** under different path prefixes — see below. The bare-table public-read RLS that used to gate this on `runs.is_public` was dropped in `20260619_001_drop_public_runs_storage_policy.sql`; non-owner reads now go through the `clip-public-track` Edge Function. |
+| `runs` | Private (RLS, owner-scoped) | **Two content classes** under different path prefixes — see below. The bare-table public-read RLS that used to gate this on `runs.is_public` was dropped in `20260619_001_drop_public_runs_storage_policy.sql`; non-owner reads now go through the `clip-public-track` Edge Function. Owner SELECT on the `exports/` subprefix was removed in `20260816_001_runs_bucket_exports_signed_url_only.sql` — exports are reachable through the EF-issued 10-min signed URL only, never via direct REST GET. |
 | `run-photos` | Private (RLS, parent-run-visibility join) | Photos attached to runs at `{owner_id}/{photo_id}.{ext}`. Per-user-folder INSERT/DELETE; storage SELECT joins through `run_photos` → `is_run_visible_to`. Bucket is private (migration `20260712_001`); clients use signed URLs with 1 h TTL. See `decisions.md § 36`. |
 
 The `routes`, `exports`, `avatars` buckets shown in older revisions of this doc were never created — `routes.waypoints` is stored inline (jsonb on the `routes` table), exports live under the `runs` bucket's `exports/` prefix, and avatar URLs are free-text columns sourced from OAuth providers or pasted URLs (no upload helper).
@@ -1272,7 +1272,9 @@ Path-prefix discipline is enforced at multiple layers:
 - The `clip-public-track` Edge Function asserts the same shape on read so a forged path can't escalate beyond the runner's own folder.
 - `delete-account/index.ts` walks both prefixes when wiping a user's data so neither tracks nor exports orphan.
 
-`allowed_mime_types` on the bucket is left null on purpose because the two prefixes carry different content types (`application/gzip` for tracks, `text/csv` / `application/zip` for exports). The CHECK + EF assertions enforce shape; MIME enforcement adds nothing.
+`allowed_mime_types` on the bucket is set to `[application/gzip, application/octet-stream, text/csv, application/zip]` (migration `20260815_001_runs_bucket_mime_allowlist.sql`) — defence-in-depth so a future writer can't sneak in `image/svg+xml` or `text/html` and turn the bucket into an XSS vector via a thumbnail / share-page Lambda that serves bytes back to a browser. `application/octet-stream` is included because supabase-js historically defaulted to that when a Blob's MIME wasn't set; some older mobile callers may still emit it.
+
+The owner SELECT policy (`Users can read their own run tracks`) was rewritten in `20260816_001_runs_bucket_exports_signed_url_only.sql` to exclude any path whose second `foldername` segment is `exports` — track downloads (`{user_id}/{run_id}.json.gz`) keep working, but export blobs at `{user_id}/exports/<ts>.{csv,zip}` are reachable only through the service-role-signed URL the `export-data` EF returns. Closes the gap where an authenticated owner could replay a CSV directly from the bucket during the 7-day retention window even after the signed URL expired (e.g. via a browser-history entry or a leaked export with embedded paths).
 
 ---
 

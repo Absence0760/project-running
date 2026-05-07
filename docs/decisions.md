@@ -1201,6 +1201,24 @@ Pinned by:
 
 ---
 
+## 59. Run-export blobs are signed-URL-only — no direct REST GET, even for the owner
+
+The `runs` Storage bucket holds two content classes under one prefix tree: GPS tracks at `{user_id}/{run_id}.json.gz` and data-export bundles at `{user_id}/exports/<ts>.{csv,zip}`. Until `20260816_001`, the owner-folder SELECT policy (`(storage.foldername(name))[1] = auth.uid()::text`) covered both — an authenticated owner could `GET /storage/v1/object/runs/<self>/exports/<ts>.csv` directly, bypassing the signed URL the `export-data` Edge Function returns.
+
+We narrowed the policy to exclude any path whose **second** `foldername` segment is `exports`. The intent: every export download flows through the EF (rate-limited, audit-loggable, 10-min signed URL via service role) — never through the bucket's own REST endpoint. The CSV / ZIP retention cron (`20260720_001`) keeps the blobs for 7 days; without this lockdown, a leaked or browser-history-cached path remained replayable for the full retention window even after the original signed URL expired. Tracks (`{user_id}/<run_id>.json.gz`, only one segment under the user prefix) keep working because the policy still matches single-segment paths.
+
+Trade-offs:
+
+- **Direct REST GET on a self-export now 404s under user JWT.** That's intentional — the EF is the only legitimate read path. If a future feature needs in-app preview of the bundle, it should call the EF, not paper around the policy.
+- **Service-role writes (in the EF) and admin deletes (in `delete-account`) are unaffected.** Both already bypass RLS via `SUPABASE_SERVICE_ROLE_KEY`.
+- **Owner-tracks read path is unchanged** — `RunDetail` still calls `fetchTrackByPath('{user_id}/{run_id}.json.gz')`, which the narrowed policy still allows.
+
+Don't re-litigate unless the EF becomes a bottleneck for a use case where rate-limiting is unwanted (e.g. server-side bulk export pipelines from the user's own infra). At that point, prefer minting a longer-lived signed URL from a different EF, not widening the bucket policy.
+
+Pinned by `apps/backend/supabase/tests/rls_storage_runs_exports_lockdown_test.sql`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
