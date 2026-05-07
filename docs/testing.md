@@ -610,7 +610,7 @@ Pure-helper tests for the webhook security primitives that gate `revenuecat-webh
 
 The handler bodies themselves (HTTP envelope, `createClient`, `webhook_events` insert / `23505` dedupe path, side-effect writes) are not unit-tested in isolation — that surface is end-to-end and currently exercised manually via the workflow described in [apps/backend/CLAUDE.md § Testing without real credentials](../apps/backend/CLAUDE.md#testing-without-real-credentials). The pure helpers above cover the security-critical decision points: signature comparison, replay window, identity validation, tier transition. Anything load-bearing on those four lives in tested code now.
 
-### `apps/web/tests-e2e/` — Playwright suite (284 tests across 76 files)
+### `apps/web/tests-e2e/` — Playwright suite (297 tests across 79 files)
 
 End-to-end browser tests that drive the real SvelteKit app against a real local Supabase. Unit tests pin pure helpers and SQL pins RLS at the database; this suite catches the next failure mode — **a UI fetch path that bypasses or misuses an otherwise-correct policy** (a wrong join, a dropped filter, a client-side lookup that trusts the URL, an optimistic update that never round-trips). Browser-only on purpose — mobile / watch don't have an equivalent harness (Flutter `integration_test` is too slow + flaky on CI to be worth the cycles right now).
 
@@ -647,6 +647,7 @@ tests-e2e/
     cascade.spec.ts            — backend boundary: deleting a run sweeps every cascading child (kudos, comments, photos, segment_efforts, live_run_pings, run_matched_tracks, notifications) + the Storage object; run_photos cascade
     photos.spec.ts             — /runs/[id] RunPhotos: owner upload + caption edit + delete (with DB + Storage assertions)
     save-as-route.spec.ts      — /runs/[id] Save-as-route CRUD (prompt → /routes/[new])
+    track-missing.spec.ts      — row + Storage divergence resilience: plant a row with `track_url` pointing at a non-existent Storage object (mirrors a mid-sync crash where the row insert succeeded but the gzipped track upload failed); /runs/[id] must render the run header + distance/duration without crashing on the failed track download. Pins the data-layer's try/catch around fetchTrack
     social.spec.ts             — /runs/[id] owner sees kudos count + comment list (RunSocial mounts for own runs); owner posts comment on own run
   routes/
     list.spec.ts               — /routes (search, filter, tab switch)
@@ -701,7 +702,9 @@ tests-e2e/
     paywall-wire.spec.ts       — `/api/coach` daily-limit gate via real user JWTs: free user planted at message_count=5 → 6th request 429s with `error: 'daily_limit'`, `tier: 'free'`, `limit: 5`; pro user same scenario doesn't hit free cap; anon POST → 401. Auto-skips when `BYPASS_PAYWALL=true` in `apps/web/.env.local`
     tier-cache-resilience.spec.ts — companion to paywall-wire: where that pins the static states (free vs pro), this pins the *dynamic* property — flip morgan free → pro mid-session via service-role write and watch the very next /api/coach request observe the new state using the SAME JWT (no re-sign-in). Catches a regression that would cache subscription_tier at sign-in or in a module-level memo
     public-runs-view.spec.ts   — `public_runs` view privacy-strip contract end-to-end: plant a public run with every strip-listed metadata key (24 keys: strava_id, garmin_id, plan_workout_id, race_name, perceived_effort, …), read as anon via supabase-js, assert each strip-listed key is absent and the retained keys (activity_type, avg_bpm) survive; anon CANNOT read is_public=false rows
+    runs-external-id-dedupe.spec.ts — `runs.external_id` UNIQUE constraint resilience: 5 simultaneous service-role inserts with the same external_id must produce exactly one row, every loser raising 23505 (not a different error code); a second post-success replay also gets a clean 23505. Pins the import-pipeline backstop for Strava manual-sync + strava-webhook racing the same activity
     storage-boundaries.spec.ts — `runs` Storage bucket RLS via supabase-js: anon cannot download a private run's track via the bucket directly; cross-user authed download is denied; cross-user upload to another user's `{user_id}/` prefix is rejected. Defence-in-depth on top of the row-level RLS
+    strava-import-guards.spec.ts — `strava-import` Edge Function pre-side-effect input validation (10 tests): missing Authorization → 401; missing/invalid action → 400; connect-action shape errors (code, scope, redirect_uri) → 400 with per-branch error code; **fail-closed-when-misconfigured**: with STRAVA_ALLOWED_REDIRECTS unset the EF returns 503 strava_not_configured rather than falling through to "allow any redirect"; sync lookbackDays out-of-range → 400
     realtime.spec.ts           — service-role INSERT into club_posts pushes through Realtime to a subscribed /clubs/[slug] page (postgres_changes filter + debounced reload)
     smoke.spec.ts              — surface smoke: every key page mounts past its loading shell with one stable selector visible (dashboard / feed / runs / routes / plans / clubs / coach / all settings tabs / detail pages / anon landing+login variants)
     surfaces.spec.ts           — detail-surface checks (back-link nav, owner-only affordances, tab switches, sidebar nav round-trips)
