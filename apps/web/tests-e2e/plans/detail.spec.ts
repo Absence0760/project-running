@@ -154,4 +154,96 @@ test.describe('/plans/[id]', () => {
 			await admin.from('training_plans').delete().eq('id', (r as { id: string }).id);
 		}
 	});
+
+	test('publish-as-template deep clone: plan_weeks + plan_workouts copied, completion fields reset', async ({
+		page
+	}) => {
+		// Backend boundary: publishPlanAsTemplate doesn't just copy
+		// the training_plans row — it iterates plan_weeks and
+		// plan_workouts and deep-clones every child. Critically, it
+		// must RESET completion fields on the clone (manually_completed,
+		// completed_run_id) — otherwise a community template would
+		// arrive with the source author's completed-workout state
+		// pre-filled, which is a privacy + correctness leak.
+		// pgtap can pin the SQL; this test pins the CANONICAL UI
+		// path through publishPlanAsTemplate against regressions in
+		// the data layer (wrong column list, missing reset, off-by-
+		// one on the week loop).
+		const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+		const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
+		const admin = getAdminClient();
+
+		// Snapshot: how many weeks + workouts does the source plan
+		// have? The clone must end up with the same counts.
+		const { data: srcWeeks } = await admin
+			.from('plan_weeks')
+			.select('id')
+			.eq('plan_id', SYDNEY_HALF_PLAN_ID);
+		const srcWeekIds = (srcWeeks ?? []).map((w) => (w as { id: string }).id);
+		expect(srcWeekIds.length).toBeGreaterThan(0);
+		const { count: srcWorkoutCount } = await admin
+			.from('plan_workouts')
+			.select('id', { count: 'exact', head: true })
+			.in('week_id', srcWeekIds);
+		expect(srcWorkoutCount).toBeGreaterThan(0);
+
+		// Drive the publish UI.
+		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+		const publishRow = page.locator('.publish-row');
+		await expect(publishRow).toBeVisible({ timeout: 10_000 });
+		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
+		await publishRow.getByRole('button', { name: 'Publish' }).click();
+		await expect(publishRow.locator('select')).toHaveValue('', {
+			timeout: 10_000
+		});
+
+		// Find the cloned template.
+		const { data: clones } = await admin
+			.from('training_plans')
+			.select('id, status, is_template')
+			.eq('is_template', true)
+			.eq('club_id', SYDNEY_RUN_CLUB_ID)
+			.eq('name', 'Sydney Half 2026');
+		expect(clones?.length).toBe(1);
+		const cloneId = (clones![0] as { id: string }).id;
+
+		try {
+			// Status flag invariants: the clone's row exists with
+			// is_template=true and a non-active status (the migration
+			// CHECK forbids active+template; setPlanIsTemplate sets
+			// status='completed' on flag).
+			expect((clones![0] as { is_template: boolean }).is_template).toBe(true);
+			expect((clones![0] as { status: string }).status).not.toBe('active');
+
+			// Same number of plan_weeks rows as the source.
+			const { data: cloneWeeks } = await admin
+				.from('plan_weeks')
+				.select('id')
+				.eq('plan_id', cloneId);
+			const cloneWeekIds = (cloneWeeks ?? []).map((w) => (w as { id: string }).id);
+			expect(cloneWeekIds.length).toBe(srcWeekIds.length);
+
+			// Same number of plan_workouts rows as the source, and
+			// EVERY clone's completion fields are reset.
+			const { data: cloneWorkouts } = await admin
+				.from('plan_workouts')
+				.select('manually_completed, completed_run_id, completed_at')
+				.in('week_id', cloneWeekIds);
+			expect(cloneWorkouts?.length).toBe(srcWorkoutCount);
+			for (const w of cloneWorkouts ?? []) {
+				const row = w as {
+					manually_completed: boolean;
+					completed_run_id: string | null;
+					completed_at: string | null;
+				};
+				expect(row.manually_completed).toBe(false);
+				expect(row.completed_run_id).toBeNull();
+				expect(row.completed_at).toBeNull();
+			}
+		} finally {
+			// Sweep — plan_weeks + plan_workouts cascade off the
+			// training_plans delete.
+			await admin.from('training_plans').delete().eq('id', cloneId);
+		}
+	});
 });

@@ -64,3 +64,30 @@ export function getAdminClient(): SupabaseClient {
 	});
 	return adminClient;
 }
+
+/**
+ * A supabase-js client authenticated as the supplied user via
+ * email/password. Use this for tests that need to verify RLS or
+ * trigger behaviour against a REAL user JWT — the admin client
+ * bypasses RLS and would mask leaks. Each call mints a fresh
+ * client (no caching) so cross-test session bleed can't happen.
+ */
+export async function getUserClient(opts: {
+	email: string;
+	password: string;
+}): Promise<SupabaseClient> {
+	const { url, anonKey } = loadSupabaseEnv();
+	const client = createClient(url, anonKey, {
+		auth: { persistSession: false, autoRefreshToken: false }
+	});
+	const { error } = await client.auth.signInWithPassword({
+		email: opts.email,
+		password: opts.password
+	});
+	if (error) {
+		throw new Error(
+			`getUserClient sign-in failed for ${opts.email}: ${error.message}`
+		);
+	}
+	return client;
+}

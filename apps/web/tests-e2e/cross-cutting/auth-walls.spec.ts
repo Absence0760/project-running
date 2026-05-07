@@ -96,6 +96,43 @@ test.describe('cross-user run isolation', () => {
 	});
 });
 
+test.describe('cross-user club isolation', () => {
+	test.use({ storageState: USER_B.storageStatePath });
+
+	test('non-member visiting a private club sees Club-not-found, no leakage of name / description / member list', async ({
+		page
+	}) => {
+		// Backend boundary: private clubs (is_public=false) are
+		// readable only by the owner + active members per the RLS
+		// policy in 20260416_001. RLS reduces fetchClubBySlug to
+		// `null` for non-members, which the page surfaces as the
+		// "Club not found" branch — same UX as a deleted slug, no
+		// leakage of the club's existence.
+		//
+		// Friends of Jared is the seeded invite-only club; alex is
+		// not a member. Visiting the slug as alex must NOT render
+		// the club's name, description, or member list — even
+		// though the slug is enumerable.
+		await page.goto('/clubs/friends-of-jared');
+		await page.waitForLoadState('networkidle');
+
+		await expect(
+			page.getByRole('heading', { name: 'Club not found' })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Negative assertions: none of the private club's content
+		// should appear. Pin three distinct columns to make this
+		// hard to accidentally satisfy.
+		await expect(
+			page.getByRole('heading', { name: 'Friends of Jared', level: 1 })
+		).toHaveCount(0);
+		await expect(
+			page.getByText('Small private group for pre-race meetups')
+		).toHaveCount(0);
+		await expect(page.locator('.member-list')).toHaveCount(0);
+	});
+});
+
 test.describe('anonymous walls', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
