@@ -35,8 +35,8 @@ importers:
         specifier: ^2.105.0
         version: 2.105.3
       fit-file-parser:
-        specifier: ^2.3.3
-        version: 2.3.3
+        specifier: ^3.0.0
+        version: 3.0.0
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -1437,8 +1437,8 @@ packages:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
 
-  fit-file-parser@2.3.3:
-    resolution: {integrity: sha512-TZPFfjkEev5TTd9RnZ4xn4k5ZSx2VZiKNjoZsHIkmQDK0S0XA7ebfdMLj76BK7kStsHh5WbK8Fmn/w85jgd0dA==}
+  fit-file-parser@3.0.0:
+    resolution: {integrity: sha512-Sf0erVcqT1TAQ3qbrg5b5Uyr8OVV0HDgxKRNuXEC0R7HeAGwz0dRTEHqpmKEluI4q+9ummnJnSDFx0gFg7yMPA==}
 
   forwarded-parse@2.1.2:
     resolution: {integrity: sha512-alTFZZQDKMporBH77856pXgzhEzaUVmLCDk+egLgIgHst3Tpndzz8MnKe+GzRJRfvVdn69HhpW7cmXzvtLvJAw==}
@@ -3482,7 +3482,7 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
-  fit-file-parser@2.3.3:
+  fit-file-parser@3.0.0:
     dependencies:
       buffer: 6.0.3
 
