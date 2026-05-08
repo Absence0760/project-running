@@ -84,11 +84,24 @@ probe_phase_done() {
 
 print_status() {
 	step "Disaster-recovery status"
+	# Without AWS auth, the 2a / 2d / 3b probes fail silently and would
+	# all report "pending" even when they're done — misleading. Check
+	# upfront so the user knows when probes can't actually tell.
+	local aws_ok=1
+	if ! aws sts get-caller-identity >/dev/null 2>&1; then
+		aws_ok=0
+		warn "AWS auth missing — Phase 2a / 2d / 3b probes can't verify state."
+		dim "  Run 'aws sso login --profile \${AWS_PROFILE:-runonward}' for accurate status."
+	fi
 	for phase in 2a 2b 2c 2d 3a 3b; do
 		if probe_phase_done "$phase"; then
 			ok "Phase $phase done"
 		else
-			warn "Phase $phase pending"
+			if (( aws_ok == 0 )) && [[ "$phase" =~ ^(2a|2d|3b)$ ]]; then
+				dim "Phase $phase ? (cannot verify without AWS auth)"
+			else
+				warn "Phase $phase pending"
+			fi
 		fi
 	done
 }

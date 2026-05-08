@@ -5,7 +5,17 @@
 #   . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 #
 # Provides: REPO_ROOT, color-aware step/log/ok/warn/err/fatal, plus
-# need_cmd / need_aws_auth helpers. No side effects.
+# need_cmd / need_aws_auth helpers. No side effects beyond the bash
+# version check below.
+
+# Bash 4+ required: cancel-stale-runs uses associative arrays
+# (`declare -A`), and several scripts rely on `${var,,}` lowercasing.
+# macOS ships bash 3.2 by default — fail loudly so the user installs
+# a newer bash via brew rather than seeing a cryptic "syntax error".
+if (( BASH_VERSINFO[0] < 4 )); then
+	printf 'bin/ scripts require bash 4+ (found %s). On macOS: brew install bash, then call scripts with /opt/homebrew/bin/bash bin/<script>.sh.\n' "$BASH_VERSION" >&2
+	exit 1
+fi
 
 # REPO_ROOT — works regardless of CWD or symlinked invocation.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -16,9 +16,17 @@
 #   bin/secret-set.sh preview ANTHROPIC_API_KEY --prompt
 #
 # Modes:
-#   stdin (default)   read until EOF, trim trailing newline
-#   --from-file PATH  read entire file, trim trailing newline
+#   stdin (default)   read until EOF, strip ONE trailing newline
+#   --from-file PATH  read entire file, strip ONE trailing newline
 #   --prompt          read with `read -s` (no echo), one line
+#
+# Trailing-newline note:
+#   Only ONE trailing newline is stripped. `echo "x" | …` (which adds
+#   exactly one) gives you `x`, the common case. For a multi-line
+#   secret like a PEM private key, internal newlines are preserved
+#   verbatim. If your input has multiple trailing blank lines, those
+#   beyond the first are kept in the value — usually a paste mistake;
+#   strip them before piping in.
 #
 # After running, re-apply the env so the Lambda picks up the new
 # value:

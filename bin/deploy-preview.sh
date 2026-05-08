@@ -39,12 +39,25 @@ for arg in "$@"; do
 	esac
 done
 
+preflight_log=""
+
+# Single EXIT trap that cleans up everything we may have created:
+#   - the preflight log tmpfile
+#   - any per-stack .tfplan files (a mid-chain `terraform apply` failure
+#     under set -e leaves these behind; harmless but clutter)
+cleanup_on_exit() {
+	[[ -n "$preflight_log" && -f "$preflight_log" ]] && rm -f "$preflight_log"
+	for stack_dir in infra/bootstrap infra/dns infra/github-oidc infra/envs/preview; do
+		rm -f "$REPO_ROOT/$stack_dir/.tfplan"
+	done
+}
+trap cleanup_on_exit EXIT
+
 if [[ $SKIP_PREFLIGHT -eq 0 ]]; then
 	step "Preflight"
 	# Capture output in a tmpfile so a hard-fail can be re-displayed
-	# without re-running the AWS API calls. Trap cleans up on exit.
+	# without re-running the AWS API calls.
 	preflight_log="$(mktemp)"
-	trap 'rm -f "$preflight_log"' EXIT
 	if "$REPO_ROOT/bin/aws-preflight.sh" >"$preflight_log" 2>&1; then
 		ok "Preflight passed"
 	else

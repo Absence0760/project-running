@@ -49,6 +49,11 @@ read_tf_output() {
 	pushd "$ENV_DIR" >/dev/null
 	terraform output -raw "$key" 2>/dev/null || true
 	popd >/dev/null
+	# Trailing `:` forces exit 0 — popd is the previous "last command"
+	# and a non-zero from it would propagate through `var=$(read_tf_output)`
+	# into a script-level `set -e` exit. popd basically can't fail in
+	# practice, but this is cheap insurance.
+	:
 }
 
 step "Reading terraform outputs ($ENV_NAME)"
