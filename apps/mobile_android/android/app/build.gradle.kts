@@ -7,6 +7,7 @@ plugins {
 
 import java.util.Properties
 import java.io.FileInputStream
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystoreProperties = Properties()
 val keystoreFile = rootProject.file("key.properties")
@@ -24,8 +25,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+    // Kotlin 2.3+ removed the `kotlinOptions { jvmTarget = ... }` DSL.
+    // Migrate to the `compilerOptions` block on the kotlin extension.
+    // https://kotl.in/u1r8ln
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 
     defaultConfig {
