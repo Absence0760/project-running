@@ -136,11 +136,19 @@ for env in "${ENVS[@]}"; do
 		ok "$secrets_file already exists — leaving it alone"
 	else
 		log "Seeding $secrets_file (encrypted, with a placeholder key)"
-		# Pipe stdin to sops directly via /dev/stdin — avoids a tmpfile
-		# that could accidentally be left behind with secrets in it.
+		# Use `sops --output` instead of shell redirect: the redirect
+		# truncates the target file BEFORE sops runs, so a sops failure
+		# (KMS auth, network) leaves an empty file that breaks the
+		# idempotence check on re-run.
 		printf 'ANTHROPIC_API_KEY: replace-me\n' \
 			| sops --config "$SOPS_CONFIG" --input-type yaml --output-type yaml \
-				--encrypt /dev/stdin > "$secrets_file"
+				--output "$secrets_file" --encrypt /dev/stdin
+		# Verify the seed actually decrypts — catches a broken seed at
+		# write time, not at first read.
+		if ! sops --decrypt "$secrets_file" >/dev/null 2>&1; then
+			rm -f "$secrets_file"
+			fatal "Seed of $secrets_file failed to decrypt round-trip; removed. Investigate KMS auth + .sops.yaml routing."
+		fi
 		ok "Seeded $secrets_file"
 	fi
 done

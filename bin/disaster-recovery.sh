@@ -58,9 +58,26 @@ probe_phase_done() {
 			gh secret list 2>/dev/null | grep -q PUBLIC_SUPABASE_URL
 			;;
 		3b)
-			# Sops file populated with non-placeholder content?
-			[[ -f "$REPO_ROOT/infra/envs/preview/secrets.enc.yaml" ]] && \
-				! grep -qE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$REPO_ROOT/infra/.sops.yaml"
+			# Three conditions for "Phase 3b done":
+			#   (1) the secrets file exists,
+			#   (2) .sops.yaml has no unresolved KMS placeholders, and
+			#   (3) the secrets file decrypts AND its contents are not
+			#       just the seed placeholder ("replace-me").
+			# (3) catches the false-positive where sops-init ran but
+			# the operator never edited in real values.
+			local secrets_file="$REPO_ROOT/infra/envs/preview/secrets.enc.yaml"
+			[[ -f "$secrets_file" ]] || return 1
+			grep -qE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$REPO_ROOT/infra/.sops.yaml" && return 1
+			# Decrypt + check for the seed placeholder.
+			local decrypted
+			decrypted="$(sops --decrypt "$secrets_file" 2>/dev/null || true)"
+			[[ -n "$decrypted" ]] || return 1
+			# If every value is `replace-me`, treat as not-done.
+			if echo "$decrypted" | grep -qE '^[A-Z_][A-Z0-9_]*:\s*replace-me\s*$' \
+				&& ! echo "$decrypted" | grep -qvE '^[A-Z_][A-Z0-9_]*:\s*replace-me\s*$|^\s*$|^#'; then
+				return 1
+			fi
+			return 0
 			;;
 	esac
 }

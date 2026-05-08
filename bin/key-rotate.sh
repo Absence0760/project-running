@@ -69,7 +69,14 @@ case "$ENV_NAME" in
 	preview) target_arn_line="$(grep -A1 'preview/secrets' "$SOPS_CONFIG" | grep 'kms:' || true)" ;;
 	prod)    target_arn_line="$(grep -A1 'prod/secrets'    "$SOPS_CONFIG" | grep 'kms:' || true)" ;;
 esac
-target_arn="$(echo "$target_arn_line" | sed -E "s/.*kms:\s*'?([^']+)'?.*/\1/" | tr -d "'\"")"
+# Pull out exactly the ARN shape — survives YAML inline comments,
+# quotes, and trailing whitespace that a permissive regex wouldn't.
+target_arn="$(echo "$target_arn_line" | grep -oE 'arn:aws:kms:[a-z0-9-]+:[0-9]+:key/[a-f0-9-]+' | head -1 || true)"
+# Fall back to the placeholder text when no ARN matches, so the next
+# guard can fail with a useful "still has placeholder" message.
+if [[ -z "$target_arn" ]] && echo "$target_arn_line" | grep -qE 'REPLACE_(PROD|PREVIEW)_KMS_ARN'; then
+	target_arn="REPLACE_$(echo "$ENV_NAME" | tr '[:lower:]' '[:upper:]')_KMS_ARN"
+fi
 if [[ "$target_arn" == REPLACE_* ]] || [[ -z "$target_arn" ]]; then
 	fatal "$SOPS_CONFIG has unresolved KMS placeholder for $ENV_NAME — run bin/sops-init.sh first"
 fi

@@ -38,6 +38,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 ENV_DIR="$REPO_ROOT/infra/envs/$ENV_NAME"
+if [[ ! -d "$ENV_DIR" ]]; then
+	fatal "$ENV_DIR does not exist — pick a different env or check the path"
+fi
 FAILS=0
 WARNS=0
 

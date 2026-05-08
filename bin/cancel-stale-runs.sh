@@ -61,6 +61,9 @@ pr_state_for_branch() {
 step "Triaging"
 to_cancel=()
 to_keep=()
+# Tab-delimited records — branch names can include almost any printable
+# character, but never tabs (git rejects them). Safer than `|`.
+DELIM=$'\t'
 
 while IFS= read -r row; do
 	id="$(echo "$row" | jq -r .databaseId)"
@@ -71,31 +74,31 @@ while IFS= read -r row; do
 	# Runs on `main` (or any direct push to a tracked branch) are
 	# legitimate — never cancel. Same for tag pushes.
 	if [[ "$event" != "pull_request" ]]; then
-		to_keep+=("$id|$wf|$branch|kept (event=$event)")
+		to_keep+=("${id}${DELIM}${wf}${DELIM}${branch}${DELIM}kept (event=$event)")
 		continue
 	fi
 
 	state="$(pr_state_for_branch "$branch")"
 	case "$state" in
-		MERGED|CLOSED) to_cancel+=("$id|$wf|$branch|PR is $state") ;;
-		OPEN)          to_keep+=("$id|$wf|$branch|PR is OPEN") ;;
-		"")            to_keep+=("$id|$wf|$branch|no PR found (orphan branch?)") ;;
+		MERGED|CLOSED) to_cancel+=("${id}${DELIM}${wf}${DELIM}${branch}${DELIM}PR is $state") ;;
+		OPEN)          to_keep+=("${id}${DELIM}${wf}${DELIM}${branch}${DELIM}PR is OPEN") ;;
+		"")            to_keep+=("${id}${DELIM}${wf}${DELIM}${branch}${DELIM}no PR found (orphan branch?)") ;;
 	esac
 done < <(echo "$runs_json" | jq -c '.[]')
 
-step "Would keep ($((${#to_keep[@]})))"
+step "Would keep (${#to_keep[@]})"
 for line in "${to_keep[@]}"; do
-	IFS='|' read -r id wf branch reason <<< "$line"
+	IFS=$'\t' read -r id wf branch reason <<< "$line"
 	dim "  #$id  $wf  $branch  ($reason)"
 done
 
-step "Would cancel ($((${#to_cancel[@]})))"
+step "Would cancel (${#to_cancel[@]})"
 if (( ${#to_cancel[@]} == 0 )); then
 	ok "No stale runs to cancel"
 	exit 0
 fi
 for line in "${to_cancel[@]}"; do
-	IFS='|' read -r id wf branch reason <<< "$line"
+	IFS=$'\t' read -r id wf branch reason <<< "$line"
 	log "  #$id  $wf  $branch  ($reason)"
 done
 
@@ -106,8 +109,21 @@ if [[ $APPLY -eq 0 ]]; then
 fi
 
 step "Cancelling"
+cancelled=0
+failed=0
 for line in "${to_cancel[@]}"; do
-	IFS='|' read -r id _ _ _ <<< "$line"
-	gh run cancel "$id" 2>&1 | sed 's/^/      /'
+	IFS=$'\t' read -r id _ _ _ <<< "$line"
+	# Don't let one cancel-failure stop the whole sweep — the next stale
+	# run is independent of this one.
+	if gh run cancel "$id" 2>&1 | sed 's/^/      /'; then
+		cancelled=$((cancelled + 1))
+	else
+		warn "Failed to cancel #$id — skipping"
+		failed=$((failed + 1))
+	fi
 done
-ok "Cancelled ${#to_cancel[@]} run(s)"
+ok "Cancelled $cancelled run(s)"
+if (( failed > 0 )); then
+	warn "$failed cancel attempt(s) failed — check the messages above"
+	exit 1
+fi

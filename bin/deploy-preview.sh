@@ -62,7 +62,9 @@ apply_stack() {
 	local label="$1" dir="$2"
 	shift 2
 	local -a extra_args=()
-	if [[ $# -gt 0 && "$1" == "--" ]]; then
+	# Defaults the unset case to '' so we don't rely on bash's [[ ]]
+	# short-circuit semantics under `set -u` — safer across versions.
+	if [[ "${1:-}" == "--" ]]; then
 		shift
 		extra_args=("$@")
 	fi
