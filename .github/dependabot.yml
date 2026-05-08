@@ -1,0 +1,426 @@
+# Dependabot configuration
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Strategy:
+# - One update schedule per ecosystem × workspace combo. Weekly on
+#   Monday at 06:00 UTC — low-noise, predictable, lands before the
+#   week's work starts.
+# - Aggressive grouping. Each ecosystem opens at most a couple of PRs
+#   per week — one for the related-package family (e.g. svelte-kit
+#   ecosystem, supabase clients, AGP / Kotlin) and one catch-all
+#   `minor-and-patch` for everything else. Major bumps stay
+#   ungrouped so they get individual review (decisions.md §39 — mobile
+#   dep bumps frequently break the Android build, e.g. flutter_reactive_ble
+#   pinning compileSdk 33 forced an `afterEvaluate` hook in
+#   apps/mobile_android/android/build.gradle.kts).
+# - GitHub Actions are SHA-pinned per the /audit/all GHA pinning pass;
+#   Dependabot keeps those SHAs current so the pinning doesn't go
+#   stale.
+# - Mobile twin caveat: apps/mobile_android/pubspec.yaml is the
+#   tracked Flutter target. apps/mobile_ios/pubspec.yaml is a manual
+#   mirror per the lib/+test/ byte-identical-twin invariant
+#   (decisions.md §39). When merging a Dependabot PR for mobile_android,
+#   mirror the version bump into apps/mobile_ios/pubspec.yaml in the
+#   same commit. The shared-library-syncer agent helps catch drift.
+# - Major version bumps for ungrouped packages open as individual PRs
+#   and require review — see audit logs for the sentry_flutter 9.20
+#   K2 incompatibility (apps/mobile_android/android AGP 8.13 fix) and
+#   the flutter_blue_plus → flutter_reactive_ble migration that
+#   wasn't caught by version bumps alone.
+
+version: 2
+updates:
+  # ---------------------------------------------------------------------------
+  # npm — root workspace (covers apps/web, apps/backend, apps/web/lambda/coach)
+  # ---------------------------------------------------------------------------
+  # The repo uses npm workspaces with a single root lockfile, so one
+  # entry covers every package.json under it. Updates surface as
+  # `chore(deps)` and the actual workspace is in the file paths.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      sveltekit-ecosystem:
+        patterns:
+          - "svelte"
+          - "svelte-*"
+          - "@sveltejs/*"
+          - "vite"
+          - "@vite/*"
+      supabase:
+        patterns:
+          - "@supabase/*"
+          - "supabase"
+      anthropic-and-llms:
+        patterns:
+          - "@anthropic-ai/*"
+          - "openai"
+      playwright:
+        patterns:
+          - "@playwright/*"
+          - "playwright"
+      types:
+        patterns:
+          - "@types/*"
+      eslint-prettier:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@typescript-eslint/*"
+          - "prettier"
+          - "prettier-*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # pub — Flutter (apps/mobile_android, the canonical target)
+  # ---------------------------------------------------------------------------
+  # Mirror to apps/mobile_ios/pubspec.yaml manually before merging —
+  # see header comment.
+  - package-ecosystem: "pub"
+    directory: "/apps/mobile_android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 4
+    commit-message:
+      prefix: "chore(mobile/deps)"
+      include: "scope"
+    groups:
+      flutter-core:
+        patterns:
+          - "flutter"
+          - "flutter_*"
+          - "cupertino_*"
+      supabase:
+        patterns:
+          - "supabase_*"
+          - "postgrest"
+          - "gotrue"
+          - "realtime_*"
+          - "storage_client"
+      sentry:
+        patterns:
+          - "sentry"
+          - "sentry_*"
+      ble:
+        patterns:
+          - "flutter_reactive_ble"
+          - "reactive_ble_*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # pub — shared Dart packages
+  # ---------------------------------------------------------------------------
+  # One entry per package; pure-Dart deps + low surface area, so no
+  # complex grouping needed beyond minor-and-patch.
+  - package-ecosystem: "pub"
+    directory: "/packages/api_client"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(packages/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/core_models"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(packages/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/gpx_parser"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(packages/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/run_recorder"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(packages/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/ui_kit"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(packages/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # gomod — apps/job_worker (the map_match background worker)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "gomod"
+    directory: "/apps/job_worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(job_worker/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # gradle — apps/watch_wear (native Kotlin + Compose-for-Wear)
+  # ---------------------------------------------------------------------------
+  # AGP 9.x + Kotlin 2.3.x + Gradle 9.4.x as of the last bump. AGP /
+  # Kotlin / Compose ride together — group them tightly so a major
+  # bump on one doesn't ship without the others.
+  - package-ecosystem: "gradle"
+    directory: "/apps/watch_wear/android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(watch_wear/deps)"
+      include: "scope"
+    groups:
+      androidx:
+        patterns:
+          - "androidx.*"
+      kotlin-and-compose:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "androidx.compose*"
+      health-services:
+        patterns:
+          - "androidx.health*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # gradle — apps/mobile_android/android (Flutter Android shell)
+  # ---------------------------------------------------------------------------
+  # Most plugin deps come via Flutter's pub side; this stack tracks
+  # AGP, Kotlin, and the Gradle plugin pins in settings.gradle.kts.
+  # AGP and Kotlin must move together — Kotlin 2.2 needs AGP ≥ 8.13
+  # (the bump documented in commit 4a5eb1f), so group them.
+  - package-ecosystem: "gradle"
+    directory: "/apps/mobile_android/android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(mobile_android/deps)"
+      include: "scope"
+    groups:
+      agp-and-kotlin:
+        patterns:
+          - "com.android.*"
+          - "org.jetbrains.kotlin*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # terraform — infra stacks
+  # ---------------------------------------------------------------------------
+  # Six directories under infra/, one entry each. Provider major
+  # bumps (hashicorp/aws v5 → v6 etc.) need careful review since the
+  # state schema can shift; ungrouped majors get individual PRs.
+  - package-ecosystem: "terraform"
+    directory: "/infra/bootstrap"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(infra/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "terraform"
+    directory: "/infra/dns"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(infra/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "terraform"
+    directory: "/infra/github-oidc"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(infra/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "terraform"
+    directory: "/infra/modules/web-stack"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(infra/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "terraform"
+    directory: "/infra/envs/prod"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(infra/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "terraform"
+    directory: "/infra/envs/preview"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(infra/deps)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions workflows
+  # ---------------------------------------------------------------------------
+  # The /audit/all GHA pinning pass replaced every `@vN` ref with a
+  # commit SHA. Dependabot keeps those SHAs current — without it the
+  # pinning is fire-and-forget and rots silently.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+    groups:
+      all-actions:
+        patterns:
+          - "*"
