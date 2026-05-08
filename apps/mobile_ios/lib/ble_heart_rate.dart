@@ -46,7 +46,6 @@ class BleHeartRate {
 
   StreamSubscription<ConnectionStateUpdate>? _connectionSub;
   StreamSubscription<List<int>>? _notifySub;
-  String? _deviceId;
   final StreamController<int> _controller = StreamController<int>.broadcast();
 
   /// Live stream of BPM readings. Open-ended — stays subscribed until
@@ -138,7 +137,6 @@ class BleHeartRate {
 
   Future<void> _connect(String deviceId) async {
     await disconnect();
-    _deviceId = deviceId;
     final completer = Completer<void>();
 
     // flutter_reactive_ble models the connection as a long-lived
@@ -199,7 +197,6 @@ class BleHeartRate {
     // explicit `disconnect()` API.
     await _connectionSub?.cancel();
     _connectionSub = null;
-    _deviceId = null;
   }
 
   /// Forget the paired strap entirely. Disconnects + clears the stored id.
