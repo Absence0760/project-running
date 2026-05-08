@@ -173,7 +173,7 @@ dependencies {
     // Health Services (live HR). 1.1.0-rc01 is the latest pre-stable; 1.0.0
     // is the last stable tag but lacks the flow helpers we want. Move to
     // 1.1.0 stable when it ships.
-    implementation("androidx.health:health-services-client:1.1.0-rc01")
+    implementation("androidx.health:health-services-client:1.1.0-rc02")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.3.0")
     implementation("com.google.guava:guava:33.6.0-android")
 
