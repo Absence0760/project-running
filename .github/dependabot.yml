@@ -125,94 +125,21 @@ updates:
           - "patch"
 
   # ---------------------------------------------------------------------------
-  # pub — shared Dart packages
+  # pub — shared Dart packages: NOT supported by Dependabot
   # ---------------------------------------------------------------------------
-  # One entry per package; pure-Dart deps + low surface area, so no
-  # complex grouping needed beyond minor-and-patch.
-  - package-ecosystem: "pub"
-    directory: "/packages/api_client"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(packages/deps)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/core_models"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(packages/deps)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/gpx_parser"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(packages/deps)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/run_recorder"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(packages/deps)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/ui_kit"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "chore(packages/deps)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+  # The packages/ subdirectories are members of a Melos / pub workspace
+  # rooted at the repo root. Dependabot's pub ecosystem can only run
+  # `pub dependency_services` against the workspace root and fails on
+  # any sub-package with: `dependency_services failed: Only apply
+  # dependency_services to the root of the workspace.` Removed the
+  # five per-package entries (api_client / core_models / gpx_parser /
+  # run_recorder / ui_kit) — they're guaranteed-fail every Monday.
+  #
+  # Coverage isn't lost: every dep in those packages is also pulled
+  # transitively by `apps/mobile_android` (which imports all five
+  # via path: refs), and the apps/mobile_android pub entry above does
+  # update those transitive constraints. If pub workspaces ever land
+  # in Dependabot, restore one entry rooted at /, not per-package.
 
   # ---------------------------------------------------------------------------
   # gomod — apps/job_worker (the map_match background worker)
