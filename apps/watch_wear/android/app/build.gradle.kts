@@ -144,7 +144,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     // Compose
-    val composeBom = platform("androidx.compose:compose-bom:2026.04.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.05.00")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
@@ -191,13 +191,13 @@ dependencies {
 
     // Serialization + coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
 
     // Sentry crash reporting. Init in MainActivity.onCreate; gated on a
     // non-empty BuildConfig.SENTRY_DSN so dev / debug builds are
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:8.40.0")
+    implementation("io.sentry:sentry-android:8.41.0")
 }
