@@ -450,4 +450,73 @@ void main() {
       expect(stages, contains('runs'));
     });
   });
+
+  // Regression group for the offline-restore-without-credentials bug
+  // (commit fc716ea). Pre-fix, `BackupService` required a non-null
+  // `ApiClient` and read `Supabase.instance.client` eagerly in its
+  // constructor, so a release APK built without --dart-define
+  // SUPABASE_URL/ANON_KEY couldn't restore a backup at all — the user
+  // saw "Backup service unavailable." even though the offline path
+  // doesn't touch Supabase or the network.
+  group('no-credentials path — api: null', () {
+    test('BackupService(api: null) constructs without throwing', () {
+      // The smoke test for the constructor relaxation. If this throws,
+      // the release APK regresses to the pre-fix behaviour.
+      expect(() => BackupService(api: null), returnsNormally);
+    });
+
+    test('restore with api: null routes to offline and writes runStore',
+        () async {
+      final bytes = buildBackupZip(runs: [
+        runRow(id: 'r-no-creds-1', distanceM: 4321),
+        runRow(id: 'r-no-creds-2', distanceM: 5555),
+      ]);
+      await zipFile.writeAsBytes(bytes);
+      final svc = BackupService(api: null);
+
+      final result = await svc.restore(
+        zipFile: zipFile,
+        runStore: runStore,
+      );
+
+      expect(result.runsImported, 2);
+      expect(
+        runStore.runs.map((r) => r.id).toList(),
+        containsAll(['r-no-creds-1', 'r-no-creds-2']),
+      );
+      // The offline branch advertises this warning so the user knows
+      // why their profile / settings weren't restored.
+      expect(
+        result.warnings.any((w) => w.contains('Restoring offline')),
+        isTrue,
+      );
+    });
+
+    test('restore with api: null still throws when no stores are supplied',
+        () async {
+      // The "you forgot to wire a store" case stays a hard failure —
+      // the offline branch needs somewhere to land the rows.
+      final bytes = buildBackupZip(runs: const []);
+      await zipFile.writeAsBytes(bytes);
+      final svc = BackupService(api: null);
+
+      expect(() => svc.restore(zipFile: zipFile), throwsException);
+    });
+
+    test('createBackup with api: null throws a clear error', () async {
+      // Read-side requires creds; this test pins that we report the
+      // unavailability cleanly rather than NPEing on a null
+      // `Supabase.instance.client`.
+      final svc = BackupService(api: null);
+      final out = File('${tempDir.path}/should-not-be-written.zip');
+
+      await expectLater(
+        () => svc.createBackup(outputFile: out),
+        throwsA(predicate(
+          (e) => e.toString().contains('Backup unavailable'),
+        )),
+      );
+      expect(out.existsSync(), isFalse);
+    });
+  });
 }

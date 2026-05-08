@@ -93,5 +93,53 @@ void main() {
           prefs: s.prefs, heartRate: s.heartRate, runStore: s.runStore);
       expect(find.text('?'), findsOneWidget);
     });
+
+    // Regression coverage for the "Backup service unavailable" gate
+    // (commit fc716ea). Pre-fix the entry guard required
+    // `apiClient != null`, blocking the offline-restore path on a
+    // release APK that wasn't built with --dart-define SUPABASE_URL /
+    // ANON_KEY. Post-fix the guard requires only `runStore`.
+    //
+    // The Data section (which contains the Restore tile) is gated on
+    // `runStore != null` at the section level, so the tile only
+    // renders when a runStore is present. These two tests pin the
+    // tile's visibility AND the absence of the unavailability banner
+    // when api is null but runStore is wired up.
+    testWidgets('Restore-from-backup tile is hidden when runStore is missing',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
+      // Scroll all the way down — the Restore tile would be near the
+      // bottom of the Data section if it were rendered.
+      await tester.drag(
+          find.byType(ListView), const Offset(0, -2000));
+      await tester.pump();
+      expect(find.text('Restore from backup'), findsNothing);
+    });
+
+    testWidgets(
+        'Restore-from-backup with apiClient: null but runStore set does NOT show "Backup service unavailable"',
+        (tester) async {
+      // The exact regression. Pre-fix this would have shown the banner;
+      // post-fix the guard passes and we route to the FilePicker
+      // (which throws MissingPluginException in widget-test env).
+      final s = await _makeStores();
+      await _pump(tester,
+          prefs: s.prefs, heartRate: s.heartRate, runStore: s.runStore);
+      final tile = find.text('Restore from backup');
+      await tester.dragUntilVisible(
+        tile,
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.tap(tile);
+      // Don't `pumpAndSettle` — the FilePicker channel throws
+      // asynchronously and pumpAndSettle would surface that as an
+      // unhandled error. Two short pumps drain enough microtasks for
+      // a synchronous showTopBanner to register if the guard fires.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Backup service unavailable.'), findsNothing);
+    });
   });
 }
