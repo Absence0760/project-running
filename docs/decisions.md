@@ -1043,7 +1043,7 @@ The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Or
 
 **Trade-off:**
 
-- **More day-one setup** than Vercel's import-and-go. Terraform modules + per-env stacks, OIDC role, OAC, ACM cert, CloudFront response-headers policy, build-time env injection from GitHub Secrets, runtime secrets via sops/KMS, CloudWatch alarms — about a day or two of focused work. Bolting these on later is painful, so they ship together with the first deploy. See [`apps/web/deployment.md`](../apps/web/deployment.md).
+- **More day-one setup** than Vercel's import-and-go. Terraform modules + per-env stacks, OIDC role, OAC, ACM cert, CloudFront response-headers policy, build-time env injection from GitHub Secrets, runtime secrets via sops/KMS, CloudWatch alarms — about a day or two of focused work. Bolting these on later is painful, so they ship together with the first deploy. See [`apps/web/deployment.md`](../apps/web/deployment.md). Operator scripts under [`bin/`](../bin/README.md) wrap the AWS / sops / terraform sequences (preflight, orchestrated apply, sops bootstrap, secret rotation, post-deploy health check, interactive DR walkthrough) so the first deploy and any rotation fit on a few commands.
 - **CloudFront egress is ~$0.085/GB** (after the first 1 TB free for 12 months). Cloudflare's egress is functionally free. At the projected scale for this app the difference is single-digit dollars/month for a long time.
 - **Terraform + provider lock-in.** Moving to a different cloud later means rewriting the modules. Acceptable given how rarely we'd want to. Terraform is more portable than CDK in principle, but the AWS-specific resources (`aws_cloudfront_distribution`, `aws_lambda_function_url`, etc.) don't translate.
 

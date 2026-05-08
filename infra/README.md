@@ -27,6 +27,24 @@ Each stack has its own remote state in the bucket created by `bootstrap`. State 
 
 ## First-time deploy
 
+> **Quick path:** [`bin/`](../bin/README.md) wraps the AWS / sops / terraform
+> sequences below. The TL;DR is six commands:
+>
+> ```bash
+> bin/aws-preflight.sh                                 # confirm tooling + AWS auth
+> bin/deploy-preview.sh                                # apply bootstrap → dns → oidc → preview, idempotent
+> bin/sops-init.sh preview                             # resolve KMS placeholders + seed secrets.enc.yaml
+> bin/secret-set.sh preview ANTHROPIC_API_KEY < ~/key  # write the real Anthropic key (stdin, never argv)
+> cd infra/envs/preview && terraform apply             # push the new env var to Lambda
+> bin/preview-status.sh preview                        # health check
+> ```
+>
+> The walkthrough below is the full manual recipe. Both produce the same result;
+> the scripts add idempotence (`bin/deploy-preview.sh` skips already-applied
+> stacks via `terraform plan -detailed-exitcode`), automatic preflight, and
+> error-message context. Read the manual recipe at least once so you understand
+> what the scripts are doing.
+
 ### 0. Phase-0 prereqs (skip what you already have)
 
 Working from zero — no AWS account, no domain, no AWS CLI:
@@ -179,6 +197,15 @@ sops secrets.enc.yaml                            # opens $EDITOR with decrypted 
 terraform apply                                  # pushes new value to Lambda
 ```
 
+Or non-interactively for one specific key (no shell history leak — value comes via stdin / `--from-file`):
+
+```bash
+echo -n "$NEW_VALUE" | bin/secret-set.sh prod ANTHROPIC_API_KEY
+cd infra/envs/prod && terraform apply
+```
+
+If you ever change the *KMS key itself* (destroyed + recreated, or moved in `.sops.yaml`), the existing encrypted file still decrypts under the OLD key in its metadata. Re-encrypt under the new key with [`bin/key-rotate.sh`](../bin/README.md). For *AWS-native key material* rotation (`aws kms enable-key-rotation`) no re-encrypt is needed — sops sees the same key alias.
+
 The Lambda's environment variables update in-place; in-flight requests finish on the old config, new requests pick up the new value within ~10 s.
 
 ## State
@@ -188,6 +215,8 @@ Remote state in `s3://runonward-tfstate/`. Locking is S3-native via `use_lockfil
 ## Disaster recovery
 
 If the AWS account itself is gone, see [`apps/web/deployment.md` § Disaster recovery](../apps/web/deployment.md#disaster-recovery) for the rebuild procedure. Important nuance: KMS keys can't be cross-account-recovered, so the existing `secrets.enc.yaml` files are unrecoverable in that scenario — re-issue the secrets fresh and re-encrypt against the new env's KMS key.
+
+For an interactive rebuild walkthrough that probes which phases are already done and resumes mid-flow, run [`bin/disaster-recovery.sh`](../bin/README.md) (or `bin/disaster-recovery.sh --status` for a read-only state check).
 
 ## What's NOT in here
 

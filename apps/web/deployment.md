@@ -120,7 +120,7 @@ The `dns` stack outputs the hosted zone ID and cert ARN; per-env stacks read tho
 
 **Region.** Everything sits in `us-east-1`. The ACM cert for CloudFront *has* to live there regardless of where the rest of the stack runs, so `dns/main.tf` declares an explicit `us_east_1` provider alias — that's a no-op while the primary region is also `us-east-1`, but it's load-bearing if the stack ever moves.
 
-**Runtime secrets via sops + AWS KMS.** `infra/envs/<env>/secrets.enc.yaml` is sops-encrypted with that env's KMS key (created by `web-stack`). Terraform reads it via the [`carlpett/sops`](https://registry.terraform.io/providers/carlpett/sops/latest) provider at apply time and writes the values into the Lambda's `environment.variables` block. Rotation is `sops infra/envs/prod/secrets.enc.yaml` → save → `terraform apply` — the Lambda config update happens in seconds.
+**Runtime secrets via sops + AWS KMS.** `infra/envs/<env>/secrets.enc.yaml` is sops-encrypted with that env's KMS key (created by `web-stack`). Terraform reads it via the [`carlpett/sops`](https://registry.terraform.io/providers/carlpett/sops/latest) provider at apply time and writes the values into the Lambda's `environment.variables` block. Rotation is `sops infra/envs/prod/secrets.enc.yaml` → save → `terraform apply` — the Lambda config update happens in seconds. For non-interactive rotation use [`bin/secret-set.sh <env> <KEY> < value-file`](../../bin/README.md) (value comes via stdin/file, never argv, so it doesn't land in shell history).
 
 ---
 
@@ -279,6 +279,8 @@ If the AWS account itself is lost, recovery is roughly:
 5. `cd ../envs/prod && terraform init && terraform apply` — recreates the prod web stack. **The KMS key for runtime secrets is recreated; the existing `secrets.enc.yaml` files are encrypted with the OLD KMS key and unrecoverable.** Re-issue the secrets fresh (Anthropic key, Sentry DSN), `sops` them against the new KMS key ARN, then re-apply.
 6. Update the domain registrar's NS records to point at the new Route 53 hosted zone.
 7. Push the desired tag to trigger a deploy.
+
+For an interactive walkthrough that probes which phases are already done and resumes mid-flow, run [`bin/disaster-recovery.sh`](../../bin/README.md) — it wraps the same six steps with idempotent probes (`--status` for a read-only state check, no flag for the full walkthrough). The sequence above remains the canonical reference.
 
 RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar we control. Most of that is DNS propagation. RPO: 0 — there's no data on AWS.
 
