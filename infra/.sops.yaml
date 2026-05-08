@@ -4,8 +4,10 @@
 # The KMS key is created by `modules/web-stack` on `terraform apply`
 # for the env.
 #
-# First-time setup for an env (after `terraform apply` has created the
-# KMS key):
+# First-time setup for an env (after `terraform apply` has created
+# the KMS key): run `bin/sops-init.sh [preview|prod|both]`. The script
+# is idempotent; the manual steps below are equivalent and useful if
+# you want to understand what it's doing:
 #
 #   ARN=$(cd infra/envs/prod && terraform output -raw kms_key_arn)
 #   sed -i "s|REPLACE_PROD_KMS_ARN|$ARN|" infra/.sops.yaml
