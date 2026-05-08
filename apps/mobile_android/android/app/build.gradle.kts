@@ -7,6 +7,7 @@ plugins {
 
 import java.util.Properties
 import java.io.FileInputStream
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystoreProperties = Properties()
 val keystoreFile = rootProject.file("key.properties")
@@ -24,8 +25,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+    // Kotlin 2.3+ removed the `kotlinOptions { jvmTarget = ... }` DSL.
+    // Migrate to the `compilerOptions` block on the kotlin extension.
+    // https://kotl.in/u1r8ln
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 
     defaultConfig {
@@ -64,7 +70,7 @@ flutter {
 
 dependencies {
     // Wearable Data Layer — pushes the Supabase session to the paired watch_wear app.
-    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
     // NotificationCompat / NotificationManagerCompat used by
     // RunNotificationBridge live under androidx.core:core, which geolocator
     // already pulls in transitively at 1.16.0 — no explicit dep needed.

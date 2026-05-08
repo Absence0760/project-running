@@ -207,11 +207,14 @@ class BackupService {
     }
 
     // Online path — we're signed in. `offline` is false here, which
-    // means `api != null && api.userId != null`. The constructor's
-    // `_client = api == null ? null : _maybeClient()` invariant means
-    // `_client != null` whenever `api != null`. Capture into non-null
-    // locals so later branches don't have to re-null-check.
-    final apiNonNull = api!;
+    // means `api != null && api.userId != null` — Dart's flow analysis
+    // already promotes `api` to non-null off the early-return above.
+    // The constructor's `_client = api == null ? null : _maybeClient()`
+    // invariant means `_client != null` whenever `api != null`, but
+    // the analyzer can't promote a class field across statements, so
+    // `_client!` is needed. Capture into stable locals so later
+    // branches survive promotion-loss across awaits.
+    final apiNonNull = api;
     final client = _client!;
     final uid = apiNonNull.userId!;
     final result = RestoreResult();
