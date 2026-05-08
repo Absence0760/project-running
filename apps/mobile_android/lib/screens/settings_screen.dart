@@ -287,7 +287,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _restoreBackup() async {
     final api = widget.apiClient;
     final store = widget.runStore;
-    if (api == null || store == null) {
+    // Restore can run with no api at all (release builds without
+    // SUPABASE_URL/ANON_KEY baked in) — `BackupService` falls through
+    // to the offline path when api is null. We only need a runStore
+    // to hydrate into; without that there's nowhere for the rows to
+    // land.
+    if (store == null) {
       showTopBanner(context, 'Backup service unavailable.');
       return;
     }
@@ -298,7 +303,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (picked == null || picked.files.isEmpty) return;
     final path = picked.files.first.path;
     if (path == null) return;
-    final offline = api.userId == null;
+    final offline = api == null || api.userId == null;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

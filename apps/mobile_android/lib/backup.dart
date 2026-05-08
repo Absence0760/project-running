@@ -18,15 +18,33 @@ import 'local_run_store.dart';
 /// archive layout. Format is identical to the web side — a backup made
 /// on either surface restores cleanly on the other.
 ///
-/// All work happens against Supabase directly (not the local
-/// `LocalRunStore`) because the backend is the canonical source of
-/// truth for a user's history. Running this without network connectivity
-/// fails fast.
+/// `createBackup` and the online `restore` path require an authenticated
+/// `ApiClient`. The offline `_restoreOffline` path reads the archive
+/// into a `LocalRunStore` only — no Supabase, no network — so the
+/// constructor accepts `api: null` to support that "I just installed
+/// the app and want my old runs back" workflow on a release build that
+/// hasn't configured Supabase credentials yet. The screen layer
+/// (`settings_screen._restoreBackup`) only requires `runStore` for the
+/// offline branch; it picks `api`-less mode when `api` is null.
 class BackupService {
-  BackupService({required this.api}) : _client = Supabase.instance.client;
+  BackupService({this.api})
+      : _client = api == null ? null : _maybeClient();
 
-  final ApiClient api;
-  final SupabaseClient _client;
+  /// Try to grab `Supabase.instance.client` without throwing when
+  /// Supabase wasn't initialized. Release builds without
+  /// `--dart-define=SUPABASE_URL=...` skip the `Supabase.initialize`
+  /// call entirely; constructing this service must still succeed so
+  /// the offline-restore path can run.
+  static SupabaseClient? _maybeClient() {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  final ApiClient? api;
+  final SupabaseClient? _client;
 
   static const _format = 'run-app-backup';
   static const _version = 1;
@@ -40,6 +58,11 @@ class BackupService {
     required File outputFile,
     void Function(BackupProgress)? onProgress,
   }) async {
+    final api = this.api;
+    final client = _client;
+    if (api == null || client == null) {
+      throw Exception('Backup unavailable — Supabase is not configured.');
+    }
     final userId = api.userId;
     if (userId == null) throw Exception('Not authenticated');
 
@@ -47,7 +70,7 @@ class BackupService {
     final runs = await api.fetchRunRowsRaw();
 
     onProgress?.call(const BackupProgress.stage('routes'));
-    final routesData = await _client
+    final routesData = await client
         .from('routes')
         .select()
         .eq('user_id', userId);
@@ -56,8 +79,8 @@ class BackupService {
     onProgress?.call(const BackupProgress.stage('profile'));
     // Self-read via RPC — sensitive columns are column-level revoked from
     // direct SELECT (migration 20260707_001).
-    final profile = await _client.rpc('get_my_profile');
-    final userSettings = await _client
+    final profile = await client.rpc('get_my_profile');
+    final userSettings = await client
         .from('user_settings')
         .select('prefs')
         .eq('user_id', userId)
@@ -144,8 +167,13 @@ class BackupService {
     LocalRouteStore? routeStore,
     void Function(RestoreProgress)? onProgress,
   }) async {
-    final userId = api.userId;
-    final offline = userId == null;
+    // `api == null` happens on a release build that wasn't given
+    // SUPABASE_URL/ANON_KEY at compile time — the offline restore
+    // path is the only one we can drive in that case. `api != null`
+    // but `userId == null` is the "have credentials, not signed in"
+    // case, which also routes through offline.
+    final api = this.api;
+    final offline = api == null || api.userId == null;
 
     if (offline && runStore == null && routeStore == null) {
       throw Exception(
@@ -178,9 +206,14 @@ class BackupService {
       );
     }
 
-    // Online path — we're signed in. Capture into a non-null local so
-    // later branches don't have to re-null-check.
-    final uid = userId;
+    // Online path — we're signed in. `offline` is false here, which
+    // means `api != null && api.userId != null`. The constructor's
+    // `_client = api == null ? null : _maybeClient()` invariant means
+    // `_client != null` whenever `api != null`. Capture into non-null
+    // locals so later branches don't have to re-null-check.
+    final apiNonNull = api!;
+    final client = _client!;
+    final uid = apiNonNull.userId!;
     final result = RestoreResult();
 
     // Profile first.
@@ -201,12 +234,12 @@ class BackupService {
           row.remove('subscription_at');
           row.remove('parkrun_number');
           row['id'] = uid;
-          await _client.from('user_profiles').upsert(row);
+          await client.from('user_profiles').upsert(row);
           result.profileRestored = true;
         }
         final prefs = profile['settings_prefs'];
         if (prefs is Map && prefs.isNotEmpty) {
-          await _client.from('user_settings').upsert({
+          await client.from('user_settings').upsert({
             'user_id': uid,
             'prefs': prefs,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -230,7 +263,7 @@ class BackupService {
           .toList();
       final validEventIds = <String>{};
       if (incomingEventIds.isNotEmpty) {
-        final data = await _client
+        final data = await client
             .from('events')
             .select('id')
             .inFilter('id', incomingEventIds);
@@ -253,7 +286,7 @@ class BackupService {
         if (trackFile != null) {
           try {
             final trackBytes = Uint8List.fromList(trackFile.content as List<int>);
-            await api.uploadTrackBytes(
+            await apiNonNull.uploadTrackBytes(
               userId: uid,
               runId: newId,
               gzippedBytes: trackBytes,
@@ -274,7 +307,7 @@ class BackupService {
         r['track_url'] = trackUrl;
 
         try {
-          await api.upsertRunRowRaw(r);
+          await apiNonNull.upsertRunRowRaw(r);
           result.runsImported++;
         } catch (e) {
           result.warnings.add('run $origId: $e');
@@ -296,7 +329,7 @@ class BackupService {
         r['id'] = newId;
         r['user_id'] = uid;
         try {
-          await _client.from('routes').upsert(r);
+          await client.from('routes').upsert(r);
           result.routesImported++;
         } catch (e) {
           result.warnings.add('route $origId: $e');
