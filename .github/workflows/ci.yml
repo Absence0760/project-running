@@ -74,6 +74,80 @@ jobs:
       - working-directory: apps/watch_wear/android
         run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
 
+  build-mobile-android:
+    name: Build mobile_android APK (smoke)
+    runs-on: ubuntu-latest
+    # `flutter test` (in test-packages) catches Dart-level regressions
+    # but does NOT exercise the Android Gradle build. Plugin pin
+    # mismatches like the AGP 8.13 / Kotlin 2.2 / reactive_ble_mobile
+    # compileSdk-33 case (apps/mobile_android/android/build.gradle.kts
+    # subprojects.afterEvaluate hook) only surface during a real
+    # assembleRelease — and those breakages are expensive to discover
+    # during a release tag. This job builds the release APK on every
+    # PR so the toolchain stays green.
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+      - run: dart pub global activate melos
+      - run: melos bootstrap
+      - name: Cache Gradle
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-mobile-android-${{ hashFiles('apps/mobile_android/android/**/*.gradle*', 'apps/mobile_android/android/gradle/wrapper/gradle-wrapper.properties', 'apps/mobile_android/pubspec.lock') }}
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
+      # `flutter build apk --release` exercises the full Gradle
+      # toolchain (AGP, Kotlin compiler, plugin compileSdk overrides)
+      # without needing a signing keystore — debug-style signing is
+      # implicit. We don't upload the artifact; this is a
+      # toolchain-only smoke test.
+      - working-directory: apps/mobile_android
+        run: flutter build apk --release --no-tree-shake-icons
+
+  twin-parity:
+    name: mobile_android ↔ mobile_ios twin parity
+    runs-on: ubuntu-latest
+    # decisions.md §39 — apps/mobile_android/lib + test must be
+    # byte-identical to apps/mobile_ios/lib + test, and pubspec.yaml
+    # may differ only in `name` and `description`. The mobile-twin-mirror
+    # agent enforces this proactively on edit, but this job is the
+    # backstop: a diverged PR fails CI rather than landing.
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: lib/ + test/ byte-identical
+        run: |
+          if ! diff -rq apps/mobile_android/lib apps/mobile_ios/lib; then
+            echo "::error::apps/mobile_android/lib has diverged from apps/mobile_ios/lib (decisions.md §39)."
+            echo "Mirror the change or invoke the mobile-twin-mirror agent."
+            exit 1
+          fi
+          if ! diff -rq apps/mobile_android/test apps/mobile_ios/test; then
+            echo "::error::apps/mobile_android/test has diverged from apps/mobile_ios/test (decisions.md §39)."
+            echo "Mirror the change or invoke the mobile-twin-mirror agent."
+            exit 1
+          fi
+      - name: pubspec.yaml deltas limited to name + description
+        run: |
+          # Strip the only-allowed-deltas (name + description) from both
+          # files and diff what remains. Anything non-empty is a
+          # violation per decisions.md §39.
+          tmp_a=$(mktemp); tmp_i=$(mktemp)
+          grep -vE '^(name|description):' apps/mobile_android/pubspec.yaml > "$tmp_a"
+          grep -vE '^(name|description):' apps/mobile_ios/pubspec.yaml > "$tmp_i"
+          if ! diff -u "$tmp_a" "$tmp_i"; then
+            echo "::error::apps/mobile_android/pubspec.yaml and apps/mobile_ios/pubspec.yaml diverge beyond name + description (decisions.md §39)."
+            echo "Mirror dependency / version / asset changes across both files in the same commit."
+            exit 1
+          fi
+
   schema-codegen-drift:
     name: Kotlin row codegen drift
     runs-on: ubuntu-latest
