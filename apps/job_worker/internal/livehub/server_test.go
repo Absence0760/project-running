@@ -290,6 +290,208 @@ func TestServer_WebSocketCleansUpOnDisconnect(t *testing.T) {
 	}
 }
 
+// --- Privacy zones ---
+
+// stubZoneFetcher returns a fixed zone list for one run; everything
+// else gets nil. Counts calls so tests can assert the per-room
+// cache.
+type stubZoneFetcher struct {
+	matchRunID string
+	zones      []PrivacyZone
+	calls      int
+	failNext   bool
+}
+
+func (s *stubZoneFetcher) Zones(_ context.Context, runID string) ([]PrivacyZone, error) {
+	s.calls++
+	if s.failNext {
+		s.failNext = false
+		return nil, errors.New("zone fetch failed")
+	}
+	if runID != s.matchRunID {
+		return nil, nil
+	}
+	return s.zones, nil
+}
+
+func TestServer_PingInsideZoneIsDropped(t *testing.T) {
+	stub := &stubZoneFetcher{
+		matchRunID: "run-1",
+		zones: []PrivacyZone{
+			{Lat: 47.37, Lng: 8.54, RadiusM: 200},
+		},
+	}
+	base, teardown := newTestServer(t, &Server{Zones: stub})
+	defer teardown()
+
+	// Subscribe so we can assert nothing arrives on the wire.
+	wsURL := strings.Replace(base, "http://", "ws://", 1) + "/v1/live/run-1/subscribe"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("ws dial: %v", err)
+	}
+	defer c.CloseNow()
+
+	// Push a ping inside the zone (dead-centre).
+	resp, err := http.Post(base+"/v1/live/run-1/push", "application/json",
+		strings.NewReader(`{"lat":47.37,"lng":8.54,"distance_m":1,"elapsed_s":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		OK              bool `json:"ok"`
+		Clipped         bool `json:"clipped"`
+		SubscribersSent int  `json:"subscribers_sent"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+	if !body.Clipped {
+		t.Fatal("clipped flag missing on in-zone ping response")
+	}
+	if body.SubscribersSent != 0 {
+		t.Fatalf("subscribers_sent = %d, want 0 (clip suppresses fan-out)", body.SubscribersSent)
+	}
+
+	// Read attempts on the WS should time out — no ping arrived.
+	readCtx, readCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer readCancel()
+	var got Ping
+	if err := wsjson.Read(readCtx, c, &got); err == nil {
+		t.Fatalf("ws received in-zone ping %+v that should have been clipped", got)
+	}
+}
+
+func TestServer_PingOutsideZoneFlowsThrough(t *testing.T) {
+	stub := &stubZoneFetcher{
+		matchRunID: "run-1",
+		zones: []PrivacyZone{
+			{Lat: 47.37, Lng: 8.54, RadiusM: 200},
+		},
+	}
+	base, teardown := newTestServer(t, &Server{Zones: stub})
+	defer teardown()
+
+	wsURL := strings.Replace(base, "http://", "ws://", 1) + "/v1/live/run-1/subscribe"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("ws dial: %v", err)
+	}
+	defer c.CloseNow()
+	time.Sleep(20 * time.Millisecond)
+
+	// 1 km east — well outside the 200 m zone.
+	resp, err := http.Post(base+"/v1/live/run-1/push", "application/json",
+		strings.NewReader(`{"lat":47.37,"lng":8.555,"distance_m":1000,"elapsed_s":300}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer readCancel()
+	var got Ping
+	if err := wsjson.Read(readCtx, c, &got); err != nil {
+		t.Fatalf("ws read: %v", err)
+	}
+	if got.DistanceM != 1000 {
+		t.Fatalf("got %+v, want DistanceM=1000", got)
+	}
+}
+
+func TestServer_ZoneFetchCachedPerRoom(t *testing.T) {
+	stub := &stubZoneFetcher{
+		matchRunID: "run-1",
+		zones: []PrivacyZone{
+			{Lat: 47.37, Lng: 8.54, RadiusM: 200},
+		},
+	}
+	base, teardown := newTestServer(t, &Server{Zones: stub})
+	defer teardown()
+
+	// Three pushes — only the first should trigger a zone fetch.
+	for i := 0; i < 3; i++ {
+		resp, err := http.Post(base+"/v1/live/run-1/push", "application/json",
+			strings.NewReader(`{"lat":48,"lng":9,"distance_m":1,"elapsed_s":1}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	if stub.calls != 1 {
+		t.Fatalf("zone fetcher calls = %d, want 1 (cached per room)", stub.calls)
+	}
+}
+
+func TestServer_ZoneFetchFailureDropsFailClosed(t *testing.T) {
+	stub := &stubZoneFetcher{
+		matchRunID: "run-1",
+		zones: []PrivacyZone{
+			{Lat: 47.37, Lng: 8.54, RadiusM: 200},
+		},
+		failNext: true,
+	}
+	base, teardown := newTestServer(t, &Server{Zones: stub})
+	defer teardown()
+
+	resp, err := http.Post(base+"/v1/live/run-1/push", "application/json",
+		strings.NewReader(`{"lat":48,"lng":9,"distance_m":1,"elapsed_s":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		OK      bool   `json:"ok"`
+		Clipped bool   `json:"clipped"`
+		Reason  string `json:"reason"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+	if !body.Clipped {
+		t.Fatal("zone-fetch failure must drop the ping (fail-closed)")
+	}
+	if body.Reason != "zone fetch failed" {
+		t.Fatalf("reason = %q, want zone fetch failed", body.Reason)
+	}
+}
+
+func TestServer_NoZoneFetcherSkipsCheckEntirely(t *testing.T) {
+	// Server.Zones = nil → unclipped fall-through (dev / unit-test
+	// path). The legacy tests at the top of this file rely on this
+	// behaviour — keep one explicit test so a future refactor that
+	// drops the nil-guard surfaces it immediately.
+	base, teardown := newTestServer(t, &Server{Zones: nil})
+	defer teardown()
+
+	resp, err := http.Post(base+"/v1/live/run-1/push", "application/json",
+		strings.NewReader(`{"lat":0,"lng":0,"distance_m":1,"elapsed_s":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+	// Snapshot path confirms the push landed unclipped.
+	snap, _ := http.Get(base + "/v1/live/run-1/snapshot")
+	if snap.StatusCode != http.StatusOK {
+		t.Fatalf("snapshot = %d, want 200 (push was published)", snap.StatusCode)
+	}
+	snap.Body.Close()
+}
+
 // Smoke-test the path-parsing on an edge case: run_id with hyphens
 // + uuid-shaped — the trim-and-split logic must round-trip these.
 func TestServer_RunIDWithHyphens(t *testing.T) {

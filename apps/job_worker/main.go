@@ -88,10 +88,21 @@ func main() {
 	// the single source of truth for in-flight runs. See
 	// `internal/livehub/types.go` for the migration path.
 	hub := livehub.NewHub()
+	// Privacy-zone fetcher. Wires the hub's push path to the
+	// broadcaster's `user_settings.prefs.privacy_zones` so in-zone
+	// pings are dropped before fan-out — same contract as the
+	// `live_run_pings_drop_in_zone` trigger on the Supabase Realtime
+	// path. Same service-role auth as the rest of the worker.
+	zoneFetcher := &livehub.SupabaseZoneFetcher{
+		BaseURL:    baseURL,
+		ServiceKey: serviceKey,
+		HTTP:       client.HTTP, // reuse the worker's pooled client
+	}
 	hubSrv := &livehub.Server{
 		Hub:            hub,
 		Log:            logger.With("component", "livehub"),
 		AllowedOrigins: parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS")),
+		Zones:          zoneFetcher,
 		// Authorizer left nil for the first slice → permissive.
 		// Production must plug in a Supabase JWT verifier here
 		// before enabling the public route — see server.go's

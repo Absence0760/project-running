@@ -22,9 +22,24 @@ import (
 // Path-param parsing is intentionally manual (strings.TrimPrefix +
 // strings.Split) so this package doesn't pull a router dep. The
 // route shapes are stable and there are only three of them.
+//
+// **Privacy zones** — on every push the server fetches (or reads
+// from the room cache) the broadcaster's privacy zones via
+// [Server.Zones] and drops the ping when the lat/lng falls inside
+// any zone. Mirrors the `live_run_pings_drop_in_zone` BEFORE-INSERT
+// trigger on the Supabase Realtime path. When [Server.Zones] is
+// nil the hub falls through unclipped — useful for dev / unit
+// tests; production MUST set it.
 type Server struct {
 	Hub *Hub
 	Log *slog.Logger
+
+	// Zones resolves the broadcaster's privacy zones for a run.
+	// Wired in `main.go` to a [SupabaseZoneFetcher]. When nil the
+	// hub publishes every ping unclipped — appropriate for local
+	// dev where there's no Supabase service-role key available.
+	// Production deploys MUST set this.
+	Zones ZoneFetcher
 
 	// Authorizer is called once per request after the run_id is
 	// parsed. It returns a non-nil error to deny the request (the
@@ -128,6 +143,34 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 		http.Error(w, "bad ping body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Privacy-zone clip — fail-closed: if the zone fetch errors we
+	// drop the ping rather than risk publishing through a broken
+	// fetch. A persistent fetch failure surfaces in logs; a runner's
+	// home address must never leak as a side effect of a Supabase
+	// outage.
+	clipped, err := s.shouldDrop(r.Context(), runID, p)
+	if err != nil {
+		s.log().Warn("zone fetch failed; dropping ping",
+			"err", err, "run_id", runID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":      false,
+			"clipped": true,
+			"reason":  "zone fetch failed",
+		})
+		return
+	}
+	if clipped {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":               true,
+			"clipped":          true,
+			"subscribers_sent": 0,
+		})
+		return
+	}
 	delivered := s.Hub.Publish(runID, p)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -135,6 +178,28 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 		"ok":               true,
 		"subscribers_sent": delivered,
 	})
+}
+
+// shouldDrop checks the ping against the broadcaster's cached
+// privacy zones. Returns (true, nil) when the ping must be dropped,
+// (false, nil) when it can be published, or (_, err) when the zone
+// fetch itself failed (caller drops fail-closed).
+//
+// Skips the check entirely when [Server.Zones] is nil — the dev
+// path. The 100% safe production wiring sets a real fetcher in
+// main.go.
+func (s *Server) shouldDrop(ctx context.Context, runID string, p Ping) (bool, error) {
+	if s.Zones == nil {
+		return false, nil
+	}
+	zones, err := s.Hub.LoadZones(ctx, runID, s.Zones)
+	if err != nil {
+		return false, err
+	}
+	if len(zones) == 0 {
+		return false, nil
+	}
+	return IsInAnyZone(p.Lat, p.Lng, zones), nil
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request, runID string) {

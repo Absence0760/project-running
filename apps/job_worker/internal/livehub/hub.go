@@ -52,6 +52,14 @@ type room struct {
 	mu       sync.Mutex
 	subs     map[*subscriber]struct{}
 	lastPing *Ping
+	// Cached privacy zones for the broadcaster of this room. Loaded
+	// lazily on the first push (or first read via [Hub.Zones]) and
+	// kept for the room's lifetime. Hub GC drops the cache along
+	// with the room when the last subscriber leaves and no lastPing
+	// is held. nil zonesLoaded → not yet fetched; non-nil + empty →
+	// fetched, broadcaster has no zones.
+	zonesLoaded bool
+	zones       []PrivacyZone
 }
 
 type subscriber struct {
@@ -163,6 +171,45 @@ func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func())
 	}
 
 	return s.ch, unsub
+}
+
+// LoadZones populates the room's privacy-zone cache (if not yet
+// loaded) via the supplied [ZoneFetcher], then returns the cached
+// list. Idempotent — a second call with a populated cache returns
+// the existing slice. The fetcher is only invoked at most once per
+// room. A fetcher error is returned verbatim; the caller (push
+// path) is expected to fail-closed: drop the ping rather than risk
+// publishing through a broken zone fetch.
+//
+// Returns (nil, nil) when zones are loaded and the broadcaster has
+// none configured — the caller publishes the ping unclipped.
+func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) ([]PrivacyZone, error) {
+	r := h.roomFor(runID, true)
+	r.mu.Lock()
+	if r.zonesLoaded {
+		zones := append([]PrivacyZone(nil), r.zones...)
+		r.mu.Unlock()
+		return zones, nil
+	}
+	r.mu.Unlock()
+
+	// Fetch outside the room mutex so a slow Supabase call doesn't
+	// pin subscribers' close paths. We accept that a concurrent
+	// publisher could call us twice — the loser of the race
+	// overwrites with the same data, no correctness hit.
+	zones, err := fetcher.Zones(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	r.mu.Lock()
+	if !r.zonesLoaded {
+		r.zonesLoaded = true
+		r.zones = zones
+	}
+	out := append([]PrivacyZone(nil), r.zones...)
+	r.mu.Unlock()
+	return out, nil
 }
 
 // LastKnown returns the most recent ping the hub has seen for

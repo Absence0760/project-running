@@ -28,7 +28,15 @@ Edge Functions move per [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
    surface is the only touchpoint. Auth is left permissive in this
    slice; production sets `Server.Authorizer` to verify Supabase JWTs
    (recorder must own the run for push; spectators must be the owner
-   or the run must be `is_public=true`).
+   or the run must be `is_public=true`). **Privacy zones** are
+   enforced server-side: `Server.shouldDrop` runs
+   `IsInAnyZone(p.lat, p.lng, room.zones)` on every `/push`. Zones
+   are fetched once per room via `SupabaseZoneFetcher` and cached
+   on the room until GC. **Fail-closed** on fetch errors — a
+   Supabase outage drops the ping rather than risk leaking a home
+   coordinate. Mirrors the `live_run_pings_drop_in_zone` BEFORE-INSERT
+   trigger on the Supabase Realtime path so both transports honour
+   the same contract.
 
 **Build here:**
 
@@ -78,10 +86,13 @@ apps/job_worker/
 │   ├── worker_test.go       # table-driven test using a fake Backend
 │   └── livehub/             # live spectator pub/sub + HTTP + WebSocket
 │       ├── types.go         # Ping wire shape
-│       ├── hub.go           # in-process subscribe / publish / GC
-│       ├── hub_test.go      # 10 unit tests, race-clean
-│       ├── server.go        # HTTP routes for /v1/live/{run_id}/*
-│       └── server_test.go   # httptest + WebSocket integration tests
+│       ├── hub.go           # in-process subscribe / publish / GC + per-room zone cache
+│       ├── hub_test.go      # 10 hub unit tests, race-clean
+│       ├── privacy.go       # PrivacyZone + IsInAnyZone (haversine)
+│       ├── privacy_test.go  # 8 privacy unit tests
+│       ├── zones.go         # ZoneFetcher iface + SupabaseZoneFetcher
+│       ├── server.go        # HTTP routes for /v1/live/{run_id}/* + zone clip
+│       └── server_test.go   # 16 httptest + WebSocket integration tests
 ├── osrm/                    # local OSRM dev stack (compose + Makefile)
 ├── Dockerfile               # multi-stage; final image is distroless
 ├── README.md                # local-run instructions
