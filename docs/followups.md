@@ -103,7 +103,16 @@ Phase 3 "External platform sync" — current state:
 
 ### #12 Backend Go service (Phase 2/3)
 
-Whole Go service on Fly.io. Live spectator WS hub, job queue, Strava webhook migration off Edge Function, token-refresh worker, export worker, Upstash Redis for ephemeral position store. Then premium Go endpoints: `/training-plan`, `/vo2max`, `/race-predictor`, `/recovery`.
+The job-worker half is **shipped + deployed** (map-match jobs draining via `claim_next_job` on Fly.io with the OSRM matcher behind a sibling app). The **live spectator hub is now wired in code** but not yet deployed:
+
+- [x] **Live spectator WS hub (Go code)** — `apps/job_worker/internal/livehub/`. In-process `Hub` with `Publish` + `Subscribe`, served via three HTTP routes mounted on the existing `/health` listener: `POST /v1/live/{run_id}/push` (recorder pushes a `Ping` body), `GET /v1/live/{run_id}/snapshot` (last-known position as JSON, 204 when room empty), `GET /v1/live/{run_id}/subscribe` (WebSocket stream via `coder/websocket v1.8.14`). Late joiners receive the room's last-known ping immediately on subscribe so a spectator sees the runner without waiting for the next 5 s broadcaster tick. Per-subscriber 8-slot buffer + `trySend`-with-mutex serialises sends against close (race-clean under `-race`). Idle-proxy ping every 25 s; `CloseRead` detects peer-close so unsubscribe is prompt. Room GC keeps last-known for ungated refreshes; subscriber cleanup is exercised by a leak test. Auth left permissive (`Server.Authorizer = nil`) with a precise TODO recipe in `server.go` for the Supabase JWT verifier (recorder must own the run for push; spectators must own the run OR `is_public=true`). `LIVEHUB_ALLOWED_ORIGINS=https://run.app,https://preview.runonward.com` enforces the WS upgrade origin check in production. Tests: 10 hub unit + 10 server integration (httptest + WS client). `go test -race ./...` clean.
+- [ ] **Live hub deploy to Fly.io** — code is ready, just needs the `fly.toml` for the live-hub HTTP port + an upstream nginx / CloudFront route that maps `live.runonward.com/v1/*` to the Fly app.
+- [ ] **Upstash Redis swap** — once the live hub is in production, lift the in-process `Hub` map onto Redis pub/sub with a per-run 24h TTL. The Hub's API shape (Publish + Subscribe) is the only touchpoint — the swap is mechanical.
+- [ ] **Supabase JWT authorizer** — fill in `Server.Authorizer` to verify the bearer token on the recorder side (push must be the run owner) and gate spectator subscribes/snapshots to public-or-owner.
+- [ ] **Strava webhook migration** — port `apps/backend/supabase/functions/strava-webhook` to a Go endpoint on this service.
+- [ ] **Token refresh worker** — periodic background job (new `kind` in the job queue) that refreshes Strava OAuth tokens before they expire.
+- [ ] **Data export worker** — same — new `kind` for `apps/backend/supabase/functions/export-data` migration.
+- [ ] **Premium Go endpoints** — `/training-plan`, `/vo2max`, `/race-predictor`, `/recovery`. Pro-only via Supabase JWT verification.
 
 ### #13 Live spectator WebSocket (blocked by #12)
 

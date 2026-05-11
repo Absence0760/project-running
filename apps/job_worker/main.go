@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
 )
 
 // main wires environment → SupabaseClient → Worker.Run. Kept thin so
@@ -80,7 +82,23 @@ func main() {
 	if healthPort == "" {
 		healthPort = "8080"
 	}
-	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID)
+	// Live spectator hub — runs alongside the job-drain loop on the
+	// same Go service. Phase 2 follow-up will move ephemeral
+	// positions into Upstash Redis; until then the in-memory Hub is
+	// the single source of truth for in-flight runs. See
+	// `internal/livehub/types.go` for the migration path.
+	hub := livehub.NewHub()
+	hubSrv := &livehub.Server{
+		Hub:            hub,
+		Log:            logger.With("component", "livehub"),
+		AllowedOrigins: parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS")),
+		// Authorizer left nil for the first slice → permissive.
+		// Production must plug in a Supabase JWT verifier here
+		// before enabling the public route — see server.go's
+		// Authorizer field doc for the policy.
+	}
+
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -107,8 +125,11 @@ func main() {
 // happens to take that long to handle; longer-running jobs would
 // trigger a restart, which is the correct response for "this job is
 // hung".
-func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string) *http.Server {
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server) *http.Server {
 	mux := http.NewServeMux()
+	if hub != nil {
+		hub.RegisterRoutes(mux)
+	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		ageSec := time.Now().Unix() - lastClaim.Load()
 		w.Header().Set("Content-Type", "application/json")
@@ -131,6 +152,24 @@ func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, w
 		}
 	}()
 	return srv
+}
+
+// parseOrigins splits a comma-separated env value into the
+// AllowedOrigins list the WS upgrade enforces. Empty input → empty
+// slice (caller treats as "skip origin check", which is fine for
+// local dev / smoke tests; production sets at least one host).
+func parseOrigins(env string) []string {
+	if env == "" {
+		return nil
+	}
+	parts := strings.Split(env, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func requireEnv(log *slog.Logger, name string) string {

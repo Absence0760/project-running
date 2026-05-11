@@ -8,12 +8,27 @@ Edge Functions move per [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
 
 ## Scope — read before writing code
 
-**This service is the *only* place writes to `jobs` and
-`run_matched_tracks` should originate from on the worker side.** Both
-tables are RLS-locked and the SECURITY DEFINER worker functions
-(`claim_next_job`, `finish_job`, `defer_job`) are revoked from PUBLIC and
-granted only to `service_role`. The worker authenticates with the service
-role key.
+**Two concerns share this binary:**
+
+1. **Job-queue drain** — claims `jobs` rows, runs the matcher, writes
+   `run_matched_tracks`. This is the original concern; the worker is
+   the *only* place writes to those tables originate. Both are
+   RLS-locked and the SECURITY DEFINER functions
+   (`claim_next_job`, `finish_job`, `defer_job`) are revoked from
+   PUBLIC and granted only to `service_role`. The worker auths with
+   the service role key.
+2. **Live spectator hub** — in-process pub/sub keyed by `run_id`. The
+   mobile recorder POSTs ping bodies to `POST /v1/live/{run_id}/push`;
+   spectators stream pings over `GET /v1/live/{run_id}/subscribe`
+   (WebSocket) or fetch the last-known position via
+   `GET /v1/live/{run_id}/snapshot`. Implementation lives in
+   `internal/livehub/`. Today the buffer is an in-process map keyed
+   by run_id; the roadmap calls for Upstash Redis pub/sub with a 24h
+   TTL — the swap is mechanical because the Hub's Publish + Subscribe
+   surface is the only touchpoint. Auth is left permissive in this
+   slice; production sets `Server.Authorizer` to verify Supabase JWTs
+   (recorder must own the run for push; spectators must be the owner
+   or the run must be `is_public=true`).
 
 **Build here:**
 
@@ -26,6 +41,10 @@ role key.
   another env-driven branch.
 - Additional job kinds — extend the switch in `Worker.dispatch` and
   add the matching trigger / migration in `apps/backend/`.
+- Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
+  with a Redis pub/sub-backed variant), Supabase JWT auth plumbing
+  (fill in `livehub.Server.Authorizer`), per-run ring buffer for
+  late-joiner replay of more than the most recent ping.
 - Operational concerns — backoff tuning, Prometheus metrics, leader
   election if multiple workers don't suffice. None shipped today.
 
@@ -47,6 +66,7 @@ role key.
 apps/job_worker/
 ├── go.mod
 ├── main.go                  # entrypoint: env → SupabaseClient → Worker.Run
+│                            # also wires the livehub.Server alongside /health
 ├── internal/
 │   ├── types.go             # Job, MapMatchPayload, TrackPoint, MatchedTrackRow
 │   ├── supabase.go          # PostgREST + Storage REST client (service role)
@@ -55,7 +75,13 @@ apps/job_worker/
 │   ├── matcher_osrm.go      # OSRMMatcher — /match/v1/foot, chunked
 │   ├── matcher_osrm_test.go
 │   ├── worker.go            # claim → handle → finish loop
-│   └── worker_test.go       # table-driven test using a fake Backend
+│   ├── worker_test.go       # table-driven test using a fake Backend
+│   └── livehub/             # live spectator pub/sub + HTTP + WebSocket
+│       ├── types.go         # Ping wire shape
+│       ├── hub.go           # in-process subscribe / publish / GC
+│       ├── hub_test.go      # 10 unit tests, race-clean
+│       ├── server.go        # HTTP routes for /v1/live/{run_id}/*
+│       └── server_test.go   # httptest + WebSocket integration tests
 ├── osrm/                    # local OSRM dev stack (compose + Makefile)
 ├── Dockerfile               # multi-stage; final image is distroless
 ├── README.md                # local-run instructions

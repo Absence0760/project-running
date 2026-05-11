@@ -204,12 +204,12 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 ### Backend work (Phase 2)
 
 - [ ] Deploy Go service to Fly.io (~$5/month)
-  - [ ] WebSocket hub for live spectator tracking
-  - [ ] Background job queue (Postgres-backed via River)
+  - [x] **WebSocket hub code shipped** — `apps/job_worker/internal/livehub/` (Hub + HTTP routes + WS streaming via `coder/websocket`); 20 tests race-clean. Wired into `main.go`'s health listener alongside `/health`. Deploy still needs the `fly.toml` route + upstream proxy mapping `live.runonward.com/v1/*`.
+  - [x] Background job queue (Postgres-backed via River-style `claim_next_job` / `defer_job` / `finish_job` RPCs)
   - [ ] Strava webhook handler (moved from Edge Function)
   - [ ] Token refresh worker (moved from Edge Function)
   - [ ] Data export worker (moved from Edge Function)
-- [ ] Set up Upstash Redis for live position streams
+- [ ] Set up Upstash Redis for live position streams (live hub is in-process for now; Hub's Publish/Subscribe is the only swap touchpoint)
 - [x] Add `personal_records` summary table with insert trigger (migration `20260508_001_personal_records_cache.sql` — table, `refresh_personal_records_for_user(uid)` helper, insert / update / delete triggers, backfill; `security definer` writes, reads scoped to owner)
 - [x] Add `jobs` table for Go worker queue (migration `20260609_001_run_match_pipeline.sql` — generic `(id, kind, payload jsonb, status, attempts, scheduled_at, locked_at, locked_by)` queue with River-style `claim_next_job` / `finish_job` / `defer_job` SECURITY DEFINER API. `for update skip locked` for safe concurrent drain; partial indexes on `(scheduled_at, kind) where status='queued'` keep the worker scan O(active set); RLS deny-by-default + revoke EXECUTE from public + grant to service_role for the worker functions. First tenant is `kind='map_match'`; strava-webhook / token-refresh / data-export will follow the same shape.)
 - [ ] Migrate Strava webhook, token refresh, data export from Edge Functions to Go service
