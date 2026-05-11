@@ -11,16 +11,30 @@
 /// pull (deno.land/x tags aren't immutable, so a tag rewrite would
 /// silently substitute the digest). FIPS-aligned, zero supply-chain
 /// surface. /audit/all edge-functions Medium 2026-05-07.
-export async function hmacHex(secret: string, body: string): Promise<string> {
+///
+/// Accepts string or Uint8Array for both inputs. The string branch
+/// UTF-8 encodes via TextEncoder (lossless round-trip for valid UTF-8
+/// — every RevenueCat / Strava webhook body is JSON, so the string
+/// path is correct for every production caller). Tests that need to
+/// pin against byte-exact RFC reference vectors pass Uint8Array so
+/// non-ASCII bytes like 0xcd don't get UTF-8-expanded into two bytes.
+export async function hmacHex(
+  secret: string | Uint8Array,
+  body: string | Uint8Array,
+): Promise<string> {
   const enc = new TextEncoder();
+  const keyBytes =
+    typeof secret === 'string' ? enc.encode(secret) : secret;
+  const bodyBytes =
+    typeof body === 'string' ? enc.encode(body) : body;
   const key = await crypto.subtle.importKey(
     'raw',
-    enc.encode(secret),
+    keyBytes,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
   );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(body));
+  const sig = await crypto.subtle.sign('HMAC', key, bodyBytes);
   return Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');

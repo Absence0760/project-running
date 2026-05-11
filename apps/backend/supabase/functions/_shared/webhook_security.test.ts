@@ -22,13 +22,14 @@ import {
 Deno.test(
   'hmacHex — RFC 4868 §2.7.2 case 4 SHA-256 reference vector',
   async () => {
-    const keyBytes = Array.from({ length: 25 }, (_, i) =>
-      String.fromCharCode(0x01 + i),
-    ).join('');
-    const body = 'cd'.repeat(50);
-    const bodyBytes = body.match(/.{2}/g)!
-      .map((h) => String.fromCharCode(parseInt(h, 16)))
-      .join('');
+    // Pass Uint8Array on both sides so the non-ASCII body bytes
+    // (0xcd × 50) reach HMAC as bytes — not UTF-8-expanded. The
+    // previous version of this test stringified everything via
+    // `String.fromCharCode`, which made TextEncoder emit `c3 8d` for
+    // each 0xcd byte and broke the reference-vector check.
+    const keyBytes = new Uint8Array(25);
+    for (let i = 0; i < 25; i++) keyBytes[i] = 0x01 + i;
+    const bodyBytes = new Uint8Array(50).fill(0xcd);
     const result = await hmacHex(keyBytes, bodyBytes);
     assertEquals(
       result,
