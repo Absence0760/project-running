@@ -55,8 +55,14 @@ dispatch when those Edge Functions move per
   first real engine and is selected in `main.go` when `OSRM_URL` is
   set. Valhalla / GraphHopper would each be a sibling file plus
   another env-driven branch.
-- Additional job kinds — extend the switch in `Worker.dispatch` and
-  add the matching trigger / migration in `apps/backend/`.
+- Additional job kinds — extend the switch in `Worker.dispatch`,
+  extend the CHECK allowlist on `jobs.kind` (migration
+  `20260822_001_jobs_kind_allowlist.sql` is the precedent), and
+  extend the pgtap suite at
+  `apps/backend/supabase/tests/jobs_kind_allowlist_test.sql`. The
+  three steps must land together — the DB rejects an unknown kind
+  at INSERT (23514) rather than at the worker's dispatch, so
+  shipping a new kind without all three slips it through silently.
   Token-refresh (sweeps expiring Strava integrations + rotates via
   `/oauth/token`) is in `handler_token_refresh.go` and is the worked
   example for "port an Edge Function into the queue"; strava-webhook
