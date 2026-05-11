@@ -121,7 +121,9 @@ cpus = 1
 flyctl secrets set --app job_worker \
   SUPABASE_URL="https://<ref>.supabase.co" \
   SUPABASE_SERVICE_ROLE_KEY="..." \
-  SUPABASE_JWT_SECRET="..."   # Studio → Project Settings → API → JWT Secret
+  SUPABASE_JWT_SECRET="..." \  # Studio → Project Settings → API → JWT Secret
+  STRAVA_CLIENT_ID="..." \      # optional — only needed for token_refresh
+  STRAVA_CLIENT_SECRET="..."    # jobs (Strava OAuth rotation)
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is **multi-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`), the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping, AND it powers `SupabaseRunMetaFetcher` (the per-room `(user_id, is_public)` lookup that backs the JWT authorizer). One secret, one identity — there's no per-concern split.
@@ -129,6 +131,33 @@ flyctl secrets set --app job_worker \
 `SUPABASE_JWT_SECRET` is the HS256 signing key the Supabase project mints user tokens with — the hub's `JWTAuthorizer` verifies the recorder's bearer token against it. **The hub refuses to accept production traffic without this set** — when `SUPABASE_JWT_SECRET` is empty the authorizer is nil and the hub falls back to permissive mode (everything allowed), which is fine for the local smoke flow but a hard blocker for the public route. Set it before running `flyctl deploy` and confirm the boot log shows `livehub auth: enabled (Supabase JWT)`.
 
 `OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` are in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
+
+### Job kinds + cutover from Edge Functions
+
+The worker dispatches by `jobs.kind`. Today:
+
+| Kind | Source | Notes |
+|---|---|---|
+| `map_match` | `runs` AFTER INSERT/UPDATE trigger | Shipped. OSRM matcher behind `OSRM_URL`. |
+| `token_refresh` | pg_cron `enqueue-token-refresh` (operator-wired, see below) | Replaces the `refresh-tokens` Edge Function. Strava OAuth rotation. Requires `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET`. |
+
+**Cutover recipe for `token_refresh`.** The Edge Function and the Go path can coexist — they both refresh the same rows; whichever runs first wins, the second one finds nothing expiring within an hour. To migrate:
+
+1. Deploy the worker with the Strava env vars set. Boot log should show `strava: enabled (token_refresh dispatch armed)`. Without that line the dispatch falls through to a permanent failure on every `token_refresh` job — operator-visible in `flyctl logs`.
+2. Add a pg_cron schedule that enqueues a job hourly (NOT a migration — schedule lives in production data, not source):
+   ```sql
+   select cron.schedule(
+     'enqueue-token-refresh',
+     '0 * * * *',
+     $$insert into jobs (kind, payload) values ('token_refresh', '{}'::jsonb)$$
+   );
+   ```
+3. Observe one cycle (`select * from jobs where kind='token_refresh' order by id desc limit 5;`). Confirm rows flip to `done` and that `integrations.token_expiry` for the touched rows moved forward by ~6 hours.
+4. Once steady, retire the old Edge Function cron:
+   ```sql
+   select cron.unschedule('refresh-tokens-cron');  -- or whatever name was configured
+   ```
+   Leave the `refresh-tokens` Edge Function deployed for rollback; revisit in a later cleanup PR.
 
 ### Deploy
 

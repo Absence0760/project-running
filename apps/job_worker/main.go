@@ -48,6 +48,25 @@ func main() {
 
 	client := internal.NewSupabaseClient(baseURL, serviceKey)
 
+	// Strava OAuth client for the token_refresh dispatch path.
+	// Optional — when either env var is missing the worker still
+	// drains map_match jobs, but any token_refresh row fails permanent
+	// with a clear "Strava client not configured" message. The Edge
+	// Function path remains the fallback during cutover.
+	stravaID := os.Getenv("STRAVA_CLIENT_ID")
+	stravaSecret := os.Getenv("STRAVA_CLIENT_SECRET")
+	var strava internal.StravaRefresher
+	if stravaID != "" && stravaSecret != "" {
+		strava = &internal.StravaClient{
+			ClientID:     stravaID,
+			ClientSecret: stravaSecret,
+			HTTP:         client.HTTP, // reuse pooled client
+		}
+		logger.Info("strava: enabled (token_refresh dispatch armed)")
+	} else {
+		logger.Warn("strava: DISABLED — STRAVA_CLIENT_ID/SECRET unset; token_refresh jobs will fail permanent")
+	}
+
 	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
 	// worker's poll loop bumps it on every successful poll
 	// (claim-or-empty), so /health flips to 503 only when the loop
@@ -60,6 +79,7 @@ func main() {
 	worker := &internal.Worker{
 		Backend: client,
 		Matcher: matcher,
+		Strava:  strava,
 		Config: internal.Config{
 			WorkerID:       workerID,
 			PollInterval:   2 * time.Second,

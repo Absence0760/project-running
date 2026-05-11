@@ -25,6 +25,18 @@ type Backend interface {
 	ReadRunForAutoLink(ctx context.Context, runID string) (RunLinkInfo, error)
 	FindMatchingRoutes(ctx context.Context, userID string, track []TrackPoint, toleranceM float64, maxResults int) ([]RouteMatchCandidate, error)
 	LinkRunToRoute(ctx context.Context, runID, routeID string) error
+	// Token-refresh path — used by the kind='token_refresh' handler
+	// that replaces apps/backend/supabase/functions/refresh-tokens.
+	FetchExpiringStravaIntegrations(ctx context.Context, within time.Duration) ([]IntegrationRow, error)
+	GetIntegrationTokens(ctx context.Context, userID, provider string) (*TokenPair, error)
+	SetIntegrationTokens(ctx context.Context, userID, provider, accessToken, refreshToken string, tokenExpiry time.Time) error
+}
+
+// StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
+// Production wires *StravaClient; tests substitute a fake to avoid
+// hitting Strava during unit runs.
+type StravaRefresher interface {
+	Refresh(ctx context.Context, refreshToken string) (*StravaTokenResponse, error)
 }
 
 // Config bundles tunables. Defaults are conservative — short poll
@@ -37,16 +49,26 @@ type Config struct {
 	TransientDelay int           // seconds; defer_job's delay_seconds
 }
 
-// Worker drains kind='map_match' jobs forever. Stops when ctx is
+// Worker drains background jobs forever. Stops when ctx is
 // cancelled. Each iteration claims at most one job, dispatches, and
 // loops back — single-flight per worker keeps the per-job error
 // surface simple. Run multiple processes for horizontal scale; the
 // SQL `for update skip locked` in claim_next_job makes that safe.
+//
+// Drains any kind the dispatcher knows about. Today: `map_match`
+// + `token_refresh`. Strava-webhook / data-export will land as
+// additional cases — see `dispatch`.
 type Worker struct {
 	Backend Backend
 	Matcher Matcher
-	Config  Config
-	Log     *slog.Logger
+	// Strava is the OAuth-refresh upstream. Nil disables the
+	// `token_refresh` dispatch path; a job of that kind falls
+	// through to the "unknown kind" failure branch in dispatch.
+	// Wired in main.go when STRAVA_CLIENT_ID + STRAVA_CLIENT_SECRET
+	// are both set.
+	Strava StravaRefresher
+	Config Config
+	Log    *slog.Logger
 	// OnPollTick fires after every claim attempt (whether or not a job
 	// was returned). Used by the /health server to distinguish "queue
 	// empty" from "loop wedged" — see main.go. Safe to leave nil; the
@@ -77,7 +99,10 @@ func (w *Worker) Run(ctx context.Context) error {
 			return nil
 		}
 
-		job, err := w.Backend.ClaimNextJob(ctx, w.Config.WorkerID, "map_match")
+		// Empty kind filter → drain any kind the dispatcher knows
+		// about. Today: map_match + token_refresh. New kinds plug into
+		// `dispatch` without touching this claim.
+		job, err := w.Backend.ClaimNextJob(ctx, w.Config.WorkerID, "")
 		// Heartbeat fires after the claim returns — including the
 		// error and empty-queue paths. /health reads this; a stuck
 		// claim (DB down, network gone) won't bump it and the
@@ -145,11 +170,13 @@ func (w *Worker) handle(ctx context.Context, job *Job) {
 }
 
 // dispatch picks the per-kind handler. New job types (strava-webhook,
-// token-refresh, data-export per roadmap §214) plug in here.
+// data-export per roadmap §214) plug in here.
 func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 	switch job.Kind {
 	case "map_match":
 		return w.handleMapMatch(ctx, job)
+	case "token_refresh":
+		return w.handleTokenRefresh(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

@@ -100,10 +100,17 @@ func (c *SupabaseClient) rpc(ctx context.Context, fn string, params any, out any
 // ClaimNextJob calls the SECURITY DEFINER RPC. Returns (nil, nil) when
 // the queue is empty so the caller can sleep + retry without treating
 // emptiness as an error condition.
+//
+// Empty `kindFilter` omits the `kind_filter` RPC parameter so the SQL
+// default of NULL kicks in and the worker drains any kind it knows how
+// to dispatch. A non-empty value pins the claim to that single kind —
+// useful for partitioning workers by job class if we ever need it.
 func (c *SupabaseClient) ClaimNextJob(ctx context.Context, workerID, kindFilter string) (*Job, error) {
 	params := map[string]any{
-		"worker_id":   workerID,
-		"kind_filter": kindFilter,
+		"worker_id": workerID,
+	}
+	if kindFilter != "" {
+		params["kind_filter"] = kindFilter
 	}
 	var rows []Job
 	if err := c.rpc(ctx, "claim_next_job", params, &rows); err != nil {
@@ -385,4 +392,75 @@ func (c *SupabaseClient) LinkRunToRoute(ctx context.Context, runID, routeID stri
 	req.Header.Set("Prefer", "return=minimal")
 	_, err = c.do(ctx, req)
 	return err
+}
+
+// FetchExpiringStravaIntegrations returns Strava integrations whose
+// access token expires within `within`. Used by the token-refresh
+// handler — the wider window the cron picks, the larger this slice
+// gets, so it's the only knob between "refresh ahead of expiry" and
+// "burn Strava's quota on too many rotations".
+//
+// Bounded at 500 rows. The job handler walks the slice sequentially
+// (one Strava call per row at ~1 s) and finishes well inside the
+// per-job HandleTimeout. If a tenant ever has more than 500 expiring
+// at once the next cron tick picks up the remainder.
+func (c *SupabaseClient) FetchExpiringStravaIntegrations(ctx context.Context, within time.Duration) ([]IntegrationRow, error) {
+	cutoff := time.Now().Add(within).UTC().Format(time.RFC3339)
+	q := url.Values{}
+	q.Set("provider", "eq.strava")
+	q.Set("token_expiry", "lt."+cutoff)
+	q.Set("select", "id,user_id")
+	q.Set("order", "token_expiry.asc")
+	q.Set("limit", "500")
+	u := c.BaseURL + "/rest/v1/integrations?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []IntegrationRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// GetIntegrationTokens decrypts the (access, refresh) pair from Vault
+// via the `get_integration_tokens` SECURITY DEFINER RPC. Service role
+// bypasses the owner check baked into the function.
+//
+// Returns (nil, nil) when the integration row exists but no Vault
+// entry is attached — the caller skips refresh for that user, same
+// fail-safe shape as the Edge Function it replaces.
+func (c *SupabaseClient) GetIntegrationTokens(ctx context.Context, userID, provider string) (*TokenPair, error) {
+	params := map[string]any{
+		"p_user_id":  userID,
+		"p_provider": provider,
+	}
+	var rows []TokenPair
+	if err := c.rpc(ctx, "get_integration_tokens", params, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 || rows[0].RefreshToken == "" {
+		return nil, nil
+	}
+	return &rows[0], nil
+}
+
+// SetIntegrationTokens round-trips a refreshed pair through Vault via
+// the `set_integration_tokens` RPC. The function also updates
+// `integrations.token_expiry` + `updated_at` so the next sweep skips
+// this user.
+func (c *SupabaseClient) SetIntegrationTokens(ctx context.Context, userID, provider, accessToken, refreshToken string, tokenExpiry time.Time) error {
+	params := map[string]any{
+		"p_user_id":       userID,
+		"p_provider":      provider,
+		"p_access_token":  accessToken,
+		"p_refresh_token": refreshToken,
+		"p_token_expiry":  tokenExpiry.UTC().Format(time.RFC3339),
+	}
+	return c.rpc(ctx, "set_integration_tokens", params, nil)
 }

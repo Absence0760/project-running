@@ -1,10 +1,12 @@
 # job_worker — AI session notes
 
 Generic Go service that drains the `jobs` queue (migration
-`20260609_001_run_match_pipeline.sql`). First and only kind today is
-`map_match`; strava-webhook / token-refresh / data-export will land as
-additional kinds in `internal/worker.go`'s dispatch when those
-Edge Functions move per [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
+`20260609_001_run_match_pipeline.sql`). Kinds today: `map_match`
+(server-side OSRM map matching) and `token_refresh` (Strava OAuth
+rotation, replaces the `refresh-tokens` Edge Function). Strava-webhook
+and data-export will land as additional kinds in `internal/worker.go`'s
+dispatch when those Edge Functions move per
+[`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
 
 ## Scope — read before writing code
 
@@ -55,6 +57,10 @@ Edge Functions move per [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
   another env-driven branch.
 - Additional job kinds — extend the switch in `Worker.dispatch` and
   add the matching trigger / migration in `apps/backend/`.
+  Token-refresh (sweeps expiring Strava integrations + rotates via
+  `/oauth/token`) is in `handler_token_refresh.go` and is the worked
+  example for "port an Edge Function into the queue"; strava-webhook
+  + data-export follow the same shape.
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
   with a Redis pub/sub-backed variant), per-run ring buffer for
   late-joiner replay of more than the most recent ping, JWKS-based
@@ -82,14 +88,17 @@ apps/job_worker/
 ├── main.go                  # entrypoint: env → SupabaseClient → Worker.Run
 │                            # also wires the livehub.Server alongside /health
 ├── internal/
-│   ├── types.go             # Job, MapMatchPayload, TrackPoint, MatchedTrackRow
+│   ├── types.go             # Job, MapMatchPayload, TrackPoint, MatchedTrackRow, IntegrationRow, TokenPair
 │   ├── supabase.go          # PostgREST + Storage REST client (service role)
+│   ├── strava.go            # StravaClient — /oauth/token refresh_token grant
+│   ├── strava_test.go       # 4 tests: parse, error surface, malformed, default URL
 │   ├── matcher.go           # Matcher interface + PassthroughMatcher stub
 │   ├── matcher_test.go
 │   ├── matcher_osrm.go      # OSRMMatcher — /match/v1/foot, chunked
 │   ├── matcher_osrm_test.go
-│   ├── worker.go            # claim → handle → finish loop
-│   ├── worker_test.go       # table-driven test using a fake Backend
+│   ├── worker.go            # claim → handle → finish loop; dispatch by kind
+│   ├── handler_token_refresh.go  # kind='token_refresh' sweep + rotate
+│   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests
 │   └── livehub/             # live spectator pub/sub + HTTP + WebSocket
 │       ├── types.go         # Ping wire shape
 │       ├── hub.go           # in-process subscribe / publish / GC + per-room zone + run-meta cache

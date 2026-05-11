@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -63,6 +64,17 @@ type fakeBackend struct {
 	deferred []deferCall
 	uploaded map[string][]TrackPoint
 	rowSets  []rowSet
+
+	// token_refresh inputs
+	expiring             []IntegrationRow
+	fetchExpiringErr     error
+	fetchExpiringWindows []time.Duration
+	tokensByUser         map[string]TokenPair
+	getTokenErrs         map[string]error
+	setTokenErrs         map[string]error
+	// token_refresh outputs
+	getTokenCalls []string
+	setTokenCalls []setTokenCall
 }
 
 type finishCall struct {
@@ -89,8 +101,11 @@ type linkCall struct {
 
 func newFakeBackend() *fakeBackend {
 	return &fakeBackend{
-		trackByPath: map[string][]TrackPoint{},
-		uploaded:    map[string][]TrackPoint{},
+		trackByPath:  map[string][]TrackPoint{},
+		uploaded:     map[string][]TrackPoint{},
+		tokensByUser: map[string]TokenPair{},
+		getTokenErrs: map[string]error{},
+		setTokenErrs: map[string]error{},
 	}
 }
 
@@ -252,6 +267,93 @@ func (f *fakeBackend) ReadRunTrackURL(_ context.Context, _ string) (string, erro
 		return url, nil
 	}
 	return f.trackURL, nil
+}
+
+// --- token_refresh fake state ---
+
+// Token-refresh test inputs/outputs are kept on the same fakeBackend
+// so a single test wires one backend, one matcher, one Strava fake.
+// Default zero values are safe: no expiring rows + no Vault tokens
+// means a token_refresh job is a no-op (matches the "no expiring
+// tokens" production branch).
+func (f *fakeBackend) FetchExpiringStravaIntegrations(_ context.Context, within time.Duration) ([]IntegrationRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchExpiringErr != nil {
+		err := f.fetchExpiringErr
+		f.fetchExpiringErr = nil
+		return nil, err
+	}
+	f.fetchExpiringWindows = append(f.fetchExpiringWindows, within)
+	return append([]IntegrationRow(nil), f.expiring...), nil
+}
+
+func (f *fakeBackend) GetIntegrationTokens(_ context.Context, userID, provider string) (*TokenPair, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getTokenCalls = append(f.getTokenCalls, userID+":"+provider)
+	if err, ok := f.getTokenErrs[userID]; ok {
+		return nil, err
+	}
+	tok, ok := f.tokensByUser[userID]
+	if !ok {
+		return nil, nil
+	}
+	cp := tok
+	return &cp, nil
+}
+
+func (f *fakeBackend) SetIntegrationTokens(_ context.Context, userID, provider, access, refresh string, expiry time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err, ok := f.setTokenErrs[userID]; ok {
+		return err
+	}
+	f.setTokenCalls = append(f.setTokenCalls, setTokenCall{
+		UserID:       userID,
+		Provider:     provider,
+		AccessToken:  access,
+		RefreshToken: refresh,
+		Expiry:       expiry,
+	})
+	// Mirror production: rotation updates the in-memory pair so a
+	// subsequent GetIntegrationTokens returns the new value.
+	f.tokensByUser[userID] = TokenPair{AccessToken: access, RefreshToken: refresh}
+	return nil
+}
+
+type setTokenCall struct {
+	UserID       string
+	Provider     string
+	AccessToken  string
+	RefreshToken string
+	Expiry       time.Time
+}
+
+// fakeStrava is the StravaRefresher stub the token-refresh tests use.
+// Each call returns the next scripted response; errors are scripted by
+// user-id so a mid-loop failure can be modelled without poisoning the
+// other rows.
+type fakeStrava struct {
+	mu          sync.Mutex
+	byToken     map[string]StravaTokenResponse
+	errsByToken map[string]error
+	calls       []string // refresh tokens seen, in order
+}
+
+func (s *fakeStrava) Refresh(_ context.Context, refreshToken string) (*StravaTokenResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, refreshToken)
+	if err, ok := s.errsByToken[refreshToken]; ok {
+		return nil, err
+	}
+	r, ok := s.byToken[refreshToken]
+	if !ok {
+		return nil, fmt.Errorf("no scripted response for token %q", refreshToken)
+	}
+	cp := r
+	return &cp, nil
 }
 
 // nopMatcher returns whatever it's told to, with the ability to inject
@@ -803,4 +905,228 @@ func keys[K comparable, V any](m map[K]V) []K {
 		out = append(out, k)
 	}
 	return out
+}
+
+// ---- token_refresh -----------------------------------------------------
+
+// newTokenRefreshWorker wires a worker with the token-refresh deps. The
+// dispatcher still calls handleMapMatch for any map_match job, but the
+// happy path here only enqueues `token_refresh`, so the matcher arg is
+// nil to make it obvious if a misrouted job tries to use it.
+func newTokenRefreshWorker(be Backend, st StravaRefresher) *Worker {
+	w := newTestWorker(be, nil)
+	w.Strava = st
+	return w
+}
+
+func TestTokenRefresh_NoExpiringIsNoop(t *testing.T) {
+	be := newFakeBackend()
+	st := &fakeStrava{}
+	be.jobs = []*Job{{ID: 1, Kind: "token_refresh", Attempts: 1, Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 {
+		t.Fatalf("finished=%d, want 1", got)
+	}
+	if be.finished[0].Status != "done" {
+		t.Errorf("status=%q, want done", be.finished[0].Status)
+	}
+	if got := len(st.calls); got != 0 {
+		t.Errorf("strava calls=%d, want 0 (no expiring rows)", got)
+	}
+	if got, want := len(be.fetchExpiringWindows), 1; got != want {
+		t.Fatalf("fetch calls=%d, want %d", got, want)
+	}
+	if be.fetchExpiringWindows[0] != time.Hour {
+		t.Errorf("fetch window=%v, want 1h", be.fetchExpiringWindows[0])
+	}
+}
+
+func TestTokenRefresh_RotatesEveryExpiringRow(t *testing.T) {
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{
+		{ID: 1, UserID: "user-A"},
+		{ID: 2, UserID: "user-B"},
+	}
+	be.tokensByUser = map[string]TokenPair{
+		"user-A": {AccessToken: "old-A", RefreshToken: "rt-A"},
+		"user-B": {AccessToken: "old-B", RefreshToken: "rt-B"},
+	}
+	expiresAt := time.Now().Add(6 * time.Hour).Unix()
+	st := &fakeStrava{
+		byToken: map[string]StravaTokenResponse{
+			"rt-A": {AccessToken: "new-A", RefreshToken: "rt-A2", ExpiresAt: expiresAt},
+			"rt-B": {AccessToken: "new-B", RefreshToken: "rt-B2", ExpiresAt: expiresAt},
+		},
+	}
+	be.jobs = []*Job{{ID: 99, Kind: "token_refresh", Payload: []byte(`{}`)}}
+
+	w := newTokenRefreshWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
+		t.Fatalf("finished=%v, want one done", be.finished)
+	}
+	if got := len(st.calls); got != 2 {
+		t.Fatalf("strava calls=%d, want 2", got)
+	}
+	if got := len(be.setTokenCalls); got != 2 {
+		t.Fatalf("set_integration_tokens calls=%d, want 2", got)
+	}
+	// Spot-check one rotation: new access + new refresh + correct expiry.
+	for _, c := range be.setTokenCalls {
+		if c.Provider != "strava" {
+			t.Errorf("provider=%q, want strava", c.Provider)
+		}
+		if c.AccessToken == "" || c.RefreshToken == "" {
+			t.Errorf("set with empty tokens: %+v", c)
+		}
+		if c.Expiry.Unix() != expiresAt {
+			t.Errorf("expiry=%v, want %v", c.Expiry.Unix(), expiresAt)
+		}
+	}
+}
+
+func TestTokenRefresh_SkipsRowWithoutVaultToken(t *testing.T) {
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{{ID: 1, UserID: "ghost"}}
+	// tokensByUser empty → GetIntegrationTokens returns (nil, nil) for any user.
+	st := &fakeStrava{}
+	be.jobs = []*Job{{ID: 1, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
+		t.Fatalf("job must still finish done even when all rows are skipped; got %v", be.finished)
+	}
+	if got := len(st.calls); got != 0 {
+		t.Errorf("strava calls=%d, want 0 (no token to send)", got)
+	}
+	if got := len(be.setTokenCalls); got != 0 {
+		t.Errorf("set calls=%d, want 0", got)
+	}
+}
+
+func TestTokenRefresh_StravaErrorOnOneRowSkipsButContinues(t *testing.T) {
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{
+		{ID: 1, UserID: "alice"},
+		{ID: 2, UserID: "bob"},
+	}
+	be.tokensByUser = map[string]TokenPair{
+		"alice": {RefreshToken: "rt-alice"},
+		"bob":   {RefreshToken: "rt-bob"},
+	}
+	expiresAt := time.Now().Add(6 * time.Hour).Unix()
+	st := &fakeStrava{
+		byToken: map[string]StravaTokenResponse{
+			"rt-bob": {AccessToken: "new-bob", RefreshToken: "rt-bob2", ExpiresAt: expiresAt},
+		},
+		errsByToken: map[string]error{
+			"rt-alice": &HTTPError{StatusCode: 400, Body: "invalid_grant"},
+		},
+	}
+	be.jobs = []*Job{{ID: 5, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
+		t.Fatalf("job must still finish done; one row's permanent skip shouldn't fail the whole sweep. got %v", be.finished)
+	}
+	if got := len(be.setTokenCalls); got != 1 {
+		t.Fatalf("set calls=%d, want 1 (only bob)", got)
+	}
+	if be.setTokenCalls[0].UserID != "bob" {
+		t.Errorf("rotated user=%q, want bob", be.setTokenCalls[0].UserID)
+	}
+}
+
+func TestTokenRefresh_FetchExpiringErrorFailsJob(t *testing.T) {
+	be := newFakeBackend()
+	be.fetchExpiringErr = &HTTPError{StatusCode: 500, Body: "boom"}
+	st := &fakeStrava{}
+	be.jobs = []*Job{{ID: 3, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	// 5xx is transient → defer, not finish.
+	if got := len(be.deferred); got != 1 {
+		t.Fatalf("deferred=%d, want 1 (5xx is transient)", got)
+	}
+	if got := len(be.finished); got != 0 {
+		t.Errorf("finished=%d, want 0 (job was deferred)", got)
+	}
+}
+
+func TestTokenRefresh_NoStravaClientFailsPermanent(t *testing.T) {
+	be := newFakeBackend()
+	be.jobs = []*Job{{ID: 1, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	// Worker.Strava intentionally left nil — simulates an operator who
+	// enqueued a token_refresh job without setting the Strava env vars.
+	w := newTestWorker(be, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "failed" {
+		t.Fatalf("unconfigured worker must surface a permanent failure; got %v", be.finished)
+	}
+}
+
+func TestTokenRefresh_StravaErrorIsTransient_DeferJob(t *testing.T) {
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{{ID: 1, UserID: "alice"}}
+	be.tokensByUser = map[string]TokenPair{"alice": {RefreshToken: "rt-alice"}}
+	// 5xx from Strava is transient; the row is skipped (job still
+	// finishes "done" for the sweep as a whole). Pinned here to
+	// document the policy: ONE bad row never fails the sweep.
+	st := &fakeStrava{
+		errsByToken: map[string]error{
+			"rt-alice": &HTTPError{StatusCode: 503, Body: "down"},
+		},
+	}
+	be.jobs = []*Job{{ID: 1, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "done" {
+		t.Fatalf("one Strava 503 row must skip, not fail the sweep: %v", be.finished)
+	}
+	if got := len(be.setTokenCalls); got != 0 {
+		t.Errorf("set calls=%d, want 0 (rotation failed)", got)
+	}
+}
+
+func TestTokenRefresh_DispatchUnknownKindIsPermanentFail(t *testing.T) {
+	be := newFakeBackend()
+	be.jobs = []*Job{{ID: 1, Kind: "some-future-kind", Payload: []byte(`{}`)}}
+	st := &fakeStrava{}
+	w := newTokenRefreshWorker(be, st)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if got := len(be.finished); got != 1 || be.finished[0].Status != "failed" {
+		t.Fatalf("unknown kind must fail permanent; got %v", be.finished)
+	}
 }

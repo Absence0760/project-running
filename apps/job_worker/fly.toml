@@ -92,8 +92,16 @@ cpus = 1
 #                                   on /push. Without it the hub falls
 #                                   back to permissive (dev) mode and
 #                                   refuses to accept production traffic.
+#   STRAVA_CLIENT_ID              — optional; required for the
+#   STRAVA_CLIENT_SECRET          — `token_refresh` job kind that
+#                                   replaces apps/backend/supabase/
+#                                   functions/refresh-tokens. When unset
+#                                   the worker still drains map_match
+#                                   jobs but token_refresh fails
+#                                   permanent.
 # Set with:
 #   flyctl secrets set --app job_worker \
 #     SUPABASE_URL=https://<ref>.supabase.co \
 #     SUPABASE_SERVICE_ROLE_KEY=eyJ... \
-#     SUPABASE_JWT_SECRET=...   # Studio → Project Settings → API → JWT Secret
+#     SUPABASE_JWT_SECRET=...   \  # Studio → Project Settings → API → JWT Secret
+#     STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=...

@@ -65,3 +65,19 @@ type RouteMatchCandidate struct {
 	StartOffsetM  float64 `json:"start_offset_m"`
 	EndOffsetM    float64 `json:"end_offset_m"`
 }
+
+// IntegrationRow is the minimal projection of `integrations` the
+// token-refresh handler needs. Real tokens live in Vault and are
+// fetched via the `get_integration_tokens` SECURITY DEFINER RPC —
+// the row itself never holds plaintext.
+type IntegrationRow struct {
+	ID     int64  `json:"id"`
+	UserID string `json:"user_id"`
+}
+
+// TokenPair mirrors the `get_integration_tokens` RPC return — a
+// single-row table of decrypted (access, refresh) values.
+type TokenPair struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
