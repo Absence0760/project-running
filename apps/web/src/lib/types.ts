@@ -109,7 +109,17 @@ export type JoinPolicy = 'open' | 'request' | 'invite';
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 
-export type Club = Omit<ClubRow, 'join_policy'> & { join_policy: JoinPolicy };
+// `invite_token` is excluded from the base type because the column-
+// level grant lockdown (migrations 20260801_001 + 20260818_001 redo)
+// revokes SELECT on it from anon + authenticated. Reads use
+// CLUB_SELECT_COLS which omits it; admin reads go through the
+// `get_club_invite_token` SECURITY DEFINER RPC and decorate the
+// result inline. A previous version of this type included
+// invite_token, which masked the column-mismatch when `.select(<col
+// list>)` was typed as `string` (no inference); after the dependabot
+// bump that tightened supabase-js's literal inference, the
+// mismatch surfaces as a real svelte-check error.
+export type Club = Omit<ClubRow, 'join_policy' | 'invite_token'> & { join_policy: JoinPolicy };
 export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
 	role: ClubRole;
 	status: MembershipStatus;
@@ -126,6 +136,12 @@ export type ClubWithMeta = Club & {
 	member_count: number;
 	viewer_role: ClubRole | null;
 	viewer_status: MembershipStatus | null;
+	// Decorated by `fetchClubBySlug` when the viewer is owner/admin —
+	// the `get_club_invite_token` SECURITY DEFINER RPC returns the
+	// value the column-grant lockdown hides from regular SELECT.
+	// Optional + nullable so list endpoints that don't decorate the
+	// field still satisfy the type.
+	invite_token?: string | null;
 };
 
 /** `viewer_rsvp` is always for the *next* instance of a recurring series; per-instance RSVPs are queried separately. */

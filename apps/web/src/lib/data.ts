@@ -1166,9 +1166,14 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 // `get_club_invite_token`. The arch-guard test
 // `tests-e2e/cross-cutting/select-star-discipline.spec.ts` greps to
 // keep this in lockstep.
+// `as const` on a single-line literal — supabase-js's `.select(<cols>)`
+// type-level parser needs a string-literal type to infer the row shape,
+// not the `string` widening that `'a' + 'b'` concatenation produces.
+// Without `as const`, every `.from('clubs').select(CLUB_SELECT_COLS)`
+// falls back to `GenericStringError` and downstream type assertions
+// fail svelte-check.
 const CLUB_SELECT_COLS =
-	'id, owner_id, name, slug, description, avatar_url, location_label, ' +
-	'is_public, join_policy, created_at, updated_at';
+	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, join_policy, created_at, updated_at' as const;
 
 // Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
 // from anon + authenticated (migrations 20260723_001 + 20260806_001 +
@@ -1176,10 +1181,7 @@ const CLUB_SELECT_COLS =
 // enumerates these safe columns; the two coords are write-only
 // today (no UI consumer).
 const EVENT_SELECT_COLS =
-	'id, club_id, title, description, starts_at, duration_min, ' +
-	'meet_label, route_id, distance_m, pace_target_sec, capacity, ' +
-	'created_by, created_at, updated_at, recurrence_freq, ' +
-	'recurrence_byday, recurrence_until, recurrence_count';
+	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, created_by, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count' as const;
 
 function slugify(name: string): string {
 	return name
@@ -1276,7 +1278,11 @@ export async function createClub(input: {
 	location_label?: string;
 	is_public: boolean;
 	join_policy: JoinPolicy;
-}): Promise<Club> {
+}): Promise<Club & { invite_token: string | null }> {
+	// invite_token is excluded from the base Club shape (column-grant
+	// lockdown) but createClub knows the freshly-generated token —
+	// decorate the return so callers can display the share link
+	// immediately without a separate get_club_invite_token RPC.
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
