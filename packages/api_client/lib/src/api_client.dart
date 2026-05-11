@@ -459,7 +459,11 @@ class ApiClient {
           path,
           gzippedBytes,
           fileOptions: const FileOptions(
-            contentType: 'application/json',
+            // gzipped JSON bytes — `application/gzip` is the only
+            // shape the `runs` bucket MIME allowlist (migration
+            // 20260815_001) accepts for tracks. `application/json`
+            // would 415 the upload.
+            contentType: 'application/gzip',
             upsert: true,
           ),
         );
@@ -502,7 +506,12 @@ class ApiClient {
           path,
           bytes,
           fileOptions: const FileOptions(
-            contentType: 'application/json',
+            // The byte payload IS gzipped (line above), so the MIME
+            // must match. `application/gzip` is on the `runs` bucket
+            // allowlist (migration 20260815_001); `application/json`
+            // is not and would 415 the upload, silently breaking
+            // every live-recording save on mobile.
+            contentType: 'application/gzip',
             upsert: true,
           ),
         );
