@@ -30,6 +30,14 @@
 	<string>Run App uses your location to track runs.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Run App continues tracking runs in the background so you don't lose data if you take a call or lock your phone.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Run Onward reads workout summaries from Apple Health so runs you've recorded on Apple Watch, Nike Run Club, Strava, and other apps can be imported into your history.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Run Onward connects to your Bluetooth heart-rate strap so it can stream live BPM into your run.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Run Onward uses motion data to count steps and estimate cadence on treadmill runs without GPS.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Run Onward lets you attach photos from your library to your runs.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -56,6 +64,12 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>processing</string>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.runonward.backgroundSync</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

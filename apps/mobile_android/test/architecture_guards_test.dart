@@ -1346,4 +1346,65 @@ void main() {
       });
     }
   });
+
+  group('iOS Info.plist', () {
+    // These tests are gated on the iOS Info.plist being present —
+    // they auto-skip on the Android twin (which has no `ios/`
+    // directory). The twin-share rule keeps the test file byte-
+    // identical; the runtime check below picks the right target.
+    test('every plugin-required usage-description key is set', () {
+      final file = File('ios/Runner/Info.plist');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Without these keys iOS silently denies the permission and
+      // the corresponding feature fails at runtime — the worst kind
+      // of regression because nothing throws, the feature just
+      // returns empty / never streams. Pin them in place.
+      final required = <String, String>{
+        'NSLocationWhenInUseUsageDescription': 'geolocator (foreground GPS)',
+        'NSLocationAlwaysAndWhenInUseUsageDescription':
+            'geolocator (background GPS during a run)',
+        'NSHealthShareUsageDescription':
+            'health (HealthKit reads for the import surface)',
+        'NSBluetoothAlwaysUsageDescription':
+            'flutter_reactive_ble (BLE chest-strap HR)',
+        'NSMotionUsageDescription':
+            'pedometer (treadmill step count / cadence)',
+        'NSPhotoLibraryUsageDescription':
+            'image_picker (attaching photos to runs)',
+      };
+      for (final entry in required.entries) {
+        expect(
+          body,
+          contains('<key>${entry.key}</key>'),
+          reason: 'Info.plist must declare ${entry.key} '
+              '(used by ${entry.value}). iOS denies the permission '
+              'silently when the key is missing.',
+        );
+      }
+    });
+
+    test('Workmanager background-task identifier is registered', () {
+      final file = File('ios/Runner/Info.plist');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Workmanager (`registerPeriodicTask` in background_sync.dart)
+      // uses BGTaskScheduler under the hood on iOS 13+. Without the
+      // identifier listed in BGTaskSchedulerPermittedIdentifiers
+      // the task ID gets rejected at registration time.
+      expect(
+        body,
+        contains('com.runonward.backgroundSync'),
+        reason: 'BGTaskSchedulerPermittedIdentifiers must include '
+            'the Workmanager task ID (com.runonward.backgroundSync) '
+            'or the periodic sync job will not run on iOS.',
+      );
+      expect(
+        body,
+        contains('<string>processing</string>'),
+        reason: 'UIBackgroundModes must include `processing` so the '
+            'BGTaskScheduler permitted-identifier above is honoured.',
+      );
+    });
+  });
 }
