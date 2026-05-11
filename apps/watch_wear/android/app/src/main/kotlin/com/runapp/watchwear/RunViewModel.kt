@@ -99,6 +99,11 @@ data class UiState(
     val offRouteDistanceM: Double? = null,
     /// Live "distance to end of route" in metres. Null when no route.
     val routeRemainingM: Double? = null,
+    /// Resolved zone upper-bound cutoffs (5 strictly-ascending BPMs).
+    /// Null until `applyUniversalPrefsAsync` lands the user's
+    /// `hr_zones` / `max_hr_bpm` / `date_of_birth` from the bag.
+    /// Drives the "Z3" badge next to the live BPM on the RunningScreen.
+    val hrZoneCutoffs: List<Int>? = null,
     /// Latest GPS fix during this run, or null until the first fix
     /// lands. Drives the runner-position dot on the on-watch mini-map.
     val latestPoint: GpsPoint? = null,
@@ -529,6 +534,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             // matters at handleFinishedRun, which can run minutes or
             // hours after the fetch returns.
             universalPrivacyDefault = settings.privacyDefault
+            // hr-zone cutoffs — resolved in priority order (explicit
+            // hr_zones > max_hr_bpm > 220-age from DOB). Stored on the
+            // VM state so the RunningScreen can render "Z3" next to
+            // BPM. Updated regardless of stage; null cutoffs disable
+            // the badge silently.
+            val resolved = resolveZoneCutoffs(settings, System.currentTimeMillis())
+            _state.value = _state.value.copy(hrZoneCutoffs = resolved)
             // default_activity_type — only prime; never override a
             // started run or a manual chip choice.
             val preferred = settings.defaultActivityType ?: return@launch

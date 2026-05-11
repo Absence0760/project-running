@@ -50,9 +50,14 @@ class UniversalSettingsTest {
     fun `prefs object with missing default_activity_type returns null`() {
         // Other prefs present but no default_activity_type. Same
         // outcome as no key at all — and same for privacy_default
-        // when only the other field is set.
-        val out = parseUniversalSettings("""[{"prefs":{"resting_hr_bpm":52}}]""")
-        assertEquals(UniversalSettings(defaultActivityType = null, privacyDefault = null), out)
+        // when only the other field is set. (Pick a key the wrist
+        // doesn't consume — `voice_feedback_enabled` is device-scoped
+        // so it never lands on `UniversalSettings`.)
+        val out = parseUniversalSettings(
+            """[{"prefs":{"voice_feedback_enabled":true}}]""",
+        )
+        assertEquals(null, out?.defaultActivityType)
+        assertEquals(null, out?.privacyDefault)
     }
 
     @Test
@@ -168,5 +173,167 @@ class UniversalSettingsTest {
         // ignores. If a future migration adds a value, extend both
         // this test and `UNIVERSAL_PRIVACY_DEFAULTS` together.
         assertEquals(setOf("public", "followers", "private"), UNIVERSAL_PRIVACY_DEFAULTS)
+    }
+
+    // ---- hr_zones + zone math ---------------------------------------------
+
+    @Test
+    fun `valid hr_zones round-trip as a 5-int list`() {
+        val out = parseUniversalSettings(
+            """[{"prefs":{"hr_zones":{"z1":114,"z2":133,"z3":152,"z4":171,"z5":190}}}]""",
+        )
+        assertEquals(listOf(114, 133, 152, 171, 190), out?.hrZones)
+    }
+
+    @Test
+    fun `hr_zones with a missing key is rejected`() {
+        // Pre-fix: parsing would have returned a 4-element list. The
+        // wrist would then crash or render Z5 for every bpm above
+        // cutoff[3]. Forcing all-or-nothing keeps the contract clear.
+        val out = parseUniversalSettings(
+            """[{"prefs":{"hr_zones":{"z1":114,"z2":133,"z3":152,"z4":171}}}]""",
+        )
+        assertNull(out?.hrZones)
+    }
+
+    @Test
+    fun `hr_zones not strictly ascending is rejected`() {
+        // Catches the "z3 < z2" misconfiguration that an older client
+        // could have produced. The Z calculator would otherwise pick
+        // a misleading zone.
+        val out = parseUniversalSettings(
+            """[{"prefs":{"hr_zones":{"z1":114,"z2":133,"z3":152,"z4":152,"z5":190}}}]""",
+        )
+        assertNull(out?.hrZones)
+    }
+
+    @Test
+    fun `hr_zones out-of-range entries are rejected`() {
+        // 300 bpm is past the human ceiling; 20 is well below
+        // resting. Either should sanitize the whole bag away.
+        val outHigh = parseUniversalSettings(
+            """[{"prefs":{"hr_zones":{"z1":114,"z2":133,"z3":152,"z4":171,"z5":300}}}]""",
+        )
+        assertNull(outHigh?.hrZones)
+        val outLow = parseUniversalSettings(
+            """[{"prefs":{"hr_zones":{"z1":20,"z2":133,"z3":152,"z4":171,"z5":190}}}]""",
+        )
+        assertNull(outLow?.hrZones)
+    }
+
+    @Test
+    fun `resting and max hr round-trip with valid range`() {
+        val out = parseUniversalSettings(
+            """[{"prefs":{"resting_hr_bpm":52,"max_hr_bpm":195}}]""",
+        )
+        assertEquals(52, out?.restingHrBpm)
+        assertEquals(195, out?.maxHrBpm)
+    }
+
+    @Test
+    fun `out-of-range resting and max hr are sanitised`() {
+        // resting in [25, 120], max in [100, 240]. Anything outside
+        // is treated as a corrupt write and zeroed.
+        val out = parseUniversalSettings(
+            """[{"prefs":{"resting_hr_bpm":15,"max_hr_bpm":80}}]""",
+        )
+        assertNull(out?.restingHrBpm)
+        assertNull(out?.maxHrBpm)
+    }
+
+    @Test
+    fun `date_of_birth round-trips when shaped correctly`() {
+        val out = parseUniversalSettings(
+            """[{"prefs":{"date_of_birth":"1990-04-15"}}]""",
+        )
+        assertEquals("1990-04-15", out?.dateOfBirth)
+    }
+
+    @Test
+    fun `malformed date_of_birth is sanitised away`() {
+        // The consumer parses via java.time.LocalDate later; we
+        // gate obvious garbage here so the DOB read path can't
+        // surface a parser exception.
+        for (bad in listOf("not-a-date", "1990-13-99", "90-04-15", "1990/04/15", "1990-04")) {
+            val out = parseUniversalSettings(
+                """[{"prefs":{"date_of_birth":"$bad"}}]""",
+            )
+            // We only require the shape gate, not full calendar
+            // validation. `1990-13-99` passes the shape gate
+            // (10 chars, hyphens at 4/7, digits) so it's caught
+            // in `ageBasedMaxHr`'s try/catch. The other four
+            // fail the shape gate.
+            if (bad == "1990-13-99") {
+                assertEquals(bad, out?.dateOfBirth)
+            } else {
+                assertNull("expected $bad to be rejected at parse time", out?.dateOfBirth)
+            }
+        }
+    }
+
+    @Test
+    fun `hrZoneOf maps each band correctly with explicit cutoffs`() {
+        val c = listOf(114, 133, 152, 171, 190)
+        // Boundary on the upper edge of each band is "in" that band
+        // (≤ cutoff). One above goes to the next.
+        assertEquals(1, hrZoneOf(80, c))
+        assertEquals(1, hrZoneOf(114, c))
+        assertEquals(2, hrZoneOf(115, c))
+        assertEquals(2, hrZoneOf(133, c))
+        assertEquals(3, hrZoneOf(150, c))
+        assertEquals(4, hrZoneOf(170, c))
+        assertEquals(5, hrZoneOf(191, c))
+        assertEquals(5, hrZoneOf(220, c))
+    }
+
+    @Test
+    fun `hrZoneOf returns null when cutoffs missing or malformed`() {
+        assertNull(hrZoneOf(150, null))
+        assertNull(hrZoneOf(150, emptyList()))
+        assertNull(hrZoneOf(150, listOf(100, 110, 120, 130))) // 4 entries
+    }
+
+    @Test
+    fun `resolveZoneCutoffs prefers explicit hr_zones`() {
+        val s = UniversalSettings(
+            defaultActivityType = null,
+            privacyDefault = null,
+            hrZones = listOf(110, 120, 130, 140, 150),
+            maxHrBpm = 195, // ignored because hr_zones win
+        )
+        assertEquals(listOf(110, 120, 130, 140, 150), resolveZoneCutoffs(s, 0L))
+    }
+
+    @Test
+    fun `resolveZoneCutoffs derives from max_hr_bpm when hr_zones missing`() {
+        // 60/70/80/90/100% of 200 = 120/140/160/180/200.
+        val s = UniversalSettings(
+            defaultActivityType = null,
+            privacyDefault = null,
+            maxHrBpm = 200,
+        )
+        assertEquals(listOf(120, 140, 160, 180, 200), resolveZoneCutoffs(s, 0L))
+    }
+
+    @Test
+    fun `resolveZoneCutoffs derives from dob via 220 minus age`() {
+        // Born 1990-01-01; "now" of 2026-01-01 → 36 years old → 184 max.
+        val s = UniversalSettings(
+            defaultActivityType = null,
+            privacyDefault = null,
+            dateOfBirth = "1990-01-01",
+        )
+        val now2026 = java.time.LocalDate.of(2026, 1, 1)
+            .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        // 60/70/80/90/100% of 184 = 110, 128, 147, 165, 184.
+        // (`(184 * 0.60).toInt()` = 110 via truncation).
+        assertEquals(listOf(110, 128, 147, 165, 184), resolveZoneCutoffs(s, now2026))
+    }
+
+    @Test
+    fun `resolveZoneCutoffs returns null when no signal available`() {
+        // Empty bag → no zones to show.
+        val s = UniversalSettings(defaultActivityType = null, privacyDefault = null)
+        assertNull(resolveZoneCutoffs(s, 0L))
     }
 }

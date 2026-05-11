@@ -81,6 +81,7 @@ import androidx.wear.compose.material.Vignette
 import androidx.wear.compose.material.VignettePosition
 import com.runapp.watchwear.RunViewModel
 import com.runapp.watchwear.Stage
+import com.runapp.watchwear.hrZoneOf
 import com.runapp.watchwear.system.BatteryOptimization
 import android.app.Activity
 import kotlinx.coroutines.Job
@@ -196,6 +197,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     distanceM = state.distanceM,
                     paceSecPerKm = state.paceSecPerKm,
                     bpm = state.bpm,
+                    hrZoneCutoffs = state.hrZoneCutoffs,
                     steps = state.steps,
                     lapCount = state.lapCount,
                     paused = state.stage == Stage.Paused,
@@ -1040,6 +1042,7 @@ private fun RunningScreen(
     distanceM: Double,
     paceSecPerKm: Double?,
     bpm: Int?,
+    hrZoneCutoffs: List<Int>?,
     steps: Int?,
     lapCount: Int,
     paused: Boolean,
@@ -1244,7 +1247,15 @@ private fun RunningScreen(
                 )
             }
             val secondary = listOfNotNull(
-                bpm?.let { "$it bpm" },
+                // Zone badge sits adjacent to the BPM reading so the
+                // runner can read both in a single glance. Falls back
+                // to bare "146 bpm" when the cutoffs haven't been
+                // resolved (no hr_zones / max_hr_bpm / DOB set, or the
+                // session-restore prefs fetch hasn't returned yet).
+                bpm?.let { b ->
+                    val z = hrZoneOf(b, hrZoneCutoffs)
+                    if (z != null) "$b bpm · Z$z" else "$b bpm"
+                },
                 steps?.takeIf { it > 0 }?.let { "$it steps" },
                 lapCount.takeIf { it > 0 }?.let { "Lap $it" },
             )

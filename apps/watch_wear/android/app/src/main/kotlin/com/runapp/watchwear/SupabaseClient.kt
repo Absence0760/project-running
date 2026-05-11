@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -64,9 +65,19 @@ internal fun humanErrorMessage(code: Int, body: String): String {
 ///     `private` / null → omit the column (DB default `false`
 ///     wins). The phone/web social layer is the authoritative path
 ///     for the `followers` nuance.
+///   - `hrZones` (5 strictly-ascending upper bounds) plus the
+///     fallback inputs `maxHrBpm` and `dateOfBirth` feed the live
+///     "Z3" badge next to BPM on the RunningScreen. The
+///     `resolveZoneCutoffs` precedence is: explicit hr_zones >
+///     60/70/80/90/100% of max_hr_bpm > 60/70/80/90/100% of
+///     (220 - age from DOB) > null (no zone display).
 data class UniversalSettings(
     val defaultActivityType: String?,
     val privacyDefault: String?,
+    val hrZones: List<Int>? = null,
+    val restingHrBpm: Int? = null,
+    val maxHrBpm: Int? = null,
+    val dateOfBirth: String? = null,
 )
 
 /// Allowed values for `default_activity_type`. Mirrors the CHECK
@@ -100,11 +111,106 @@ internal fun parseUniversalSettings(body: String?): UniversalSettings? {
         if (arr.isEmpty()) return empty
         val row = arr[0] as? JsonObject ?: return null
         val prefs = row["prefs"] as? JsonObject ?: return empty
-        val activity = prefs["default_activity_type"]?.jsonPrimitive?.contentOrNull
-            ?.takeIf { it in UNIVERSAL_ACTIVITY_TYPES }
-        val privacy = prefs["privacy_default"]?.jsonPrimitive?.contentOrNull
-            ?.takeIf { it in UNIVERSAL_PRIVACY_DEFAULTS }
-        UniversalSettings(defaultActivityType = activity, privacyDefault = privacy)
+        UniversalSettings(
+            defaultActivityType = prefs["default_activity_type"]?.jsonPrimitive?.contentOrNull
+                ?.takeIf { it in UNIVERSAL_ACTIVITY_TYPES },
+            privacyDefault = prefs["privacy_default"]?.jsonPrimitive?.contentOrNull
+                ?.takeIf { it in UNIVERSAL_PRIVACY_DEFAULTS },
+            hrZones = parseHrZones(prefs["hr_zones"] as? JsonObject),
+            restingHrBpm = (prefs["resting_hr_bpm"]?.jsonPrimitive?.intOrNull)
+                ?.takeIf { it in 25..120 },
+            maxHrBpm = (prefs["max_hr_bpm"]?.jsonPrimitive?.intOrNull)
+                ?.takeIf { it in 100..240 },
+            dateOfBirth = prefs["date_of_birth"]?.jsonPrimitive?.contentOrNull
+                ?.takeIf { isValidIsoDate(it) },
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+/// Parse an `hr_zones` object (`{z1, z2, z3, z4, z5}`) into an
+/// ordered list of upper-bound cutoffs. Returns null when any entry
+/// is missing, non-integer, non-positive, out of [40, 240], or when
+/// the five values aren't strictly ascending. The strict-ascending
+/// gate is what stops a misconfigured zone bag from rendering a
+/// nonsensical "Z3" at e.g. bpm=130 when the cutoffs were saved as
+/// {z1:170, z2:160, z3:150, ...} by an old client.
+private fun parseHrZones(obj: JsonObject?): List<Int>? {
+    if (obj == null) return null
+    val keys = listOf("z1", "z2", "z3", "z4", "z5")
+    val out = ArrayList<Int>(5)
+    for (k in keys) {
+        val v = obj[k]?.jsonPrimitive?.intOrNull ?: return null
+        if (v !in 40..240) return null
+        out.add(v)
+    }
+    for (i in 1 until out.size) {
+        if (out[i] <= out[i - 1]) return null
+    }
+    return out
+}
+
+/// Cheap ISO-date sanity check (YYYY-MM-DD). Not a full RFC 3339
+/// parse — the consumer does the day arithmetic via `LocalDate` so
+/// any malformed string would surface there. We sanitise the most
+/// obvious garbage here so a corrupt `date_of_birth` cell doesn't
+/// poison the calling code with a `DateTimeParseException`.
+private fun isValidIsoDate(s: String): Boolean {
+    if (s.length != 10) return false
+    if (s[4] != '-' || s[7] != '-') return false
+    return s.substring(0, 4).all { it.isDigit() } &&
+        s.substring(5, 7).all { it.isDigit() } &&
+        s.substring(8, 10).all { it.isDigit() }
+}
+
+/// Pure mapping from a live BPM to a 1..5 zone, given the
+/// strictly-ascending 5-element cutoff array. Returns null when
+/// `cutoffs` is null or empty so the caller can omit the "Z3"
+/// badge rather than rendering a misleading default. The Dart
+/// twin in `apps/mobile_android/lib/hr_zones.dart`'s `_zoneIndex`
+/// uses 0..4; the wrist uses 1..5 because it surfaces directly
+/// in user-visible text.
+internal fun hrZoneOf(bpm: Int, cutoffs: List<Int>?): Int? {
+    if (cutoffs.isNullOrEmpty() || cutoffs.size != 5) return null
+    for (i in 0 until 4) {
+        if (bpm <= cutoffs[i]) return i + 1
+    }
+    return 5
+}
+
+/// Pick zone cutoffs in priority order: explicit `hr_zones` >
+/// 60/70/80/90/100% of `max_hr_bpm` > 60/70/80/90/100% of
+/// (220 - age from `date_of_birth`) > null.
+///
+/// `nowMs` is injected so tests can pin the age calculation —
+/// production callers pass `System.currentTimeMillis()`.
+internal fun resolveZoneCutoffs(s: UniversalSettings, nowMs: Long): List<Int>? {
+    s.hrZones?.let { return it }
+    val maxHr = s.maxHrBpm ?: ageBasedMaxHr(s.dateOfBirth, nowMs)
+    if (maxHr == null) return null
+    // 60/70/80/90/100% — matches the Dart fallback ladder
+    // (60% × 190 = 114, etc.) and the web inferred path.
+    return listOf(
+        (maxHr * 0.60).toInt(),
+        (maxHr * 0.70).toInt(),
+        (maxHr * 0.80).toInt(),
+        (maxHr * 0.90).toInt(),
+        maxHr,
+    )
+}
+
+private fun ageBasedMaxHr(dob: String?, nowMs: Long): Int? {
+    if (dob == null) return null
+    return try {
+        val year = dob.substring(0, 4).toInt()
+        val month = dob.substring(5, 7).toInt()
+        val day = dob.substring(8, 10).toInt()
+        val now = java.time.Instant.ofEpochMilli(nowMs)
+            .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val born = java.time.LocalDate.of(year, month, day)
+        val age = java.time.Period.between(born, now).years
+        if (age in 5..120) (220 - age) else null
     } catch (_: Throwable) {
         null
     }
