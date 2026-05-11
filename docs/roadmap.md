@@ -322,10 +322,10 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 
 ### In-app route builder (free)
 
-- [ ] Click-to-place waypoints on MapLibre (mobile)
-- [ ] Auto-snap to roads or trail mode
-- [ ] Elevation preview before running
-- [ ] Save to route library + shareable link
+- [x] Click-to-place waypoints on MapLibre (mobile) — `route_builder_screen.dart`, tap-to-place + numbered pins
+- [x] Auto-snap to roads or trail mode — `routing.dart` (foot/car profiles via public OSRM), plus a Straight bypass for off-road
+- [ ] Elevation preview before running — deferred (no elevation API call wired yet)
+- [x] Save to route library + shareable link — Save dialog hands off to `ApiClient.saveRoute`, public toggle exposes it via the existing share path
 
 ### Community route library
 

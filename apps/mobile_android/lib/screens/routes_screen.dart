@@ -13,6 +13,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../widgets/route_track_preview.dart';
 import 'explore_routes_screen.dart';
+import 'route_builder_screen.dart';
 import 'route_detail_screen.dart';
 import '../widgets/top_banner.dart';
 
@@ -402,6 +403,22 @@ class _RoutesScreenState extends State<RoutesScreen> {
     }
   }
 
+  Future<void> _openBuilder() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final created = await Navigator.of(context).push<cm.Route>(
+      MaterialPageRoute(
+        builder: (_) => RouteBuilderScreen(
+          apiClient: api,
+          routeStore: widget.routeStore,
+        ),
+      ),
+    );
+    if (created != null && mounted) {
+      showTopBanner(context, 'Saved "${created.name}"');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -466,11 +483,25 @@ class _RoutesScreenState extends State<RoutesScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'routes_import_fab',
-        onPressed: _importFile,
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Import'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (widget.apiClient != null)
+            FloatingActionButton.extended(
+              heroTag: 'routes_build_fab',
+              onPressed: _openBuilder,
+              icon: const Icon(Icons.add_location_alt),
+              label: const Text('Build'),
+            ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'routes_import_fab',
+            onPressed: _importFile,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Import'),
+          ),
+        ],
       ),
       body: mergedRoutes.isEmpty
           ? Center(

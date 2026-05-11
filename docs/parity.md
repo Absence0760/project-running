@@ -67,9 +67,9 @@ See [features § Full-screen route builder](features.md#full-screen-route-builde
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Full-screen click-to-place route builder | ✗ | ✗ | ✓ | N/A | N/A | Mobile builder is Phase 3, not started. Wrist screens too small by design. |
-| Snap-to-road / trail (OSRM) | ✗ | ✗ | ✓ | N/A | N/A | |
-| Elevation preview while drawing | ✗ | ✗ | ✓ | N/A | N/A | |
+| Full-screen click-to-place route builder | Partial | Partial | ✓ | N/A | N/A | Mobile MVP shipped: tap-to-place waypoints + OSRM road / trail / straight modes + undo + clear + save (name + public toggle) on `route_builder_screen.dart`. Reached from the second "Build" FAB on `routes_screen`. Deferred for parity with web: draggable marker reshape, snap-to-start pulsing marker, MapTiler place search, overlap detection, geolocate auto-center, numbered start/end pins (basic ones shipped). Wrist screens too small by design. |
+| Snap-to-road / trail (OSRM) | Partial | Partial | ✓ | N/A | N/A | Mobile shipped via `lib/routing.dart` (Dart port of `apps/web/src/lib/routing.ts`). `snapToRoad` + `fetchRouteThrough` wrap the public OSRM endpoint with foot / car profiles. 9 unit tests on URL building, parsing, and error fallback. |
+| Elevation preview while drawing | ✗ | ✗ | ✓ | N/A | N/A | Mobile builder MVP doesn't fetch the elevation grid yet — deferred follow-up. |
 | Route library (list saved routes) | ✓ | Partial | ✓ | ✗ | ✗ | iOS code is identical to Android per [decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — `Partial` reflects "Mac-build runtime parity not yet verified end-to-end" rather than "screen is mock". |
 | Route detail (map + stats) | ✓ | Partial | ✓ | ✗ | ✗ | Same shape as the row above — code-equivalent, awaiting Mac-runtime verification. |
 | Public / private toggle per route | ✓ | ✗ | ✓ | N/A | N/A | Bidirectional on both: Android's globe icon on `route_detail_screen.dart`; web's owner-only `Public` / `Private` button on `/routes/[id]` (added in parallel with the explicit Share button; `setRoutePublic(id, bool)` in `data.ts` with optimistic UI + rollback). |
