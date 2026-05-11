@@ -16,6 +16,7 @@ import '../goals.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
+import '../revenuecat.dart';
 import '../settings_sync.dart';
 import 'import_screen.dart';
 import 'devices_screen.dart';
@@ -1017,6 +1018,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _startProCheckout() async {
+    // Three-way fallback to keep this tile useful on every build:
+    //   1. RC configured + signed in → native sheet
+    //   2. RC unconfigured (no API key in dotenv)        → web URL
+    //   3. RC configured but anonymous (no Supabase user) → web URL,
+    //      since the purchase needs to attach to a user id
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (!isRevenueCatConfigured() || userId == null) {
+      await _openExternal('https://run.app/settings/upgrade');
+      return;
+    }
+    final r = await startProCheckout(userId);
+    if (!mounted) return;
+    switch (r) {
+      case PurchaseResult.purchased:
+        showTopBanner(context, 'Welcome to Pro! Pulling your benefits…');
+        // The revenuecat-webhook flips subscription_tier server-side;
+        // a profile refetch a few seconds later picks it up. Caller
+        // surfaces are already wired via `ApiClient.isPro()`.
+        break;
+      case PurchaseResult.cancelled:
+        // Benign — user dismissed the sheet.
+        break;
+      case PurchaseResult.failed:
+        showTopBanner(context, 'Purchase failed. Try again later.');
+        break;
+      case PurchaseResult.notConfigured:
+        // Shouldn't fire (we gated on isRevenueCatConfigured above),
+        // but if the SDK init itself failed, fall through to web.
+        await _openExternal('https://run.app/settings/upgrade');
+        break;
+    }
+  }
+
   Future<void> _changePassword() async {
     final pwdCtl = TextEditingController();
     final confirmCtl = TextEditingController();
@@ -1224,11 +1260,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.workspace_premium_outlined),
-              title: const Text('Manage subscription'),
-              subtitle:
-                  const Text('Open the subscription portal in your browser'),
-              trailing: const Icon(Icons.open_in_new, size: 18),
-              onTap: () => _openExternal('https://run.app/settings/upgrade'),
+              title: const Text('Subscribe to Pro'),
+              subtitle: Text(
+                isRevenueCatConfigured()
+                    ? 'Unlock the AI coach and priority processing'
+                    : 'Opens the subscription portal in your browser',
+              ),
+              trailing: Icon(
+                isRevenueCatConfigured()
+                    ? Icons.chevron_right
+                    : Icons.open_in_new,
+                size: 18,
+              ),
+              onTap: _startProCheckout,
             ),
             ListTile(
               leading: const Icon(Icons.volunteer_activism_outlined),

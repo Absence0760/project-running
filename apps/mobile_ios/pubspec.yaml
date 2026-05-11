@@ -66,6 +66,14 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_markdown: ^0.7.4
   sign_in_with_apple: ^8.0.0
+  # RevenueCat native SDK for the in-app Pro purchase sheet. The Dart
+  # wrapper in `lib/revenuecat.dart` gates every call on `dotenv.env`
+  # carrying a platform-appropriate API key, so an unconfigured build
+  # (no `REVENUECAT_API_KEY_ANDROID` / `REVENUECAT_API_KEY_IOS`) keeps
+  # the existing "open web /settings/upgrade" fallback and never
+  # initialises the SDK. Mirrors the web's
+  # `apps/web/src/lib/revenuecat.ts` pattern.
+  purchases_flutter: ^10.0.0
   # Crash reporting + breadcrumb trail for production builds. Init in
   # lib/main.dart's runZonedGuarded so unhandled errors land tagged with
   # the build's versionName; off when SENTRY_DSN is unset (dev / debug).
