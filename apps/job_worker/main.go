@@ -15,6 +15,7 @@ import (
 	"github.com/Absence0760/project-running/apps/job_worker/internal"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/dataexport"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
 )
 
@@ -98,6 +99,32 @@ func (b *dataexportBackend) UploadExportArtifact(ctx context.Context, path, cont
 
 func (b *dataexportBackend) CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error) {
 	return b.client.CreateSignedURL(ctx, path, ttlSec)
+}
+
+// premiumBackend adapts SupabaseClient to premium.Backend.
+type premiumBackend struct {
+	client *internal.SupabaseClient
+}
+
+func (b *premiumBackend) FetchUserSubscriptionTier(ctx context.Context, userID string) (string, error) {
+	return b.client.FetchUserSubscriptionTier(ctx, userID)
+}
+
+func (b *premiumBackend) FetchPremiumRuns(ctx context.Context, userID string, since time.Time, limit int) ([]premium.PremiumRun, error) {
+	rows, err := b.client.FetchPremiumRuns(ctx, userID, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]premium.PremiumRun, len(rows))
+	for i, r := range rows {
+		out[i] = premium.PremiumRun{
+			StartedAt: r.StartedAt,
+			DistanceM: r.DistanceM,
+			DurationS: r.DurationS,
+			Metadata:  r.Metadata,
+		}
+	}
+	return out, nil
 }
 
 // main wires environment → SupabaseClient → Worker.Run. Kept thin so
@@ -286,7 +313,23 @@ func main() {
 		logger.Warn("dataexport: DISABLED — SUPABASE_JWT_SECRET unset; export endpoint returns 503")
 	}
 
-	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv)
+	// Premium endpoints — Pro-tier-gated POSTs at /v1/premium/{vo2max,
+	// race-predictor, recovery, training-plan}. Same JWT auth as the
+	// data-export endpoint; an extra subscription_tier check before
+	// the compute. Refuses with 503 when SUPABASE_JWT_SECRET unset.
+	var premiumSrv *premium.Server
+	if jwtSecret := os.Getenv("SUPABASE_JWT_SECRET"); jwtSecret != "" {
+		premiumSrv = &premium.Server{
+			JWTSecret: []byte(jwtSecret),
+			Backend:   &premiumBackend{client: client},
+			Log:       logger.With("component", "premium"),
+		}
+		logger.Info("premium: enabled (Pro endpoints mounted at /v1/premium/*)")
+	} else {
+		logger.Warn("premium: DISABLED — SUPABASE_JWT_SECRET unset; Pro endpoints return 503")
+	}
+
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv, premiumSrv)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -313,7 +356,7 @@ func main() {
 // happens to take that long to handle; longer-running jobs would
 // trigger a restart, which is the correct response for "this job is
 // hung".
-func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server) *http.Server {
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server, prem *premium.Server) *http.Server {
 	mux := http.NewServeMux()
 	if hub != nil {
 		hub.RegisterRoutes(mux)
@@ -323,6 +366,9 @@ func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, w
 	}
 	if export != nil {
 		export.RegisterRoutes(mux)
+	}
+	if prem != nil {
+		prem.RegisterRoutes(mux)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		ageSec := time.Now().Unix() - lastClaim.Load()

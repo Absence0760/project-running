@@ -133,9 +133,14 @@ apps/job_worker/
 │   ├── stravahook/          # Strava webhook HTTP endpoint (POST → enqueue strava_event)
 │   │   ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
 │   │   └── server_test.go   # 13 httptest cases on every gate + the handshake
-│   └── dataexport/          # GDPR data-export HTTP endpoint (POST /v1/export)
-│       ├── server.go        # JWT auth + tiered rate limit + CSV/GPX-zip builder + signed URL
-│       └── server_test.go   # 14 tests (9 httptest + 5 pure builder/helpers)
+│   ├── dataexport/          # GDPR data-export HTTP endpoint (POST /v1/export)
+│   │   ├── server.go        # JWT auth + tiered rate limit + CSV/GPX-zip builder + signed URL
+│   │   └── server_test.go   # 14 tests (9 httptest + 5 pure builder/helpers)
+│   └── premium/             # Pro-only HTTP endpoints (POST /v1/premium/{vo2max,race-predictor,recovery,training-plan})
+│       ├── server.go        # Shared JWT + Pro-tier gate + 4 handlers; Backend leaf interface
+│       ├── compute.go       # Pure helpers — Daniels VDOT, Riegel, EWMA training load, recovery advice, plan generator
+│       ├── compute_test.go  # 16 pure-compute tests
+│       └── server_test.go   # 20 httptest tests (auth gates + 4 happy paths + validation)
 ├── osrm/                    # local OSRM dev stack (compose + Makefile)
 ├── Dockerfile               # multi-stage; final image is distroless
 ├── README.md                # local-run instructions

@@ -148,6 +148,17 @@ The worker dispatches by `jobs.kind`. Today:
 |---|---|---|
 | `POST /v1/export` on the Go service | `export-data` Edge Function | JWT-authed (same `SUPABASE_JWT_SECRET` the live hub uses). Tiered rate limit (free 2/h, pro 8/h) via `check_rate_limit_tiered`. Builds CSV or GPX zip of up to 5000 runs, uploads to `runs/{user_id}/exports/<ts>.{csv,zip}`, returns a 10-min signed URL. Body shape: `{format: 'csv'|'gpx'}`. |
 
+**Premium endpoints** are the Pro-tier compute surface — VDOT, Riegel, training-load, plan generation. All four mount on the existing health/live-hub listener and gate on `user_profiles.subscription_tier` (`pro` + `lifetime` count; `free` → 402):
+
+| Endpoint | Body | Notes |
+|---|---|---|
+| `POST /v1/premium/vo2max` | `{}` | Returns the best Daniels VDOT from qualifying runs in the last 90 days. 404 when no qualifying run (distance ≥ 3 km, duration ≥ 5 min, runlike activity). |
+| `POST /v1/premium/race-predictor` | `{target_distance_m, exponent?}` | Riegel prediction from the user's best effort to the target. `exponent` defaults to 1.06. |
+| `POST /v1/premium/recovery` | `{}` | 90-day daily-aggregated EWMA (CTL halflife 42, ATL halflife 7) → fitness/fatigue/form + advice string. |
+| `POST /v1/premium/training-plan` | `{goal_event, goal_distance_m?, recent_5k_sec, weeks?, days_per_week?}` | Phased plan generator. `goal_event` ∈ `distance_5k`, `distance_10k`, `distance_half`, `distance_full`, `custom` (requires `goal_distance_m`). Defaults: weeks per event (8/8/12/16/12), days/week 4. |
+
+All four endpoints share the same auth + Pro-check shape: 503 when `SUPABASE_JWT_SECRET` is unset, 405 on non-POST, 401 on missing/invalid/expired/wrong-key bearer, 402 on free tier, 500 on tier-lookup failure. Boot log reads `premium: enabled (Pro endpoints mounted at /v1/premium/*)` when `SUPABASE_JWT_SECRET` is set; without the secret it reads `premium: DISABLED — SUPABASE_JWT_SECRET unset; Pro endpoints return 503`. The compute is pure (no per-request DB writes; the only Supabase reads are the tier check and a runs projection up to 500 rows).
+
 **Cutover recipe for `token_refresh`.** The Edge Function and the Go path can coexist — they both refresh the same rows; whichever runs first wins, the second one finds nothing expiring within an hour. To migrate:
 
 1. Deploy the worker with the Strava env vars set. Boot log should show `strava: enabled (token_refresh dispatch armed)`. Without that line the dispatch falls through to a permanent failure on every `token_refresh` job — operator-visible in `flyctl logs`.

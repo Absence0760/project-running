@@ -853,3 +853,72 @@ func (c *SupabaseClient) CreateSignedURL(ctx context.Context, path string, ttlSe
 	}
 	return parsed.SignedURL, nil
 }
+
+// FetchUserSubscriptionTier reads the `subscription_tier` column on
+// `user_profiles`. Returns "free" when no row exists (a user that
+// hasn't completed onboarding); otherwise returns the value
+// verbatim — the caller decides whether it counts as Pro.
+func (c *SupabaseClient) FetchUserSubscriptionTier(ctx context.Context, userID string) (string, error) {
+	q := url.Values{}
+	q.Set("id", "eq."+userID)
+	q.Set("select", "subscription_tier")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/user_profiles?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	var rows []struct {
+		Tier string `json:"subscription_tier"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return "", err
+	}
+	if len(rows) == 0 || rows[0].Tier == "" {
+		return "free", nil
+	}
+	return rows[0].Tier, nil
+}
+
+// FetchPremiumRuns reads the projection the Pro endpoints need
+// (started_at + distance + duration + metadata). Service role.
+// Ordered most-recent first, capped at limit, filtered to runs
+// since `since` when non-zero.
+func (c *SupabaseClient) FetchPremiumRuns(ctx context.Context, userID string, since time.Time, limit int) ([]premiumRunRow, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("select", "started_at,distance_m,duration_s,metadata")
+	q.Set("order", "started_at.desc")
+	q.Set("limit", strconv.Itoa(limit))
+	if !since.IsZero() {
+		q.Set("started_at", "gte."+since.UTC().Format(time.RFC3339))
+	}
+	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []premiumRunRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// premiumRunRow mirrors premium.PremiumRun. Keeping it in `internal`
+// avoids importing `premium` and creating a cycle; the adapter in
+// main.go translates across.
+type premiumRunRow struct {
+	StartedAt string                 `json:"started_at"`
+	DistanceM float64                `json:"distance_m"`
+	DurationS int                    `json:"duration_s"`
+	Metadata  map[string]interface{} `json:"metadata"`
+}

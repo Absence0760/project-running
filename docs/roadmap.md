@@ -479,12 +479,7 @@ Surfaces that other running apps ship as table stakes and we don't. Each one is 
 
 ### Backend work (Phase 3)
 
-- [ ] Add premium endpoints to Go service:
-  - [ ] `POST /training-plan` — generate weekly plan (Daniels' VDOT tables)
-  - [ ] `GET /vo2max` — estimate from recent runs with HR data
-  - [ ] `GET /race-predictor` — predict finish times (Riegel formula)
-  - [ ] `GET /recovery` — training load and recovery recommendation
-  - [ ] Gate all by `subscription_tier = 'premium'`
+- [x] Add premium endpoints to Go service — shipped under `apps/job_worker/internal/premium/`. All four endpoints mounted on the existing `/health` listener as POSTs (consistent verb regardless of whether the endpoint reads or computes): `/v1/premium/training-plan` (Riegel-derived paces + phased weekly mileage), `/v1/premium/vo2max` (Daniels VDOT from the best qualifying run in the last 90 days), `/v1/premium/race-predictor` (Riegel from best effort), `/v1/premium/recovery` (90-day EWMA CTL/ATL/TSB + advice). Gated via `user_profiles.subscription_tier` (`pro` + `lifetime` count; anything else → 402) after a shared HS256 JWT extract that mirrors the live hub's auth path. Pure-compute helpers mirror `apps/web/src/lib/fitness.ts` + `apps/web/src/lib/training.ts`. 36 tests (16 pure-compute + 20 httptest), race-clean. See `docs/followups.md § #12` for the full surface, test list, and cutover recipe.
 - [x] Enable PostGIS extension in Supabase — shipped in migration `20260415_001_postgis_nearby_routes.sql` (extension + `routes.start_point` + GiST index + `nearby_routes` RPC + sync trigger).
 - [x] Add `geom geography(LineString, 4326)` column to `routes` with spatial index — shipped in migration `20260607_001_routes_geom_linestring.sql`. Column + `routes_geom_gist` GiST index + `routes_set_geom` trigger keep the full polyline in sync with `waypoints`. Backfill rebuilds existing rows with ≥2 valid waypoints. Both client codegens treat the column as opaque; queries against it live server-side.
 - [x] Add `training_plans` table for generated plans — shipped in migration `20260419_001_training_plans.sql` along with `plan_weeks` and `plan_workouts`. Hardening pass in `20260421_001_plan_hardening.sql`; editor / template surfaces in `20260420_001` and `20260524_001`.
