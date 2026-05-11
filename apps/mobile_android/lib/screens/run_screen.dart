@@ -1547,6 +1547,12 @@ class _RunScreenState extends State<RunScreen> {
     _publishWorkoutBand();
   }
 
+  void _onRewindWorkoutStep() {
+    final r = _workoutRunner;
+    if (r == null) return;
+    if (r.rewindStep()) _publishWorkoutBand();
+  }
+
   void _onAbandonWorkout() async {
     final r = _workoutRunner;
     if (r == null) return;
@@ -2026,6 +2032,7 @@ class _RunScreenState extends State<RunScreen> {
             child: WorkoutExecutionBand(
               state: _workoutBand,
               onSkip: _onSkipWorkoutStep,
+              onRewind: _onRewindWorkoutStep,
               onAbandon: _onAbandonWorkout,
             ),
           ),

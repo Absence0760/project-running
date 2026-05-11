@@ -24,6 +24,7 @@ Future<void> _pumpBand(
   WidgetTester tester, {
   required WorkoutBandState state,
   VoidCallback? onSkip,
+  VoidCallback? onRewind,
   VoidCallback? onAbandon,
 }) {
   final notifier = ValueNotifier<WorkoutBandState>(state);
@@ -33,6 +34,7 @@ Future<void> _pumpBand(
         body: WorkoutExecutionBand(
           state: notifier,
           onSkip: onSkip ?? () {},
+          onRewind: onRewind ?? () {},
           onAbandon: onAbandon ?? () {},
         ),
       ),
@@ -46,7 +48,8 @@ void main() {
         (tester) async {
       await _pumpBand(tester, state: WorkoutBandState.empty);
       expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(find.text('Skip step'), findsNothing);
+      expect(find.text('Skip'), findsNothing);
+      expect(find.text('Rewind'), findsNothing);
     });
 
     testWidgets('renders step label, target distance, target pace, and m-to-go',
@@ -96,13 +99,62 @@ void main() {
         onAbandon: () => abandons++,
       );
 
-      await tester.tap(find.text('Skip step'));
+      await tester.tap(find.text('Skip'));
       await tester.pump();
       expect(skips, 1);
 
       await tester.tap(find.text('Abandon'));
       await tester.pump();
       expect(abandons, 1);
+    });
+
+    testWidgets('Rewind is disabled on the first step', (tester) async {
+      var rewinds = 0;
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _step(),
+          totalSteps: 3,
+          currentIndex: 0,
+          progress: 0.5,
+          remainingMetres: 200,
+          actualPaceSecPerKm: 240,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+        onRewind: () => rewinds++,
+      );
+      final rewindBtn = find.widgetWithText(OutlinedButton, 'Rewind');
+      expect(rewindBtn, findsOneWidget);
+      // onPressed is null on the first step → button is disabled, taps no-op.
+      await tester.tap(rewindBtn, warnIfMissed: false);
+      await tester.pump();
+      expect(rewinds, 0,
+          reason: 'Rewind button must be disabled when currentIndex == 0');
+    });
+
+    testWidgets('Rewind triggers callback once advanced past first step',
+        (tester) async {
+      var rewinds = 0;
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _step(),
+          totalSteps: 3,
+          currentIndex: 1,
+          progress: 0.1,
+          remainingMetres: 360,
+          actualPaceSecPerKm: 240,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+        onRewind: () => rewinds++,
+      );
+      await tester.tap(find.text('Rewind'));
+      await tester.pump();
+      expect(rewinds, 1);
     });
 
     testWidgets('renders the workout-complete shell when step is null + complete',
@@ -123,7 +175,8 @@ void main() {
       );
       expect(find.textContaining('Workout complete'), findsOneWidget);
       // Controls hidden in complete state.
-      expect(find.text('Skip step'), findsNothing);
+      expect(find.text('Skip'), findsNothing);
+      expect(find.text('Rewind'), findsNothing);
       expect(find.text('Abandon'), findsNothing);
     });
 
@@ -143,7 +196,8 @@ void main() {
         ),
       );
       expect(find.textContaining('abandoned'), findsOneWidget);
-      expect(find.text('Skip step'), findsNothing);
+      expect(find.text('Skip'), findsNothing);
+      expect(find.text('Rewind'), findsNothing);
     });
 
     testWidgets('pace pip uses an em-dash when actual pace is null',

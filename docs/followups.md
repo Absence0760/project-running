@@ -62,7 +62,7 @@ These tasks are marked completed at the high-leverage surface but have known sub
 ### #7 Workout execution v2
 
 Per `docs/workout_execution.md` deferred section:
-- [ ] `rewindStep` UI control
+- [x] `rewindStep` UI control — `WorkoutRunner.rewindStep()` + leftmost band button (disabled on step 0). 4 new runner tests + 2 new band tests.
 - [ ] Ghost-pacer marker on the map
 - [ ] Duration-based steps (v2)
 - [ ] Crash-checkpoint resume

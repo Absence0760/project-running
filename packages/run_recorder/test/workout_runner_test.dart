@@ -211,6 +211,91 @@ void main() {
       expect(runner.adherence(), WorkoutAdherence.abandoned);
       runner.dispose();
     });
+
+    test('rewindStep is a no-op on the first step (no previous to rewind to)',
+        () {
+      final runner = WorkoutRunner(steps: [
+        _step(distance: 400, label: 'A'),
+        _step(distance: 200, label: 'B'),
+      ]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 100, elapsedSec: 30));
+      expect(runner.rewindStep(), isFalse,
+          reason: 'first step has no predecessor; rewind must report false');
+      expect(runner.currentStepIndex, 0);
+      runner.dispose();
+    });
+
+    test('rewindStep after a completed advance re-enters the previous step',
+        () {
+      final steps = [
+        _step(distance: 400, label: 'A'),
+        _step(distance: 200, label: 'B'),
+      ];
+      final runner = WorkoutRunner(steps: steps);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      // Cross step A's target — runner auto-advances to step B.
+      runner.onSnapshot(_snap(distance: 400, elapsedSec: 120));
+      expect(runner.currentStepIndex, 1);
+
+      // Realised the advance was premature — rewind. The next snapshot
+      // sets _last, then the rewind anchors step start to that snapshot
+      // so stepDistanceMetres is zero relative to "now."
+      runner.onSnapshot(_snap(distance: 410, elapsedSec: 122));
+      expect(runner.rewindStep(), isTrue);
+
+      expect(runner.currentStepIndex, 0,
+          reason: 'rewind must return to the previous step');
+      expect(runner.currentStep?.label, 'A');
+      // Step distance resets to zero from the rewind snapshot's distance.
+      runner.onSnapshot(_snap(distance: 410, elapsedSec: 122));
+      expect(runner.stepDistanceMetres, 0,
+          reason: 'rewind must anchor step distance to the rewind moment');
+      // Results from the completed advance are discarded.
+      final results = runner.snapshotResults();
+      expect(results, hasLength(1),
+          reason: 'in-progress step is included; the previously-advanced '
+              'result is dropped');
+      expect(results.first.stepIndex, 0);
+      runner.dispose();
+    });
+
+    test('rewindStep after skipStep also restores the skipped step', () {
+      final steps = [
+        _step(distance: 400, label: 'A'),
+        _step(distance: 200, label: 'B'),
+      ];
+      final runner = WorkoutRunner(steps: steps);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 100, elapsedSec: 30));
+      runner.skipStep();
+      expect(runner.currentStepIndex, 1);
+
+      runner.onSnapshot(_snap(distance: 100, elapsedSec: 30));
+      expect(runner.rewindStep(), isTrue);
+      expect(runner.currentStepIndex, 0);
+      // No skip artefact left behind in results.
+      runner.onSnapshot(_snap(distance: 100, elapsedSec: 30));
+      final results = runner.snapshotResults();
+      // Only the in-progress step is reported (as skipped on the
+      // snapshotResults convention); no completed/skipped record from
+      // the rewound advance remains.
+      expect(results.where((r) => r.stepIndex == 0).length, 1);
+      runner.dispose();
+    });
+
+    test('rewindStep does not pre-empt an abandoned runner', () {
+      final runner = WorkoutRunner(steps: [
+        _step(distance: 400, label: 'A'),
+        _step(distance: 200, label: 'B'),
+      ]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 400, elapsedSec: 120));
+      runner.abandon();
+      expect(runner.rewindStep(), isFalse,
+          reason: 'abandoned runs are terminal; rewind is a no-op');
+      runner.dispose();
+    });
   });
 
   group('Pace adherence', () {

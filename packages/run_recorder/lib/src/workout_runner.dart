@@ -172,6 +172,37 @@ class WorkoutRunner {
     _advance(snap, status: WorkoutStepStatus.skipped);
   }
 
+  /// Rewind one step — undoes the most recent [_advance] (whether
+  /// completed or skipped). The current step's distance counter resets
+  /// to zero and the previous step re-enters. No-op if there's no
+  /// previous step or no snapshot to anchor on.
+  ///
+  /// Spec: [docs/workout_execution.md § Rewind step](../../../../docs/workout_execution.md).
+  /// Only one step deep — no rewind-of-rewind history.
+  bool rewindStep() {
+    if (_abandoned) return false;
+    if (_results.isEmpty) return false;
+    final snap = _last;
+    if (snap == null) return false;
+
+    _results.removeLast();
+    final prev = _idx;
+    _idx -= 1;
+
+    _stepStartDistanceMetres = snap.distanceMetres;
+    _stepStartElapsed = snap.elapsed;
+    _firedHalfway = false;
+    _firedLastFifty = false;
+    _lastDriftCueAt = null;
+
+    _events.add(StepTransitionEvent(
+      previousIndex: prev,
+      currentIndex: _idx,
+      step: steps[_idx],
+    ));
+    return true;
+  }
+
   /// Abandon the workout — remaining steps are not added to results;
   /// the recorder keeps running as a free run.
   void abandon() {

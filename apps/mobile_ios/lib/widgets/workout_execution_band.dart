@@ -14,12 +14,14 @@ import '../training.dart' show fmtPace;
 class WorkoutExecutionBand extends StatelessWidget {
   final ValueListenable<WorkoutBandState> state;
   final VoidCallback onSkip;
+  final VoidCallback onRewind;
   final VoidCallback onAbandon;
 
   const WorkoutExecutionBand({
     super.key,
     required this.state,
     required this.onSkip,
+    required this.onRewind,
     required this.onAbandon,
   });
 
@@ -30,6 +32,7 @@ class WorkoutExecutionBand extends StatelessWidget {
       builder: (_, s, __) => _Band(
         state: s,
         onSkip: onSkip,
+        onRewind: onRewind,
         onAbandon: onAbandon,
       ),
     );
@@ -75,10 +78,12 @@ class WorkoutBandState {
 class _Band extends StatelessWidget {
   final WorkoutBandState state;
   final VoidCallback onSkip;
+  final VoidCallback onRewind;
   final VoidCallback onAbandon;
   const _Band({
     required this.state,
     required this.onSkip,
+    required this.onRewind,
     required this.onAbandon,
   });
 
@@ -155,11 +160,26 @@ class _Band extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
+              // Rewind only enabled after the first step has advanced —
+              // there's nothing to rewind to on step 0. WorkoutRunner
+              // returns false safely in that case, but greying the
+              // button matches user expectation.
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: state.currentIndex == 0 ? null : onRewind,
+                  icon: const Icon(Icons.skip_previous, size: 16),
+                  label: const Text('Rewind'),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: onSkip,
                   icon: const Icon(Icons.skip_next, size: 16),
-                  label: const Text('Skip step'),
+                  label: const Text('Skip'),
                   style: OutlinedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                   ),
