@@ -353,12 +353,12 @@ Phased rollout so the schema doesn't sprawl. MVP is club-owned events only, enum
 
 | Source | Method | Status |
 |---|---|---|
-| Apple HealthKit | `health` Flutter package | [ ] Not started |
-| Android Health Connect | `health` Flutter package | [ ] Not started |
-| Strava | Official OAuth 2.0 API + webhook | [ ] Edge Function exists, not wired |
-| Garmin Connect | Official developer program (apply) | [ ] Not started |
-| parkrun | Athlete number scrape | [ ] Edge Function exists, not wired |
-| Race results | RunSignUp API + bib scrape | [ ] Not started |
+| Apple HealthKit | `health` Flutter package | [x] Shipped via the `health` package's HealthKit backend; iOS import card + button now platform-labelled. No GPS traces — Apple Health doesn't expose third-party-app routes. |
+| Android Health Connect | `health` Flutter package | [x] Shipped on Android via the same `health` package's Health Connect backend; pulls Google Fit / Samsung Health / Garmin / Fitbit workout summaries. No GPS traces. |
+| Strava | Official OAuth 2.0 API + webhook | [x] Connect button + sync wired (`ApiClient.syncStrava` invokes the `strava-import` Edge Function with `action: 'sync'`). Mobile-native OAuth helpers (`lib/strava.dart#stravaAuthUrl`, `isStravaConfigured`) ported from web; connect flow still punts to web `/settings/integrations` for the OAuth dance until a custom URL scheme is registered. Webhook handler is live. |
+| Garmin Connect | Official developer program (apply) | [ ] Hard-blocked on the multi-day Garmin Developer Program application. Once approved, follow the Strava pattern. |
+| parkrun | Athlete number scrape | [x] Shipped on Android/iOS — Settings → Integrations → "parkrun" tile calls `ApiClient.setParkrunAthleteNumber` + `importParkrunResults` (Edge Function). |
+| Race results | RunSignUp API + bib scrape | [ ] Needs a RunSignUp API key. Once provisioned, follow the parkrun pattern. |
 
 ### AI Coach (free, usage-capped)
 

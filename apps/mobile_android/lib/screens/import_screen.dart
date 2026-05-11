@@ -31,10 +31,12 @@ class _ImportScreenState extends State<ImportScreen> {
   int _total = 0;
   List<String> _errors = [];
 
+  String get _healthLabel => healthLabelFor(isIOS: Platform.isIOS);
+
   Future<void> _importHealthConnect() async {
     setState(() {
       _busy = true;
-      _status = 'Requesting Health Connect permission...';
+      _status = 'Requesting $_healthLabel permission...';
       _imported = 0;
       _total = 0;
       _errors = [];
@@ -45,19 +47,19 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!granted) {
         setState(() {
           _busy = false;
-          _status = 'Health Connect permission denied';
+          _status = '$_healthLabel permission denied';
         });
         return;
       }
 
       setState(() => _status = 'Reading workouts...');
       final runs = await HealthConnectImporter.fetchWorkouts();
-      await _saveImportedRuns(runs, label: 'Health Connect');
+      await _saveImportedRuns(runs, label: _healthLabel);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = 'Health Connect import failed: $e';
+        _status = '$_healthLabel import failed: $e';
       });
     }
   }
@@ -251,11 +253,10 @@ class _ImportScreenState extends State<ImportScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Health Connect',
+                            Text(_healthLabel,
                                 style: theme.textTheme.titleMedium),
                             Text(
-                              'Pull workouts from Google Fit, Samsung Health, '
-                              'Garmin, Fitbit, and any other Health Connect app',
+                              healthCardSubtitleFor(isIOS: Platform.isIOS),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
@@ -267,9 +268,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Reads workout summaries (date, distance, duration, type) '
-                    'from the last year. GPS routes are not exposed by Health '
-                    'Connect — runs imported this way won\'t have a map trace.',
+                    healthCardDescriptionFor(isIOS: Platform.isIOS),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                       height: 1.5,
@@ -281,7 +280,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     child: FilledButton.icon(
                       onPressed: _busy ? null : _importHealthConnect,
                       icon: const Icon(Icons.health_and_safety),
-                      label: const Text('Import from Health Connect'),
+                      label: Text('Import from $_healthLabel'),
                     ),
                   ),
                 ],
@@ -347,3 +346,30 @@ class _ImportScreenState extends State<ImportScreen> {
     );
   }
 }
+
+/// Human-readable label for the platform-specific health store the
+/// `health` package transparently dispatches into. Android backs by
+/// Health Connect; iOS backs by HealthKit (Apple Health). Pure
+/// function — caller passes `Platform.isIOS` so it's unit-testable
+/// without `debugDefaultTargetPlatformOverride` (which only affects
+/// the Flutter target platform, not `dart:io`'s `Platform.isIOS`).
+String healthLabelFor({required bool isIOS}) =>
+    isIOS ? 'Apple Health' : 'Health Connect';
+
+/// Subtitle copy for the Health import card — names the third-party
+/// apps each platform's health store typically receives data from.
+String healthCardSubtitleFor({required bool isIOS}) => isIOS
+    ? "Pull workouts you've recorded on Apple Watch, Nike Run Club, "
+        "Strava, and other apps that write to Apple Health"
+    : 'Pull workouts from Google Fit, Samsung Health, Garmin, Fitbit, '
+        'and any other Health Connect app';
+
+/// Body copy explaining what's imported + the no-track caveat.
+String healthCardDescriptionFor({required bool isIOS}) => isIOS
+    ? "Reads workout summaries (date, distance, duration, type) from "
+        "the last year. Apple Health doesn't expose GPS routes recorded "
+        "by third-party apps — runs imported this way won't have a map "
+        "trace."
+    : 'Reads workout summaries (date, distance, duration, type) from '
+        'the last year. GPS routes are not exposed by Health Connect — '
+        "runs imported this way won't have a map trace.";

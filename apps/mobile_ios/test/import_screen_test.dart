@@ -82,4 +82,56 @@ void main() {
       expect(find.byType(LinearProgressIndicator), findsNothing);
     });
   });
+
+  group('Platform-aware Health label helpers', () {
+    test('healthLabelFor names HealthKit on iOS, Health Connect on Android',
+        () {
+      expect(healthLabelFor(isIOS: true), 'Apple Health');
+      expect(healthLabelFor(isIOS: false), 'Health Connect');
+    });
+
+    test(
+        'healthCardSubtitleFor names iOS source apps on iOS, Android on Android',
+        () {
+      expect(
+        healthCardSubtitleFor(isIOS: true),
+        contains('Apple Watch'),
+        reason: 'iOS subtitle should mention Apple Watch',
+      );
+      expect(
+        healthCardSubtitleFor(isIOS: true),
+        contains('Apple Health'),
+      );
+      expect(
+        healthCardSubtitleFor(isIOS: false),
+        contains('Google Fit'),
+      );
+      expect(
+        healthCardSubtitleFor(isIOS: false),
+        contains('Health Connect'),
+      );
+    });
+
+    test('healthCardDescriptionFor names the platform store in the caveat',
+        () {
+      expect(
+        healthCardDescriptionFor(isIOS: true),
+        contains('Apple Health'),
+      );
+      expect(
+        healthCardDescriptionFor(isIOS: false),
+        contains('Health Connect'),
+      );
+      // Both variants must call out the no-GPS-track caveat — without
+      // it the user is surprised by trackless runs in their history.
+      expect(
+        healthCardDescriptionFor(isIOS: true),
+        contains("won't have a map trace"),
+      );
+      expect(
+        healthCardDescriptionFor(isIOS: false),
+        contains("won't have a map trace"),
+      );
+    });
+  });
 }

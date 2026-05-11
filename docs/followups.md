@@ -86,13 +86,14 @@ Phase 3 "In-app route builder (free)" — 4 unchecked items in `roadmap.md`. Web
 
 ### #10 External integrations
 
-Phase 3 "External platform sync" — entire table is `[ ]` in roadmap.md:
-- [ ] HealthKit (iOS)
-- [ ] Health Connect (Android)
-- [ ] Strava OAuth + sync (Edge Function `strava-import` exists, not wired into client)
-- [ ] Garmin (multi-day Developer Program application + OAuth)
-- [x] parkrun athlete-number import — already shipped on Android/iOS. Settings → Integrations → "parkrun" tile in `settings_screen.dart` (line 1274) calls `_importParkrun`, pre-fills from `user_profiles.parkrun_number` via `fetchMyProfile`, then drives `ApiClient.setParkrunAthleteNumber` + `ApiClient.importParkrunResults` (invokes the existing Edge Function). Parity.md already lists it as ✓. The followups entry was stale.
-- [ ] RunSignUp
+Phase 3 "External platform sync" — current state:
+- [x] Health Connect (Android) — shipped: `lib/health_connect_importer.dart` uses the `health` package's Health Connect backend; reads workout summaries (no GPS traces — Health Connect doesn't expose them) with per-window avg-BPM. Import screen card + button. Roadmap entry was stale.
+- [x] HealthKit (iOS) — shipped via the **same** `health` package which transparently dispatches to HealthKit on iOS. UI is now platform-aware: card title says "Apple Health" on iOS / "Health Connect" on Android, body copy names the platform-typical source apps (Apple Watch / Nike Run Club / Strava on iOS; Google Fit / Samsung Health / Garmin / Fitbit on Android), button reads "Import from Apple Health" / "Import from Health Connect". Pure helpers `healthLabelFor` / `healthCardSubtitleFor` / `healthCardDescriptionFor` cover both branches; 3 new unit tests.
+- [x] Strava sync — `ApiClient.syncStrava` already wraps the `strava-import` Edge Function (`action: 'sync'`, returns `{imported, skipped, failed}`). Connect button on Settings → Integrations → "Strava" punts to the web `/settings/integrations` for the OAuth dance; the user pulls-to-refresh on return and the integration row surfaces via `fetchIntegrations`. Disconnect drops the row.
+- [x] Strava OAuth (Dart helpers) — `lib/strava.dart` ports the web's `strava.ts`: `isStravaConfigured()` reads `STRAVA_CLIENT_ID` from `dotenv.env` with the same 12345-placeholder anti-stub check the web uses; `stravaAuthUrl(redirectUri)` builds the authorize URL. Both gated so unconfigured builds report unconfigured. 7 unit tests. Mobile-native connect flow (in-app `WebAuth` instead of browser punt) still needs: (1) Strava developer client ID provisioned + added to `.env.local` / `dart_defines.json`; (2) a custom URL scheme registered in `AndroidManifest.xml` + `Info.plist`; (3) deep-link receiver wired to `ApiClient.completeStravaOAuth` (already exists server-side). The helpers + Edge Function are ready; the connect button is the only remaining wiring.
+- [ ] Garmin Connect — **hard-blocked** on the multi-day Garmin Developer Program application + OAuth client provisioning. Once approved, follow the Strava pattern: a `garmin.dart` helper module + a `garmin-import` Edge Function + Settings tile wired to OAuth.
+- [x] parkrun athlete-number import — already shipped. Settings → Integrations → "parkrun" tile drives `ApiClient.setParkrunAthleteNumber` + `ApiClient.importParkrunResults`.
+- [ ] RunSignUp — race-results scrape. Needs an API key from runsignup.com (free for non-commercial use). Once provisioned, follow the parkrun pattern: a `runsignup-import` Edge Function + a Settings tile that ingests results into `runs.metadata.event` / `runs.metadata.position`.
 
 ### #11 Platform parity (multi-platform)
 
