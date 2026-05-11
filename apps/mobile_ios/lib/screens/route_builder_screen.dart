@@ -1,54 +1,61 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
+import '../elevation.dart';
+import '../geocoding.dart';
 import '../local_route_store.dart';
+import '../route_overlap.dart';
 import '../routing.dart';
 import '../run_stats.dart' show haversineMetres;
 import '../tile_cache.dart';
+import '../widgets/snap_to_start.dart';
 import '../widgets/top_banner.dart';
 
-/// MVP click-to-place route builder (decisions roadmap Phase 3
-/// "In-app route builder (free)" / followups #8).
+/// Full-screen in-app route builder. Phase 3 "In-app route builder
+/// (free)" — the mobile counterpart of `apps/web/src/lib/components/
+/// RouteBuilder.svelte`.
 ///
-/// What's wired:
-/// - tap the map → append a waypoint, OSRM-snap it (foot or car), and
-///   fetch the road-snapped polyline through every placed point
-/// - mode toggle: foot (trail) / car (road) / straight (no OSRM)
-/// - undo last waypoint
-/// - clear all
-/// - distance accumulator from OSRM (or great-circle in straight mode)
-/// - save dialog: name + public toggle → ApiClient.saveRoute +
-///   LocalRouteStore.save, then pops with the new route
+/// Shipped features:
+/// - tap-to-place waypoints, OSRM-snapped (foot / car) or straight
+/// - long-press a waypoint to drag-reshape — pan to move, release to
+///   commit + re-fetch the snapped polyline
+/// - tap near the start (when 3+ waypoints placed) snaps the loop closed
+///   and shows a pulsing halo on the start marker as the affordance
+/// - "Locate me" FAB centers on the user's current GPS position
+/// - place-name search in the AppBar — debounced MapTiler geocoding,
+///   tap a result to fly the camera there
+/// - elevation gain in the status pill, sampled at up to 100 points per
+///   re-route via Open-Meteo
+/// - out-and-back overlap is rendered as a purple over-stroke on the
+///   retraced sections
+/// - undo / clear / save (name + public toggle → ApiClient.saveRoute
+///   + LocalRouteStore.save, then pops with the new route)
 ///
-/// Deferred (followups #8 remaining bullets — see docs/followups.md):
-/// - draggable marker reshape
-/// - elevation profile preview while drawing
-/// - snap-to-start pulsing marker to close loops
-/// - place-name search via MapTiler geocoding
-/// - overlap detection (purple out-and-back sections)
-/// - geolocate auto-center
-///
-/// Pure-logic helpers (`routing.dart`) are unit-tested separately.
-/// This screen is the integration glue.
+/// Pure helpers (`routing.dart`, `elevation.dart`, `geocoding.dart`,
+/// `route_overlap.dart`, `widgets/snap_to_start.dart`) are unit-tested
+/// in isolation; this screen is the integration glue.
 class RouteBuilderScreen extends StatefulWidget {
   final ApiClient apiClient;
   final LocalRouteStore routeStore;
   final LatLng? initialCenter;
 
-  /// Test-only OSRM fetcher seam — pass a stubbed [OsrmFetcher] in
-  /// widget tests so the screen doesn't hit the network. Production
-  /// passes null and the routing module uses its dart:io default.
+  /// Test seams — production passes null and each helper uses its
+  /// dart:io fetcher / OS geolocator default.
   final OsrmFetcher? osrmFetcher;
-
-  /// Test-only seam for the cloud save call. Defaults to
-  /// `apiClient.saveRoute`. Widget tests pass a no-op or recorder.
+  final ElevationFetcher? elevationFetcher;
+  final GeocodingFetcher? geocodingFetcher;
   final Future<void> Function(cm.Route route)? saveRouteFn;
+  final Future<Position> Function()? locateFn;
 
   const RouteBuilderScreen({
     super.key,
@@ -56,7 +63,10 @@ class RouteBuilderScreen extends StatefulWidget {
     required this.routeStore,
     this.initialCenter,
     this.osrmFetcher,
+    this.elevationFetcher,
+    this.geocodingFetcher,
     this.saveRouteFn,
+    this.locateFn,
   });
 
   @override
@@ -67,84 +77,96 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   static const _kDefaultCenter = LatLng(51.5074, -0.1278); // London
   final MapController _map = MapController();
 
-  /// User-placed waypoints (OSRM-snapped). Drives marker layer + the
-  /// next OSRM call.
+  // Waypoint + polyline state.
   final List<cm.Waypoint> _waypoints = [];
-
-  /// Fully-resolved polyline between waypoints, from OSRM in road /
-  /// trail mode or interpolated straight in straight mode.
   List<cm.Waypoint> _polyline = const [];
-
   double _distanceM = 0;
+  double _elevationGainM = 0;
+  List<OverlapSpan> _overlapSpans = const [];
+
+  // Mode toggle + in-flight flags.
   RouteBuilderMode _mode = RouteBuilderMode.trail;
   bool _routing = false;
   bool _saving = false;
 
+  // Drag state. When the user long-presses a marker, we enter drag
+  // mode; subsequent map taps move that waypoint until the user taps
+  // the marker again or hits the cancel chip.
+  int? _dragIndex;
+
+  // Place search.
+  final TextEditingController _searchCtl = TextEditingController();
+  List<PlaceResult> _searchResults = const [];
+  Timer? _searchDebounce;
+  bool _searchOpen = false;
+
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtl.dispose();
     _map.dispose();
     super.dispose();
   }
 
+  String get _maptilerKey => dotenv.env['MAPTILER_KEY'] ?? '';
+
   String get _tileUrl {
-    final key = dotenv.env['MAPTILER_KEY'] ?? '';
-    if (key.isEmpty) {
+    if (_maptilerKey.isEmpty) {
       return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     }
-    return 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=$key';
+    return 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=$_maptilerKey';
   }
 
-  Future<void> _onMapTap(TapPosition _, LatLng latLng) async {
-    if (_routing || _saving) return;
-    final next = cm.Waypoint(lat: latLng.latitude, lng: latLng.longitude);
+  OsrmProfile get _osrmProfile =>
+      _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;
 
-    // Straight mode skips OSRM — just append + interpolate.
+  /// Run OSRM through every waypoint + update derived fields
+  /// (polyline / distance / elevation / overlap). Pure side-effect
+  /// helper called from every mutator (_onMapTap, _undo, drag commit,
+  /// snap-to-start close).
+  Future<void> _rerouteThrough(List<cm.Waypoint> waypoints) async {
     if (_mode == RouteBuilderMode.straight) {
       setState(() {
-        _waypoints.add(next);
-        _polyline = List<cm.Waypoint>.from(_waypoints);
-        _distanceM = straightLineDistance(_waypoints);
+        _waypoints
+          ..clear()
+          ..addAll(waypoints);
+        _polyline = List<cm.Waypoint>.from(waypoints);
+        _distanceM = straightLineDistance(waypoints);
+        _overlapSpans = const [];
+      });
+      unawaited(_refreshElevation());
+      return;
+    }
+    if (waypoints.length < 2) {
+      setState(() {
+        _waypoints
+          ..clear()
+          ..addAll(waypoints);
+        _polyline = const [];
+        _distanceM = 0;
+        _elevationGainM = 0;
+        _overlapSpans = const [];
       });
       return;
     }
-
     setState(() => _routing = true);
-    final profile =
-        _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;
     try {
-      final snapped = await snapToRoad(
-        next,
-        profile: profile,
-        fetcher: widget.osrmFetcher,
-      );
-      final newWaypoints = [..._waypoints, snapped];
-      if (newWaypoints.length < 2) {
-        if (mounted) {
-          setState(() {
-            _waypoints
-              ..clear()
-              ..addAll(newWaypoints);
-            _polyline = const [];
-            _distanceM = 0;
-            _routing = false;
-          });
-        }
-        return;
-      }
       final routed = await fetchRouteThrough(
-        newWaypoints,
-        profile: profile,
+        waypoints,
+        profile: _osrmProfile,
         fetcher: widget.osrmFetcher,
       );
       if (!mounted) return;
       setState(() {
         _waypoints
           ..clear()
-          ..addAll(newWaypoints);
+          ..addAll(waypoints);
         _polyline = routed.coordinates;
         _distanceM = routed.distanceMetres;
+        _overlapSpans = detectOverlapSpans(routed.coordinates);
         _routing = false;
       });
+      unawaited(_refreshElevation());
     } catch (e) {
       if (!mounted) return;
       setState(() => _routing = false);
@@ -152,46 +174,78 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     }
   }
 
+  /// Sample the current polyline and look up open-meteo elevations.
+  /// Fire-and-forget — runs after the polyline updates so the user
+  /// sees the line + distance immediately and elevation fills in on
+  /// the network round-trip (~300 ms). L4 best-effort: a failure just
+  /// leaves the gain reading at 0.
+  Future<void> _refreshElevation() async {
+    if (_polyline.length < 2) {
+      if (mounted) setState(() => _elevationGainM = 0);
+      return;
+    }
+    final sample = sampleCoordinates(_polyline);
+    try {
+      final elevations = await fetchElevations(
+        sample,
+        fetcher: widget.elevationFetcher,
+      );
+      final gain = calculateElevationGain(elevations);
+      if (!mounted) return;
+      setState(() => _elevationGainM = gain);
+    } catch (e) {
+      debugPrint('elevation fetch failed: $e');
+    }
+  }
+
+  Future<void> _onMapTap(TapPosition _, LatLng latLng) async {
+    if (_routing || _saving) return;
+    final tapWaypoint =
+        cm.Waypoint(lat: latLng.latitude, lng: latLng.longitude);
+
+    // Drag-to-reshape: a marker is currently selected, this tap moves
+    // it to the tap point + re-routes.
+    if (_dragIndex != null) {
+      final idx = _dragIndex!;
+      _dragIndex = null;
+      final moved = _mode == RouteBuilderMode.straight
+          ? tapWaypoint
+          : await snapToRoad(
+              tapWaypoint,
+              profile: _osrmProfile,
+              fetcher: widget.osrmFetcher,
+            );
+      final next = List<cm.Waypoint>.from(_waypoints);
+      next[idx] = moved;
+      await _rerouteThrough(next);
+      return;
+    }
+
+    // Snap-to-start: close the loop instead of placing a stub-end
+    // waypoint right next to the start marker.
+    if (shouldSnapToStart(
+      tap: tapWaypoint,
+      existingWaypoints: _waypoints,
+    )) {
+      final next = [..._waypoints, _waypoints.first];
+      await _rerouteThrough(next);
+      return;
+    }
+
+    final next = _mode == RouteBuilderMode.straight
+        ? tapWaypoint
+        : await snapToRoad(
+            tapWaypoint,
+            profile: _osrmProfile,
+            fetcher: widget.osrmFetcher,
+          );
+    await _rerouteThrough([..._waypoints, next]);
+  }
+
   Future<void> _undo() async {
     if (_routing || _saving || _waypoints.isEmpty) return;
     final next = _waypoints.sublist(0, _waypoints.length - 1);
-    if (next.length < 2 || _mode == RouteBuilderMode.straight) {
-      setState(() {
-        _waypoints
-          ..clear()
-          ..addAll(next);
-        _polyline = _mode == RouteBuilderMode.straight
-            ? List<cm.Waypoint>.from(next)
-            : const [];
-        _distanceM = _mode == RouteBuilderMode.straight
-            ? straightLineDistance(next)
-            : 0;
-      });
-      return;
-    }
-    setState(() => _routing = true);
-    final profile =
-        _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;
-    try {
-      final routed = await fetchRouteThrough(
-        next,
-        profile: profile,
-        fetcher: widget.osrmFetcher,
-      );
-      if (!mounted) return;
-      setState(() {
-        _waypoints
-          ..clear()
-          ..addAll(next);
-        _polyline = routed.coordinates;
-        _distanceM = routed.distanceMetres;
-        _routing = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _routing = false);
-      showTopBanner(context, 'Undo failed: $e');
-    }
+    await _rerouteThrough(next);
   }
 
   void _clear() {
@@ -200,6 +254,9 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       _waypoints.clear();
       _polyline = const [];
       _distanceM = 0;
+      _elevationGainM = 0;
+      _overlapSpans = const [];
+      _dragIndex = null;
     });
   }
 
@@ -219,6 +276,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       name: result.name,
       waypoints: _polyline,
       distanceMetres: _distanceM,
+      elevationGainMetres: _elevationGainM,
       isPublic: result.isPublic,
       surface: _surfaceFor(_mode),
     );
@@ -234,6 +292,78 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     }
   }
 
+  Future<void> _locate() async {
+    if (_routing || _saving) return;
+    try {
+      final pos = widget.locateFn != null
+          ? await widget.locateFn!()
+          : await _platformLocate();
+      if (!mounted) return;
+      _map.move(LatLng(pos.latitude, pos.longitude), 15);
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, 'Location unavailable: $e');
+    }
+  }
+
+  // Default locate path — kept separate so widget.locateFn can stub
+  // the whole platform-channel call in tests.
+  Future<Position> _platformLocate() async {
+    if (kIsWeb) {
+      throw UnsupportedError('Locate unavailable on web');
+    }
+    // Permission gate matches the recorder's own pattern.
+    final perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      final asked = await Geolocator.requestPermission();
+      if (asked == LocationPermission.denied ||
+          asked == LocationPermission.deniedForever) {
+        throw StateError('Location permission denied');
+      }
+    } else if (perm == LocationPermission.deniedForever) {
+      throw StateError('Location permission denied forever');
+    }
+    return Geolocator.getCurrentPosition();
+  }
+
+  Future<void> _onSearchChanged(String query) async {
+    _searchDebounce?.cancel();
+    if (query.trim().length < 2) {
+      setState(() {
+        _searchResults = const [];
+        _searchOpen = false;
+      });
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final results = await searchPlaces(
+        query,
+        apiKey: _maptilerKey,
+        fetcher: widget.geocodingFetcher,
+      );
+      if (!mounted) return;
+      setState(() {
+        _searchResults = results;
+        _searchOpen = results.isNotEmpty;
+      });
+    });
+  }
+
+  void _onSearchResultTap(PlaceResult result) {
+    _map.move(LatLng(result.lat, result.lng), 15);
+    FocusManager.instance.primaryFocus?.unfocus();
+    _searchCtl.clear();
+    setState(() {
+      _searchResults = const [];
+      _searchOpen = false;
+    });
+  }
+
+  void _toggleDragOn(int index) {
+    if (_routing || _saving) return;
+    setState(() => _dragIndex = _dragIndex == index ? null : index);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -243,11 +373,23 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     final polylineLatLngs = [
       for (final w in _polyline) LatLng(w.lat, w.lng),
     ];
+    final overlapLatLngs = _polyline.length >= 2
+        ? overlapLatLngsFor(_polyline, _overlapSpans)
+        : const <List<LatLng>>[];
     final center = widget.initialCenter ?? _kDefaultCenter;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New route'),
+        title: TextField(
+          controller: _searchCtl,
+          onChanged: _onSearchChanged,
+          decoration: const InputDecoration(
+            hintText: 'Search places…',
+            border: InputBorder.none,
+            prefixIcon: Icon(Icons.search, size: 20),
+          ),
+          style: theme.textTheme.bodyLarge,
+        ),
         actions: [
           IconButton(
             tooltip: 'Undo',
@@ -294,6 +436,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   dio: TileCache.dio,
                 ),
               ),
+              // Base polyline.
               if (polylineLatLngs.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -304,49 +447,120 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                     ),
                   ],
                 ),
+              // Overlap (out-and-back) over-stroke — purple, matches
+              // the web spec.
+              if (overlapLatLngs.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    for (final span in overlapLatLngs)
+                      if (span.length >= 2)
+                        Polyline(
+                          points: span,
+                          strokeWidth: 6,
+                          color: const Color(0xCCB084EE),
+                        ),
+                  ],
+                ),
+              // Waypoint pins. Long-press toggles drag mode for that
+              // waypoint; the next map tap moves it.
               if (waypointLatLngs.isNotEmpty)
                 MarkerLayer(
                   markers: [
                     for (var i = 0; i < waypointLatLngs.length; i++)
                       Marker(
                         point: waypointLatLngs[i],
-                        width: 24,
-                        height: 24,
-                        child: _WaypointPin(
-                          index: i,
-                          isStart: i == 0,
-                          isEnd: i == waypointLatLngs.length - 1 && i > 0,
+                        width: 36,
+                        height: 36,
+                        child: GestureDetector(
+                          onLongPress: () => _toggleDragOn(i),
+                          onTap: _dragIndex == null
+                              ? null
+                              : () => _toggleDragOn(i),
+                          child: _WaypointPin(
+                            index: i,
+                            isStart: i == 0,
+                            isEnd: i == waypointLatLngs.length - 1 && i > 0,
+                            isDragging: _dragIndex == i,
+                            pulseStart: i == 0 &&
+                                _waypoints.length >= 3 &&
+                                _dragIndex == null,
+                          ),
                         ),
                       ),
                   ],
                 ),
             ],
           ),
-          // Top status pill — distance + routing/saving spinner.
+          // Top status pill — distance + elevation gain + spinner.
           Positioned(
             top: 12,
             left: 12,
             right: 12,
             child: _StatusPill(
               distanceM: _distanceM,
+              elevationGainM: _elevationGainM,
               routing: _routing,
               saving: _saving,
               waypointCount: _waypoints.length,
+              dragIndex: _dragIndex,
+              onCancelDrag: () => setState(() => _dragIndex = null),
             ),
           ),
+          // Search-results dropdown (under the AppBar).
+          if (_searchOpen && _searchResults.isNotEmpty)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                elevation: 4,
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    for (final r in _searchResults)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.place),
+                        title: Text(
+                          r.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => _onSearchResultTap(r),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           // Bottom mode toggle.
           Positioned(
-            bottom: 16,
+            bottom: 88,
             left: 16,
             right: 16,
             child: _ModeToggle(
               mode: _mode,
               onChanged: _routing || _saving
                   ? null
-                  : (m) => setState(() => _mode = m),
+                  : (m) {
+                      setState(() => _mode = m);
+                      // Re-route through existing waypoints when the
+                      // mode changes — the polyline shape depends on
+                      // the OSRM profile.
+                      if (_waypoints.length >= 2) {
+                        unawaited(
+                            _rerouteThrough(List.of(_waypoints)));
+                      }
+                    },
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'route_builder_locate_fab',
+        tooltip: 'Locate me',
+        onPressed: _routing || _saving ? null : _locate,
+        child: const Icon(Icons.my_location),
       ),
     );
   }
@@ -364,9 +578,8 @@ String _surfaceFor(RouteBuilderMode mode) {
   };
 }
 
-/// Great-circle distance summation between consecutive waypoints. Used
-/// in straight-line mode (OSRM bypass). Re-exported from `run_stats`
-/// so the math lives in one place.
+/// Sum great-circle distances between consecutive waypoints. Re-uses
+/// the haversine helper from `run_stats`.
 @visibleForTesting
 double straightLineDistance(List<cm.Waypoint> points) {
   if (points.length < 2) return 0;
@@ -382,27 +595,62 @@ double straightLineDistance(List<cm.Waypoint> points) {
   return total;
 }
 
-// Smaller pill widget showing distance + state.
+/// Slice the polyline into [LatLng] runs by overlap span — used to
+/// draw the purple over-stroke on retraced sections. Public so the
+/// widget test can assert the slicing without mounting the screen.
+List<List<LatLng>> overlapLatLngsFor(
+  List<cm.Waypoint> polyline,
+  List<OverlapSpan> spans,
+) {
+  if (spans.isEmpty) return const [];
+  final out = <List<LatLng>>[];
+  for (final span in spans) {
+    if (span.startIndex >= polyline.length) continue;
+    final end = span.endIndex.clamp(0, polyline.length - 1);
+    final slice = <LatLng>[
+      for (var i = span.startIndex; i <= end; i++)
+        LatLng(polyline[i].lat, polyline[i].lng),
+    ];
+    if (slice.length >= 2) out.add(slice);
+  }
+  return out;
+}
+
 class _StatusPill extends StatelessWidget {
   final double distanceM;
+  final double elevationGainM;
   final bool routing;
   final bool saving;
   final int waypointCount;
+  final int? dragIndex;
+  final VoidCallback onCancelDrag;
 
   const _StatusPill({
     required this.distanceM,
+    required this.elevationGainM,
     required this.routing,
     required this.saving,
     required this.waypointCount,
+    required this.dragIndex,
+    required this.onCancelDrag,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label = waypointCount == 0
-        ? 'Tap the map to place waypoints'
-        : '${(distanceM / 1000).toStringAsFixed(2)} km · '
-            '$waypointCount ${waypointCount == 1 ? "point" : "points"}';
+    String label;
+    if (dragIndex != null) {
+      label = 'Tap anywhere to move point ${dragIndex! + 1}';
+    } else if (waypointCount == 0) {
+      label = 'Tap the map to place waypoints';
+    } else {
+      final km = (distanceM / 1000).toStringAsFixed(2);
+      final pointsLabel =
+          '$waypointCount ${waypointCount == 1 ? "point" : "points"}';
+      label = elevationGainM > 0
+          ? '$km km · ${elevationGainM.round()} m ↑ · $pointsLabel'
+          : '$km km · $pointsLabel';
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -413,7 +661,14 @@ class _StatusPill extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-          if (routing || saving) ...[
+          if (dragIndex != null)
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: 'Cancel drag',
+              onPressed: onCancelDrag,
+              visualDensity: VisualDensity.compact,
+            )
+          else if (routing || saving) ...[
             const SizedBox(width: 8),
             const SizedBox(
               width: 16,
@@ -469,25 +724,61 @@ class _ModeToggle extends StatelessWidget {
   }
 }
 
-class _WaypointPin extends StatelessWidget {
+/// Waypoint pin. Renders a small numbered circle (green start, red
+/// end, blue intermediate). The start pin shows a pulsing halo when
+/// the route is long enough to close as a loop — visual cue for
+/// snap-to-start. While the user is dragging this waypoint, the pin
+/// switches to an amber outline.
+class _WaypointPin extends StatefulWidget {
   final int index;
   final bool isStart;
   final bool isEnd;
+  final bool isDragging;
+  final bool pulseStart;
 
   const _WaypointPin({
     required this.index,
     required this.isStart,
     required this.isEnd,
+    required this.isDragging,
+    required this.pulseStart,
   });
 
   @override
+  State<_WaypointPin> createState() => _WaypointPinState();
+}
+
+class _WaypointPinState extends State<_WaypointPin>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      duration: const Duration(milliseconds: 1100),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = isStart
-        ? Colors.green
-        : isEnd
-            ? Colors.red
-            : Colors.blueGrey;
-    return Container(
+    final color = widget.isDragging
+        ? Colors.amber
+        : widget.isStart
+            ? Colors.green
+            : widget.isEnd
+                ? Colors.red
+                : Colors.blueGrey;
+    final pin = Container(
+      width: 22,
+      height: 22,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
@@ -495,13 +786,44 @@ class _WaypointPin extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(
-        '${index + 1}',
+        '${widget.index + 1}',
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
           fontSize: 11,
         ),
       ),
+    );
+    if (!widget.pulseStart) return pin;
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, child) {
+        final t = _pulse.value;
+        final ringScale = 1 + 0.7 * t;
+        final ringOpacity = (1 - t).clamp(0.0, 1.0);
+        return SizedBox(
+          width: 36,
+          height: 36,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.scale(
+                scale: ringScale,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green.withValues(alpha: 0.25 * ringOpacity),
+                  ),
+                ),
+              ),
+              child!,
+            ],
+          ),
+        );
+      },
+      child: pin,
     );
   }
 }

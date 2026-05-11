@@ -6,17 +6,17 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../lib/local_route_store.dart';
+import '../lib/route_overlap.dart';
 import '../lib/routing.dart';
 import '../lib/screens/route_builder_screen.dart';
 
-/// Minimal in-memory path_provider stub. flutter_map_cache touches the
-/// docs directory at startup; we let it create an ephemeral folder so
-/// the widget mounts without exploding.
 class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin {
   final Directory _tmp;
   _FakePathProvider(this._tmp);
@@ -28,12 +28,8 @@ class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceM
   Future<String?> getTemporaryPath() async => _tmp.path;
 }
 
-/// Stub OSRM fetcher — returns the same single-point snap for any
-/// `/nearest/` request, and a polyline with the same two endpoints
-/// (plus a midpoint) for any `/route/` request.
 Future<String> _stubOsrm(Uri url) async {
   if (url.path.contains('/nearest/')) {
-    // Echo whatever lng,lat came in as the "snapped" point.
     final segs = url.path.split('/');
     final coord = segs.last.split(',');
     final lng = double.parse(coord[0]);
@@ -45,7 +41,6 @@ Future<String> _stubOsrm(Uri url) async {
       ],
     });
   }
-  // /route/ — fabricate a polyline through the requested pairs.
   final segs = url.path.split('/');
   final pairs = segs.last.split(';');
   final coords = [
@@ -55,7 +50,7 @@ Future<String> _stubOsrm(Uri url) async {
         double.parse(pair.split(',')[1]),
       ],
   ];
-  final dist = (pairs.length - 1) * 100.0; // 100 m per leg
+  final dist = (pairs.length - 1) * 100.0;
   return jsonEncode({
     'code': 'Ok',
     'routes': [
@@ -65,6 +60,41 @@ Future<String> _stubOsrm(Uri url) async {
       },
     ],
   });
+}
+
+Future<String> _stubElev(Uri url) async {
+  // open-meteo response with one entry per lat point.
+  final lats = (url.queryParameters['latitude'] ?? '').split(',');
+  return jsonEncode({
+    'elevation': [for (final _ in lats) 400.0],
+  });
+}
+
+Future<String> _stubGeocoding(Uri url) async {
+  // Return a single canned result.
+  return jsonEncode({
+    'features': [
+      {
+        'place_name': 'London, United Kingdom',
+        'center': [-0.1278, 51.5074],
+      },
+    ],
+  });
+}
+
+Future<Position> _stubLocate() async {
+  return Position(
+    latitude: 51.5074,
+    longitude: -0.1278,
+    timestamp: DateTime.now(),
+    accuracy: 5,
+    altitude: 0,
+    altitudeAccuracy: 0,
+    heading: 0,
+    headingAccuracy: 0,
+    speed: 0,
+    speedAccuracy: 0,
+  );
 }
 
 void main() {
@@ -101,13 +131,13 @@ void main() {
             apiClient: ApiClient(),
             routeStore: store,
             osrmFetcher: _stubOsrm,
+            elevationFetcher: _stubElev,
+            geocodingFetcher: _stubGeocoding,
+            locateFn: _stubLocate,
           ),
         ),
       ),
     );
-    // Two pumps — first to mount, second to drain post-frame callbacks
-    // queued by flutter_map's onMapReady. pumpAndSettle would hang on
-    // the tile fetch's retry timer.
     await tester.pump();
     await tester.pump(Duration.zero);
   }
@@ -117,10 +147,18 @@ void main() {
     final store = await _store();
     await _pumpScreen(tester, store);
     expect(find.text('Tap the map to place waypoints'), findsOneWidget);
-    // Save button disabled while we have <2 points.
     final save = find.widgetWithText(TextButton, 'Save');
     expect(save, findsOneWidget);
     expect(tester.widget<TextButton>(save).onPressed, isNull);
+  });
+
+  testWidgets('AppBar hosts the place-search field + locate FAB',
+      (tester) async {
+    final store = await _store();
+    await _pumpScreen(tester, store);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Search places…'), findsOneWidget);
+    expect(find.byIcon(Icons.my_location), findsOneWidget);
   });
 
   testWidgets('mode toggle has Trail / Road / Straight segments',
@@ -133,7 +171,6 @@ void main() {
   });
 
   test('straightLineDistance sums haversine legs', () {
-    // 1 km @ equator ≈ 0.00899° longitude.
     final pts = [
       const cm.Waypoint(lat: 0, lng: 0),
       const cm.Waypoint(lat: 0, lng: 0.00899),
@@ -151,5 +188,56 @@ void main() {
       0,
     );
   });
-}
 
+  group('overlapLatLngsFor', () {
+    test('empty list for empty spans', () {
+      expect(
+        overlapLatLngsFor(const [], const []),
+        isEmpty,
+      );
+    });
+
+    test('slices the polyline by span indices, skipping <2-point spans',
+        () {
+      final polyline = [
+        const cm.Waypoint(lat: 0, lng: 0),
+        const cm.Waypoint(lat: 0.001, lng: 0),
+        const cm.Waypoint(lat: 0.002, lng: 0),
+        const cm.Waypoint(lat: 0.003, lng: 0),
+        const cm.Waypoint(lat: 0.004, lng: 0),
+      ];
+      final spans = [
+        const OverlapSpan(startIndex: 1, endIndex: 3),
+        const OverlapSpan(startIndex: 4, endIndex: 4), // single-point, skipped
+      ];
+      final slices = overlapLatLngsFor(polyline, spans);
+      expect(slices, hasLength(1));
+      expect(slices.first, hasLength(3));
+      expect(slices.first.first.latitude, closeTo(0.001, 1e-9));
+      expect(slices.first.last.latitude, closeTo(0.003, 1e-9));
+    });
+
+    test('clamps endIndex when it overflows the polyline', () {
+      final polyline = [
+        const cm.Waypoint(lat: 0, lng: 0),
+        const cm.Waypoint(lat: 0.001, lng: 0),
+      ];
+      final spans = [
+        const OverlapSpan(startIndex: 0, endIndex: 99),
+      ];
+      final slices = overlapLatLngsFor(polyline, spans);
+      expect(slices.first, hasLength(2));
+    });
+
+    test('skips spans whose startIndex is out of range', () {
+      final polyline = [
+        const cm.Waypoint(lat: 0, lng: 0),
+        const cm.Waypoint(lat: 0.001, lng: 0),
+      ];
+      final spans = [
+        const OverlapSpan(startIndex: 5, endIndex: 6),
+      ];
+      expect(overlapLatLngsFor(polyline, spans), isEmpty);
+    });
+  });
+}
