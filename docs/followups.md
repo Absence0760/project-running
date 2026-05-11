@@ -104,7 +104,7 @@ Replace the current simulated WS with a real connection to the Go service. Wire 
 
 - [ ] **Map matching deploy:** OSRM alongside Supabase, OSM extract refresh pipeline, auth endpoint, return matched geom to mobile, raw-vs-matched toggle, offline fallback. Engine choice + trigger wiring already shipped; deploy is what remains.
 - [ ] **Protomaps self-hosted tiles** — all 4 items from roadmap.md "Future" section.
-- [ ] **Cross-platform parity periodic audit + cross-client integration test in CI** — `docs/roadmap.md` "Future" section §2 and §3.
+- [x] **Cross-platform parity periodic audit in CI** — new `parity-matrix` CI job runs `scripts/check_parity_matrix.dart` on every PR. Validates row column count, legal cell values (`✓ / ✗ / Partial / N/A` only), the iOS-ahead-of-Android impossibility (decisions §39), and Partial-without-Notes. Caught 3 real drift bugs on first run (Garmin row with stray `|`, `"✓ (read-only)"` non-standard cell, empty-Notes Partial); all fixed. Cross-client integration test in CI is still open.
 
 ### #15 Competitor backlog + SEO route pages
 
