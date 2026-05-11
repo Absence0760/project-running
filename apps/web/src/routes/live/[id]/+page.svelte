@@ -5,6 +5,12 @@
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
 	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
 	import { supabase } from '$lib/supabase';
+	import {
+		isLiveHubConfigured,
+		fetchLiveSnapshot,
+		openLiveWebSocket,
+		type LivePing,
+	} from '$lib/live_hub';
 
 	let { data } = $props();
 
@@ -18,6 +24,10 @@
 	let status = $state<Status>('connecting');
 	let demoTicker: ReturnType<typeof setInterval> | null = null;
 	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+	// Go live-hub teardown handle. Held alongside `realtimeChannel`
+	// because exactly one of the two transports is active per session
+	// — `subscribeLive` picks based on `isLiveHubConfigured()`.
+	let liveHubHandle: { close: () => void } | null = null;
 
 	// Runner position + completed trace. Held as mutable module-scope
 	// state rather than `$state` because MapLibre mutates the GeoJSON
@@ -82,6 +92,25 @@
 		// Fetch any pings already logged for this run so a spectator
 		// joining mid-run sees the trace so far, not just what arrives
 		// after they connect.
+		if (isLiveHubConfigured()) {
+			// Hub path: only the last-known ping is durable (Redis 24h
+			// TTL in production). Earlier pings live on `live_run_pings`
+			// only when the legacy transport is still writing — we
+			// don't promise a full backlog here. A single snapshot is
+			// enough to render the runner's current position
+			// immediately on connect.
+			const snap = await fetchLiveSnapshot(data.id);
+			if (snap) {
+				pushPing({
+					lat: snap.lat,
+					lng: snap.lng,
+					distance_m: snap.distance_m ?? null,
+					elapsed_s: snap.elapsed_s ?? null,
+				});
+				return true;
+			}
+			return false;
+		}
 		const { data: rows, error } = await supabase
 			.from('live_run_pings')
 			.select('lat, lng, distance_m, elapsed_s, at')
@@ -97,12 +126,39 @@
 		// broadcaster's privacy zones are NOT fetched here (doing so
 		// would defeat the purpose — anyone watching a public live run
 		// could read off the broadcaster's home / work coordinates).
-		// The single line of defence is the
-		// `live_run_pings_drop_in_zone` BEFORE-INSERT trigger from
+		// On the Supabase Realtime path, the single line of defence is
+		// the `live_run_pings_drop_in_zone` BEFORE-INSERT trigger from
 		// migration `20260618_001_clip_live_run_pings_to_privacy_zones.sql`,
 		// which silently drops in-zone pings before they reach Realtime.
 		// Pinned by `apps/backend/supabase/tests/rls_live_run_pings_trigger_test.sql`
-		// so a future migration can't silently undo it.
+		// so a future migration can't silently undo it. On the Go
+		// live-hub path, the broadcaster (LiveBroadcaster) must apply
+		// the same clip before it pushes to the hub — server-side
+		// clipping is on the migration list (followups #13).
+		if (isLiveHubConfigured()) {
+			liveHubHandle = openLiveWebSocket(data.id, {
+				onPing: (p: LivePing) => {
+					pushPing({
+						lat: p.lat,
+						lng: p.lng,
+						distance_m: p.distance_m ?? null,
+						elapsed_s: p.elapsed_s ?? null,
+					});
+					if (status !== 'live') status = 'live';
+				},
+				onStatus: (s) => {
+					// 'closed' surfaces if the hub goes down mid-run;
+					// the openLiveWebSocket helper auto-reconnects, so
+					// we flip the badge back to `connecting` rather
+					// than terminal so the user sees recovery in
+					// progress.
+					if (s === 'closed' && status === 'live') {
+						status = 'connecting';
+					}
+				},
+			});
+			return;
+		}
 		realtimeChannel = supabase
 			.channel(`live-run:${data.id}`)
 			.on(
@@ -210,6 +266,7 @@
 	onDestroy(() => {
 		if (demoTicker) clearInterval(demoTicker);
 		if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+		liveHubHandle?.close();
 		map?.remove();
 	});
 </script>

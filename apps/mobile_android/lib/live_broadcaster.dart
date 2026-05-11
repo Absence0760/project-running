@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 
-/// Pushes live spectator pings to `live_run_pings` while a recording
-/// is in progress. Mirrors the shape of `RaceController.pushPing` —
-/// throttled to one insert every [_pingInterval], swallows network /
+import 'live_hub_client.dart';
+
+/// Pushes live spectator pings while a recording is in progress.
+/// Throttled to one push every [_pingInterval], swallows network /
 /// auth errors via `debugPrint` so the recorder's L0/L1 stays
 /// untouched (see `docs/conventions.md § Layered resilience`).
 ///
@@ -14,10 +15,26 @@ import 'package:flutter/foundation.dart';
 /// spectator table at all. The throttle window is intentionally
 /// looser than the recorder's GPS cadence (1 s) — the spectator UI
 /// is a glanceable surface, not a bit-for-bit replay.
+///
+/// Transport:
+/// - When [hubClient] is non-null and [LiveHubClient.isConfigured]
+///   is true (deploy sets `LIVE_HUB_URL` in `dotenv.env`), pings
+///   POST to the Go live hub via the hub client. The hub fans out
+///   to subscribed spectators in real-time and stores the last
+///   known position for late joiners. No Postgres / Realtime
+///   involved.
+/// - Otherwise the broadcaster falls back to the legacy path —
+///   `ApiClient.insertLivePing` writes a row to `live_run_pings`
+///   and Supabase Realtime fans out to the web spectator page.
+///
+/// The fallback keeps the feature usable on every build pre-deploy
+/// and during a Fly.io outage. See `docs/followups.md § #13` for
+/// the migration plan.
 class LiveBroadcaster {
-  LiveBroadcaster(this._api);
+  LiveBroadcaster(this._api, {this.hubClient});
 
   final ApiClient _api;
+  final LiveHubClient? hubClient;
 
   String? _runId;
   bool _active = false;
@@ -63,16 +80,29 @@ class LiveBroadcaster {
     final now = DateTime.now();
     if (now.difference(_lastPingAt) < _pingInterval) return;
     _lastPingAt = now;
+    final hub = hubClient;
     try {
-      await _api.insertLivePing(
-        runId: id,
-        lat: lat,
-        lng: lng,
-        distanceM: distanceM,
-        elapsedS: elapsedS,
-        bpm: bpm,
-        ele: ele,
-      );
+      if (hub != null && hub.isConfigured) {
+        await hub.pushPing(
+          runId: id,
+          lat: lat,
+          lng: lng,
+          distanceM: distanceM,
+          elapsedS: elapsedS,
+          bpm: bpm,
+          ele: ele,
+        );
+      } else {
+        await _api.insertLivePing(
+          runId: id,
+          lat: lat,
+          lng: lng,
+          distanceM: distanceM,
+          elapsedS: elapsedS,
+          bpm: bpm,
+          ele: ele,
+        );
+      }
     } catch (e) {
       debugPrint('[LiveBroadcaster.pushPing] $e');
     }

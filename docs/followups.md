@@ -114,9 +114,14 @@ The job-worker half is **shipped + deployed** (map-match jobs draining via `clai
 - [ ] **Data export worker** — same — new `kind` for `apps/backend/supabase/functions/export-data` migration.
 - [ ] **Premium Go endpoints** — `/training-plan`, `/vo2max`, `/race-predictor`, `/recovery`. Pro-only via Supabase JWT verification.
 
-### #13 Live spectator WebSocket (blocked by #12)
+### #13 Live spectator WebSocket
 
-Replace the current simulated WS with a real connection to the Go service. Wire the spectator UI to subscribe to ephemeral position updates from Redis. Single PR once #12 lands.
+Client wiring shipped — both ends now have a hub-or-Supabase transport switch gated on env. The hub itself is in-process today (`apps/job_worker/internal/livehub/`, see #12); the swap to Upstash Redis is a Hub-internal change with no further client work.
+
+- [x] **Mobile recorder hub path** — `apps/mobile_android/lib/live_hub_client.dart` is the HTTP wrapper around `POST /v1/live/{run_id}/push` (dart:io HttpClient + pluggable fetcher seam for tests). `LiveBroadcaster` now takes an optional `hubClient`; when `LiveHubClient.isConfigured` is true (deploy sets `LIVE_HUB_URL` in `dotenv.env`), pings route through the hub instead of Supabase `live_run_pings`. Falls back to the legacy `ApiClient.insertLivePing` path otherwise so the feature stays usable every build pre-deploy. Twin-mirrored. 13 new unit tests (9 hub-client URL building + encoding + status code + error path, 4 broadcaster transport selection including L4-swallow contract).
+- [x] **Web spectator hub path** — `apps/web/src/lib/live_hub.ts` (env-coupled module) + `live_hub_helpers.ts` (pure URL + backoff math). `openLiveWebSocket(runId, {onPing, onStatus})` opens a browser `WebSocket` to `${PUBLIC_LIVE_HUB_URL}/v1/live/{run_id}/subscribe` with auto-reconnect (exponential backoff capped at 30 s). `fetchLiveSnapshot(runId)` covers the late-joiner case via `GET /v1/live/{run_id}/snapshot`. Spectator page (`/live/[id]/+page.svelte`) gates the entire subscribe + hydrate flow on `isLiveHubConfigured()` — falls back to the Supabase Realtime channel + table backlog when unset, so existing builds keep working. 7 unit tests on the pure helpers (URL building, http/ws scheme flip, run-id encoding, backoff math).
+- [ ] **Server-side privacy-zone clip on the Go hub** — today the `live_run_pings_drop_in_zone` trigger does the clip on the Supabase path. When the hub becomes the only writer, the Go-side `Server.Authorizer` (or a peer interceptor) needs to fetch the broadcaster's privacy zones and drop in-zone pings before broadcasting. Documented in `apps/web/src/routes/live/[id]/+page.svelte`'s subscribeLive comment.
+- [ ] **Hub deploy + env flip** — the env vars (`LIVE_HUB_URL` for mobile, `PUBLIC_LIVE_HUB_URL` for web) stay empty until the Fly.io app + DNS land per #12.
 
 ### #14 Map matching + Protomaps + parity audit (Future)
 

@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/live_broadcaster.dart';
+import '../lib/live_hub_client.dart';
 
 class _FakeApiClient extends ApiClient {
   int callCount = 0;
@@ -110,6 +111,84 @@ void main() {
       await lb.pushPing(lat: 3, lng: 4);
       expect(api.callCount, 2);
       expect(api.calls.last['run_id'], 'run-2');
+    });
+  });
+
+  group('LiveBroadcaster transport selection', () {
+    test('routes pings through the Go hub when hubClient is configured',
+        () async {
+      // hubClient configured → API insert path should NOT fire.
+      final api = _FakeApiClient();
+      Uri? hubUrl;
+      Map<String, dynamic>? hubBody;
+      final hub = LiveHubClient(
+        baseUrl: 'https://live.runonward.com',
+        fetcher: (u, b) async {
+          hubUrl = u;
+          hubBody = b;
+          return 202;
+        },
+      );
+      final lb = LiveBroadcaster(api, hubClient: hub);
+      lb.attach('run-1');
+      await lb.pushPing(
+        lat: 47.37,
+        lng: 8.54,
+        distanceM: 500,
+        elapsedS: 60,
+      );
+      expect(api.callCount, 0,
+          reason: 'hub path must not fall through to insertLivePing');
+      expect(hubUrl!.path, '/v1/live/run-1/push');
+      expect(hubBody!['lat'], 47.37);
+      expect(hubBody!['distance_m'], 500);
+    });
+
+    test('falls back to insertLivePing when hubClient is null',
+        () async {
+      // Default (unconfigured) path — the Supabase insert still works
+      // so the feature stays usable on every build before the hub
+      // deploys.
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(api);
+      lb.attach('run-1');
+      await lb.pushPing(lat: 1, lng: 1);
+      expect(api.callCount, 1);
+    });
+
+    test('falls back to insertLivePing when hubClient.isConfigured = false',
+        () async {
+      // baseUrl: '' → hub.isConfigured = false → broadcaster picks
+      // the legacy path. Same as null hubClient, just expressed via
+      // an unconfigured client (matches what run_screen does today
+      // when LIVE_HUB_URL is absent).
+      final api = _FakeApiClient();
+      final hub = LiveHubClient(
+        baseUrl: '',
+        fetcher: (_, __) async => fail('hub must not be hit'),
+      );
+      final lb = LiveBroadcaster(api, hubClient: hub);
+      lb.attach('run-1');
+      await lb.pushPing(lat: 1, lng: 1);
+      expect(api.callCount, 1);
+    });
+
+    test('hub HTTP failure does not bubble — L4 best-effort contract',
+        () async {
+      final api = _FakeApiClient();
+      final hub = LiveHubClient(
+        baseUrl: 'https://live.runonward.com',
+        fetcher: (_, __) async => throw StateError('hub down'),
+      );
+      final lb = LiveBroadcaster(api, hubClient: hub);
+      lb.attach('run-1');
+      // Must not throw — the broadcaster swallows so the recorder's
+      // L0/L1 stays untouched.
+      await lb.pushPing(lat: 1, lng: 1);
+      // And it didn't silently fall through to the Supabase path
+      // either — failure is just a missed ping; next 5 s tick takes
+      // its place.
+      expect(api.callCount, 0);
     });
   });
 }

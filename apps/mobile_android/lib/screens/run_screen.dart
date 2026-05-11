@@ -21,6 +21,7 @@ import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
+import '../live_hub_client.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../race_controller.dart';
@@ -685,7 +686,18 @@ class _RunScreenState extends State<RunScreen> {
     // only signed-in users can broadcast.
     final api = widget.apiClient;
     if (api != null && api.userId != null) {
-      _liveBroadcaster ??= LiveBroadcaster(api);
+      // LiveHubClient stays nil-effect when `LIVE_HUB_URL` is unset
+      // — the broadcaster falls back to the legacy
+      // `live_run_pings` Supabase path. Once the Go hub is deployed
+      // and the env var lands in the build, the broadcaster swaps to
+      // the hub without any further client change.
+      final hubUrl = dotenv.env['LIVE_HUB_URL'] ?? '';
+      _liveBroadcaster ??= LiveBroadcaster(
+        api,
+        hubClient: hubUrl.isNotEmpty
+            ? LiveHubClient(baseUrl: hubUrl)
+            : null,
+      );
       try {
         await api.beginLiveBroadcast(
           runId: _runId!,

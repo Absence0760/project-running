@@ -198,8 +198,8 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Live position dot, trace line, pace/distance/elapsed stats
 - [x] Runner shares a live tracking link before starting — pre-start "Share live link" button on `run_screen.dart` pre-mints the run id so the URL is stable across the "share now → tap GO later" gap; URL points at `/live/{run_id}` on the configured web host (`WEB_BASE_URL`).
 - [x] Mobile recorder writes per-ping rows to `live_run_pings` while a run is in flight — `LiveBroadcaster` (Android + iOS twin) attached on Share-live-link tap, throttled 5 s, swallows network failures (L4); `ApiClient.beginLiveBroadcast` pre-creates the parent `runs` row with `is_public=true` so anon spectators on the share URL can read; `endLiveBroadcast` wipes pings on stop and `cleanup_stale_live_run_pings` (cron, 4 h) handles the crash path.
-- [ ] WebSocket connection to Go service (replace simulation)
-- [ ] Positions stored ephemerally in Redis (TTL 24h) for late joiners
+- [x] WebSocket connection to Go service (replace simulation) — both ends shipped. Mobile recorder routes pings through `apps/mobile_android/lib/live_hub_client.dart` when `LIVE_HUB_URL` is in `dotenv.env`; web spectator opens a WS to `${PUBLIC_LIVE_HUB_URL}/v1/live/{run_id}/subscribe` when set (with auto-reconnect + late-joiner snapshot via `fetchLiveSnapshot`). Both gracefully fall back to the Supabase Realtime path when unset. The Go-side hub lives in `apps/job_worker/internal/livehub/` (see #12). Env-flip lands once the Fly.io app is provisioned.
+- [ ] Positions stored ephemerally in Redis (TTL 24h) for late joiners — hub uses an in-process map today; the Hub's Publish/Subscribe surface is the only swap touchpoint to Upstash Redis pub/sub.
 
 ### Backend work (Phase 2)
 
