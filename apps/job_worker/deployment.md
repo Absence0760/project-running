@@ -142,6 +142,12 @@ The worker dispatches by `jobs.kind`. Today:
 | `token_refresh` | pg_cron `enqueue-token-refresh` (migration `20260821_001`) | Replaces the `refresh-tokens` Edge Function. Strava OAuth rotation. Requires `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET`. |
 | `strava_event` | `POST /v1/strava/webhook` on the Go service | Replaces the `strava-webhook` Edge Function. The HTTP endpoint validates URL secret + verify-token + freshness + dedupes via `webhook_events`, then enqueues a job; the worker does the activity fetch + Storage upload + runs insert async. Requires `STRAVA_CLIENT_ID` / `_SECRET` (Strava API) + `STRAVA_WEBHOOK_SECRET` / `STRAVA_VERIFY_TOKEN` (URL-side gates). |
 
+**Data export** is the other Edge-Function move that lives in the Go service:
+
+| Endpoint | Replaces | Notes |
+|---|---|---|
+| `POST /v1/export` on the Go service | `export-data` Edge Function | JWT-authed (same `SUPABASE_JWT_SECRET` the live hub uses). Tiered rate limit (free 2/h, pro 8/h) via `check_rate_limit_tiered`. Builds CSV or GPX zip of up to 5000 runs, uploads to `runs/{user_id}/exports/<ts>.{csv,zip}`, returns a 10-min signed URL. Body shape: `{format: 'csv'|'gpx'}`. |
+
 **Cutover recipe for `token_refresh`.** The Edge Function and the Go path can coexist — they both refresh the same rows; whichever runs first wins, the second one finds nothing expiring within an hour. To migrate:
 
 1. Deploy the worker with the Strava env vars set. Boot log should show `strava: enabled (token_refresh dispatch armed)`. Without that line the dispatch falls through to a permanent failure on every `token_refresh` job — operator-visible in `flyctl logs`.

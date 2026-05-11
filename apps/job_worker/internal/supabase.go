@@ -723,3 +723,133 @@ func (c *SupabaseClient) EnqueueStravaEvent(ctx context.Context, payload map[str
 	}
 	return rows[0].ID, nil
 }
+
+// CheckRateLimitTiered consults the `check_rate_limit_tiered`
+// SECURITY DEFINER RPC. Mirrors the EF helper of the same shape.
+// Returns `denied=true` + the suggested Retry-After when the user
+// is over their tier's per-hour quota. RPC errors bubble so the
+// caller can fail-closed (treat outage as throttled) — matches the
+// EF's `failClosed: true` posture.
+func (c *SupabaseClient) CheckRateLimitTiered(ctx context.Context, userID, bucket string, freeMax, proMax, windowSec int) (bool, int, error) {
+	params := map[string]any{
+		"p_user_id":        userID,
+		"p_bucket":         bucket,
+		"p_free_max":       freeMax,
+		"p_pro_max":        proMax,
+		"p_window_seconds": windowSec,
+	}
+	var rows []struct {
+		Allowed           bool   `json:"allowed"`
+		RetryAfterSeconds int    `json:"retry_after_seconds"`
+		Tier              string `json:"tier"`
+	}
+	if err := c.rpc(ctx, "check_rate_limit_tiered", params, &rows); err != nil {
+		return false, 0, err
+	}
+	if len(rows) == 0 {
+		// The RPC always returns one row; an empty result means a
+		// schema-level surprise. Fail-closed.
+		return true, 60, nil
+	}
+	return !rows[0].Allowed, rows[0].RetryAfterSeconds, nil
+}
+
+// FetchExportRuns reads the user's runs with the column projection
+// the GDPR export needs. Service role bypasses RLS; the userID
+// filter is the only access gate. Ordered most-recent-first, capped
+// at `limit`. Returns dataexport.ExportRun rows so the adapter
+// doesn't need to translate fields.
+func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, limit int) ([]dataexportRow, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("select",
+		"id,user_id,started_at,duration_s,distance_m,source,external_id,metadata,track_url,is_public,event_id,route_id,created_at,updated_at")
+	q.Set("order", "started_at.desc")
+	q.Set("limit", strconv.Itoa(limit))
+	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []dataexportRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// dataexportRow mirrors dataexport.ExportRun. We don't import the
+// dataexport package here to keep `internal` a leaf (the adapter
+// in main.go bridges across).
+type dataexportRow struct {
+	ID         string                 `json:"id"`
+	UserID     string                 `json:"user_id"`
+	StartedAt  string                 `json:"started_at"`
+	DurationS  int                    `json:"duration_s"`
+	DistanceM  float64                `json:"distance_m"`
+	Source     string                 `json:"source"`
+	ExternalID *string                `json:"external_id"`
+	Metadata   map[string]interface{} `json:"metadata"`
+	TrackURL   *string                `json:"track_url"`
+	IsPublic   *bool                  `json:"is_public"`
+	EventID    *string                `json:"event_id"`
+	RouteID    *string                `json:"route_id"`
+	CreatedAt  string                 `json:"created_at"`
+	UpdatedAt  string                 `json:"updated_at"`
+}
+
+// UploadExportArtifact stores the assembled CSV / GPX-zip body to
+// the `runs` bucket. `upsert=false` so a duplicate path doesn't
+// stomp on an existing export (the caller picks a ms-precision
+// timestamped path).
+func (c *SupabaseClient) UploadExportArtifact(ctx context.Context, path, contentType string, body []byte) error {
+	u := c.BaseURL + "/storage/v1/object/runs/" + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("x-upsert", "false")
+	_, err = c.do(ctx, req)
+	return err
+}
+
+// CreateSignedURL calls the Storage /object/sign endpoint to mint
+// a time-bounded download URL. The returned `signedURL` is a path
+// (e.g. `/object/sign/runs/...?token=...`) — we prepend the
+// project's storage host so the caller hands back a full URL.
+func (c *SupabaseClient) CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error) {
+	body, err := json.Marshal(map[string]any{"expiresIn": ttlSec})
+	if err != nil {
+		return "", err
+	}
+	u := c.BaseURL + "/storage/v1/object/sign/runs/" + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.do(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	var parsed struct {
+		SignedURL string `json:"signedURL"`
+	}
+	if err := json.Unmarshal(resp, &parsed); err != nil {
+		return "", err
+	}
+	if parsed.SignedURL == "" {
+		return "", errors.New("signed url: empty")
+	}
+	// The signedURL field is path-relative (`/storage/v1/object/sign/...`).
+	// Front it with the base URL so the client doesn't need to know.
+	if strings.HasPrefix(parsed.SignedURL, "/") {
+		return strings.TrimRight(c.BaseURL, "/") + parsed.SignedURL, nil
+	}
+	return parsed.SignedURL, nil
+}

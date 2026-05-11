@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/dataexport"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
 )
@@ -34,6 +35,69 @@ func (e *stravaJobEnqueuer) EnqueueStravaEvent(ctx context.Context, p stravahook
 		"owner_id":    p.OwnerID,
 		"event_time":  p.EventTime,
 	})
+}
+
+// dataexportBackend adapts SupabaseClient to dataexport.Backend.
+// Same reasoning as stravaJobEnqueuer — the leaf package keeps its
+// own types so tests don't import `internal`; this adapter is the
+// production translation layer.
+type dataexportBackend struct {
+	client *internal.SupabaseClient
+}
+
+func (b *dataexportBackend) CheckRateLimitTiered(ctx context.Context, userID, bucket string, freeMax, proMax, windowSec int) (bool, int, error) {
+	return b.client.CheckRateLimitTiered(ctx, userID, bucket, freeMax, proMax, windowSec)
+}
+
+func (b *dataexportBackend) FetchExportRuns(ctx context.Context, userID string, limit int) ([]dataexport.ExportRun, error) {
+	rows, err := b.client.FetchExportRuns(ctx, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dataexport.ExportRun, len(rows))
+	for i, r := range rows {
+		out[i] = dataexport.ExportRun{
+			ID: r.ID, UserID: r.UserID, StartedAt: r.StartedAt,
+			DurationS: r.DurationS, DistanceM: r.DistanceM,
+			Source: r.Source, ExternalID: r.ExternalID,
+			Metadata: r.Metadata, TrackURL: r.TrackURL,
+			IsPublic: r.IsPublic, EventID: r.EventID, RouteID: r.RouteID,
+			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		}
+	}
+	return out, nil
+}
+
+func (b *dataexportBackend) DownloadTrackBytes(ctx context.Context, path string) ([]dataexport.TrackPoint, error) {
+	pts, err := b.client.DownloadTrack(ctx, path)
+	if err != nil {
+		return nil, nil // swallow; caller drops the per-run GPX file
+	}
+	out := make([]dataexport.TrackPoint, len(pts))
+	for i, p := range pts {
+		out[i] = dataexport.TrackPoint{Lat: p.Lat, Lng: p.Lng}
+		if p.Elevation != nil {
+			ele := *p.Elevation
+			out[i].Ele = &ele
+		}
+		if p.Timestamp != nil {
+			ts := p.Timestamp.Format(time.RFC3339)
+			out[i].Ts = &ts
+		}
+		if p.Bpm != nil {
+			b := *p.Bpm
+			out[i].Bpm = &b
+		}
+	}
+	return out, nil
+}
+
+func (b *dataexportBackend) UploadExportArtifact(ctx context.Context, path, contentType string, body []byte) error {
+	return b.client.UploadExportArtifact(ctx, path, contentType, body)
+}
+
+func (b *dataexportBackend) CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error) {
+	return b.client.CreateSignedURL(ctx, path, ttlSec)
 }
 
 // main wires environment → SupabaseClient → Worker.Run. Kept thin so
@@ -190,7 +254,24 @@ func main() {
 		logger.Warn("stravahook: DISABLED — STRAVA_WEBHOOK_SECRET / STRAVA_VERIFY_TOKEN unset; webhook endpoint returns 503")
 	}
 
-	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv)
+	// Data export endpoint — POST /v1/export. JWT-authed (same
+	// SUPABASE_JWT_SECRET the live hub uses), service-role for the
+	// Storage upload + signed URL. Replaces the export-data Edge
+	// Function. Refuses with 503 when the JWT secret isn't set —
+	// matching the live hub's posture.
+	var exportSrv *dataexport.Server
+	if jwtSecret := os.Getenv("SUPABASE_JWT_SECRET"); jwtSecret != "" {
+		exportSrv = &dataexport.Server{
+			JWTSecret: []byte(jwtSecret),
+			Backend:   &dataexportBackend{client: client},
+			Log:       logger.With("component", "dataexport"),
+		}
+		logger.Info("dataexport: enabled (export endpoint mounted at /v1/export)")
+	} else {
+		logger.Warn("dataexport: DISABLED — SUPABASE_JWT_SECRET unset; export endpoint returns 503")
+	}
+
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -217,13 +298,16 @@ func main() {
 // happens to take that long to handle; longer-running jobs would
 // trigger a restart, which is the correct response for "this job is
 // hung".
-func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server) *http.Server {
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server) *http.Server {
 	mux := http.NewServeMux()
 	if hub != nil {
 		hub.RegisterRoutes(mux)
 	}
 	if strava != nil {
 		strava.RegisterRoutes(mux)
+	}
+	if export != nil {
+		export.RegisterRoutes(mux)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		ageSec := time.Now().Unix() - lastClaim.Load()

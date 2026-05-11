@@ -127,9 +127,12 @@ apps/job_worker/
 │   │   ├── auth_test.go     # 16 unit + 1 end-to-end test for the authorizer
 │   │   ├── server.go        # HTTP routes for /v1/live/{run_id}/* + zone clip
 │   │   └── server_test.go   # 16 httptest + WebSocket integration tests
-│   └── stravahook/          # Strava webhook HTTP endpoint (POST → enqueue strava_event)
-│       ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
-│       └── server_test.go   # 13 httptest cases on every gate + the handshake
+│   ├── stravahook/          # Strava webhook HTTP endpoint (POST → enqueue strava_event)
+│   │   ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
+│   │   └── server_test.go   # 13 httptest cases on every gate + the handshake
+│   └── dataexport/          # GDPR data-export HTTP endpoint (POST /v1/export)
+│       ├── server.go        # JWT auth + tiered rate limit + CSV/GPX-zip builder + signed URL
+│       └── server_test.go   # 14 tests (9 httptest + 5 pure builder/helpers)
 ├── osrm/                    # local OSRM dev stack (compose + Makefile)
 ├── Dockerfile               # multi-stage; final image is distroless
 ├── README.md                # local-run instructions
