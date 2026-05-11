@@ -50,20 +50,36 @@ export const load: PageLoad = async ({ params }) => {
 	// the SvelteKit dev server (returns null body) instead of hitting
 	// the real Supabase instance.
 	if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) {
-		return { id: params.id, run: null };
+		return { id: params.id, run: null, displayName: null };
 	}
 	try {
 		const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 			auth: { persistSession: false },
 		});
-		const { data } = await supabase
+		const { data: run } = await supabase
 			.from('public_runs')
-			.select('id, distance_m, duration_s, started_at, source')
+			.select('id, user_id, distance_m, duration_s, started_at, source')
 			.eq('id', params.id)
 			.maybeSingle();
-		return { id: params.id, run: data ?? null };
+		// Second hop: pull the runner's display name from
+		// public_profiles (anon-readable per migration
+		// 20260824_001) so the og:title can attribute the run.
+		// Done as a separate query rather than a PostgREST embed
+		// because public_runs and public_profiles are views, not
+		// tables, and embeds across views are gated on FK metadata
+		// that views don't carry.
+		let displayName: string | null = null;
+		if (run?.user_id) {
+			const { data: profile } = await supabase
+				.from('public_profiles')
+				.select('display_name')
+				.eq('id', run.user_id)
+				.maybeSingle();
+			displayName = profile?.display_name ?? null;
+		}
+		return { id: params.id, run: run ?? null, displayName };
 	} catch (err) {
 		console.warn('share/run load: fetch failed', err);
-		return { id: params.id, run: null };
+		return { id: params.id, run: null, displayName: null };
 	}
 };

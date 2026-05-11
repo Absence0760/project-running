@@ -4,15 +4,14 @@
 
 	let { data } = $props();
 
-	// `data.run` is a thin projection from `public_runs` fetched at
-	// prerender (and in the browser on a cold load). The title /
-	// description are baked into the prerendered HTML so chat-app
-	// unfurls (Slack, Discord, FB, LinkedIn) see per-run copy
-	// instead of the generic SPA-shell fallback. The display_name
-	// branch is still deferred — `user_profiles` is owner-only by
-	// RLS, so a build-time anon fetch can't see the runner's name.
-	let title = $derived(buildRunShareTitle(data.run));
-	let description = $derived(buildRunShareDescription(data.run));
+	// `data.run` + `data.displayName` are thin projections from
+	// `public_runs` and `public_profiles` (migration 20260824_001
+	// added the latter so the anon prerender can see display names).
+	// Both bake into the prerendered HTML so chat-app unfurls (Slack,
+	// Discord, FB, LinkedIn) get per-run, per-runner copy instead
+	// of the SPA-shell fallback.
+	let title = $derived(buildRunShareTitle(data.run, data.displayName));
+	let description = $derived(buildRunShareDescription(data.run, data.displayName));
 </script>
 
 <svelte:head>

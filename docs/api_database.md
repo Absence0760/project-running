@@ -133,6 +133,8 @@ create index idx_routes_user_starred on routes (user_id, updated_at desc) where 
 
 **`public_routes.user_id` is intentionally exposed.** Combined with `public_runs.user_id`, it makes `auth.users.id` (UUID) a stable cross-link between a public route, the public runs that ran on it, and the runner's `/u/[id]` profile page. That linkage is the entire point of the social surface — followers click through from a friend's run to the route they used, then to their profile. The trade-off is that a runner can't share a single public route or run without publishing their auth UUID as a durable identifier; if/when handles ship (decisions §31), the UUID will be aliased but the cross-link will still be present at the schema layer.
 
+**`public_profiles` view** (migration `20260824_001_public_profiles_view.sql`) — anon-readable projection of `user_profiles` exposing only `id`, `display_name`, `avatar_url`. The base `user_profiles` table is owner-only by RLS (`auth.uid() = id`), which blocked the prerendered share pages from baking the runner's name into the og:title. The view restores that single read path with the same privacy posture as `/u/[id]` (display_name + avatar are already on every share-page body via RunSocial / kudos / comments for any authed viewer; the only delta is anon crawlers now see the same name on the unfurl card). No way to enumerate "all users" — callers must supply a uuid up-front (typically from a `public_runs` / `public_routes` row). To retract per-user, add a `crawler_visible` flag to `user_profiles` and a `WHERE` clause on the view; v1 ships it unconditionally readable.
+
 ---
 
 ### `saved_routes`

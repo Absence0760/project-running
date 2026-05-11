@@ -57,22 +57,31 @@ export function formatDateStable(iso: string | null | undefined): string {
 	});
 }
 
-export function buildRunShareTitle(run: ShareRunMeta | null | undefined): string {
+export function buildRunShareTitle(
+	run: ShareRunMeta | null | undefined,
+	displayName?: string | null,
+): string {
 	if (!run) return `Run — ${SITE_NAME}`;
 	const km = formatKmStable(run.distance_m);
 	const date = formatDateStable(run.started_at);
-	if (km && date) return `${km} run on ${date} — ${SITE_NAME}`;
-	if (km) return `${km} run — ${SITE_NAME}`;
-	if (date) return `Run on ${date} — ${SITE_NAME}`;
-	return `Run — ${SITE_NAME}`;
+	const by = displayName ? ` by ${displayName}` : '';
+	if (km && date) return `${km} run${by} on ${date} — ${SITE_NAME}`;
+	if (km) return `${km} run${by} — ${SITE_NAME}`;
+	if (date) return `Run${by} on ${date} — ${SITE_NAME}`;
+	return displayName ? `Run by ${displayName} — ${SITE_NAME}` : `Run — ${SITE_NAME}`;
 }
 
-export function buildRunShareDescription(run: ShareRunMeta | null | undefined): string {
+export function buildRunShareDescription(
+	run: ShareRunMeta | null | undefined,
+	displayName?: string | null,
+): string {
 	if (!run) return 'View a public run on Run Onward — map, splits, elevation, kudos.';
 	const km = formatKmStable(run.distance_m);
 	const date = formatDateStable(run.started_at);
+	const by = displayName ? ` by ${displayName}` : '';
 	const bits: string[] = [];
-	if (km) bits.push(km);
+	if (km) bits.push(`${km}${by}`);
+	else if (by.trim()) bits.push(`Run${by}`);
 	if (date) bits.push(`on ${date}`);
 	const lead = bits.length > 0 ? `${bits.join(' ')}.` : '';
 	return `${lead} Map, splits, and elevation on Run Onward.`.trim();

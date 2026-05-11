@@ -75,6 +75,34 @@ test('buildRunShareTitle — date-only run omits distance', () => {
 	);
 });
 
+test('buildRunShareTitle — display_name folds into the title when provided', () => {
+	assert.equal(
+		buildRunShareTitle(
+			{ distance_m: 5000, started_at: '2026-05-11T00:00:00Z' },
+			'Jared',
+		),
+		'5.0 km run by Jared on 11 May 2026 — Run Onward',
+	);
+});
+
+test('buildRunShareTitle — display_name with distance only', () => {
+	assert.equal(
+		buildRunShareTitle({ distance_m: 10000 }, 'Alex'),
+		'10.0 km run by Alex — Run Onward',
+	);
+});
+
+test('buildRunShareTitle — null display_name falls back to anonymous shape', () => {
+	assert.equal(
+		buildRunShareTitle({ distance_m: 5000, started_at: '2026-05-11T00:00:00Z' }, null),
+		'5.0 km run on 11 May 2026 — Run Onward',
+	);
+});
+
+test('buildRunShareTitle — display_name with no run meta still attributes', () => {
+	assert.equal(buildRunShareTitle({}, 'Morgan'), 'Run by Morgan — Run Onward');
+});
+
 // ---------------- buildRunShareDescription ----------------
 
 test('buildRunShareDescription — meta is appended before the lead', () => {
@@ -84,6 +112,14 @@ test('buildRunShareDescription — meta is appended before the lead', () => {
 	});
 	assert.ok(desc.startsWith('5.0 km on 11 May 2026.'));
 	assert.ok(desc.includes('Map, splits, and elevation on Run Onward.'));
+});
+
+test('buildRunShareDescription — display_name appears next to the distance', () => {
+	const desc = buildRunShareDescription(
+		{ distance_m: 5000, started_at: '2026-05-11T00:00:00Z' },
+		'Jared',
+	);
+	assert.ok(desc.startsWith('5.0 km by Jared on 11 May 2026.'));
 });
 
 test('buildRunShareDescription — null run keeps generic copy', () => {

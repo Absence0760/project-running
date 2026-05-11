@@ -71,18 +71,21 @@ test.describe('/share/run/[id] — anon', () => {
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
 		await page.waitForLoadState('networkidle');
 
-		// Per-run reactive title — seeded RUNNER_PUBLIC_RUN_ID is
-		// 5 km on a fixed date. Assert the wire shape ("X km run on
-		// DD MMM YYYY") rather than the specific values so a seed
-		// tweak doesn't break the spec.
-		await expect(page).toHaveTitle(/\d+(\.\d+)?\s+km run on \d+\s\w+\s\d{4}\s—\sRun Onward/);
+		// Per-run reactive title — pulls runner name from
+		// public_profiles (migration 20260824_001) so the unfurl
+		// can attribute the run. Assert the wire shape
+		// ("X km run by NAME on DD MMM YYYY") rather than specific
+		// values so a seed tweak doesn't break the spec.
+		await expect(page).toHaveTitle(
+			/\d+(\.\d+)?\s+km run by .+ on \d+\s\w+\s\d{4}\s—\sRun Onward/
+		);
 		await expect(page.locator('meta[name="description"]')).toHaveAttribute(
 			'content',
 			/Map, splits, and elevation on Run Onward\.$/
 		);
 		await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
 			'content',
-			/\d+(\.\d+)?\s+km run on /
+			/\d+(\.\d+)?\s+km run by .+ on /
 		);
 		await expect(page.locator('meta[property="og:type"]')).toHaveAttribute(
 			'content',

@@ -4,6 +4,7 @@
 	import { fetchRouteById } from '$lib/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import { buildRouteShareDescription, buildRouteShareTitle } from '$lib/share_meta';
 	import type { Route, TrackPoint } from '$lib/types';
 
 	let { data } = $props();
@@ -34,8 +35,12 @@
 	let hasElevationData = $derived(
 		elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations)
 	);
-	let pageTitle = $derived(route ? `${route.name} — Run Onward` : 'Route — Run Onward');
-	let pageDesc = $derived(route ? `${(route.distance_m / 1000).toFixed(1)} km ${route.surface} route${route.elevation_m ? ` with ${route.elevation_m} m elevation` : ''}` : '');
+	// Head meta uses the thin projection from +page.ts (baked into
+	// the prerendered HTML), with the body-fetched `route` as the
+	// browser-side upgrade once the owner-aware fetch lands.
+	let metaSource = $derived(route ?? data.route ?? null);
+	let pageTitle = $derived(buildRouteShareTitle(metaSource));
+	let pageDesc = $derived(buildRouteShareDescription(metaSource));
 </script>
 
 <svelte:head>
