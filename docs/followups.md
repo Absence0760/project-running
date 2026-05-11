@@ -50,7 +50,7 @@ These tasks are marked completed at the high-leverage surface but have known sub
 ### #6 Android residuals (parity.md follow-ups)
 
 - [ ] Ultra-length recording (mobile_android backlog #117 — long-runs >6 h crash-resume guarantee)
-- [ ] Club-template publish action (`Partial` → `✓`) — admin button on `plan_detail_screen` to publish into a club's templates list
+- [x] Club-template publish action — AppBar publish button on `plan_detail_screen.dart` opens a picker of the viewer's owner/admin clubs (via `adminClubsForPublish` filter), then commits via `TrainingService.publishPlanAsTemplate`. Found + fixed two latent bugs while wiring: (1) Dart was calling a non-existent `publish_plan_as_template` RPC — replaced with the canonical multi-INSERT path that mirrors web `data.ts`; (2) `clonePlanTemplate` was passing `p_template_id` / `p_start_date` (with stray `p_` prefix) — corrected to `template_id` / `new_start_date` matching the actual `clone_plan_template` SQL signature. Test coverage: 3 unit tests on `adminClubsForPublish`, 3 widget tests on `PublishClubPicker`, 1 wire-level integration test for `publishPlanAsTemplate` against real Supabase. Twin-mirrored.
 - [ ] Club-owned-route admin transfer / detach UI on `route_detail_screen`
 - [x] Device-override "+ Add override" sheet in Settings → Devices — registry of 10 D/UD keys in `devices_screen.dart` drives a key-picker → type-aware value-editor flow (bool / enum / int / double). Excludes purely-universal keys that have no device-scope semantics. 5 new unit tests pin the registry shape. Mirrored to iOS.
 - [ ] Pro native RevenueCat purchase sheet + native donate (`purchases_flutter` mobile Pro flow)

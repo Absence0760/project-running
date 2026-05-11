@@ -463,5 +463,35 @@ void main() {
                 'club');
       }
     });
+
+    test('publishPlanAsTemplate clones the source plan into the club', () async {
+      // Snapshot existing template count so we can assert the publish
+      // actually inserted a row, regardless of how many seeded
+      // templates already live on the club.
+      final before = await training.fetchClubTemplates(_seededClubId);
+      final beforeIds = before.map((t) => t.id).toSet();
+
+      final newId = await training.publishPlanAsTemplate(
+        planId: _seededPlanId,
+        clubId: _seededClubId,
+      );
+      expect(newId, isNotEmpty,
+          reason: 'RPC must return the new template id so the caller can '
+              'route to it or surface a confirmation');
+      expect(beforeIds.contains(newId), isFalse,
+          reason: 'publishPlanAsTemplate must insert a new row, not '
+              'replace an existing one');
+
+      final after = await training.fetchClubTemplates(_seededClubId);
+      final fresh = after.firstWhere(
+        (t) => t.id == newId,
+        orElse: () => throw StateError('new template id not visible in '
+            'fetchClubTemplates'),
+      );
+      expect(fresh.isTemplate, isTrue,
+          reason: 'cloned row must carry is_template=true');
+      expect(fresh.clubId, _seededClubId,
+          reason: 'cloned row must belong to the publishing club');
+    });
   });
 }

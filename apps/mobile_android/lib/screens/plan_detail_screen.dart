@@ -2,23 +2,42 @@ import 'dart:async';
 
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../main.dart' show pendingStartWorkout;
+import '../social_service.dart' show ClubView, SocialService;
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/plan_calendar.dart';
+import '../widgets/top_banner.dart';
 import '../widgets/workout_edit_sheet.dart';
 import 'workout_detail_screen.dart';
+
+/// Filter the viewer's club memberships to ones they can publish a
+/// plan-template into — owner or admin. Pure so it's directly
+/// unit-tested in `plan_detail_screen_test.dart`.
+@visibleForTesting
+List<ClubView> adminClubsForPublish(Iterable<ClubView> clubs) {
+  return clubs.where((c) => c.isAdmin).toList();
+}
 
 class PlanDetailScreen extends StatefulWidget {
   final TrainingService training;
   final String planId;
+
+  /// Optional SocialService injection so tests can drive the publish
+  /// flow with a fake. Production callsites pass `null` and the screen
+  /// constructs its own SocialService against the global Supabase
+  /// client.
+  final SocialService? social;
+
   const PlanDetailScreen({
     super.key,
     required this.training,
     required this.planId,
+    this.social,
   });
 
   @override
@@ -31,6 +50,11 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Map<String, List<PlanWorkoutRow>> _byWeek = const {};
   bool _loading = true;
   String? _error;
+  bool _publishing = false;
+
+  // Lazily construct a SocialService against the global Supabase client
+  // when none was injected. Tests pass a fake via the constructor.
+  late final SocialService _social = widget.social ?? SocialService();
 
   @override
   void initState() {
@@ -77,6 +101,64 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     }
   }
 
+  Future<void> _publishToClub(TrainingPlanRow plan) async {
+    if (_publishing) return;
+    setState(() => _publishing = true);
+
+    List<ClubView> myClubs;
+    try {
+      myClubs = await _social.fetchMyClubs().timeout(kBackendLoadTimeout);
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _publishing = false);
+        showTopBanner(context, 'Couldn\'t load your clubs — check your network.');
+      }
+      return;
+    } catch (e, s) {
+      debugPrint('publish: fetchMyClubs failed: $e\n$s');
+      if (mounted) {
+        setState(() => _publishing = false);
+        showTopBanner(context, 'Couldn\'t load your clubs.');
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final eligible = adminClubsForPublish(myClubs);
+    if (eligible.isEmpty) {
+      setState(() => _publishing = false);
+      showTopBanner(
+        context,
+        'You need to own or admin a club before you can publish a template.',
+      );
+      return;
+    }
+
+    final clubId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => PublishClubPicker(clubs: eligible),
+    );
+    if (clubId == null) {
+      if (mounted) setState(() => _publishing = false);
+      return;
+    }
+
+    try {
+      await widget.training
+          .publishPlanAsTemplate(planId: plan.id, clubId: clubId)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() => _publishing = false);
+      showTopBanner(context, 'Published "${plan.name}" as a club template.');
+    } catch (e, s) {
+      debugPrint('publishPlanAsTemplate failed: $e\n$s');
+      if (!mounted) return;
+      setState(() => _publishing = false);
+      showTopBanner(context, 'Publish failed: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -114,7 +196,22 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         allActive.isEmpty ? 0 : (100 * done / allActive.length).round();
 
     return Scaffold(
-      appBar: AppBar(title: Text(p.name)),
+      appBar: AppBar(
+        title: Text(p.name),
+        actions: [
+          IconButton(
+            icon: _publishing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.publish),
+            tooltip: 'Publish as club template',
+            onPressed: _publishing ? null : () => _publishToClub(p),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -443,5 +540,70 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       return;
     }
     _load();
+  }
+}
+
+/// Modal that lists the viewer's admin-able clubs and pops the picked
+/// club id (or `null` on cancel). Pure presentation — the parent does
+/// the fetch + commit so cancel doesn't leave a half-state.
+class PublishClubPicker extends StatelessWidget {
+  final List<ClubView> clubs;
+  const PublishClubPicker({super.key, required this.clubs});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Publish to club', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              'Members of the club will be able to adopt this plan as their own.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: clubs.length,
+                itemBuilder: (_, i) {
+                  final c = clubs[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.group),
+                    title: Text(c.row.name),
+                    subtitle: Text(
+                      '${c.row.locationLabel ?? c.row.slug} · '
+                      '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(context, c.row.id),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

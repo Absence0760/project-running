@@ -746,7 +746,7 @@ class _RunScreenState extends State<RunScreen> {
         // carries per-point BPM (and run_detail_screen's HR-zone
         // breakdown lights up for phone-recorded runs). The recorder
         // drops out-of-range values defensively.
-        _recorder.setHeartRate(bpm);
+        _recorder?.setHeartRate(bpm);
         if (mounted) setState(() => _currentBpm = bpm);
       },
       // The strap stream doesn't error today, but a future plugin

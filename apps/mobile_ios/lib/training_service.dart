@@ -55,20 +55,108 @@ class TrainingService extends ChangeNotifier {
   }
 
   /// Publish one of the viewer's plans as a template under a club they
-  /// admin. Returns the new template id.
+  /// admin. Returns the new template id. Mirrors the canonical web
+  /// path at `apps/web/src/lib/data.ts#publishPlanAsTemplate` — a
+  /// multi-table INSERT rather than an RPC (there is no
+  /// `publish_plan_as_template` function server-side; only
+  /// `clone_plan_template` exists, for the adopt direction).
+  ///
+  /// `vdot` + `current_5k_seconds` are intentionally nulled on the
+  /// template row — they're the publisher's personal fitness numbers
+  /// and would otherwise leak to every club member via
+  /// `fetchClubTemplates` (see migration 20260721_001_plan_templates_strip_fitness).
   Future<String> publishPlanAsTemplate({
     required String planId,
     required String clubId,
   }) async {
-    final newId = await _c.rpc(
-      'publish_plan_as_template',
-      params: {'p_source_plan_id': planId, 'p_club_id': clubId},
-    );
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+
+    final src = await fetchPlan(planId);
+    final source = src.plan;
+    if (source == null) {
+      throw Exception('Source plan not found');
+    }
+    if (source.userId != uid) {
+      throw Exception('Only the plan owner can publish');
+    }
+
+    final templateRow = await _c.from('training_plans').insert({
+      'user_id': uid,
+      'name': source.name,
+      'goal_event': source.goalEvent,
+      'goal_distance_m': source.goalDistanceM,
+      'goal_time_seconds': source.goalTimeSeconds,
+      'start_date': toIsoDate(source.startDate),
+      'end_date': toIsoDate(source.endDate),
+      'days_per_week': source.daysPerWeek,
+      'vdot': null,
+      'current_5k_seconds': null,
+      'status': 'completed',
+      'source': source.source,
+      'notes': source.notes,
+      'rules': source.rules,
+      'is_template': true,
+      'club_id': clubId,
+      'parent_template_id': null,
+    }).select('id').single();
+    final newPlanId = templateRow['id'] as String;
+
+    if (src.weeks.isEmpty) {
+      notifyListeners();
+      return newPlanId;
+    }
+
+    final weekRes = await _c.from('plan_weeks').insert([
+      for (final w in src.weeks)
+        {
+          'plan_id': newPlanId,
+          'week_index': w.weekIndex,
+          'phase': w.phase,
+          'target_volume_m': w.targetVolumeM,
+          'notes': w.notes,
+        },
+    ]).select('id, week_index');
+
+    final byIdx = <int, String>{};
+    for (final r in weekRes as List) {
+      final m = r as Map<String, dynamic>;
+      byIdx[m['week_index'] as int] = m['id'] as String;
+    }
+    final oldToNew = <String, String>{};
+    for (final w in src.weeks) {
+      final newId = byIdx[w.weekIndex];
+      if (newId != null) oldToNew[w.id] = newId;
+    }
+
+    final workoutPayload = <Map<String, dynamic>>[];
+    for (final w in src.workouts) {
+      final newWeekId = oldToNew[w.weekId];
+      if (newWeekId == null) continue;
+      workoutPayload.add({
+        'week_id': newWeekId,
+        'scheduled_date': toIsoDate(w.scheduledDate),
+        'kind': w.kind,
+        'target_distance_m': w.targetDistanceM,
+        'target_duration_seconds': w.targetDurationSeconds,
+        'target_pace_sec_per_km': w.targetPaceSecPerKm,
+        'target_pace_tolerance_sec': w.targetPaceToleranceSec,
+        'structure': w.structure,
+        'notes': w.notes,
+      });
+    }
+    if (workoutPayload.isNotEmpty) {
+      await _c.from('plan_workouts').insert(workoutPayload);
+    }
     notifyListeners();
-    return newId as String;
+    return newPlanId;
   }
 
   /// Adopt a club template — RPC clones it back into a personal plan.
+  /// Parameter names mirror the server function signature
+  /// (`clone_plan_template(template_id uuid, new_start_date date)`)
+  /// exactly — postgrest passes these through verbatim, so a typo
+  /// surfaces as `PGRST202 function not found`.
   Future<String> clonePlanTemplate({
     required String templateId,
     DateTime? startDate,
@@ -76,8 +164,8 @@ class TrainingService extends ChangeNotifier {
     final newId = await _c.rpc(
       'clone_plan_template',
       params: {
-        'p_template_id': templateId,
-        if (startDate != null) 'p_start_date': startDate.toIso8601String(),
+        'template_id': templateId,
+        'new_start_date': toIsoDate(startDate ?? DateTime.now()),
       },
     );
     notifyListeners();
