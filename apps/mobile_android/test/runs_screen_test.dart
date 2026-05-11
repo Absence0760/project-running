@@ -262,9 +262,16 @@ void main() {
         (tester) async {
       // Pre-stage 30 runs on disk before the store boots — see
       // _seedRunFiles for the rationale (awaited file writes hang
-      // pumpAndSettle in test). All within the past ~15 h so the
-      // default 'this week' range keeps every one visible.
-      SharedPreferences.setMockInitialValues({});
+      // pumpAndSettle in test). Pin the range filter to 'all' via
+      // SharedPreferences so the visible count is independent of which
+      // weekday CI runs on — the default 'this week' range clips runs
+      // older than Monday 00:00 local and dropped half the synthetic
+      // entries when CI ran early on a Monday morning (the synthetic
+      // runs are 30 min apart × 30 entries = ~15 h, which crosses the
+      // week boundary if "now" is < 15 h after Monday 00:00).
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+      });
       final prefs = Preferences();
       await prefs.init();
       _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
@@ -282,7 +289,11 @@ void main() {
           ),
         ),
       );
+      // First pump = initial paint with defaults. Second pump = post-
+      // hydration setState from _hydrateFilters resolves and the screen
+      // rebuilds with the persisted 'all' range applied.
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       // First page = 20 runs visible; remaining 10 hidden behind the
       // Load-more button. apiClient is null so the cloud branch is a
@@ -325,7 +336,10 @@ void main() {
 
     testWidgets('tapping Load more reveals the next local page',
         (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      // See the sibling test above for why we hydrate range='all' here.
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+      });
       final prefs = Preferences();
       await prefs.init();
       _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
@@ -344,6 +358,7 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       await tester.scrollUntilVisible(
         find.text('Load 20 more'),
