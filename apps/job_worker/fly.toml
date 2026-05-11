@@ -93,15 +93,28 @@ cpus = 1
 #                                   back to permissive (dev) mode and
 #                                   refuses to accept production traffic.
 #   STRAVA_CLIENT_ID              — optional; required for the
-#   STRAVA_CLIENT_SECRET          — `token_refresh` job kind that
-#                                   replaces apps/backend/supabase/
-#                                   functions/refresh-tokens. When unset
-#                                   the worker still drains map_match
-#                                   jobs but token_refresh fails
-#                                   permanent.
+#   STRAVA_CLIENT_SECRET          — `token_refresh` + `strava_event`
+#                                   job kinds that replace
+#                                   apps/backend/supabase/functions/
+#                                   refresh-tokens + strava-webhook.
+#                                   When unset the worker still drains
+#                                   map_match jobs but the Strava
+#                                   kinds fail permanent.
+#   STRAVA_WEBHOOK_SECRET         — URL-query secret that guards the
+#                                   /v1/strava/webhook endpoint.
+#                                   When unset the endpoint returns
+#                                   503 and Strava drops the event;
+#                                   set this before flipping Strava's
+#                                   webhook URL to point at this app.
+#   STRAVA_VERIFY_TOKEN           — verify token for Strava's GET
+#                                   subscription handshake (the
+#                                   value we pass when registering
+#                                   the subscription via the
+#                                   /api/v3/push_subscriptions API).
 # Set with:
 #   flyctl secrets set --app job_worker \
 #     SUPABASE_URL=https://<ref>.supabase.co \
 #     SUPABASE_SERVICE_ROLE_KEY=eyJ... \
 #     SUPABASE_JWT_SECRET=...   \  # Studio → Project Settings → API → JWT Secret
-#     STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=...
+#     STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... \
+#     STRAVA_WEBHOOK_SECRET=... STRAVA_VERIFY_TOKEN=...

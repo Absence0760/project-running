@@ -30,12 +30,33 @@ type Backend interface {
 	FetchExpiringStravaIntegrations(ctx context.Context, within time.Duration) ([]IntegrationRow, error)
 	GetIntegrationTokens(ctx context.Context, userID, provider string) (*TokenPair, error)
 	SetIntegrationTokens(ctx context.Context, userID, provider, accessToken, refreshToken string, tokenExpiry time.Time) error
+	// Strava webhook ingest path — used by the kind='strava_event'
+	// handler that replaces apps/backend/supabase/functions/strava-webhook.
+	FindIntegrationUserByAthlete(ctx context.Context, provider string, athleteID int64) (string, error)
+	IsStravaActivityImported(ctx context.Context, userID string, stravaActivityID int64) (bool, error)
+	InsertStravaRun(ctx context.Context, userID string, act *StravaActivity) (*IngestedRunInfo, error)
+	UpdateRunTrackURL(ctx context.Context, runID, trackURL string) error
+	// Webhook dedupe — bound to the `webhook_events` table. Returned
+	// `inserted == false` means the row already existed (Strava-side
+	// retry); the caller treats that as "ack 200, skip ingest".
+	InsertWebhookEvent(ctx context.Context, provider, eventID string) (inserted bool, err error)
+	DeleteWebhookEvent(ctx context.Context, provider, eventID string) error
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
 // Production wires *StravaClient; tests substitute a fake to avoid
 // hitting Strava during unit runs.
 type StravaRefresher interface {
+	Refresh(ctx context.Context, refreshToken string) (*StravaTokenResponse, error)
+}
+
+// StravaIngestor is the upstream interface used by handleStravaEvent
+// for the per-event activity fetch + track-stream upload. Wider than
+// StravaRefresher so the token-refresh handler doesn't carry these
+// methods; production wires *StravaClient (which implements both).
+type StravaIngestor interface {
+	FetchActivity(ctx context.Context, accessToken string, activityID int64) (StravaActivityResult, error)
+	FetchStreams(ctx context.Context, accessToken string, activityID int64) (map[string]StravaStream, error)
 	Refresh(ctx context.Context, refreshToken string) (*StravaTokenResponse, error)
 }
 
@@ -61,12 +82,13 @@ type Config struct {
 type Worker struct {
 	Backend Backend
 	Matcher Matcher
-	// Strava is the OAuth-refresh upstream. Nil disables the
-	// `token_refresh` dispatch path; a job of that kind falls
-	// through to the "unknown kind" failure branch in dispatch.
+	// Strava is the OAuth-refresh + activity-fetch upstream. Nil
+	// disables both `token_refresh` and `strava_event` dispatch
+	// paths; jobs of those kinds fall through to the
+	// "Strava client not configured" failure branch.
 	// Wired in main.go when STRAVA_CLIENT_ID + STRAVA_CLIENT_SECRET
 	// are both set.
-	Strava StravaRefresher
+	Strava StravaIngestor
 	Config Config
 	Log    *slog.Logger
 	// OnPollTick fires after every claim attempt (whether or not a job
@@ -177,6 +199,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleMapMatch(ctx, job)
 	case "token_refresh":
 		return w.handleTokenRefresh(ctx, job)
+	case "strava_event":
+		return w.handleStravaEvent(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

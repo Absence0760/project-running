@@ -75,6 +75,18 @@ type fakeBackend struct {
 	// token_refresh outputs
 	getTokenCalls []string
 	setTokenCalls []setTokenCall
+	// strava_event inputs
+	integrationByAthlete map[int64]string
+	findIntegrationErr   error
+	alreadyImported      map[importedKey]bool
+	isAlreadyImportedErr error
+	insertStravaRunErr   error
+	webhookEvents        map[string]bool
+	insertWebhookErr     error
+	// strava_event outputs
+	insertedStravaRuns []insertedStravaRun
+	trackURLPatches    []trackURLPatch
+	webhookDeletes     []string
 }
 
 type finishCall struct {
@@ -101,11 +113,14 @@ type linkCall struct {
 
 func newFakeBackend() *fakeBackend {
 	return &fakeBackend{
-		trackByPath:  map[string][]TrackPoint{},
-		uploaded:     map[string][]TrackPoint{},
-		tokensByUser: map[string]TokenPair{},
-		getTokenErrs: map[string]error{},
-		setTokenErrs: map[string]error{},
+		trackByPath:          map[string][]TrackPoint{},
+		uploaded:             map[string][]TrackPoint{},
+		tokensByUser:         map[string]TokenPair{},
+		getTokenErrs:         map[string]error{},
+		setTokenErrs:         map[string]error{},
+		integrationByAthlete: map[int64]string{},
+		alreadyImported:      map[importedKey]bool{},
+		webhookEvents:        map[string]bool{},
 	}
 }
 
@@ -330,15 +345,111 @@ type setTokenCall struct {
 	Expiry       time.Time
 }
 
-// fakeStrava is the StravaRefresher stub the token-refresh tests use.
-// Each call returns the next scripted response; errors are scripted by
-// user-id so a mid-loop failure can be modelled without poisoning the
-// other rows.
+// --- strava_event fake state ---
+
+func (f *fakeBackend) FindIntegrationUserByAthlete(_ context.Context, _ string, athleteID int64) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.findIntegrationErr != nil {
+		err := f.findIntegrationErr
+		f.findIntegrationErr = nil
+		return "", err
+	}
+	return f.integrationByAthlete[athleteID], nil
+}
+
+func (f *fakeBackend) IsStravaActivityImported(_ context.Context, userID string, activityID int64) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.isAlreadyImportedErr != nil {
+		err := f.isAlreadyImportedErr
+		f.isAlreadyImportedErr = nil
+		return false, err
+	}
+	return f.alreadyImported[importedKey{userID, activityID}], nil
+}
+
+func (f *fakeBackend) InsertStravaRun(_ context.Context, userID string, act *StravaActivity) (*IngestedRunInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.insertStravaRunErr != nil {
+		err := f.insertStravaRunErr
+		f.insertStravaRunErr = nil
+		return nil, err
+	}
+	runID := fmt.Sprintf("run-%d", act.ID)
+	f.insertedStravaRuns = append(f.insertedStravaRuns, insertedStravaRun{
+		UserID: userID, ActivityID: act.ID, RunID: runID,
+		ActivityType: act.Type, SportType: act.SportType,
+	})
+	return &IngestedRunInfo{ID: runID, UserID: userID}, nil
+}
+
+func (f *fakeBackend) UpdateRunTrackURL(_ context.Context, runID, trackURL string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.trackURLPatches = append(f.trackURLPatches, trackURLPatch{RunID: runID, URL: trackURL})
+	return nil
+}
+
+func (f *fakeBackend) InsertWebhookEvent(_ context.Context, provider, eventID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.insertWebhookErr != nil {
+		err := f.insertWebhookErr
+		f.insertWebhookErr = nil
+		return false, err
+	}
+	key := provider + ":" + eventID
+	if f.webhookEvents[key] {
+		return false, nil
+	}
+	f.webhookEvents[key] = true
+	return true, nil
+}
+
+func (f *fakeBackend) DeleteWebhookEvent(_ context.Context, provider, eventID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.webhookEvents, provider+":"+eventID)
+	f.webhookDeletes = append(f.webhookDeletes, provider+":"+eventID)
+	return nil
+}
+
+type importedKey struct {
+	UserID     string
+	ActivityID int64
+}
+
+type insertedStravaRun struct {
+	UserID       string
+	ActivityID   int64
+	RunID        string
+	ActivityType string
+	SportType    string
+}
+
+type trackURLPatch struct {
+	RunID string
+	URL   string
+}
+
+// fakeStrava is the StravaIngestor stub the token-refresh and
+// strava_event tests use. Each call returns the next scripted
+// response; errors are scripted by token / activity id so a mid-loop
+// failure can be modelled without poisoning the other rows.
 type fakeStrava struct {
 	mu          sync.Mutex
 	byToken     map[string]StravaTokenResponse
 	errsByToken map[string]error
 	calls       []string // refresh tokens seen, in order
+	// strava_event ingest stubs
+	byActivity         map[int64]StravaActivityResult
+	activityErrs       map[int64]error
+	activityCalls      []int64
+	streamsByActivity  map[int64]map[string]StravaStream
+	streamsErrs        map[int64]error
+	streamsCalls       []int64
 }
 
 func (s *fakeStrava) Refresh(_ context.Context, refreshToken string) (*StravaTokenResponse, error) {
@@ -354,6 +465,30 @@ func (s *fakeStrava) Refresh(_ context.Context, refreshToken string) (*StravaTok
 	}
 	cp := r
 	return &cp, nil
+}
+
+func (s *fakeStrava) FetchActivity(_ context.Context, _ string, activityID int64) (StravaActivityResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.activityCalls = append(s.activityCalls, activityID)
+	if err, ok := s.activityErrs[activityID]; ok {
+		return StravaActivityResult{}, err
+	}
+	r, ok := s.byActivity[activityID]
+	if !ok {
+		return StravaActivityResult{Status: StravaFetchNotFound}, nil
+	}
+	return r, nil
+}
+
+func (s *fakeStrava) FetchStreams(_ context.Context, _ string, activityID int64) (map[string]StravaStream, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.streamsCalls = append(s.streamsCalls, activityID)
+	if err, ok := s.streamsErrs[activityID]; ok {
+		return nil, err
+	}
+	return s.streamsByActivity[activityID], nil
 }
 
 // nopMatcher returns whatever it's told to, with the ability to inject
@@ -913,7 +1048,7 @@ func keys[K comparable, V any](m map[K]V) []K {
 // dispatcher still calls handleMapMatch for any map_match job, but the
 // happy path here only enqueues `token_refresh`, so the matcher arg is
 // nil to make it obvious if a misrouted job tries to use it.
-func newTokenRefreshWorker(be Backend, st StravaRefresher) *Worker {
+func newTokenRefreshWorker(be Backend, st StravaIngestor) *Worker {
 	w := newTestWorker(be, nil)
 	w.Strava = st
 	return w

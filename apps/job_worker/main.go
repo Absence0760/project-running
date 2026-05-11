@@ -14,7 +14,27 @@ import (
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
 )
+
+// stravaJobEnqueuer adapts SupabaseClient.EnqueueStravaEvent to the
+// stravahook.JobEnqueuer interface. The leaf-package stravahook
+// declares its own payload struct so its tests stay isolated from
+// the `internal` package; we translate across them by marshalling
+// to the wire-identical map[string]any here.
+type stravaJobEnqueuer struct {
+	client *internal.SupabaseClient
+}
+
+func (e *stravaJobEnqueuer) EnqueueStravaEvent(ctx context.Context, p stravahook.StravaEventPayload) (int64, error) {
+	return e.client.EnqueueStravaEvent(ctx, map[string]any{
+		"object_type": p.ObjectType,
+		"object_id":   p.ObjectID,
+		"aspect_type": p.AspectType,
+		"owner_id":    p.OwnerID,
+		"event_time":  p.EventTime,
+	})
+}
 
 // main wires environment → SupabaseClient → Worker.Run. Kept thin so
 // the worker logic can be exercised from tests against a mock backend
@@ -55,16 +75,16 @@ func main() {
 	// Function path remains the fallback during cutover.
 	stravaID := os.Getenv("STRAVA_CLIENT_ID")
 	stravaSecret := os.Getenv("STRAVA_CLIENT_SECRET")
-	var strava internal.StravaRefresher
+	var strava internal.StravaIngestor
 	if stravaID != "" && stravaSecret != "" {
 		strava = &internal.StravaClient{
 			ClientID:     stravaID,
 			ClientSecret: stravaSecret,
 			HTTP:         client.HTTP, // reuse pooled client
 		}
-		logger.Info("strava: enabled (token_refresh dispatch armed)")
+		logger.Info("strava: enabled (token_refresh + strava_event dispatch armed)")
 	} else {
-		logger.Warn("strava: DISABLED — STRAVA_CLIENT_ID/SECRET unset; token_refresh jobs will fail permanent")
+		logger.Warn("strava: DISABLED — STRAVA_CLIENT_ID/SECRET unset; token_refresh + strava_event jobs will fail permanent")
 	}
 
 	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
@@ -146,7 +166,31 @@ func main() {
 		logger.Warn("livehub auth: DISABLED — SUPABASE_JWT_SECRET unset; permissive mode is for local dev only")
 	}
 
-	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv)
+	// Strava webhook receiver — mounts /v1/strava/webhook on the same
+	// mux. Auth uses a shared URL secret + verify token (mirrors the
+	// EF's contract); the body filter / dedupe / freshness gates live
+	// in `internal/stravahook/server.go`. Events pass validation,
+	// enqueue a `strava_event` job, and ack 200 in well under 2 s —
+	// the worker's dispatch then does the activity fetch + Storage
+	// upload async. See `apps/job_worker/deployment.md § Strava
+	// webhook` for the cutover recipe.
+	stravaWebhookSecret := os.Getenv("STRAVA_WEBHOOK_SECRET")
+	stravaVerifyToken := os.Getenv("STRAVA_VERIFY_TOKEN")
+	var stravaSrv *stravahook.Server
+	if stravaWebhookSecret != "" && stravaVerifyToken != "" {
+		stravaSrv = &stravahook.Server{
+			WebhookSecret: stravaWebhookSecret,
+			VerifyToken:   stravaVerifyToken,
+			Enqueuer:      &stravaJobEnqueuer{client: client},
+			WebhookEvents: client,
+			Log:           logger.With("component", "stravahook"),
+		}
+		logger.Info("stravahook: enabled (Strava webhook endpoint mounted at /v1/strava/webhook)")
+	} else {
+		logger.Warn("stravahook: DISABLED — STRAVA_WEBHOOK_SECRET / STRAVA_VERIFY_TOKEN unset; webhook endpoint returns 503")
+	}
+
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -173,10 +217,13 @@ func main() {
 // happens to take that long to handle; longer-running jobs would
 // trigger a restart, which is the correct response for "this job is
 // hung".
-func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server) *http.Server {
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server) *http.Server {
 	mux := http.NewServeMux()
 	if hub != nil {
 		hub.RegisterRoutes(mux)
+	}
+	if strava != nil {
+		strava.RegisterRoutes(mux)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		ageSec := time.Now().Unix() - lastClaim.Load()

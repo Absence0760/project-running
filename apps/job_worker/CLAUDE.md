@@ -2,10 +2,12 @@
 
 Generic Go service that drains the `jobs` queue (migration
 `20260609_001_run_match_pipeline.sql`). Kinds today: `map_match`
-(server-side OSRM map matching) and `token_refresh` (Strava OAuth
-rotation, replaces the `refresh-tokens` Edge Function). Strava-webhook
-and data-export will land as additional kinds in `internal/worker.go`'s
-dispatch when those Edge Functions move per
+(server-side OSRM map matching), `token_refresh` (Strava OAuth
+rotation, replaces the `refresh-tokens` Edge Function), and
+`strava_event` (per-activity ingest enqueued by the
+`/v1/strava/webhook` endpoint, replaces the `strava-webhook` Edge
+Function). Data-export will land as an additional kind in
+`internal/worker.go`'s dispatch when that Edge Function moves per
 [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
 
 ## Scope — read before writing code
@@ -63,10 +65,16 @@ dispatch when those Edge Functions move per
   three steps must land together — the DB rejects an unknown kind
   at INSERT (23514) rather than at the worker's dispatch, so
   shipping a new kind without all three slips it through silently.
-  Token-refresh (sweeps expiring Strava integrations + rotates via
+  `token_refresh` (sweeps expiring Strava integrations + rotates via
   `/oauth/token`) is in `handler_token_refresh.go` and is the worked
-  example for "port an Edge Function into the queue"; strava-webhook
-  + data-export follow the same shape.
+  example for "port a scheduled Edge Function into the queue".
+  `strava_event` (per-activity ingest enqueued by the HTTP webhook
+  endpoint at `/v1/strava/webhook`) is the worked example for
+  "port a webhook Edge Function into HTTP-front + queue-back" — see
+  `handler_strava_event.go` for the dispatch and
+  `internal/stravahook/server.go` for the request-side validation.
+  Data-export follows the request-side pattern; it doesn't fit the
+  job-queue shape because the user is waiting on a signed URL.
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
   with a Redis pub/sub-backed variant), per-run ring buffer for
   late-joiner replay of more than the most recent ping, JWKS-based
@@ -104,19 +112,24 @@ apps/job_worker/
 │   ├── matcher_osrm_test.go
 │   ├── worker.go            # claim → handle → finish loop; dispatch by kind
 │   ├── handler_token_refresh.go  # kind='token_refresh' sweep + rotate
+│   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload
+│   ├── handler_strava_event_test.go # 10 tests on the ingest dispatch
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests
-│   └── livehub/             # live spectator pub/sub + HTTP + WebSocket
-│       ├── types.go         # Ping wire shape
-│       ├── hub.go           # in-process subscribe / publish / GC + per-room zone + run-meta cache
-│       ├── hub_test.go      # 10 hub unit tests, race-clean
-│       ├── privacy.go       # PrivacyZone + IsInAnyZone (haversine)
-│       ├── privacy_test.go  # 8 privacy unit tests
-│       ├── zones.go         # ZoneFetcher iface + SupabaseZoneFetcher
-│       ├── runmeta.go       # RunMeta + RunMetaFetcher + SupabaseRunMetaFetcher (authorizer's lookup)
-│       ├── auth.go          # JWTAuthorizer — Supabase HS256 JWT verify + owner check
-│       ├── auth_test.go     # 16 unit + 1 end-to-end test for the authorizer
-│       ├── server.go        # HTTP routes for /v1/live/{run_id}/* + zone clip
-│       └── server_test.go   # 16 httptest + WebSocket integration tests
+│   ├── livehub/             # live spectator pub/sub + HTTP + WebSocket
+│   │   ├── types.go         # Ping wire shape
+│   │   ├── hub.go           # in-process subscribe / publish / GC + per-room zone + run-meta cache
+│   │   ├── hub_test.go      # 10 hub unit tests, race-clean
+│   │   ├── privacy.go       # PrivacyZone + IsInAnyZone (haversine)
+│   │   ├── privacy_test.go  # 8 privacy unit tests
+│   │   ├── zones.go         # ZoneFetcher iface + SupabaseZoneFetcher
+│   │   ├── runmeta.go       # RunMeta + RunMetaFetcher + SupabaseRunMetaFetcher (authorizer's lookup)
+│   │   ├── auth.go          # JWTAuthorizer — Supabase HS256 JWT verify + owner check
+│   │   ├── auth_test.go     # 16 unit + 1 end-to-end test for the authorizer
+│   │   ├── server.go        # HTTP routes for /v1/live/{run_id}/* + zone clip
+│   │   └── server_test.go   # 16 httptest + WebSocket integration tests
+│   └── stravahook/          # Strava webhook HTTP endpoint (POST → enqueue strava_event)
+│       ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
+│       └── server_test.go   # 13 httptest cases on every gate + the handshake
 ├── osrm/                    # local OSRM dev stack (compose + Makefile)
 ├── Dockerfile               # multi-stage; final image is distroless
 ├── README.md                # local-run instructions

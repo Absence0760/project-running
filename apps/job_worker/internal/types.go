@@ -25,12 +25,15 @@ type MapMatchPayload struct {
 
 // TrackPoint mirrors the Dart / TypeScript TrackPoint shape uploaded by
 // every recorder. The watch_wear and mobile recorders write
-// {lat, lng, ele, ts}; older imports may omit ele or ts.
+// {lat, lng, ele, ts}; older imports may omit ele or ts; Strava-imported
+// tracks add `bpm` when the activity had a HR stream (mirrored from
+// apps/web/src/lib/types.ts).
 type TrackPoint struct {
 	Lat       float64    `json:"lat"`
 	Lng       float64    `json:"lng"`
 	Elevation *float64   `json:"ele,omitempty"`
 	Timestamp *time.Time `json:"ts,omitempty"`
+	Bpm       *int       `json:"bpm,omitempty"`
 }
 
 // MatchOutput is what a Matcher hands back to the worker. The matched
@@ -80,4 +83,72 @@ type IntegrationRow struct {
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	// TokenExpiry is the integration row's separate `token_expiry`
+	// column — useful when the worker needs to decide whether to
+	// proactively refresh ahead of a hot path call (Strava webhook
+	// activity fetch). The `get_integration_tokens` RPC returns
+	// this; older callers can ignore it.
+	TokenExpiry *time.Time `json:"token_expiry,omitempty"`
+}
+
+// StravaEventPayload is the payload shape the Go webhook endpoint
+// enqueues for `kind='strava_event'` jobs. Mirrors the wire shape
+// Strava POSTs to the subscription URL — see
+// `apps/job_worker/internal/stravahook/server.go` for the
+// validation gate and `handler_strava_event.go` for the ingest
+// dispatch.
+type StravaEventPayload struct {
+	ObjectType string `json:"object_type"` // "activity" — anything else is ignored
+	ObjectID   int64  `json:"object_id"`   // Strava activity id
+	AspectType string `json:"aspect_type"` // "create" | "update" | "delete"
+	OwnerID    int64  `json:"owner_id"`    // Strava athlete id (== integrations.external_id for the user)
+	EventTime  int64  `json:"event_time"`  // unix seconds
+}
+
+// StravaActivity is the subset of Strava's `/api/v3/activities/{id}`
+// response the ingest path consumes. Mirrors the EF shape at
+// `apps/backend/supabase/functions/_shared/strava.ts` — keep these
+// in lockstep so a webhook-ingested run looks byte-identical to
+// one from the strava-import EF.
+type StravaActivity struct {
+	ID                 int64   `json:"id"`
+	Name               string  `json:"name"`
+	Distance           float64 `json:"distance"`             // metres
+	MovingTime         int     `json:"moving_time"`          // seconds
+	ElapsedTime        int     `json:"elapsed_time"`         // seconds
+	TotalElevationGain float64 `json:"total_elevation_gain"` // metres
+	StartDate          string  `json:"start_date"`           // ISO 8601
+	Type               string  `json:"type"`                 // "Run" / "Walk" / "Hike" / "Ride" / ...
+	SportType          string  `json:"sport_type"`           // newer, more granular field
+	AverageHeartrate   float64 `json:"average_heartrate"`
+	HasHeartrate       bool    `json:"has_heartrate"`
+}
+
+// StravaFetchOutcome bands the three categorical outcomes the
+// webhook handler must distinguish (so a 429 from Strava produces
+// a defer + retry, while a 404 produces a finish-done that doesn't
+// retry forever).
+type StravaFetchOutcome int
+
+const (
+	StravaFetchOK StravaFetchOutcome = iota
+	StravaFetchRateLimited
+	StravaFetchNotFound
+)
+
+// StravaActivityResult is the return type of
+// StravaClient.FetchActivity. Status carries the categorical
+// outcome; Activity is non-nil only when Status == StravaFetchOK.
+type StravaActivityResult struct {
+	Status   StravaFetchOutcome
+	Activity *StravaActivity
+}
+
+// IngestedRunInfo is the projection of an inserted run row the
+// strava_event handler needs to know in order to upload the
+// gzipped track to Storage afterwards. Returned by
+// `Backend.InsertStravaRun`.
+type IngestedRunInfo struct {
+	ID     string `json:"id"`
+	UserID string `json:"user_id"`
 }

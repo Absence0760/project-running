@@ -86,6 +86,101 @@ func (c *StravaClient) Refresh(ctx context.Context, refreshToken string) (*Strav
 	return &out, nil
 }
 
+// FetchActivity GETs a single Strava activity by id. Mirrors the EF
+// helper `fetchStravaActivity` — the 429 / 503 branch surfaces as
+// StravaFetchRateLimited so the caller can defer + retry; any other
+// non-2xx surfaces as StravaFetchNotFound so the caller can finish
+// the job cleanly (Strava retries up to 3× on non-200; once we ack
+// 200-with-skip the event is dropped).
+func (c *StravaClient) FetchActivity(ctx context.Context, accessToken string, activityID int64) (StravaActivityResult, error) {
+	base := c.BaseURL
+	if base == "" {
+		base = "https://www.strava.com"
+	}
+	url := fmt.Sprintf("%s/api/v3/activities/%d", base, activityID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return StravaActivityResult{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	client := c.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return StravaActivityResult{}, err
+	}
+	defer resp.Body.Close()
+	raw, _ := readAllResponse(resp)
+	if resp.StatusCode == 429 || resp.StatusCode == 503 {
+		return StravaActivityResult{Status: StravaFetchRateLimited}, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return StravaActivityResult{Status: StravaFetchNotFound}, nil
+	}
+	var act StravaActivity
+	if err := json.Unmarshal(raw, &act); err != nil {
+		return StravaActivityResult{}, fmt.Errorf("strava: decode activity: %w", err)
+	}
+	return StravaActivityResult{Status: StravaFetchOK, Activity: &act}, nil
+}
+
+// FetchStreams pulls the latlng/altitude/time/heartrate streams for
+// an activity. Returns the raw map keyed by stream type — the caller
+// (handler_strava_event) walks it into a TrackPoint slice via
+// `BuildTrackFromStreams`. Returns nil + no error when Strava has no
+// stream for the activity (404 — short/indoor activities) so the
+// caller can ingest the row without a track.
+func (c *StravaClient) FetchStreams(ctx context.Context, accessToken string, activityID int64) (map[string]StravaStream, error) {
+	base := c.BaseURL
+	if base == "" {
+		base = "https://www.strava.com"
+	}
+	url := fmt.Sprintf("%s/api/v3/activities/%d/streams?keys=latlng,altitude,time,heartrate&key_by_type=true", base, activityID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	client := c.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return nil, nil // no streams for this activity
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := readAllResponse(resp)
+		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	raw, err := readAllResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]StravaStream{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("strava: decode streams: %w", err)
+	}
+	return out, nil
+}
+
+// StravaStream is the per-stream payload Strava returns — `data` is
+// always present but its element type depends on the stream key
+// (latlng → [lat, lng] pairs, altitude → numbers, time → ints,
+// heartrate → ints). The handler unmarshals each branch into its
+// concrete type via `BuildTrackFromStreams`.
+type StravaStream struct {
+	Data []json.RawMessage `json:"data"`
+}
+
 func readAllResponse(resp *http.Response) ([]byte, error) {
 	buf := make([]byte, 0, 1024)
 	chunk := make([]byte, 1024)

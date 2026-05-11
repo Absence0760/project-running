@@ -14,8 +14,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -463,4 +466,260 @@ func (c *SupabaseClient) SetIntegrationTokens(ctx context.Context, userID, provi
 		"p_token_expiry":  tokenExpiry.UTC().Format(time.RFC3339),
 	}
 	return c.rpc(ctx, "set_integration_tokens", params, nil)
+}
+
+// FindIntegrationUserByAthlete maps a Strava athlete id (the external
+// id Strava sends in webhook payloads) back to the Supabase user id
+// that owns the integration row. Returns "" + nil when no integration
+// matches — the caller treats that as "ack 200, skip" (the user
+// disconnected, or never connected).
+func (c *SupabaseClient) FindIntegrationUserByAthlete(ctx context.Context, provider string, athleteID int64) (string, error) {
+	q := url.Values{}
+	q.Set("provider", "eq."+provider)
+	q.Set("external_id", "eq."+strconv.FormatInt(athleteID, 10))
+	q.Set("select", "user_id")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/integrations?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	var rows []struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", nil
+	}
+	return rows[0].UserID, nil
+}
+
+// IsStravaActivityImported is the metadata.strava_id dedupe check.
+// Mirrors the EF helper `isAlreadyImported` (apps/backend/supabase/
+// functions/_shared/strava.ts) — both webhook + backfill paths use
+// the same dedupe key so a webhook firing during a backfill is a
+// no-op rather than a duplicate row.
+func (c *SupabaseClient) IsStravaActivityImported(ctx context.Context, userID string, stravaActivityID int64) (bool, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("source", "eq.strava")
+	q.Set("metadata->>strava_id", "eq."+strconv.FormatInt(stravaActivityID, 10))
+	q.Set("select", "id")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
+}
+
+// InsertStravaRun inserts a runs row sourced from a Strava activity.
+// Mirrors the EF `ingestActivity` row shape (apps/backend/supabase/
+// functions/_shared/strava.ts) — fields, source='strava', metadata
+// keys all in lockstep so dashboard queries that read across both
+// writers see one consistent shape.
+//
+// Returns the inserted row's id (so the caller can subsequently
+// upload the gzipped track + PATCH track_url).
+func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act *StravaActivity) (*IngestedRunInfo, error) {
+	sport := strings.ToLower(act.SportType)
+	if sport == "" {
+		sport = strings.ToLower(act.Type)
+	}
+	activityType := "run"
+	if strings.Contains(sport, "walk") {
+		activityType = "walk"
+	} else if strings.Contains(sport, "hike") {
+		activityType = "hike"
+	}
+
+	metadata := map[string]any{
+		"strava_id":            act.ID,
+		"activity_type":        activityType,
+		"imported_from":        "strava",
+		"imported_at":          time.Now().UTC().Format(time.RFC3339),
+		"strava_activity_type": act.Type,
+	}
+	if act.AverageHeartrate > 0 {
+		metadata["avg_bpm"] = int(math.Round(act.AverageHeartrate))
+	}
+	if act.Name != "" {
+		metadata["title"] = act.Name
+	}
+	if act.TotalElevationGain != 0 {
+		metadata["elevation_m"] = int(math.Round(act.TotalElevationGain))
+	}
+
+	duration := act.MovingTime
+	if duration == 0 {
+		duration = act.ElapsedTime
+	}
+
+	row := map[string]any{
+		"user_id":    userID,
+		"started_at": act.StartDate,
+		"distance_m": int(math.Round(act.Distance)),
+		"duration_s": duration,
+		"source":     "strava",
+		"metadata":   metadata,
+	}
+	payload, err := json.Marshal(row)
+	if err != nil {
+		return nil, err
+	}
+	u := c.BaseURL + "/rest/v1/runs"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=representation")
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []IngestedRunInfo
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, errors.New("strava run insert: no row returned")
+	}
+	return &rows[0], nil
+}
+
+// UpdateRunTrackURL PATCHes runs.track_url after a successful Storage
+// upload. Service role bypasses RLS; the upload + PATCH happen in
+// the worker so the runner doesn't need to be present.
+func (c *SupabaseClient) UpdateRunTrackURL(ctx context.Context, runID, trackURL string) error {
+	body, err := json.Marshal(map[string]any{"track_url": trackURL})
+	if err != nil {
+		return err
+	}
+	u := c.BaseURL + "/rest/v1/runs?id=eq." + runID
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
+// InsertWebhookEvent is the replay-protection dedupe insert. Returns
+// `inserted == true` on a fresh row, `false` when the unique
+// constraint on (provider, event_id) rejected it (Strava-side retry
+// of an event we've already ack'd).
+//
+// 23505 (unique_violation) is the only "false" path; anything else
+// (RLS denial, table missing, network) bubbles as an error.
+func (c *SupabaseClient) InsertWebhookEvent(ctx context.Context, provider, eventID string) (bool, error) {
+	body, err := json.Marshal(map[string]any{
+		"provider": provider,
+		"event_id": eventID,
+	})
+	if err != nil {
+		return false, err
+	}
+	u := c.BaseURL + "/rest/v1/webhook_events"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	if err == nil {
+		return true, nil
+	}
+	// PostgREST surfaces 23505 as 409 with `code: "23505"` in the
+	// JSON body. The `do` wrapper preserves the body text on
+	// HTTPError so we can sniff for the SQLSTATE.
+	var hErr *HTTPError
+	if errors.As(err, &hErr) {
+		if hErr.StatusCode == http.StatusConflict && strings.Contains(hErr.Body, "23505") {
+			return false, nil
+		}
+	}
+	return false, err
+}
+
+// DeleteWebhookEvent is the rollback path for the Strava webhook's
+// "fetch returned 429 / 503 → propagate retry to Strava" branch.
+// The dedupe row was inserted before the fetch attempt; without
+// undoing it a Strava-side retry would skip the activity entirely
+// because the dedupe wins. Removing the row reopens the dedupe
+// gate for the next retry attempt.
+func (c *SupabaseClient) DeleteWebhookEvent(ctx context.Context, provider, eventID string) error {
+	q := url.Values{}
+	q.Set("provider", "eq."+provider)
+	q.Set("event_id", "eq."+eventID)
+	u := c.BaseURL + "/rest/v1/webhook_events?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
+// EnqueueStravaEvent inserts a `kind='strava_event'` job row with
+// the webhook payload. Called by the stravahook HTTP endpoint after
+// validation + dedupe. The CHECK constraint on `jobs.kind`
+// (`20260823_001_jobs_kind_allowlist_strava_event.sql`) gates the
+// insert; an out-of-allowlist kind would 23514 here.
+//
+// Note the struct shape is mirrored — `stravahook.Server` doesn't
+// import `internal` (it's a leaf package for testability), so the
+// payload type appears in both packages. The JSON wire shape is
+// identical, so the SupabaseClient adapter at main.go translates
+// across them.
+func (c *SupabaseClient) EnqueueStravaEvent(ctx context.Context, payload map[string]any) (int64, error) {
+	body, err := json.Marshal(map[string]any{
+		"kind":    "strava_event",
+		"payload": payload,
+	})
+	if err != nil {
+		return 0, err
+	}
+	u := c.BaseURL + "/rest/v1/jobs"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=representation")
+	resp, err := c.do(ctx, req)
+	if err != nil {
+		return 0, err
+	}
+	var rows []struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(resp, &rows); err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, errors.New("enqueue strava_event: no row returned")
+	}
+	return rows[0].ID, nil
 }

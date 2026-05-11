@@ -139,7 +139,8 @@ The worker dispatches by `jobs.kind`. Today:
 | Kind | Source | Notes |
 |---|---|---|
 | `map_match` | `runs` AFTER INSERT/UPDATE trigger | Shipped. OSRM matcher behind `OSRM_URL`. |
-| `token_refresh` | pg_cron `enqueue-token-refresh` (operator-wired, see below) | Replaces the `refresh-tokens` Edge Function. Strava OAuth rotation. Requires `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET`. |
+| `token_refresh` | pg_cron `enqueue-token-refresh` (migration `20260821_001`) | Replaces the `refresh-tokens` Edge Function. Strava OAuth rotation. Requires `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET`. |
+| `strava_event` | `POST /v1/strava/webhook` on the Go service | Replaces the `strava-webhook` Edge Function. The HTTP endpoint validates URL secret + verify-token + freshness + dedupes via `webhook_events`, then enqueues a job; the worker does the activity fetch + Storage upload + runs insert async. Requires `STRAVA_CLIENT_ID` / `_SECRET` (Strava API) + `STRAVA_WEBHOOK_SECRET` / `STRAVA_VERIFY_TOKEN` (URL-side gates). |
 
 **Cutover recipe for `token_refresh`.** The Edge Function and the Go path can coexist — they both refresh the same rows; whichever runs first wins, the second one finds nothing expiring within an hour. To migrate:
 
@@ -150,6 +151,18 @@ The worker dispatches by `jobs.kind`. Today:
    ```
 3. Observe one cycle (`select * from jobs where kind='token_refresh' order by id desc limit 5;`). Confirm rows flip to `done` and that `integrations.token_expiry` for the touched rows moved forward by ~6 hours.
 4. Once steady, retire any dashboard-configured cron that POSTed to the `refresh-tokens` Edge Function. Leave the Edge Function deployed for rollback; revisit in a later cleanup PR.
+
+**Cutover recipe for the Strava webhook.** Strava sends events to a single registered URL. Cutover is operator-mediated — the operator updates the subscription URL via Strava's `/api/v3/push_subscriptions` so events flow to the Go endpoint instead of the Edge Function. Both paths write the same row shape + share the `webhook_events` dedupe table so a Strava-side retry that races between the two endpoints during the swap produces one canonical row.
+
+1. Set the four Strava env vars as Fly secrets: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_WEBHOOK_SECRET`, `STRAVA_VERIFY_TOKEN`. Boot log should read `stravahook: enabled (Strava webhook endpoint mounted at /v1/strava/webhook)`. Without all four the endpoint returns 503 and Strava drops events.
+2. Smoke-test the GET handshake:
+   ```bash
+   curl -i 'https://live.runonward.com/v1/strava/webhook?secret=<STRAVA_WEBHOOK_SECRET>&hub.mode=subscribe&hub.challenge=abc123&hub.verify_token=<STRAVA_VERIFY_TOKEN>'
+   ```
+   Expect 200 echoing `{"hub.challenge":"abc123"}`. A 403 means one of the two secrets is wrong; 503 means env vars didn't land.
+3. **Re-register the Strava subscription.** Strava's webhook URL is set once via `POST /api/v3/push_subscriptions` and survives until explicitly deleted. The operator deletes the existing EF-targeted subscription and creates a new one pointing at `https://live.runonward.com/v1/strava/webhook?secret=<STRAVA_WEBHOOK_SECRET>`, with the same `verify_token` you set in the Fly secret. Strava sends the GET handshake to validate; on success the new subscription `id` is authoritative.
+4. Watch `flyctl logs --app job_worker` for the first few real events — the endpoint enqueues a `strava_event` job in <100ms; the worker runs the activity fetch + Storage upload + runs insert async. The EF stays deployed; it'll just stop seeing traffic once Strava's subscription URL is the new one.
+5. Once steady, the `strava-webhook` Edge Function can be marked Deprecated in `apps/backend/CLAUDE.md` (same treatment we gave `refresh-tokens`).
 
 ### Deploy
 
