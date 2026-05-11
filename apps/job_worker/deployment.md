@@ -144,20 +144,12 @@ The worker dispatches by `jobs.kind`. Today:
 **Cutover recipe for `token_refresh`.** The Edge Function and the Go path can coexist — they both refresh the same rows; whichever runs first wins, the second one finds nothing expiring within an hour. To migrate:
 
 1. Deploy the worker with the Strava env vars set. Boot log should show `strava: enabled (token_refresh dispatch armed)`. Without that line the dispatch falls through to a permanent failure on every `token_refresh` job — operator-visible in `flyctl logs`.
-2. Add a pg_cron schedule that enqueues a job hourly (NOT a migration — schedule lives in production data, not source):
+2. The pg_cron schedule is in source (migration `20260821_001_token_refresh_cron.sql`) — applies automatically with the rest of the schema. The cron command is dedupe-safe: hourly ticks coalesce onto a single backlog row when the worker is behind. To check it's live:
    ```sql
-   select cron.schedule(
-     'enqueue-token-refresh',
-     '0 * * * *',
-     $$insert into jobs (kind, payload) values ('token_refresh', '{}'::jsonb)$$
-   );
+   select jobname, schedule from cron.job where jobname = 'enqueue-token-refresh';
    ```
 3. Observe one cycle (`select * from jobs where kind='token_refresh' order by id desc limit 5;`). Confirm rows flip to `done` and that `integrations.token_expiry` for the touched rows moved forward by ~6 hours.
-4. Once steady, retire the old Edge Function cron:
-   ```sql
-   select cron.unschedule('refresh-tokens-cron');  -- or whatever name was configured
-   ```
-   Leave the `refresh-tokens` Edge Function deployed for rollback; revisit in a later cleanup PR.
+4. Once steady, retire any dashboard-configured cron that POSTed to the `refresh-tokens` Edge Function. Leave the Edge Function deployed for rollback; revisit in a later cleanup PR.
 
 ### Deploy
 
