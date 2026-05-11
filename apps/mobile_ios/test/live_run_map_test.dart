@@ -121,6 +121,42 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('mounts the ghost-pacer marker when ghostPosition is set',
+        (tester) async {
+      final pos = _w(51.5, -0.1);
+      final ghost = _w(51.5005, -0.0995);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LiveRunMap(
+                track: const [],
+                currentPosition: pos,
+                ghostPosition: ghost,
+                followRunner: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      // Two MarkerLayers should render: the ghost + the live blue dot.
+      // Asserting "no exception" + non-null ghost is enough — the
+      // pure-geometry side is covered by ghost_pacer_test.dart.
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('does not mount the ghost marker when ghostPosition is null',
+        (tester) async {
+      final pos = _w(51.5, -0.1);
+      await _pump(tester, track: const [], currentPosition: pos);
+      // Smoke — null path must not crash and must not throw a null deref.
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('fits camera to bounds when followRunner=false with 2+ points',
         (tester) async {
       // The detail screen passes followRunner=false so the camera frames

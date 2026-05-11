@@ -91,6 +91,14 @@ class LiveRunMap extends StatefulWidget {
   /// rendered popup). When `null`, the map disables the gesture.
   final ValueChanged<SelectedSegment?>? onSegmentSelect;
 
+  /// Optional ghost-pacer marker — when non-null, renders a faint
+  /// silhouette at the supplied position. The host (`run_screen.dart`)
+  /// computes it during a structured workout step via
+  /// [`ghostPacerPosition`]; when no workout is active it stays null
+  /// and the marker is hidden. See `docs/workout_execution.md`
+  /// § Ghost pacer.
+  final Waypoint? ghostPosition;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -103,6 +111,7 @@ class LiveRunMap extends StatefulWidget {
     this.useMilesForDecorations = false,
     this.totalDistanceM,
     this.onSegmentSelect,
+    this.ghostPosition,
   });
 
   @override
@@ -583,6 +592,26 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
               ),
             ],
 
+            // Ghost-pacer marker — faint silhouette showing where a
+            // runner on the workout step's target pace would be right
+            // now. Rendered UNDER the blue dot so the live position
+            // wins for attention; the ghost is informational. Hidden
+            // when no workout is active (the host passes null).
+            if (widget.ghostPosition != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: LatLng(
+                      widget.ghostPosition!.lat,
+                      widget.ghostPosition!.lng,
+                    ),
+                    width: 28,
+                    height: 28,
+                    child: const _GhostDot(),
+                  ),
+                ],
+              ),
+
             // Current position marker — drawn from the interpolated tween
             // position so the dot glides smoothly between GPS fixes, with
             // the raw latest fix as a fallback on the very first frame.
@@ -651,7 +680,30 @@ class _DistanceMarkerPin extends StatelessWidget {
   }
 }
 
-/// Pulsing blue dot showing the runner's current position.
+/// Faint marker at the ghost-pacer position. No animation — the dot
+/// already pulses for the live position, so a second pulsing element
+/// would compete for attention. Outline-only with a low-alpha fill so
+/// it reads as "secondary signal" against the route line.
+class _GhostDot extends StatelessWidget {
+  const _GhostDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0x55FFFFFF),
+        border: Border.all(
+          color: const Color(0xCC818CF8),
+          width: 2,
+        ),
+      ),
+    );
+  }
+}
+
 class _PulsingDot extends StatelessWidget {
   final Animation<double> animation;
   const _PulsingDot({required this.animation});

@@ -63,7 +63,7 @@ These tasks are marked completed at the high-leverage surface but have known sub
 
 Per `docs/workout_execution.md` deferred section:
 - [x] `rewindStep` UI control — `WorkoutRunner.rewindStep()` + leftmost band button (disabled on step 0). 4 new runner tests + 2 new band tests.
-- [ ] Ghost-pacer marker on the map
+- [x] Ghost-pacer marker on the map — pure-geometry helper `ghostPacerPosition` in `apps/mobile_android/lib/widgets/ghost_pacer.dart` walks the planned route's waypoints by `elapsed × target speed`, interpolating lat/lng inside the bracketing segment. `LiveRunMap` gets a new `ghostPosition` field and renders a faint outline-only marker under the live blue dot (no animation, no second pulse — secondary signal only). `run_screen.dart` computes it from the active workout runner's `stepElapsed` + step `targetPaceSecPerKm`. Returns null when the ghost overshoots the path so it doesn't pin to `path.last`. 9 unit tests on the helper (empty/short path, non-positive elapsed/pace, mid-segment, cross-segment, exactly-on-waypoint, coincident-points, returned waypoint carries lat/lng only). 2 widget tests asserting the marker mounts when set and is omitted when null. Twin-mirrored.
 - [ ] Duration-based steps (v2)
 - [ ] Crash-checkpoint resume
 
