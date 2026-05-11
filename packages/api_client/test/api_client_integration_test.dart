@@ -126,6 +126,77 @@ void main() {
       }
     });
 
+    test(
+        'fetchRoutesIntersectingTrack returns the matching seeded route '
+        'for a track that overlaps it', () async {
+      // Pick a known seeded route ("Commute Run", id is stable). Use
+      // its waypoints to construct an overlapping track — endpoints
+      // exactly on the route's start/end so startOffsetM + endOffsetM
+      // should be ~0 and the route appears as a candidate.
+      final commute = await client
+          .from('routes')
+          .select('id, waypoints, distance_m')
+          .eq('name', 'Commute Run')
+          .eq('user_id', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
+          .single();
+      final waypointsJson = commute['waypoints'] as List;
+      final track = [
+        for (final w in waypointsJson)
+          Waypoint(
+            lat: ((w as Map)['lat'] as num).toDouble(),
+            lng: (w['lng'] as num).toDouble(),
+          ),
+      ];
+      expect(track.length, greaterThanOrEqualTo(2),
+          reason: 'seeded Commute Run must have at least 2 waypoints '
+              'for the RPC to accept it');
+
+      final candidates = await api.fetchRoutesIntersectingTrack(track);
+      expect(candidates, isNotEmpty,
+          reason: 'a track that retraces the seeded Commute Run must '
+              'surface at least one candidate via the spatial RPC');
+      final hit = candidates.firstWhere(
+        (c) => c.id == commute['id'],
+        orElse: () => throw StateError(
+            'Commute Run not in the candidate list — the spatial RPC '
+            'index may be stale, or routes.geom was never populated '
+            'for the seed row.'),
+      );
+      // Endpoint offsets should be tiny (we used the same start/end
+      // coordinates as the route) and the length ratio should be ~0.
+      expect(hit.startOffsetM, lessThan(50),
+          reason: 'recorded start sits within metres of the route\'s '
+              'start; offset must be small');
+      expect(hit.endOffsetM, lessThan(50),
+          reason: 'recorded end sits within metres of the route\'s '
+              'end; offset must be small');
+    });
+
+    test('fetchRoutesIntersectingTrack returns empty for a track far '
+        'from any seeded route', () async {
+      // Mid-Atlantic — no seeded route is here.
+      final track = [
+        const Waypoint(lat: 0, lng: -30),
+        const Waypoint(lat: 0.001, lng: -30.001),
+      ];
+      final candidates = await api.fetchRoutesIntersectingTrack(track);
+      expect(candidates, isEmpty,
+          reason: 'a track in the middle of the ocean must not surface '
+              'any of the seeded routes (Sydney + London)');
+    });
+
+    test(
+        'fetchRoutesIntersectingTrack short-circuits on a single-point '
+        'track', () async {
+      // Implementation drops tracks with length < 2 without calling
+      // the RPC — important so the recorder\'s indoor-mode first
+      // snapshot (which has a single point or none) doesn\'t fire a
+      // wasted network call.
+      final track = [const Waypoint(lat: 47.37, lng: 8.54)];
+      final candidates = await api.fetchRoutesIntersectingTrack(track);
+      expect(candidates, isEmpty);
+    });
+
     test('saveRun + fetchTrack round-trip through Storage and the '
         'runs row (exercises _uploadTrack + fetchTrack)', () async {
       // The integration roundtrip pins three guarantees in one shot:

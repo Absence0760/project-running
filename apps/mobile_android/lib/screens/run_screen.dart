@@ -24,6 +24,7 @@ import '../live_broadcaster.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../race_controller.dart';
+import '../route_match.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
@@ -1263,14 +1264,39 @@ class _RunScreenState extends State<RunScreen> {
     // stop-time uuid so the saved run matches any incremental in-progress
     // file that may have been written while recording.
     final runId = _runId ?? raw.id;
+    var resolvedRouteId = _selectedRoute?.id ?? raw.routeId;
+    final api = widget.apiClient;
+    final distanceMetres =
+        indoorEstimate ? _displayDistanceMetres : raw.distanceMetres;
+
+    // L4 — Auto-link unmatched runs to a saved route. Only when no
+    // route was pre-selected, the track has enough points to bother
+    // the RPC with, and we're signed in. Network failure here is
+    // best-effort; never let it block the save.
+    if (resolvedRouteId == null &&
+        api != null &&
+        api.userId != null &&
+        raw.track.length >= 2) {
+      try {
+        final candidates =
+            await api.fetchRoutesIntersectingTrack(raw.track, maxResults: 5);
+        final match = bestStrongRouteMatch(
+          candidates,
+          runDistanceMetres: distanceMetres,
+        );
+        if (match != null) resolvedRouteId = match.id;
+      } catch (e) {
+        debugPrint('Auto-link routes_intersecting_track failed: $e');
+      }
+    }
+
     final run = cm.Run(
       id: runId,
       startedAt: _runStartedAtWall ?? raw.startedAt,
       duration: raw.duration,
-      distanceMetres:
-          indoorEstimate ? _displayDistanceMetres : raw.distanceMetres,
+      distanceMetres: distanceMetres,
       track: raw.track,
-      routeId: _selectedRoute?.id ?? raw.routeId,
+      routeId: resolvedRouteId,
       source: raw.source,
       externalId: raw.externalId,
       metadata: metadata,
@@ -1300,7 +1326,6 @@ class _RunScreenState extends State<RunScreen> {
 
     await widget.runStore.save(run);
 
-    final api = widget.apiClient;
     if (api != null && api.userId != null) {
       try {
         await api.saveRun(run);
