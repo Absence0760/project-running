@@ -52,7 +52,7 @@ These tasks are marked completed at the high-leverage surface but have known sub
 - [ ] Ultra-length recording (mobile_android backlog #117 — long-runs >6 h crash-resume guarantee)
 - [ ] Club-template publish action (`Partial` → `✓`) — admin button on `plan_detail_screen` to publish into a club's templates list
 - [ ] Club-owned-route admin transfer / detach UI on `route_detail_screen`
-- [ ] Device-override "+ Add override" sheet in Settings → Devices (the typed-editor entry point for new keys; existing-key edits already work)
+- [x] Device-override "+ Add override" sheet in Settings → Devices — registry of 10 D/UD keys in `devices_screen.dart` drives a key-picker → type-aware value-editor flow (bool / enum / int / double). Excludes purely-universal keys that have no device-scope semantics. 5 new unit tests pin the registry shape. Mirrored to iOS.
 - [ ] Pro native RevenueCat purchase sheet + native donate (`purchases_flutter` mobile Pro flow)
 - [ ] Full-screen route builder (mobile click-to-place + OSRM snap + elevation-preview-while-drawing — see `mobile_android_backlog.md` Route-management section)
 - [ ] Auto-link unmatched run to saved route on save

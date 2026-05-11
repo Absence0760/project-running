@@ -278,10 +278,109 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 }
 
-/// Modal for the override-editor — shows the existing keys with a
-/// per-row delete. The "add a key" affordance is intentionally
-/// out-of-scope for v1 — most overrides land via the per-screen
-/// settings UI on the device itself.
+/// Spec for an override-eligible key. Mirrors the device (`D`) and
+/// universal-default-with-device-override (`UD`) entries in
+/// [docs/settings.md § Keys] — purely-universal keys (hr_zones, dob,
+/// weekly_mileage_goal_m, etc.) aren't exposed here because they have
+/// no device-scope semantics.
+///
+/// `kind` drives the value-editor in [_AddOverrideSheet]:
+///   - `bool`  → SwitchListTile
+///   - `enum`  → radio list of [options]
+///   - `int` / `double` → text input parsed to the declared type
+@visibleForTesting
+class OverrideKeySpec {
+  final String key;
+  final String label;
+  final String hint;
+  final String kind; // 'bool' | 'enum' | 'int' | 'double'
+  final List<String>? options;
+
+  const OverrideKeySpec({
+    required this.key,
+    required this.label,
+    required this.hint,
+    required this.kind,
+    this.options,
+  });
+}
+
+/// The D + UD-scoped keys from docs/settings.md that admit a per-device
+/// override. Keep in lockstep with `SettingsKeys` + the doc table.
+@visibleForTesting
+const overrideKeyRegistry = <OverrideKeySpec>[
+  // UD — universal default, optional per-device override.
+  OverrideKeySpec(
+    key: 'preferred_unit',
+    label: 'Preferred unit',
+    hint: 'Distance unit for all displays.',
+    kind: 'enum',
+    options: ['km', 'mi'],
+  ),
+  OverrideKeySpec(
+    key: 'default_activity_type',
+    label: 'Default activity type',
+    hint: 'Pre-selected activity on the start screen.',
+    kind: 'enum',
+    options: ['run', 'walk', 'hike', 'cycle'],
+  ),
+  OverrideKeySpec(
+    key: 'auto_pause_enabled',
+    label: 'Auto-pause',
+    hint: 'Stop the clock when stopped.',
+    kind: 'bool',
+  ),
+  OverrideKeySpec(
+    key: 'auto_pause_speed_mps',
+    label: 'Auto-pause speed (m/s)',
+    hint: 'Threshold below which auto-pause engages.',
+    kind: 'double',
+  ),
+  OverrideKeySpec(
+    key: 'map_style',
+    label: 'Map style',
+    hint: 'MapLibre style for the map view.',
+    kind: 'enum',
+    options: ['streets', 'satellite', 'outdoors', 'dark'],
+  ),
+  OverrideKeySpec(
+    key: 'units_pace_format',
+    label: 'Pace format',
+    hint: 'Display format for pace.',
+    kind: 'enum',
+    options: ['min_per_km', 'min_per_mi', 'kph', 'mph'],
+  ),
+  // D — device-only.
+  OverrideKeySpec(
+    key: 'voice_feedback_enabled',
+    label: 'Voice feedback',
+    hint: 'Speak pace / distance callouts during a run.',
+    kind: 'bool',
+  ),
+  OverrideKeySpec(
+    key: 'voice_feedback_interval_km',
+    label: 'Voice feedback interval (km)',
+    hint: 'Distance between spoken callouts.',
+    kind: 'double',
+  ),
+  OverrideKeySpec(
+    key: 'haptic_feedback_enabled',
+    label: 'Haptic feedback',
+    hint: 'Vibration on lap + pace-zone changes.',
+    kind: 'bool',
+  ),
+  OverrideKeySpec(
+    key: 'keep_screen_on',
+    label: 'Keep screen on',
+    hint: 'Disable OS auto-dim while recording.',
+    kind: 'bool',
+  ),
+];
+
+/// Modal for the override-editor — lists existing keys with a per-row
+/// delete and exposes an "+ Add override" sheet that picks an
+/// eligible D / UD key from [overrideKeyRegistry] and prompts the
+/// user for a value with the appropriate type-aware editor.
 class _OverridesSheet extends StatefulWidget {
   final Map<String, dynamic> initial;
   const _OverridesSheet({required this.initial});
@@ -292,6 +391,27 @@ class _OverridesSheet extends StatefulWidget {
 
 class _OverridesSheetState extends State<_OverridesSheet> {
   late Map<String, dynamic> _current = Map.of(widget.initial);
+
+  Future<void> _addOverride() async {
+    // Eligible keys = the registry minus anything already overridden.
+    final taken = _current.keys.toSet();
+    final eligible =
+        overrideKeyRegistry.where((s) => !taken.contains(s.key)).toList();
+    if (eligible.isEmpty) {
+      showTopBanner(
+        context,
+        'Every overridable key is already set; remove one before adding another.',
+      );
+      return;
+    }
+    final entry = await showModalBottomSheet<MapEntry<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _AddOverrideSheet(eligible: eligible),
+    );
+    if (entry == null) return;
+    setState(() => _current[entry.key] = entry.value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -331,6 +451,15 @@ class _OverridesSheetState extends State<_OverridesSheet> {
                   onPressed: () => setState(() => _current.remove(entry.key)),
                 ),
               ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _addOverride,
+              icon: const Icon(Icons.add),
+              label: const Text('Add override'),
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -349,5 +478,178 @@ class _OverridesSheetState extends State<_OverridesSheet> {
         ],
       ),
     );
+  }
+}
+
+/// Bottom sheet that drives the two-step "pick a key, then a value"
+/// flow. Returns the new (key, value) entry on Save, or `null` on
+/// Cancel.
+class _AddOverrideSheet extends StatefulWidget {
+  final List<OverrideKeySpec> eligible;
+  const _AddOverrideSheet({required this.eligible});
+
+  @override
+  State<_AddOverrideSheet> createState() => _AddOverrideSheetState();
+}
+
+class _AddOverrideSheetState extends State<_AddOverrideSheet> {
+  OverrideKeySpec? _picked;
+  // Editor state — only the shape that matches `_picked!.kind` is read.
+  bool _boolValue = false;
+  String? _enumValue;
+  final TextEditingController _numCtrl = TextEditingController();
+  String? _numError;
+
+  @override
+  void dispose() {
+    _numCtrl.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final spec = _picked;
+    if (spec == null) return;
+    dynamic value;
+    switch (spec.kind) {
+      case 'bool':
+        value = _boolValue;
+      case 'enum':
+        if (_enumValue == null) return;
+        value = _enumValue;
+      case 'int':
+        final parsed = int.tryParse(_numCtrl.text.trim());
+        if (parsed == null) {
+          setState(() => _numError = 'Enter a whole number.');
+          return;
+        }
+        value = parsed;
+      case 'double':
+        final parsed = double.tryParse(_numCtrl.text.trim());
+        if (parsed == null) {
+          setState(() => _numError = 'Enter a number (e.g. 0.8).');
+          return;
+        }
+        value = parsed;
+      default:
+        return;
+    }
+    Navigator.pop(context, MapEntry(spec.key, value));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final spec = _picked;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(spec == null ? 'Pick a key' : spec.label,
+              style: theme.textTheme.titleLarge),
+          if (spec != null) ...[
+            const SizedBox(height: 4),
+            Text(spec.hint, style: theme.textTheme.bodySmall),
+          ],
+          const SizedBox(height: 12),
+          if (spec == null)
+            // Key-picker pass — list the eligible registry entries.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.eligible.length,
+                itemBuilder: (_, i) {
+                  final s = widget.eligible[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(s.label),
+                    subtitle: Text(s.key,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        )),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => setState(() => _picked = s),
+                  );
+                },
+              ),
+            )
+          else
+            // Value-editor pass — switch on the spec's declared kind.
+            _buildEditor(spec, theme),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  if (spec != null) {
+                    setState(() {
+                      _picked = null;
+                      _enumValue = null;
+                      _boolValue = false;
+                      _numCtrl.clear();
+                      _numError = null;
+                    });
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(spec == null ? 'Cancel' : 'Back'),
+              ),
+              if (spec != null) ...[
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _commit,
+                  child: const Text('Add'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditor(OverrideKeySpec spec, ThemeData theme) {
+    switch (spec.kind) {
+      case 'bool':
+        return SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(spec.label),
+          value: _boolValue,
+          onChanged: (v) => setState(() => _boolValue = v),
+        );
+      case 'enum':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final opt in spec.options ?? const <String>[])
+              RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
+                title: Text(opt),
+                value: opt,
+                groupValue: _enumValue,
+                onChanged: (v) => setState(() => _enumValue = v),
+              ),
+          ],
+        );
+      case 'int':
+      case 'double':
+        return TextField(
+          controller: _numCtrl,
+          keyboardType: TextInputType.numberWithOptions(
+            decimal: spec.kind == 'double',
+          ),
+          decoration: InputDecoration(
+            labelText: 'Value',
+            errorText: _numError,
+            border: const OutlineInputBorder(),
+          ),
+        );
+    }
+    return const SizedBox.shrink();
   }
 }

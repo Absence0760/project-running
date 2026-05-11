@@ -43,4 +43,67 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
   });
+
+  group('overrideKeyRegistry', () {
+    test('covers exactly the D + UD scoped keys from docs/settings.md', () {
+      // UD scope.
+      final ud = [
+        'preferred_unit',
+        'default_activity_type',
+        'auto_pause_enabled',
+        'auto_pause_speed_mps',
+        'map_style',
+        'units_pace_format',
+      ];
+      // D scope.
+      final d = [
+        'voice_feedback_enabled',
+        'voice_feedback_interval_km',
+        'haptic_feedback_enabled',
+        'keep_screen_on',
+      ];
+      final expected = {...ud, ...d};
+      final actual = overrideKeyRegistry.map((s) => s.key).toSet();
+      expect(actual, expected,
+          reason: 'registry must include every D/UD key from settings.md '
+              'and exclude purely-universal keys (hr_zones, weekly goal, '
+              'privacy_default, etc.) that have no device-scope semantics');
+    });
+
+    test('every key has a non-empty label + hint', () {
+      for (final s in overrideKeyRegistry) {
+        expect(s.label.trim(), isNotEmpty,
+            reason: '${s.key} must declare a UI label');
+        expect(s.hint.trim(), isNotEmpty,
+            reason: '${s.key} must declare a one-line hint shown under '
+                'the editor');
+      }
+    });
+
+    test('enum specs always declare a non-empty options list', () {
+      for (final s in overrideKeyRegistry.where((s) => s.kind == 'enum')) {
+        expect(s.options, isNotNull,
+            reason: 'enum-kind spec ${s.key} must declare options');
+        expect(s.options, isNotEmpty,
+            reason: 'enum-kind spec ${s.key} must have at least one option');
+      }
+    });
+
+    test('non-enum specs do not declare options', () {
+      for (final s in overrideKeyRegistry.where((s) => s.kind != 'enum')) {
+        expect(s.options, isNull,
+            reason: '${s.kind}-kind spec ${s.key} should not declare options');
+      }
+    });
+
+    test('every spec.kind is one of the editor-supported types', () {
+      const supported = {'bool', 'enum', 'int', 'double'};
+      for (final s in overrideKeyRegistry) {
+        expect(supported.contains(s.kind), isTrue,
+            reason: '${s.key} kind="${s.kind}" must be one of $supported '
+                '(those are the only branches _AddOverrideSheet._buildEditor '
+                'handles)');
+      }
+    });
+  });
 }
