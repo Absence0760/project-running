@@ -171,6 +171,50 @@ jobs:
             exit 1
           fi
 
+  api-client-integration:
+    name: api_client integration (real Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+      - uses: supabase/setup-cli@df56b21da46c98abb12a9804e4fb1f657773e333 # v2.0.0
+        with:
+          version: 2.84.2
+      # Boot the local stack and apply seed.sql so the seed user
+      # (runner@test.com / testtest) and its 12 runs exist. The
+      # integration tests sign in as that user and exercise the
+      # priority wire-level ApiClient methods (signIn / getRuns /
+      # saveRun + fetchTrack roundtrip — which transitively
+      # covers _uploadTrack).
+      - name: Start local Supabase stack
+        working-directory: apps/backend
+        run: supabase start
+      - name: Apply migrations + seed (db reset)
+        working-directory: apps/backend
+        run: supabase db reset --local
+      - run: dart pub global activate melos
+      - run: melos bootstrap
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
+      - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.local
+      - run: flutter precache
+      - name: Read Supabase URL + anon key
+        id: sb
+        working-directory: apps/backend
+        run: |
+          ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
+          API_URL=$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '"')
+          echo "anon_key=$ANON_KEY" >> "$GITHUB_OUTPUT"
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+      - name: Run api_client integration tests
+        working-directory: packages/api_client
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+        run: flutter test test/api_client_integration_test.dart
+
   pgtap-rls:
     name: pgtap RLS suite
     runs-on: ubuntu-latest
