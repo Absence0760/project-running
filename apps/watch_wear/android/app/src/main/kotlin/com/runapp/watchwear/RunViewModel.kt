@@ -492,6 +492,33 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         )
         _state.value = _state.value.copy(authed = true, authError = null)
         authReady.value = true
+        // Pull the universal prefs bag once per session restore so the
+        // pre-run activity picker opens on the user's phone-side
+        // default (run / walk / hike / cycle) instead of the hardcoded
+        // "run". Read-only on the wrist by design — the user edits
+        // this from the phone or web. See parity.md row
+        // `default_activity_type` + watch_wear/CLAUDE.md "Don't build
+        // settings panels on the wrist."
+        applyUniversalPrefsAsync()
+    }
+
+    /// Fetches `user_settings.prefs.default_activity_type` and applies
+    /// it to the pre-run picker, but ONLY when the user hasn't started
+    /// a run and hasn't manually re-picked an activity already. A
+    /// running / paused / finished stage means we'd be re-priming the
+    /// state mid-run, which is the wrong thing to do; a non-default
+    /// `activityType` means the user already touched the chip and
+    /// their choice wins.
+    private fun applyUniversalPrefsAsync() {
+        viewModelScope.launch {
+            val settings = supabase.fetchUniversalSettings() ?: return@launch
+            val preferred = settings.defaultActivityType ?: return@launch
+            val s = _state.value
+            // Only prime — never override a started run or a manual choice.
+            if (s.stage != Stage.PreRun) return@launch
+            if (s.activityType != "run") return@launch
+            _state.value = s.copy(activityType = preferred)
+        }
     }
 
     private suspend fun refreshIfExpired(s: StoredSession) {

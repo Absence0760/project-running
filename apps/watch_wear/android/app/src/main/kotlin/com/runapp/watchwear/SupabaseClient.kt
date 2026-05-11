@@ -50,6 +50,52 @@ internal fun humanErrorMessage(code: Int, body: String): String {
     }
 }
 
+/// Universal-prefs subset the wrist actually reads. Keep this narrow
+/// — the watch is a recording surface, not a settings surface, so
+/// only fields the recording loop or pre-run UX needs belong here.
+///
+/// Today: `defaultActivityType` flows into the pre-run picker so a
+/// runner whose phone default is "walk" doesn't see "run" pre-armed
+/// on the wrist. Future scalar fields (e.g. resting_hr_bpm) would
+/// land here as additional nullable properties.
+data class UniversalSettings(
+    val defaultActivityType: String?,
+)
+
+/// Allowed values for `default_activity_type`. Mirrors the CHECK
+/// constraint that gates the pref's writers on web + Android. A
+/// rogue value (older client, manual SQL edit) is silently ignored
+/// so the watch can never end up trying to record a `metadata
+/// .activity_type` Strava wouldn't recognise.
+internal val UNIVERSAL_ACTIVITY_TYPES = setOf("run", "walk", "hike", "cycle")
+
+/// Pure parser for the PostgREST response body of
+/// `GET /rest/v1/user_settings?user_id=eq.<uid>&select=prefs&limit=1`.
+///
+/// Internal so the unit test can pin the every shape variant: empty
+/// array (no row), null `prefs`, missing `default_activity_type`
+/// key, malformed value. Always returns a non-null `UniversalSettings`
+/// when the body is a parseable array (even an empty `prefs`); the
+/// caller can still get null from the wrapping `fetchUniversalSettings`
+/// when the HTTP call fails entirely.
+internal fun parseUniversalSettings(body: String?): UniversalSettings? {
+    if (body.isNullOrBlank()) return null
+    return try {
+        val arr = errorBodyJson.parseToJsonElement(body) as? JsonArray
+            ?: return null
+        if (arr.isEmpty()) return UniversalSettings(defaultActivityType = null)
+        val row = arr[0] as? JsonObject ?: return null
+        val prefs = row["prefs"] as? JsonObject
+            ?: return UniversalSettings(defaultActivityType = null)
+        val raw = prefs["default_activity_type"]?.jsonPrimitive?.contentOrNull
+            ?: return UniversalSettings(defaultActivityType = null)
+        val sanitised = if (raw in UNIVERSAL_ACTIVITY_TYPES) raw else null
+        UniversalSettings(defaultActivityType = sanitised)
+    } catch (_: Throwable) {
+        null
+    }
+}
+
 /// Minimal Supabase REST client for the Wear OS app.
 ///
 /// Talks directly to `${baseUrl}/rest/v1`, `/auth/v1`, and `/storage/v1`.
@@ -244,6 +290,37 @@ class SupabaseClient(
             if (waypoints.size < 2) return@mapNotNull null
             SavedRoute(id = id, name = name, distanceM = distanceM, waypoints = waypoints)
         }
+    }
+
+    /// Fetch the signed-in user's universal-prefs bag from
+    /// `user_settings.prefs`. Today the only field we consume on the
+    /// wrist is `default_activity_type`; the rest of the bag (HR
+    /// zones, privacy_default, date_of_birth, etc.) is edited from
+    /// the phone / web. We keep this surface read-only on Wear OS
+    /// per `apps/watch_wear/CLAUDE.md` — settings panels belong on
+    /// the pocket app, not the wrist.
+    ///
+    /// Returns null on any failure (offline, RLS denial, malformed
+    /// row) so the caller can fall through to the on-device default
+    /// without a try/catch. The caller treats null as "leave the
+    /// default in place"; a present `UniversalSettings` with a null
+    /// `defaultActivityType` is also fine — the bag exists but the
+    /// user hasn't picked a default yet.
+    suspend fun fetchUniversalSettings(): UniversalSettings? {
+        val token = accessToken ?: return null
+        val uid = userId ?: return null
+        val req = Request.Builder()
+            .url("$baseUrl/rest/v1/user_settings?user_id=eq.$uid&select=prefs&limit=1")
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer $token")
+            .get()
+            .build()
+        val body = try {
+            execute(req)
+        } catch (_: Throwable) {
+            return null
+        }
+        return parseUniversalSettings(body)
     }
 
     /// Upload a run: gzip the track file into the `runs` bucket at
