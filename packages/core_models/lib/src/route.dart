@@ -41,6 +41,13 @@ class Route {
   /// from web / mobile; read-only on the watch.
   final bool isStarred;
 
+  /// Club this route belongs to, if any. Owned routes can be
+  /// transferred into a club's library or detached back to personal
+  /// via `SocialService.setRouteClub`. `null` means personal. See
+  /// `decisions.md § 30` (club-owned routes) and migration
+  /// `20260520_001_club_owned_routes.sql`.
+  final String? clubId;
+
   const Route({
     required this.id,
     required this.name,
@@ -55,6 +62,7 @@ class Route {
     this.featured = false,
     this.runCount = 0,
     this.isStarred = false,
+    this.clubId,
   });
 
   factory Route.fromJson(Map<String, dynamic> json) => _$RouteFromJson(json);

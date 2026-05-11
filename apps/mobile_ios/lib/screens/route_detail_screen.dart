@@ -1,17 +1,32 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../backend_timeout.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../social_service.dart' show ClubView, SocialService;
 import '../widgets/live_run_map.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
 import '../widgets/top_banner.dart';
+
+/// Pure helper — filter the viewer's club memberships down to clubs
+/// they can transfer a route into (owner or admin). Mirrors the
+/// equivalent helper for plan templates (see `plan_detail_screen.dart`
+/// `adminClubsForPublish`); kept distinct so a future change of policy
+/// (e.g. event organisers gain transfer rights) doesn't accidentally
+/// loosen the publish path too.
+@visibleForTesting
+List<ClubView> adminClubsForRouteTransfer(Iterable<ClubView> clubs) {
+  return clubs.where((c) => c.isAdmin).toList();
+}
 
 class RouteDetailScreen extends StatefulWidget {
   final cm.Route route;
@@ -22,6 +37,11 @@ class RouteDetailScreen extends StatefulWidget {
   /// their own library pass `true`; the Explore tab opens read-only.
   final bool isOwner;
 
+  /// Optional SocialService injection for the transfer-to-club sheet.
+  /// When `null`, the screen constructs its own against the global
+  /// Supabase client. Tests pass a fake.
+  final SocialService? social;
+
   const RouteDetailScreen({
     super.key,
     required this.route,
@@ -29,6 +49,7 @@ class RouteDetailScreen extends StatefulWidget {
     required this.preferences,
     this.apiClient,
     this.isOwner = false,
+    this.social,
   });
 
   @override
@@ -39,6 +60,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   late bool _isPublic = widget.route.isPublic;
   late bool _isStarred = widget.route.isStarred;
   late List<String> _tags = List.from(widget.route.tags);
+  // Mirrors widget.route.clubId initially so the transfer/detach button
+  // can show the current ownership state and `_transferToClub` can
+  // refresh it without rebuilding the screen.
+  late String? _clubId = widget.route.clubId;
+  bool _transferBusy = false;
+
+  // Lazy SocialService — production uses the global Supabase client;
+  // tests inject a fake via the constructor.
+  late final SocialService _social = widget.social ?? SocialService();
   List<cm.RouteReviewRow> _reviews = [];
   bool _loadingReviews = false;
   bool _reviewsOffline = false;
@@ -348,6 +378,22 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             ),
           if (_isOwner)
             IconButton(
+              icon: _transferBusy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(_clubId == null
+                      ? Icons.group_add_outlined
+                      : Icons.group),
+              tooltip: _clubId == null
+                  ? 'Transfer to club'
+                  : 'Detach or move to another club',
+              onPressed: _transferBusy ? null : _transferToClub,
+            ),
+          if (_isOwner)
+            IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Delete route',
               onPressed: () => _confirmDelete(context),
@@ -605,6 +651,74 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       if (context.mounted) {
         showTopBanner(context, 'Could not share ${format.toUpperCase()}: $e');
       }
+    }
+  }
+
+  /// Owner-only — open the transfer/detach sheet, then commit the
+  /// chosen action via `SocialService.setRouteClub`. Detach is
+  /// distinguished from transfer by passing `null` as the new clubId.
+  Future<void> _transferToClub() async {
+    if (_transferBusy) return;
+    setState(() => _transferBusy = true);
+
+    List<ClubView> myClubs;
+    try {
+      myClubs = await _social.fetchMyClubs().timeout(kBackendLoadTimeout);
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _transferBusy = false);
+      showTopBanner(context, 'Couldn\'t load your clubs — check your network.');
+      return;
+    } catch (e, s) {
+      debugPrint('transferToClub: fetchMyClubs failed: $e\n$s');
+      if (!mounted) return;
+      setState(() => _transferBusy = false);
+      showTopBanner(context, 'Couldn\'t load your clubs.');
+      return;
+    }
+    if (!mounted) return;
+
+    final eligible = adminClubsForRouteTransfer(myClubs);
+    final result = await showModalBottomSheet<TransferRouteResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => RouteTransferClubPicker(
+        clubs: eligible,
+        currentClubId: _clubId,
+      ),
+    );
+    if (result == null) {
+      if (mounted) setState(() => _transferBusy = false);
+      return;
+    }
+
+    final targetClubId = result.detach ? null : result.clubId;
+    if (targetClubId == _clubId) {
+      // No-op selection.
+      if (mounted) setState(() => _transferBusy = false);
+      return;
+    }
+
+    try {
+      await _social
+          .setRouteClub(routeId: widget.route.id, clubId: targetClubId)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _clubId = targetClubId;
+        _transferBusy = false;
+      });
+      showTopBanner(
+        context,
+        targetClubId == null
+            ? 'Detached from club; route is now personal.'
+            : 'Route moved into the club library.',
+      );
+    } catch (e, s) {
+      debugPrint('setRouteClub failed: $e\n$s');
+      if (!mounted) return;
+      setState(() => _transferBusy = false);
+      showTopBanner(context, 'Transfer failed: $e');
     }
   }
 
@@ -875,6 +989,128 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Pop result for the route transfer picker. `detach` means "move
+/// back to personal" (the parent passes `clubId: null` to
+/// `setRouteClub`); otherwise `clubId` is the destination club's id.
+@visibleForTesting
+class TransferRouteResult {
+  final bool detach;
+  final String? clubId;
+  const TransferRouteResult.transfer(this.clubId) : detach = false;
+  const TransferRouteResult.detach()
+      : detach = true,
+        clubId = null;
+}
+
+/// Modal that lists the viewer's admin-able clubs + a "Detach to
+/// personal" option (when the route is currently owned by a club).
+/// Pops `null` on cancel, a `TransferRouteResult.detach()` on
+/// detach, or `TransferRouteResult.transfer(clubId)` on a club tap.
+class RouteTransferClubPicker extends StatelessWidget {
+  final List<ClubView> clubs;
+  final String? currentClubId;
+  const RouteTransferClubPicker({
+    super.key,
+    required this.clubs,
+    this.currentClubId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              currentClubId == null ? 'Transfer to club' : 'Manage club ownership',
+              style: theme.textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              currentClubId == null
+                  ? 'Members of the club will see this route in the club library and can adopt it onto their plans.'
+                  : 'Move this route into another club you admin, or detach it back to personal.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (currentClubId != null)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.person),
+                title: const Text('Detach to personal'),
+                subtitle: Text(
+                  'Removes the route from the current club\'s library.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                onTap: () =>
+                    Navigator.pop(context, const TransferRouteResult.detach()),
+              ),
+            if (clubs.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'You don\'t own or admin any clubs yet.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: clubs.length,
+                  itemBuilder: (_, i) {
+                    final c = clubs[i];
+                    final isCurrent = c.row.id == currentClubId;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.group),
+                      title: Text(c.row.name),
+                      subtitle: Text(
+                        isCurrent
+                            ? 'Current club'
+                            : '${c.row.locationLabel ?? c.row.slug} · '
+                                '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: isCurrent
+                          ? const Icon(Icons.check, size: 18)
+                          : const Icon(Icons.chevron_right),
+                      onTap: isCurrent
+                          ? null
+                          : () => Navigator.pop(
+                              context,
+                              TransferRouteResult.transfer(c.row.id),
+                            ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -243,6 +243,45 @@ void main() {
       }
     });
 
+    test('setRouteClub attaches + detaches a personal route', () async {
+      // Find a route owned by runner@test.com that isn't already
+      // attached to a club. The seeded routes are personal by default.
+      final personal = await client
+          .from('routes')
+          .select('id, club_id')
+          .filter('club_id', 'is', null)
+          .limit(1);
+      expect((personal as List), isNotEmpty,
+          reason: 'seed.sql provisions at least one personal route');
+      final routeId = (personal.first as Map)['id'] as String;
+      try {
+        // Attach.
+        await social.setRouteClub(routeId: routeId, clubId: _seededClubId);
+        final afterAttach = await client
+            .from('routes')
+            .select('club_id')
+            .eq('id', routeId)
+            .single();
+        expect(afterAttach['club_id'], _seededClubId,
+            reason: 'setRouteClub(clubId: X) must persist the club_id');
+
+        // Detach.
+        await social.setRouteClub(routeId: routeId, clubId: null);
+        final afterDetach = await client
+            .from('routes')
+            .select('club_id')
+            .eq('id', routeId)
+            .single();
+        expect(afterDetach['club_id'], isNull,
+            reason: 'setRouteClub(clubId: null) must clear the club_id, '
+                'returning the route to personal');
+      } finally {
+        // Defensive restore — keep the seed personal so re-runs don't
+        // accumulate state.
+        await social.setRouteClub(routeId: routeId, clubId: null);
+      }
+    });
+
     test('createPost + deletePost roundtrip', () async {
       // The reply body distinguishes the test row from anything the
       // seed plants so the cleanup `delete` is unambiguous. We delete

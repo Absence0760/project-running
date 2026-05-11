@@ -395,6 +395,7 @@ class SocialService extends ChangeNotifier {
       tags: (row['tags'] as List?)?.cast<String>() ?? const [],
       featured: row['featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
+      clubId: r.clubId,
     );
   }
 

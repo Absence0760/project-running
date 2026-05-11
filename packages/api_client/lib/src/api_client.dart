@@ -2496,6 +2496,7 @@ class ApiClient {
       featured: row['featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
       isStarred: row['is_starred'] == true,
+      clubId: row['club_id'] as String?,
     );
   }
 
