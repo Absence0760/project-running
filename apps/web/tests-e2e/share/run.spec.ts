@@ -53,6 +53,44 @@ test.describe('/share/run/[id] — anon', () => {
 		).toBeVisible({ timeout: 5_000 });
 	});
 
+	test('anon visitor gets SEO unfurl tags on the share page', async ({ page }) => {
+		// Crawlers + chat-app unfurls read these from <head>. The
+		// run share page intentionally keeps title / description
+		// generic (the run fetch lives inside RunShareView, which
+		// the feed modal also mounts — a per-run unfurl would
+		// require lifting the fetch out, deferred). Pin that the
+		// scaffolding tags are present so a refactor that drops
+		// them surfaces here, not as a silently broken Slack
+		// unfurl in prod.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+		await page.waitForLoadState('networkidle');
+
+		await expect(page).toHaveTitle('Run — Run Onward');
+		await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+			'content',
+			/Run Onward/
+		);
+		await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute(
+			'content',
+			'Run Onward'
+		);
+		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+			'content',
+			'/apple-touch-icon.png'
+		);
+		await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
+			'content',
+			'summary_large_image'
+		);
+	});
+
 	test('Sign up CTA on the anon share page lands on /login?signup=1', async ({
 		page
 	}) => {

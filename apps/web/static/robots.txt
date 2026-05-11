@@ -1,0 +1,26 @@
+# Run Onward — crawler guidance.
+#
+# Allow all public surfaces. The interesting indexable pages are
+#   /                — landing
+#   /share/run/<id>  — public run share (RLS-gated: only is_public=true rows render)
+#   /share/route/<id> — public route share (anon hits public_routes view; geom+start_point dropped)
+#   /u/<id>          — public user profile (recent public runs)
+#   /feed            — activity feed (auth-gated; crawlers see the login redirect)
+#
+# Authenticated-only surfaces (/dashboard, /settings, /coach, /plans, /runs,
+# /clubs/[slug]) bounce anon to /login, so disallowing them costs us nothing
+# and trims crawl budget.
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /coach
+Disallow: /plans
+Disallow: /runs
+Disallow: /clubs
+Disallow: /auth
+
+# A dynamic sitemap.xml that lists every public run + route by id needs a
+# build-time Supabase fetch (adapter-static prerender hook). Deferred per
+# `docs/followups.md § #15` — for now crawlers discover share URLs via
+# inbound links + the feed.

@@ -6,7 +6,30 @@
 
 <svelte:head>
 	<title>Run — Run Onward</title>
+	<meta
+		name="description"
+		content="View a public run on Run Onward — map, splits, elevation, kudos."
+	/>
+	<!-- Open Graph + Twitter scaffold. Title / description stay generic
+	     here because the per-run data fetch lives inside RunShareView and
+	     refactoring that out for a per-run unfurl would touch the feed
+	     modal too. A future slice can lift the run fetch into +page.ts
+	     (load function) so og:title can include the runner's name. -->
+	<meta property="og:title" content="Run — Run Onward" />
+	<meta
+		property="og:description"
+		content="View a public run on Run Onward — map, splits, elevation, kudos."
+	/>
 	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Run Onward" />
+	<meta property="og:image" content="/apple-touch-icon.png" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Run — Run Onward" />
+	<meta
+		name="twitter:description"
+		content="View a public run on Run Onward — map, splits, elevation, kudos."
+	/>
+	<meta name="twitter:image" content="/apple-touch-icon.png" />
 </svelte:head>
 
 <div class="share-page">

@@ -41,9 +41,21 @@
 <svelte:head>
 	<title>{pageTitle}</title>
 	<meta name="description" content={pageDesc} />
+	<!-- Open Graph — Facebook, LinkedIn, Slack, Discord, iMessage all
+	     read the og:* tags for the unfurl preview. og:image points at
+	     a generic static asset for now; a per-route track-preview PNG
+	     would be a follow-up that needs a server-side image renderer. -->
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={pageDesc} />
 	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Run Onward" />
+	<meta property="og:image" content="/apple-touch-icon.png" />
+	<!-- Twitter / X — `summary_large_image` so the unfurl renders the
+	     full og:image rather than a tiny icon. -->
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDesc} />
+	<meta name="twitter:image" content="/apple-touch-icon.png" />
 </svelte:head>
 
 <div class="share-page">
