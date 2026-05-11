@@ -4,7 +4,7 @@ How the Go worker at `apps/job_worker/` and the OSRM map-matching engine at `app
 
 Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker contract, scope, error classification) and [`apps/job_worker/README.md`](README.md) (local dev recipe). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md).
 
-**Status: plan.** The worker compiles and tests pass; OSRMMatcher is wired behind the `OSRM_URL` env switch. Neither has been deployed.
+**Status: plan.** The worker binary compiles, tests pass, OSRMMatcher is wired behind the `OSRM_URL` env switch, and the live spectator hub (HTTP + WebSocket) is wired into the same binary alongside `/health`. Neither app has been deployed. All config (fly.toml, env examples, secrets list, DNS) is ready — the remaining step is `flyctl deploy --remote-only` from an operator with `FLY_API_TOKEN`.
 
 ---
 
@@ -15,12 +15,19 @@ The worker is small (single Go binary, ~9 MB distroless) and the OSRM engine is 
 ```
 Fly.io organisation: runonward
 ├── job_worker           (1+ machines, shared-cpu-1x, 256 MB RAM)
-│   └─ talks to Supabase REST + Storage over the public internet
+│   ├─ Queue drain: claims `jobs` rows over Supabase REST + Storage
+│   ├─ Live hub HTTP + WebSocket on :8080 (Fly TLS-terminates at :443)
+│   │   └─ public surface: POST /v1/live/{run_id}/push,
+│   │                      GET  /v1/live/{run_id}/snapshot,
+│   │                      GET  /v1/live/{run_id}/subscribe (WS)
+│   │   └─ also serves /health for Fly's HTTP check
 │   └─ talks to OSRM over Fly's 6PN private network
 └── osrm                 (1 machine, performance-2x, 8 GB RAM)
     └─ Volume mounted at /data — holds the extracted graph
     └─ NO public route
 ```
+
+The live hub shares the worker's binary by design — both speak the same Supabase REST stack and the hub's in-process pub/sub state is tiny (a map keyed by `run_id` with a few hundred bytes per active room). When the hub's storage moves to Upstash Redis (see `CLAUDE.md`), the binary stays unified; only the `Hub` implementation swaps.
 
 Why same Fly.io organisation: 6PN gives them a private network at no cost. The worker calls `http://osrm.internal:5000/match/v1/foot/...` and never goes through public internet.
 
@@ -46,32 +53,66 @@ Why the worker app stays separate from OSRM: independent restart (worker → 5 s
 
 ### Sizing
 
-- `shared-cpu-1x`, 256 MB RAM. The worker is mostly idle on a poll loop; matching is delegated to OSRM. RAM ceiling is during a Storage upload of a matched gzip (~hundreds of KB in flight).
-- 1 machine baseline. Add a second when the active set in `jobs.status='queued' AND scheduled_at <= now()` regularly exceeds ~50.
-- `auto_start_machines = true`, `auto_stop_machines = false`. The worker is supposed to be always-on; auto-stop would just delay the next claim by the cold-start time.
+- `shared-cpu-1x`, 256 MB RAM. The worker is mostly idle on a poll loop; matching is delegated to OSRM. RAM ceiling is during a Storage upload of a matched gzip (~hundreds of KB in flight). The hub's in-process pub/sub state is negligible — a `map[string]*room` with at most a few hundred bytes per active run.
+- 1 machine baseline. Add a second when the active set in `jobs.status='queued' AND scheduled_at <= now()` regularly exceeds ~50, or when concurrent live-spectator viewers regularly exceed ~500. (Per-room fan-out is in-process, so a second machine roughly halves the per-machine viewer load.)
+- `auto_start_machines = true`, `auto_stop_machines = false`. The worker is supposed to be always-on; auto-stop would just delay the next claim by the cold-start time. Live-hub WS subscribers also drop if the machine stops.
 
 ### `fly.toml`
 
-Lives at [`fly.toml`](fly.toml). Shape:
+Lives at [`fly.toml`](fly.toml). Shape (matches the actual checked-in file — keep this snippet in sync if you edit it):
 
 ```toml
 app = "job_worker"
 primary_region = "lhr"
 
 [build]
-dockerfile = "../../apps/job_worker/Dockerfile"
+dockerfile = "Dockerfile"
 
 [env]
 WORKER_ID = "fly-${FLY_MACHINE_ID}"
 OSRM_URL = "http://osrm.internal:5000"
+# Comma-separated WS Origin allow-list. Anything not listed gets a 403 at
+# the WS handshake. Production clients: apps/web prod + preview.
+LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.runonward.com"
+
+[[services]]
+internal_port = 8080
+protocol = "tcp"
+auto_start_machines = true
+auto_stop_machines = false
+min_machines_running = 1
+
+[[services.ports]]
+port = 443
+handlers = ["tls", "http"]   # Fly's "http" handler transparently
+                             # upgrades WS frames; the server handles
+                             # Sec-WebSocket-Accept via coder/websocket.
+
+[[services.ports]]
+port = 80
+handlers = ["http"]
+force_https = true
+
+[[services.tcp_checks]]
+interval = "30s"
+timeout = "5s"
+grace_period = "10s"
+
+[[services.http_checks]]
+# /health JSON body: {"status":"ok"} | {"status":"stale"} when the poll
+# loop is wedged. Fly auto-restarts after 3 consecutive failures.
+interval = "15s"
+timeout = "5s"
+grace_period = "20s"
+method = "get"
+path = "/health"
+protocol = "http"
+restart_limit = 0
 
 [[vm]]
 size = "shared-cpu-1x"
 memory = "256mb"
 cpus = 1
-
-# No [[services]] block: the worker is a pure consumer, not a server.
-# It exposes nothing on the public internet and nothing on 6PN.
 ```
 
 ### Secrets
@@ -82,7 +123,9 @@ flyctl secrets set --app job_worker \
   SUPABASE_SERVICE_ROLE_KEY="..."
 ```
 
-`OSRM_URL` is in `[env]` (not a secret) because the URL itself is non-sensitive and we want it visible in `flyctl status`.
+`SUPABASE_SERVICE_ROLE_KEY` is **dual-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`) AND the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping. One secret, one identity — there's no per-concern split.
+
+`OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` are in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
 
 ### Deploy
 
@@ -103,6 +146,8 @@ Once the `release-worker.yml` workflow lands (see § CI wiring below), tagging `
 | Per-machine metrics (CPU, RAM, restarts) | Fly.io dashboard → Metrics |
 | Queue lag | Custom: `select count(*) from jobs where status='queued' and scheduled_at <= now()` — wire to a Better Stack heartbeat that PG-queries every minute and alerts if >50 |
 | Worker liveness | Heartbeat: have the worker `update jobs set scheduled_at = ... where ...` once per claim; alert if no claim observed in >10 min while queued > 0 |
+| Hub liveness | The `/health` HTTP check above also covers the hub — both concerns share the binary, so a hub crash trips the same probe |
+| Hub fan-out / drop counts | Logged on each push (room subscriber count, drops from zone clip). No metrics endpoint yet — `flyctl logs` + a `jq`-friendly filter is the path until Prometheus lands |
 
 The worker exposes a `/health` endpoint on `:8080` (override with `HEALTH_PORT`). Returns 200 + a small JSON body while the poll loop ticks, 503 once the heartbeat ages past 10 s — long enough that a job mid-handle is fine but short enough that a wedged loop is caught. `fly.toml` declares both a TCP check and an HTTP check against `/health`; Fly's auto-restart catches stale machines without a watchdog of our own.
 
@@ -113,7 +158,72 @@ flyctl releases --app job_worker
 flyctl releases rollback <version> --app job_worker
 ```
 
-Drains in-flight jobs and starts the previous image. Takes <60 s.
+Drains in-flight jobs and starts the previous image. Takes <60 s. Live-hub WS subscribers are dropped during the swap; clients reconnect automatically (`apps/web/src/lib/live_hub.ts` and `apps/mobile_android/lib/live_hub_client.dart` both have backoff).
+
+---
+
+## Live spectator hub — same binary as the worker
+
+The hub is wired into the worker's binary (`main.go` mounts `livehub.Server.RegisterRoutes(mux)` alongside `/health`) so there's no second deploy artefact. Everything in the "Worker app — `job_worker`" section above also describes the hub. This section covers the bits that are hub-specific: the public surface, DNS, client env flip, and the privacy-zone failure mode.
+
+### Public surface
+
+Three routes under the hub mux:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/live/{run_id}/push` | Mobile recorder publishes a ping. Body: `{ts, lat, lng, accuracy_m?, speed_mps?, heading_deg?, distance_m?, elapsed_s?, source?}` — 4 KiB body cap + `DisallowUnknownFields`. Returns `{ok:true, fanout:N}` or `{ok:false, clipped:true, reason:"..."}` when the ping is dropped server-side (in privacy zone OR fail-closed when zone fetch errored). |
+| `GET` | `/v1/live/{run_id}/snapshot` | Spectator (or reconnecting WS client) fetches the last known ping. Returns 204 when empty so a clean reconnect doesn't render stale data. |
+| `GET` | `/v1/live/{run_id}/subscribe` | Spectator opens a WebSocket; the server streams every subsequent ping. WS Origin header is checked against `LIVEHUB_ALLOWED_ORIGINS` — anything not listed gets a 403 at handshake. |
+
+The matching client transports:
+
+- Web — `apps/web/src/lib/live_hub.ts` (auto-reconnect WS with snapshot-on-resume) gated on `PUBLIC_LIVE_HUB_URL`.
+- Mobile — `apps/mobile_android/lib/live_hub_client.dart` (HTTP push only; the watch-side spectator UI lives on web) gated on `LIVE_HUB_URL`.
+
+When the env var is empty, both clients fall back to the legacy Supabase Realtime path on `live_run_pings`. The env flip is the entire production-cutover gesture — no code change required.
+
+### DNS
+
+Point a subdomain at the Fly app so the public URL doesn't leak the Fly hostname:
+
+```bash
+# Tell Fly to provision a Let's Encrypt cert for the subdomain
+flyctl certs add live.runonward.com --app job_worker
+
+# Then add a Route 53 record (managed via infra/dns/) — CNAME to
+# job_worker.fly.dev (or A/AAAA to the Fly anycast IPs reported by
+# `flyctl ips list --app job_worker`).
+```
+
+Once the cert lights up green in `flyctl certs show live.runonward.com`, the hub is reachable at `https://live.runonward.com/v1/live/...`.
+
+### Client env flip
+
+After DNS resolves and a smoke-test push round-trips:
+
+1. **Web** — set `PUBLIC_LIVE_HUB_URL=https://live.runonward.com` in the prod sops blob (`infra/envs/prod/secrets.sops.json` → `runtime.PUBLIC_LIVE_HUB_URL`). Rebuild + redeploy via the `web@*` tag.
+2. **Mobile** — set `LIVE_HUB_URL=https://live.runonward.com` in the Android + iOS release `.env` (not committed; injected at build time). Ship a new build through the Play Console / TestFlight.
+
+Both clients pick up the new transport on next launch. Old builds with the env unset stay on the Supabase Realtime path — they continue to work because the trigger-driven `live_run_pings` table still receives pings from any recorder that hasn't been updated. Roll-forward is gradual.
+
+### Privacy zones — fail-closed contract
+
+`Server.shouldDrop` runs `IsInAnyZone(p.lat, p.lng, room.zones)` on every push. Zones are fetched once per room via `SupabaseZoneFetcher` (PostgREST: `runs?id=eq.<id>&select=user_id` then `user_settings?user_id=eq.<owner>&select=prefs`) and cached on the room until garbage collection.
+
+**A Supabase outage drops the ping rather than risk leaking a home coordinate.** The response is `{ok:false, clipped:true, reason:"zone fetch failed"}`. The mobile broadcaster swallows this per the L4 best-effort contract — the run still records locally and uploads when the network recovers; only the live spectator stream goes dark. This mirrors the `live_run_pings_drop_in_zone` BEFORE-INSERT trigger on the Supabase Realtime path so both transports honour the same contract.
+
+### Hub deploy checklist
+
+- [ ] `flyctl deploy --remote-only` from `apps/job_worker/` (or push a `worker@*` tag once `release-worker.yml` lands)
+- [ ] `flyctl certs add live.runonward.com --app job_worker` and Route 53 record pointing at it
+- [ ] `flyctl certs show live.runonward.com` shows a valid Let's Encrypt cert
+- [ ] `curl https://live.runonward.com/health` returns `{"status":"ok"}`
+- [ ] Smoke push: `curl -X POST https://live.runonward.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` returns `{"ok":true,"fanout":0}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
+- [ ] WS Origin allow-list (`LIVEHUB_ALLOWED_ORIGINS` in `[env]`) covers every host that will subscribe (prod web + preview web + any dev tunnel that needs to be tested against prod)
+- [ ] `PUBLIC_LIVE_HUB_URL` set in the web prod sops blob, redeployed
+- [ ] `LIVE_HUB_URL` set in the next mobile release builds
+- [ ] After the cutover, watch `flyctl logs --app job_worker` for a session — confirm zone-clip drop counts look sane (not 100 %, not 0 %)
 
 ---
 

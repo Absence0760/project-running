@@ -204,7 +204,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 ### Backend work (Phase 2)
 
 - [ ] Deploy Go service to Fly.io (~$5/month)
-  - [x] **WebSocket hub code shipped** — `apps/job_worker/internal/livehub/` (Hub + HTTP routes + WS streaming via `coder/websocket`); 20 tests race-clean. Wired into `main.go`'s health listener alongside `/health`. Deploy still needs the `fly.toml` route + upstream proxy mapping `live.runonward.com/v1/*`.
+  - [x] **WebSocket hub code shipped + deploy config ready** — `apps/job_worker/internal/livehub/` (Hub + HTTP routes + WS streaming via `coder/websocket` + per-room privacy-zone clip via `SupabaseZoneFetcher`); 34 tests race-clean. Wired into `main.go`'s health listener alongside `/health`. `apps/job_worker/fly.toml` exposes `:443` (TLS + http handler for WS) with `LIVEHUB_ALLOWED_ORIGINS` env + `/health` HTTP probe; env examples (`apps/web/.env.example` → `PUBLIC_LIVE_HUB_URL`, `apps/mobile_android/.env.example` → `LIVE_HUB_URL`) and `apps/job_worker/deployment.md § Live spectator hub` document the cutover. Remaining steps are operator-only: `flyctl deploy --remote-only`, `flyctl certs add live.runonward.com`, Route 53 record, then flip the two env vars in the prod sops blob + next mobile release.
   - [x] Background job queue (Postgres-backed via River-style `claim_next_job` / `defer_job` / `finish_job` RPCs)
   - [ ] Strava webhook handler (moved from Edge Function)
   - [ ] Token refresh worker (moved from Edge Function)

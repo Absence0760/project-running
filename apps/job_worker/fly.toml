@@ -1,6 +1,10 @@
-# Fly.io app config for the Go background worker.
+# Fly.io app config for the Go background worker + live spectator
+# hub. The worker drains the `jobs` queue (map-match etc.); the hub
+# serves the public HTTP + WebSocket routes for live spectator
+# tracking. Both share the same binary and the same port.
+#
 # See apps/job_worker/deployment.md for the full plan (sizing, secrets,
-# observability, rollback, DR).
+# observability, rollback, DR, hub-specific concerns).
 #
 # This file lives next to the Dockerfile so `flyctl deploy` picks it
 # up without --config flags.
@@ -24,9 +28,19 @@ WORKER_ID = "fly-${FLY_MACHINE_ID}"
 # network. Never publicly resolvable — see apps/job_worker/osrm/fly.toml.
 OSRM_URL = "http://osrm.internal:5000"
 
-# Worker is a pure consumer (polls Postgres, writes to Storage), so it
-# exposes no [[services]] block. Health checks come from the optional
-# /health endpoint on a private port (see deployment.md).
+# Live spectator hub WS upgrade origin allow-list. Comma-separated;
+# only requests whose Origin header matches one of these are allowed
+# to upgrade. The corresponding clients are `apps/web` (PUBLIC build
+# at https://run.app) and the preview env. Keep the list tight —
+# anything not listed gets a 403 at the WS handshake.
+LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.runonward.com"
+
+# Public HTTPS + WebSocket service (live spectator hub).
+# Fly.io's "http" handler transparently upgrades WS frames; the
+# server (apps/job_worker/internal/livehub/server.go) handles the
+# Sec-WebSocket-Accept dance via coder/websocket. The TLS handler
+# terminates HTTPS at Fly's edge so the Dockerfile binary stays
+# plain HTTP.
 [[services]]
 internal_port = 8080
 protocol = "tcp"
@@ -34,10 +48,33 @@ auto_start_machines = true
 auto_stop_machines = false
 min_machines_running = 1
 
+[[services.ports]]
+port = 443
+handlers = ["tls", "http"]
+
+[[services.ports]]
+port = 80
+handlers = ["http"]
+force_https = true
+
 [[services.tcp_checks]]
 interval = "30s"
 timeout = "5s"
 grace_period = "10s"
+
+# HTTP-level health check on /health — fail-fast on the JSON
+# `{"status":"stale"}` body the worker returns when the poll loop
+# is wedged. Fly auto-restarts after repeated failures (default
+# 3 consecutive). The grace period covers cold-start of the
+# Go binary + first poll.
+[[services.http_checks]]
+interval = "15s"
+timeout = "5s"
+grace_period = "20s"
+method = "get"
+path = "/health"
+protocol = "http"
+restart_limit = 0
 
 [[vm]]
 size = "shared-cpu-1x"
@@ -45,7 +82,11 @@ memory = "256mb"
 cpus = 1
 
 # Secrets (set via `flyctl secrets set`):
-#   SUPABASE_URL
-#   SUPABASE_SERVICE_ROLE_KEY
+#   SUPABASE_URL                  — Supabase API endpoint
+#   SUPABASE_SERVICE_ROLE_KEY     — used by both the worker (jobs)
+#                                   and the hub's SupabaseZoneFetcher
+#                                   (privacy zones).
 # Set with:
-#   flyctl secrets set --app job_worker SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
+#   flyctl secrets set --app job_worker \
+#     SUPABASE_URL=https://<ref>.supabase.co \
+#     SUPABASE_SERVICE_ROLE_KEY=eyJ...
