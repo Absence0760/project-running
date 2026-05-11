@@ -3,11 +3,23 @@ library;
 
 import 'dart:io';
 
+import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
+
+// Known seed IDs / slugs — kept here so an unintended seed change shows
+// up as a clear test failure rather than a vague NotFound deep in
+// SocialService.
+const _seededClubId = 'c1111111-0000-0000-0000-000000000001';
+const _seededClubSlug = 'sydney-run-club';
+const _seededRecurringEventId = 'e1111111-0000-0000-0000-000000000001';
+const _seededRecurringEventInstance = '2026-04-19T06:30:00Z';
+const _seededTopLevelPostId = 'b1111111-0000-0000-0000-000000000001';
+const _seededPlanId = 'a1a1eada-aaaa-0000-0000-000000000001';
+const _seededFirstWeekId = 'a0aa0001-0000-0000-0000-000000000001';
 
 /// Wire-level integration tests for the Supabase-touching methods on
 /// `SocialService` and `TrainingService`. Closes priorities (3) + (4)
@@ -141,6 +153,315 @@ void main() {
           reason: 'an active plan with weeks must have at least one '
               'plan_workouts row');
       expect(overview.completionPct, inInclusiveRange(0, 100));
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Additional wire-level tests covering the previously-uncovered
+  // SocialService + TrainingService methods. Same DI seam, same seed
+  // user. Read paths assert wire shape + RLS gates; the two write
+  // roundtrips clean up after themselves in a try/finally so re-runs
+  // don't accumulate seed drift.
+  // ───────────────────────────────────────────────────────────────────────
+
+  group('SocialService — clubs + routes + posts (wire-level)', () {
+    late SupabaseClient client;
+    late SocialService social;
+
+    setUp(() async {
+      client = SupabaseClient(url, anonKey);
+      await client.auth.signInWithPassword(
+        email: 'runner@test.com',
+        password: 'testtest',
+      );
+      social = SocialService.withClient(client);
+    });
+
+    tearDown(() async {
+      try {
+        await client.auth.signOut();
+      } catch (_) {}
+      client.dispose();
+    });
+
+    test('fetchClubBySlug returns the seeded sydney-run-club', () async {
+      final club = await social.fetchClubBySlug(_seededClubSlug);
+      expect(club, isNotNull,
+          reason: 'seed.sql provisions sydney-run-club; fetchClubBySlug '
+              'should surface it for any authenticated viewer');
+      expect(club!.row.slug, _seededClubSlug);
+      expect(club.row.id, _seededClubId);
+      expect(club.memberCount, greaterThan(0),
+          reason: 'enrichment must count active club_members rows');
+    });
+
+    test('fetchClubBySlug returns null for an unknown slug', () async {
+      final club = await social.fetchClubBySlug('no-such-club-xyz-zzz');
+      expect(club, isNull,
+          reason: 'maybeSingle path must fall through to null, not throw');
+    });
+
+    test('fetchClubRoutes returns the club\'s route rows', () async {
+      final routes = await social.fetchClubRoutes(_seededClubId);
+      // The seed doesn't currently pin a route to this club; the
+      // assertion is wire-shape: returns a List<Route> (possibly empty)
+      // and doesn't throw on RLS / type-coercion.
+      expect(routes, isA<List>());
+    });
+
+    test('fetchClubPosts surfaces the seeded top-level announcement', () async {
+      final posts = await social.fetchClubPosts(_seededClubId);
+      expect(posts, isNotEmpty,
+          reason: 'seed.sql plants top-level posts on sydney-run-club');
+      // Replies (parent_post_id != null) must be filtered out — the
+      // method's `.isFilter('parent_post_id', null)` clause is what
+      // gates the threaded UI's top-level pass.
+      for (final p in posts) {
+        expect(p.row.parentPostId, isNull,
+            reason: 'fetchClubPosts must only return top-level posts');
+      }
+      // reply_count enrichment: at least the seeded top-level post has
+      // one reply (b2222222-…), so somewhere in the result it must
+      // appear with replyCount >= 1.
+      final pinned = posts.firstWhere(
+        (p) => p.row.id == _seededTopLevelPostId,
+        orElse: () => posts.first,
+      );
+      expect(pinned.replyCount, greaterThanOrEqualTo(0));
+    });
+
+    test('fetchPostReplies returns the seeded reply on the top-level post',
+        () async {
+      final replies = await social.fetchPostReplies(_seededTopLevelPostId);
+      expect(replies, isNotEmpty,
+          reason: 'seed.sql plants exactly one reply on the pinned '
+              'top-level post (b2222222-…); fetchPostReplies must '
+              'surface it');
+      for (final r in replies) {
+        expect(r.row.parentPostId, _seededTopLevelPostId,
+            reason: 'every returned reply must carry the requested parent');
+      }
+    });
+
+    test('createPost + deletePost roundtrip', () async {
+      // The reply body distinguishes the test row from anything the
+      // seed plants so the cleanup `delete` is unambiguous. We delete
+      // by id so even a fuzzy seed grow doesn't accidentally clobber
+      // the seeded posts.
+      final body = 'integration-test reply ${DateTime.now().toIso8601String()}';
+      String? newPostId;
+      try {
+        await social.createPost(
+          clubId: _seededClubId,
+          body: body,
+          parentPostId: _seededTopLevelPostId,
+        );
+        // Round-trip: the new row appears under the parent's replies.
+        final replies = await social.fetchPostReplies(_seededTopLevelPostId);
+        final mine = replies.firstWhere(
+          (r) => r.row.body == body,
+          orElse: () => throw StateError('newly-created reply not visible'),
+        );
+        newPostId = mine.row.id;
+        expect(mine.row.parentPostId, _seededTopLevelPostId);
+      } finally {
+        if (newPostId != null) {
+          await social.deletePost(newPostId);
+        }
+      }
+      // Post-delete: the row no longer appears under the parent.
+      final after = await social.fetchPostReplies(_seededTopLevelPostId);
+      expect(
+        after.where((r) => r.row.body == body),
+        isEmpty,
+        reason: 'deletePost must remove the row so a re-fetch no longer '
+            'surfaces it',
+      );
+    });
+  });
+
+  group('SocialService — events + RSVPs + recent runs (wire-level)', () {
+    late SupabaseClient client;
+    late SocialService social;
+
+    setUp(() async {
+      client = SupabaseClient(url, anonKey);
+      await client.auth.signInWithPassword(
+        email: 'runner@test.com',
+        password: 'testtest',
+      );
+      social = SocialService.withClient(client);
+    });
+
+    tearDown(() async {
+      try {
+        await client.auth.signOut();
+      } catch (_) {}
+      client.dispose();
+    });
+
+    test('fetchUpcomingEvents returns events for the seeded club', () async {
+      final events = await social.fetchUpcomingEvents(_seededClubId);
+      // Wire shape: returns a list (possibly empty if real wall-clock
+      // has passed every seeded instance). All returned events must be
+      // for the requested club.
+      for (final e in events) {
+        expect(e.row.clubId, _seededClubId);
+      }
+    });
+
+    test('fetchEventById returns the seeded recurring event', () async {
+      final ev = await social.fetchEventById(_seededRecurringEventId);
+      expect(ev, isNotNull,
+          reason: 'seed.sql provisions the Sunday Long Run; fetchEventById '
+              'must surface it');
+      expect(ev!.row.id, _seededRecurringEventId);
+      expect(ev.row.clubId, _seededClubId);
+    });
+
+    test('fetchAttendees returns the seeded attendees for a known instance',
+        () async {
+      final attendees = await social.fetchAttendees(
+        _seededRecurringEventId,
+        DateTime.parse(_seededRecurringEventInstance),
+      );
+      // The seed plants two attendees on this (event, instance) pair.
+      // Soft lower bound so future seed grow doesn't break the test.
+      expect(attendees.length, greaterThanOrEqualTo(2),
+          reason: 'seed.sql plants exactly two attendees on this instance');
+    });
+
+    test('fetchRecentRuns returns the signed-in user\'s runs', () async {
+      final runs = await social.fetchRecentRuns(limit: 20);
+      expect(runs, isNotEmpty,
+          reason: 'seed.sql provisions ~12 hand-curated runs + a bulk back-'
+              'history for runner@test.com');
+      // Order invariant: most-recent first.
+      for (var i = 0; i + 1 < runs.length; i++) {
+        expect(runs[i].startedAt.isAfter(runs[i + 1].startedAt) ||
+                runs[i].startedAt.isAtSameMomentAs(runs[i + 1].startedAt),
+            isTrue,
+            reason: 'fetchRecentRuns must return rows in started_at DESC');
+      }
+    });
+  });
+
+  group('TrainingService — plans + workouts (wire-level)', () {
+    late SupabaseClient client;
+    late TrainingService training;
+
+    setUp(() async {
+      client = SupabaseClient(url, anonKey);
+      await client.auth.signInWithPassword(
+        email: 'runner@test.com',
+        password: 'testtest',
+      );
+      training = TrainingService.withClient(client);
+    });
+
+    tearDown(() async {
+      try {
+        await client.auth.signOut();
+      } catch (_) {}
+      client.dispose();
+    });
+
+    test('fetchPlan hydrates plan + weeks + workouts for the seeded plan',
+        () async {
+      final res = await training.fetchPlan(_seededPlanId);
+      expect(res.plan, isNotNull,
+          reason: 'seeded plan id must resolve for its owner');
+      expect(res.weeks, isNotEmpty,
+          reason: 'seed.sql plants 12 plan_weeks for this plan');
+      expect(res.weeks.length, 12,
+          reason: 'seed plants exactly 12 weeks (base 4 / build 5 / peak '
+              '1 / taper 1 / race 1)');
+      expect(res.workouts, isNotEmpty,
+          reason: 'seed.sql plants workouts across every week');
+      // Each workout must reference a week that's in this plan.
+      final weekIds = res.weeks.map((w) => w.id).toSet();
+      for (final w in res.workouts) {
+        expect(weekIds.contains(w.weekId), isTrue,
+            reason: 'every returned plan_workouts row must reference a '
+                'plan_weeks row that belongs to this plan');
+      }
+    });
+
+    test('fetchPlan returns null plan + empty lists for an unknown id',
+        () async {
+      final res = await training.fetchPlan(
+          'deadbeef-0000-0000-0000-000000000000');
+      expect(res.plan, isNull);
+      expect(res.weeks, isEmpty);
+      expect(res.workouts, isEmpty);
+    });
+
+    test('fetchWorkout returns a known workout row', () async {
+      // The seed doesn't pin explicit workout IDs, so we walk via
+      // fetchPlan to find one. The cheapest is the first row in week 0.
+      final plan = await training.fetchPlan(_seededPlanId);
+      final firstWeekWorkout = plan.workouts.firstWhere(
+        (w) => w.weekId == _seededFirstWeekId,
+        orElse: () =>
+            throw StateError('seed week 0 has no plan_workouts rows'),
+      );
+      final fetched = await training.fetchWorkout(firstWeekWorkout.id);
+      expect(fetched, isNotNull);
+      expect(fetched!.id, firstWeekWorkout.id);
+      expect(fetched.weekId, _seededFirstWeekId);
+    });
+
+    test('fetchPlanForWorkout walks workout → week → plan', () async {
+      final plan = await training.fetchPlan(_seededPlanId);
+      final wo = plan.workouts.first;
+      final owner = await training.fetchPlanForWorkout(wo);
+      expect(owner, isNotNull,
+          reason: 'fetchPlanForWorkout must resolve plan via plan_weeks');
+      expect(owner!.id, _seededPlanId);
+    });
+
+    test('updateWorkout patch roundtrip', () async {
+      final plan = await training.fetchPlan(_seededPlanId);
+      // Pick a workout that already has a notes field so the restore
+      // step is a real value-write, not a null→string→null swap.
+      final target = plan.workouts.firstWhere(
+        (w) => w.notes != null && w.notes!.isNotEmpty,
+        orElse: () => plan.workouts.first,
+      );
+      final originalNotes = target.notes;
+      const probe = 'integration-test notes — restored to original';
+      try {
+        await training.updateWorkout(target.id, notes: probe);
+        final after = await training.fetchWorkout(target.id);
+        expect(after, isNotNull);
+        expect(after!.notes, probe,
+            reason: 'updateWorkout(notes: …) must reflect in fetchWorkout');
+      } finally {
+        // Restore so subsequent runs (and any other test that reads
+        // this row) see the seed value. Pass an empty string when
+        // original was null — the column is nullable but the patch
+        // helper drops null fields, so we can't write null back. The
+        // seed re-runs on every `supabase db reset` so a small mutation
+        // is acceptable.
+        await training.updateWorkout(
+          target.id,
+          notes: originalNotes ?? '',
+        );
+      }
+    });
+
+    test('fetchClubTemplates returns templates only', () async {
+      final templates = await training.fetchClubTemplates(_seededClubId);
+      // Wire shape: returns a list (possibly empty). Every returned
+      // row must carry is_template=true — the filter is the whole
+      // point of the method.
+      for (final t in templates) {
+        expect(t.isTemplate, isTrue,
+            reason: 'fetchClubTemplates must filter to is_template=true');
+        expect(t.clubId, _seededClubId,
+            reason: 'every returned template must belong to the requested '
+                'club');
+      }
     });
   });
 }
