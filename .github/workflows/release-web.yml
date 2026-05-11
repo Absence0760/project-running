@@ -1,8 +1,16 @@
 name: Release Web
 
-# Two triggers, two environments:
+# Tag-only trigger:
 #   - tag `web@*`     →  prod  →  runonward.com + www.runonward.com
-#   - push to `main`  →  preview  →  preview.runonward.com
+#
+# A preview deploy on push-to-main is supported by the rest of the
+# workflow (env=preview, ARN_PREVIEW, preview.runonward.com), but the
+# trigger is left out here because this fork doesn't have the AWS
+# Terraform stacks applied or the GitHub secrets populated — every
+# push to main would otherwise fail the configure-aws-credentials
+# step. Re-enable by adding `branches: [main]` under `push:` once the
+# AWS_DEPLOY_ROLE_ARN_PREVIEW + PUBLIC_* secrets exist (see
+# infra/README.md § First-time deploy).
 #
 # Hosted on AWS (S3 + CloudFront + Lambda + Route 53). Provisioned by
 # Terraform (infra/) — see decisions.md § 53 and apps/web/deployment.md.
@@ -20,8 +28,6 @@ on:
   push:
     tags:
       - 'web@*'
-    branches:
-      - main
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
