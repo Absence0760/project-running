@@ -1035,12 +1035,15 @@ BEGIN
     WHEN check_violation THEN NULL;
   END;
 
-  -- NULL is fine (no track yet).
+  -- NULL is fine (no track yet). Leave the test_run_id row with a
+  -- NULL track_url after the CHECK exercise — seed.sql does NOT
+  -- upload an actual Storage file for it, so a non-null canonical
+  -- track_url would make the dashboard / detail page's
+  -- `fetchTrack` 404 on Storage instead of returning [] for the
+  -- seed user. (The earlier comment about needing to "restore
+  -- canonical for the live_run_pings downstream test" was wrong —
+  -- that test only references `test_run_id`, never `track_url`.)
   UPDATE runs SET track_url = NULL WHERE id = test_run_id;
-
-  -- Restore canonical so downstream live_run_pings test has a valid run.
-  UPDATE runs SET track_url = test_user::text || '/' || test_run_id::text || '.json.gz'
-    WHERE id = test_run_id;
 END $$;
 
 -- ───────── run_photos.storage_path path-shape CHECK (migration 20260622_001) ─────────
