@@ -502,23 +502,50 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         applyUniversalPrefsAsync()
     }
 
-    /// Fetches `user_settings.prefs.default_activity_type` and applies
-    /// it to the pre-run picker, but ONLY when the user hasn't started
-    /// a run and hasn't manually re-picked an activity already. A
-    /// running / paused / finished stage means we'd be re-priming the
-    /// state mid-run, which is the wrong thing to do; a non-default
-    /// `activityType` means the user already touched the chip and
-    /// their choice wins.
+    /// Latest universal `privacy_default` ("public" / "followers" /
+    /// "private"), set after every session restore. Snapshotted onto
+    /// QueuedRun.isPublic at run-stop time so a later pref change can't
+    /// retroactively flip an already-recorded run's visibility.
+    /// `@Volatile` because reads land on the recording's coroutine
+    /// continuation and writes land on the universal-prefs fetch
+    /// continuation — they're never the same thread.
+    @Volatile
+    private var universalPrivacyDefault: String? = null
+
+    /// Fetches the universal-prefs bag and applies the relevant fields:
+    ///   - `default_activity_type` primes the pre-run picker chip (PreRun
+    ///     stage only, and only when the user hasn't already moved off
+    ///     the hardcoded default).
+    ///   - `privacy_default` is cached on the VM; `handleFinishedRun`
+    ///     reads it at stop-time so a watch-saved run respects the
+    ///     user's universal visibility default. The wrist can only
+    ///     write `is_public` (boolean), so `public → true` and
+    ///     `followers` / `private` → false. The phone/web social layer
+    ///     is the authoritative path for the `followers` nuance.
     private fun applyUniversalPrefsAsync() {
         viewModelScope.launch {
             val settings = supabase.fetchUniversalSettings() ?: return@launch
+            // privacy_default — stash regardless of stage; the snapshot
+            // matters at handleFinishedRun, which can run minutes or
+            // hours after the fetch returns.
+            universalPrivacyDefault = settings.privacyDefault
+            // default_activity_type — only prime; never override a
+            // started run or a manual chip choice.
             val preferred = settings.defaultActivityType ?: return@launch
             val s = _state.value
-            // Only prime — never override a started run or a manual choice.
             if (s.stage != Stage.PreRun) return@launch
             if (s.activityType != "run") return@launch
             _state.value = s.copy(activityType = preferred)
         }
+    }
+
+    /// Map the universal `privacy_default` ("public" / "followers" /
+    /// "private") to the wrist's boolean snapshot. Null when the bag
+    /// fetch hasn't returned or returned no value — caller omits the
+    /// column and the DB default (`false`) applies.
+    internal fun snapshotIsPublic(): Boolean? {
+        val v = universalPrivacyDefault ?: return null
+        return v == "public"
     }
 
     private suspend fun refreshIfExpired(s: StoredSession) {
@@ -776,6 +803,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = m.steps,
+                    // Snapshot the universal privacy default at stop time
+                    // so an in-flight queued run keeps its visibility
+                    // even if the user toggles the pref while the upload
+                    // is pending or while the watch is offline.
+                    isPublic = snapshotIsPublic(),
                 )
             )
             RecordingRepository.reset()
@@ -1001,6 +1033,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             distanceM = run.distanceM,
             trackFile = trackFile,
             metadata = metadata,
+            isPublic = run.isPublic,
         )
         // Once the track is safely in Storage, clear the cache file. On
         // retry paths we'll already be past this line (pushRun threw) so

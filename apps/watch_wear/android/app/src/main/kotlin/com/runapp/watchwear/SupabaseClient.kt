@@ -54,12 +54,19 @@ internal fun humanErrorMessage(code: Int, body: String): String {
 /// — the watch is a recording surface, not a settings surface, so
 /// only fields the recording loop or pre-run UX needs belong here.
 ///
-/// Today: `defaultActivityType` flows into the pre-run picker so a
-/// runner whose phone default is "walk" doesn't see "run" pre-armed
-/// on the wrist. Future scalar fields (e.g. resting_hr_bpm) would
-/// land here as additional nullable properties.
+/// Today:
+///   - `defaultActivityType` flows into the pre-run picker so a
+///     runner whose phone default is "walk" doesn't see "run"
+///     pre-armed on the wrist.
+///   - `privacyDefault` is stamped onto QueuedRun at stop-time so a
+///     watch-saved run respects the user's universal default. The
+///     mapping is `public → is_public=true`; `followers` /
+///     `private` / null → omit the column (DB default `false`
+///     wins). The phone/web social layer is the authoritative path
+///     for the `followers` nuance.
 data class UniversalSettings(
     val defaultActivityType: String?,
+    val privacyDefault: String?,
 )
 
 /// Allowed values for `default_activity_type`. Mirrors the CHECK
@@ -68,6 +75,12 @@ data class UniversalSettings(
 /// so the watch can never end up trying to record a `metadata
 /// .activity_type` Strava wouldn't recognise.
 internal val UNIVERSAL_ACTIVITY_TYPES = setOf("run", "walk", "hike", "cycle")
+
+/// Allowed values for `privacy_default`. Mirrors the editor on web +
+/// mobile (docs/settings.md: `'public' | 'followers' | 'private'`).
+/// Rogue / future / typo values fall back to null → DB default
+/// (`false`) wins on save.
+internal val UNIVERSAL_PRIVACY_DEFAULTS = setOf("public", "followers", "private")
 
 /// Pure parser for the PostgREST response body of
 /// `GET /rest/v1/user_settings?user_id=eq.<uid>&select=prefs&limit=1`.
@@ -83,14 +96,15 @@ internal fun parseUniversalSettings(body: String?): UniversalSettings? {
     return try {
         val arr = errorBodyJson.parseToJsonElement(body) as? JsonArray
             ?: return null
-        if (arr.isEmpty()) return UniversalSettings(defaultActivityType = null)
+        val empty = UniversalSettings(defaultActivityType = null, privacyDefault = null)
+        if (arr.isEmpty()) return empty
         val row = arr[0] as? JsonObject ?: return null
-        val prefs = row["prefs"] as? JsonObject
-            ?: return UniversalSettings(defaultActivityType = null)
-        val raw = prefs["default_activity_type"]?.jsonPrimitive?.contentOrNull
-            ?: return UniversalSettings(defaultActivityType = null)
-        val sanitised = if (raw in UNIVERSAL_ACTIVITY_TYPES) raw else null
-        UniversalSettings(defaultActivityType = sanitised)
+        val prefs = row["prefs"] as? JsonObject ?: return empty
+        val activity = prefs["default_activity_type"]?.jsonPrimitive?.contentOrNull
+            ?.takeIf { it in UNIVERSAL_ACTIVITY_TYPES }
+        val privacy = prefs["privacy_default"]?.jsonPrimitive?.contentOrNull
+            ?.takeIf { it in UNIVERSAL_PRIVACY_DEFAULTS }
+        UniversalSettings(defaultActivityType = activity, privacyDefault = privacy)
     } catch (_: Throwable) {
         null
     }
@@ -337,6 +351,14 @@ class SupabaseClient(
         distanceM: Double,
         trackFile: File,
         metadata: JsonObject?,
+        /// Snapshot of the user's `privacy_default` at run-stop time,
+        /// mapped to a boolean: `public → true`, `followers / private
+        /// → false`. Null omits the column so the DB default (`false`)
+        /// applies — same as a watch-saved run before the privacy_default
+        /// fetch existed. Stamped on QueuedRun rather than read at upload
+        /// time so a later pref change can't retroactively flip an
+        /// already-recorded run's visibility.
+        isPublic: Boolean? = null,
     ) {
         val token = accessToken ?: throw IllegalStateException("not authenticated")
         val uid = userId ?: throw IllegalStateException("not authenticated")
@@ -346,17 +368,18 @@ class SupabaseClient(
             val path = "$uid/$runId.json.gz"
             uploadTrack(path, gzFile, token)
 
-            val rowMap = mapOf(
-                RunRow.COL_ID to runId,
-                RunRow.COL_USER_ID to uid,
-                RunRow.COL_STARTED_AT to startedAtIso,
-                RunRow.COL_DURATION_S to durationS,
-                RunRow.COL_DISTANCE_M to distanceM,
-                RunRow.COL_SOURCE to "watch",
-                RunRow.COL_TRACK_URL to path,
-                RunRow.COL_METADATA to metadata,
-                RunRow.COL_EXTERNAL_ID to runId,
-            )
+            val rowMap = buildMap<String, Any?> {
+                put(RunRow.COL_ID, runId)
+                put(RunRow.COL_USER_ID, uid)
+                put(RunRow.COL_STARTED_AT, startedAtIso)
+                put(RunRow.COL_DURATION_S, durationS)
+                put(RunRow.COL_DISTANCE_M, distanceM)
+                put(RunRow.COL_SOURCE, "watch")
+                put(RunRow.COL_TRACK_URL, path)
+                put(RunRow.COL_METADATA, metadata)
+                put(RunRow.COL_EXTERNAL_ID, runId)
+                if (isPublic != null) put(RunRow.COL_IS_PUBLIC, isPublic)
+            }
             val body = encodeJsonMap(rowMap).toRequestBody(jsonMedia)
 
             val req = Request.Builder()

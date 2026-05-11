@@ -34,6 +34,13 @@ data class QueuedRun(
     /// `run.metadata.steps` on upload. Null when the device has no
     /// pedometer or the sensor never emitted.
     val steps: Int? = null,
+    /// Snapshot of the universal `privacy_default` at stop time,
+    /// mapped to a boolean: `public → true`; `followers` /
+    /// `private` / not-yet-fetched → false. Null omits the column
+    /// on upload so the DB default (`false`) wins — preserves the
+    /// pre-change behaviour for runs queued before this field
+    /// existed (kotlinx-serialization fills the default on decode).
+    val isPublic: Boolean? = null,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "watch_wear")
