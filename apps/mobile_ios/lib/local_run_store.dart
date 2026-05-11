@@ -298,11 +298,21 @@ class LocalRunStore extends ChangeNotifier {
 
   /// Load an in-progress run left over from a previous session, if any.
   /// Returns null when there's nothing to recover.
+  ///
+  /// The read + JSON decode runs in a background isolate via [compute].
+  /// For an ultra-length session (a 6 h+ run accumulates 20 k+ waypoints,
+  /// which serialises to ~1.5+ MB of JSON) the decode alone was a 300-
+  /// 500 ms UI stall on startup — long enough to push first-frame past
+  /// the typical app-launch budget. Moving it off-isolate keeps the
+  /// recovery transparent to the user. The final `Run.fromJson` call
+  /// stays on the calling isolate because the Run object needs to
+  /// cross back over anyway.
   Future<Run?> loadInProgress() async {
     final file = _inProgressFile;
     if (!file.existsSync()) return null;
     try {
-      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final data = await compute(_readAndDecodeJson, file.path);
+      if (data == null) return null;
       return Run.fromJson(data['run'] as Map<String, dynamic>);
     } catch (e) {
       debugPrint('Failed to load in-progress run: $e');
@@ -516,4 +526,18 @@ Future<void> _encodeAndWriteJson(Map<String, dynamic> args) async {
   final path = args['path'] as String;
   final data = args['data'] as Map<String, dynamic>;
   await File(path).writeAsString(jsonEncode(data));
+}
+
+/// Top-level helper invoked via [compute] so the heavy `readAsString` +
+/// `jsonDecode` of an ultra-length in-progress save doesn't stall the UI
+/// isolate at app launch (the recovery path runs synchronously before
+/// `runApp`). Returns the parsed top-level map, or `null` when the file
+/// doesn't exist by the time the isolate runs (e.g. a concurrent crash
+/// cleanup deleted it between the existsSync check and here — rare but
+/// possible).
+Future<Map<String, dynamic>?> _readAndDecodeJson(String path) async {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  final raw = await file.readAsString();
+  return jsonDecode(raw) as Map<String, dynamic>;
 }

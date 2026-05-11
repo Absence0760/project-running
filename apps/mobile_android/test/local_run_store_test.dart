@@ -185,6 +185,86 @@ void main() {
       final loaded = await store.loadInProgress();
       expect(loaded?.distanceMetres, 500);
     });
+
+    test(
+        'ultra-length crash-resume roundtrip preserves every waypoint + '
+        'every field (25 000 points, ~7 h @ 1 Hz)', () async {
+      // The followup that motivated this test ("Long-runs >6 h need a
+      // crash-resume guarantee — the resume path may not reconstruct
+      // the full track for very long sessions") was speculative.
+      // Pin the behaviour with a real fixture: 25 000 waypoints,
+      // every field populated (lat / lng / ele / timestamp / bpm),
+      // so a future regression in the encoder, the decoder, or the
+      // background-isolate plumbing surfaces here instead of in the
+      // field on the day an athlete loses their 100-miler.
+      final base = DateTime(2026, 5, 11, 5);
+      final track = [
+        for (var i = 0; i < 25000; i++)
+          Waypoint(
+            // Slight drift so the lat/lng aren't degenerate constants
+            // — catches a "we only kept the first" truncation bug.
+            lat: 47.37 + i * 1e-7,
+            lng: 8.54 + i * 1e-7,
+            elevationMetres: 400.0 + (i % 100),
+            timestamp: base.add(Duration(seconds: i)),
+            bpm: 120 + (i % 60),
+          ),
+      ];
+      final original = Run(
+        id: 'ultra-stress',
+        startedAt: base,
+        duration: const Duration(hours: 6, minutes: 56, seconds: 39),
+        distanceMetres: 70_400, // 70.4 km
+        track: track,
+        source: RunSource.app,
+        metadata: const {
+          'activity_type': 'run',
+          'indoor_estimated': false,
+          'steps': 84210,
+        },
+      );
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveInProgress(original);
+
+      // Sanity: the file actually grew to ~1.5 MB+. A silent encoder
+      // truncation would surface here as a much smaller file.
+      final bytes = await File('${tempDir.path}/in_progress.json').length();
+      expect(bytes, greaterThan(1_500_000),
+          reason: '25 000 waypoints with full field set must serialise '
+              'past ~1.5 MB — anything smaller signals an encoder cut-off');
+
+      final loaded = await store.loadInProgress();
+      expect(loaded, isNotNull);
+      // Shape preservation.
+      expect(loaded!.id, original.id);
+      expect(loaded.startedAt, original.startedAt);
+      expect(loaded.duration, original.duration);
+      expect(loaded.distanceMetres, original.distanceMetres);
+      expect(loaded.source, original.source);
+      // Track count must match exactly — even a one-off truncation
+      // (e.g. an off-by-one in a streaming JSON parser) breaks this.
+      expect(loaded.track.length, 25000,
+          reason: 'loadInProgress must return every saved waypoint');
+      // Spot-check first, last, and a middle waypoint so a partial
+      // corruption (e.g. mid-track byte flip) is caught.
+      for (final idx in const [0, 12345, 24999]) {
+        final o = original.track[idx];
+        final l = loaded.track[idx];
+        expect(l.lat, closeTo(o.lat, 1e-12), reason: 'lat at $idx');
+        expect(l.lng, closeTo(o.lng, 1e-12), reason: 'lng at $idx');
+        expect(l.elevationMetres, o.elevationMetres,
+            reason: 'ele at $idx');
+        expect(l.timestamp, o.timestamp, reason: 'timestamp at $idx');
+        expect(l.bpm, o.bpm, reason: 'bpm at $idx');
+      }
+      // Metadata survives end-to-end too — the recovery path stamps
+      // `recovered_from_crash: true` on top of whatever was saved, so
+      // we want the rest of the keys intact.
+      expect(loaded.metadata?['activity_type'], 'run');
+      expect(loaded.metadata?['steps'], 84210);
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 
   group('edge cases', () {
