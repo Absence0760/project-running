@@ -602,6 +602,62 @@ void main() {
     });
   });
 
+  group('reviewMetadata (crash-checkpoint contract)', () {
+    test('returns empty when planWorkoutId is null', () {
+      final runner = WorkoutRunner(steps: [_step(distance: 400)]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 200, elapsedSec: 60));
+      expect(runner.reviewMetadata(planWorkoutId: null), isEmpty);
+      runner.dispose();
+    });
+
+    test('emits the three registered keys when active', () {
+      final runner = WorkoutRunner(steps: [_step(distance: 400)]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 200, elapsedSec: 60));
+      final meta = runner.reviewMetadata(planWorkoutId: 'workout-1');
+      expect(meta, containsPair('plan_workout_id', 'workout-1'));
+      expect(meta['workout_step_results'], isA<List>());
+      expect(meta, containsPair('workout_adherence', isA<String>()));
+      runner.dispose();
+    });
+
+    test('in-progress snapshot reads as adherence=partial', () {
+      // 2 steps, runner halfway through step 0 — snapshotResults returns
+      // step 0 as in-progress (skipped). Adherence must be partial.
+      final runner = WorkoutRunner(steps: [
+        _step(distance: 400),
+        _step(distance: 400),
+      ]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 150, elapsedSec: 40));
+      final meta = runner.reviewMetadata(planWorkoutId: 'workout-1');
+      expect(meta['workout_adherence'], 'partial');
+      // step_index 0 present, marked skipped (in-progress).
+      final results = meta['workout_step_results'] as List;
+      expect(results, hasLength(1));
+      expect(results.first['status'], 'skipped',
+          reason: 'mid-step crash should land the active step as skipped '
+              'so a recovered run shows the user where they stopped');
+    });
+
+    test('abandoned workout reads as adherence=abandoned', () {
+      final runner = WorkoutRunner(steps: [_step(distance: 400)]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.abandon();
+      final meta = runner.reviewMetadata(planWorkoutId: 'workout-1');
+      expect(meta['workout_adherence'], 'abandoned');
+    });
+
+    test('fully completed workout reads as adherence=completed', () {
+      final runner = WorkoutRunner(steps: [_step(distance: 400)]);
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 400, elapsedSec: 120));
+      final meta = runner.reviewMetadata(planWorkoutId: 'workout-1');
+      expect(meta['workout_adherence'], 'completed');
+    });
+  });
+
   group('Pace adherence', () {
     test('flags wayBehind when 35s/km off target', () {
       final runner = WorkoutRunner(steps: [_step(distance: 400, pace: 240)]);

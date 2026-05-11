@@ -1111,6 +1111,17 @@ class _RunScreenState extends State<RunScreen> {
       if (indoorEstimate) 'distance_source': 'pedometer',
       if (_steps > 0) 'steps': _steps,
     };
+    // Workout review trail — written here so a crash mid-workout
+    // surfaces the planned-vs-actual table on the recovered run.
+    // Empty map when no runner is active or no plan_workout_id is
+    // linked. Mirrors the same call in _finishRun. See docs/followups
+    // for the 7d "Crash-checkpoint resume for workouts" item.
+    final runner = _workoutRunner;
+    final activeWorkoutId = _activeWorkoutId ?? widget.initialWorkout?.id;
+    metadata.addAll(
+      runner?.reviewMetadata(planWorkoutId: activeWorkoutId) ??
+          const <String, dynamic>{},
+    );
     final run = cm.Run(
       id: id,
       startedAt: startedAt,
@@ -1265,18 +1276,14 @@ class _RunScreenState extends State<RunScreen> {
     // them to render a planned-vs-actual table. _activeWorkoutId
     // covers both the in-app "tap card → load runner" entry and the
     // pass-as-prop entry; metadata is written whenever a runner ran.
+    // The same helper runs in _saveInProgress so a crashed mid-workout
+    // run keeps its review trail on recovery (decisions §7d / followups).
     final runner = _workoutRunner;
     final activeWorkoutId = _activeWorkoutId ?? widget.initialWorkout?.id;
-    if (runner != null && activeWorkoutId != null) {
-      metadata['plan_workout_id'] = activeWorkoutId;
-      metadata['workout_step_results'] =
-          runner.snapshotResults().map((r) => r.toJson()).toList();
-      metadata['workout_adherence'] = switch (runner.adherence()) {
-        WorkoutAdherence.completed => 'completed',
-        WorkoutAdherence.partial => 'partial',
-        WorkoutAdherence.abandoned => 'abandoned',
-      };
-    }
+    metadata.addAll(
+      runner?.reviewMetadata(planWorkoutId: activeWorkoutId) ??
+          const <String, dynamic>{},
+    );
 
     // Prefer the stable id generated at _begin() over the recorder's
     // stop-time uuid so the saved run matches any incremental in-progress

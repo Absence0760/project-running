@@ -217,6 +217,42 @@ void main() {
       );
     });
 
+    test('_saveInProgress stamps workout review metadata', () {
+      // Reason: a crash mid-workout must preserve the planned-vs-actual
+      // review trail. The in-progress save path calls
+      // `WorkoutRunner.reviewMetadata` so the recovered run lands with
+      // `plan_workout_id`, `workout_step_results`, and
+      // `workout_adherence` already on its metadata bag. If a future
+      // refactor removes the call from _saveInProgress, a crashed
+      // workout silently drops the review trail again. (7d in followups)
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _saveInProgress\(\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('reviewMetadata'),
+        reason: '_saveInProgress must call WorkoutRunner.reviewMetadata '
+            'so a crashed workout keeps its review on recovery.',
+      );
+    });
+
+    test('_stop stamps workout review metadata via the same helper', () {
+      // Reason: pairs with the in-progress save guard above. Both call
+      // sites must use the same helper so a final save and a crash-
+      // recovered partial save produce identical metadata shape.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _stop\(\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('reviewMetadata'),
+        reason: '_stop must call WorkoutRunner.reviewMetadata — '
+            'keeps the contract symmetric with _saveInProgress.',
+      );
+    });
+
     test('_onPrefsChange skips rebuilds during recording', () {
       // Reason: runStore.notifyListeners() fires every 10s via
       // _saveInProgress. Without this gate, we'd get a full-screen

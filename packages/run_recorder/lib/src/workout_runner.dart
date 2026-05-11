@@ -295,6 +295,32 @@ class WorkoutRunner {
     return anyShort ? WorkoutAdherence.partial : WorkoutAdherence.completed;
   }
 
+  /// Build the `runs.metadata` entries for the workout review trail —
+  /// `plan_workout_id`, `workout_step_results`, `workout_adherence`.
+  /// Returns an empty map when [planWorkoutId] is null (no linked
+  /// workout, nothing to record).
+  ///
+  /// Called from both the in-progress save path (so a crash mid-workout
+  /// preserves the planned-vs-actual table on the recovered run) and
+  /// the final save path on stop. Reading [snapshotResults] mid-run is
+  /// safe — it already includes the in-progress step as a `skipped`
+  /// row, which is exactly what we want for the crash case: the user
+  /// sees they were partway through that rep when the app died, and
+  /// adherence reads as `partial`.
+  Map<String, dynamic> reviewMetadata({required String? planWorkoutId}) {
+    if (planWorkoutId == null) return const <String, dynamic>{};
+    return <String, dynamic>{
+      'plan_workout_id': planWorkoutId,
+      'workout_step_results':
+          snapshotResults().map((r) => r.toJson()).toList(),
+      'workout_adherence': switch (adherence()) {
+        WorkoutAdherence.completed => 'completed',
+        WorkoutAdherence.partial => 'partial',
+        WorkoutAdherence.abandoned => 'abandoned',
+      },
+    };
+  }
+
   void dispose() {
     _events.close();
   }
