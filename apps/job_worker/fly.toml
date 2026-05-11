@@ -85,8 +85,15 @@ cpus = 1
 #   SUPABASE_URL                  — Supabase API endpoint
 #   SUPABASE_SERVICE_ROLE_KEY     — used by both the worker (jobs)
 #                                   and the hub's SupabaseZoneFetcher
-#                                   (privacy zones).
+#                                   (privacy zones) + SupabaseRunMetaFetcher
+#                                   (authorizer).
+#   SUPABASE_JWT_SECRET           — used by the hub's JWTAuthorizer to
+#                                   verify the recorder's bearer token
+#                                   on /push. Without it the hub falls
+#                                   back to permissive (dev) mode and
+#                                   refuses to accept production traffic.
 # Set with:
 #   flyctl secrets set --app job_worker \
 #     SUPABASE_URL=https://<ref>.supabase.co \
-#     SUPABASE_SERVICE_ROLE_KEY=eyJ...
+#     SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+#     SUPABASE_JWT_SECRET=...   # Studio → Project Settings → API → JWT Secret

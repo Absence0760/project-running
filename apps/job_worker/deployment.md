@@ -120,10 +120,13 @@ cpus = 1
 ```bash
 flyctl secrets set --app job_worker \
   SUPABASE_URL="https://<ref>.supabase.co" \
-  SUPABASE_SERVICE_ROLE_KEY="..."
+  SUPABASE_SERVICE_ROLE_KEY="..." \
+  SUPABASE_JWT_SECRET="..."   # Studio → Project Settings → API → JWT Secret
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` is **dual-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`) AND the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping. One secret, one identity — there's no per-concern split.
+`SUPABASE_SERVICE_ROLE_KEY` is **multi-use**: the worker reads it to claim jobs (PostgREST RPCs `claim_next_job` / `finish_job` / `defer_job` are granted only to `service_role`), the live hub reads it via `SupabaseZoneFetcher` to fetch a runner's privacy zones for server-side ping clipping, AND it powers `SupabaseRunMetaFetcher` (the per-room `(user_id, is_public)` lookup that backs the JWT authorizer). One secret, one identity — there's no per-concern split.
+
+`SUPABASE_JWT_SECRET` is the HS256 signing key the Supabase project mints user tokens with — the hub's `JWTAuthorizer` verifies the recorder's bearer token against it. **The hub refuses to accept production traffic without this set** — when `SUPABASE_JWT_SECRET` is empty the authorizer is nil and the hub falls back to permissive mode (everything allowed), which is fine for the local smoke flow but a hard blocker for the public route. Set it before running `flyctl deploy` and confirm the boot log shows `livehub auth: enabled (Supabase JWT)`.
 
 `OSRM_URL` and `LIVEHUB_ALLOWED_ORIGINS` are in `[env]` (not secrets) because the values themselves are non-sensitive and we want them visible in `flyctl status`.
 
@@ -213,17 +216,34 @@ Both clients pick up the new transport on next launch. Old builds with the env u
 
 **A Supabase outage drops the ping rather than risk leaking a home coordinate.** The response is `{ok:false, clipped:true, reason:"zone fetch failed"}`. The mobile broadcaster swallows this per the L4 best-effort contract — the run still records locally and uploads when the network recovers; only the live spectator stream goes dark. This mirrors the `live_run_pings_drop_in_zone` BEFORE-INSERT trigger on the Supabase Realtime path so both transports honour the same contract.
 
+### Auth contract
+
+Enforced by `apps/job_worker/internal/livehub/auth.go` when `SUPABASE_JWT_SECRET` is set:
+
+| Action | Public run | Private run |
+|---|---|---|
+| `POST /v1/live/{id}/push` | **Owner-only** (Bearer JWT, `sub == runs.user_id`). No anon path even on public runs — the recorder is the single legitimate publisher. | Owner-only. |
+| `GET /v1/live/{id}/subscribe` (WS) | Anon allowed. | Owner-only (Bearer JWT, `sub == runs.user_id`). |
+| `GET /v1/live/{id}/snapshot` | Anon allowed. | Owner-only. |
+
+A `runs` row that doesn't exist denies — the hub refuses to register a phantom room for a runID Supabase has never seen. The per-room run-meta cache means the Supabase lookup runs at most once per active run; the hot publisher's per-5s push is a single map hit thereafter.
+
+Token verification uses HS256 with the Supabase project's JWT secret. `alg:none` is rejected — `golang-jwt/jwt/v5` is configured with `WithValidMethods([]string{"HS256"})` so a forged token claiming `alg:none` fails before the secret is even consulted. Expired tokens are rejected. The 16 `auth_test.go` cases pin all of this in place.
+
 ### Hub deploy checklist
 
+- [ ] `SUPABASE_JWT_SECRET` set as a Fly secret (Studio → Project Settings → API → JWT Secret)
 - [ ] `flyctl deploy --remote-only` from `apps/job_worker/` (or push a `worker@*` tag once `release-worker.yml` lands)
+- [ ] Boot log shows `livehub auth: enabled (Supabase JWT)` — if it says DISABLED, the env var didn't land
 - [ ] `flyctl certs add live.runonward.com --app job_worker` and Route 53 record pointing at it
 - [ ] `flyctl certs show live.runonward.com` shows a valid Let's Encrypt cert
 - [ ] `curl https://live.runonward.com/health` returns `{"status":"ok"}`
-- [ ] Smoke push: `curl -X POST https://live.runonward.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` returns `{"ok":true,"fanout":0}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
+- [ ] Smoke push without auth → 403: `curl -i -X POST https://live.runonward.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` — production must reject this
+- [ ] Smoke push with the seed user's JWT → 202 with `{ok:true,...}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
 - [ ] WS Origin allow-list (`LIVEHUB_ALLOWED_ORIGINS` in `[env]`) covers every host that will subscribe (prod web + preview web + any dev tunnel that needs to be tested against prod)
 - [ ] `PUBLIC_LIVE_HUB_URL` set in the web prod sops blob, redeployed
 - [ ] `LIVE_HUB_URL` set in the next mobile release builds
-- [ ] After the cutover, watch `flyctl logs --app job_worker` for a session — confirm zone-clip drop counts look sane (not 100 %, not 0 %)
+- [ ] After the cutover, watch `flyctl logs --app job_worker` for a session — confirm zone-clip drop counts look sane (not 100 %, not 0 %), and that 403s only come from genuinely unauthenticated traffic (curl probes / bots) and not from legit recorders
 
 ---
 

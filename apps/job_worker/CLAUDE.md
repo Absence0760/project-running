@@ -25,10 +25,16 @@ Edge Functions move per [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
    `internal/livehub/`. Today the buffer is an in-process map keyed
    by run_id; the roadmap calls for Upstash Redis pub/sub with a 24h
    TTL — the swap is mechanical because the Hub's Publish + Subscribe
-   surface is the only touchpoint. Auth is left permissive in this
-   slice; production sets `Server.Authorizer` to verify Supabase JWTs
-   (recorder must own the run for push; spectators must be the owner
-   or the run must be `is_public=true`). **Privacy zones** are
+   surface is the only touchpoint. **Auth** is enforced by
+   `livehub.JWTAuthorizer` (HS256 over `SUPABASE_JWT_SECRET`) when
+   that env var is set: pushes are owner-only (no anon path even on
+   public runs); subscribes/snapshots are anon for `is_public=true`
+   runs and owner-only otherwise; missing or expired tokens 403;
+   unknown run ids 403; tokens signed with the wrong key 403. The
+   `(user_id, is_public)` lookup is cached per-room via
+   `Hub.LoadRunMeta` so a hot publisher's per-5s push is one map
+   hit after warm-up. When `SUPABASE_JWT_SECRET` is empty the
+   authorizer is nil — permissive mode, dev-only. **Privacy zones** are
    enforced server-side: `Server.shouldDrop` runs
    `IsInAnyZone(p.lat, p.lng, room.zones)` on every `/push`. Zones
    are fetched once per room via `SupabaseZoneFetcher` and cached
@@ -50,9 +56,9 @@ Edge Functions move per [`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
 - Additional job kinds — extend the switch in `Worker.dispatch` and
   add the matching trigger / migration in `apps/backend/`.
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
-  with a Redis pub/sub-backed variant), Supabase JWT auth plumbing
-  (fill in `livehub.Server.Authorizer`), per-run ring buffer for
-  late-joiner replay of more than the most recent ping.
+  with a Redis pub/sub-backed variant), per-run ring buffer for
+  late-joiner replay of more than the most recent ping, JWKS-based
+  JWT verification if Supabase migrates the project off HS256.
 - Operational concerns — backoff tuning, Prometheus metrics, leader
   election if multiple workers don't suffice. None shipped today.
 
@@ -86,11 +92,14 @@ apps/job_worker/
 │   ├── worker_test.go       # table-driven test using a fake Backend
 │   └── livehub/             # live spectator pub/sub + HTTP + WebSocket
 │       ├── types.go         # Ping wire shape
-│       ├── hub.go           # in-process subscribe / publish / GC + per-room zone cache
+│       ├── hub.go           # in-process subscribe / publish / GC + per-room zone + run-meta cache
 │       ├── hub_test.go      # 10 hub unit tests, race-clean
 │       ├── privacy.go       # PrivacyZone + IsInAnyZone (haversine)
 │       ├── privacy_test.go  # 8 privacy unit tests
 │       ├── zones.go         # ZoneFetcher iface + SupabaseZoneFetcher
+│       ├── runmeta.go       # RunMeta + RunMetaFetcher + SupabaseRunMetaFetcher (authorizer's lookup)
+│       ├── auth.go          # JWTAuthorizer — Supabase HS256 JWT verify + owner check
+│       ├── auth_test.go     # 16 unit + 1 end-to-end test for the authorizer
 │       ├── server.go        # HTTP routes for /v1/live/{run_id}/* + zone clip
 │       └── server_test.go   # 16 httptest + WebSocket integration tests
 ├── osrm/                    # local OSRM dev stack (compose + Makefile)

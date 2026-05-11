@@ -98,15 +98,32 @@ func main() {
 		ServiceKey: serviceKey,
 		HTTP:       client.HTTP, // reuse the worker's pooled client
 	}
+	// JWT authorizer for the live hub. Source of truth is the
+	// Supabase project's JWT secret (HS256). When SUPABASE_JWT_SECRET
+	// is set the authorizer enforces:
+	//   - push       : Bearer JWT required + sub == runs.user_id
+	//   - subscribe  : owner-only on private runs, anon on public
+	//   - snapshot   : same as subscribe
+	// When unset the authorizer is nil and the hub stays permissive
+	// (dev path). Production deploys MUST set the secret — fly.toml
+	// + deployment.md document this.
+	runMetaFetcher := &livehub.SupabaseRunMetaFetcher{
+		BaseURL:    baseURL,
+		ServiceKey: serviceKey,
+		HTTP:       client.HTTP,
+	}
+	authorizer := livehub.NewJWTAuthorizer(os.Getenv("SUPABASE_JWT_SECRET"), hub, runMetaFetcher)
 	hubSrv := &livehub.Server{
 		Hub:            hub,
 		Log:            logger.With("component", "livehub"),
 		AllowedOrigins: parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS")),
 		Zones:          zoneFetcher,
-		// Authorizer left nil for the first slice → permissive.
-		// Production must plug in a Supabase JWT verifier here
-		// before enabling the public route — see server.go's
-		// Authorizer field doc for the policy.
+	}
+	if authorizer != nil {
+		hubSrv.Authorizer = authorizer.Authorize
+		logger.Info("livehub auth: enabled (Supabase JWT)")
+	} else {
+		logger.Warn("livehub auth: DISABLED — SUPABASE_JWT_SECRET unset; permissive mode is for local dev only")
 	}
 
 	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv)

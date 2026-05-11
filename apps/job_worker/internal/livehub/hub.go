@@ -60,6 +60,13 @@ type room struct {
 	// fetched, broadcaster has no zones.
 	zonesLoaded bool
 	zones       []PrivacyZone
+	// Cached run metadata (`user_id`, `is_public`) for the
+	// authorizer. Same lifecycle as zones — loaded once, kept for
+	// the room's lifetime, dropped along with the room on GC.
+	// `meta == nil` after load means the run row doesn't exist (the
+	// authorizer denies in that case to prevent ghost broadcasts).
+	runMetaLoaded bool
+	runMeta       *RunMeta
 }
 
 type subscriber struct {
@@ -208,6 +215,41 @@ func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) 
 		r.zones = zones
 	}
 	out := append([]PrivacyZone(nil), r.zones...)
+	r.mu.Unlock()
+	return out, nil
+}
+
+// LoadRunMeta populates the room's run-metadata cache (if not yet
+// loaded) via the supplied [RunMetaFetcher], then returns the cached
+// value. Idempotent — a second call with a populated cache returns
+// the existing pointer. The fetcher is only invoked at most once per
+// room. A fetcher error is returned verbatim; the caller (authorizer
+// path) is expected to deny on error.
+//
+// A nil return with nil error means the fetch succeeded but the run
+// row doesn't exist — callers should treat this as "deny" to keep a
+// caller from booking a room against a fictional run id.
+func (h *Hub) LoadRunMeta(ctx context.Context, runID string, fetcher RunMetaFetcher) (*RunMeta, error) {
+	r := h.roomFor(runID, true)
+	r.mu.Lock()
+	if r.runMetaLoaded {
+		meta := r.runMeta
+		r.mu.Unlock()
+		return meta, nil
+	}
+	r.mu.Unlock()
+
+	meta, err := fetcher.RunMeta(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	r.mu.Lock()
+	if !r.runMetaLoaded {
+		r.runMetaLoaded = true
+		r.runMeta = meta
+	}
+	out := r.runMeta
 	r.mu.Unlock()
 	return out, nil
 }
