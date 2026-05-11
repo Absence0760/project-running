@@ -55,39 +55,42 @@
     "packageJson": {
       "dependencies": [
         "npm:html-to-image@^1.11.13"
-      ]
+      ],
+      "overrides": {
+        "cookie": "^1.0.2"
+      }
     },
     "members": {
       "apps/web": {
         "packageJson": {
           "dependencies": [
-            "npm:@anthropic-ai/sdk@0.92",
-            "npm:@iconify-json/material-symbols@1.2.69",
+            "npm:@anthropic-ai/sdk@~0.95.1",
+            "npm:@iconify-json/material-symbols@1.2.70",
             "npm:@playwright/test@^1.59.1",
-            "npm:@revenuecat/purchases-js@^1.38.0",
-            "npm:@sentry/sveltekit@10",
-            "npm:@supabase/ssr@0.10",
+            "npm:@revenuecat/purchases-js@^1.39.1",
+            "npm:@sentry/sveltekit@^10.52.0",
+            "npm:@supabase/ssr@~0.10.3",
             "npm:@supabase/supabase-js@^2.105.0",
             "npm:@sveltejs/adapter-static@3.0.10",
             "npm:@sveltejs/adapter-vercel@6.3.3",
-            "npm:@sveltejs/kit@2.59.0",
-            "npm:@sveltejs/vite-plugin-svelte@7.0.0",
-            "npm:@types/aws-lambda@8.10.150",
-            "npm:@types/node@^25.6.0",
-            "npm:esbuild@0.27.0",
-            "npm:fit-file-parser@^2.3.3",
+            "npm:@sveltejs/kit@2.59.1",
+            "npm:@sveltejs/vite-plugin-svelte@7.1.2",
+            "npm:@types/aws-lambda@8.10.161",
+            "npm:@types/node@^25.6.2",
+            "npm:esbuild@0.28.0",
+            "npm:fit-file-parser@3",
             "npm:html-to-image@^1.11.13",
-            "npm:isomorphic-dompurify@3",
+            "npm:isomorphic-dompurify@^3.12.0",
             "npm:jszip@^3.10.1",
             "npm:maplibre-gl@^5.24.0",
             "npm:marked@^18.0.3",
             "npm:mdsvex@~0.12.7",
             "npm:normalize.css@8.0.1",
-            "npm:svelte-check@4.4.7",
+            "npm:svelte-check@4.4.8",
             "npm:svelte@5.55.5",
             "npm:typescript@6.0.3",
             "npm:unplugin-icons@23.0.1",
-            "npm:vite@8.0.10"
+            "npm:vite@8.0.11"
           ]
         }
       }
