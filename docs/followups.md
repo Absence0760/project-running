@@ -1,0 +1,120 @@
+---
+name: Gap-closure follow-ups
+description: Outstanding work after the 2026-05-10 gap-closure session. Mirrors `roadmap.md` in spirit — checkboxes, brief context, no doc-rot. Prune entries as they land.
+---
+
+# Gap-closure follow-ups
+
+Session of 2026-05-10 ran through the four highest-priority test-coverage gaps from `docs/testing.md` "What's not covered" and closed three of them plus a CI gap and four production bugs (see "What landed" below). The pending work below is what remains.
+
+Pick up cold by reading this file + `docs/testing.md` "What's *not* covered" — both should reflect current state.
+
+## What landed this session
+
+**Tests + CI infrastructure (8 commits):**
+- `pgtap-rls` CI job — gates the full 279-test pgTAP RLS suite on every PR
+- 7 new pgtap suites (route_reviews, segments, clubs, club_members, club_posts, events, event_attendees) — closes the original "still uncovered tables" list
+- `api-client-integration` CI job — boots local Supabase + runs `flutter test` against the seed user; covers the five priority `ApiClient` wire-level methods (signIn / getRuns / saveRun + _uploadTrack / fetchTrack)
+- `SocialService.withClient` + `TrainingService.withClient` DI seams + 5 wire-level integration tests on the same CI job
+- `edge-functions` CI job — boots `supabase functions serve --env-file`, runs 9 HTTP-level handler-envelope tests for refresh-tokens / strava-webhook / revenuecat-webhook + the pre-existing pure-helper deno tests that had no CI coverage
+
+**Production bugs fixed:**
+1. `is_route_visible_to` revoke from anon (migration 20260711_001) broke anon SELECT on `route_reviews` + `segments` — PG 17.6 manifested it as a backend SIGSEGV instead of clean 42501. Fixed by moving the function to the `private` schema and granting anon EXECUTE (migration 20260819_001, mirrors the parallel for `is_run_visible_to`).
+2. `club_posts` had three INSERT policies stacking; the older two (`admins can post top-level` + `active members can reply`) had been dead code since 20260428_001's `members can post` catch-all landed. Cleanup migration 20260820_001.
+3. `ApiClient._uploadTrack` + `uploadTrackBytes` set `contentType: application/json` for gzipped JSON bytes — every live-recording save on mobile was 415'ing silently against the runs-bucket MIME allowlist (migration 20260815_001). Fixed.
+4. `seed.sql` "restored canonical" `track_url` after the path-shape CHECK exercise, leaving an orphaned URL pointing at a non-existent Storage file. Any dev using the seed user got fetchTrack 404s. Fixed.
+5. `hmacHex` RFC 4868 reference-vector test had been silently wrong since written — the body construction UTF-8-expanded each 0xcd byte into `c3 8d`. Refactored hmacHex to accept `Uint8Array` so byte-exact tests actually represent the bytes they claim.
+
+## Carry-over from "completed" tasks
+
+These tasks are marked completed at the high-leverage surface but have known sub-gaps left for follow-up.
+
+### Mobile testing gaps (from session task #3)
+
+- [ ] **RunScreen Finish + save UI test.** Tried during the session; reverted. The existing widget-test scaffold doesn't fully initialise `RunRecorder` from `run_recorder` so `_stop()` doesn't produce a row in `LocalRunStore`. Needs additional platform-channel mocks for whatever the recorder depends on at start time. Data-pipeline equivalent (`recording_integration_test.dart`) IS covered — only the UI Finish-tap surface remains uncovered.
+- [ ] **Device-instrumented `integration_test` harness.** None exist today. Would close real-device coverage for tile-cache, foreground-service, and background-sync paths that need actual Android primitives. New infrastructure.
+- [ ] **Widen the `SocialService` / `TrainingService` wire-level suite.** The seam + 5-test scaffold is in place (`services_integration_test.dart`); adding new tests is one block per method. ~25 untested Supabase-touching methods across both services. Bug-discovery yield: probably moderate — the 5 existing tests passed first try, so this surface is more correct than the ApiClient one was.
+
+### Edge Function tests (from session task #4)
+
+- [ ] **OSRM smoke test in CI.** Genuinely blocked on free-runner capacity — the OSM PBF extract + osrm-extract memory pressure don't fit. Real options: self-hosted runner, or a pre-built OSRM cache in S3 the workflow downloads. Both are infra decisions outside the code.
+- [ ] **Positive-path Edge Function tests.** Current handler-envelope suite only covers auth-rejection branches. Adding 200-on-valid-HMAC / replay-protection-dedupe / freshness-window tests needs real secret values in the test config — straightforward to add once we decide on a CI-side secret config strategy.
+
+## Pending tasks (session-order)
+
+### #5 Phase 1+2b ops
+
+- [ ] **MapTiler API usage monitoring** (Phase 1, roadmap.md). Likely needs cloud-console access — set up alerting on tile-request rate against the MapTiler dashboard or via a CloudWatch metric on the CloudFront distribution that proxies tiles.
+- [ ] **Verify dashboard queries are under 2 s for users with 200+ runs** (Phase 2b, roadmap.md). Seed a fat fixture via the service-role bulk insert; measure `fetchRuns(limit: 50)` + the dashboard's weekly-mileage / PR queries with `EXPLAIN ANALYZE`; add indexes if anything's slow.
+
+### #6 Android residuals (parity.md follow-ups)
+
+- [ ] Ultra-length recording (mobile_android backlog #117 — long-runs >6 h crash-resume guarantee)
+- [ ] Club-template publish action (`Partial` → `✓`) — admin button on `plan_detail_screen` to publish into a club's templates list
+- [ ] Club-owned-route admin transfer / detach UI on `route_detail_screen`
+- [ ] Device-override "+ Add override" sheet in Settings → Devices (the typed-editor entry point for new keys; existing-key edits already work)
+- [ ] Pro native RevenueCat purchase sheet + native donate (`purchases_flutter` mobile Pro flow)
+- [ ] Full-screen route builder (mobile click-to-place + OSRM snap + elevation-preview-while-drawing — see `mobile_android_backlog.md` Route-management section)
+- [ ] Auto-link unmatched run to saved route on save
+- [ ] Map-matched track display (gated on Map-matching deploy under #14)
+- [ ] Per-point BPM HR-zone view from the phone recorder
+
+### #7 Workout execution v2
+
+Per `docs/workout_execution.md` deferred section:
+- [ ] `rewindStep` UI control
+- [ ] Ghost-pacer marker on the map
+- [ ] Duration-based steps (v2)
+- [ ] Crash-checkpoint resume
+
+### #8 In-app route builder (mobile)
+
+Phase 3 "In-app route builder (free)" — 4 unchecked items in `roadmap.md`. Web has it at `/routes/new`; mobile needs the equivalent. Largely subsumed by Android residuals "full-screen route builder."
+
+### #9 Push notifications + Monetisation
+
+- [ ] **FCM (Android) + APNs (iOS) push notifications.** Phase 4b. Blocked on Firebase / APNs credentials being set up — both the platform creds AND `VAPID_PRIVATE_KEY` for the web Push API.
+- [ ] **Mobile Pro purchase flow.** `purchases_flutter` RevenueCat native sheet on Android + iOS, plus the donate hand-off via in-app browser. Phase 3 monetisation.
+
+### #10 External integrations
+
+Phase 3 "External platform sync" — entire table is `[ ]` in roadmap.md:
+- [ ] HealthKit (iOS)
+- [ ] Health Connect (Android)
+- [ ] Strava OAuth + sync (Edge Function `strava-import` exists, not wired into client)
+- [ ] Garmin (multi-day Developer Program application + OAuth)
+- [ ] parkrun athlete-number import (Edge Function `parkrun-import` exists, not wired into client UI)
+- [ ] RunSignUp
+
+### #11 Platform parity (multi-platform)
+
+- [ ] **iOS** — the byte-identical Dart codebase is there; almost every parity.md row still `✗` or `Partial` pending Mac-build runtime verification. High-leverage gaps: GPX/KML/TCX import, recording verification, run history surface, social, settings, Strava/parkrun wiring, BLE HR pairing, share-as-image, public/private toggle, Apple Sign-In Services-ID.
+- [ ] **Apple Watch** — route nav visuals, ultra-length stress, live race participant, complication target wiring (Xcode Widget Extension), activity types, lap markers, hold-to-stop, TTS cues, pedometer, GPS self-heal, indoor mode, route picker UI, BLE pairing UI.
+- [ ] **Wear OS** — settings surfaces mostly unmirrored from universal-prefs keys.
+
+### #12 Backend Go service (Phase 2/3)
+
+Whole Go service on Fly.io. Live spectator WS hub, job queue, Strava webhook migration off Edge Function, token-refresh worker, export worker, Upstash Redis for ephemeral position store. Then premium Go endpoints: `/training-plan`, `/vo2max`, `/race-predictor`, `/recovery`.
+
+### #13 Live spectator WebSocket (blocked by #12)
+
+Replace the current simulated WS with a real connection to the Go service. Wire the spectator UI to subscribe to ephemeral position updates from Redis. Single PR once #12 lands.
+
+### #14 Map matching + Protomaps + parity audit (Future)
+
+- [ ] **Map matching deploy:** OSRM alongside Supabase, OSM extract refresh pipeline, auth endpoint, return matched geom to mobile, raw-vs-matched toggle, offline fallback. Engine choice + trigger wiring already shipped; deploy is what remains.
+- [ ] **Protomaps self-hosted tiles** — all 4 items from roadmap.md "Future" section.
+- [ ] **Cross-platform parity periodic audit + cross-client integration test in CI** — `docs/roadmap.md` "Future" section §2 and §3.
+
+### #15 Competitor backlog + SEO route pages
+
+From `roadmap.md` "Competitor-parity backlog (unphased)" — open items only (about half the table already shipped):
+- [ ] Heatmap / popular-route discovery (#4)
+- [ ] Trail / offline navigation (#5)
+- [ ] Gear tracking (#7)
+- [ ] Audio-coached runs (#9)
+- [ ] Race calendar + results import (#10)
+- [ ] Advanced analytics polish (#11)
+- [ ] Premium billing extensions (#12)
+- [ ] Treadmill BLE FTMS (#13)
+- [ ] SEO-indexed public route pages (Phase 3 "Community route library")

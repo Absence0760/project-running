@@ -115,7 +115,11 @@ It understands `create table`, `alter table ... add column`, and `alter table ..
 
 ## Edge Functions
 
-Eight functions live under `supabase/functions/`. All are wired up; none currently have tests.
+Eight functions live under `supabase/functions/`. All are wired up. Test coverage breakdown:
+
+- **Pure helpers** — `_shared/webhook_security.ts`, `_shared/body_limit.ts`, and `revenuecat-webhook/lib.ts` are covered by 45 deno tests across three `*.test.ts` files. Gated in CI by the `edge-functions` job.
+- **HTTP-level handler envelopes** — `_shared/handler_envelope.test.ts` covers the auth-rejection branches of the three webhook / cron handlers that bypass the platform `verify_jwt` gate (refresh-tokens / strava-webhook / revenuecat-webhook). 9 tests, gated on `SUPABASE_TEST_URL`. The same `edge-functions` CI job stops the auto-started edge runtime (which ignores `.env.local`) and re-launches `supabase functions serve --env-file` so the rejection branches are reachable instead of 503'ing.
+- **Happy-path with valid HMAC / freshness / dedupe** — not covered. Needs real secret values in the test config; deferred.
 
 | Function | Status | Trigger | Auth | Env vars |
 |---|---|---|---|---|
@@ -217,7 +221,7 @@ Strava, parkrun, and Google each require real API credentials to test their happ
 3. **Use a sandbox Strava account.** Strava has a real sandbox but registration is a multi-day process.
 4. **Don't test the happy path locally; test only the auth rejection branch.** Send a request with a bogus JWT and assert 401. Covers the common shape; skips the integration detail.
 
-For Phase 1, option 4 is what's been done (or nothing). If you're about to write a test for an Edge Function, flag it to the user before going down a rabbit hole — the honest truth is that nothing in the existing CI exercises Edge Functions end-to-end.
+The `edge-functions` CI job now exercises the three handler envelopes (refresh-tokens / strava-webhook / revenuecat-webhook) end-to-end on every PR — see the "Edge Functions" section above. The five JWT-gated handlers (clip-public-track / delete-account / export-data / parkrun-import / strava-import) are 401'd by the platform gateway before the handler body runs, so option 4 is degenerate for them and there's no equivalent CI coverage. The happy paths (valid HMACs / fresh event timestamps / real OAuth) still fall through to options 1-3 above when you need them.
 
 ### Deploying functions to production
 
