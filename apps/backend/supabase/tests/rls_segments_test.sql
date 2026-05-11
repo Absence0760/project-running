@@ -22,7 +22,7 @@
 
 begin;
 
-select plan(8);
+select plan(10);
 
 -- ── Fixture ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -152,6 +152,31 @@ select throws_ok(
   '23514',
   null,
   'CHECK rejects segments with length_m < 100'
+);
+
+-- ── Anon read paths ──
+-- Same regression guard as in rls_route_reviews_test.sql: before
+-- 20260819_001 moved `is_route_visible_to` to the `private` schema,
+-- every anon SELECT against `segments` SEGV'd the backend because
+-- anon had no EXECUTE on the function called from the SELECT
+-- predicate. Now that anon has EXECUTE on the qualified function,
+-- the predicate evaluates correctly.
+
+-- 9. Anon can SELECT a segment on a public route.
+set local role anon;
+set local "request.jwt.claims" = '';
+select results_eq(
+  $$ select name from segments
+     where id = '55555555-5555-5555-5555-555555550002' $$,
+  $$ values ('Sprint Renamed'::text) $$,
+  'anon can SELECT a segment on a public route'
+);
+
+-- 10. Anon cannot SELECT a segment on a private route.
+select is_empty(
+  $$ select id from segments
+     where id = '55555555-5555-5555-5555-555555550001' $$,
+  'anon cannot SELECT a segment on a private route'
 );
 
 select * from finish();

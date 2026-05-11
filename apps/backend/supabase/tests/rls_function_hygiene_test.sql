@@ -13,21 +13,31 @@
 --   20260713_001_is_run_visible_to_anon_grant.sql — restore the anon
 --     grant that pass-1 dropped, breaking every social-affordance read
 --     on /share/run/<id>.
+--   20260812_001_is_run_visible_to_private_schema.sql — move
+--     `is_run_visible_to` to the `private` schema (closes the
+--     PostgREST RPC oracle without breaking the share page).
+--   20260819_001_is_route_visible_to_private_schema.sql — same
+--     pattern for `is_route_visible_to`, after 20260711_001's
+--     anon revoke turned out to break anon SELECT on
+--     `route_reviews` + `segments` (PG 17.6 manifested it as a
+--     server SEGV instead of a clean 42501).
 --
 -- Coverage:
 --   1. `weekly_mileage` and `personal_records` both pin search_path.
---   2. `is_route_visible_to` is NOT executable by anon (Pass-2 closed
---      the existence-oracle on bookmarked-private routes).
---   3. `is_route_visible_to` IS executable by authenticated (its
---      five sibling policies still need it).
---   4. `is_run_visible_to` IS executable by anon (Pass-2 fix —
---      anonymous /share/run/<id> visitors need it for kudos /
---      comments / photos / segment efforts / live pings).
---   5. `recompute_event_ranks` is NOT executable by PUBLIC.
+--   2. `public.is_route_visible_to` has been dropped (PostgREST RPC
+--      oracle closed by 20260819_001).
+--   3. `private.is_route_visible_to` IS executable by anon (every
+--      dependent policy on `route_reviews` + `segments` calls it
+--      from anon-reachable SELECT predicates).
+--   4. `private.is_run_visible_to` IS executable by anon (Pass-2
+--      fix — anonymous /share/run/<id> visitors need it for kudos
+--      / comments / photos / segment efforts / live pings).
+--   5. `public.is_run_visible_to` has been dropped.
+--   6/7. `recompute_event_ranks` grants.
 
 begin;
 
-select plan(8);
+select plan(9);
 
 -- 1. weekly_mileage has search_path = public pinned.
 select results_eq(
@@ -60,20 +70,34 @@ select results_eq(
   'personal_records pins search_path'
 );
 
--- 3. is_route_visible_to is NOT executable by anon (existence-oracle
---    closed in 20260711_001).
-select is(
-  has_function_privilege('anon', 'is_route_visible_to(uuid, uuid)', 'execute'),
-  false,
-  'anon cannot EXECUTE is_route_visible_to (existence oracle closed)'
+-- 3. public.is_route_visible_to has been dropped (PostgREST RPC
+--    oracle closed by 20260819_001 — the function lives in the
+--    `private` schema now).
+select ok(
+  not exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'is_route_visible_to'
+  ),
+  'public.is_route_visible_to has been dropped (PostgREST RPC oracle closed by 20260819_001)'
 );
 
--- 4. is_route_visible_to IS executable by authenticated (five
---    sibling policies still need it).
+-- 4. private.is_route_visible_to IS executable by anon. The SELECT
+--    + INSERT policies on `route_reviews` + `segments` (20260703_001)
+--    call this from anon-reachable paths — anonymous viewers of
+--    /share/route/<id> need it.
 select is(
-  has_function_privilege('authenticated', 'is_route_visible_to(uuid, uuid)', 'execute'),
+  has_function_privilege('anon', 'private.is_route_visible_to(uuid, uuid)', 'execute'),
   true,
-  'authenticated can EXECUTE is_route_visible_to (sibling policies depend on it)'
+  'anon CAN EXECUTE private.is_route_visible_to (anonymous /share/route/<id> needs it for reviews + segments)'
+);
+
+-- 4b. ...and by authenticated (route-detail page reads, route_reviews
+--     INSERT, segments INSERT, routes_run_count_trigger).
+select is(
+  has_function_privilege('authenticated', 'private.is_route_visible_to(uuid, uuid)', 'execute'),
+  true,
+  'authenticated CAN EXECUTE private.is_route_visible_to (route_reviews + segments policies + run_count trigger)'
 );
 
 -- 5. is_run_visible_to IS executable by anon AND has been moved to

@@ -21,7 +21,7 @@
 
 begin;
 
-select plan(8);
+select plan(10);
 
 -- ── Fixture ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -144,18 +144,46 @@ select throws_ok(
   'duplicate (route_id, user_id) rejected by UNIQUE constraint'
 );
 
--- NOTE: anon read paths for `route_reviews` are intentionally NOT
--- covered here. PostgreSQL 17.6 SIGSEGVs (signal 11) when an anon
--- role evaluates the `reviews on visible routes are readable` policy
--- chain (`is_route_visible_to` SECURITY DEFINER → `routes` RLS) inside
--- a pgtap transaction — `set local role anon; select … from
--- route_reviews where id = '…'` reproducibly terminates the backend
--- and trips `database system is in recovery mode` for the next ~2 s.
--- The authenticated cross-user tests above cover the same effective
--- policy surface (visibility helper + INSERT visibility gate +
--- author-only UPDATE/DELETE); anon coverage of the public-route view
--- path is exercised at the wire level by the Playwright
--- `auth-walls.spec.ts` suite. Revisit if PG ships a fix.
+-- ── Anon read paths ──
+-- Migration 20260819_001 moved `is_route_visible_to` to the
+-- `private` schema (parallel of 20260812_001 for is_run_visible_to)
+-- and granted anon EXECUTE on the qualified function, restoring the
+-- anon read paths broken by 20260711_001's revoke. Before the
+-- migration these tests SEGV'd the PG 17.6 backend (signal 11) on
+-- every `select … from route_reviews` as anon — the missing-grant
+-- error path crashed instead of raising 42501. Keep these tests:
+-- they're the regression guard if the function move is reverted.
+
+-- 9. Anon can read a review on a public route (route is visible to
+--    everyone via private.is_route_visible_to).
+set local role anon;
+set local "request.jwt.claims" = '';
+select results_eq(
+  $$ select rating::int from route_reviews
+     where id = '33333333-3333-3333-3333-333333330001' $$,
+  $$ values (4) $$,
+  'anon can SELECT a review on a public route'
+);
+
+-- 10. Anon cannot see reviews on a private route. (We plant such a
+--     review via the route owner — who can see their own private
+--     route, so they're allowed to review it — then check anon's
+--     read returns zero rows.)
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000aa0001"}';
+insert into route_reviews (id, route_id, user_id, rating, comment)
+values
+  ('33333333-3333-3333-3333-333333330002',
+   '22222222-2222-2222-2222-222222220002',
+   '00000000-0000-0000-0000-000000aa0001',
+   3, 'self-review on private');
+set local role anon;
+set local "request.jwt.claims" = '';
+select is_empty(
+  $$ select id from route_reviews
+     where id = '33333333-3333-3333-3333-333333330002' $$,
+  'anon cannot SELECT a review on a private route'
+);
 
 select * from finish();
 

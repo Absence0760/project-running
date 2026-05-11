@@ -2066,10 +2066,6 @@ export type Database = {
       is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }
       is_public_route_by_id: { Args: { p_route_id: string }; Returns: boolean }
       is_race_director: { Args: { target_club: string }; Returns: boolean }
-      is_route_visible_to: {
-        Args: { p_route_id: string; p_user_id: string }
-        Returns: boolean
-      }
       job_scheduled_at_for_user: {
         Args: { p_user_id: string }
         Returns: string
