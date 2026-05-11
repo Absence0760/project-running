@@ -227,6 +227,14 @@ The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-laun
 - Sentry: any new error class with >10 events in 5 min
 - Better Stack probe of `https://runonward.com/` returning non-200 for >2 min
 - Anthropic cost above $X/day (Console → Usage → Alerts)
+- **MapTiler API usage above 80% of monthly free-tier quota** — clients (web, mobile, watch) hit `api.maptiler.com` directly, so there is no CloudFront proxy to attach a CloudWatch metric to. Alert lives MapTiler-side instead. Set it up once per environment (prod + preview both share `PUBLIC_MAPTILER_KEY` today; if they get separate keys later, repeat per key):
+  1. Sign in at https://cloud.maptiler.com/.
+  2. **Account → API key** for the key in `PUBLIC_MAPTILER_KEY` — confirm the **Allowed origins** include `runonward.com`, `preview.runonward.com`, and the dev origin (`localhost:7777`). An unconstrained key is a free-credit drain magnet.
+  3. **Account → Usage and statistics** — note current month's request count to baseline against.
+  4. **Account → Notifications** — enable **Daily usage** email and set a **threshold alert at 80% of the included monthly quota** (current plan is the free tier = 100k tile requests/month, so trigger at 80k). MapTiler also sends an automatic 100% notice; the 80% gate is the actionable one.
+  5. Send the alert to the same address as the SNS oncall topic.
+  6. When usage crosses the alert, two options before paying: drop tile traffic by raising the disk-cache TTL on the mobile clients (`apps/mobile_android/lib/tile_cache.dart`), or kick off the Protomaps migration plan (`roadmap.md § Phase 7 Future` + `decisions.md § 8`).
+  Why no CloudWatch path: tiles never traverse our CloudFront. Adding a same-origin proxy purely for metrics would inflate the egress cost more than the alert is worth — flip when Protomaps lands and we own the tile path end-to-end.
 
 ---
 
