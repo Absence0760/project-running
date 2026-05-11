@@ -564,10 +564,13 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Recent public runs for Alex — 12 entries spread across the last
 -- ~7 days so the feed has variety even before pagination kicks in.
+-- Anchored on NOW() (not a fixed timestamp) so the entries stay inside
+-- the 14-day FEED_WINDOW as real wall-clock time advances past the
+-- frozen 2026-04-26 "today" the rest of the seed uses.
 INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata)
 SELECT
   'b2c3d4e5-f6a7-8901-bcde-f23456789012'::uuid,
-  ('2026-04-27T17:00:00Z'::timestamptz - (n * INTERVAL '14 hours')),
+  (NOW() - (n * INTERVAL '14 hours')),
   (1800 + (n * 173 % 2400))::integer,
   (5000 + (n * 251 % 8000))::numeric,
   CASE n % 3 WHEN 0 THEN 'app' WHEN 1 THEN 'strava' ELSE 'healthkit' END,
@@ -581,10 +584,11 @@ FROM generate_series(1, 12) AS n;
 
 -- Recent public runs for Morgan — 13 entries on a different cadence
 -- so the feed mixes the two authors rather than alternating cleanly.
+-- Same NOW()-relative anchor as Alex above; see comment there.
 INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata)
 SELECT
   'c3d4e5f6-a7b8-9012-cdef-345678901234'::uuid,
-  ('2026-04-27T06:30:00Z'::timestamptz - (n * INTERVAL '17 hours')),
+  (NOW() - INTERVAL '4 hours' - (n * INTERVAL '17 hours')),
   (1500 + (n * 197 % 2700))::integer,
   (4500 + (n * 293 % 9500))::numeric,
   CASE n % 4 WHEN 0 THEN 'app' WHEN 1 THEN 'app' WHEN 2 THEN 'strava' ELSE 'parkrun' END,
