@@ -182,5 +182,77 @@ void main() {
       expect(fmtPace(null), '—');
       expect(fmtPace(245), '4:05/km');
     });
+
+    testWidgets('duration-based step renders time plan + time actual cells',
+        (tester) async {
+      await _pump(tester, metadata: {
+        'workout_adherence': 'completed',
+        'workout_step_results': [
+          {
+            'kind': 'rep',
+            'rep_index': 1,
+            'rep_total': 4,
+            'target_distance_m': 0,
+            'actual_distance_m': 120,
+            'target_duration_s': 30,
+            'duration_s': 30,
+            'target_pace_sec_per_km': 240,
+            'actual_pace_sec_per_km': 240,
+            'status': 'completed',
+          },
+          {
+            'kind': 'recovery',
+            'rep_index': 1,
+            'rep_total': 3,
+            'target_distance_m': 0,
+            'actual_distance_m': 180,
+            'target_duration_s': 90,
+            'duration_s': 90,
+            'target_pace_sec_per_km': 420,
+            'actual_pace_sec_per_km': 420,
+            'status': 'completed',
+          },
+        ],
+      });
+      // First row: 30s / 30s plan vs actual.
+      expect(find.text('30s'), findsNWidgets(2));
+      // Second row: 1m 30s / 1m 30s.
+      expect(find.text('1m 30s'), findsNWidgets(2));
+      // Distance formatting MUST NOT appear for time-based steps.
+      expect(find.text('0.12 km'), findsNothing);
+    });
+
+    test('WorkoutStepReview.fromMap reads target_duration_s', () {
+      final s = WorkoutStepReview.fromMap({
+        'kind': 'rep',
+        'target_distance_m': 0,
+        'target_duration_s': 30,
+        'duration_s': 30,
+        'target_pace_sec_per_km': 240,
+      });
+      expect(s.isDurationBased, isTrue);
+      expect(s.targetDurationSec, 30);
+      expect(s.durationSeconds, 30);
+    });
+
+    test('WorkoutStepReview without target_duration_s stays distance-based',
+        () {
+      final s = WorkoutStepReview.fromMap({
+        'kind': 'rep',
+        'target_distance_m': 400,
+        'actual_distance_m': 400,
+        'target_pace_sec_per_km': 240,
+      });
+      expect(s.isDurationBased, isFalse);
+      expect(s.targetDurationSec, isNull);
+    });
+
+    test('formatStepDuration formats <60 / =60 / minutes-plus-seconds', () {
+      expect(formatStepDuration(30), '30s');
+      expect(formatStepDuration(60), '1m');
+      expect(formatStepDuration(90), '1m 30s');
+      expect(formatStepDuration(240), '4m');
+      expect(formatStepDuration(245), '4m 5s');
+    });
   });
 }

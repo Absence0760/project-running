@@ -20,6 +20,19 @@ WorkoutStep _step({
       repTotal: repTotal,
     );
 
+WorkoutStep _durStep({
+  String label = 'Stride',
+  int durationSec = 30,
+  int pace = 240,
+}) =>
+    WorkoutStep(
+      kind: WorkoutStepKind.rep,
+      targetDistanceMetres: 0,
+      targetDurationSec: durationSec,
+      targetPaceSecPerKm: pace,
+      label: label,
+    );
+
 Future<void> _pumpBand(
   WidgetTester tester, {
   required WorkoutBandState state,
@@ -198,6 +211,54 @@ void main() {
       expect(find.textContaining('abandoned'), findsOneWidget);
       expect(find.text('Skip'), findsNothing);
       expect(find.text('Rewind'), findsNothing);
+    });
+
+    testWidgets('renders duration-based target ("30s") and seconds-to-go',
+        (tester) async {
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _durStep(durationSec: 30, pace: 240),
+          totalSteps: 4,
+          currentIndex: 1,
+          progress: 0.6,
+          remainingMetres: 0,
+          remainingDuration: const Duration(seconds: 12),
+          actualPaceSecPerKm: 245,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+      );
+      // Header shows time target, not metres.
+      expect(find.textContaining('Stride · 30s'), findsOneWidget);
+      // Distance footer is replaced by a time remainder.
+      expect(find.text('12s to go'), findsOneWidget);
+      expect(find.text('0 m to go'), findsNothing,
+          reason: 'must not fall back to distance footer for duration steps');
+    });
+
+    testWidgets('formats longer duration remainders as "Nm Ns"',
+        (tester) async {
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _durStep(durationSec: 240, pace: 240),
+          totalSteps: 1,
+          currentIndex: 0,
+          progress: 0.1,
+          remainingMetres: 0,
+          remainingDuration: const Duration(seconds: 215),
+          actualPaceSecPerKm: 240,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+      );
+      // 4-minute step, 215 s remaining → "3m 35s to go".
+      expect(find.text('3m 35s to go'), findsOneWidget);
+      // Header shows the rounded target as "4m".
+      expect(find.textContaining('4m'), findsOneWidget);
     });
 
     testWidgets('pace pip uses an em-dash when actual pace is null',

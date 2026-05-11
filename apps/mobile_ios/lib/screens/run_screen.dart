@@ -434,17 +434,13 @@ class _RunScreenState extends State<RunScreen> {
       return;
     }
     final step = runner.currentStep;
-    final progress = step == null
-        ? 1.0
-        : (runner.stepDistanceMetres / step.targetDistanceMetres)
-            .clamp(0.0, 1.0)
-            .toDouble();
     _workoutBand.value = WorkoutBandState(
       step: step,
       totalSteps: runner.steps.length,
       currentIndex: runner.currentStepIndex,
-      progress: progress,
+      progress: runner.progressFraction,
       remainingMetres: runner.stepRemainingMetres,
+      remainingDuration: runner.stepRemainingDuration,
       actualPaceSecPerKm: runner.stepAveragePaceSecPerKm,
       adherence: runner.paceAdherence,
       complete: runner.isComplete && step == null,

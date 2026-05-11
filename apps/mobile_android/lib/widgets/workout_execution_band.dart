@@ -45,6 +45,9 @@ class WorkoutBandState {
   final int currentIndex;
   final double progress; // 0..1
   final double remainingMetres;
+  // Seconds remaining for duration-based steps. Zero for distance-based
+  // (band reads `step.isDurationBased` to pick which to render).
+  final Duration remainingDuration;
   final int? actualPaceSecPerKm;
   final PaceAdherence adherence;
   final bool complete;
@@ -56,6 +59,7 @@ class WorkoutBandState {
     required this.currentIndex,
     required this.progress,
     required this.remainingMetres,
+    this.remainingDuration = Duration.zero,
     required this.actualPaceSecPerKm,
     required this.adherence,
     required this.complete,
@@ -120,7 +124,7 @@ class _Band extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${step.label} · ${_fmtDistance(step.targetDistanceMetres)} '
+                  '${step.label} · ${_fmtTarget(step)} '
                   '@ ${fmtPace(step.targetPaceSecPerKm)}',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
@@ -150,7 +154,7 @@ class _Band extends StatelessWidget {
                 ),
               ),
               Text(
-                '${state.remainingMetres.round()} m to go',
+                _fmtRemaining(step),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -237,6 +241,32 @@ class _Band extends StatelessWidget {
     return '${metres.round()} m';
   }
 
+  static String _fmtDuration(Duration d) {
+    final s = d.inSeconds;
+    if (s >= 60) {
+      final m = s ~/ 60;
+      final r = s % 60;
+      return r == 0 ? '${m}m' : '${m}m ${r}s';
+    }
+    return '${s}s';
+  }
+
+  // "Rep 3/6 · 400 m" or "Stride · 30s" depending on the step's axis.
+  // Picks one or the other so the band header doesn't grow on duration
+  // steps (the time target IS the size signal).
+  static String _fmtTarget(WorkoutStep step) {
+    if (step.isDurationBased) {
+      return _fmtDuration(Duration(seconds: step.targetDurationSec!));
+    }
+    return _fmtDistance(step.targetDistanceMetres);
+  }
+
+  String _fmtRemaining(WorkoutStep step) {
+    if (step.isDurationBased) {
+      return '${_fmtDuration(state.remainingDuration)} to go';
+    }
+    return '${state.remainingMetres.round()} m to go';
+  }
 }
 
 class _PacePip extends StatelessWidget {

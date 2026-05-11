@@ -185,10 +185,27 @@
 		rep_total?: number;
 		target_distance_m: number;
 		actual_distance_m: number;
+		// Present only on duration-based steps (workout execution v2).
+		// When set + positive, the table renders time on the plan +
+		// actual columns instead of km.
+		target_duration_s?: number;
 		target_pace_sec_per_km: number;
 		actual_pace_sec_per_km: number | null;
 		duration_s: number;
 		status: 'completed' | 'skipped';
+	}
+
+	function isDurationStep(s: WorkoutStepResult): boolean {
+		return typeof s.target_duration_s === 'number' && s.target_duration_s > 0;
+	}
+
+	function formatStepDuration(seconds: number): string {
+		if (seconds >= 60) {
+			const m = Math.floor(seconds / 60);
+			const r = seconds % 60;
+			return r === 0 ? `${m}m` : `${m}m ${r}s`;
+		}
+		return `${seconds}s`;
 	}
 
 	let workoutStepResults = $derived.by<WorkoutStepResult[]>(() => {
@@ -1016,8 +1033,20 @@
 						{#each workoutStepResults as s}
 							<tr class:skipped={s.status === 'skipped'}>
 								<td>{stepLabel(s)}</td>
-								<td class="num">{(s.target_distance_m / 1000).toFixed(2)} km</td>
-								<td class="num">{(s.actual_distance_m / 1000).toFixed(2)} km</td>
+								<td class="num">
+									{#if isDurationStep(s)}
+										{formatStepDuration(s.target_duration_s ?? 0)}
+									{:else}
+										{(s.target_distance_m / 1000).toFixed(2)} km
+									{/if}
+								</td>
+								<td class="num">
+									{#if isDurationStep(s)}
+										{formatStepDuration(s.duration_s)}
+									{:else}
+										{(s.actual_distance_m / 1000).toFixed(2)} km
+									{/if}
+								</td>
 								<td class="num">{formatPaceSec(s.actual_pace_sec_per_km)}</td>
 								<td class="num pace-delta pace-delta-{paceDeltaClass(s)}">
 									{s.status === 'skipped' ? 'skip' : paceDeltaLabel(s)}

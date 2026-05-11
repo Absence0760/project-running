@@ -219,7 +219,7 @@ Modified:
 
 ## Open questions (before building)
 
-1. **Duration-based steps.** Current plans are all distance-based. When plan v2 adds `target_duration_sec` steps (useful for time-trial reps and short warmups), the auto-advance check grows a second branch. Decision needed before a time-based workout ships, not before.
+1. **Duration-based steps.** *Shipped (v2 follow-up).* `WorkoutStep.targetDurationSec` is a nullable int — when positive, the step is duration-based and `WorkoutRunner` swaps the distance-axis checks for time-axis ones (auto-advance, halfway cue, end-of-step warning at last 10 s for `> 20 s` steps). `expandWorkoutSteps` honours `duration_s` in any block (warmup / repeats.rep / repeats.recovery / steady / cooldown); when both `distance_m` and `duration_s` are present, distance wins for backwards-compatibility. The band header renders `Stride · 30s @ 4:00/km` and the footer shows `12s to go`; the post-run review table renders time on the plan + actual columns when `target_duration_s` is on the result row. `runs.metadata.workout_step_results[].target_duration_s` is the optional registered key (see `docs/metadata.md`).
 2. **Audio cue wording** — "four hundred metres" vs "point four kilometres" vs "four hundred" (metric unit implied). Stick with the verbose-and-clear form for v1; revisit if users flag it.
 3. **Tolerance default** — 10 s/km is tight for a beginner, loose for a racer. The existing `plan_workouts.target_pace_tolerance_sec_per_km` is editable; default stays 10 but surface it in the workout editor.
 4. **Skip vs abandon ergonomics** — two buttons that sound similar. If user testing shows confusion, collapse to one "stop workout" that the user confirms to "stop entirely" or "convert to free run".

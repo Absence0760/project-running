@@ -133,10 +133,20 @@ class WorkoutReviewSection extends StatelessWidget {
       child: Row(
         children: [
           cell(s.label, flex: 3, weight: FontWeight.w600),
-          cell('${(s.targetDistanceM / 1000).toStringAsFixed(2)} km',
-              flex: 2, align: TextAlign.right),
-          cell('${(s.actualDistanceM / 1000).toStringAsFixed(2)} km',
-              flex: 2, align: TextAlign.right),
+          cell(
+            s.isDurationBased
+                ? formatStepDuration(s.targetDurationSec!)
+                : '${(s.targetDistanceM / 1000).toStringAsFixed(2)} km',
+            flex: 2,
+            align: TextAlign.right,
+          ),
+          cell(
+            s.isDurationBased
+                ? formatStepDuration(s.durationSeconds)
+                : '${(s.actualDistanceM / 1000).toStringAsFixed(2)} km',
+            flex: 2,
+            align: TextAlign.right,
+          ),
           cell(fmtPace(s.actualPaceSecPerKm),
               flex: 2, align: TextAlign.right),
           Expanded(
@@ -161,6 +171,11 @@ class WorkoutStepReview {
   final String kind;
   final double targetDistanceM;
   final double actualDistanceM;
+  // Duration target in seconds. Non-null when this step was authored as
+  // duration-based (v2). When set, the review table renders time on the
+  // plan + actual columns instead of km.
+  final int? targetDurationSec;
+  final int durationSeconds;
   final int targetPaceSecPerKm;
   final int? actualPaceSecPerKm;
   final int toleranceSecPerKm;
@@ -171,11 +186,16 @@ class WorkoutStepReview {
     required this.kind,
     required this.targetDistanceM,
     required this.actualDistanceM,
+    this.targetDurationSec,
+    this.durationSeconds = 0,
     required this.targetPaceSecPerKm,
     required this.actualPaceSecPerKm,
     this.toleranceSecPerKm = 10,
     required this.status,
   });
+
+  bool get isDurationBased =>
+      targetDurationSec != null && targetDurationSec! > 0;
 
   factory WorkoutStepReview.fromMap(Map raw) {
     final kind = raw['kind']?.toString() ?? 'steady';
@@ -205,6 +225,8 @@ class WorkoutStepReview {
       kind: kind,
       targetDistanceM: (raw['target_distance_m'] as num?)?.toDouble() ?? 0,
       actualDistanceM: (raw['actual_distance_m'] as num?)?.toDouble() ?? 0,
+      targetDurationSec: (raw['target_duration_s'] as num?)?.toInt(),
+      durationSeconds: (raw['duration_s'] as num?)?.toInt() ?? 0,
       targetPaceSecPerKm:
           (raw['target_pace_sec_per_km'] as num?)?.toInt() ?? 0,
       actualPaceSecPerKm: (raw['actual_pace_sec_per_km'] as num?)?.toInt(),
@@ -213,6 +235,17 @@ class WorkoutStepReview {
       status: raw['status']?.toString() ?? 'completed',
     );
   }
+}
+
+/// Formats a duration in seconds for the review table: "30s", "1m 30s",
+/// "5m". Mirrors the band's same-name helper.
+String formatStepDuration(int seconds) {
+  if (seconds >= 60) {
+    final m = seconds ~/ 60;
+    final r = seconds % 60;
+    return r == 0 ? '${m}m' : '${m}m ${r}s';
+  }
+  return '${seconds}s';
 }
 
 enum PaceDeltaTone { neutral, on, amber, off }

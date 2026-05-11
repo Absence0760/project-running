@@ -72,6 +72,33 @@ class WorkoutRunner {
     return r < 0 ? 0 : r;
   }
 
+  /// Seconds remaining on the current step when it's duration-based.
+  /// Always 0 for distance-based steps — callers can read
+  /// [WorkoutStep.isDurationBased] to know which axis to display.
+  Duration get stepRemainingDuration {
+    final s = currentStep;
+    if (s == null || !s.isDurationBased) return Duration.zero;
+    final r = s.targetDurationSec! - stepElapsed.inSeconds;
+    return r < 0 ? Duration.zero : Duration(seconds: r);
+  }
+
+  /// Progress 0..1 along the active step's end condition — distance
+  /// fraction for distance-based steps, time fraction for duration-based.
+  /// The band reads this so the progress bar renders the same shape on
+  /// both step types.
+  double get progressFraction {
+    final s = currentStep;
+    if (s == null) return 1.0;
+    if (s.isDurationBased) {
+      final target = s.targetDurationSec!;
+      if (target <= 0) return 1.0;
+      return (stepElapsed.inSeconds / target).clamp(0.0, 1.0);
+    }
+    final target = s.targetDistanceMetres;
+    if (target <= 0) return 1.0;
+    return (stepDistanceMetres / target).clamp(0.0, 1.0);
+  }
+
   PaceAdherence get paceAdherence {
     final s = currentStep;
     if (s == null) return PaceAdherence.onPace;
@@ -115,9 +142,14 @@ class WorkoutRunner {
 
     final step = steps[_idx];
     final stepDist = stepDistanceMetres;
+    final stepSecs = stepElapsed.inSeconds;
 
-    // Halfway cue.
-    if (!_firedHalfway && stepDist >= step.targetDistanceMetres * 0.5) {
+    // Halfway cue — branches on step axis. Duration steps hit half on
+    // time elapsed; distance steps on distance covered.
+    final halfwayHit = step.isDurationBased
+        ? stepSecs >= step.targetDurationSec! / 2
+        : stepDist >= step.targetDistanceMetres * 0.5;
+    if (!_firedHalfway && halfwayHit) {
       _firedHalfway = true;
       _events.add(StepProgressEvent(
         step: step,
@@ -126,10 +158,15 @@ class WorkoutRunner {
       ));
     }
 
-    // Last 50 m cue.
-    if (!_firedLastFifty &&
-        step.targetDistanceMetres - stepDist <= 50 &&
-        step.targetDistanceMetres > 100) {
+    // End-of-step warning cue. For distance steps: last 50 m, gated to
+    // steps longer than 100 m (else cue collides with halfway). For
+    // duration steps: last 10 s, gated to durations longer than 20 s.
+    final lastWindowHit = step.isDurationBased
+        ? (step.targetDurationSec! - stepSecs <= 10 &&
+            step.targetDurationSec! > 20)
+        : (step.targetDistanceMetres - stepDist <= 50 &&
+            step.targetDistanceMetres > 100);
+    if (!_firedLastFifty && lastWindowHit) {
       _firedLastFifty = true;
       _events.add(StepProgressEvent(
         step: step,
@@ -157,8 +194,12 @@ class WorkoutRunner {
       }
     }
 
-    // Auto-advance.
-    if (stepDist >= step.targetDistanceMetres) {
+    // Auto-advance — duration steps trip on elapsed time, distance
+    // steps on distance covered.
+    final endHit = step.isDurationBased
+        ? stepSecs >= step.targetDurationSec!
+        : stepDist >= step.targetDistanceMetres;
+    if (endHit) {
       _advance(s, status: WorkoutStepStatus.completed);
     }
   }
@@ -240,8 +281,13 @@ class WorkoutRunner {
         continue;
       }
       // ≥ 80 % of target counts as "completed for adherence" — matches
-      // the web review section's 'partial' cutoff.
-      if (r.actualDistanceMetres < r.step.targetDistanceMetres * 0.8) {
+      // the web review section's 'partial' cutoff. Duration-based steps
+      // measure against the time axis, distance-based against the metres.
+      if (r.step.isDurationBased) {
+        if (r.durationSeconds < r.step.targetDurationSec! * 0.8) {
+          anyShort = true;
+        }
+      } else if (r.actualDistanceMetres < r.step.targetDistanceMetres * 0.8) {
         anyShort = true;
       }
     }
@@ -318,6 +364,14 @@ class WorkoutStep {
   final int? repIndex; // 1-based for rep + recovery
   final int? repTotal;
   final double targetDistanceMetres;
+  // Duration target in whole seconds. When non-null + positive, this
+  // step auto-advances on elapsed time rather than distance covered —
+  // useful for time-trial reps and short pickups (e.g. 30 s strides).
+  // Mutually exclusive with [targetDistanceMetres] at the call sites
+  // that read the end condition; [targetDistanceMetres] is left at the
+  // numeric default for duration-based steps but isn't read by the
+  // auto-advance check when [isDurationBased] is true.
+  final int? targetDurationSec;
   final int targetPaceSecPerKm;
   final int toleranceSecPerKm;
   final String label;
@@ -327,10 +381,14 @@ class WorkoutStep {
     this.repIndex,
     this.repTotal,
     required this.targetDistanceMetres,
+    this.targetDurationSec,
     required this.targetPaceSecPerKm,
     this.toleranceSecPerKm = 10,
     required this.label,
   });
+
+  bool get isDurationBased =>
+      targetDurationSec != null && targetDurationSec! > 0;
 }
 
 class WorkoutStepResult {
@@ -366,6 +424,8 @@ class WorkoutStepResult {
       if (step.repIndex != null) 'rep_index': step.repIndex,
       if (step.repTotal != null) 'rep_total': step.repTotal,
       'target_distance_m': step.targetDistanceMetres,
+      if (step.targetDurationSec != null)
+        'target_duration_s': step.targetDurationSec,
       'actual_distance_m': actualDistanceMetres,
       'target_pace_sec_per_km': step.targetPaceSecPerKm,
       'actual_pace_sec_per_km': actualPaceSecPerKm,
@@ -482,83 +542,117 @@ List<WorkoutStep> expandWorkoutSteps({
     return paces[fallbackKey ?? 'easy'] ?? 360;
   }
 
+  // Read either `distance_m` (legacy + Phase 2 default) or `duration_s`
+  // (v2 — time-based steps). When both are present, distance wins so
+  // existing plans don't change behaviour. Returns null if neither is
+  // a usable positive number.
+  WorkoutStep? buildStep({
+    required Map block,
+    required WorkoutStepKind kind,
+    required String label,
+    required String paceFallback,
+    int? repIndex,
+    int? repTotal,
+  }) {
+    final dist = (block['distance_m'] as num?)?.toDouble();
+    final dur = (block['duration_s'] as num?)?.toInt();
+    if (dist != null && dist > 0) {
+      return WorkoutStep(
+        kind: kind,
+        repIndex: repIndex,
+        repTotal: repTotal,
+        targetDistanceMetres: dist,
+        targetPaceSecPerKm: resolvePaceFrom(block, paceFallback),
+        toleranceSecPerKm: toleranceSecPerKm,
+        label: label,
+      );
+    }
+    if (dur != null && dur > 0) {
+      return WorkoutStep(
+        kind: kind,
+        repIndex: repIndex,
+        repTotal: repTotal,
+        targetDistanceMetres: 0,
+        targetDurationSec: dur,
+        targetPaceSecPerKm: resolvePaceFrom(block, paceFallback),
+        toleranceSecPerKm: toleranceSecPerKm,
+        label: label,
+      );
+    }
+    return null;
+  }
+
   final out = <WorkoutStep>[];
 
   final warmup = structure['warmup'];
   if (warmup is Map) {
-    final dist = (warmup['distance_m'] as num?)?.toDouble();
-    if (dist != null && dist > 0) {
-      out.add(WorkoutStep(
-        kind: WorkoutStepKind.warmup,
-        targetDistanceMetres: dist,
-        targetPaceSecPerKm: resolvePaceFrom(warmup, 'easy'),
-        toleranceSecPerKm: toleranceSecPerKm,
-        label: 'Warmup',
-      ));
-    }
+    final step = buildStep(
+      block: warmup,
+      kind: WorkoutStepKind.warmup,
+      label: 'Warmup',
+      paceFallback: 'easy',
+    );
+    if (step != null) out.add(step);
   }
 
   // Repeats — supports two on-disk shapes:
   //   1. Spec-style: `{count, rep: {...}, recovery: {...}}`
-  //   2. Generator-style: `{count, distance_m, pace_sec_per_km,
-  //      recovery_distance_m, recovery_pace}`
+  //   2. Generator-style: `{count, distance_m | duration_s, pace_sec_per_km,
+  //      recovery_distance_m | recovery_duration_s, recovery_pace}`
+  // Both shapes can now use `duration_s` instead of `distance_m` for
+  // either the rep or the recovery (v2 time-based reps).
   final repeats = structure['repeats'];
   if (repeats is Map) {
     final count = (repeats['count'] as num?)?.toInt() ?? 0;
     if (count > 0) {
-      double repDist;
-      int repPace;
-      double recDist;
-      int recPace;
+      Map repBlock;
+      Map? recBlock;
       final nestedRep = repeats['rep'];
       final nestedRec = repeats['recovery'];
       if (nestedRep is Map) {
-        repDist = (nestedRep['distance_m'] as num?)?.toDouble() ?? 0;
-        repPace = resolvePaceFrom(nestedRep, 'interval');
-        recDist = nestedRec is Map
-            ? ((nestedRec['distance_m'] as num?)?.toDouble() ?? 0)
-            : 0;
-        recPace = nestedRec is Map
-            ? resolvePaceFrom(nestedRec, 'jog')
-            : (paces['jog'] ?? 420);
+        repBlock = nestedRep;
+        recBlock = nestedRec is Map ? nestedRec : null;
       } else {
-        repDist = (repeats['distance_m'] as num?)?.toDouble() ?? 0;
-        repPace = resolvePaceFrom(repeats, 'interval');
-        recDist =
-            (repeats['recovery_distance_m'] as num?)?.toDouble() ?? 0;
-        final recRaw =
-            repeats['recovery_pace_sec_per_km'] ?? repeats['recovery_pace'];
-        if (recRaw is num) {
-          recPace = recRaw.round();
-        } else if (recRaw is String) {
-          recPace = paces[recRaw] ?? paces['jog'] ?? 420;
-        } else {
-          recPace = paces['jog'] ?? 420;
-        }
+        repBlock = repeats;
+        // Flatten the generator shape into a recovery-block map so
+        // buildStep can read it uniformly.
+        recBlock = {
+          if (repeats['recovery_distance_m'] != null)
+            'distance_m': repeats['recovery_distance_m'],
+          if (repeats['recovery_duration_s'] != null)
+            'duration_s': repeats['recovery_duration_s'],
+          if (repeats['recovery_pace_sec_per_km'] != null)
+            'pace_sec_per_km': repeats['recovery_pace_sec_per_km'],
+          if (repeats['recovery_pace'] != null)
+            'pace': repeats['recovery_pace'],
+        };
+        if (recBlock.isEmpty) recBlock = null;
       }
-      if (repDist > 0) {
-        for (var i = 0; i < count; i++) {
-          out.add(WorkoutStep(
-            kind: WorkoutStepKind.rep,
+
+      for (var i = 0; i < count; i++) {
+        final repStep = buildStep(
+          block: repBlock,
+          kind: WorkoutStepKind.rep,
+          label: 'Rep ${i + 1}/$count',
+          paceFallback: 'interval',
+          repIndex: i + 1,
+          repTotal: count,
+        );
+        if (repStep == null) {
+          // Malformed rep block — skip the entire repeats group.
+          break;
+        }
+        out.add(repStep);
+        if (i < count - 1 && recBlock != null) {
+          final recStep = buildStep(
+            block: recBlock,
+            kind: WorkoutStepKind.recovery,
+            label: 'Recovery ${i + 1}/${count - 1}',
+            paceFallback: 'jog',
             repIndex: i + 1,
-            repTotal: count,
-            targetDistanceMetres: repDist,
-            targetPaceSecPerKm: repPace,
-            toleranceSecPerKm: toleranceSecPerKm,
-            label: 'Rep ${i + 1}/$count',
-          ));
-          // Last rep skips the trailing recovery — cooldown takes over.
-          if (i < count - 1 && recDist > 0) {
-            out.add(WorkoutStep(
-              kind: WorkoutStepKind.recovery,
-              repIndex: i + 1,
-              repTotal: count - 1,
-              targetDistanceMetres: recDist,
-              targetPaceSecPerKm: recPace,
-              toleranceSecPerKm: toleranceSecPerKm,
-              label: 'Recovery ${i + 1}/${count - 1}',
-            ));
-          }
+            repTotal: count - 1,
+          );
+          if (recStep != null) out.add(recStep);
         }
       }
     }
@@ -566,30 +660,24 @@ List<WorkoutStep> expandWorkoutSteps({
 
   final steady = structure['steady'];
   if (steady is Map) {
-    final dist = (steady['distance_m'] as num?)?.toDouble();
-    if (dist != null && dist > 0) {
-      out.add(WorkoutStep(
-        kind: WorkoutStepKind.steady,
-        targetDistanceMetres: dist,
-        targetPaceSecPerKm: resolvePaceFrom(steady, 'tempo'),
-        toleranceSecPerKm: toleranceSecPerKm,
-        label: 'Steady',
-      ));
-    }
+    final step = buildStep(
+      block: steady,
+      kind: WorkoutStepKind.steady,
+      label: 'Steady',
+      paceFallback: 'tempo',
+    );
+    if (step != null) out.add(step);
   }
 
   final cooldown = structure['cooldown'];
   if (cooldown is Map) {
-    final dist = (cooldown['distance_m'] as num?)?.toDouble();
-    if (dist != null && dist > 0) {
-      out.add(WorkoutStep(
-        kind: WorkoutStepKind.cooldown,
-        targetDistanceMetres: dist,
-        targetPaceSecPerKm: resolvePaceFrom(cooldown, 'easy'),
-        toleranceSecPerKm: toleranceSecPerKm,
-        label: 'Cooldown',
-      ));
-    }
+    final step = buildStep(
+      block: cooldown,
+      kind: WorkoutStepKind.cooldown,
+      label: 'Cooldown',
+      paceFallback: 'easy',
+    );
+    if (step != null) out.add(step);
   }
 
   return out;
