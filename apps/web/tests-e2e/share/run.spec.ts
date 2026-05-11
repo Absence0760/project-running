@@ -53,15 +53,14 @@ test.describe('/share/run/[id] — anon', () => {
 		).toBeVisible({ timeout: 5_000 });
 	});
 
-	test('anon visitor gets SEO unfurl tags on the share page', async ({ page }) => {
+	test('anon visitor gets per-run SEO unfurl tags on the share page', async ({ page }) => {
 		// Crawlers + chat-app unfurls read these from <head>. The
-		// run share page intentionally keeps title / description
-		// generic (the run fetch lives inside RunShareView, which
-		// the feed modal also mounts — a per-run unfurl would
-		// require lifting the fetch out, deferred). Pin that the
-		// scaffolding tags are present so a refactor that drops
-		// them surfaces here, not as a silently broken Slack
-		// unfurl in prod.
+		// run share page lifts its meta fetch into +page.ts so the
+		// per-run title + description bake into the prerendered HTML
+		// (vs the generic SPA-shell fallback that earlier shipped).
+		// Display name is still deferred until `public_profiles`
+		// view ships (`user_profiles` is owner-only by RLS), so the
+		// title carries distance + date, not the runner's name.
 		await page.route('**/functions/v1/clip-public-track', (route) =>
 			route.fulfill({
 				status: 200,
@@ -72,10 +71,22 @@ test.describe('/share/run/[id] — anon', () => {
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
 		await page.waitForLoadState('networkidle');
 
-		await expect(page).toHaveTitle('Run — Run Onward');
+		// Per-run reactive title — seeded RUNNER_PUBLIC_RUN_ID is
+		// 5 km on a fixed date. Assert the wire shape ("X km run on
+		// DD MMM YYYY") rather than the specific values so a seed
+		// tweak doesn't break the spec.
+		await expect(page).toHaveTitle(/\d+(\.\d+)?\s+km run on \d+\s\w+\s\d{4}\s—\sRun Onward/);
 		await expect(page.locator('meta[name="description"]')).toHaveAttribute(
 			'content',
-			/Run Onward/
+			/Map, splits, and elevation on Run Onward\.$/
+		);
+		await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
+			'content',
+			/\d+(\.\d+)?\s+km run on /
+		);
+		await expect(page.locator('meta[property="og:type"]')).toHaveAttribute(
+			'content',
+			'article'
 		);
 		await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute(
 			'content',
