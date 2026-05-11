@@ -221,6 +221,84 @@ jobs:
           SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
         run: flutter test test/services_integration_test.dart
 
+  edge-functions:
+    name: Edge Function tests (Deno)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: denoland/setup-deno@a3776b27d595c14782ce1d4ad75c95a4f74cd71d # v2.0.3
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@df56b21da46c98abb12a9804e4fb1f657773e333 # v2.0.0
+        with:
+          version: 2.84.2
+      - name: Start local Supabase stack
+        working-directory: apps/backend
+        run: supabase start
+      # Auto-started edge-runtime container has no env vars beyond the
+      # Supabase defaults — every secret-gated function 503s. Stop it
+      # and run `functions serve` with `--env-file` so the rejection
+      # branches in `_shared/handler_envelope.test.ts` are reachable.
+      - name: Stop auto-started edge-runtime + boot env-loaded host
+        working-directory: apps/backend
+        run: |
+          # Write a CI-scoped .env.local with test-default secrets. The
+          # values are deliberately non-prod — the tests assert that
+          # WRONG bearers / HMACs / ?secret= are rejected, not the
+          # positive cases.
+          cat > .env.local <<'ENV'
+          STRAVA_CLIENT_ID=ci-strava-client-id
+          STRAVA_CLIENT_SECRET=ci-strava-client-secret
+          STRAVA_VERIFY_TOKEN=ci-strava-verify-token
+          STRAVA_WEBHOOK_SECRET=ci-strava-webhook-secret
+          PARKRUN_USER_AGENT=ci-parkrun-ua
+          REVENUECAT_WEBHOOK_SECRET=ci-revenuecat-secret
+          CRON_SECRET=ci-cron-secret
+          STRAVA_ALLOWED_REDIRECTS=http://localhost:7777/settings/integrations
+          SENTRY_DSN=
+          APP_RELEASE=ci
+          ENV
+          docker stop supabase_edge_runtime_backend || true
+          # Background `supabase functions serve`. The CLI keeps the
+          # process attached to the terminal even in CI, so put it in
+          # background and capture the PID.
+          nohup supabase functions serve --env-file .env.local \
+            > functions-serve.log 2>&1 &
+          echo $! > functions-serve.pid
+          # Wait for the function host to take over routing through
+          # kong. refresh-tokens 403's on missing auth which is the
+          # quickest probe — the env-loaded host returns 403, the
+          # unconfigured one returned 503.
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              http://127.0.0.1:54321/functions/v1/refresh-tokens)
+            if [ "$code" = "403" ]; then
+              echo "function host ready (403 = env loaded)"
+              break
+            fi
+            sleep 2
+          done
+          if [ "$code" != "403" ]; then
+            echo "::error::function host never reached the 403 ready state"
+            cat functions-serve.log || true
+            exit 1
+          fi
+      - name: Run handler-envelope integration tests
+        working-directory: apps/backend
+        env:
+          SUPABASE_TEST_URL: http://127.0.0.1:54321
+        run: |
+          deno test --no-check --allow-net --allow-env \
+            supabase/functions/_shared/handler_envelope.test.ts
+      - name: Run pure-helper unit tests
+        working-directory: apps/backend
+        run: |
+          deno test --no-check \
+            supabase/functions/_shared/webhook_security.test.ts \
+            supabase/functions/_shared/body_limit.test.ts \
+            supabase/functions/revenuecat-webhook/lib.test.ts
+
   pgtap-rls:
     name: pgtap RLS suite
     runs-on: ubuntu-latest
