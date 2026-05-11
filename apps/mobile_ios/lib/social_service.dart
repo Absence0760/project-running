@@ -165,7 +165,18 @@ class EventResultView {
 /// the screens can subscribe to refresh events (joined a club, posted an
 /// update, RSVP'd) without threading callbacks. One instance per app.
 class SocialService extends ChangeNotifier {
-  SupabaseClient get _c => Supabase.instance.client;
+  final SupabaseClient? _override;
+
+  SocialService() : _override = null;
+
+  /// Test-only DI seam. Production callsites use the unnamed constructor
+  /// and resolve through the global. Mirrors `ApiClient.withClient` so
+  /// wire-level methods can be driven against a real local Supabase
+  /// without booting `Supabase.initialize` in the test isolate.
+  @visibleForTesting
+  SocialService.withClient(SupabaseClient client) : _override = client;
+
+  SupabaseClient get _c => _override ?? Supabase.instance.client;
 
   String? get _uid => _c.auth.currentUser?.id;
 

@@ -25,7 +25,19 @@ class ActivePlanOverview {
 }
 
 class TrainingService extends ChangeNotifier {
-  SupabaseClient get _c => Supabase.instance.client;
+  final SupabaseClient? _override;
+
+  TrainingService() : _override = null;
+
+  /// Test-only DI seam mirroring `ApiClient.withClient` and
+  /// `SocialService.withClient`. Production callsites use the unnamed
+  /// constructor and resolve through the global; tests inject a
+  /// real-but-local-loopback `SupabaseClient` so the Supabase-touching
+  /// methods can be driven without booting `Supabase.initialize`.
+  @visibleForTesting
+  TrainingService.withClient(SupabaseClient client) : _override = client;
+
+  SupabaseClient get _c => _override ?? Supabase.instance.client;
   String? get _uid => _c.auth.currentUser?.id;
 
   /// Plan templates owned by `clubId`. Visible to club members per RLS.

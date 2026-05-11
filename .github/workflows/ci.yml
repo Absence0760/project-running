@@ -214,6 +214,12 @@ jobs:
           SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
           SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
         run: flutter test test/api_client_integration_test.dart
+      - name: Run mobile_android service-layer integration tests
+        working-directory: apps/mobile_android
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+        run: flutter test test/services_integration_test.dart
 
   pgtap-rls:
     name: pgtap RLS suite
