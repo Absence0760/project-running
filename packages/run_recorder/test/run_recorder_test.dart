@@ -250,5 +250,43 @@ void main() {
       expect(r.debugCurrentWaypoint, isNotNull);
       expect(r.debugTrack.length, 1);
     });
+
+    test('setHeartRate stamps subsequent waypoints with per-point BPM', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // No HR yet → first waypoint carries bpm:null.
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      expect(r.debugTrack.last.bpm, isNull,
+          reason: 'no setHeartRate yet → no bpm on the waypoint');
+
+      r.setHeartRate(142);
+      r.debugInjectPosition(makePosition(metresEast: 5, secondsFromStart: 2));
+      expect(r.debugTrack.last.bpm, 142,
+          reason: 'setHeartRate value must apply to the next waypoint');
+
+      // Clear the strap reading (e.g. dropped connection); future
+      // waypoints stop carrying BPM.
+      r.setHeartRate(null);
+      r.debugInjectPosition(makePosition(metresEast: 10, secondsFromStart: 4));
+      expect(r.debugTrack.last.bpm, isNull,
+          reason: 'setHeartRate(null) clears the stamp');
+    });
+
+    test('setHeartRate ignores out-of-range readings', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setHeartRate(155);
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      expect(r.debugTrack.last.bpm, 155);
+
+      // A bogus 250 BPM reading from a flaky strap mustn't clobber the
+      // good value — hr_zones drops < 30 and > 230 anyway, so silently
+      // dropping at the recorder keeps the saved track clean.
+      r.setHeartRate(250);
+      r.debugInjectPosition(makePosition(metresEast: 5, secondsFromStart: 2));
+      expect(r.debugTrack.last.bpm, 155,
+          reason: 'out-of-range readings must be ignored, preserving the '
+              'last known good value');
+    });
   });
 }

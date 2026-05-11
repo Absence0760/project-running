@@ -144,6 +144,17 @@ class RunRecorder {
   // same accuracy setting the caller passed to [prepare].
   LocationAccuracy _locationAccuracy = LocationAccuracy.high;
 
+  /// Latest heart-rate sample, in BPM. Stamped onto each new [Waypoint]
+  /// when constructed so the saved track carries per-point BPM and the
+  /// run-detail HR-zone breakdown lights up for phone-recorded runs.
+  ///
+  /// Push via [setHeartRate] from whatever HR source the caller wires up
+  /// (`BleHeartRate` for the chest strap on mobile, or any other plugin
+  /// that yields BPM samples). Leave at `null` while no strap is paired
+  /// — Waypoints constructed without a sample carry `bpm: null`, which
+  /// matches the pre-strap behaviour.
+  int? _currentBpm;
+
   /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
   /// per second after [begin] starts recording time.
   Stream<RunSnapshot> get snapshots => _controller.stream;
@@ -435,6 +446,19 @@ class RunRecorder {
     _lastTrackedPositionAt = null;
   }
 
+  /// Update the latest heart-rate reading the recorder stamps onto new
+  /// [Waypoint]s. Pass `null` to clear (e.g. strap dropped). No-op
+  /// while not recording — early samples before [begin] just get
+  /// overwritten by the next one before they'd be applied.
+  void setHeartRate(int? bpm) {
+    // Drop obviously bogus readings rather than poison the saved track
+    // — same bounds the HR-zone reader applies in apps/mobile_android/
+    // lib/hr_zones.dart so a single malformed sample doesn't end up
+    // visible in the breakdown anyway.
+    if (bpm != null && (bpm < 30 || bpm > 230)) return;
+    _currentBpm = bpm;
+  }
+
   void _onPosition(Position pos) {
     if (_paused) return;
 
@@ -470,6 +494,7 @@ class RunRecorder {
       lng: pos.longitude,
       elevationMetres: pos.altitude != 0 ? pos.altitude : null,
       timestamp: pos.timestamp,
+      bpm: _currentBpm,
     );
 
     // Only append to the track and accumulate distance once the run has

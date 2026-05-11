@@ -57,7 +57,7 @@ These tasks are marked completed at the high-leverage surface but have known sub
 - [ ] Full-screen route builder (mobile click-to-place + OSRM snap + elevation-preview-while-drawing — see `mobile_android_backlog.md` Route-management section)
 - [ ] Auto-link unmatched run to saved route on save
 - [ ] Map-matched track display (gated on Map-matching deploy under #14)
-- [ ] Per-point BPM HR-zone view from the phone recorder
+- [x] Per-point BPM HR-zone view from the phone recorder — `RunRecorder.setHeartRate(bpm)` stamps each `BleHeartRate` sample onto the next constructed waypoint. Out-of-range guard at the recorder (< 30 or > 230 BPM). 2 new unit tests in `run_recorder_test.dart`. The breakdown panel on `run_detail_screen.dart` was already wired against `track[].bpm`; now phone-recorded runs feed it too.
 
 ### #7 Workout execution v2
 

@@ -742,6 +742,11 @@ class _RunScreenState extends State<RunScreen> {
     _hrSub = widget.heartRate.stream.listen(
       (bpm) {
         _bpmSamples.add(bpm);
+        // Stamp each new sample onto the recorder so the saved track
+        // carries per-point BPM (and run_detail_screen's HR-zone
+        // breakdown lights up for phone-recorded runs). The recorder
+        // drops out-of-range values defensively.
+        _recorder.setHeartRate(bpm);
         if (mounted) setState(() => _currentBpm = bpm);
       },
       // The strap stream doesn't error today, but a future plugin
