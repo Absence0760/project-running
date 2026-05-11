@@ -83,7 +83,7 @@ Phase 3 "External platform sync" — entire table is `[ ]` in roadmap.md:
 - [ ] Health Connect (Android)
 - [ ] Strava OAuth + sync (Edge Function `strava-import` exists, not wired into client)
 - [ ] Garmin (multi-day Developer Program application + OAuth)
-- [ ] parkrun athlete-number import (Edge Function `parkrun-import` exists, not wired into client UI)
+- [x] parkrun athlete-number import — already shipped on Android/iOS. Settings → Integrations → "parkrun" tile in `settings_screen.dart` (line 1274) calls `_importParkrun`, pre-fills from `user_profiles.parkrun_number` via `fetchMyProfile`, then drives `ApiClient.setParkrunAthleteNumber` + `ApiClient.importParkrunResults` (invokes the existing Edge Function). Parity.md already lists it as ✓. The followups entry was stale.
 - [ ] RunSignUp
 
 ### #11 Platform parity (multi-platform)
