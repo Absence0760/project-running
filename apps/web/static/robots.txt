@@ -20,7 +20,8 @@ Disallow: /runs
 Disallow: /clubs
 Disallow: /auth
 
-# A dynamic sitemap.xml that lists every public run + route by id needs a
-# build-time Supabase fetch (adapter-static prerender hook). Deferred per
-# `docs/followups.md § #15` — for now crawlers discover share URLs via
-# inbound links + the feed.
+# Sitemap — prerendered at build time from `public_routes` + `public_runs`
+# (see `src/routes/sitemap.xml/+server.ts`). PUBLIC_SITE_URL is baked into
+# the <loc> values; this Sitemap directive itself is a relative pointer
+# that every major crawler resolves against the request host.
+Sitemap: /sitemap.xml
