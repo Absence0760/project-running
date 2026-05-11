@@ -1,0 +1,41 @@
+-- Cleanup: drop the two dead INSERT policies on `club_posts` left
+-- behind by `20260428_001_role_permissions.sql`.
+--
+-- Policy archaeology:
+--
+--   1. `20260416_001` created "admins can post" (admin-only,
+--      no parent_post_id constraint).
+--   2. `20260417_001` added threaded replies. It dropped
+--      "admins can post" and split into:
+--        - "admins can post top-level"
+--          (parent_post_id IS NULL AND is_club_admin AND
+--           author_id = auth.uid())
+--        - "active members can reply"
+--          (parent_post_id IS NOT NULL AND is_club_member AND
+--           author_id = auth.uid())
+--   3. `20260428_001` then "relaxes the feed to let any active
+--      member post (not just admins)" by ADDING:
+--        - "members can post"
+--          (is_club_member AND author_id = auth.uid()) — no
+--          parent_post_id constraint.
+--      It dropped the original 20260416_001 "admins can post" name
+--      (already gone, so a no-op) but **did not drop the two
+--      20260417_001 policies**.
+--
+-- Postgres OR's multiple permissive INSERT policies. The catch-all
+-- "members can post" allows the union of {admin AND top-level} ∪
+-- {member AND reply} ∪ everything-else-a-member-can-do, so the two
+-- older policies have been dead code since 20260428_001 landed —
+-- they never widen nor narrow the allow set. The web client
+-- (`apps/web/src/lib/data.ts createClubPost`) inserts top-level OR
+-- reply posts under any active member's auth without gating, which
+-- matches the relaxed-policy intent.
+--
+-- This migration drops the two dead policies so `pg_policies`
+-- accurately reflects the binding rule. Behaviour change: none.
+-- pgtap suite `rls_club_posts_test.sql` covers the catch-all
+-- already; the test's narrative still reads correctly after the
+-- cleanup.
+
+drop policy if exists "admins can post top-level" on club_posts;
+drop policy if exists "active members can reply" on club_posts;

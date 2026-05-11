@@ -6,17 +6,18 @@
 --   - SELECT "posts readable with their club" — gated on the caller
 --     seeing the parent club (public / owner / active member).
 --   - INSERT "members can post" — any active member, no parent
---     constraint. This catch-all from 20260428_001 supersedes the
---     two narrower 20260417_001 policies ("admins can post top-
---     level" + "active members can reply"), which are still on the
---     table but are no longer the binding rule. The current
---     effective behaviour is: any active member can post any kind
---     of post (top-level OR reply); only **strangers** and
---     **pending** requesters are blocked. If a future migration
---     tightens this back to admins-only-top-level, this file is
---     where the test will flip — and that's the right shape, because
---     the post creation surface in the web UI assumes the relaxed
---     policy.
+--     constraint. This catch-all from 20260428_001 is the sole
+--     binding INSERT rule on `club_posts`. The two narrower
+--     20260417_001 policies ("admins can post top-level" + "active
+--     members can reply") were dead code from the day 20260428_001
+--     landed (their allow set is a subset of the catch-all), and
+--     `20260820_001_drop_dead_club_posts_policies.sql` finally
+--     dropped them. The current effective behaviour is: any active
+--     member can post any kind of post (top-level OR reply); only
+--     **strangers** and **pending** requesters are blocked. The
+--     web UI's `createClubPost` function inserts top-level OR
+--     reply posts under any active member's auth, matching the
+--     relaxed-policy intent.
 --   - DELETE "authors can delete their posts" — `author_id =
 --     auth.uid()`. There is no admin-DELETE policy: a club admin
 --     who wants to remove a member's post must do so by removing
@@ -89,10 +90,10 @@ select is_empty(
   'stranger cannot SELECT posts in a private club they do not belong to'
 );
 
--- 3. Active member can INSERT a top-level post. The
---    20260428_001 catch-all "members can post" makes this work
---    despite the older "admins can post top-level" policy still
---    being on the table.
+-- 3. Active member can INSERT a top-level post via the
+--    20260428_001 catch-all "members can post" (now the sole
+--    binding INSERT rule after 20260820_001 dropped the
+--    20260417_001 dead-code pair).
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000ee0002"}';
 insert into club_posts (id, club_id, author_id, body)
 values
