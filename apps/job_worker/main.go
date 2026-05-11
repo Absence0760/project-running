@@ -187,11 +187,26 @@ func main() {
 		healthPort = "8080"
 	}
 	// Live spectator hub — runs alongside the job-drain loop on the
-	// same Go service. Phase 2 follow-up will move ephemeral
-	// positions into Upstash Redis; until then the in-memory Hub is
-	// the single source of truth for in-flight runs. See
-	// `internal/livehub/types.go` for the migration path.
-	hub := livehub.NewHub()
+	// same Go service. Picks Redis-backed pub/sub (multi-replica
+	// fan-out, last-known TTL'd at 24h) when REDIS_URL is set,
+	// otherwise falls back to the in-process Hub (single-replica /
+	// dev path). Both satisfy `livehub.LivePubSub`.
+	var hub livehub.LivePubSub
+	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+		rdb, err := livehub.ConfigureRedis(redisURL)
+		if err != nil {
+			logger.Error("livehub: REDIS_URL parse failed; falling back to in-process", "err", err)
+			hub = livehub.NewHub()
+		} else {
+			redisHub := livehub.NewRedisHub(rdb)
+			redisHub.Log = logger.With("component", "livehub-redis")
+			hub = redisHub
+			logger.Info("livehub: backend=redis (multi-replica fan-out)")
+		}
+	} else {
+		hub = livehub.NewHub()
+		logger.Info("livehub: backend=in-process (single-replica)")
+	}
 	// Privacy-zone fetcher. Wires the hub's push path to the
 	// broadcaster's `user_settings.prefs.privacy_zones` so in-zone
 	// pings are dropped before fan-out — same contract as the

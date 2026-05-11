@@ -126,7 +126,10 @@ apps/job_worker/
 │   │   ├── auth.go          # JWTAuthorizer — Supabase HS256 JWT verify + owner check
 │   │   ├── auth_test.go     # 16 unit + 1 end-to-end test for the authorizer
 │   │   ├── server.go        # HTTP routes for /v1/live/{run_id}/* + zone clip
-│   │   └── server_test.go   # 16 httptest + WebSocket integration tests
+│   │   ├── server_test.go   # 16 httptest + WebSocket integration tests
+│   │   ├── iface.go         # LivePubSub interface — both Hub + RedisHub satisfy
+│   │   ├── redis_hub.go     # Redis-backed pub/sub variant (multi-replica fan-out + 24h TTL)
+│   │   └── redis_hub_test.go # 14 miniredis-backed tests on the Redis path
 │   ├── stravahook/          # Strava webhook HTTP endpoint (POST → enqueue strava_event)
 │   │   ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
 │   │   └── server_test.go   # 13 httptest cases on every gate + the handshake

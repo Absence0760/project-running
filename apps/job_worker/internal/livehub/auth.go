@@ -37,15 +37,17 @@ type JWTAuthorizer struct {
 	// Hub + Fetcher resolve the run owner / public flag. The
 	// authorizer never touches Supabase directly — it goes through
 	// the room cache so a hot publisher's per-second push is a
-	// single map lookup after warm-up.
-	Hub     *Hub
+	// single map lookup after warm-up. `Hub` is the LivePubSub
+	// interface so either the in-process broker or the Redis-backed
+	// variant can plug in here.
+	Hub     LivePubSub
 	Fetcher RunMetaFetcher
 }
 
 // NewJWTAuthorizer is the wiring helper main.go uses. Returns nil
 // when [secret] is empty — caller falls back to the permissive
 // (dev) authorizer in that case rather than booting up insecure.
-func NewJWTAuthorizer(secret string, hub *Hub, fetcher RunMetaFetcher) *JWTAuthorizer {
+func NewJWTAuthorizer(secret string, hub LivePubSub, fetcher RunMetaFetcher) *JWTAuthorizer {
 	if secret == "" {
 		return nil
 	}

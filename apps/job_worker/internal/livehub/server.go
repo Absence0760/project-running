@@ -31,7 +31,12 @@ import (
 // nil the hub falls through unclipped — useful for dev / unit
 // tests; production MUST set it.
 type Server struct {
-	Hub *Hub
+	// Hub is the pub/sub broker. Production wires either an
+	// in-process [Hub] (zero deps; single replica) or a Redis-backed
+	// [RedisHub] (multi-replica fan-out). The interface is wide
+	// enough to cover the Publish + Subscribe + snapshot + per-room
+	// caches the routes touch; see `iface.go`.
+	Hub LivePubSub
 	Log *slog.Logger
 
 	// Zones resolves the broadcaster's privacy zones for a run.
