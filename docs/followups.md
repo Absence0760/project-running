@@ -45,7 +45,7 @@ These tasks are marked completed at the high-leverage surface but have known sub
 ### #5 Phase 1+2b ops
 
 - [ ] **MapTiler API usage monitoring** (Phase 1, roadmap.md). Likely needs cloud-console access — set up alerting on tile-request rate against the MapTiler dashboard or via a CloudWatch metric on the CloudFront distribution that proxies tiles.
-- [ ] **Verify dashboard queries are under 2 s for users with 200+ runs** (Phase 2b, roadmap.md). Seed a fat fixture via the service-role bulk insert; measure `fetchRuns(limit: 50)` + the dashboard's weekly-mileage / PR queries with `EXPLAIN ANALYZE`; add indexes if anything's slow.
+- [x] **Verify dashboard queries are under 2 s for users with 200+ runs** (Phase 2b, roadmap.md). Measured locally at 2074 runs — all three queries (`fetchRuns(limit:50)`, `fetchWeeklyMileage`, `fetchPersonalRecords`) ran in 0.1–1 ms, ~1000× under the 2 s budget. No index changes needed; the existing composites carry it. Roadmap Phase 2b checkbox ticked.
 
 ### #6 Android residuals (parity.md follow-ups)
 

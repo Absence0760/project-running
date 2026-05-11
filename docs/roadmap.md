@@ -308,7 +308,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Full-text search index on `routes.name`
 - [x] Composite indexes for dashboard queries (runs by source, distance range)
 - [x] `pg_cron` job to refresh materialized view (every 15 min) — migration `20260602_001_pg_cron_schedules.sql` schedules `refresh materialized view concurrently mv_weekly_mileage` (later bumped from `*/5` to `*/15` in `20260706_001_pg_cron_mv_refresh_15min.sql` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw) plus a 15-minute `cleanup_stale_live_run_pings()` sweep that the `20260509_001` follow-up note had pending.
-- [ ] Verify dashboard queries perform under 2 seconds for users with 200+ runs
+- [x] Verify dashboard queries perform under 2 seconds for users with 200+ runs — measured locally at 2074 runs for the seed user (10× the target). `fetchRuns(limit:50)` 0.11 ms via `runs_user_started_at` index scan; `fetchWeeklyMileage` 0.99 ms (seq scan + sort — planner correctly picks seq when the user owns ~all rows); `fetchPersonalRecords` 0.31 ms via the trigger-maintained PR cache. All three queries land ~1000× under the 2 s budget. Indexes already in place from `20260403_001_initial_schema.sql` carry it.
 
 ### Milestone: web app live at `app.runapp.com`
 
