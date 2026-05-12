@@ -3,11 +3,11 @@ library;
 
 import 'dart:io';
 
-import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/social_service.dart';
+import '../lib/training.dart';
 import '../lib/training_service.dart';
 
 // Known seed IDs / slugs — kept here so an unintended seed change shows
@@ -282,6 +282,44 @@ void main() {
       }
     });
 
+    // NOTE: a parallel `createClub + leaveClub` test would be the
+    // natural place to drive `SocialService.createClub` end-to-end,
+    // but the mobile implementation uses `.select()` (all columns)
+    // after the insert, which fails against the column-grant
+    // lockdown (migration 20260818_001 grants column-level SELECT
+    // but `clubs.invite_token` is intentionally excluded — the web
+    // path passes `.select(CLUB_SELECT_COLS)` to avoid this). Fixing
+    // that is a pre-existing mobile<>web divergence; tracked as a
+    // follow-up. The lifecycle below covers `joinClub` + `leaveClub`
+    // without going through the broken createClub path.
+
+    test('joinClub on the seeded club is idempotent against re-runs',
+        () async {
+      // The runner@test.com seed user is already a member of the
+      // seeded club (the seed plants that row). joinClub on an
+      // existing membership must not blow up — the upsert path
+      // is idempotent. This is the contract that lets the UI safely
+      // call joinClub on a "Join" button without first checking
+      // membership.
+      // (Use a fresh leave + rejoin so the test exercises both
+      // sides; restore the seed state in finally.)
+      try {
+        await social.leaveClub(_seededClubId);
+        // joinClub returns the resulting status; open policy → active.
+        final status = await social.joinClub(_seededClubId, 'open');
+        expect(status, 'active',
+            reason: 'open policy must produce status=active immediately');
+        // fetchMyClubs sees it again.
+        final mine = await social.fetchMyClubs();
+        expect(mine.any((c) => c.row.id == _seededClubId), isTrue);
+      } finally {
+        // Ensure membership is restored even on test failure.
+        try {
+          await social.joinClub(_seededClubId, 'open');
+        } catch (_) {}
+      }
+    });
+
     test('createPost + deletePost roundtrip', () async {
       // The reply body distinguishes the test row from anything the
       // seed plants so the cleanup `delete` is unambiguous. We delete
@@ -368,6 +406,80 @@ void main() {
       // Soft lower bound so future seed grow doesn't break the test.
       expect(attendees.length, greaterThanOrEqualTo(2),
           reason: 'seed.sql plants exactly two attendees on this instance');
+    });
+
+    test('rsvpEvent + clearRsvp toggle attendance on the seeded instance',
+        () async {
+      // The seed plants two attendees on the recurring instance
+      // (the runner is one of them — going). Flip it through the
+      // states the UI exposes (going → maybe → cleared) and restore
+      // the seed `going` at the end.
+      final instance = DateTime.parse(_seededRecurringEventInstance);
+      final myUid = client.auth.currentUser!.id;
+      try {
+        await social.rsvpEvent(_seededRecurringEventId, 'maybe', instance);
+        final after1 = await social.fetchAttendees(
+            _seededRecurringEventId, instance);
+        final me1 = after1.firstWhere(
+          (a) => a.userId == myUid,
+          orElse: () =>
+              throw StateError('signed-in user not visible after rsvpEvent'),
+        );
+        expect(me1.status, 'maybe',
+            reason: 'rsvpEvent(maybe) must persist the upserted status');
+
+        await social.clearRsvp(_seededRecurringEventId, instance);
+        final after2 = await social.fetchAttendees(
+            _seededRecurringEventId, instance);
+        expect(after2.any((a) => a.userId == myUid), isFalse,
+            reason: 'clearRsvp must remove the event_attendees row');
+      } finally {
+        // Restore the seed `going` state.
+        await social.rsvpEvent(
+            _seededRecurringEventId, 'going', instance);
+      }
+    });
+
+    // NOTE: `createEvent` would test the admin write path, but the
+    // seed user is a regular `member` on the seeded club rather than
+    // an admin — RLS `admins can create events` policy denies. The
+    // alternative (seed user → createClub → admin trigger → createEvent)
+    // is gated on the mobile createClub bug noted above. Deferred.
+
+    test('submitEventResult + fetchEventResults + removeEventResult lifecycle',
+        () async {
+      // submitEventResult is the wire that backs the post-race "log
+      // my time" composer; fetchEventResults backs the leaderboard
+      // tile on the event detail screen. Walk the full lifecycle.
+      final instance = DateTime.parse(_seededRecurringEventInstance);
+      final myUid = client.auth.currentUser!.id;
+      try {
+        await social.submitEventResult(
+          eventId: _seededRecurringEventId,
+          instance: instance,
+          durationS: 1380,
+          distanceM: 5000,
+          finisherStatus: 'finished',
+          note: 'integration-test result',
+        );
+        final results = await social.fetchEventResults(
+            _seededRecurringEventId, instance);
+        final mine = results.firstWhere(
+          (r) => r.userId == myUid,
+          orElse: () => throw StateError(
+              'submitted result not visible on fetchEventResults'),
+        );
+        expect(mine.durationS, 1380,
+            reason: 'submitEventResult must persist the duration verbatim');
+        expect(mine.distanceM, 5000);
+      } finally {
+        await social.removeEventResult(_seededRecurringEventId, instance);
+        final afterDelete = await social.fetchEventResults(
+            _seededRecurringEventId, instance);
+        expect(afterDelete.any((r) => r.userId == myUid), isFalse,
+            reason: 'removeEventResult must drop the row so a re-fetch '
+                'no longer surfaces it');
+      }
     });
 
     test('fetchRecentRuns returns the signed-in user\'s runs', () async {
@@ -500,6 +612,115 @@ void main() {
         expect(t.clubId, _seededClubId,
             reason: 'every returned template must belong to the requested '
                 'club');
+      }
+    });
+
+    test('createPlan + deletePlan roundtrip', () async {
+      // Picks up the createPlan -> updateStatus -> deletePlan triangle
+      // in one shot. Without it the writer side of TrainingService had
+      // zero coverage; fetchPlan tests only the reader side.
+      final beforeIds = (await training.fetchMyPlans()).map((p) => p.id).toSet();
+      String? newId;
+      try {
+        final generated = generatePlan(GeneratePlanInput(
+          goalEvent: GoalEvent.distance10k,
+          recent5kSec: 1500,
+          startDate: DateTime.utc(2030, 1, 6),
+          daysPerWeek: 4,
+        ));
+        final created = await training.createPlan(
+          name: 'integration-test plan',
+          goalEvent: GoalEvent.distance10k,
+          goalDistanceM: 10_000,
+          startDate: DateTime.utc(2030, 1, 6),
+          daysPerWeek: 4,
+          recent5kSec: 1500,
+          generated: generated,
+        );
+        newId = created.id;
+        expect(beforeIds.contains(created.id), isFalse,
+            reason: 'createPlan must return a fresh row id, not reuse one');
+        expect(created.name, 'integration-test plan');
+        expect(created.daysPerWeek, 4);
+
+        // Status update must reflect on re-fetch. Valid statuses
+        // (CHECK constraint, migration 20260421_001): active /
+        // completed / abandoned. The user-visible "archive" action
+        // maps to `abandoned`.
+        await training.updateStatus(created.id, 'abandoned');
+        final after = await training.fetchMyPlans();
+        final updated = after.firstWhere((p) => p.id == created.id);
+        expect(updated.status, 'abandoned',
+            reason: 'updateStatus must persist the new value');
+      } finally {
+        if (newId != null) {
+          await training.deletePlan(newId);
+        }
+      }
+      // Post-delete: the row no longer surfaces on fetchMyPlans.
+      // newId is guaranteed non-null here because either createPlan
+      // succeeded (and we set it) or it threw (and we never reached
+      // this line). Analyzer's nullability inference doesn't follow
+      // the try/finally control flow.
+      final restored =
+          (await training.fetchMyPlans()).map((p) => p.id).toSet();
+      expect(restored.contains(newId), isFalse,
+          reason: 'deletePlan must remove the row');
+    });
+
+    test('markCompleted toggles the completion fields', () async {
+      // Pick a workout that the seed leaves un-completed so we have
+      // a clean baseline. Restore in finally.
+      final plan = await training.fetchPlan(_seededPlanId);
+      final target = plan.workouts.firstWhere(
+        (w) => w.completedRunId == null && w.manuallyCompleted != true,
+        orElse: () => plan.workouts.first,
+      );
+      try {
+        await training.markCompleted(target.id, null, manual: true);
+        final after = await training.fetchWorkout(target.id);
+        expect(after, isNotNull);
+        expect(after!.manuallyCompleted, isTrue,
+            reason: 'markCompleted(manual: true) must flip the flag');
+      } finally {
+        // Restore: passing null runId + manual=false flips both back
+        // off per the method's contract.
+        await training.markCompleted(target.id, null, manual: false);
+      }
+    });
+
+    test('clonePlanTemplate spawns a fresh plan from a template', () async {
+      // Step 1: ensure a template exists. publishPlanAsTemplate already
+      // has its own coverage; here we lean on it as a setup helper.
+      final templateId = await training.publishPlanAsTemplate(
+        planId: _seededPlanId,
+        clubId: _seededClubId,
+      );
+      String? clonedId;
+      try {
+        clonedId = await training.clonePlanTemplate(
+          templateId: templateId,
+          startDate: DateTime.utc(2030, 6, 1),
+        );
+        expect(clonedId, isNotEmpty,
+            reason: 'clone_plan_template RPC must return the new plan id');
+        // The clone is a regular (non-template) plan on the cloning
+        // user. Pick it up via fetchMyPlans.
+        final mine = await training.fetchMyPlans();
+        final fresh = mine.firstWhere(
+          (p) => p.id == clonedId,
+          orElse: () => throw StateError(
+              'cloned plan id not visible on fetchMyPlans'),
+        );
+        expect(fresh.isTemplate, isFalse,
+            reason: 'a cloned plan must NOT itself be a template');
+      } finally {
+        // Cleanup: drop the cloned plan AND the template we created
+        // for setup so the seed doesn't accumulate cruft on re-runs.
+        if (clonedId != null) {
+          await training.deletePlan(clonedId);
+        }
+        await training.deletePlan(templateId);
       }
     });
 
