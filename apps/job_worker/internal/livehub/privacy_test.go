@@ -88,3 +88,33 @@ func TestHaversineMetres_OneMetreEast(t *testing.T) {
 		t.Fatalf("haversine(1 m east) = %f, want ~1", d)
 	}
 }
+
+// FuzzIsInAnyZone — Go native fuzzing over the privacy-zone matcher.
+// The function is a hot path on every live-spectator ping; a NaN /
+// Inf / antipode coordinate must never panic or return a misclassed
+// result. Run locally with `go test -fuzz=FuzzIsInAnyZone -fuzztime=30s`.
+func FuzzIsInAnyZone(f *testing.F) {
+	// Seed corpus: a handful of representative inputs spanning the
+	// equator, dateline, the poles, and a normal mid-latitude point.
+	f.Add(0.0, 0.0, 0.0, 0.0, 100.0)
+	f.Add(47.37, 8.54, 47.37, 8.54, 200.0)
+	f.Add(-89.9, 179.9, 89.9, -179.9, 500.0)
+	f.Add(0.0, 0.0, 0.0, 180.0, 1000.0)
+
+	f.Fuzz(func(t *testing.T, lat, lng, zLat, zLng, radius float64) {
+		zones := []PrivacyZone{{Lat: zLat, Lng: zLng, RadiusM: radius}}
+		// The contract: never panic, always return a bool. Invariant
+		// checks against haversine pathology (NaN coords, negative
+		// radius, antipodes) are deliberately permissive — the
+		// matcher's job is to return a clear true/false so the caller
+		// can decide whether to drop the ping.
+		got := IsInAnyZone(lat, lng, zones)
+		// A negative radius can never enclose a point: the matcher
+		// must return false. The trigger-based equivalent in the SQL
+		// path treats radius_m as unsigned via CHECK constraint, but
+		// the in-process matcher accepts any float64 from the fetch.
+		if radius < 0 && got {
+			t.Fatalf("IsInAnyZone with radius=%v returned true (must be false for negative radius)", radius)
+		}
+	})
+}
