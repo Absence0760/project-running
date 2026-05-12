@@ -35,6 +35,7 @@
 	"type": "module",
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.95.1",
+		"@resvg/resvg-js": "^2.6.2",
 		"@revenuecat/purchases-js": "^1.39.1",
 		"@sentry/sveltekit": "^10.52.0",
 		"@supabase/ssr": "^0.10.3",

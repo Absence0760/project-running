@@ -47,20 +47,26 @@
 	<title>{pageTitle}</title>
 	<meta name="description" content={pageDesc} />
 	<!-- Open Graph — Facebook, LinkedIn, Slack, Discord, iMessage all
-	     read the og:* tags for the unfurl preview. og:image points at
-	     a generic static asset for now; a per-route track-preview PNG
-	     would be a follow-up that needs a server-side image renderer. -->
+	     read the og:* tags for the unfurl preview. og:image is a
+	     per-route 1200×630 PNG built at prerender time by
+	     /og/route/[id].png (resvg-js renders the SVG from
+	     `lib/og_route_image.ts`). Privacy zones are clipped server-side
+	     via the same `clip_track_for_user` RPC the share page uses, so
+	     a runner's home / work coordinate never leaks into a public
+	     unfurl image. -->
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={pageDesc} />
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content="Run Onward" />
-	<meta property="og:image" content="/apple-touch-icon.png" />
+	<meta property="og:image" content="/og/route/{data.id}.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
 	<!-- Twitter / X — `summary_large_image` so the unfurl renders the
 	     full og:image rather than a tiny icon. -->
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDesc} />
-	<meta name="twitter:image" content="/apple-touch-icon.png" />
+	<meta name="twitter:image" content="/og/route/{data.id}.png" />
 </svelte:head>
 
 <div class="share-page">

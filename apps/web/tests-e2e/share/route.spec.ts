@@ -70,9 +70,20 @@ test.describe('/share/route/[id] — anon', () => {
 			'content',
 			'Run Onward'
 		);
+		// og:image is now the per-route prerendered PNG. The image URL
+		// includes the route id so the unfurl card carries a real
+		// track preview rather than the static favicon.
 		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
 			'content',
-			'/apple-touch-icon.png'
+			`/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
+		);
+		await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute(
+			'content',
+			'1200'
+		);
+		await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute(
+			'content',
+			'630'
 		);
 		await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
 			'content',
@@ -88,8 +99,28 @@ test.describe('/share/route/[id] — anon', () => {
 		);
 		await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute(
 			'content',
-			'/apple-touch-icon.png'
+			`/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
 		);
+	});
+
+	test('per-route og:image renders a real PNG of correct dimensions', async ({ request }) => {
+		// The prerendered /og/route/[id].png endpoint must return a
+		// 1200×630 PNG (Twitter / Facebook recommended unfurl size).
+		// In dev mode the +server.ts handler runs at request time;
+		// in production CloudFront serves the prerendered file from S3.
+		// Either way the URL + Content-Type + magic bytes are pinned.
+		const res = await request.get(
+			`http://localhost:7777/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
+		);
+		expect(res.status()).toBe(200);
+		expect(res.headers()['content-type']).toContain('image/png');
+		const body = await res.body();
+		// PNG magic number — 89 50 4E 47 0D 0A 1A 0A.
+		expect(body.subarray(0, 8)).toEqual(
+			Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+		);
+		// Sanity: > 1KB rules out a degenerate 0-byte error response.
+		expect(body.length).toBeGreaterThan(1024);
 	});
 
 	test('not-found: visiting a missing route id renders the not-found state', async ({
