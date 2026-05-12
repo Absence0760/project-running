@@ -13,7 +13,12 @@
 
 resource "aws_sns_topic" "alerts" {
   name = "${local.resource_prefix}-alerts"
-  tags = var.tags
+  # SSE at rest with the AWS-managed SNS key. We don't need a CMK
+  # here — alarm messages contain no secrets, just the alarm name +
+  # state transition — so the AWS-managed key is the right
+  # cost/control trade-off. Closes Trivy AWS-0095.
+  kms_master_key_id = "alias/aws/sns"
+  tags              = var.tags
 }
 
 resource "aws_sns_topic_subscription" "alerts_email" {

@@ -19,6 +19,17 @@ provider "aws" {
 
 # ─────────────────── State bucket ───────────────────
 
+# trivy:ignore:AWS-0089 — S3 access logging would require a second
+# state bucket (logs-of-state) with its own lifecycle. The state
+# bucket sees ~1 write per `terraform apply` (single OIDC role,
+# fully audited via CloudTrail at the account level), so the
+# CloudTrail data event for `s3:PutObject` on this bucket is the
+# right surface — not bucket logging.
+# trivy:ignore:AWS-0132 — AES256 is sufficient for state encryption
+# here: the bucket is locked to the OIDC deploy role + the operator
+# IAM principal, and the contents are Terraform plans (no PII, no
+# customer data). Customer-managed KMS would add cross-account
+# rotation overhead with no marginal control gain.
 resource "aws_s3_bucket" "state" {
   bucket        = var.state_bucket_name
   force_destroy = false

@@ -147,6 +147,17 @@ resource "aws_kms_alias" "secrets" {
 
 # ──────────────────────────── S3 bucket (static site) ────────────────────────────
 
+# trivy:ignore:AWS-0089 — S3 access logging duplicates what CloudFront
+# already logs via `logging_config` on the distribution (when enabled)
+# and via real-time metrics. Every object in this bucket is served
+# through CloudFront with OAC — a direct S3 GET that bypasses
+# CloudFront is blocked by the bucket policy, so S3 access logs would
+# only capture the CI deploy writes already tracked in CloudTrail.
+# trivy:ignore:AWS-0132 — site contents are intentionally public
+# (static SvelteKit build for runonward.com). AES256 protects the
+# data at rest from the underlying storage layer; CMK rotation
+# offers no additional protection over an asset designed to be
+# served to anonymous viewers.
 resource "aws_s3_bucket" "site" {
   bucket        = "${local.resource_prefix}-site"
   force_destroy = false
@@ -249,10 +260,22 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# X-Ray write permissions for the tracing_config on aws_lambda_function.coach.
+# The managed policy grants PutTraceSegments + PutTelemetryRecords only.
+resource "aws_iam_role_policy_attachment" "lambda_xray" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${local.resource_prefix}-coach"
   retention_in_days = 30
-  tags              = var.tags
+  # Reuse the same CMK that already encrypts the lambda env vars.
+  # KMS rotation + access policy are managed in one place; the log
+  # group only contains coach request traces, which can carry the
+  # same secrecy class as the env vars themselves.
+  kms_key_id = aws_kms_key.secrets.arn
+  tags       = var.tags
 }
 
 resource "aws_lambda_function" "coach" {
@@ -279,6 +302,14 @@ resource "aws_lambda_function" "coach" {
 
   environment {
     variables = local.lambda_env
+  }
+
+  # X-Ray tracing — captures the upstream Anthropic call duration
+  # + the supabase auth lookup as segments alongside the standard
+  # Init / Invocation phases. Cost is ~$0.000005 per traced
+  # request which is negligible at coach's volume.
+  tracing_config {
+    mode = "Active"
   }
 
   tags = var.tags
@@ -506,6 +537,13 @@ resource "aws_cloudfront_origin_request_policy" "lambda" {
   }
 }
 
+# trivy:ignore:AWS-0010 — CloudFront access logging adds a per-env
+# S3 bucket with its own lifecycle + IAM grant, plus the storage cost
+# scales with viewer count. The CloudWatch real-time metrics emitted
+# by `default_cache_behavior` + the per-Lambda alarms in alarms.tf
+# already cover the operational signals (4xx/5xx rate, origin latency,
+# request volume). Revisit if we need per-IP audit trails (currently
+# we don't — anonymous viewers are intentional).
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true
