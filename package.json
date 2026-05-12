@@ -17,12 +17,16 @@
     "html-to-image": "^1.11.13"
   },
   "overrides": {
-    "cookie": "^1.0.2"
-  },
-  "pnpm": {
-    "overrides": {
+    "cookie": "^1.0.2",
+    "@sveltejs/kit": {
       "cookie": "^1.0.2"
     }
   },
-  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Force the transitive to 1.x via npm AND pnpm overrides — the API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop this once @sveltejs/kit ships its own bump."
+  "pnpm": {
+    "overrides": {
+      "cookie": "^1.0.2",
+      "@sveltejs/kit>cookie": "^1.0.2"
+    }
+  },
+  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Top-level override deduplicates direct copies but npm leaves SvelteKit's nested node_modules/@sveltejs/kit/node_modules/cookie@0.6.0 in place because the v0.x → v1.x range jump is outside SvelteKit's declared dependency range. The nested @sveltejs/kit > cookie override forces that transitive copy too. The API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop both entries once @sveltejs/kit ships its own bump."
 }
