@@ -7,14 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../lib/local_route_store.dart';
 import '../lib/route_overlap.dart';
-import '../lib/routing.dart';
 import '../lib/screens/route_builder_screen.dart';
 
 class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin {
