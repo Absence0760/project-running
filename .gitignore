@@ -26,6 +26,11 @@ apps/web/test-results/
 apps/web/playwright-report/
 apps/web/blob-report/
 apps/web/playwright/.cache/
+# Playwright sometimes lands its artefact dir at the repo root when
+# the test is invoked from a different cwd (e.g. via the npm-workspace
+# wrapper). Same purpose, same regeneration cycle — ignore here too.
+/test-results/
+/playwright-report/
 
 # Environment
 .env
