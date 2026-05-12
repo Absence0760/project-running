@@ -67,8 +67,15 @@ test.describe('settings persistence', () => {
 		try {
 			await page.goto('/settings/account');
 			// Display Name input is the first text input under Profile.
+			// The page's onMount polls auth.user (loading=false flips
+			// before fetchUser resolves) and only THEN writes
+			// `displayName = auth.user.display_name`. If we .fill() before
+			// that hydration completes, the late assignment clobbers our
+			// input back to the original. Wait for the input to carry the
+			// pre-existing display_name so we know hydration has run.
 			const input = page.locator('input[type="text"]').first();
 			await expect(input).toBeVisible({ timeout: 10_000 });
+			await expect(input).toHaveValue(original ?? '', { timeout: 10_000 });
 			await input.fill(newName);
 			await page.getByRole('button', { name: /Save Profile/ }).click();
 
