@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
-import { buildSitemap, composeEntries } from '$lib/sitemap';
+import { buildRunCountByRouteId, buildSitemap, composeEntries } from '$lib/sitemap';
 
 // Build-time sitemap. `adapter-static` runs this once during the
 // production build because of `prerender = true`; the resulting
@@ -39,12 +39,15 @@ export const GET: RequestHandler = async () => {
 	// share-link viewers). `started_at` is the only timestamp the view
 	// publishes and is the right lastmod for a public share page anyway.
 	let runs: Array<{ id: string; updated_at: string | null; started_at: string | null }> = [];
+	// Popularity map: route_id -> # of public_runs that ran it. Bumps
+	// <priority> + <changefreq> on routes the community actually uses.
+	let runCountByRouteId: Map<string, number> | undefined;
 	if (PUBLIC_SUPABASE_URL && PUBLIC_SUPABASE_ANON_KEY) {
 		try {
 			const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 				auth: { persistSession: false },
 			});
-			const [routesRes, runsRes] = await Promise.all([
+			const [routesRes, runsRes, popularityRes] = await Promise.all([
 				supabase
 					.from('public_routes')
 					.select('id, updated_at')
@@ -55,6 +58,16 @@ export const GET: RequestHandler = async () => {
 					.select('id, started_at')
 					.order('started_at', { ascending: false })
 					.limit(MAX_RUNS),
+				// public_runs.route_id is nulled out unless the linked
+				// route is itself public (migration 20260626_001), so
+				// the popularity signal only counts public-on-public
+				// matches. The not.is.null filter keeps the payload
+				// small (most runs don't link to a saved route).
+				supabase
+					.from('public_runs')
+					.select('route_id')
+					.not('route_id', 'is', null)
+					.limit(MAX_RUNS),
 			]);
 			if (routesRes.error) {
 				console.warn('sitemap: public_routes fetch failed', routesRes.error);
@@ -62,18 +75,22 @@ export const GET: RequestHandler = async () => {
 			if (runsRes.error) {
 				console.warn('sitemap: public_runs fetch failed', runsRes.error);
 			}
+			if (popularityRes.error) {
+				console.warn('sitemap: popularity fetch failed', popularityRes.error);
+			}
 			routes = routesRes.data ?? [];
 			runs = (runsRes.data ?? []).map((r) => ({
 				id: r.id,
 				updated_at: null,
 				started_at: r.started_at,
 			}));
+			runCountByRouteId = buildRunCountByRouteId(popularityRes.data ?? []);
 		} catch (err) {
 			console.warn('sitemap: supabase fetch failed; emitting top-level-only', err);
 		}
 	}
 
-	const body = buildSitemap(composeEntries(base, routes, runs));
+	const body = buildSitemap(composeEntries(base, routes, runs, runCountByRouteId));
 	return new Response(body, {
 		headers: {
 			'content-type': 'application/xml; charset=utf-8',

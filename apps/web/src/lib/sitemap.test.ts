@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSitemap, composeEntries, normaliseBase, xmlEscape } from './sitemap';
+import {
+	buildRunCountByRouteId,
+	buildSitemap,
+	changefreqForRunCount,
+	composeEntries,
+	normaliseBase,
+	priorityForRunCount,
+	xmlEscape,
+} from './sitemap';
 
 // ---------------- xmlEscape ----------------
 
@@ -122,10 +130,95 @@ test('composeEntries — every share entry carries a priority and a changefreq',
 	const entries = composeEntries('https://runonward.com', [{ id: 'a' }], [{ id: 'b' }]);
 	const route = entries.find((e) => e.loc.endsWith('/share/route/a'))!;
 	const run = entries.find((e) => e.loc.endsWith('/share/run/b'))!;
-	assert.equal(route.changefreq, 'weekly');
+	// Route with no popularity → cold base values.
+	assert.equal(route.changefreq, 'monthly');
 	assert.equal(route.priority, 0.7);
 	assert.equal(run.changefreq, 'monthly');
 	assert.equal(run.priority, 0.6);
+});
+
+// ---------------- end-to-end ----------------
+
+// ---------------- priorityForRunCount + changefreqForRunCount ----------------
+
+test('priorityForRunCount — bucket boundaries', () => {
+	assert.equal(priorityForRunCount(0), 0.7);
+	assert.equal(priorityForRunCount(4), 0.7);
+	assert.equal(priorityForRunCount(5), 0.8);
+	assert.equal(priorityForRunCount(19), 0.8);
+	assert.equal(priorityForRunCount(20), 0.9);
+	assert.equal(priorityForRunCount(49), 0.9);
+	assert.equal(priorityForRunCount(50), 1.0);
+	assert.equal(priorityForRunCount(1000), 1.0);
+});
+
+test('changefreqForRunCount — bucket boundaries', () => {
+	assert.equal(changefreqForRunCount(0), 'monthly');
+	assert.equal(changefreqForRunCount(4), 'monthly');
+	assert.equal(changefreqForRunCount(5), 'weekly');
+	assert.equal(changefreqForRunCount(19), 'weekly');
+	assert.equal(changefreqForRunCount(20), 'daily');
+});
+
+// ---------------- buildRunCountByRouteId ----------------
+
+test('buildRunCountByRouteId — tallies repeated ids', () => {
+	const m = buildRunCountByRouteId([
+		{ route_id: 'a' },
+		{ route_id: 'a' },
+		{ route_id: 'b' },
+		{ route_id: 'a' },
+	]);
+	assert.equal(m.get('a'), 3);
+	assert.equal(m.get('b'), 1);
+	assert.equal(m.size, 2);
+});
+
+test('buildRunCountByRouteId — ignores null + undefined route_ids', () => {
+	const m = buildRunCountByRouteId([
+		{ route_id: null },
+		{ route_id: undefined },
+		{ route_id: 'real' },
+		{},
+	]);
+	assert.equal(m.size, 1);
+	assert.equal(m.get('real'), 1);
+});
+
+test('buildRunCountByRouteId — empty input returns empty map', () => {
+	const m = buildRunCountByRouteId([]);
+	assert.equal(m.size, 0);
+});
+
+// ---------------- composeEntries popularity ----------------
+
+test('composeEntries — popular route bumps priority + changefreq', () => {
+	const popularity = new Map<string, number>([
+		['hot', 25], // → daily / 0.9
+		['warm', 7], // → weekly / 0.8
+	]);
+	const entries = composeEntries(
+		'https://x',
+		[{ id: 'hot' }, { id: 'warm' }, { id: 'cold' }],
+		[],
+		popularity,
+	);
+	const hot = entries.find((e) => e.loc.endsWith('/share/route/hot'))!;
+	const warm = entries.find((e) => e.loc.endsWith('/share/route/warm'))!;
+	const cold = entries.find((e) => e.loc.endsWith('/share/route/cold'))!;
+	assert.equal(hot.priority, 0.9);
+	assert.equal(hot.changefreq, 'daily');
+	assert.equal(warm.priority, 0.8);
+	assert.equal(warm.changefreq, 'weekly');
+	assert.equal(cold.priority, 0.7);
+	assert.equal(cold.changefreq, 'monthly');
+});
+
+test('composeEntries — popularity map omitted → all routes use base values', () => {
+	const entries = composeEntries('https://x', [{ id: 'a' }, { id: 'b' }], []);
+	const a = entries.find((e) => e.loc.endsWith('/share/route/a'))!;
+	assert.equal(a.priority, 0.7);
+	assert.equal(a.changefreq, 'monthly');
 });
 
 // ---------------- end-to-end ----------------

@@ -57,13 +57,39 @@ export function buildSitemap(entries: SitemapEntry[]): string {
 	return lines.join('\n') + '\n';
 }
 
+/// Bucket a route's run-count into a sitemap priority. Routes
+/// without any recorded runs use the base 0.7; popular routes
+/// bump up through 0.8 / 0.9 / 1.0 (cap matches the landing page).
+/// Sub-linear (log-buckets) so a single hyper-popular route doesn't
+/// drown the rest of the namespace.
+export function priorityForRunCount(count: number): number {
+	if (count >= 50) return 1.0;
+	if (count >= 20) return 0.9;
+	if (count >= 5) return 0.8;
+	return 0.7;
+}
+
+/// changefreq for a route — popular routes get crawled more often.
+/// Same bucketing as `priorityForRunCount` (a route popular enough
+/// to bump priority is one where crawl freshness matters too).
+export function changefreqForRunCount(
+	count: number,
+): 'daily' | 'weekly' | 'monthly' {
+	if (count >= 20) return 'daily';
+	if (count >= 5) return 'weekly';
+	return 'monthly';
+}
+
 /// Compose the full entries list from the base URL + raw db rows.
 /// Top-level surfaces (landing, feed, explore) come first; share
-/// pages follow.
+/// pages follow. `runCountByRouteId` is an optional popularity map
+/// from a `public_runs.route_id` aggregation — present values bump
+/// the route's <priority> + <changefreq>.
 export function composeEntries(
 	base: string,
 	routes: Array<{ id: string; updated_at?: string | null }>,
 	runs: Array<{ id: string; updated_at?: string | null; started_at?: string | null }>,
+	runCountByRouteId?: Map<string, number>,
 ): SitemapEntry[] {
 	const b = normaliseBase(base);
 	const entries: SitemapEntry[] = [
@@ -76,11 +102,12 @@ export function composeEntries(
 		{ loc: `${b}/routes?tab=explore`, changefreq: 'daily', priority: 0.6 },
 	];
 	for (const r of routes) {
+		const count = runCountByRouteId?.get(r.id) ?? 0;
 		entries.push({
 			loc: `${b}/share/route/${r.id}`,
 			lastmod: r.updated_at ?? undefined,
-			changefreq: 'weekly',
-			priority: 0.7,
+			changefreq: changefreqForRunCount(count),
+			priority: priorityForRunCount(count),
 		});
 	}
 	for (const r of runs) {
@@ -92,4 +119,20 @@ export function composeEntries(
 		});
 	}
 	return entries;
+}
+
+/// Tally `public_runs.route_id` into a Map keyed by route_id. Used
+/// by the sitemap endpoint to popularity-weight routes. Rows with a
+/// null `route_id` (the most common case — most runs aren't matched
+/// to a saved route) are ignored.
+export function buildRunCountByRouteId(
+	rows: Array<{ route_id?: string | null }>,
+): Map<string, number> {
+	const out = new Map<string, number>();
+	for (const r of rows) {
+		const id = r.route_id;
+		if (!id) continue;
+		out.set(id, (out.get(id) ?? 0) + 1);
+	}
+	return out;
 }
