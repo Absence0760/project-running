@@ -95,14 +95,47 @@ test.describe('/share/run/[id] — anon', () => {
 			'content',
 			'Run Onward'
 		);
+		// Per-run og:image is the prerendered PNG under /og/run/<id>.png.
 		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
 			'content',
-			'/apple-touch-icon.png'
+			`/og/run/${RUNNER_PUBLIC_RUN_ID}.png`
+		);
+		await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute(
+			'content',
+			'1200'
+		);
+		await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute(
+			'content',
+			'630'
 		);
 		await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
 			'content',
 			'summary_large_image'
 		);
+		await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute(
+			'content',
+			`/og/run/${RUNNER_PUBLIC_RUN_ID}.png`
+		);
+	});
+
+	test('per-run og:image renders a real PNG of correct dimensions', async ({ request }) => {
+		// The prerendered /og/run/[id].png endpoint must return a
+		// 1200×630 PNG (Twitter / Facebook recommended unfurl size).
+		// In dev mode the +server.ts handler runs at request time;
+		// in production CloudFront serves the prerendered file from S3.
+		// Either way the URL + Content-Type + magic bytes are pinned.
+		const res = await request.get(
+			`http://localhost:7777/og/run/${RUNNER_PUBLIC_RUN_ID}.png`
+		);
+		expect(res.status()).toBe(200);
+		expect(res.headers()['content-type']).toContain('image/png');
+		const body = await res.body();
+		// PNG magic number — 89 50 4E 47 0D 0A 1A 0A.
+		expect(body.subarray(0, 8)).toEqual(
+			Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+		);
+		// Sanity: > 1KB rules out a degenerate 0-byte error response.
+		expect(body.length).toBeGreaterThan(1024);
 	});
 
 	test('Sign up CTA on the anon share page lands on /login?signup=1', async ({

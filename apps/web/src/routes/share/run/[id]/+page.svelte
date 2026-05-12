@@ -25,11 +25,13 @@
 	<meta property="og:description" content={description} />
 	<meta property="og:type" content="article" />
 	<meta property="og:site_name" content="Run Onward" />
-	<meta property="og:image" content="/apple-touch-icon.png" />
+	<meta property="og:image" content="/og/run/{data.id}.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
-	<meta name="twitter:image" content="/apple-touch-icon.png" />
+	<meta name="twitter:image" content="/og/run/{data.id}.png" />
 </svelte:head>
 
 <div class="share-page">
