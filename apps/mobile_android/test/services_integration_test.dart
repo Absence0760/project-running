@@ -282,16 +282,51 @@ void main() {
       }
     });
 
-    // NOTE: a parallel `createClub + leaveClub` test would be the
-    // natural place to drive `SocialService.createClub` end-to-end,
-    // but the mobile implementation uses `.select()` (all columns)
-    // after the insert, which fails against the column-grant
-    // lockdown (migration 20260818_001 grants column-level SELECT
-    // but `clubs.invite_token` is intentionally excluded — the web
-    // path passes `.select(CLUB_SELECT_COLS)` to avoid this). Fixing
-    // that is a pre-existing mobile<>web divergence; tracked as a
-    // follow-up. The lifecycle below covers `joinClub` + `leaveClub`
-    // without going through the broken createClub path.
+    test('createClub + leaveClub roundtrip', () async {
+      // The signed-in seed user creates a new public club, then
+      // leaves it. browseClubs (which filters to is_public=true)
+      // must surface it during the gap; fetchMyClubs must list it
+      // for the creator (the trigger plants the owner's
+      // club_members row) and stop listing it after leave.
+      final probe = 'it-club-${DateTime.now().microsecondsSinceEpoch}';
+      String? createdId;
+      try {
+        final created = await social.createClub(
+          name: 'IT $probe',
+          slug: probe,
+        );
+        createdId = created.id;
+        expect(created.isPublic, isTrue);
+        expect(created.slug, probe);
+
+        // Owner sees it on fetchMyClubs (the create-side trigger
+        // plants club_members for the owner role).
+        final myClubs = await social.fetchMyClubs();
+        expect(myClubs.any((c) => c.row.id == createdId), isTrue,
+            reason: 'creator must be auto-added as a club_members row');
+
+        // It's also visible to anyone via browseClubs.
+        final browsed = await social.browseClubs(query: probe);
+        expect(browsed.any((c) => c.row.id == createdId), isTrue);
+
+        await social.leaveClub(createdId);
+        final afterLeave = await social.fetchMyClubs();
+        expect(afterLeave.any((c) => c.row.id == createdId), isFalse,
+            reason: 'leaveClub removes the club_members row, so '
+                'fetchMyClubs no longer surfaces it');
+      } finally {
+        // Last resort: delete the club row directly. RLS allows
+        // owners to delete their clubs. After `leaveClub` the
+        // creator is no longer in `club_members` BUT clubs.owner_id
+        // still references them — the policy gate is
+        // `auth.uid() = owner_id`, not membership.
+        if (createdId != null) {
+          try {
+            await client.from('clubs').delete().eq('id', createdId);
+          } catch (_) {}
+        }
+      }
+    });
 
     test('joinClub on the seeded club is idempotent against re-runs',
         () async {
@@ -440,11 +475,46 @@ void main() {
       }
     });
 
-    // NOTE: `createEvent` would test the admin write path, but the
-    // seed user is a regular `member` on the seeded club rather than
-    // an admin — RLS `admins can create events` policy denies. The
-    // alternative (seed user → createClub → admin trigger → createEvent)
-    // is gated on the mobile createClub bug noted above. Deferred.
+    test('createEvent on a fresh club (where user is admin) writes + fetches',
+        () async {
+      // The seed user is a plain `member` on the seeded club, so
+      // the admin-gated event write would 403 there. Bootstrap a
+      // fresh club via createClub — the create-trigger plants the
+      // owner's club_members row with role `admin`, which lets the
+      // RLS `admins can create events` policy pass for this test.
+      final probe = 'it-evt-${DateTime.now().microsecondsSinceEpoch}';
+      String? clubId;
+      String? eventId;
+      try {
+        final club = await social.createClub(name: 'IT $probe', slug: probe);
+        clubId = club.id;
+        final created = await social.createEvent(
+          clubId: clubId,
+          title: 'IT one-off event',
+          startsAt: DateTime.utc(2030, 1, 15, 7, 0),
+          meetLabel: 'Test Park',
+          durationMin: 60,
+        );
+        eventId = created.id;
+        expect(created.clubId, clubId);
+        final fetched = await social.fetchEventById(eventId);
+        expect(fetched, isNotNull,
+            reason: 'createEvent must produce a row that fetchEventById can '
+                'resolve');
+        expect(fetched!.row.title, 'IT one-off event');
+      } finally {
+        if (eventId != null) {
+          try {
+            await client.from('events').delete().eq('id', eventId);
+          } catch (_) {}
+        }
+        if (clubId != null) {
+          try {
+            await client.from('clubs').delete().eq('id', clubId);
+          } catch (_) {}
+        }
+      }
+    });
 
     test('submitEventResult + fetchEventResults + removeEventResult lifecycle',
         () async {

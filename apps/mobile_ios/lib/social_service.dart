@@ -303,7 +303,7 @@ class SocialService extends ChangeNotifier {
           'is_public': isPublic,
           'join_policy': joinPolicy,
         })
-        .select()
+        .select(_clubSelectCols)
         .single();
     notifyListeners();
     return ClubRow.fromJson(inserted);
