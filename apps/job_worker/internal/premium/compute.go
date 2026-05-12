@@ -305,12 +305,15 @@ func GeneratePlan(input GeneratePlanInput) GeneratedPlan {
 
 	baseEnd := weeks / 2
 	buildEnd := (weeks * 3) / 4
-	// Explicit constant bound at the allocation — `weeks` is already
-	// clamped to [4, 24] above, but CodeQL's taint analysis follows
-	// the user-input flow into the make() call without re-deriving
-	// the guard. The min() here makes the upper bound visible at the
-	// allocation site so `go/uncontrolled-allocation-size` stays quiet.
-	weekly := make([]PlanWeek, 0, min(weeks, 24))
+	// Pre-allocate to the constant ceiling rather than to `weeks` —
+	// `weeks` is already clamped to [4, 24], but CodeQL follows the
+	// user-input taint through `make` regardless of intervening
+	// clamps or `min()` calls. A literal capacity severs the data
+	// flow entirely; the unused tail (when weeks < 24) is one PlanWeek
+	// struct per missing week, ~hundreds of bytes total. The for-loop
+	// below only appends `weeks` entries so the slice length is right.
+	const maxPlanWeeks = 24
+	weekly := make([]PlanWeek, 0, maxPlanWeeks)
 	for w := 1; w <= weeks; w++ {
 		var phase, key string
 		var km int
