@@ -18,6 +18,11 @@ on:
     tags:
       - 'osrm@*'
 
+# Least-privilege default; the release job opts up to `contents: write`
+# for the GitHub Release step.
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 

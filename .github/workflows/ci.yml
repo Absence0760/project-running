@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default: every job inherits `contents: read` and
+# must opt in to anything more. CodeQL's
+# `actions/missing-workflow-permissions` flags individual jobs when
+# the workflow lacks this top-level grant.
+permissions:
+  contents: read
+
 # Opt every JS-based action (actions/checkout, actions/cache,
 # supabase/setup-cli, …) into Node 24 ahead of GitHub's 2026-06-02
 # forced upgrade. Without this, the runner emits a deprecation

@@ -10,6 +10,12 @@ on:
   pull_request_review:
     types: [submitted]
 
+# Least-privilege default. The single job below opts up to the
+# write scopes it needs (contents/pull-requests/issues + id-token
+# for OIDC).
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 

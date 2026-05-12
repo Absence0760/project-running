@@ -11,6 +11,11 @@ on:
     tags:
       - 'watch_ios@*'
 
+# Least-privilege default; the build job opts up to `contents: write`
+# for the GitHub Release step.
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
