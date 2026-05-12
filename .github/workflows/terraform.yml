@@ -21,9 +21,14 @@ name: Terraform
 #   - infra/bootstrap        (state bucket + DDB lock — one-time)
 #   - infra/dns              (Route 53 zone + ACM cert)
 #   - infra/github-oidc      (OIDC provider + per-env deploy roles)
-#   - infra/modules/web-stack (reusable per-env module)
 #   - infra/envs/prod        (prod root module)
 #   - infra/envs/preview     (preview root module)
+#
+# infra/modules/web-stack is deliberately NOT in the matrix:
+# `terraform validate` against a module fails with "Provider
+# configuration not present" because the module references an
+# `aws.us_east_1` aliased provider passed in by the caller. The
+# module is transitively validated by envs/prod and envs/preview.
 #
 # When adding a new stack: append it to the `stack` matrix below
 # AND add a `terraform` ecosystem entry to `.github/dependabot.yml`.
@@ -60,7 +65,6 @@ jobs:
           - infra/bootstrap
           - infra/dns
           - infra/github-oidc
-          - infra/modules/web-stack
           - infra/envs/prod
           - infra/envs/preview
 
