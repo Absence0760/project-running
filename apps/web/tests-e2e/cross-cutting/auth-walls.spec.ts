@@ -185,8 +185,14 @@ test.describe('anonymous walls', () => {
 		// it on a successful sign-in.
 		const target = `/runs/${RUNNER_PUBLIC_RUN_ID}`;
 		await page.goto(target);
+		// Full regex-escape (every metacharacter, including backslash)
+		// rather than the slash-only replace — CodeQL flagged the prior
+		// shortcut as `js/incomplete-sanitization` and a future test
+		// author copying this pattern might pass a string that
+		// genuinely contains a regex metachar.
+		const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 		await expect(page).toHaveURL(
-			new RegExp(`/login\\?return_to=${encodeURIComponent(target).replace(/\//g, '\\/')}`),
+			new RegExp(`/login\\?return_to=${escapeRegex(encodeURIComponent(target))}`),
 			{ timeout: 10_000 }
 		);
 
@@ -195,7 +201,7 @@ test.describe('anonymous walls', () => {
 		await page.getByPlaceholder('Email address').fill(USER_A.email);
 		await page.getByPlaceholder('Password').fill(USER_A.password);
 		await page.getByRole('button', { name: 'Sign In' }).click();
-		await expect(page).toHaveURL(new RegExp(target.replace(/\//g, '\\/') + '$'), {
+		await expect(page).toHaveURL(new RegExp(escapeRegex(target) + '$'), {
 			timeout: 15_000
 		});
 	});

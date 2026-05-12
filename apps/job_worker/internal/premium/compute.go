@@ -305,7 +305,12 @@ func GeneratePlan(input GeneratePlanInput) GeneratedPlan {
 
 	baseEnd := weeks / 2
 	buildEnd := (weeks * 3) / 4
-	weekly := make([]PlanWeek, 0, weeks)
+	// Explicit constant bound at the allocation — `weeks` is already
+	// clamped to [4, 24] above, but CodeQL's taint analysis follows
+	// the user-input flow into the make() call without re-deriving
+	// the guard. The min() here makes the upper bound visible at the
+	// allocation site so `go/uncontrolled-allocation-size` stays quiet.
+	weekly := make([]PlanWeek, 0, min(weeks, 24))
 	for w := 1; w <= weeks; w++ {
 		var phase, key string
 		var km int
