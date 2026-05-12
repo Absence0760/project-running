@@ -256,9 +256,9 @@ resource "aws_cloudwatch_log_group" "lambda" {
 }
 
 resource "aws_lambda_function" "coach" {
-  function_name                  = "${local.resource_prefix}-coach"
-  role                           = aws_iam_role.lambda.arn
-  handler                        = "index.handler"
+  function_name = "${local.resource_prefix}-coach"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
   # Node 24 (current Active LTS). Must be 22+: @supabase/realtime-js
   # >=2.105 needs native WebSocket support, which only landed in Node
   # 22. The coach handler calls createClient() per request; on Node
