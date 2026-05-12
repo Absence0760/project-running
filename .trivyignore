@@ -1,0 +1,34 @@
+# Centralised suppressions for Trivy IaC findings on infra/ that we
+# have decided not to fix. Each entry lists the rule ID and the
+# rationale; remove the entry to re-enable that check.
+#
+# Format: `AVD-AWS-XXXX` per Trivy's misconfig ID convention. The
+# SARIF emits `AWS-XXXX` but the ignore file expects the AVD-prefixed
+# form.
+#
+# Picked up automatically by the Trivy CLI (and the trivy-action) when
+# present at the working directory of the scan. The terraform workflow
+# checks the repo out at the workspace root, so this file sits there.
+
+# S3 access logging on the Terraform state bucket (infra/bootstrap) and
+# the static site bucket (infra/modules/web-stack). State bucket has
+# ~1 write/apply audited by CloudTrail data events; site bucket is
+# fronted by CloudFront with OAC (direct S3 GETs are blocked) and
+# every deploy write lands in CloudTrail too. A second logs bucket
+# would duplicate signals already captured upstream.
+AVD-AWS-0089
+
+# S3 customer-managed-key encryption on the same two buckets above.
+# State bucket has no PII / no customer data — Terraform plans only —
+# and is locked to a single OIDC role. Site bucket contains the
+# public SvelteKit build, intentionally served anonymously. AES256
+# protects against storage-layer compromise; CMK rotation adds no
+# marginal security for content with this threat model.
+AVD-AWS-0132
+
+# CloudFront access logging. CloudWatch real-time metrics +
+# per-Lambda alarms in infra/modules/web-stack/alarms.tf already
+# cover the operational signals access logs would. Per-IP audit
+# trails aren't a current requirement; revisit if regulatory needs
+# change.
+AVD-AWS-0010

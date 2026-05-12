@@ -147,17 +147,12 @@ resource "aws_kms_alias" "secrets" {
 
 # ──────────────────────────── S3 bucket (static site) ────────────────────────────
 
-# trivy:ignore:AWS-0089 — S3 access logging duplicates what CloudFront
-# already logs via `logging_config` on the distribution (when enabled)
-# and via real-time metrics. Every object in this bucket is served
-# through CloudFront with OAC — a direct S3 GET that bypasses
-# CloudFront is blocked by the bucket policy, so S3 access logs would
-# only capture the CI deploy writes already tracked in CloudTrail.
-# trivy:ignore:AWS-0132 — site contents are intentionally public
-# (static SvelteKit build for runonward.com). AES256 protects the
-# data at rest from the underlying storage layer; CMK rotation
-# offers no additional protection over an asset designed to be
-# served to anonymous viewers.
+# Trivy AWS-0089 (S3 access logging) and AWS-0132 (S3 CMK encryption)
+# are suppressed for this bucket in .trivyignore at the repo root.
+# Rationale: contents are intentionally public (static SvelteKit
+# build), CloudFront OAC blocks direct S3 GETs, deploy writes are
+# in CloudTrail. AES256 is sufficient for an asset designed to be
+# served anonymously.
 resource "aws_s3_bucket" "site" {
   bucket        = "${local.resource_prefix}-site"
   force_destroy = false
@@ -537,13 +532,11 @@ resource "aws_cloudfront_origin_request_policy" "lambda" {
   }
 }
 
-# trivy:ignore:AWS-0010 — CloudFront access logging adds a per-env
-# S3 bucket with its own lifecycle + IAM grant, plus the storage cost
-# scales with viewer count. The CloudWatch real-time metrics emitted
-# by `default_cache_behavior` + the per-Lambda alarms in alarms.tf
-# already cover the operational signals (4xx/5xx rate, origin latency,
-# request volume). Revisit if we need per-IP audit trails (currently
-# we don't — anonymous viewers are intentional).
+# Trivy AWS-0010 (CloudFront access logging) is suppressed in
+# .trivyignore at the repo root. Rationale: real-time CloudWatch
+# metrics + per-Lambda alarms in alarms.tf already cover the
+# operational signals. Per-IP audit trails aren't a requirement
+# today (anonymous viewers are intentional).
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true

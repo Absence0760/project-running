@@ -109,6 +109,11 @@ jobs:
           # coverage without standing up tfsec separately.
           scan-type: config
           scan-ref: infra
+          # Centralised suppressions with rationale. Inline
+          # `# trivy:ignore:` comments don't accept trailing text on
+          # the same line; the .trivyignore file at the repo root
+          # keeps the rule IDs + per-rule rationale in one place.
+          trivyignores: .trivyignore
           format: sarif
           output: trivy-iac.sarif
           severity: CRITICAL,HIGH
