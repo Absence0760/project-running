@@ -162,6 +162,26 @@ updates:
           - "patch"
 
   # ---------------------------------------------------------------------------
+  # docker — apps/job_worker (the only Dockerfile in the repo)
+  # ---------------------------------------------------------------------------
+  # Picks up base-image bumps (currently the Go builder + the distroless
+  # final stage). Surfaces via the Security workflow's Trivy scan when a
+  # known CVE hits an in-use base image; Dependabot here closes the
+  # loop by opening a PR to bump the FROM line. Low PR volume — base
+  # image churn is slow.
+  - package-ecosystem: "docker"
+    directory: "/apps/job_worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(job_worker/docker)"
+      include: "scope"
+
+  # ---------------------------------------------------------------------------
   # gradle — apps/watch_wear (native Kotlin + Compose-for-Wear)
   # ---------------------------------------------------------------------------
   # AGP 9.x + Kotlin 2.3.x + Gradle 9.4.x as of the last bump. AGP /
