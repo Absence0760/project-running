@@ -162,4 +162,84 @@ test.describe('/settings/account — data export', () => {
 			expect(r).not.toHaveProperty('user_id');
 		}
 	});
+
+	test('Cloud export (GPX zip) calls the server endpoint and opens the signed URL', async ({
+		page,
+		context
+	}) => {
+		// PUBLIC_EXPORT_HUB_URL is unset in the dev `.env`, so the
+		// button takes the fallback path: `supabase.functions.invoke
+		// ('export-data', ...)`. supabase-js targets that EF at
+		// `${PUBLIC_SUPABASE_URL}/functions/v1/export-data`, which the
+		// dev stack actually has running. We don't want to exercise
+		// the real EF (it touches Storage + the rate-limit RPC and
+		// produces a real signed URL we'd then download), so route-
+		// intercept the call and fulfil with a fake-but-correctly-shaped
+		// response. That pins both the wire shape AND the UI's
+		// behaviour after success.
+		const fakeSignedUrl =
+			'https://signed.example/runs/exports/abc?token=fake';
+		await page.route('**/functions/v1/export-data', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					url: fakeSignedUrl,
+					expires_in: 600,
+					count: 12,
+					format: 'gpx'
+				})
+			})
+		);
+		// Fulfil the popup navigation with a tiny 200 so we can read
+		// the URL after the navigation completes (signed.example
+		// doesn't resolve, which would leave the popup on
+		// chrome-error://chromewebdata/ and lose the requested URL).
+		await context.route('**/runs/exports/**', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'text/plain',
+				body: 'fake-export'
+			})
+		);
+
+		await page.goto('/settings/account');
+
+		const popupPromise = context.waitForEvent('page');
+		await page
+			.getByRole('button', { name: /Cloud export \(GPX zip\)/ })
+			.click();
+		const popup = await popupPromise;
+		await popup.waitForLoadState('domcontentloaded');
+		expect(popup.url()).toBe(fakeSignedUrl);
+		// Success toast must mention the seeded run count from the
+		// mocked response.
+		await expect(page.getByText(/Export ready \(12 runs\)/)).toBeVisible({
+			timeout: 5_000
+		});
+	});
+
+	test('Cloud export (GPX zip) surfaces a server-side failure as a toast', async ({
+		page
+	}) => {
+		// A 500 from the EF must surface as a readable error toast
+		// instead of swallowing the failure, otherwise a user staring
+		// at a stuck "Building zip..." button has no idea why nothing
+		// happens.
+		await page.route('**/functions/v1/export-data', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'fetch_failed' })
+			})
+		);
+
+		await page.goto('/settings/account');
+		await page
+			.getByRole('button', { name: /Cloud export \(GPX zip\)/ })
+			.click();
+		await expect(page.getByText(/Export failed:/)).toBeVisible({
+			timeout: 5_000
+		});
+	});
 });

@@ -22,6 +22,7 @@
 		unsubscribeFromPush,
 		getCurrentSubscription,
 	} from '$lib/push';
+	import { cloudExport } from '$lib/cloud_export';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -32,6 +33,7 @@
 	let saved = $state(false);
 	let exporting = $state(false);
 	let exportingJson = $state(false);
+	let exportingGpx = $state(false);
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
@@ -251,6 +253,34 @@
 			showToast(`Export failed: ${(e as Error).message}`, 'error');
 		} finally {
 			exportingJson = false;
+		}
+	}
+
+	/// Server-built GPX zip download. Calls /v1/export on the Go
+	/// service (or the legacy `export-data` Edge Function when
+	/// PUBLIC_EXPORT_HUB_URL is unset). The server builds the zip
+	/// from up to 5,000 runs — including GPX-with-HR-extensions per
+	/// run — uploads to Storage, and returns a 10-minute signed URL.
+	/// Different from `handleBackup` (the in-page Full backup) in
+	/// three ways: GPX format instead of raw row JSON + gz tracks;
+	/// server-side memory budget instead of client-heap; subject to
+	/// the tiered rate limit (free 2/hour, pro 8/hour).
+	async function handleCloudGpxExport() {
+		exportingGpx = true;
+		try {
+			const res = await cloudExport('gpx');
+			// Trigger the download via the signed URL. `target=_blank`
+			// preserves the user's settings tab — the browser swaps to
+			// a download tab, then auto-closes after the GET completes.
+			window.open(res.url, '_blank', 'noopener');
+			showToast(
+				`Export ready (${res.count} runs). The download tab will close once the file lands.`,
+				'success',
+			);
+		} catch (e) {
+			showToast(`Export failed: ${(e as Error).message}`, 'error');
+		} finally {
+			exportingGpx = false;
 		}
 	}
 
@@ -644,15 +674,29 @@
 			use Full backup for a lossless copy.
 		</p>
 		<div class="btn-row">
-			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson}>
+			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson || exportingGpx}>
 				<span class="material-symbols">download</span>
 				{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
 			</button>
-			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson}>
+			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson || exportingGpx}>
 				<span class="material-symbols">code</span>
 				{exportingJson ? 'Exporting...' : 'Export All Runs (JSON)'}
 			</button>
+			<button
+				class="btn btn-outline"
+				onclick={handleCloudGpxExport}
+				disabled={exporting || exportingJson || exportingGpx}
+				title="Server-built GPX zip with full GPS + HR tracks. Imports into Strava, Garmin, Komoot, etc."
+			>
+				<span class="material-symbols">cloud_download</span>
+				{exportingGpx ? 'Building zip...' : 'Cloud export (GPX zip)'}
+			</button>
 		</div>
+		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
+			<strong>Cloud export</strong> builds a server-side zip with one
+			GPX file per run (including HR extensions), bypassing browser
+			memory limits. Free tier: 2 exports per hour; Pro: 8.
+		</p>
 	</section>
 
 	<ConfirmDialog
