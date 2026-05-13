@@ -34,6 +34,12 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
   bool _showCreate = false;
   bool _creating = false;
 
+  // v2 tier filters. Applied to whichever segment's leaderboard is
+  // currently expanded; reset whenever the user collapses or switches
+  // segments so the new view starts unfiltered.
+  String? _genderFilter;
+  String? _ageFilter;
+
   late final TextEditingController _nameCtrl = TextEditingController();
   late final TextEditingController _startCtrl = TextEditingController(text: '0');
   late final TextEditingController _endCtrl = TextEditingController();
@@ -77,18 +83,34 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
       setState(() => _openSegmentId = null);
       return;
     }
-    setState(() => _openSegmentId = seg.id);
-    if (_leaderboards.containsKey(seg.id)) return;
-    setState(() => _leaderboards[seg.id] = null);
+    setState(() {
+      _openSegmentId = seg.id;
+      _genderFilter = null;
+      _ageFilter = null;
+    });
+    await _refreshLeaderboard(seg.id);
+  }
+
+  Future<void> _refreshLeaderboard(String segmentId) async {
+    setState(() => _leaderboards[segmentId] = null);
     try {
-      final entries =
-          await widget.api.fetchSegmentLeaderboardWithAthletes(seg.id);
+      final entries = await widget.api.fetchSegmentLeaderboardTiered(
+        segmentId,
+        gender: _genderFilter,
+        ageBand: _ageFilter,
+      );
       if (!mounted) return;
-      setState(() => _leaderboards[seg.id] = entries);
+      setState(() => _leaderboards[segmentId] = entries);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _leaderboards[seg.id] = const []);
+      setState(() => _leaderboards[segmentId] = const []);
     }
+  }
+
+  void _onFilterChanged() {
+    final segId = _openSegmentId;
+    if (segId == null) return;
+    _refreshLeaderboard(segId);
   }
 
   Future<void> _submitCreate() async {
@@ -228,6 +250,23 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
                 canDelete: widget.canCreate,
                 onTap: () => _toggleLeaderboard(seg),
                 onDelete: () => _confirmDelete(seg),
+                genderFilter: _genderFilter,
+                ageFilter: _ageFilter,
+                onGenderChanged: (v) {
+                  setState(() => _genderFilter = v);
+                  _onFilterChanged();
+                },
+                onAgeChanged: (v) {
+                  setState(() => _ageFilter = v);
+                  _onFilterChanged();
+                },
+                onResetFilters: () {
+                  setState(() {
+                    _genderFilter = null;
+                    _ageFilter = null;
+                  });
+                  _onFilterChanged();
+                },
               ),
         ],
       ),
@@ -329,6 +368,11 @@ class _SegmentTile extends StatelessWidget {
   final bool canDelete;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final String? genderFilter;
+  final String? ageFilter;
+  final ValueChanged<String?> onGenderChanged;
+  final ValueChanged<String?> onAgeChanged;
+  final VoidCallback onResetFilters;
 
   const _SegmentTile({
     required this.seg,
@@ -338,6 +382,11 @@ class _SegmentTile extends StatelessWidget {
     required this.canDelete,
     required this.onTap,
     required this.onDelete,
+    required this.genderFilter,
+    required this.ageFilter,
+    required this.onGenderChanged,
+    required this.onAgeChanged,
+    required this.onResetFilters,
   });
 
   @override
@@ -388,9 +437,23 @@ class _SegmentTile extends StatelessWidget {
           if (expanded)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: _Leaderboard(
-                entries: leaderboard,
-                viewerId: viewerId,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TierFilters(
+                    genderFilter: genderFilter,
+                    ageFilter: ageFilter,
+                    onGenderChanged: onGenderChanged,
+                    onAgeChanged: onAgeChanged,
+                    onReset: onResetFilters,
+                  ),
+                  const SizedBox(height: 8),
+                  _Leaderboard(
+                    entries: leaderboard,
+                    viewerId: viewerId,
+                    filtered: genderFilter != null || ageFilter != null,
+                  ),
+                ],
               ),
             ),
         ],
@@ -404,11 +467,90 @@ class _SegmentTile extends StatelessWidget {
   }
 }
 
+class _TierFilters extends StatelessWidget {
+  final String? genderFilter;
+  final String? ageFilter;
+  final ValueChanged<String?> onGenderChanged;
+  final ValueChanged<String?> onAgeChanged;
+  final VoidCallback onReset;
+
+  const _TierFilters({
+    required this.genderFilter,
+    required this.ageFilter,
+    required this.onGenderChanged,
+    required this.onAgeChanged,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasFilter = genderFilter != null || ageFilter != null;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: genderFilter,
+              isDense: true,
+              hint: const Text('All genders'),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('All genders')),
+                DropdownMenuItem(value: 'male', child: Text('Men')),
+                DropdownMenuItem(value: 'female', child: Text('Women')),
+                DropdownMenuItem(value: 'nonbinary', child: Text('Nonbinary')),
+              ],
+              onChanged: onGenderChanged,
+            ),
+          ),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: ageFilter,
+              isDense: true,
+              hint: const Text('All ages'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All ages')),
+                for (final b in kSegmentAgeBands)
+                  DropdownMenuItem(value: b, child: Text(b)),
+              ],
+              onChanged: onAgeChanged,
+            ),
+          ),
+          if (hasFilter)
+            TextButton.icon(
+              onPressed: onReset,
+              icon: const Icon(Icons.close, size: 16),
+              label: const Text('Reset'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Leaderboard extends StatelessWidget {
   final List<SegmentLeaderboardEntry>? entries;
   final String? viewerId;
+  final bool filtered;
 
-  const _Leaderboard({required this.entries, required this.viewerId});
+  const _Leaderboard({
+    required this.entries,
+    required this.viewerId,
+    required this.filtered,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -428,7 +570,9 @@ class _Leaderboard extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          'No efforts yet — be the first to run this segment.',
+          filtered
+              ? 'No efforts match this filter — try widening it.'
+              : 'No efforts yet — be the first to run this segment.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

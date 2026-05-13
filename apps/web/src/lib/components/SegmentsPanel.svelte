@@ -2,11 +2,14 @@
 	import { onMount } from 'svelte';
 	import {
 		fetchSegmentsForRoute,
-		fetchSegmentLeaderboard,
+		fetchSegmentLeaderboardTiered,
 		createSegment,
 		deleteSegment,
+		SEGMENT_AGE_BANDS,
 		type Segment,
 		type SegmentLeaderboardEntry,
+		type SegmentGenderFilter,
+		type SegmentAgeBand,
 	} from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -24,6 +27,12 @@
 	let loading = $state(true);
 	let leaderboards = $state<Map<string, SegmentLeaderboardEntry[]>>(new Map());
 	let openSegmentId = $state<string | null>(null);
+	// v2: tier filter (gender + age band). Applies to whichever
+	// segment's leaderboard is currently expanded. Cleared whenever
+	// the user picks a different segment so the new view starts from
+	// the unfiltered baseline.
+	let genderFilter = $state<SegmentGenderFilter | null>(null);
+	let ageFilter = $state<SegmentAgeBand | null>(null);
 
 	let showCreate = $state(false);
 	let creating = $state(false);
@@ -51,17 +60,39 @@
 
 	onMount(load);
 
-	async function toggleLeaderboard(seg: Segment) {
+	function toggleLeaderboard(seg: Segment) {
 		if (openSegmentId === seg.id) {
 			openSegmentId = null;
 			return;
 		}
+		// Reset filters when switching segments — a runner who narrowed
+		// to "Women 30-34" on segment A doesn't want that carried into
+		// segment B's first impression. The $effect below picks up the
+		// combined state change and fires exactly one RPC.
 		openSegmentId = seg.id;
-		if (!leaderboards.has(seg.id)) {
-			const entries = await fetchSegmentLeaderboard(seg.id);
-			leaderboards = new Map(leaderboards).set(seg.id, entries);
-		}
+		genderFilter = null;
+		ageFilter = null;
 	}
+
+	async function refreshLeaderboard(segmentId: string) {
+		const entries = await fetchSegmentLeaderboardTiered(segmentId, {
+			gender: genderFilter,
+			ageBand: ageFilter,
+		});
+		leaderboards = new Map(leaderboards).set(segmentId, entries);
+	}
+
+	$effect(() => {
+		// Single source of refetches for both opening a segment and
+		// changing a filter. Reading every signal up front is what makes
+		// the effect reactive to them.
+		const segId = openSegmentId;
+		const _g = genderFilter;
+		const _a = ageFilter;
+		void _g;
+		void _a;
+		if (segId) refreshLeaderboard(segId);
+	});
 
 	async function submitCreate() {
 		const name = draftName.trim();
@@ -210,10 +241,47 @@
 
 					{#if openSegmentId === seg.id}
 						<div class="leaderboard">
+							<div class="tier-filters">
+								<label>
+									Gender
+									<select bind:value={genderFilter}>
+										<option value={null}>All</option>
+										<option value="male">Men</option>
+										<option value="female">Women</option>
+										<option value="nonbinary">Nonbinary</option>
+									</select>
+								</label>
+								<label>
+									Age band
+									<select bind:value={ageFilter}>
+										<option value={null}>All ages</option>
+										{#each SEGMENT_AGE_BANDS as band}
+											<option value={band}>{band}</option>
+										{/each}
+									</select>
+								</label>
+								{#if genderFilter || ageFilter}
+									<button
+										class="clear-btn"
+										type="button"
+										onclick={() => {
+											genderFilter = null;
+											ageFilter = null;
+										}}
+										title="Clear filters"
+									>
+										Reset
+									</button>
+								{/if}
+							</div>
 							{#if leaderboards.get(seg.id) == null}
 								<p class="muted small">Loading…</p>
 							{:else if (leaderboards.get(seg.id) ?? []).length === 0}
-								<p class="muted small">No efforts yet — be the first to run this segment.</p>
+								<p class="muted small">
+									{genderFilter || ageFilter
+										? 'No efforts match this filter — try widening it.'
+										: 'No efforts yet — be the first to run this segment.'}
+								</p>
 							{:else}
 								<ol>
 									{#each leaderboards.get(seg.id) ?? [] as entry (entry.effort.id)}
@@ -379,6 +447,47 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
+	}
+	.tier-filters {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: var(--space-sm);
+		padding: var(--space-sm);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-sm);
+	}
+	.tier-filters label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+	.tier-filters select {
+		padding: 0.3rem 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		font-size: 0.85rem;
+		color: inherit;
+		min-width: 8rem;
+	}
+	.clear-btn {
+		align-self: end;
+		padding: 0.35rem 0.7rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		font-size: 0.78rem;
+		cursor: pointer;
+		color: var(--color-text-secondary);
+	}
+	.clear-btn:hover {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
 	}
 	.leaderboard ol {
 		list-style: none;

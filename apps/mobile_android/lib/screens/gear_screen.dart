@@ -1,5 +1,4 @@
 import 'package:api_client/api_client.dart';
-import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../preferences.dart';

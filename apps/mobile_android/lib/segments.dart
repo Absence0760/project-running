@@ -137,3 +137,4 @@ double _haversine(double lat1, double lng1, double lat2, double lng2) {
           sinLng;
   return 2 * r * math.asin(math.min(1, math.sqrt(a)));
 }
+

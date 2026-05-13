@@ -61,6 +61,13 @@
 	let z4 = $state('');
 	let z5 = $state('');
 
+	// Demographics — live on user_profiles, not the cross-device prefs bag.
+	// Used only by tiered segment leaderboards. Both fields are optional;
+	// leaving them blank simply means the runner doesn't appear in
+	// gender/age-band-filtered views.
+	let gender = $state<'male' | 'female' | 'nonbinary' | ''>('');
+	let dateOfBirth = $state('');
+
 	// Privacy zones — geofences clipped from public track renders.
 	let privacyZones = $state<PrivacyZone[]>([]);
 	let showZonePicker = $state(false);
@@ -108,6 +115,16 @@
 			}
 
 			privacyZones = effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
+
+			const { data: prof } = await supabase
+				.from('user_profiles')
+				.select('gender, date_of_birth')
+				.eq('id', auth.user.id)
+				.maybeSingle();
+			if (prof) {
+				gender = (prof.gender as typeof gender) ?? '';
+				dateOfBirth = prof.date_of_birth ?? '';
+			}
 		} catch (e) {
 			console.warn('Settings load failed', e);
 		}
@@ -165,8 +182,12 @@
 		}
 
 		// Also dual-write preferred_unit to profile column for legacy readers.
+		// Demographics live here too — RPCs that tier leaderboards by gender
+		// and age band read from user_profiles directly.
 		await supabase.from('user_profiles').update({
 			preferred_unit: preferredUnit,
+			gender: gender || null,
+			date_of_birth: dateOfBirth || null,
 		}).eq('id', auth.user.id);
 
 		await updateUniversal(auth.user.id, changes);
@@ -321,6 +342,30 @@
 				<label class="checkbox-row">
 					<input type="checkbox" bind:checked={stravaAutoShare} />
 					<span>Auto-push runs to Strava</span>
+				</label>
+			</div>
+		</section>
+
+		<!-- Demographics — gender + DOB power tiered segment leaderboards. -->
+		<section class="card">
+			<h2>Demographics</h2>
+			<p class="section-desc">
+				Optional. Lets segment leaderboards filter by gender and 5-year age band — the same buckets
+				Strava uses. Leave blank to stay out of those filtered views.
+			</p>
+			<div class="form-grid">
+				<label>
+					<span class="label-text">Gender</span>
+					<select bind:value={gender}>
+						<option value="">Prefer not to say</option>
+						<option value="male">Male</option>
+						<option value="female">Female</option>
+						<option value="nonbinary">Nonbinary</option>
+					</select>
+				</label>
+				<label>
+					<span class="label-text">Date of birth</span>
+					<input type="date" bind:value={dateOfBirth} />
 				</label>
 			</div>
 		</section>

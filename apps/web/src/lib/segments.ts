@@ -97,6 +97,62 @@ function timestampAtDistance(
 	return null;
 }
 
+/**
+ * Standard competition rank for an ascending-time leaderboard. Tied
+ * times share the lower rank; the next distinct time skips to its
+ * natural ordinal position. Example: times [10, 10, 15] → [1, 1, 3].
+ *
+ * Pure — used by both v1 (`fetchSegmentLeaderboard`) and v2
+ * (`fetchSegmentLeaderboardTiered`) leaderboard fetchers. Mirrors the
+ * `assignCompetitionRanks` helper in `apps/mobile_android/lib/segments.dart`.
+ *
+ * Caller must pass items pre-sorted ascending by `time_seconds`.
+ */
+export function assignCompetitionRanks<T extends { time_seconds: number }>(
+	rows: readonly T[],
+): Array<{ row: T; rank: number }> {
+	const out: Array<{ row: T; rank: number }> = [];
+	let lastTime = Number.NaN;
+	let lastRank = 0;
+	for (let i = 0; i < rows.length; i++) {
+		const r = rows[i];
+		const rank = r.time_seconds === lastTime ? lastRank : i + 1;
+		lastTime = r.time_seconds;
+		lastRank = rank;
+		out.push({ row: r, rank });
+	}
+	return out;
+}
+
+/**
+ * Strava-style age band labels — 5-year bins starting at 18-19, then
+ * 20-24 / 25-29 / ... up to '75+'. Matches Strava + Garmin Connect.
+ * The migration's `segment_leaderboard_tiered` RPC accepts any of
+ * these strings; pass `null` for "all ages".
+ *
+ * Lives in this pure module (not `data.ts`) so unit tests can pin
+ * its shape without dragging in the SvelteKit `$env`-bound supabase
+ * client.
+ */
+export const SEGMENT_AGE_BANDS = [
+	'18-19',
+	'20-24',
+	'25-29',
+	'30-34',
+	'35-39',
+	'40-44',
+	'45-49',
+	'50-54',
+	'55-59',
+	'60-64',
+	'65-69',
+	'70-74',
+	'75+',
+] as const;
+export type SegmentAgeBand = (typeof SEGMENT_AGE_BANDS)[number];
+
+export type SegmentGenderFilter = 'male' | 'female' | 'nonbinary';
+
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
 	const r = 6371000;
 	const dLat = ((lat2 - lat1) * Math.PI) / 180;

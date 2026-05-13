@@ -30,6 +30,11 @@ import { parseRunSource } from './types';
 import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
+import {
+	assignCompetitionRanks,
+	type SegmentAgeBand,
+	type SegmentGenderFilter,
+} from './segments';
 
 // --- Runs ---
 
@@ -3509,10 +3514,23 @@ export async function deleteSegment(segmentId: string): Promise<void> {
 	if (error) throw error;
 }
 
+// SEGMENT_AGE_BANDS, SegmentAgeBand, and SegmentGenderFilter live in
+// `./segments` (pure module, importable by unit tests without pulling
+// in the SvelteKit-only supabase client). Re-exported here so existing
+// callers don't break.
+export { SEGMENT_AGE_BANDS, type SegmentAgeBand, type SegmentGenderFilter } from './segments';
+
 /**
  * Leaderboard for a segment — efforts ascending by time, joined to
  * the author profile so the UI can render avatars + names. Ranks are
- * 1-based and dense (ties share a rank).
+ * 1-based standard competition (ties share a rank; next distinct time
+ * skips to its natural ordinal position).
+ *
+ * v1 (filter-less) is preserved for callers that haven't opted into
+ * tiering. v2 calls go through fetchSegmentLeaderboardTiered which
+ * routes to the new RPC (migration 20260829_001) — gender + age
+ * band filtering happens server-side so the demographic data stays
+ * off the wire when it doesn't need to.
  */
 export async function fetchSegmentLeaderboard(
 	segmentId: string,
@@ -3534,21 +3552,59 @@ export async function fetchSegmentLeaderboard(
 	const byId = new Map<string, PublicProfile>();
 	for (const p of profiles ?? []) byId.set(p.id, p);
 
-	const out: SegmentLeaderboardEntry[] = [];
-	let lastTime = -1;
-	let lastRank = 0;
-	for (let i = 0; i < efforts.length; i++) {
-		const e = efforts[i] as SegmentEffort;
-		const rank = e.time_seconds === lastTime ? lastRank : i + 1;
-		lastTime = e.time_seconds;
-		lastRank = rank;
-		out.push({
-			effort: e,
-			athlete: byId.get(e.user_id) ?? { id: e.user_id, display_name: null, avatar_url: null },
-			rank,
-		});
+	return assignCompetitionRanks(efforts as SegmentEffort[]).map(({ row, rank }) => ({
+		effort: row,
+		athlete: byId.get(row.user_id) ?? { id: row.user_id, display_name: null, avatar_url: null },
+		rank,
+	}));
+}
+
+/**
+ * v2 tiered leaderboard. Calls the `segment_leaderboard_tiered` RPC
+ * which joins user_profiles server-side and applies gender / age-band
+ * filters. Pass `null` for "all" on a filter. Ranks are computed
+ * client-side from the returned order (1-based standard competition —
+ * ties share a rank; next distinct time skips ordinal positions).
+ */
+export async function fetchSegmentLeaderboardTiered(
+	segmentId: string,
+	filter: { gender?: SegmentGenderFilter | null; ageBand?: SegmentAgeBand | null } = {},
+	limit = 50,
+): Promise<SegmentLeaderboardEntry[]> {
+	const { data, error } = await supabase.rpc('segment_leaderboard_tiered', {
+		p_segment_id: segmentId,
+		p_gender: filter.gender ?? null,
+		p_age_band: filter.ageBand ?? null,
+		p_limit: limit,
+	});
+	if (error || !data) {
+		console.warn('fetchSegmentLeaderboardTiered failed', error);
+		return [];
 	}
-	return out;
+	const rows = data as Array<{
+		effort_id: string;
+		user_id: string;
+		run_id: string;
+		time_seconds: number;
+		started_at: string;
+		display_name: string | null;
+		avatar_url: string | null;
+		gender: string | null;
+		age: number | null;
+	}>;
+	return assignCompetitionRanks(rows).map(({ row, rank }) => ({
+		effort: {
+			id: row.effort_id,
+			segment_id: segmentId,
+			run_id: row.run_id,
+			user_id: row.user_id,
+			time_seconds: row.time_seconds,
+			started_at: row.started_at,
+			created_at: row.started_at,
+		} as SegmentEffort,
+		athlete: { id: row.user_id, display_name: row.display_name, avatar_url: row.avatar_url },
+		rank,
+	}));
 }
 
 /**

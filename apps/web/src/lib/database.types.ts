@@ -1732,6 +1732,8 @@ export type Database = {
           preferred_unit: string | null
           subscription_at: string | null
           subscription_tier: string | null
+          gender: string | null
+          date_of_birth: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -1743,6 +1745,8 @@ export type Database = {
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
+          gender?: string | null
+          date_of_birth?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -1754,6 +1758,8 @@ export type Database = {
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
+          gender?: string | null
+          date_of_birth?: string | null
         }
         Relationships: []
       }

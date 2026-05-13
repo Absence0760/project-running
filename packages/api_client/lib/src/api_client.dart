@@ -6,6 +6,8 @@ import 'package:core_models/core_models.dart';
 import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'segments_rank.dart';
+
 // Column-level grant lockdowns: see migrations 20260801_001 +
 // 20260818_001 (clubs.invite_token) and 20260723_001 + 20260806_001 +
 // 20260818_001 (events.meet_lat / meet_lng). PostgREST `select('*')`
@@ -2501,7 +2503,8 @@ class ApiClient {
 
   /// Segment leaderboard with athlete profiles + ranks. Sorted
   /// by time ascending; dedupes per user (keeps each athlete's
-  /// fastest effort).
+  /// fastest effort). Ranks are standard competition (ties share
+  /// a rank; next distinct time skips to its ordinal slot).
   Future<List<SegmentLeaderboardEntry>> fetchSegmentLeaderboardWithAthletes(
     String segmentId, {
     int limit = 200,
@@ -2529,18 +2532,68 @@ class ApiClient {
         p['id'] as String: PublicProfile.fromJson(p),
     };
 
-    final out = <SegmentLeaderboardEntry>[];
-    for (var i = 0; i < efforts.length; i++) {
-      final eff = efforts[i];
-      out.add(SegmentLeaderboardEntry(
-        effort: eff,
-        athlete: athletesById[eff.userId] ??
-            PublicProfile(
-                id: eff.userId, displayName: null, avatarUrl: null),
-        rank: i + 1,
-      ));
-    }
-    return out;
+    final ranks = assignCompetitionRanks(efforts, (e) => e.timeSeconds);
+    return [
+      for (var i = 0; i < efforts.length; i++)
+        SegmentLeaderboardEntry(
+          effort: efforts[i],
+          athlete: athletesById[efforts[i].userId] ??
+              PublicProfile(
+                  id: efforts[i].userId, displayName: null, avatarUrl: null),
+          rank: ranks[i],
+        ),
+    ];
+  }
+
+  /// v2 tiered leaderboard. Calls `segment_leaderboard_tiered` RPC
+  /// (migration 20260829_001) which joins user_profiles server-side
+  /// and applies gender + age-band filters there. The RPC returns
+  /// already-ordered rows; client assigns standard competition ranks
+  /// (ties share a rank; next distinct time skips ordinal positions).
+  /// Pass `null` for "any" on either filter; the RPC ignores nulls.
+  Future<List<SegmentLeaderboardEntry>> fetchSegmentLeaderboardTiered(
+    String segmentId, {
+    String? gender,
+    String? ageBand,
+    int limit = 50,
+  }) async {
+    final rows = await _client.rpc(
+      'segment_leaderboard_tiered',
+      params: {
+        'p_segment_id': segmentId,
+        'p_gender': gender,
+        'p_age_band': ageBand,
+        'p_limit': limit,
+      },
+    );
+    if (rows is! List || rows.isEmpty) return const [];
+    final maps = [
+      for (final r in rows) (r as Map).cast<String, dynamic>(),
+    ];
+    final ranks = assignCompetitionRanks(
+      maps,
+      (r) => (r['time_seconds'] as num),
+    );
+    return [
+      for (var i = 0; i < maps.length; i++)
+        SegmentLeaderboardEntry(
+          effort: SegmentEffortRow(
+            id: maps[i]['effort_id'] as String,
+            segmentId: segmentId,
+            runId: maps[i]['run_id'] as String,
+            userId: maps[i]['user_id'] as String,
+            timeSeconds: (maps[i]['time_seconds'] as num).toDouble(),
+            startedAt: DateTime.parse(maps[i]['started_at'] as String),
+            createdAt: DateTime.parse(maps[i]['started_at'] as String),
+          ),
+          athlete: PublicProfile(
+            id: maps[i]['user_id'] as String,
+            displayName: maps[i]['display_name'] as String?,
+            avatarUrl: maps[i]['avatar_url'] as String?,
+          ),
+          rank: ranks[i],
+        ),
+    ];
   }
 
   /// Per-run segment efforts joined to their parent segment + a rank
