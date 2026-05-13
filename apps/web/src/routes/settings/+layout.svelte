@@ -6,6 +6,7 @@
 		{ href: '/settings/preferences', label: 'Preferences', icon: 'tune' },
 		{ href: '/settings/integrations', label: 'Integrations', icon: 'link' },
 		{ href: '/settings/devices', label: 'Devices', icon: 'devices' },
+		{ href: '/settings/gear', label: 'Gear', icon: 'directions_run' },
 		{ href: '/settings/upgrade', label: 'Pro & support', icon: 'favorite' },
 		{ href: '/settings/licenses', label: 'Licenses', icon: 'description' },
 	];

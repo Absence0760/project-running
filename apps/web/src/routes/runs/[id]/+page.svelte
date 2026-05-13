@@ -4,6 +4,7 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
+	import RunGearChips from '$lib/components/RunGearChips.svelte';
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
 	import RouteHistory from '$lib/components/RouteHistory.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
@@ -961,6 +962,10 @@
 		<section class="section">
 			<h2>Elevation Profile</h2>
 			<ElevationProfile {elevations} totalDistance={run.distance_m} />
+		</section>
+
+		<section class="section">
+			<RunGearChips runId={run.id} runOwnerId={run.user_id} />
 		</section>
 
 		<section class="section">

@@ -22,6 +22,7 @@ import '../settings_sync.dart';
 import '../strava.dart';
 import 'import_screen.dart';
 import 'devices_screen.dart';
+import 'gear_screen.dart';
 import 'privacy_zones_screen.dart';
 import 'profile_screen.dart';
 import 'sign_in_screen.dart';
@@ -1293,6 +1294,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     builder: (_) => DevicesScreen(
                       api: api,
                       currentDeviceId: widget.preferences.deviceId,
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_run_outlined),
+              title: const Text('Gear'),
+              subtitle: const Text('Track shoes + bikes and per-item mileage'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final api = widget.apiClient;
+                if (api == null) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GearScreen(
+                      api: api,
+                      preferences: widget.preferences,
                     ),
                   ),
                 );

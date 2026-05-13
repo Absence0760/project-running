@@ -3252,6 +3252,148 @@ export async function updateRunPhotoCaption(
 	if (error) throw error;
 }
 
+// --- Gear tracking (decisions backlog item #7) ---
+
+export type GearKind = 'shoe' | 'bike';
+
+export interface Gear {
+	id: string;
+	owner_id: string;
+	kind: GearKind;
+	name: string;
+	brand: string | null;
+	model: string | null;
+	purchased_at: string | null;
+	retired_at: string | null;
+	target_distance_m: number | null;
+	notes: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface GearWithDistance extends Gear {
+	total_distance_m: number;
+	run_count: number;
+}
+
+/// Fetch every gear item the signed-in user owns, with the rolled-up
+/// total distance from `gear_with_distance`. Default order: active
+/// (retired_at IS NULL) first, then newest. Settings UI renders sub-
+/// tabs (shoes / bikes) on top of this single fetch.
+export async function fetchMyGear(): Promise<GearWithDistance[]> {
+	const { data, error } = await supabase
+		.from('gear_with_distance')
+		.select('*')
+		.order('retired_at', { ascending: true, nullsFirst: true })
+		.order('created_at', { ascending: false });
+	if (error) {
+		console.error('fetchMyGear failed', error);
+		return [];
+	}
+	return ((data ?? []) as GearWithDistance[]).map((g) => ({
+		...g,
+		// Postgres bigint comes through as a string in some PostgREST
+		// configurations; coerce defensively so the UI math is never
+		// surprised by 'NaN km'.
+		total_distance_m: Number(g.total_distance_m ?? 0),
+		target_distance_m:
+			g.target_distance_m == null ? null : Number(g.target_distance_m),
+	}));
+}
+
+export async function createGear(input: {
+	kind: GearKind;
+	name: string;
+	brand?: string | null;
+	model?: string | null;
+	purchased_at?: string | null;
+	target_distance_m?: number | null;
+	notes?: string | null;
+}): Promise<Gear> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { data, error } = await supabase
+		.from('gear')
+		.insert({
+			owner_id: userId,
+			kind: input.kind,
+			name: input.name,
+			brand: input.brand ?? null,
+			model: input.model ?? null,
+			purchased_at: input.purchased_at ?? null,
+			target_distance_m: input.target_distance_m ?? null,
+			notes: input.notes ?? null,
+		})
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('createGear failed');
+	return data as Gear;
+}
+
+export async function updateGear(
+	id: string,
+	patch: Partial<Pick<Gear,
+		'name' | 'brand' | 'model' | 'purchased_at' | 'retired_at' |
+		'target_distance_m' | 'notes'
+	>>,
+): Promise<void> {
+	const { error } = await supabase.from('gear').update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+/// Stamp retired_at to today and clear nothing else — the row stays
+/// around for historical mileage roll-ups on past runs that reference
+/// it. Use [deleteGear] to actually remove (cascades to run_gear).
+export async function retireGear(id: string): Promise<void> {
+	const today = new Date().toISOString().slice(0, 10);
+	await updateGear(id, { retired_at: today });
+}
+
+/// Un-retire — restore an actively-tracked piece of gear without
+/// touching anything else. Useful when a runner pulled an old pair
+/// out of retirement for slow / treadmill runs.
+export async function unretireGear(id: string): Promise<void> {
+	await updateGear(id, { retired_at: null });
+}
+
+export async function deleteGear(id: string): Promise<void> {
+	const { error } = await supabase.from('gear').delete().eq('id', id);
+	if (error) throw error;
+}
+
+/// Replace the full gear set assigned to a run. Empty array clears
+/// the assignment. Idempotent — re-running with the same set is a
+/// no-op once the round trip completes. RLS gates both the insert
+/// and the delete to the run's owner.
+export async function setRunGear(runId: string, gearIds: string[]): Promise<void> {
+	// Delete-then-insert is the simple shape; the join table has no
+	// natural-key churn to make a smarter diff worthwhile. Wrap in
+	// best-effort error surfacing for the toast layer.
+	const del = await supabase.from('run_gear').delete().eq('run_id', runId);
+	if (del.error) throw del.error;
+	if (gearIds.length === 0) return;
+	const rows = gearIds.map((gear_id) => ({ run_id: runId, gear_id }));
+	const ins = await supabase.from('run_gear').insert(rows);
+	if (ins.error) throw ins.error;
+}
+
+/// Fetch the gear assigned to a single run. Used on the run-detail
+/// page to render the chip row. RLS gates this to runs the viewer
+/// can see (owner OR public run); non-visible runs return [].
+export async function fetchRunGear(runId: string): Promise<Gear[]> {
+	const { data, error } = await supabase
+		.from('run_gear')
+		.select('gear:gear_id(*)')
+		.eq('run_id', runId);
+	if (error || !data) {
+		console.error('fetchRunGear failed', error);
+		return [];
+	}
+	return (data as unknown as Array<{ gear: Gear | null }>)
+		.map((r) => r.gear)
+		.filter((g): g is Gear => g != null);
+}
+
 // --- Segments + leaderboards (decisions §37) ---
 
 export interface Segment {

@@ -445,6 +445,84 @@ export type Database = {
           },
         ]
       }
+      gear: {
+        Row: {
+          id: string
+          owner_id: string
+          kind: string
+          name: string
+          brand: string | null
+          model: string | null
+          purchased_at: string | null
+          retired_at: string | null
+          target_distance_m: number | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          owner_id: string
+          kind: string
+          name: string
+          brand?: string | null
+          model?: string | null
+          purchased_at?: string | null
+          retired_at?: string | null
+          target_distance_m?: number | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          owner_id?: string
+          kind?: string
+          name?: string
+          brand?: string | null
+          model?: string | null
+          purchased_at?: string | null
+          retired_at?: string | null
+          target_distance_m?: number | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      run_gear: {
+        Row: {
+          run_id: string
+          gear_id: string
+          created_at: string
+        }
+        Insert: {
+          run_id: string
+          gear_id: string
+          created_at?: string
+        }
+        Update: {
+          run_id?: string
+          gear_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_gear_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_gear_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       fitness_snapshots: {
         Row: {
           acute_load: number | null

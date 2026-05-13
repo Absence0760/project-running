@@ -15,6 +15,7 @@ import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/track_segment.dart';
+import '../widgets/run_gear_chips.dart';
 import '../widgets/run_photos.dart';
 import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_share_card.dart';
@@ -878,6 +879,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           // Local RunDetail only opens runs owned by the viewer, so the
           // viewer is also the run owner — gates "delete any comment".
           if (widget.apiClient != null && widget.apiClient!.userId != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: RunGearChips(
+                api: widget.apiClient!,
+                runId: run.id,
+                runOwnerId: widget.apiClient!.userId!,
+              ),
+            ),
             RunSocialSection(
               api: widget.apiClient!,
               runId: run.id,

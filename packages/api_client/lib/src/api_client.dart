@@ -1367,6 +1367,143 @@ class ApiClient {
   // walks the run track in `core_models`/segments and posts efforts
   // through `recordSegmentEffort` below.
 
+  // ─────────────────── Gear tracking (decisions backlog #7) ───────────────────
+
+  /// Fetch every gear item the signed-in user owns plus its rolled-up
+  /// total distance. Reads through `gear_with_distance` (a view that
+  /// joins `gear` with the runs assigned via `run_gear`); RLS on the
+  /// underlying tables keeps the view scoped to the caller. Returns
+  /// rows decoded as Maps because the view doesn't have a generated
+  /// row class — the consumer (settings_screen.dart's gear list) is
+  /// the only reader today.
+  Future<List<Map<String, dynamic>>> fetchMyGearWithDistance() async {
+    final data = await _client
+        .from('gear_with_distance')
+        .select()
+        .order('retired_at', ascending: true, nullsFirst: true)
+        .order('created_at', ascending: false);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Insert a new gear row and return the persisted shape.
+  Future<GearRow> createGear({
+    required String kind,
+    required String name,
+    String? brand,
+    String? model,
+    DateTime? purchasedAt,
+    int? targetDistanceM,
+    String? notes,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(GearRow.table)
+        .insert({
+          GearRow.colOwnerId: viewerId,
+          GearRow.colKind: kind,
+          GearRow.colName: name,
+          GearRow.colBrand: brand,
+          GearRow.colModel: model,
+          GearRow.colPurchasedAt:
+              purchasedAt?.toIso8601String().substring(0, 10),
+          GearRow.colTargetDistanceM: targetDistanceM,
+          GearRow.colNotes: notes,
+        })
+        .select()
+        .single();
+    return GearRow.fromJson(row);
+  }
+
+  /// Patch any subset of the editable fields. The `updated_at` column
+  /// is bumped by a trigger so the caller doesn't pass it.
+  Future<void> updateGear(
+    String id, {
+    String? name,
+    String? brand,
+    String? model,
+    DateTime? purchasedAt,
+    DateTime? retiredAt,
+    bool clearRetiredAt = false,
+    int? targetDistanceM,
+    String? notes,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (name != null) patch[GearRow.colName] = name;
+    if (brand != null) patch[GearRow.colBrand] = brand;
+    if (model != null) patch[GearRow.colModel] = model;
+    if (purchasedAt != null) {
+      patch[GearRow.colPurchasedAt] =
+          purchasedAt.toIso8601String().substring(0, 10);
+    }
+    if (clearRetiredAt) {
+      patch[GearRow.colRetiredAt] = null;
+    } else if (retiredAt != null) {
+      patch[GearRow.colRetiredAt] =
+          retiredAt.toIso8601String().substring(0, 10);
+    }
+    if (targetDistanceM != null) {
+      patch[GearRow.colTargetDistanceM] = targetDistanceM;
+    }
+    if (notes != null) patch[GearRow.colNotes] = notes;
+    if (patch.isEmpty) return;
+    await _client.from(GearRow.table).update(patch).eq(GearRow.colId, id);
+  }
+
+  /// Mark a gear item retired (cosmetic only — the row stays for
+  /// historical mileage roll-ups on past runs). Same shape as the
+  /// web's `retireGear`.
+  Future<void> retireGear(String id) async {
+    await updateGear(id, retiredAt: DateTime.now());
+  }
+
+  /// Restore an actively-tracked piece of gear without touching
+  /// anything else. Mirrors the web's `unretireGear`.
+  Future<void> unretireGear(String id) async {
+    await updateGear(id, clearRetiredAt: true);
+  }
+
+  /// Hard-delete a gear row (cascades to `run_gear` rows pointing at
+  /// it). Surface this only behind a confirm dialog — historical
+  /// mileage on past runs drops with the cascade.
+  Future<void> deleteGear(String id) async {
+    await _client.from(GearRow.table).delete().eq(GearRow.colId, id);
+  }
+
+  /// Replace the full gear set assigned to a run. Empty list clears
+  /// the assignment. RLS gates both the delete and the insert to the
+  /// run + gear owner; a non-owner gets a 42501 PostgREST error.
+  /// Mirrors the web's `setRunGear` byte-for-byte (delete-then-insert
+  /// over a smarter diff — the join table is tiny per run).
+  Future<void> setRunGear(String runId, List<String> gearIds) async {
+    await _client
+        .from(RunGearRow.table)
+        .delete()
+        .eq(RunGearRow.colRunId, runId);
+    if (gearIds.isEmpty) return;
+    final rows = gearIds
+        .map((g) => {RunGearRow.colRunId: runId, RunGearRow.colGearId: g})
+        .toList();
+    await _client.from(RunGearRow.table).insert(rows);
+  }
+
+  /// Fetch the gear assigned to a single run. RLS gates the read to
+  /// runs the viewer can see (owner OR public run). Drives the gear
+  /// chip on run-detail screens. Returns the joined `gear` rows
+  /// directly so the caller doesn't need a second round-trip.
+  Future<List<GearRow>> fetchRunGear(String runId) async {
+    final data = await _client
+        .from(RunGearRow.table)
+        .select('gear:gear_id(*)')
+        .eq(RunGearRow.colRunId, runId);
+    final rows = (data as List).cast<Map<String, dynamic>>();
+    return rows
+        .map((r) => r['gear'])
+        .where((g) => g is Map)
+        .map<GearRow>((g) => GearRow.fromJson((g as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
   /// Segments anchored on a route, sorted by start distance.
   Future<List<SegmentRow>> fetchSegmentsForRoute(
     String routeId, {
