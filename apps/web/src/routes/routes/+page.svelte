@@ -8,11 +8,12 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
+	import RouteHeatmap from '$lib/components/RouteHeatmap.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { Route } from '$lib/types';
 	import type { Snapshot } from './$types';
 
-	let tab = $state<'mine' | 'explore'>('mine');
+	let tab = $state<'mine' | 'explore' | 'heatmap'>('mine');
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
 	let fetchError = $state<string | null>(null);
@@ -56,9 +57,10 @@
 		loading = false;
 	}
 
-	function setTab(next: 'mine' | 'explore') {
+	function setTab(next: 'mine' | 'explore' | 'heatmap') {
 		tab = next;
-		goto(next === 'explore' ? '/routes?tab=explore' : '/routes', {
+		const path = next === 'mine' ? '/routes' : `/routes?tab=${next}`;
+		goto(path, {
 			replaceState: true,
 			noScroll: true,
 			keepFocus: true,
@@ -68,6 +70,7 @@
 	onMount(() => {
 		const initial = $page.url.searchParams.get('tab');
 		if (initial === 'explore') tab = 'explore';
+		else if (initial === 'heatmap') tab = 'heatmap';
 		try {
 			const raw = localStorage.getItem(FILTERS_KEY);
 			if (raw) {
@@ -171,7 +174,7 @@
 		}
 	}
 
-	export const snapshot: Snapshot<{ routes: Route[]; tab: 'mine' | 'explore' }> = {
+	export const snapshot: Snapshot<{ routes: Route[]; tab: 'mine' | 'explore' | 'heatmap' }> = {
 		capture: () => ({ routes, tab }),
 		restore: (s) => {
 			routes = s.routes;
@@ -205,6 +208,9 @@
 			</button>
 			<button class="tab" class:active={tab === 'explore'} onclick={() => setTab('explore')}>
 				Explore routes
+			</button>
+			<button class="tab" class:active={tab === 'heatmap'} onclick={() => setTab('heatmap')}>
+				Heatmap
 			</button>
 		</div>
 	</header>
@@ -342,8 +348,10 @@
 			</div>
 			{/if}
 		{/if}
-	{:else}
+	{:else if tab === 'explore'}
 		<RouteExplorer />
+	{:else}
+		<RouteHeatmap />
 	{/if}
 </div>
 

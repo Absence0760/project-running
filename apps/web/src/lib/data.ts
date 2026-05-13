@@ -3252,6 +3252,44 @@ export async function updateRunPhotoCaption(
 	if (error) throw error;
 }
 
+// --- Heatmap / popular-route discovery (decisions backlog item #4) ---
+
+export interface HeatmapPoint {
+	lng: number;
+	lat: number;
+}
+
+/// Fetch densified sample points from public routes intersecting the
+/// given bounding box. Backed by the `heatmap_points_in_bbox` PostGIS
+/// RPC (migration 20260828_001), which itself caps the response at
+/// `max_points` to keep the wire size bounded — a continent-wide pan
+/// returns the same 5k points as a city pan, just spread thinner.
+/// Empty array on RPC error so the caller's map layer just stays
+/// blank rather than throwing.
+export async function fetchHeatmapPoints(bbox: {
+	minLng: number;
+	minLat: number;
+	maxLng: number;
+	maxLat: number;
+	maxPoints?: number;
+}): Promise<HeatmapPoint[]> {
+	const { data, error } = await supabase.rpc('heatmap_points_in_bbox', {
+		p_min_lng: bbox.minLng,
+		p_min_lat: bbox.minLat,
+		p_max_lng: bbox.maxLng,
+		p_max_lat: bbox.maxLat,
+		p_max_points: bbox.maxPoints ?? 5000,
+	});
+	if (error || !data) {
+		console.warn('fetchHeatmapPoints failed', error);
+		return [];
+	}
+	return (data as { lng: number; lat: number }[]).map((r) => ({
+		lng: r.lng,
+		lat: r.lat,
+	}));
+}
+
 // --- Gear tracking (decisions backlog item #7) ---
 
 export type GearKind = 'shoe' | 'bike';
