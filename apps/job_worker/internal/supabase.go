@@ -217,6 +217,57 @@ func (c *SupabaseClient) UploadMatchedTrack(ctx context.Context, path string, po
 	return err
 }
 
+// DownloadPhoto fetches the raw bytes of a photo from the run-photos
+// Storage bucket. Returns the body + the response's Content-Type so
+// the caller can preserve it on the re-upload (some browsers fall
+// back to extension-sniffing when it's missing, but Supabase Storage
+// signed URLs only use the stored header).
+func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte, string, error) {
+	url := c.BaseURL + "/storage/v1/object/run-photos/" + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	// We need the response headers, not just the body — re-use
+	// http.Client directly here rather than go through `c.do` which
+	// throws the response away.
+	req.Header.Set("apikey", c.ServiceKey)
+	req.Header.Set("Authorization", "Bearer "+c.ServiceKey)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, "", &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	return body, resp.Header.Get("Content-Type"), nil
+}
+
+// UploadPhoto writes [body] back to the same Storage path as
+// DownloadPhoto, with `x-upsert: true` so a re-process overwrites
+// the original. Used by the photo_process handler after EXIF
+// stripping. Idempotent — uploading already-stripped bytes a second
+// time produces no observable difference.
+func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	url := c.BaseURL + "/storage/v1/object/run-photos/" + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("x-upsert", "true")
+	_, err = c.do(ctx, req)
+	return err
+}
+
 // ErrStaleSourceTrackURL is returned by UpdateMatchedTrackRow when the
 // conditional PATCH found zero rows — meaning a re-upload trigger
 // reset the row's source_track_url between the worker reading it and

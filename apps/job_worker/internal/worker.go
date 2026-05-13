@@ -41,6 +41,12 @@ type Backend interface {
 	// retry); the caller treats that as "ack 200, skip ingest".
 	InsertWebhookEvent(ctx context.Context, provider, eventID string) (inserted bool, err error)
 	DeleteWebhookEvent(ctx context.Context, provider, eventID string) error
+	// Photo-process path — fetches + replaces a photo in the
+	// `run-photos` Storage bucket. Used by `handlePhotoProcess` to
+	// strip EXIF before the photo is visible to non-owner viewers
+	// (see `decisions.md` § 36 + the `run_photos` storage gate).
+	DownloadPhoto(ctx context.Context, path string) (body []byte, contentType string, err error)
+	UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
@@ -201,6 +207,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleTokenRefresh(ctx, job)
 	case "strava_event":
 		return w.handleStravaEvent(ctx, job)
+	case "photo_process":
+		return w.handlePhotoProcess(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

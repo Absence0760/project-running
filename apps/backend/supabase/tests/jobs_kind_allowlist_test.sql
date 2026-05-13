@@ -23,7 +23,7 @@
 
 begin;
 
-select plan(6);
+select plan(7);
 
 -- Accepted kinds round-trip cleanly. We're not asserting any
 -- particular id; just that the INSERT doesn't throw.
@@ -49,6 +49,15 @@ select lives_ok(
                                 'aspect_type', 'create',
                                 'event_time', extract(epoch from now())::int)) $$,
   'public.jobs accepts kind = ''strava_event'''
+);
+
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('photo_process',
+             jsonb_build_object('photo_id', gen_random_uuid(),
+                                'storage_path', 'user/photo.jpg',
+                                'owner_id', gen_random_uuid())) $$,
+  'public.jobs accepts kind = ''photo_process'''
 );
 
 -- Junk kinds are rejected at INSERT time, not deferred to dispatch.

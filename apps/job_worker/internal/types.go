@@ -91,6 +91,20 @@ type TokenPair struct {
 	TokenExpiry *time.Time `json:"token_expiry,omitempty"`
 }
 
+// PhotoProcessPayload is the payload shape the `run_photos` AFTER
+// INSERT trigger writes for `kind='photo_process'` jobs (migration
+// `20260825_001_jobs_kind_allowlist_photo_process.sql`). The handler
+// downloads the photo from the `run-photos` Storage bucket, strips
+// JPEG EXIF / XMP / ICC metadata via `internal/exif`, and re-uploads
+// in place. `owner_id` isn't strictly needed for the strip — the
+// `storage_path` already encodes it as the leading folder — but it's
+// carried for log-line breadcrumbs and future per-owner rate limits.
+type PhotoProcessPayload struct {
+	PhotoID     string `json:"photo_id"`
+	StoragePath string `json:"storage_path"`
+	OwnerID     string `json:"owner_id"`
+}
+
 // StravaEventPayload is the payload shape the Go webhook endpoint
 // enqueues for `kind='strava_event'` jobs. Mirrors the wire shape
 // Strava POSTs to the subscription URL — see

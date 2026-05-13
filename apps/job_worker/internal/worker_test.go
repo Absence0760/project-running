@@ -59,6 +59,15 @@ type fakeBackend struct {
 	// download that exceeds the worker's per-job deadline.
 	downloadDelay time.Duration
 
+	// photo_process inputs/outputs — keyed by storage_path. The
+	// fake echoes back whatever's stored; the handler's strip path
+	// asserts on the post-upload bytes.
+	photoByPath              map[string][]byte
+	photoContentType         string
+	downloadPhotoErr         error
+	uploadPhotoErr           error
+	photoUploadedContentType string
+
 	// Outputs
 	finished []finishCall
 	deferred []deferCall
@@ -161,6 +170,45 @@ func (f *fakeBackend) DeferJob(_ context.Context, jobID int64, delay int, msg *s
 		return err
 	}
 	f.deferred = append(f.deferred, deferCall{JobID: jobID, DelayS: delay, ErrMsg: msg})
+	return nil
+}
+
+// Photo-process surface — used by handler_photo_process_test.go.
+// The existing track-handler tests don't touch these and don't
+// care about their state; per-test setUp overrides `photoByPath`
+// or `uploadPhotoErr` when they need different behaviour.
+func (f *fakeBackend) DownloadPhoto(_ context.Context, path string) ([]byte, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.downloadPhotoErr != nil {
+		err := f.downloadPhotoErr
+		f.downloadPhotoErr = nil
+		return nil, "", err
+	}
+	b, ok := f.photoByPath[path]
+	if !ok {
+		return nil, "", errors.New("photo not found in fake backend: " + path)
+	}
+	ct := f.photoContentType
+	if ct == "" {
+		ct = "image/jpeg"
+	}
+	return b, ct, nil
+}
+
+func (f *fakeBackend) UploadPhoto(_ context.Context, path string, body []byte, contentType string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.uploadPhotoErr != nil {
+		err := f.uploadPhotoErr
+		f.uploadPhotoErr = nil
+		return err
+	}
+	if f.photoByPath == nil {
+		f.photoByPath = make(map[string][]byte)
+	}
+	f.photoByPath[path] = body
+	f.photoUploadedContentType = contentType
 	return nil
 }
 
