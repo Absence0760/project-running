@@ -23,6 +23,7 @@
 	} from '$lib/data';
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
 	import { computeRunStreaks } from '$lib/streaks';
+	import { computeReadiness } from '$lib/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import { WORKOUT_KIND_LABEL } from '$lib/training';
@@ -279,6 +280,14 @@
 		return computeRunStreaks(starts, now);
 	});
 
+	/// Readiness-to-run score (0–100) derived from the live fitness
+	/// snapshot. Sleep + resting-HR inputs aren't piped yet (Health
+	/// Connect / HealthKit reads ship separately); the helper handles
+	/// null gracefully so the card shows a TSB-only score for now.
+	let readiness = $derived.by(() =>
+		computeReadiness({ tsb: liveSnap.trainingStressBal ?? null }),
+	);
+
 	// Mileage chart data based on view mode
 	let mileageData = $derived.by(() => {
 		if (mileageView === 'weekly') return weeklyMileage;
@@ -461,6 +470,34 @@
 		     `fitness_snapshots` on every dashboard open so the trend
 		     chart has history. Hides when the user has no qualifying
 		     runs yet (short / non-recording sources only). -->
+		<!-- Readiness-to-run — single 0-100 number with band-aware
+		     accent. Inputs today are TSB-only; sleep + resting-HR pipe
+		     through the `readiness.ts` helper unchanged once Health
+		     Connect / HealthKit reads land. Hide entirely when there's
+		     nothing to score (no TSB, no qualifying runs). -->
+		{#if liveSnap.trainingStressBal != null}
+			<section class="readiness-card readiness-{readiness.band}">
+				<div class="readiness-head">
+					<span class="readiness-label">Readiness</span>
+					<span class="readiness-band">{readiness.band}</span>
+				</div>
+				<div class="readiness-score">{readiness.score}</div>
+				<p class="readiness-advice">{readiness.advice}</p>
+				{#if readiness.contributors.length > 0}
+					<ul class="readiness-contribs">
+						{#each readiness.contributors as c (c.name)}
+							<li>
+								<span class="contrib-name">{c.name}</span>
+								<span class="contrib-delta" class:positive={c.delta > 0} class:negative={c.delta < 0}>
+									{c.delta > 0 ? '+' : ''}{c.delta}
+								</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+		{/if}
+
 		{#if liveSnap.vo2Max != null || liveSnap.chronicLoad != null}
 			<section class="fitness-card">
 				<div class="fitness-row">
@@ -1168,6 +1205,81 @@
 	}
 	.fitness-value.tsb-neg { color: var(--color-danger); }
 	.fitness-value.tsb-pos { color: #2e7d32; }
+
+	.readiness-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		margin-bottom: var(--space-xl);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+	.readiness-card.readiness-high {
+		border-left: 4px solid #2e7d32;
+	}
+	.readiness-card.readiness-moderate {
+		border-left: 4px solid #f59e0b;
+	}
+	.readiness-card.readiness-low {
+		border-left: 4px solid #d32f2f;
+	}
+	.readiness-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-secondary);
+	}
+	.readiness-band {
+		padding: 0.1rem 0.5rem;
+		border-radius: 999px;
+		background: var(--color-bg-secondary);
+	}
+	.readiness-card.readiness-high .readiness-band {
+		background: color-mix(in srgb, #2e7d32 12%, transparent);
+		color: #2e7d32;
+	}
+	.readiness-card.readiness-moderate .readiness-band {
+		background: color-mix(in srgb, #f59e0b 18%, transparent);
+		color: #b45309;
+	}
+	.readiness-card.readiness-low .readiness-band {
+		background: color-mix(in srgb, #d32f2f 14%, transparent);
+		color: #d32f2f;
+	}
+	.readiness-score {
+		font-size: 2.5rem;
+		font-weight: 800;
+		line-height: 1;
+	}
+	.readiness-advice {
+		margin: 0;
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+	}
+	.readiness-contribs {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-md);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.readiness-contribs li {
+		display: inline-flex;
+		gap: 0.4rem;
+		align-items: baseline;
+	}
+	.contrib-delta { font-variant-numeric: tabular-nums; font-weight: 700; }
+	.contrib-delta.positive { color: #2e7d32; }
+	.contrib-delta.negative { color: #d32f2f; }
 	.fitness-unit {
 		font-size: 0.72rem;
 		color: var(--color-text-tertiary);

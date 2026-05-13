@@ -12,6 +12,7 @@ import '../streaks.dart';
 import '../training_load.dart';
 import '../training_service.dart';
 import '../widgets/fitness_card.dart';
+import '../widgets/readiness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/training_load_chart.dart';
 import 'coach_screen.dart';
@@ -349,6 +350,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _kSectionGap,
                 ],
                 FitnessCard(runs: runs, now: now),
+                ReadinessCard(runs: runs, now: now),
                 _buildTrainingLoadChart(runs, now),
               ],
             ),
