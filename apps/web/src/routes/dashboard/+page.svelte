@@ -406,6 +406,12 @@
 		</div>
 
 		<!-- Stat cards -->
+		<div class="recap-strip">
+			<a href="/recap/{new Date().getFullYear()}" class="recap-link">
+				<span class="material-symbols">auto_awesome</span>
+				View {new Date().getFullYear()} recap →
+			</a>
+		</div>
 		<div class="stat-grid">
 			<button
 				type="button"
@@ -1205,6 +1211,27 @@
 	}
 	.fitness-value.tsb-neg { color: var(--color-danger); }
 	.fitness-value.tsb-pos { color: #2e7d32; }
+
+	.recap-strip {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: var(--space-sm);
+	}
+	.recap-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.8rem;
+		background: color-mix(in srgb, #7C3AED 12%, transparent);
+		color: #7C3AED;
+		border-radius: 999px;
+		font-weight: 600;
+		font-size: 0.85rem;
+		text-decoration: none;
+	}
+	.recap-link:hover {
+		background: color-mix(in srgb, #7C3AED 20%, transparent);
+	}
 
 	.readiness-card {
 		background: var(--color-surface);
