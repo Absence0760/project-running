@@ -23,6 +23,7 @@ import '../strava.dart';
 import 'import_screen.dart';
 import 'devices_screen.dart';
 import 'gear_screen.dart';
+import 'guided_runs_screen.dart';
 import 'privacy_zones_screen.dart';
 import 'profile_screen.dart';
 import 'sign_in_screen.dart';
@@ -1314,6 +1315,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       api: api,
                       preferences: widget.preferences,
                     ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.headset),
+              title: const Text('Guided runs'),
+              subtitle:
+                  const Text('Coach-voice scripted workouts with TTS cues'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GuidedRunsScreen(),
                   ),
                 );
               },

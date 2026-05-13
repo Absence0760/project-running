@@ -61,6 +61,7 @@
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
 		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
+		{ href: '/guided', label: 'Guided runs', icon: 'headset', accent: '#8FB8DB' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
 		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];

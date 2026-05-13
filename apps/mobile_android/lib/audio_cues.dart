@@ -184,6 +184,14 @@ class AudioCues {
     await _tts.speak('Workout complete. Nice work.');
   }
 
+  /// Speak an arbitrary guided-run cue. The TTS engine handles
+  /// interruption (a new speak() call cancels the previous utterance)
+  /// so back-to-back cues at the same second cleanly chain.
+  Future<void> speakGuidedCue(String text) async {
+    await _init();
+    await _tts.speak(text);
+  }
+
   String _workoutStepUtterance(WorkoutStep step) =>
       formatWorkoutStepUtterance(step);
 
