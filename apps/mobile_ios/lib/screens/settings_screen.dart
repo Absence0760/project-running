@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -18,6 +19,7 @@ import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
 import '../revenuecat.dart';
 import '../settings_sync.dart';
+import '../strava.dart';
 import 'import_screen.dart';
 import 'devices_screen.dart';
 import 'privacy_zones_screen.dart';
@@ -849,10 +851,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _connectStrava() async {
-    await _openExternal('https://run.app/settings/integrations');
-    if (!mounted) return;
-    showTopBanner(context, 'Complete the Strava sign-in in your browser, then return here '
-          'and pull to refresh.',);
+    final api = widget.apiClient;
+    if (api == null) return;
+
+    // Fall back to the browser flow on unconfigured builds — the native
+    // OAuth call needs STRAVA_CLIENT_ID in dotenv. Older builds will
+    // continue to land on the web Settings page rather than hit a
+    // confusing StateError.
+    if (!isStravaConfigured()) {
+      await _openExternal('https://run.app/settings/integrations');
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        'Complete the Strava sign-in in your browser, then return here '
+            'and pull to refresh.',
+      );
+      return;
+    }
+
+    setState(() => _stravaBusy = true);
+    try {
+      final authUrl = stravaAuthUrl(redirectUri: kStravaCallbackUri);
+      final resultUrl = await FlutterWebAuth2.authenticate(
+        url: authUrl,
+        callbackUrlScheme: kStravaCallbackScheme,
+      );
+      final cb = parseStravaCallback(resultUrl);
+      if (!cb.isSuccess) {
+        if (!mounted) return;
+        showTopBanner(
+          context,
+          cb.error == 'access_denied'
+              ? 'Strava sign-in cancelled.'
+              : 'Strava sign-in failed: ${cb.error ?? 'no code returned'}',
+        );
+        return;
+      }
+      final res = await api.completeStravaOAuth(
+        code: cb.code!,
+        scope: cb.scope ?? '',
+        redirectUri: kStravaCallbackUri,
+      );
+      if (!mounted) return;
+      final err = res['error'];
+      if (err is String) {
+        showTopBanner(context, 'Strava connect failed: $err');
+        return;
+      }
+      showTopBanner(context, 'Strava connected.');
+      await _refreshIntegrations();
+    } catch (e) {
+      // FlutterWebAuth2 throws PlatformException on user cancel, network
+      // failure, or scheme mismatch — same broad surface as the EF
+      // failures, so one catch is enough. L4 per layered resilience:
+      // a failure here can't break the rest of Settings.
+      if (!mounted) return;
+      showTopBanner(context, 'Strava sign-in failed: $e');
+    } finally {
+      if (mounted) setState(() => _stravaBusy = false);
+    }
   }
 
   Future<void> _syncStrava() async {

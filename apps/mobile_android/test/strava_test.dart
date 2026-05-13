@@ -71,4 +71,48 @@ void main() {
       );
     });
   });
+
+  group('parseStravaCallback', () {
+    test('extracts code + scope from a successful callback', () {
+      final cb = parseStravaCallback(
+        'runonward://strava-callback?state=&code=abc123&scope=read,activity:read_all',
+      );
+      expect(cb.code, 'abc123');
+      expect(cb.scope, 'read,activity:read_all');
+      expect(cb.error, isNull);
+      expect(cb.isSuccess, isTrue);
+    });
+
+    test('flags access_denied when the user declines the consent screen', () {
+      final cb = parseStravaCallback(
+        'runonward://strava-callback?state=&error=access_denied',
+      );
+      expect(cb.code, isNull);
+      expect(cb.error, 'access_denied');
+      expect(cb.isSuccess, isFalse);
+    });
+
+    test('isSuccess is false when code is present but error is also set', () {
+      // Strava never sends both, but the helper shouldn't paper over it
+      // by treating the code as authoritative — surfacing the error is
+      // safer than blindly POSTing the code to the EF.
+      final cb = parseStravaCallback(
+        'runonward://strava-callback?code=x&error=server_error',
+      );
+      expect(cb.isSuccess, isFalse);
+    });
+
+    test('handles a callback URL with no query string', () {
+      final cb = parseStravaCallback('runonward://strava-callback');
+      expect(cb.code, isNull);
+      expect(cb.scope, isNull);
+      expect(cb.error, isNull);
+      expect(cb.isSuccess, isFalse);
+    });
+
+    test('exposes the constants the AndroidManifest + Strava console pin', () {
+      expect(kStravaCallbackScheme, 'runonward');
+      expect(kStravaCallbackUri, 'runonward://strava-callback');
+    });
+  });
 }

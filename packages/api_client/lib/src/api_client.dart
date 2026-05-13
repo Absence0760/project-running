@@ -2543,6 +2543,34 @@ class ApiClient {
     return const {};
   }
 
+  /// Complete the in-app Strava OAuth exchange. The caller (Settings)
+  /// drives the user through `FlutterWebAuth2.authenticate(...)` and
+  /// receives a `runonward://strava-callback?code=...&scope=...` URL;
+  /// this method posts the extracted `code` + `scope` + `redirect_uri`
+  /// to the `strava-import` EF with `action: 'connect'`. The EF
+  /// validates the redirect against `STRAVA_ALLOWED_REDIRECTS`, swaps
+  /// the code for a refresh token, and writes the row to `integrations`.
+  /// Returns the raw response so callers can surface success/failure.
+  Future<Map<String, dynamic>> completeStravaOAuth({
+    required String code,
+    required String scope,
+    required String redirectUri,
+  }) async {
+    final res = await _client.functions.invoke(
+      'strava-import',
+      body: {
+        'action': 'connect',
+        'code': code,
+        'scope': scope,
+        'redirect_uri': redirectUri,
+      },
+    );
+    final data = res.data;
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return const {};
+  }
+
   /// Lightweight count of a user's runs, capped by [limit]. The coach
   /// context strip uses this to show how much history the model is
   /// reasoning over — only the count matters, so the column projection

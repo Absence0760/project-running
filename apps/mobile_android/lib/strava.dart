@@ -25,6 +25,50 @@ const _kEnvKey = 'STRAVA_CLIENT_ID';
 /// non-public runs too. Mirrors the web exactly.
 const _kStravaScope = 'activity:read_all,read';
 
+/// Custom URL scheme the in-app OAuth flow listens for. Must match a
+/// scheme registered in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function
+/// side AND a `<data android:scheme="runonward" />` intent-filter on
+/// the `flutter_web_auth_2` callback activity (see AndroidManifest).
+/// iOS doesn't need any Info.plist registration —
+/// ASWebAuthenticationSession matches the scheme at runtime.
+const String kStravaCallbackScheme = 'runonward';
+const String kStravaCallbackUri = '$kStravaCallbackScheme://strava-callback';
+
+/// Result of parsing a Strava OAuth callback URL.
+///
+/// Strava's `/authorize` redirects to the registered URI with either
+/// (a) `?code=…&scope=…&state=…` on success or (b) `?error=access_denied`
+/// when the user declines. The scope string is what the user actually
+/// granted — may be a subset of what we asked for if they unchecked
+/// boxes on the consent screen.
+class StravaCallback {
+  final String? code;
+  final String? scope;
+  final String? error;
+  const StravaCallback({this.code, this.scope, this.error});
+
+  bool get isSuccess => code != null && code!.isNotEmpty && error == null;
+}
+
+/// Parse a `runonward://strava-callback?code=...&scope=...` URL into
+/// its components. Pure helper kept out of the Settings screen so the
+/// success / decline / malformed branches can be unit-tested without
+/// invoking the auth session.
+StravaCallback parseStravaCallback(String url) {
+  Uri? parsed;
+  try {
+    parsed = Uri.parse(url);
+  } catch (_) {
+    return const StravaCallback(error: 'invalid_url');
+  }
+  final q = parsed.queryParameters;
+  return StravaCallback(
+    code: q['code'],
+    scope: q['scope'],
+    error: q['error'],
+  );
+}
+
 /// True when `STRAVA_CLIENT_ID` is present in `dotenv.env` and not the
 /// `12345` placeholder. Mirrors the web's `isStravaConfigured` check.
 bool isStravaConfigured({String? keyOverride}) {
