@@ -452,6 +452,8 @@ class _SegmentTile extends StatelessWidget {
                     entries: leaderboard,
                     viewerId: viewerId,
                     filtered: genderFilter != null || ageFilter != null,
+                    genderFilter: genderFilter,
+                    ageFilter: ageFilter,
                   ),
                 ],
               ),
@@ -545,11 +547,15 @@ class _Leaderboard extends StatelessWidget {
   final List<SegmentLeaderboardEntry>? entries;
   final String? viewerId;
   final bool filtered;
+  final String? genderFilter;
+  final String? ageFilter;
 
   const _Leaderboard({
     required this.entries,
     required this.viewerId,
     required this.filtered,
+    required this.genderFilter,
+    required this.ageFilter,
   });
 
   @override
@@ -579,11 +585,52 @@ class _Leaderboard extends StatelessWidget {
         ),
       );
     }
+    final label = crownLabel(genderFilter, ageFilter);
+    final crownHolder =
+        entries!.firstWhere((e) => e.rank == 1, orElse: () => entries!.first);
+    final viewerHoldsCrown = crownHolder.rank == 1 &&
+        viewerId != null &&
+        crownHolder.effort.userId == viewerId;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final e in entries!) _LeaderboardRow(entry: e, viewerId: viewerId),
+        if (viewerHoldsCrown) _CrownBanner(label: label),
+        for (final e in entries!)
+          _LeaderboardRow(entry: e, viewerId: viewerId, crownLabel: label),
       ],
+    );
+  }
+}
+
+class _CrownBanner extends StatelessWidget {
+  final String label;
+  const _CrownBanner({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0x1FF5B30A),
+        border: Border.all(color: const Color(0x59F5B30A)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.emoji_events, color: Color(0xFFF5B30A), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'You hold this crown — $label.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -591,12 +638,18 @@ class _Leaderboard extends StatelessWidget {
 class _LeaderboardRow extends StatelessWidget {
   final SegmentLeaderboardEntry entry;
   final String? viewerId;
-  const _LeaderboardRow({required this.entry, required this.viewerId});
+  final String crownLabel;
+  const _LeaderboardRow({
+    required this.entry,
+    required this.viewerId,
+    required this.crownLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isViewer = viewerId != null && entry.effort.userId == viewerId;
+    final isCrowned = entry.rank == 1;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -610,13 +663,22 @@ class _LeaderboardRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 32,
-            child: Text(
-              '#${entry.rank}',
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
+            child: isCrowned
+                ? Tooltip(
+                    message: crownLabel,
+                    child: const Icon(
+                      Icons.emoji_events,
+                      color: Color(0xFFF5B30A),
+                      size: 20,
+                    ),
+                  )
+                : Text(
+                    '#${entry.rank}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
           ),
           _MiniAvatar(
             displayName: entry.athlete.displayName,

@@ -153,6 +153,30 @@ export type SegmentAgeBand = (typeof SEGMENT_AGE_BANDS)[number];
 
 export type SegmentGenderFilter = 'male' | 'female' | 'nonbinary';
 
+/**
+ * Tooltip / aria-label for the KOM/QOM crown badge. Describes which
+ * tier the rank-1 holder owns ("Fastest woman 35-39", "Fastest
+ * overall", etc.) given the active filter. Mirrors
+ * `apps/mobile_android/lib/segments.dart#crownLabel`.
+ */
+export function crownLabel(
+	genderFilter: SegmentGenderFilter | null,
+	ageFilter: SegmentAgeBand | null,
+): string {
+	const subject =
+		genderFilter == null
+			? null
+			: genderFilter === 'male'
+				? 'man'
+				: genderFilter === 'female'
+					? 'woman'
+					: 'nonbinary runner';
+	if (subject == null && ageFilter == null) return 'Fastest overall';
+	if (subject != null && ageFilter == null) return `Fastest ${subject}`;
+	if (subject == null && ageFilter != null) return `Fastest ${ageFilter}`;
+	return `Fastest ${subject} ${ageFilter}`;
+}
+
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
 	const r = 6371000;
 	const dLat = ((lat2 - lat1) * Math.PI) / 180;

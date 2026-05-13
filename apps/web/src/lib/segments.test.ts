@@ -2,7 +2,12 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { computeEffortFromTrack, assignCompetitionRanks, SEGMENT_AGE_BANDS } from './segments';
+import {
+	computeEffortFromTrack,
+	assignCompetitionRanks,
+	crownLabel,
+	SEGMENT_AGE_BANDS,
+} from './segments';
 import type { TrackPoint } from './types';
 
 /**
@@ -272,4 +277,30 @@ test('SEGMENT_AGE_BANDS: every band the RPC parser accepts', () => {
 			`band '${band}' would be rejected by the RPC's regex /${m![1]}/`,
 		);
 	}
+});
+
+// ─────────── crownLabel ───────────
+
+test('crownLabel: no filter → "Fastest overall"', () => {
+	assert.equal(crownLabel(null, null), 'Fastest overall');
+});
+
+test('crownLabel: gender only', () => {
+	assert.equal(crownLabel('male', null), 'Fastest man');
+	assert.equal(crownLabel('female', null), 'Fastest woman');
+	assert.equal(crownLabel('nonbinary', null), 'Fastest nonbinary runner');
+});
+
+test('crownLabel: age band only', () => {
+	assert.equal(crownLabel(null, '35-39'), 'Fastest 35-39');
+	assert.equal(crownLabel(null, '75+'), 'Fastest 75+');
+});
+
+test('crownLabel: gender + age band combined', () => {
+	assert.equal(crownLabel('female', '30-34'), 'Fastest woman 30-34');
+	assert.equal(crownLabel('male', '75+'), 'Fastest man 75+');
+	assert.equal(
+		crownLabel('nonbinary', '18-19'),
+		'Fastest nonbinary runner 18-19',
+	);
 });

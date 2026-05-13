@@ -1464,6 +1464,24 @@ void main() {
           reason: 'v2 must route through assignCompetitionRanks');
     });
 
+    test('SegmentsPanel widget renders a KOM/QOM crown on rank-1 rows', () {
+      // Reason: the gold trophy is the parity surface with Strava's
+      // KOM/QOM crowns. Conditioning on `entry.rank == 1` keeps it on
+      // exactly one row per filtered view. The crownLabel() pipe means
+      // the tooltip mentions the active tier rather than a generic
+      // "King" label.
+      final source =
+          File('lib/widgets/segments_panel.dart').readAsStringSync();
+      expect(source.contains('Icons.emoji_events'), isTrue,
+          reason: 'crown glyph missing');
+      expect(source.contains('entry.rank == 1'), isTrue,
+          reason: 'crown gate missing');
+      expect(source.contains('crownLabel'), isTrue,
+          reason: 'crown tooltip not piped through crownLabel()');
+      expect(source.contains("'You hold this crown"), isTrue,
+          reason: 'viewer-holds-crown banner copy missing');
+    });
+
     test('kSegmentAgeBands list matches the migration SQL regex', () {
       // The plpgsql RPC accepts '^[0-9]+-[0-9]+$' OR the literal '75+'.
       // Read the migration, extract the regex, validate every band the

@@ -114,6 +114,35 @@ test('Settings → preferences hydrates gender + dob from user_profiles on load'
 	);
 });
 
+test('SegmentsPanel.svelte renders a KOM/QOM crown on the rank-1 row', () => {
+	// Reason: the crown badge is the visual marker for the tier leader.
+	// It lives behind `entry.rank === 1` so it only appears once per
+	// leaderboard view. Stripping the badge silently turns segments
+	// into a plain top-N list — bug class: lost product surface.
+	const source = read('src/lib/components/SegmentsPanel.svelte');
+	assert.match(source, /\{#if entry\.rank === 1\}/, 'crown gate missing');
+	assert.match(source, /class="material-symbols crown-icon"/, 'crown icon class missing');
+	assert.match(source, /emoji_events/, 'crown glyph missing');
+});
+
+test('SegmentsPanel.svelte tooltips the crown with the active tier', () => {
+	// Reason: a generic "King" badge would be ambiguous on a filtered
+	// view. crownLabel() composes "Fastest woman 30-34" / "Fastest
+	// overall" / etc. so the tooltip is honest about which tier the
+	// crown represents.
+	const source = read('src/lib/components/SegmentsPanel.svelte');
+	assert.match(source, /crownLabel\(genderFilter, ageFilter\)/, 'crown label not piped to title/aria');
+});
+
+test('SegmentsPanel.svelte announces a self-held crown above the list', () => {
+	// Reason: the per-row crown is small. The "You hold this crown"
+	// banner gives the viewer an obvious confirmation when they're the
+	// rank-1 holder under the current filter.
+	const source = read('src/lib/components/SegmentsPanel.svelte');
+	assert.match(source, /class="crown-banner"/, 'crown banner class missing');
+	assert.match(source, /You hold this crown/, 'crown banner copy missing');
+});
+
 test('data.ts re-exports the moved constants from segments.ts', () => {
 	// Reason: SEGMENT_AGE_BANDS / SegmentAgeBand / SegmentGenderFilter
 	// moved out of data.ts into the pure segments module so unit tests

@@ -56,3 +56,21 @@ const kSegmentAgeBands = <String>[
   '70-74',
   '75+',
 ];
+
+/// Tooltip / accessibility label for the KOM/QOM crown badge.
+/// Describes which tier the rank-1 holder owns ("Fastest woman 35-39",
+/// "Fastest overall", etc.) given the active filter. Mirrors
+/// `apps/web/src/lib/segments.ts#crownLabel`.
+String crownLabel(String? genderFilter, String? ageFilter) {
+  final subject = switch (genderFilter) {
+    null => null,
+    'male' => 'man',
+    'female' => 'woman',
+    'nonbinary' => 'nonbinary runner',
+    _ => null,
+  };
+  if (subject == null && ageFilter == null) return 'Fastest overall';
+  if (subject != null && ageFilter == null) return 'Fastest $subject';
+  if (subject == null && ageFilter != null) return 'Fastest $ageFilter';
+  return 'Fastest $subject $ageFilter';
+}

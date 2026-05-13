@@ -125,6 +125,38 @@ void main() {
     });
   });
 
+  group('crownLabel', () {
+    test('no filter → "Fastest overall"', () {
+      expect(crownLabel(null, null), 'Fastest overall');
+    });
+
+    test('gender only', () {
+      expect(crownLabel('male', null), 'Fastest man');
+      expect(crownLabel('female', null), 'Fastest woman');
+      expect(crownLabel('nonbinary', null), 'Fastest nonbinary runner');
+    });
+
+    test('age band only', () {
+      expect(crownLabel(null, '35-39'), 'Fastest 35-39');
+      expect(crownLabel(null, '75+'), 'Fastest 75+');
+    });
+
+    test('gender + age band combined', () {
+      expect(crownLabel('female', '30-34'), 'Fastest woman 30-34');
+      expect(crownLabel('male', '75+'), 'Fastest man 75+');
+      expect(crownLabel('nonbinary', '18-19'),
+          'Fastest nonbinary runner 18-19');
+    });
+
+    test('unknown gender values fall through gracefully', () {
+      // The migration's CHECK allows prefer_not_to_say; that's never
+      // sent as a filter (the UI only offers male / female / nonbinary)
+      // but the helper should not throw on garbage input.
+      expect(crownLabel('prefer_not_to_say', null), 'Fastest overall');
+      expect(crownLabel('prefer_not_to_say', '40-44'), 'Fastest 40-44');
+    });
+  });
+
   group('assignCompetitionRanks — additional edge cases', () {
     test('single element gets rank 1', () {
       expect(

@@ -11,6 +11,7 @@
 		type SegmentGenderFilter,
 		type SegmentAgeBand,
 	} from '$lib/data';
+	import { crownLabel } from '$lib/segments';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { distanceInPreferred } from '$lib/units.svelte';
@@ -283,10 +284,32 @@
 										: 'No efforts yet — be the first to run this segment.'}
 								</p>
 							{:else}
+								{@const _board = leaderboards.get(seg.id) ?? []}
+								{@const _crownHolder = _board.find((e) => e.rank === 1) ?? null}
+								{@const _viewerHoldsCrown =
+									_crownHolder != null && _crownHolder.effort.user_id === auth.user?.id}
+								{#if _viewerHoldsCrown}
+									<p class="crown-banner" title={crownLabel(genderFilter, ageFilter)}>
+										<span class="material-symbols crown-icon">emoji_events</span>
+										You hold this crown — {crownLabel(genderFilter, ageFilter)}.
+									</p>
+								{/if}
 								<ol>
-									{#each leaderboards.get(seg.id) ?? [] as entry (entry.effort.id)}
+									{#each _board as entry (entry.effort.id)}
 										<li class:viewer={entry.effort.user_id === auth.user?.id}>
-											<span class="rank">#{entry.rank}</span>
+											<span class="rank">
+												{#if entry.rank === 1}
+													<span
+														class="material-symbols crown-icon"
+														title={crownLabel(genderFilter, ageFilter)}
+														aria-label={crownLabel(genderFilter, ageFilter)}
+													>
+														emoji_events
+													</span>
+												{:else}
+													#{entry.rank}
+												{/if}
+											</span>
 											<a href="/u/{entry.athlete.id}" class="athlete">
 												<span class="avatar-sm">
 													{#if entry.athlete.avatar_url}
@@ -513,6 +536,25 @@
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text-tertiary);
 		min-width: 2.5rem;
+		display: inline-flex;
+		align-items: center;
+	}
+	.crown-icon {
+		color: #f5b30a;
+		font-size: 1.1rem;
+		line-height: 1;
+	}
+	.crown-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: 0;
+		padding: var(--space-sm) var(--space-md);
+		background: color-mix(in srgb, #f5b30a 12%, transparent);
+		border: 1px solid color-mix(in srgb, #f5b30a 35%, transparent);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		font-weight: 600;
 	}
 	.athlete {
 		display: inline-flex;
