@@ -22,6 +22,7 @@
 		type FitnessSnapshotRow,
 	} from '$lib/data';
 	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
+	import { computeRunStreaks } from '$lib/streaks';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import { WORKOUT_KIND_LABEL } from '$lib/training';
@@ -268,6 +269,16 @@
 	let totalRuns = $derived(filteredRuns.length);
 	let longestRun = $derived(filteredRuns.length > 0 ? Math.max(...filteredRuns.map((r) => r.distance_m)) : 0);
 
+	/// Current + best run streak. Daily granularity; Strava's grace
+	/// rule means a missing today doesn't break the streak if
+	/// yesterday is intact. Filtered runs feed in so the user's
+	/// activity-type filter on the dashboard scopes the streak too —
+	/// "run streak" view shows running-only, "walk" shows walks, etc.
+	let runStreaks = $derived.by(() => {
+		const starts = filteredRuns.map((r) => new Date(r.started_at));
+		return computeRunStreaks(starts, now);
+	});
+
 	// Mileage chart data based on view mode
 	let mileageData = $derived.by(() => {
 		if (mileageView === 'weekly') return weeklyMileage;
@@ -425,6 +436,22 @@
 						: '--'}
 				</span>
 				<span class="stat-sub">average</span>
+			</div>
+			<div class="stat-card" class:streak-active={runStreaks.current > 0}>
+				<span class="stat-label">Streak</span>
+				<span class="stat-value">
+					{runStreaks.current}
+					<span class="stat-unit">{runStreaks.current === 1 ? 'day' : 'days'}</span>
+				</span>
+				<span class="stat-sub">
+					{#if runStreaks.best > runStreaks.current}
+						best {runStreaks.best} {runStreaks.best === 1 ? 'day' : 'days'}
+					{:else if runStreaks.current > 0}
+						all-time best
+					{:else}
+						no active streak
+					{/if}
+				</span>
 			</div>
 		</div>
 
@@ -1334,6 +1361,18 @@
 	.stat-card:nth-child(2)::before { background: linear-gradient(90deg, #10B981, #06B6D4); }
 	.stat-card:nth-child(3)::before { background: linear-gradient(90deg, #F97316, #F59E0B); }
 	.stat-card:nth-child(4)::before { background: linear-gradient(90deg, #EC4899, #EF4444); }
+	.stat-card:nth-child(5)::before { background: linear-gradient(90deg, #F5B30A, #F97316); }
+
+	.stat-unit {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text-tertiary);
+		margin-left: 0.2rem;
+	}
+
+	.streak-active .stat-value {
+		color: #F5B30A;
+	}
 
 	.stat-card:hover {
 		box-shadow: var(--shadow-md);

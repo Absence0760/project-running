@@ -103,3 +103,49 @@ export function computeElevationGain(track: LatLng[]): number {
 	}
 	return gain;
 }
+
+export interface RouteSummary {
+	/** Simplified waypoints, ready to drop into `routes.waypoints`. */
+	waypoints: LatLng[];
+	/** Equirectangular distance summed over the simplified polyline. */
+	distance_m: number;
+	/** Positive elevation change over the simplified polyline. */
+	elevation_m: number;
+}
+
+/**
+ * Turn a raw GPS track from a run into the three numbers a `routes`
+ * row needs: simplified waypoints, distance, elevation gain.
+ *
+ * Equirectangular distance is close enough at running scales (sub-1 %
+ * error vs haversine for sub-100 km separations) and matches the
+ * Android save-as-route path. Used by `saveRunAsRoute` so the inline
+ * arithmetic is testable in isolation.
+ */
+export function summarizeRouteFromTrack(
+	track: LatLng[],
+	epsilonMetres = 10,
+): RouteSummary {
+	const simplified = simplifyTrack(track, epsilonMetres);
+	const waypoints = simplified.map((p) => ({
+		lat: p.lat,
+		lng: p.lng,
+		...(p.ele != null ? { ele: p.ele } : {}),
+	}));
+	let distance = 0;
+	for (let i = 1; i < simplified.length; i++) {
+		const a = simplified[i - 1];
+		const b = simplified[i];
+		const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+		const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+		const midLat = (((a.lat + b.lat) / 2) * Math.PI) / 180;
+		const x = dLng * Math.cos(midLat);
+		const y = dLat;
+		distance += Math.sqrt(x * x + y * y) * 6_371_000;
+	}
+	return {
+		waypoints,
+		distance_m: distance,
+		elevation_m: computeElevationGain(simplified),
+	};
+}

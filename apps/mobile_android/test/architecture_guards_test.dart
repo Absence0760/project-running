@@ -1482,6 +1482,19 @@ void main() {
           reason: 'viewer-holds-crown banner copy missing');
     });
 
+    test('Dashboard wires its streak card through computeRunStreaks()', () {
+      // Reason: the streak figures must come from the pure helper in
+      // lib/streaks.dart, not an inline reimplementation. The helper
+      // is unit-tested and twinned with web; inline drift would silently
+      // disagree on the Strava grace rule.
+      final source =
+          File('lib/screens/dashboard_screen.dart').readAsStringSync();
+      expect(source.contains('computeRunStreaks'), isTrue,
+          reason: 'dashboard must call the pure helper');
+      expect(source.contains('_StreakRow'), isTrue,
+          reason: 'streak card widget missing');
+    });
+
     test('kSegmentAgeBands list matches the migration SQL regex', () {
       // The plpgsql RPC accepts '^[0-9]+-[0-9]+$' OR the literal '75+'.
       // Read the migration, extract the regex, validate every band the

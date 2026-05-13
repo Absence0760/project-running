@@ -8,6 +8,7 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
+import '../streaks.dart';
 import '../training_load.dart';
 import '../training_service.dart';
 import '../widgets/fitness_card.dart';
@@ -300,6 +301,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+                _kSectionGap,
+                const _SectionHeader('Streak'),
+                Card(
+                  child: Padding(
+                    padding: _kCardPadding,
+                    child: _StreakRow(runs: runs),
                   ),
                 ),
                 _kSectionGap,
@@ -802,6 +811,85 @@ class _SummaryStat extends StatelessWidget {
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             )),
+      ],
+    );
+  }
+}
+
+/// Current + best run-streak card. Strava-style daily grace — a
+/// missing today doesn't break the streak if yesterday is intact.
+/// Pure compute via `lib/streaks.dart` so the helper can be
+/// unit-tested without a widget pump.
+class _StreakRow extends StatelessWidget {
+  final List<Run> runs;
+  const _StreakRow({required this.runs});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final streaks = computeRunStreaks(
+      runs.map((r) => r.startedAt).toList(),
+      DateTime.now(),
+    );
+    final crown = streaks.current > 0;
+    final color = crown ? const Color(0xFFF5B30A) : theme.colorScheme.outline;
+    final bestText = streaks.best > streaks.current
+        ? 'best ${streaks.best} ${streaks.best == 1 ? "day" : "days"}'
+        : streaks.current > 0
+            ? 'all-time best'
+            : 'no active streak';
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        Column(
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Icon(Icons.local_fire_department, color: color, size: 28),
+                const SizedBox(width: 6),
+                Text(
+                  '${streaks.current}',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  streaks.current == 1 ? 'day' : 'days',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Current',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ],
+        ),
+        Column(
+          children: [
+            Text(
+              bestText,
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'History',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

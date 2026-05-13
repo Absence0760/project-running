@@ -506,30 +506,9 @@ export async function saveRunAsRoute(
 	name: string,
 	track: Array<{ lat: number; lng: number; ele?: number | null }>,
 ): Promise<{ id: string }> {
-	const { simplifyTrack, computeElevationGain } = await import('./route_simplify');
+	const { summarizeRouteFromTrack } = await import('./route_simplify');
 	if (track.length < 2) throw new Error('Not enough GPS points to save a route');
-	const simplified = simplifyTrack(track, 10);
-
-	const waypoints = simplified.map((p) => ({
-		lat: p.lat,
-		lng: p.lng,
-		...(p.ele != null ? { ele: p.ele } : {}),
-	}));
-	// Distance — sum of segment lengths. Haversine would be marginally
-	// more accurate; equirectangular is more than close enough at
-	// running scales and matches the Android save-as-route path.
-	let distance = 0;
-	for (let i = 1; i < simplified.length; i++) {
-		const a = simplified[i - 1];
-		const b = simplified[i];
-		const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-		const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-		const midLat = ((a.lat + b.lat) / 2 * Math.PI) / 180;
-		const x = dLng * Math.cos(midLat);
-		const y = dLat;
-		distance += Math.sqrt(x * x + y * y) * 6_371_000;
-	}
-	const elevation = computeElevationGain(simplified);
+	const { waypoints, distance_m, elevation_m } = summarizeRouteFromTrack(track, 10);
 
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
@@ -541,8 +520,8 @@ export async function saveRunAsRoute(
 			user_id: userId,
 			name,
 			waypoints,
-			distance_m: distance,
-			elevation_m: elevation,
+			distance_m,
+			elevation_m,
 			is_public: false,
 		})
 		.select('id')
