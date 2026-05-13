@@ -18,6 +18,9 @@ import 'feed_screen.dart';
 import 'period_summary_screen.dart';
 import 'profile_screen.dart';
 
+const _kCardPadding = EdgeInsets.all(20);
+const _kSectionGap = SizedBox(height: 24);
+
 /// Dashboard with goals, weekly/monthly stats, and personal bests.
 class DashboardScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -223,15 +226,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _goalsSection(theme, unit, runs, goals, now),
-                const SizedBox(height: 24),
-                Text('This Week', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
+                _kSectionGap,
+                const _SectionHeader('This Week'),
                 Card(
                   child: InkWell(
                     onTap: () => _openPeriodSummary(PeriodType.week),
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: _kCardPadding,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
@@ -254,15 +256,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text('This Month', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
+                _kSectionGap,
+                const _SectionHeader('This Month'),
                 Card(
                   child: InkWell(
                     onTap: () => _openPeriodSummary(PeriodType.month),
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: _kCardPadding,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
@@ -280,22 +281,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text('Last 20 Weeks', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
+                _kSectionGap,
+                const _SectionHeader('All Time'),
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: _kCardPadding,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _SummaryStat(
+                          label: 'Distance',
+                          value: UnitFormat.distanceValue(allDistance, unit),
+                          unit: UnitFormat.distanceLabel(unit),
+                        ),
+                        _SummaryStat(
+                          label: 'Runs',
+                          value: '${runs.length}',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                _kSectionGap,
+                const _SectionHeader('Last 20 Weeks'),
+                Card(
+                  child: Padding(
+                    padding: _kCardPadding,
                     child: _RunHeatmap(runs: runs, weeks: 20),
                   ),
                 ),
-                const SizedBox(height: 24),
+                _kSectionGap,
                 if (hasAnyPb) ...[
-                  Text('Personal Bests', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
+                  const _SectionHeader('Personal Bests'),
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: _kCardPadding,
                       child: Column(
                         children: [
                           if (longest != null)
@@ -317,33 +337,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  _kSectionGap,
                 ],
                 FitnessCard(runs: runs, now: now),
                 _buildTrainingLoadChart(runs, now),
-                const SizedBox(height: 16),
-
-                Text('All Time', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _SummaryStat(
-                          label: 'Distance',
-                          value: UnitFormat.distanceValue(allDistance, unit),
-                          unit: UnitFormat.distanceLabel(unit),
-                        ),
-                        _SummaryStat(
-                          label: 'Runs',
-                          value: '${runs.length}',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               ],
             ),
     );
@@ -359,23 +356,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Text('Goals', style: theme.textTheme.titleMedium),
-            const Spacer(),
-            if (goals.isNotEmpty)
-              TextButton.icon(
-                onPressed: _newGoal,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-          ],
+        _SectionHeader(
+          'Goals',
+          trailing: goals.isNotEmpty
+              ? TextButton.icon(
+                  onPressed: _newGoal,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                )
+              : null,
         ),
-        const SizedBox(height: 8),
         if (goals.isEmpty)
           _EmptyGoalsCta(onAdd: _newGoal)
         else
@@ -407,6 +401,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     }
     return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final Widget? trailing;
+  const _SectionHeader(this.title, {this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Text(title, style: theme.textTheme.titleMedium),
+          if (trailing != null) ...[const Spacer(), trailing!],
+        ],
+      ),
+    );
   }
 }
 
@@ -510,7 +524,9 @@ class _GoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final completeColor = Colors.green.shade600;
+    final completeColor = theme.brightness == Brightness.dark
+        ? Colors.green.shade300
+        : Colors.green.shade600;
     final accent =
         progress.complete ? completeColor : theme.colorScheme.primary;
     final periodLabel =
@@ -638,8 +654,10 @@ class _TargetRow extends StatelessWidget {
       );
     }
 
-    final accent =
-        t.complete ? Colors.green.shade600 : theme.colorScheme.primary;
+    final completeColor = theme.brightness == Brightness.dark
+        ? Colors.green.shade300
+        : Colors.green.shade600;
+    final accent = t.complete ? completeColor : theme.colorScheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
