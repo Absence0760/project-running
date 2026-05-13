@@ -9,6 +9,7 @@
 
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Extract the body of a named method from Dart source by walking balanced
@@ -1405,6 +1406,82 @@ void main() {
         reason: 'UIBackgroundModes must include `processing` so the '
             'BGTaskScheduler permitted-identifier above is honoured.',
       );
+    });
+  });
+
+  group('segments v2 wiring', () {
+    test('SegmentsPanel widget calls the v2 tiered RPC, not the v1 fetcher',
+        () {
+      // Reason: the panel switched to fetchSegmentLeaderboardTiered when
+      // v2 shipped. Reaching for v1 silently drops the gender + age-band
+      // filtering even when the dropdowns are populated.
+      final source = File('lib/widgets/segments_panel.dart').readAsStringSync();
+      expect(
+        source.contains('fetchSegmentLeaderboardTiered'),
+        isTrue,
+        reason: 'segments_panel.dart must route through the v2 RPC',
+      );
+    });
+
+    test('SegmentsPanel uses the shared kSegmentAgeBands constant', () {
+      // Reason: a panel-local copy of the age bins would drift from the
+      // RPC's regex (the migration parses `^[0-9]+-[0-9]+$` plus '75+').
+      // Reading the shared constant keeps both ends in lockstep.
+      final source = File('lib/widgets/segments_panel.dart').readAsStringSync();
+      expect(
+        source.contains('kSegmentAgeBands'),
+        isTrue,
+        reason: 'segments_panel.dart must read kSegmentAgeBands from api_client',
+      );
+      expect(
+        source.contains("const kSegmentAgeBands = <String>["),
+        isFalse,
+        reason: 'segments_panel.dart must not redeclare kSegmentAgeBands',
+      );
+    });
+
+    test('api_client v1 + v2 fetchers both share assignCompetitionRanks', () {
+      // Reason: previously v1 assigned i+1 unconditionally (ties got
+      // distinct ranks) while v2 ran its own in-line loop with a
+      // lastTime=-1 sentinel that collided with a real time of 0/-1.
+      // Both paths now route through the shared helper. The check pulls
+      // each function body by slicing between known anchor points.
+      final source =
+          File('../../packages/api_client/lib/src/api_client.dart')
+              .readAsStringSync();
+      final v1Start = source.indexOf('fetchSegmentLeaderboardWithAthletes(');
+      final v2Start = source.indexOf('fetchSegmentLeaderboardTiered(');
+      final fetchEffortsStart = source.indexOf('fetchEffortsForRunWithSegments(');
+      expect(v1Start, greaterThan(0), reason: 'v1 fetcher missing');
+      expect(v2Start, greaterThan(v1Start), reason: 'v2 fetcher missing');
+      expect(fetchEffortsStart, greaterThan(v2Start),
+          reason: 'method ordering changed — update the slice anchors');
+      final v1Body = source.substring(v1Start, v2Start);
+      final v2Body = source.substring(v2Start, fetchEffortsStart);
+      expect(v1Body.contains('assignCompetitionRanks'), isTrue,
+          reason: 'v1 must route through assignCompetitionRanks');
+      expect(v2Body.contains('assignCompetitionRanks'), isTrue,
+          reason: 'v2 must route through assignCompetitionRanks');
+    });
+
+    test('kSegmentAgeBands list matches the migration SQL regex', () {
+      // The plpgsql RPC accepts '^[0-9]+-[0-9]+$' OR the literal '75+'.
+      // Read the migration, extract the regex, validate every band the
+      // client will send.
+      final sql = File(
+        '../backend/supabase/migrations/'
+        '20260829_001_segments_v2_tiered_leaderboards.sql',
+      ).readAsStringSync();
+      final match = RegExp(r"p_age_band\s*~\s*'(\^[^']+\$)'").firstMatch(sql);
+      expect(match, isNotNull, reason: 'age-band regex missing from migration');
+      final rpcAccepts = RegExp(match!.group(1)!);
+      for (final band in kSegmentAgeBands) {
+        expect(
+          band == '75+' || rpcAccepts.hasMatch(band),
+          isTrue,
+          reason: "band '$band' would be rejected by the RPC's regex",
+        );
+      }
     });
   });
 }

@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { computeEffortFromTrack, assignCompetitionRanks, SEGMENT_AGE_BANDS } from './segments';
 import type { TrackPoint } from './types';
 
@@ -185,5 +187,89 @@ test('SEGMENT_AGE_BANDS: contiguous 5-year bins between the bookends', () => {
 		}
 		assert.equal(hi - lo, 4, `band ${band} not a 5-year bin`);
 		assert.equal(lo % 5, 0, `band ${band} not anchored on a multiple of 5`);
+	}
+});
+
+// ─────────── assignCompetitionRanks — additional edge cases ───────────
+
+test('assignCompetitionRanks: single element gets rank 1', () => {
+	const ranks = assignCompetitionRanks([{ time_seconds: 42 }]).map((r) => r.rank);
+	assert.deepEqual(ranks, [1]);
+});
+
+test('assignCompetitionRanks: every row tied still produces all rank 1', () => {
+	const ranks = assignCompetitionRanks([
+		{ time_seconds: 100 },
+		{ time_seconds: 100 },
+		{ time_seconds: 100 },
+		{ time_seconds: 100 },
+	]).map((r) => r.rank);
+	assert.deepEqual(ranks, [1, 1, 1, 1]);
+});
+
+test('assignCompetitionRanks: tie cluster in the middle', () => {
+	const ranks = assignCompetitionRanks([
+		{ time_seconds: 50 },
+		{ time_seconds: 60 },
+		{ time_seconds: 60 },
+		{ time_seconds: 60 },
+		{ time_seconds: 75 },
+	]).map((r) => r.rank);
+	assert.deepEqual(ranks, [1, 2, 2, 2, 5]);
+});
+
+test('assignCompetitionRanks: alternating ties', () => {
+	const ranks = assignCompetitionRanks([
+		{ time_seconds: 10 },
+		{ time_seconds: 10 },
+		{ time_seconds: 20 },
+		{ time_seconds: 30 },
+		{ time_seconds: 30 },
+	]).map((r) => r.rank);
+	assert.deepEqual(ranks, [1, 1, 3, 4, 4]);
+});
+
+test('assignCompetitionRanks: floating-point times compared by strict equality', () => {
+	const ranks = assignCompetitionRanks([
+		{ time_seconds: 10.5 },
+		{ time_seconds: 10.5 },
+		{ time_seconds: 10.5000001 },
+	]).map((r) => r.rank);
+	assert.deepEqual(ranks, [1, 1, 3]);
+});
+
+test('assignCompetitionRanks: 1000-row input is O(n) and well-formed', () => {
+	const rows: Array<{ time_seconds: number }> = [];
+	for (let i = 0; i < 1000; i++) rows.push({ time_seconds: i });
+	const t0 = Date.now();
+	const out = assignCompetitionRanks(rows);
+	const dt = Date.now() - t0;
+	assert.equal(out.length, 1000);
+	assert.equal(out[0].rank, 1);
+	assert.equal(out[999].rank, 1000);
+	assert.ok(dt < 50, `rank pass took ${dt} ms (expected < 50)`);
+});
+
+// ─────────── SEGMENT_AGE_BANDS — vs the RPC's regex ───────────
+
+test('SEGMENT_AGE_BANDS: every band the RPC parser accepts', () => {
+	// The plpgsql RPC accepts `^[0-9]+-[0-9]+$` OR the literal '75+'.
+	// Read the migration and assert every age band matches the regex
+	// the RPC will run against it — catches drift between the client
+	// list and the server parser.
+	const sql = readFileSync(
+		resolve(
+			'../backend/supabase/migrations/20260829_001_segments_v2_tiered_leaderboards.sql',
+		),
+		'utf-8',
+	);
+	const m = sql.match(/p_age_band\s*~\s*'(\^[^']+\$)'/);
+	assert.ok(m, 'could not extract age-band regex from migration');
+	const rpcAccepts = new RegExp(m![1]);
+	for (const band of SEGMENT_AGE_BANDS) {
+		assert.ok(
+			band === '75+' || rpcAccepts.test(band),
+			`band '${band}' would be rejected by the RPC's regex /${m![1]}/`,
+		);
 	}
 });

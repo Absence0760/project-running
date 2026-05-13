@@ -124,4 +124,67 @@ void main() {
       expect(kSegmentAgeBands, expected);
     });
   });
+
+  group('assignCompetitionRanks — additional edge cases', () {
+    test('single element gets rank 1', () {
+      expect(
+        assignCompetitionRanks<num>(const [42], (t) => t),
+        [1],
+      );
+    });
+
+    test('every row tied still produces all rank 1', () {
+      expect(
+        assignCompetitionRanks<num>(const [100, 100, 100, 100], (t) => t),
+        [1, 1, 1, 1],
+      );
+    });
+
+    test('tie cluster in the middle', () {
+      expect(
+        assignCompetitionRanks<num>(const [50, 60, 60, 60, 75], (t) => t),
+        [1, 2, 2, 2, 5],
+      );
+    });
+
+    test('alternating ties', () {
+      expect(
+        assignCompetitionRanks<num>(const [10, 10, 20, 30, 30], (t) => t),
+        [1, 1, 3, 4, 4],
+      );
+    });
+
+    test('double times tie by strict equality', () {
+      // The RPC returns time_seconds as a number; SegmentEffortRow.timeSeconds
+      // is `double`. Floats that are == still tie; otherwise they don't.
+      expect(
+        assignCompetitionRanks<num>(const [10.5, 10.5, 10.5000001], (t) => t),
+        [1, 1, 3],
+      );
+    });
+
+    test('mixed int + double extractors compare numerically', () {
+      // num covers both — passing an int and a double of equal value
+      // should still produce a tie via Dart's `==` on num.
+      expect(
+        assignCompetitionRanks<num>(const [10, 10.0, 11], (t) => t),
+        [1, 1, 3],
+      );
+    });
+
+    test('1000-row input is O(n) and well-formed', () {
+      final rows = List<int>.generate(1000, (i) => i);
+      final stopwatch = Stopwatch()..start();
+      final ranks = assignCompetitionRanks<num>(rows, (t) => t);
+      stopwatch.stop();
+      expect(ranks, hasLength(1000));
+      expect(ranks.first, 1);
+      expect(ranks.last, 1000);
+      expect(
+        stopwatch.elapsedMilliseconds < 50,
+        isTrue,
+        reason: 'rank pass took ${stopwatch.elapsedMilliseconds} ms',
+      );
+    });
+  });
 }
