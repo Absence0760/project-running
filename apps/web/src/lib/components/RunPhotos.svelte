@@ -163,7 +163,7 @@
 			{#each photos as p (p.id)}
 				<figure class="tile">
 					<button class="tile-img" type="button" onclick={() => (lightbox = p)} aria-label="Open photo">
-						<img src={p.url} alt={p.caption ?? ''} loading="lazy" />
+						<img src={p.thumbUrl ?? p.url} alt={p.caption ?? ''} loading="lazy" />
 					</button>
 					{#if editingId === p.id}
 						<form

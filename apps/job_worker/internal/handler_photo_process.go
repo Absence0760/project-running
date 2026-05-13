@@ -78,5 +78,43 @@ func (w *Worker) handlePhotoProcess(ctx context.Context, job *Job) error {
 	if err := w.Backend.UploadPhoto(ctx, p.StoragePath, stripped, contentType); err != nil {
 		return fmt.Errorf("photo_process: upload %s: %w", p.StoragePath, err)
 	}
+
+	// Generate the 512w gallery thumbnail from the *stripped* bytes
+	// so the thumbnail's EXIF is also gone (the JPEG decoder ignores
+	// APP1 regardless, but re-using stripped bytes keeps the two
+	// outputs consistent if anyone ever introspects them). When the
+	// original is already small (e.g. a phone screenshot), skip the
+	// thumbnail and clients fall back to the original.
+	thumb, resized, err := exif.ThumbnailJPEG(stripped, 512, 85)
+	if err != nil {
+		return fmt.Errorf("photo_process: thumbnail %s: %w", p.StoragePath, err)
+	}
+	if !resized {
+		return nil
+	}
+	thumbPath := thumbnailPath(p.StoragePath)
+	if err := w.Backend.UploadPhoto(ctx, thumbPath, thumb, "image/jpeg"); err != nil {
+		return fmt.Errorf("photo_process: upload thumb %s: %w", thumbPath, err)
+	}
+	if err := w.Backend.UpdatePhotoThumb512Path(ctx, p.PhotoID, thumbPath); err != nil {
+		return fmt.Errorf("photo_process: patch thumb_512_path %s: %w", p.PhotoID, err)
+	}
 	return nil
+}
+
+// thumbnailPath derives the 512w variant's storage path from the
+// original's. Convention: insert `_512` before the extension. Falls
+// back to appending `_512.jpg` when the original has no extension.
+// Kept as a top-level helper for the unit test in
+// handler_photo_process_test.go.
+func thumbnailPath(origPath string) string {
+	for i := len(origPath) - 1; i >= 0; i-- {
+		if origPath[i] == '.' {
+			return origPath[:i] + "_512" + origPath[i:]
+		}
+		if origPath[i] == '/' {
+			break
+		}
+	}
+	return origPath + "_512.jpg"
 }

@@ -13,4 +13,5 @@ require (
 	github.com/redis/go-redis/v9 v9.19.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	golang.org/x/image v0.40.0 // indirect
 )

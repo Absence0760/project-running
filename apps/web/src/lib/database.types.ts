@@ -1248,6 +1248,7 @@ export type Database = {
           position_idx: number
           run_id: string
           storage_path: string
+          thumb_512_path: string | null
         }
         Insert: {
           caption?: string | null
@@ -1257,6 +1258,7 @@ export type Database = {
           position_idx?: number
           run_id: string
           storage_path: string
+          thumb_512_path?: string | null
         }
         Update: {
           caption?: string | null
@@ -1266,6 +1268,7 @@ export type Database = {
           position_idx?: number
           run_id?: string
           storage_path?: string
+          thumb_512_path?: string | null
         }
         Relationships: [
           {

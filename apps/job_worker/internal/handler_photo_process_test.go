@@ -3,37 +3,68 @@ package internal
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"log/slog"
 	"strings"
 	"testing"
 )
 
-// minimalJPEG synthesises a JPEG byte stream with the requested
-// segments. Mirrors exif/strip_test.go's helper. Pulled here too so
-// the handler test stays self-contained — depending on a test helper
-// across packages would be cleaner but adds a build tag dance.
-func minimalJPEG(appPayload []byte) []byte {
-	var buf bytes.Buffer
-	buf.Write([]byte{0xFF, 0xD8})    // SOI
-	// APP1 (EXIF) carrying the payload we expect the handler to strip.
-	buf.Write([]byte{0xFF, 0xE1})
-	lenBuf := make([]byte, 2)
-	binary.BigEndian.PutUint16(lenBuf, uint16(len(appPayload)+2))
-	buf.Write(lenBuf)
-	buf.Write(appPayload)
-	// SOF + DQT + DHT + SOS — enough to be a valid skeleton.
-	for _, marker := range []byte{0xC0, 0xDB, 0xC4, 0xDA} {
-		buf.Write([]byte{0xFF, marker})
-		binary.BigEndian.PutUint16(lenBuf, uint16(2+1))
-		buf.Write(lenBuf)
-		buf.WriteByte(0x00)
+// decodableJPEG produces a real (decodable) JPEG of the requested
+// pixel size with an APP1 (EXIF-like) segment injected after SOI.
+// Real bytes are required because the handler's thumbnail step does
+// jpeg.Decode → resize → encode; the marker-walker synthetic JPEGs
+// from strip_test.go aren't decodable.
+//
+// The function: render an RGB gradient, jpeg.Encode it, then splice
+// the APP1 segment into the encoded byte stream right after SOI.
+func decodableJPEG(t *testing.T, w, h int, exifPayload []byte) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8(x * 255 / w),
+				G: uint8(y * 255 / h),
+				B: 64,
+				A: 255,
+			})
+		}
 	}
-	buf.Write([]byte{0x11, 0x22})    // a couple of entropy bytes
-	buf.Write([]byte{0xFF, 0xD9})    // EOI
-	return buf.Bytes()
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encoding fixture: %v", err)
+	}
+	encoded := buf.Bytes()
+	if len(exifPayload) == 0 {
+		return encoded
+	}
+	// Splice APP1 after SOI. encoded[0:2] is SOI; insert
+	// 0xFF 0xE1 <len-be> <payload> at position 2.
+	var out bytes.Buffer
+	out.Write(encoded[:2])
+	out.Write([]byte{0xFF, 0xE1, byte((len(exifPayload) + 2) >> 8), byte((len(exifPayload) + 2) & 0xFF)})
+	out.Write(exifPayload)
+	out.Write(encoded[2:])
+	return out.Bytes()
+}
+
+// decodableJPEGSmall returns a 100×80 real JPEG with an EXIF segment
+// spliced in. Small enough that ThumbnailJPEG decides not to resize
+// (≤512 longSide), so the original-strip path is exercised without
+// also burning CPU on a 4032w resize during unit tests.
+func decodableJPEGSmall(t *testing.T, exifPayload []byte) []byte {
+	return decodableJPEG(t, 100, 80, exifPayload)
+}
+
+// decodableJPEGLarge returns a 1600×1200 real JPEG with an EXIF
+// segment spliced in. Big enough that ThumbnailJPEG triggers a
+// resize to 512w. Exercises the full strip + thumb + PATCH path.
+func decodableJPEGLarge(t *testing.T, exifPayload []byte) []byte {
+	return decodableJPEG(t, 1600, 1200, exifPayload)
 }
 
 func newPhotoTestWorker(be *fakeBackend) *Worker {
@@ -51,7 +82,7 @@ func TestHandlePhotoProcess_StripsAPP1FromJPEG(t *testing.T) {
 	be := &fakeBackend{photoByPath: make(map[string][]byte)}
 	const path = "alice/photo123.jpg"
 	const payloadStr = "Exif\x00\x00THIS IS THE GPS PAYLOAD"
-	be.photoByPath[path] = minimalJPEG([]byte(payloadStr))
+	be.photoByPath[path] = decodableJPEGSmall(t, []byte(payloadStr))
 	be.photoContentType = "image/jpeg"
 
 	w := newPhotoTestWorker(be)
@@ -147,7 +178,7 @@ func TestHandlePhotoProcess_DownloadErrorBubblesUp(t *testing.T) {
 
 func TestHandlePhotoProcess_UploadErrorBubblesUp(t *testing.T) {
 	be := &fakeBackend{
-		photoByPath:    map[string][]byte{"a/b.jpg": minimalJPEG([]byte("Exif"))},
+		photoByPath:    map[string][]byte{"a/b.jpg": decodableJPEGSmall(t, []byte("Exif"))},
 		uploadPhotoErr: errors.New("storage 503"),
 	}
 	w := newPhotoTestWorker(be)
@@ -163,7 +194,7 @@ func TestHandlePhotoProcess_UploadErrorBubblesUp(t *testing.T) {
 
 func TestHandlePhotoProcess_DefaultsContentTypeOnReupload(t *testing.T) {
 	be := &fakeBackend{
-		photoByPath:      map[string][]byte{"a/b.jpg": minimalJPEG([]byte("Exif"))},
+		photoByPath:      map[string][]byte{"a/b.jpg": decodableJPEGSmall(t, []byte("Exif"))},
 		photoContentType: "", // Storage forgot to send Content-Type
 	}
 	w := newPhotoTestWorker(be)
@@ -178,6 +209,92 @@ func TestHandlePhotoProcess_DefaultsContentTypeOnReupload(t *testing.T) {
 		t.Errorf("upload content-type = %q, want image/jpeg fallback",
 			be.photoUploadedContentType)
 	}
+}
+
+func TestHandlePhotoProcess_GeneratesThumbnailAndPatchesRow(t *testing.T) {
+	be := &fakeBackend{photoByPath: make(map[string][]byte)}
+	const path = "alice/photo123.jpg"
+	be.photoByPath[path] = decodableJPEGLarge(t, []byte("Exif\x00\x00gps"))
+	be.photoContentType = "image/jpeg"
+
+	w := newPhotoTestWorker(be)
+	job := &Job{
+		Kind: "photo_process",
+		Payload: mustJSON(PhotoProcessPayload{
+			PhotoID:     "p1",
+			StoragePath: path,
+			OwnerID:     "alice",
+		}),
+	}
+	if err := w.handlePhotoProcess(context.Background(), job); err != nil {
+		t.Fatalf("handlePhotoProcess: %v", err)
+	}
+	// Thumbnail uploaded at the expected convention path.
+	thumbPath := "alice/photo123_512.jpg"
+	if _, ok := be.photoByPath[thumbPath]; !ok {
+		t.Errorf("thumbnail not uploaded at %q (uploaded paths: %v)",
+			thumbPath, keysOf(be.photoByPath))
+	}
+	// Row PATCHed with that path.
+	if be.photoThumbPaths["p1"] != thumbPath {
+		t.Errorf("thumb_512_path PATCH = %q, want %q",
+			be.photoThumbPaths["p1"], thumbPath)
+	}
+	// Thumbnail is meaningfully smaller than the (stripped) original.
+	orig := be.photoByPath[path]
+	thumb := be.photoByPath[thumbPath]
+	if len(thumb) >= len(orig) {
+		t.Errorf("thumbnail (%d bytes) is not smaller than original (%d)",
+			len(thumb), len(orig))
+	}
+}
+
+func TestHandlePhotoProcess_SkipsThumbnailForSmallPhotos(t *testing.T) {
+	be := &fakeBackend{photoByPath: make(map[string][]byte)}
+	be.photoByPath["a/b.jpg"] = decodableJPEGSmall(t, []byte("Exif"))
+
+	w := newPhotoTestWorker(be)
+	job := &Job{
+		Kind:    "photo_process",
+		Payload: mustJSON(PhotoProcessPayload{PhotoID: "p1", StoragePath: "a/b.jpg"}),
+	}
+	if err := w.handlePhotoProcess(context.Background(), job); err != nil {
+		t.Fatalf("handlePhotoProcess: %v", err)
+	}
+	// No thumbnail file uploaded.
+	if _, ok := be.photoByPath["a/b_512.jpg"]; ok {
+		t.Error("thumbnail uploaded for an already-small photo")
+	}
+	// And no PATCH attempted — clients fall back to the original.
+	if _, ok := be.photoThumbPaths["p1"]; ok {
+		t.Error("row PATCHed even though no thumbnail was generated")
+	}
+}
+
+func TestThumbnailPathDerivation(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"alice/photo123.jpg", "alice/photo123_512.jpg"},
+		{"alice/photo123.JPEG", "alice/photo123_512.JPEG"},
+		{"alice/photo123", "alice/photo123_512.jpg"},
+		{"alice/sub.dir/photo.jpg", "alice/sub.dir/photo_512.jpg"},
+		{"alice/no_extension_with_slash/", "alice/no_extension_with_slash/_512.jpg"},
+	}
+	for _, c := range cases {
+		got := thumbnailPath(c.in)
+		if got != c.want {
+			t.Errorf("thumbnailPath(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func keysOf(m map[string][]byte) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 func mustJSON(v any) json.RawMessage {

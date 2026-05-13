@@ -3085,10 +3085,18 @@ export interface RunPhoto {
 	run_id: string;
 	owner_id: string;
 	storage_path: string;
+	/// Server-generated 512w thumbnail path, populated by the
+	/// photo_process job (apps/job_worker handler_photo_process.go).
+	/// Null while the job is still queued OR when the original is
+	/// already small enough that resizing would just inflate the
+	/// stored bytes. Gallery callers should prefer `thumbUrl` when
+	/// present and fall back to `url`.
+	thumb_512_path: string | null;
 	caption: string | null;
 	position_idx: number;
 	created_at: string;
 	url: string;
+	thumbUrl: string | null;
 }
 
 const PHOTO_MIME_TO_EXT: Record<string, string> = {
@@ -3137,10 +3145,21 @@ export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhot
 		return [];
 	}
 	const rows = data ?? [];
-	const signed = await signRunPhotoPaths(rows.map((r) => r.storage_path));
+	// Sign both the original and any present thumbnail in one batch
+	// — Storage's createSignedUrls handles missing paths gracefully
+	// (returns an empty array entry) so the dedupe + fallback are
+	// safe even on fresh uploads where the worker hasn't filled in
+	// thumb_512_path yet.
+	const paths: string[] = [];
+	for (const r of rows) {
+		paths.push(r.storage_path);
+		if (r.thumb_512_path) paths.push(r.thumb_512_path);
+	}
+	const signed = await signRunPhotoPaths(paths);
 	return rows.map((r) => ({
 		...r,
 		url: signed[r.storage_path] ?? '',
+		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
 	}));
 }
 

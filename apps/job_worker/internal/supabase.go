@@ -268,6 +268,26 @@ func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []by
 	return err
 }
 
+// UpdatePhotoThumb512Path PATCHes the `thumb_512_path` column on a
+// run_photos row after the worker has uploaded the resized variant.
+// Service role bypasses RLS so the standard PostgREST surface works
+// without a definer function.
+func (c *SupabaseClient) UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	url := c.BaseURL + "/rest/v1/run_photos?id=eq." + photoID
+	body, err := json.Marshal(map[string]string{"thumb_512_path": path})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
 // ErrStaleSourceTrackURL is returned by UpdateMatchedTrackRow when the
 // conditional PATCH found zero rows — meaning a re-upload trigger
 // reset the row's source_track_url between the worker reading it and

@@ -47,6 +47,11 @@ type Backend interface {
 	// (see `decisions.md` § 36 + the `run_photos` storage gate).
 	DownloadPhoto(ctx context.Context, path string) (body []byte, contentType string, err error)
 	UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error
+	// UpdatePhotoThumb512Path PATCHes run_photos.thumb_512_path
+	// after the worker has uploaded the resized variant. Clients use
+	// the column to decide whether to fetch the smaller file (gallery
+	// fast-paint) or fall back to the original.
+	UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.

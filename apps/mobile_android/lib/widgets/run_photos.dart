@@ -102,15 +102,28 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
     // user sees broken images. _signPaths is idempotent — entries
     // still inside the freshness window are a no-op.
     if (state == AppLifecycleState.resumed && _photos.isNotEmpty) {
-      _signPaths(_photos.map((p) => p.storagePath).toList(growable: false));
+      _signPaths(_pathsToSign(_photos));
     }
+  }
+
+  /// All paths that need signed URLs — the original for the lightbox
+  /// + each present thumb_512_path for the gallery. Skips null
+  /// thumbnails so we don't pad the signing batch with empty rows.
+  List<String> _pathsToSign(List<RunPhotoRow> ps) {
+    final out = <String>[];
+    for (final p in ps) {
+      out.add(p.storagePath);
+      final t = p.thumb512Path;
+      if (t != null && t.isNotEmpty) out.add(t);
+    }
+    return out;
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
       final ps = await widget.api.fetchRunPhotos(widget.runId);
-      await _signPaths(ps.map((p) => p.storagePath).toList(growable: false));
+      await _signPaths(_pathsToSign(ps));
       if (!mounted) return;
       setState(() {
         _photos = ps;
@@ -148,6 +161,20 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
 
   String _photoUrl(String storagePath) =>
       _signedUrls[storagePath]?.url ?? '';
+
+  /// Prefer the 512w thumbnail when the worker has filled it in;
+  /// fall back to the original. Used by the gallery tile; the
+  /// lightbox still pulls the original via [_photoUrl] for full
+  /// quality. Empty string when neither URL has been signed yet so
+  /// the Image.network errorBuilder fires the placeholder.
+  String _galleryUrl(RunPhotoRow p) {
+    final t = p.thumb512Path;
+    if (t != null && t.isNotEmpty) {
+      final url = _signedUrls[t]?.url;
+      if (url != null && url.isNotEmpty) return url;
+    }
+    return _photoUrl(p.storagePath);
+  }
 
   Future<void> _pickPhoto() async {
     try {
@@ -443,7 +470,7 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
-                    _photoUrl(p.storagePath),
+                    _galleryUrl(p),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: cs.surfaceContainerHighest,

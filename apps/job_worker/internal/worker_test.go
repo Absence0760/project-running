@@ -67,6 +67,10 @@ type fakeBackend struct {
 	downloadPhotoErr         error
 	uploadPhotoErr           error
 	photoUploadedContentType string
+	// thumb_512_path PATCH path — photoThumbPaths records every
+	// (photo_id → thumb_path) the handler pushes.
+	photoThumbPaths     map[string]string
+	updatePhotoThumbErr error
 
 	// Outputs
 	finished []finishCall
@@ -209,6 +213,21 @@ func (f *fakeBackend) UploadPhoto(_ context.Context, path string, body []byte, c
 	}
 	f.photoByPath[path] = body
 	f.photoUploadedContentType = contentType
+	return nil
+}
+
+func (f *fakeBackend) UpdatePhotoThumb512Path(_ context.Context, photoID, path string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.updatePhotoThumbErr != nil {
+		err := f.updatePhotoThumbErr
+		f.updatePhotoThumbErr = nil
+		return err
+	}
+	if f.photoThumbPaths == nil {
+		f.photoThumbPaths = make(map[string]string)
+	}
+	f.photoThumbPaths[photoID] = path
 	return nil
 }
 

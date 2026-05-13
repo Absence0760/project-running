@@ -1429,6 +1429,7 @@ class RunPhotoRow {
   static const String colCaption = 'caption';
   static const String colPositionIdx = 'position_idx';
   static const String colCreatedAt = 'created_at';
+  static const String colThumb512Path = 'thumb_512_path';
 
   final String id;
   final String runId;
@@ -1437,6 +1438,7 @@ class RunPhotoRow {
   final String? caption;
   final int positionIdx;
   final DateTime createdAt;
+  final String? thumb512Path;
 
   const RunPhotoRow({
     required this.id,
@@ -1446,6 +1448,7 @@ class RunPhotoRow {
     this.caption,
     required this.positionIdx,
     required this.createdAt,
+    this.thumb512Path,
   });
 
   factory RunPhotoRow.fromJson(Map<String, dynamic> json) => RunPhotoRow(
@@ -1456,6 +1459,7 @@ class RunPhotoRow {
     caption: json['caption'] as String?,
     positionIdx: (json['position_idx'] as num).toInt(),
     createdAt: DateTime.parse(json['created_at'] as String),
+    thumb512Path: json['thumb_512_path'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1466,6 +1470,7 @@ class RunPhotoRow {
     colCaption: caption,
     colPositionIdx: positionIdx,
     colCreatedAt: createdAt.toIso8601String(),
+    colThumb512Path: thumb512Path,
   };
 }
 
