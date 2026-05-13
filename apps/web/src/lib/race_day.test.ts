@@ -144,3 +144,72 @@ test('fmtSplitTime: over an hour formats as H:MM:SS', () => {
 test('fmtSplitTime: rounds to nearest second', () => {
 	assert.equal(fmtSplitTime(305.6), '5:06');
 });
+
+// ─────────── Round 3 edge cases ───────────
+
+test('evenSplitPacing: exact whole-km distance has no partial-km tail', () => {
+	const s = evenSplitPacing(5000, 1500);
+	// 5 km at 5:00/km — every split exactly 300s, no remainder.
+	assert.equal(s.splitsSec.length, 5);
+	for (const sp of s.splitsSec) assert.equal(sp, 300);
+});
+
+test('negativeSplitPacing: large delta still preserves total within rounding', () => {
+	// 10% delta is aggressive — 4:00/km first half vs 4:00 second.
+	// Total must still hit the target inside +/- a few seconds.
+	const s = negativeSplitPacing(10_000, 3000, 10);
+	const sum = s.splitsSec.reduce((a, b) => a + b, 0);
+	assert.ok(Math.abs(sum - 3000) <= 10, `total drifted: ${sum}`);
+	// First-km split is slower than the last-km split by ~2× delta.
+	assert.ok(s.splitsSec[0] > s.splitsSec[9]);
+	assert.ok(s.splitsSec[0] - s.splitsSec[9] >= 50, 'expected meaningful delta');
+});
+
+test('daysUntilRace: same UTC instant on different sides of midnight', () => {
+	// 23:30 local vs 00:30 next-day local should still register the
+	// correct day-delta. The helper compares calendar dates, not wall
+	// clocks.
+	const today = new Date(2026, 4, 13, 23, 30);
+	assert.equal(daysUntilRace('2026-05-14', today), 1);
+	assert.equal(daysUntilRace('2026-05-13', today), 0);
+});
+
+test('raceChecklist: 10k boundary is on the short side', () => {
+	// 10.5 km is the threshold between "short" and "half". 10000 m
+	// must NOT prescribe gels (it's short); 11000 m must.
+	const c10k = raceChecklist(10000);
+	const fuel10k = c10k.find((s) => s.title === 'Fueling')!.items
+		.map((i) => i.name).join(' ');
+	assert.doesNotMatch(fuel10k, /gel/i);
+
+	const c11k = raceChecklist(11000);
+	const fuel11k = c11k.find((s) => s.title === 'Fueling')!.items
+		.map((i) => i.name).join(' ');
+	assert.match(fuel11k, /1-2 gels/);
+});
+
+test('raceChecklist: gear section always has the core 5 items', () => {
+	const c = raceChecklist(5000);
+	const gear = c.find((s) => s.title === 'Gear')!.items
+		.map((i) => i.name).join(' ');
+	assert.match(gear, /Race-day shoes/);
+	assert.match(gear, /Watch/);
+	assert.match(gear, /Race bib/);
+	assert.match(gear, /[Aa]nti-chafe/);
+	assert.match(gear, /Socks/);
+});
+
+test('fmtSplitTime: zero and very-small inputs', () => {
+	assert.equal(fmtSplitTime(0), '0:00');
+	assert.equal(fmtSplitTime(0.4), '0:00');
+	assert.equal(fmtSplitTime(0.5), '0:01');
+});
+
+test('evenSplitPacing: marathon distance (42.195 km) has 43 splits, last partial', () => {
+	const s = evenSplitPacing(42195, 12000); // ~4:44/km
+	assert.equal(s.splitsSec.length, 43);
+	// The 43rd (index 42) is the 0.195 km partial.
+	const partial = s.splitsSec[42];
+	const fullKm = s.splitsSec[0];
+	assert.ok(partial < fullKm, `partial ${partial} should be shorter than full ${fullKm}`);
+});

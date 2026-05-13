@@ -172,3 +172,71 @@ test('buildYearInRunningRecap: earliest + latest start times in HH:MM', () => {
 	assert.match(r.earliestStartLocal!, /^\d{2}:\d{2}$/);
 	assert.match(r.latestStartLocal!, /^\d{2}:\d{2}$/);
 });
+
+// ─────────── Round 3 edge cases ───────────
+
+test('buildYearInRunningRecap: activity_type missing → defaults to "run"', () => {
+	// Reason: metadata.activity_type is optional in the jsonb bag.
+	// The helper must not crash and should count missing-activity
+	// runs as "run" so the most-used-activity tally stays accurate.
+	const runs = [
+		mkRun({ startedAt: '2026-02-01T10:00:00', distance_m: 5000, duration_s: 1500 }), // no activity
+		mkRun({ startedAt: '2026-02-02T10:00:00', distance_m: 5000, duration_s: 1500 }), // no activity
+		mkRun({ startedAt: '2026-02-03T10:00:00', distance_m: 5000, duration_s: 1500, activity: 'walk' }),
+	];
+	const r = buildYearInRunningRecap(runs, 2026);
+	assert.equal(r.mostUsedActivity, 'run');
+});
+
+test('buildYearInRunningRecap: top-week anchor is a Monday in local time', () => {
+	// Reason: ISO weeks start on Monday but JS's Date.getDay() puts
+	// Sunday at 0. mondayOf() corrects via `(dow + 6) % 7`. The week-
+	// of-Feb-1 (a Sunday in 2026) should bucket under the previous
+	// Monday (Jan 26).
+	const runs = [
+		mkRun({ startedAt: '2026-02-01T10:00:00', distance_m: 5000, duration_s: 1500 }),
+	];
+	const r = buildYearInRunningRecap(runs, 2026);
+	assert.notEqual(r.topWeek, null);
+	assert.equal(r.topWeek!.weekStart, '2026-01-26');
+});
+
+test('buildYearInRunningRecap: fastest pace is in seconds-per-km', () => {
+	// 10k at 50:00 exactly = 300 s/km. Pin the unit so a refactor that
+	// accidentally swapped to s/mi would be caught.
+	const runs = [
+		mkRun({ startedAt: '2026-02-01T10:00:00', distance_m: 10000, duration_s: 3000 }),
+	];
+	const r = buildYearInRunningRecap(runs, 2026);
+	assert.equal(r.fastestPaceSecPerKm, 300);
+});
+
+test('buildYearInRunningRecap: zero-duration runs do not produce Infinity pace', () => {
+	// Defensive: a manual entry with duration=0 must not pollute the
+	// fastest-pace field with Infinity.
+	const runs = [
+		mkRun({ startedAt: '2026-02-01T10:00:00', distance_m: 5000, duration_s: 0 }),
+		mkRun({ startedAt: '2026-02-02T10:00:00', distance_m: 5000, duration_s: 1500 }),
+	];
+	const r = buildYearInRunningRecap(runs, 2026);
+	assert.equal(r.fastestPaceSecPerKm, 300);
+	assert.ok(Number.isFinite(r.fastestPaceSecPerKm!));
+});
+
+test('buildYearInRunningRecap: zero runs → null earliest + latest start', () => {
+	const r = buildYearInRunningRecap([], 2026);
+	assert.equal(r.earliestStartLocal, null);
+	assert.equal(r.latestStartLocal, null);
+});
+
+test('buildYearInRunningRecap: elevation falls back to 0 when absent', () => {
+	// Reason: elevation_m is nullable on the row. mkRun defaults to 0
+	// already; this test ensures the aggregate stays at 0 rather than
+	// NaN-poisoning the sum when a single run has it absent.
+	const runs = [
+		mkRun({ startedAt: '2026-02-01T10:00:00', distance_m: 5000, duration_s: 1500 }),
+		mkRun({ startedAt: '2026-02-02T10:00:00', distance_m: 5000, duration_s: 1500, elevation_m: 50 }),
+	];
+	const r = buildYearInRunningRecap(runs, 2026);
+	assert.equal(r.totalElevationM, 50);
+});

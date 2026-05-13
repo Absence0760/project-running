@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { computeRunStreaks } from './streaks';
 
 // Helper: build a local-noon Date for a given local Y/M/D. We use
@@ -160,4 +162,51 @@ test('computeRunStreaks: gap of exactly one day breaks the streak', () => {
 		localNoon(2026, 5, 13),
 	);
 	assert.deepEqual(out, { current: 1, best: 1 });
+});
+
+// ─────────── DST safety ───────────
+
+test('computeRunStreaks: spring-forward day + next day still register as consecutive', () => {
+	// Mar 8 2026 is the US DST spring-forward (clocks 02:00 → 03:00,
+	// so the day is 23 hours long). A naive `t - 86_400_000` would
+	// land on the SAME day in DST-aware zones and silently miss the
+	// consecutive-day match. The helper uses Y/M/D arithmetic, so
+	// this test passes regardless of system TZ.
+	const out = computeRunStreaks(
+		[
+			new Date(2026, 2, 8, 12, 0, 0, 0),
+			new Date(2026, 2, 9, 12, 0, 0, 0),
+		],
+		new Date(2026, 2, 9, 12, 0, 0, 0),
+	);
+	assert.deepEqual(out, { current: 2, best: 2 });
+});
+
+test('computeRunStreaks: fall-back day + next day still register as consecutive', () => {
+	// Nov 1 2026 is the US DST fall-back (25-hour day).
+	const out = computeRunStreaks(
+		[
+			new Date(2026, 10, 1, 12, 0, 0, 0),
+			new Date(2026, 10, 2, 12, 0, 0, 0),
+		],
+		new Date(2026, 10, 2, 12, 0, 0, 0),
+	);
+	assert.deepEqual(out, { current: 2, best: 2 });
+});
+
+test('streaks.ts is DST-safe: previousLocalDay uses Y/M/D arithmetic', () => {
+	// Reason: subtracting milliseconds from a Date crosses a DST
+	// boundary as a 23/25-hour day and silently misaligns the local-day
+	// keys. The helper documents the gotcha; this guard pins it.
+	const source = readFileSync(resolve('src/lib/streaks.ts'), 'utf-8');
+	assert.doesNotMatch(
+		source,
+		/\.getTime\(\)\s*-\s*(?:24\s*\*\s*60\s*\*\s*60\s*\*\s*1000|86_?400_?000)/,
+		'previousLocalDay must not subtract 86_400_000 ms from a Date',
+	);
+	assert.match(
+		source,
+		/new Date\([^,]+\.getFullYear\(\),\s*[^,]+\.getMonth\(\),\s*[^,]+\.getDate\(\)\s*-\s*1\)/,
+		'expected Y/M/D arithmetic in previousLocalDay',
+	);
 });

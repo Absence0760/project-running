@@ -201,4 +201,50 @@ class StreaksTest {
         )
         assertEquals(Streaks.Result(current = 1, best = 1), out)
     }
+
+    // ─────────── DST safety ───────────
+
+    @Test
+    fun `spring-forward day + next day still register as consecutive in US Eastern`() {
+        // Mar 8 2026 is US DST spring-forward — clocks jump 02:00 → 03:00
+        // in America/New_York, so the local day is 23 hours long. The
+        // Streaks helper uses java.time.LocalDate.plusDays() which is
+        // DST-safe by construction; this test exercises the boundary
+        // in a real DST zone rather than UTC.
+        val ny = ZoneId.of("America/New_York")
+        val mar8Noon = java.time.ZonedDateTime.of(2026, 3, 8, 12, 0, 0, 0, ny)
+            .toInstant().toEpochMilli()
+        val mar9Noon = java.time.ZonedDateTime.of(2026, 3, 9, 12, 0, 0, 0, ny)
+            .toInstant().toEpochMilli()
+        val out = Streaks.compute(listOf(mar8Noon, mar9Noon), mar9Noon, ny)
+        assertEquals(Streaks.Result(current = 2, best = 2), out)
+    }
+
+    @Test
+    fun `fall-back day + next day still register as consecutive in US Eastern`() {
+        // Nov 1 2026 is US DST fall-back — 25-hour day. Subtracting
+        // 86_400_000 ms from Nov 2 noon would land at 11am Nov 1, but
+        // LocalDate.minusDays(1) lands cleanly on Nov 1 regardless.
+        val ny = ZoneId.of("America/New_York")
+        val nov1Noon = java.time.ZonedDateTime.of(2026, 11, 1, 12, 0, 0, 0, ny)
+            .toInstant().toEpochMilli()
+        val nov2Noon = java.time.ZonedDateTime.of(2026, 11, 2, 12, 0, 0, 0, ny)
+            .toInstant().toEpochMilli()
+        val out = Streaks.compute(listOf(nov1Noon, nov2Noon), nov2Noon, ny)
+        assertEquals(Streaks.Result(current = 2, best = 2), out)
+    }
+
+    @Test
+    fun `current streak walks across spring-forward boundary`() {
+        // Streak of 5 days straddling the DST boundary (Mar 6-10).
+        val ny = ZoneId.of("America/New_York")
+        val runs = (6..10).map { day ->
+            java.time.ZonedDateTime.of(2026, 3, day, 12, 0, 0, 0, ny)
+                .toInstant().toEpochMilli()
+        }
+        val today = java.time.ZonedDateTime.of(2026, 3, 10, 12, 0, 0, 0, ny)
+            .toInstant().toEpochMilli()
+        val out = Streaks.compute(runs, today, ny)
+        assertEquals(Streaks.Result(current = 5, best = 5), out)
+    }
 }

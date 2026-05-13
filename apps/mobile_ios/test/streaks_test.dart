@@ -187,4 +187,36 @@ void main() {
       expect(a, isNot(c));
     });
   });
+
+  group('DST safety', () {
+    test('spring-forward day + next day still register as consecutive', () {
+      // Mar 8 2026 is the US DST spring-forward (23-hour day). Y/M/D
+      // arithmetic in _previousLocalDay sidesteps the 86_400_000-ms
+      // gotcha; this test passes regardless of system TZ.
+      expect(
+        computeRunStreaks(
+          [
+            DateTime(2026, 3, 8, 12),
+            DateTime(2026, 3, 9, 12),
+          ],
+          DateTime(2026, 3, 9, 12),
+        ),
+        const RunStreaks(current: 2, best: 2),
+      );
+    });
+
+    test('fall-back day + next day still register as consecutive', () {
+      // Nov 1 2026 is the US DST fall-back (25-hour day).
+      expect(
+        computeRunStreaks(
+          [
+            DateTime(2026, 11, 1, 12),
+            DateTime(2026, 11, 2, 12),
+          ],
+          DateTime(2026, 11, 2, 12),
+        ),
+        const RunStreaks(current: 2, best: 2),
+      );
+    });
+  });
 }
