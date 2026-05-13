@@ -59,6 +59,12 @@ const String _kRunsFiltersKey = 'runs_filters_v1';
 /// flaky cellular connection blocks the rest of the home screen.
 const int _kRunsPageSize = 20;
 
+/// Single leading-slot width for every `_RunTile` variant (track
+/// preview, selecting checkbox, or activity icon fallback). Locking
+/// this to one value keeps the title column anchored at the same
+/// x-position regardless of which leading the row happens to render.
+const double _kLeadingWidth = 72;
+
 /// True when the Load-more button should render at the bottom of the
 /// runs list — either the local filtered superset has more rows beyond
 /// `visibleCount`, or the cloud might have older runs we haven't
@@ -1022,70 +1028,69 @@ class _RunTile extends StatelessWidget {
 
     final trackUrl = run.metadata?['track_url'] as String?;
     final hasInlineTrack = run.track.length >= 2;
-    final Widget leading;
-    if (selecting) {
-      leading = SizedBox(
-        width: 56,
-        height: 40,
-        child: Center(
-          child: Icon(
-            selected ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: selected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline,
-          ),
-        ),
-      );
-    } else if (hasInlineTrack) {
-      leading = SizedBox(
-        width: 72,
-        height: 40,
-        child: TrackPreview(points: run.track),
-      );
-    } else if (trackUrl != null && api != null) {
-      leading = SizedBox(
-        width: 72,
-        height: 40,
-        child: RunTrackPreview(trackUrl: trackUrl, api: api!),
-      );
-    } else {
-      leading = SizedBox(
-        width: 56,
-        height: 40,
-        child: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Icon(activity.icon, color: theme.colorScheme.primary),
-        ),
-      );
-    }
+    final Widget leading = SizedBox(
+      width: _kLeadingWidth,
+      height: 40,
+      child: Center(
+        child: selecting
+            ? Icon(
+                selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline,
+              )
+            : hasInlineTrack
+                ? TrackPreview(points: run.track)
+                : (trackUrl != null && api != null)
+                    ? RunTrackPreview(trackUrl: trackUrl, api: api!)
+                    : CircleAvatar(
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        child: Icon(activity.icon,
+                            color: theme.colorScheme.primary),
+                      ),
+      ),
+    );
 
-    return Card(
-      color: selected
-          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
-          : null,
-      child: ListTile(
-        leading: leading,
-        title: Row(
-          children: [
-            Icon(activity.icon, size: 16, color: theme.colorScheme.outline),
-            const SizedBox(width: 6),
-            Text(dist),
-          ],
-        ),
-        subtitle: Text('$date  •  $dur'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(trailingMetric, style: theme.textTheme.bodySmall),
-            if (isUnsynced) ...[
-              const SizedBox(width: 8),
-              Icon(Icons.cloud_off,
-                  size: 16, color: theme.colorScheme.outline),
+    final semanticsLabel = [
+      '$dist ${activity.label.toLowerCase()}',
+      date,
+      dur,
+      trailingMetric,
+      if (isUnsynced) 'not yet synced',
+    ].join(', ');
+
+    return Semantics(
+      label: semanticsLabel,
+      button: true,
+      selected: selected,
+      child: Card(
+        color: selected
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
+            : null,
+        child: ListTile(
+          leading: leading,
+          title: Row(
+            children: [
+              Icon(activity.icon, size: 16, color: theme.colorScheme.outline),
+              const SizedBox(width: 6),
+              Text(dist),
             ],
-          ],
+          ),
+          subtitle: Text('$date  •  $dur'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(trailingMetric, style: theme.textTheme.bodySmall),
+              if (isUnsynced) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.cloud_off,
+                    size: 16, color: theme.colorScheme.outline),
+              ],
+            ],
+          ),
+          onTap: onTap,
+          onLongPress: onLongPress,
         ),
-        onTap: onTap,
-        onLongPress: onLongPress,
       ),
     );
   }
@@ -1155,7 +1160,7 @@ class _RunsFilterHeader extends StatelessWidget {
     required this.onSourceChanged,
   });
 
-  static const _sourceChips = <(RunSource, String)>[
+  static const _sources = <(RunSource, String)>[
     (RunSource.app, 'Recorded'),
     (RunSource.watch, 'Watch'),
     (RunSource.strava, 'Strava'),
@@ -1164,17 +1169,28 @@ class _RunsFilterHeader extends StatelessWidget {
     (RunSource.healthconnect, 'Health Connect'),
   ];
 
-  // Pastel purple for the selected chip background. The default
-  // theme.colorScheme.secondaryContainer derived from the dusk seed
-  // rendered as dark purple, dropping the label into low-contrast
-  // territory. This matches the existing `lilac` palette entry in
-  // ui_kit's AppPalette without pulling the package as a dep.
-  static const _selectedChipColour = Color(0xFFD8CCFA);
-  static const _selectedChipLabel = Color(0xFF120D22);
+  static String _sourceLabel(RunSource? src) {
+    if (src == null) return 'All sources';
+    for (final s in _sources) {
+      if (s.$1 == src) return s.$2;
+    }
+    return 'All sources';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // The default ChipTheme derived from the dusk seed renders the
+    // selected state as dark purple — low-contrast against the dark
+    // surface in dark mode and over-saturated against parchment in
+    // light. Branch on brightness so the selected chip stays legible
+    // on both palettes. Hex values mirror ui_kit's AppPalette
+    // (lilac / midnight + parchment) without taking the package dep.
+    final isDark = theme.brightness == Brightness.dark;
+    final selectedChipBg =
+        isDark ? const Color(0xFF5A4985) : const Color(0xFFD8CCFA);
+    final selectedChipLabel =
+        isDark ? const Color(0xFFF7F3EC) : const Color(0xFF120D22);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1193,65 +1209,77 @@ class _RunsFilterHeader extends StatelessWidget {
         const SizedBox(height: 8),
         ChipTheme(
           data: theme.chipTheme.copyWith(
-            selectedColor: _selectedChipColour,
-            secondarySelectedColor: _selectedChipColour,
-            checkmarkColor: _selectedChipLabel,
+            selectedColor: selectedChipBg,
+            secondarySelectedColor: selectedChipBg,
+            checkmarkColor: selectedChipLabel,
             secondaryLabelStyle: theme.chipTheme.secondaryLabelStyle?.copyWith(
-                  color: _selectedChipLabel,
+                  color: selectedChipLabel,
                 ) ??
-                const TextStyle(color: _selectedChipLabel),
+                TextStyle(color: selectedChipLabel),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    FilterChip(
-                      label: const Text('All'),
-                      selected: activityFilter == null,
-                      onSelected: (_) => onActivityChanged(null),
-                    ),
-                    const SizedBox(width: 8),
-                    for (final type in ActivityType.values) ...[
-                      FilterChip(
-                        avatar: Icon(type.icon, size: 18),
-                        label: Text(type.label),
-                        selected: activityFilter == type,
-                        onSelected: (_) => onActivityChanged(type),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('All'),
+                  selected: activityFilter == null,
+                  onSelected: (_) => onActivityChanged(null),
                 ),
+                const SizedBox(width: 8),
+                for (final type in ActivityType.values) ...[
+                  FilterChip(
+                    avatar: Icon(type.icon, size: 18),
+                    label: Text(type.label),
+                    selected: activityFilter == type,
+                    onSelected: (_) => onActivityChanged(type),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Source filter collapsed into a popup so the 7-entry list doesn't
+        // need its own scrollable row. Matches the AppBar's existing
+        // PopupMenuButton pattern for date-range and sort.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PopupMenuButton<RunSource?>(
+            tooltip: 'Filter by source',
+            initialValue: sourceFilter,
+            onSelected: onSourceChanged,
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                value: null,
+                checked: sourceFilter == null,
+                child: const Text('All sources'),
               ),
-              const SizedBox(height: 8),
-              // Source filter — matches the web's dashboard chip row so a
-              // runner filtering by "Strava-imported only" on both
-              // surfaces sees the same subset. `null` = all sources.
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    FilterChip(
-                      label: const Text('All sources'),
-                      selected: sourceFilter == null,
-                      onSelected: (_) => onSourceChanged(null),
-                    ),
-                    const SizedBox(width: 8),
-                    for (final entry in _sourceChips) ...[
-                      FilterChip(
-                        label: Text(entry.$2),
-                        selected: sourceFilter == entry.$1,
-                        onSelected: (_) => onSourceChanged(entry.$1),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
+              for (final entry in _sources)
+                CheckedPopupMenuItem(
+                  value: entry.$1,
+                  checked: sourceFilter == entry.$1,
+                  child: Text(entry.$2),
                 ),
-              ),
             ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.filter_alt_outlined,
+                      size: 16, color: theme.colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Source: ${_sourceLabel(sourceFilter)}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  Icon(Icons.arrow_drop_down,
+                      size: 18, color: theme.colorScheme.outline),
+                ],
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 8),
