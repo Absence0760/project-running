@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fetchPlan, fetchMyClubs, publishPlanAsTemplate } from '$lib/data';
+	import { fetchPlan, fetchMyClubs, fetchRuns, publishPlanAsTemplate } from '$lib/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
+	import RaceDayPanel from '$lib/components/RaceDayPanel.svelte';
+	import { daysUntilRace } from '$lib/race_day';
+	import type { Run } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
@@ -28,8 +31,17 @@
 	let adminClubs = $state<ClubWithMeta[]>([]);
 	let publishingTo = $state('');
 	let editingPlanMeta = $state(false);
+	let recentRuns = $state<Run[]>([]);
 
 	let isOwner = $derived(plan != null && plan.user_id === auth.user?.id);
+
+	let showRaceDay = $derived.by(() => {
+		if (!plan) return false;
+		const days = daysUntilRace(plan.end_date, new Date());
+		// Show within 21 days of race day (Strava's "race week" surface
+		// is +/-14; we widen it slightly to cover a proper taper).
+		return days >= 0 && days <= 21;
+	});
 
 	async function load() {
 		loading = true;
@@ -38,6 +50,14 @@
 		weeks = res.weeks;
 		workouts = res.workouts;
 		loading = false;
+		if (plan != null) {
+			const days = daysUntilRace(plan.end_date, new Date());
+			if (days >= 0 && days <= 21) {
+				// Lazy-load the runner's recent runs so the Race Day panel
+				// can predict a finish time from a Riegel projection.
+				recentRuns = await fetchRuns({ limit: 50 });
+			}
+		}
 	}
 
 	onMount(async () => {
@@ -223,6 +243,15 @@
 					Publish
 				</button>
 			</section>
+		{/if}
+
+		{#if showRaceDay && plan != null}
+			<RaceDayPanel
+				raceDate={plan.end_date}
+				distanceM={plan.goal_distance_m}
+				goalTimeSec={plan.goal_time_seconds}
+				{recentRuns}
+			/>
 		{/if}
 
 		{#if todayWorkout}
