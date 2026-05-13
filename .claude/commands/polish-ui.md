@@ -1,59 +1,96 @@
 ---
-description: Polish the UI/UX of a single web page or component to the running app's quality bar — clean toolbars, archetype fit, status accents, friendly dates, modal-hosted create flows. Delegates to the `ui-polisher` agent.
-argument-hint: <route or component path>
+description: Polish the UI/UX of a single page, screen, or component to the running app's quality bar — across web (SvelteKit), mobile (Flutter, byte-identical twin), Wear OS (Compose-for-Wear), and watchOS (SwiftUI). Delegates to the `ui-polisher` agent.
+argument-hint: <route | screen | view | component path>
 ---
 
 Polish the UI/UX of `$ARGUMENTS` using the `ui-polisher` agent.
 
-## Scope
+This is a cross-platform command. The target path tells the agent which platform sub-flow to run.
 
-This command operates on `apps/web` only — the SvelteKit web app, the canonical feature surface (see [docs/decisions.md § 24](../../docs/decisions.md)). Mobile (Flutter), watch (Kotlin / Swift), and the Go job worker have their own conventions and are out of scope.
+## Scope by platform
+
+| Platform | Path prefix | Status |
+| --- | --- | --- |
+| **Web** (SvelteKit) | `apps/web/` | Full support — type-check + screenshot + e2e |
+| **Mobile** (Flutter, byte-identical twin) | `apps/mobile_android/` | Full support — `flutter analyze` + widget-test golden + `mobile-twin-mirror` agent after edit |
+| **Wear OS** (Compose-for-Wear, native Kotlin) | `apps/watch_wear/` | Full support — gradle compile + emulator screenshot or `@Preview` |
+| **watchOS** (SwiftUI) | `apps/watch_ios/` | **macOS-only.** Refuse on Linux (this workstation) and tell the user to switch to a Mac. |
+
+Anything else (`apps/backend/`, `apps/job_worker/`, `packages/`, `infra/`, `docs/`) is out of scope — polish is for user-facing surfaces only.
+
+**Never edit `apps/mobile_ios/lib/` or `apps/mobile_ios/test/` directly.** Those files are byte-identical mirrors of `apps/mobile_android/`. Edits go in `mobile_android/`, then the `mobile-twin-mirror` agent copies them across. See [decisions.md § 39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase).
 
 ## When to use this command
 
-**Right fit:**
+**Right fit** (any platform):
 
-- An index page that doesn't use the wide-screen real estate well (cramped middle column on a 1920px display).
-- A page where alignment drifts row-to-row (chips / badges / dates at different x-positions).
-- A page leaking raw ISO dates, a redundant `<h1>`, inline create forms that should be modals, missing filter / sort toolbar, no URL state for filters or tabs.
-- A page whose archetype doesn't match the data — a flat card list when the data has workflow state, no master/detail when each item has a rich inspector, no heatmap when the data is items × time.
-- A modal or shared component used in multiple places where consistency matters.
+- An index / list / home screen that doesn't use the available real estate well.
+- A screen where alignment drifts row-to-row or platform-to-platform.
+- A screen leaking raw ISO dates, redundant titles, inline forms that should be modals / sheets, hard-coded colors instead of theme tokens.
+- A screen whose archetype doesn't match the data — flat list when the data has workflow state, no master/detail when each item has rich inspection.
+- A shared widget / component used in multiple places where consistency matters.
 
 **Wrong fit — tell the user and stop:**
 
-- A purely-functional Settings / login / single-form page with no real-estate or scanability problem (`/login`, `/auth/callback`, `/auth/reset`, `/settings/account`, `/settings/preferences`, `/settings/devices`, `/settings/integrations`, `/settings/upgrade`, `/settings/licenses`).
-- A detail page with already-rich UI (`/runs/[id]`, `/routes/[id]`, `/plans/[id]`, `/clubs/[slug]`, `/share/run/[id]`, `/share/route/[id]`, `/live/[id]`) — polish on detail pages usually has a worse cost/value ratio than on index pages. Push back unless the user has a specific complaint.
-- A request that's really a feature, not polish — "add a chart of weekly distance over time" is a feature, not a redesign. Decline and ask the user to break it out.
-- A blanket sweep ("polish all pages"). Pick one and tell the user to invoke this command again for the next.
-- A Flutter / native / job-worker / Edge Function target. Out of scope — only `apps/web/`.
+- Purely-functional auth / settings / single-form screens with no real-estate or scanability problem.
+- Detail screens with already-rich UI (`/runs/[id]` web, `RunDetailScreen` Flutter, `PostRunScreen` Wear, `PostRunView` watchOS).
+- Feature requests masquerading as polish ("add a graph of weekly distance").
+- Blanket sweeps — pick one and tell the user to re-invoke for the next.
+- Anything that crosses an invariant: privacy zones (clipTrackForUser), paywall gates (ProGate / `effectiveTier`), the L0–L4 recording layering contract on `run_screen.dart` / `run_recorder/` / `live_run_map.dart`, or RLS / SECURITY DEFINER plumbing. Switch to `/safe-edit` for those.
 
 ## Resolving the target
 
 `$ARGUMENTS` can be:
 
-- A **route slug** (`/runs`, `/feed`, `/dashboard`, `/plans`, `/coach`, `/clubs`, `/routes`, `/u/[id]`) — resolves to `apps/web/src/routes/<slug>/+page.svelte`.
-- A **file path** (`apps/web/src/lib/components/RunEditor.svelte`) — used as-is.
-- A **component name** (`RunEditor`, `PlanCalendar`, `CalendarHeatmap`) — resolve via `find apps/web/src/lib/components -name "<name>.svelte"`.
+- A **web route slug** (`/runs`, `/feed`, `/dashboard`) — resolves to `apps/web/src/routes/<slug>/+page.svelte`.
+- A **file path under `apps/web/`, `apps/mobile_android/`, `apps/watch_wear/`, or `apps/watch_ios/`** — used as-is.
+- A **component / widget / view name** — resolve via `find apps/<platform>/ -name "<Name>.<ext>"` where ext is `svelte | dart | kt | swift`.
 
-If the argument is empty or "audit", list the candidate index pages with a one-line "why this one matters most right now" and ask the user to pick. Don't blanket-sweep.
+If the argument is empty or "audit", list one or two candidate index screens per platform (the agent's CLAUDE.md `## Read first` rows give you the index), with a one-line "why this one matters most" and ask the user to pick.
 
-## Pre-flight (one check, fast)
+## Pre-flight (per platform)
 
-Playwright auto-starts the dev server (`webServer` block in `apps/web/tests-e2e/playwright.config.ts` runs `pnpm run dev` if nothing is on `:7777`) and the `fixtures/auth.ts` globalSetup re-signs all three seeded users on every invocation, repopulating `apps/web/tests-e2e/.auth/*.json`. So the only pre-flight worth checking is the backend:
+Decide the platform from the target path, then run only the matching check:
+
+### Web (`apps/web/`)
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}' http://localhost:54321/ # expect 200/404
+curl -s -o /dev/null -w '%{http_code}' http://localhost:54321/  # Supabase API health
 ```
 
-If Supabase isn't up, tell the user `cd apps/backend && supabase start` and stop — the screenshot run and any e2e re-run will fail without it. **Do not** start the dev server yourself or pre-create storage states; Playwright handles both.
+Playwright auto-starts the dev server (`webServer` block in `apps/web/tests-e2e/playwright.config.ts`) and `fixtures/auth.ts` globalSetup re-signs all three users on every invocation, so no other checks needed. If Supabase isn't up, tell the user `cd apps/backend && supabase start` and stop.
 
-## Pick the seed user
+### Mobile (`apps/mobile_android/`)
+
+```bash
+command -v flutter && (cd apps/mobile_android && flutter --version)
+```
+
+If Flutter isn't on PATH or `pub get` hasn't been run, stop and surface — the agent will need `flutter analyze` + `flutter test` for verification.
+
+### Wear OS (`apps/watch_wear/`)
+
+```bash
+test -x apps/watch_wear/android/gradlew && (cd apps/watch_wear/android && ./gradlew --version | head -3)
+```
+
+If Gradle / Android SDK isn't usable, stop and tell the user.
+
+### watchOS (`apps/watch_ios/`)
+
+```bash
+uname -s  # If "Linux", refuse before spawning the agent.
+```
+
+On Linux (this workstation), respond to the user with: *"watchOS UI polish requires macOS and Xcode. This workstation is Fedora 43 — switch to a Mac, then re-run."* Do not spawn the agent.
+
+## Pick the test/screenshot user (web only)
 
 Decide *before* spawning the agent which seeded user to log in as for screenshots:
 
-- If the page or component is paywall-gated (anything under `/coach`, the training-load chart on `/dashboard`, the export-pace chart, anything that grep'd `ProGate|isPro|requires_pro|tier === .pro.|effectiveTier` in the route), use **`USER_C_PRO`** (`morgan@test.com`, storage state `apps/web/tests-e2e/.auth/user-c-pro.json`).
+- If the page or component is paywall-gated (anything under `/coach`, the training-load chart on `/dashboard`, anything that grep'd `ProGate|isPro|requires_pro|tier === .pro.|effectiveTier`), use **`USER_C_PRO`** (`morgan@test.com`, `apps/web/tests-e2e/.auth/user-c-pro.json`).
 - Otherwise default to **`USER_A`** (`runner@test.com`, free tier, `user-a.json`).
-- `USER_B` (`alex@test.com`) is the "other user" — only pick it if you need a profile-as-someone-else view (e.g. polishing `/u/<USER_B.id>`).
+- `USER_B` (`alex@test.com`) — only pick it if you need a profile-as-someone-else view.
 
 Quick grep:
 
@@ -61,45 +98,51 @@ Quick grep:
 rg -l 'ProGate|isPro|requires_pro|tier === .pro.|effectiveTier' apps/web/src/routes/<route>/ apps/web/src/lib/components/<component>.svelte
 ```
 
+Mobile / Wear / watchOS use a recorded run from local seed; no user selection needed.
+
 ## Invoke the agent
 
 Spawn the `ui-polisher` agent with a prompt like:
 
-> "Polish the UI/UX of `<resolved file path>`. The user's stated intent was: `<the original argument string>`. Log in as `<USER_A | USER_C_PRO | USER_B>` (import from `../fixtures/users`). Follow your agent spec: audit, plan, edit, verify, report. Do not commit."
+> "Polish the UI/UX of `<resolved file path>`. Platform: `<web | mobile | wear | watchos>`. The user's stated intent was: `<the original argument string>`. (For web: log in as `<USER_A | USER_C_PRO | USER_B>`, import from `../fixtures/users`.) Follow your agent spec for this platform — audit, plan, edit, verify, report. Do not commit."
 
-The agent's spec covers the design language, screenshot capture, type-check, and affected-e2e selector updates. Trust it.
+For mobile (Flutter), also instruct: "After your edits, the `mobile-twin-mirror` agent must run to mirror `apps/mobile_android/lib/+test/` into `apps/mobile_ios/`. Surface that in your report."
+
+The agent's spec covers the design language, screenshot capture, type-check, and affected test updates per platform. Trust it.
 
 ## Relay the agent's report
 
 When it returns, surface to the user:
 
-- The before/after screenshot paths (`/tmp/polish-before.png` → `/tmp/polish-after.png`).
+- The before/after screenshot paths.
 - The list of files changed (`git diff --stat`).
-- Any e2e selector updates the agent applied — call those out so the user can sanity-check the test edits.
-- The agent's "Notes for the human" section verbatim. Don't paraphrase.
+- Any test / selector updates the agent applied — call those out so the user can sanity-check.
+- For mobile: confirmation that `mobile-twin-mirror` ran clean (or what it would copy).
+- The agent's "Notes for the human" section verbatim.
 
 ## Commit (only when the user asks)
 
 Do not pre-stage or pre-commit. When the user says yes:
 
 - Stage the changed files explicitly (don't `git add -A` — risks pulling in test artifacts / screenshots).
-- Commit message follows the recent log style (`fix(web): …`, `feat(web): …`, `ui(web): …`). **No `Co-Authored-By`, no "Generated with Claude Code" footer, no robot emoji** — the user-level rule in `~/.claude/CLAUDE.md` overrides everything, including the project CLAUDE.md.
-- Example: `git commit -m "ui(web): <one-liner>" -m "<2-4 line body explaining the archetype + which patterns applied>"`.
+- For mobile: stage **both** `apps/mobile_android/` AND `apps/mobile_ios/` changes in the same commit. The twin invariant requires it.
+- Commit message follows the recent log style: `ui(web): …` / `ui(mobile): …` / `ui(wear): …` / `ui(watch): …`. **No `Co-Authored-By`, no "Generated with Claude Code" footer, no robot emoji** — the user-level rule in `~/.claude/CLAUDE.md` overrides everything.
 
 ## Cost reality
 
-This command costs more than a normal edit (a screenshot pass, full `svelte-check`, affected Playwright run, an Opus agent context). Don't burn it on a 5-pixel padding tweak — for that, the user edits directly. The command earns its cost on archetype-level or hierarchy-level changes (a card grid that should be a table, a flat list that should be master/detail, an inline form that should be a modal-hosted editor).
+This command costs more than a normal edit (per-platform: a screenshot pass, a full type-check, possibly an affected-test re-run, an Opus agent context). Don't burn it on a 5-pixel padding tweak. The command earns its cost on archetype-level changes (a card grid that should be a table, an inline form that should be a sheet / modal, a hand-rolled palette that should pull from theme tokens).
 
 ## What this command does NOT replace
 
-- `/check` for a pre-commit gate (code-review + test-gap + doc-hygiene). Polish doesn't run those — if the redesign touches non-trivial logic, follow up with `/check` before committing.
-- `/safe-edit` for security-sensitive changes (RLS, paywall gates, privacy zones). If the polish would touch those surfaces, switch to `/safe-edit` instead.
+- `/check` (web only) for the pre-commit gate.
+- `/safe-edit` for security-sensitive or invariant-crossing changes.
 - `/audit/*` for periodic broad sweeps.
+- The `mobile-twin-mirror` / `schema-change-coordinator` / `metadata-key-keeper` agents — those run from inside the polish flow when the edit touches their domain.
 
 ## Tone
 
 Don't narrate the agent's internal steps. The user sees:
 
-- A one-sentence "Resolving target → `<path>`. Logging in as `<user>`. Spawning the polisher."
-- The agent's structured report (audit findings + changes + verification + notes), relayed.
-- A "Want me to commit?" question with the suggested commit message.
+- A one-sentence "Resolving target → `<path>`. Platform: `<x>`. (Web only: logging in as `<user>`.) Spawning the polisher."
+- The agent's structured report relayed.
+- A "Want me to commit?" question with the suggested message.
