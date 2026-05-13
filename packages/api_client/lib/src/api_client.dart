@@ -440,6 +440,18 @@ class ApiClient {
     );
   }
 
+  /// Force a fresh map-match for a run the caller owns. Resets the
+  /// `run_matched_tracks` row to `pending` and queues a fresh
+  /// `kind='map_match'` job. The `enqueue_run_rematch` PostgREST RPC
+  /// self-gates on `auth.uid() = run.user_id`; non-owner calls raise
+  /// `42501` which surfaces as a PostgrestException here. Idempotent
+  /// against in-flight jobs (the `jobs_dedupe_map_match` unique index
+  /// coalesces a second call while a previous re-match is queued).
+  /// Mirrors `enqueueRunRematch` in `apps/web/src/lib/data.ts`.
+  Future<void> enqueueRunRematch(String runId) async {
+    await _client.rpc('enqueue_run_rematch', params: {'p_run_id': runId});
+  }
+
   /// Download the raw gzipped track bytes from Storage without decoding.
   /// Used by the backup flow which wants to archive the gzipped blob
   /// verbatim so restore is a byte-for-byte upload.

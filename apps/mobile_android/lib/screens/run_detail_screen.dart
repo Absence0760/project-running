@@ -57,6 +57,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// switches to it when present. A failure here cannot break the
   /// page.
   RunMatchInfo? _matchInfo;
+  /// True while an owner-initiated re-match RPC is in flight. Drives
+  /// the disabled state on the Re-match button so a rapid double-tap
+  /// can't fire two redundant enqueues (the unique-index dedupe would
+  /// catch it server-side anyway, but the UI feedback matters).
+  bool _rematchBusy = false;
   /// Auto-link suggestion: when run.routeId is null AND the track
   /// confidently overlaps one of the runner's saved routes, surface
   /// a one-tap "Looks like you ran X — link?" banner. Stays null
@@ -193,6 +198,30 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       if (mounted) setState(() => _matchInfo = info);
     } catch (e) {
       debugPrint('matched-track fetch failed for ${run.id}: $e');
+    }
+  }
+
+  /// Owner-only: force a fresh map-match against the current track.
+  /// Resets `run_matched_tracks` to `pending` and queues a `map_match`
+  /// job server-side. Mirrors the web's `handleRematch` on
+  /// `/runs/[id]`. Re-reads the row immediately so the pill flips to
+  /// 'pending' without a manual refresh; the dedupe unique-index on
+  /// jobs swallows a second click while the first job is queued.
+  Future<void> _handleRematch() async {
+    final api = widget.apiClient;
+    if (api == null || _rematchBusy) return;
+    setState(() => _rematchBusy = true);
+    try {
+      await api.enqueueRunRematch(run.id);
+      final info = await api.fetchRunMatchedTrack(run.id);
+      if (!mounted) return;
+      setState(() => _matchInfo = info);
+      showTopBanner(context, 'Re-snapping to roads…');
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, 'Re-match failed: $e');
+    } finally {
+      if (mounted) setState(() => _rematchBusy = false);
     }
   }
 
@@ -560,7 +589,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     Positioned(
                       top: 12,
                       left: 12,
-                      child: _MatchStatusPill(status: _matchInfo!.status),
+                      child: _MatchStatusPill(
+                        status: _matchInfo!.status,
+                        // RLS on `run_matched_tracks` only returns the
+                        // row to the owner, so a non-null `_matchInfo`
+                        // already implies the viewer is the owner.
+                        // The RPC self-gates with 42501 anyway as a
+                        // defence in depth.
+                        onRematch: widget.apiClient == null
+                            ? null
+                            : _handleRematch,
+                        busy: _rematchBusy,
+                      ),
                     ),
                   if (run.track.length >= 2)
                     Positioned(
@@ -2065,9 +2105,23 @@ class _RouteSuggestBanner extends StatelessWidget {
 /// it's anything other than `matched` (the silent default — the
 /// cleaner line speaks for itself). Mirrors the shape of the web's
 /// `.match-pill` on `/runs/[id]`.
+///
+/// When [onRematch] is non-null and the status is `skipped` or
+/// `failed`, the pill exposes a small "Re-match" button — the same
+/// owner-only affordance the web has. Hidden for `pending` (the job
+/// is already in flight; another enqueue is a no-op via the dedupe
+/// unique index) and for `matched` (the pill itself doesn't render).
+/// While the callback's Future is in flight [busy] is true so the
+/// host can disable the action.
 class _MatchStatusPill extends StatelessWidget {
   final MatchStatus status;
-  const _MatchStatusPill({required this.status});
+  final VoidCallback? onRematch;
+  final bool busy;
+  const _MatchStatusPill({
+    required this.status,
+    this.onRematch,
+    this.busy = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2077,6 +2131,8 @@ class _MatchStatusPill extends StatelessWidget {
       MatchStatus.failed => (Icons.error_outline, 'Snap failed — showing raw track'),
       MatchStatus.matched => (Icons.check_circle, 'Snapped'),
     };
+    final showRematch =
+        onRematch != null && status != MatchStatus.pending;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -2097,6 +2153,36 @@ class _MatchStatusPill extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (showRematch) ...[
+            const SizedBox(width: 10),
+            InkWell(
+              onTap: busy ? null : onRematch,
+              borderRadius: BorderRadius.circular(999),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.refresh,
+                      size: 14,
+                      color: busy ? Colors.white38 : Colors.white,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      busy ? 'Queueing…' : 'Re-match',
+                      style: TextStyle(
+                        color: busy ? Colors.white38 : Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
