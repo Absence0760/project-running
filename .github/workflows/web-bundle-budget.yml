@@ -1,0 +1,92 @@
+name: Web bundle budget
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - '.github/workflows/web-bundle-budget.yml'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Hard ceilings (kilobytes, transferred = gzipped) for the public web bundle.
+  # When a PR pushes either over the limit, the job fails so a reviewer
+  # has to acknowledge the increase before merging. Numbers chosen with
+  # headroom over the 2026-05 baseline (~972 KB total, ~263 KB largest):
+  # 55% headroom on total → catches a major regression but allows
+  # ordinary feature growth; 33% headroom on largest → keeps the main
+  # entry bundle from quietly drifting toward code-split territory.
+  # Bump deliberately when the right answer is "ship the feature", not
+  # casually because the job failed.
+  MAX_TOTAL_KB: 1500
+  MAX_LARGEST_CHUNK_KB: 350
+
+jobs:
+  bundle-budget:
+    name: Web bundle budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci --workspaces --include-workspace-root
+      - name: Build web (production)
+        run: npm run build --workspace=apps/web
+        env:
+          PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          PUBLIC_MAPTILER_KEY: placeholder
+          BASE_PATH: ""
+      - name: Measure + assert budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_DIR=apps/web/build
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "::error::No build output at $BUILD_DIR"
+            exit 1
+          fi
+
+          shopt -s globstar nullglob
+          total_kb=0
+          largest_kb=0
+          largest_path=""
+
+          while IFS= read -r -d '' f; do
+            gz_size=$(gzip -c "$f" | wc -c)
+            kb=$(( (gz_size + 1023) / 1024 ))
+            total_kb=$(( total_kb + kb ))
+            if [ "$kb" -gt "$largest_kb" ]; then
+              largest_kb="$kb"
+              largest_path="$f"
+            fi
+          done < <(find "$BUILD_DIR" \( -name '*.js' -o -name '*.css' \) -print0)
+
+          echo "Total gzipped JS+CSS: ${total_kb} KB (budget ${MAX_TOTAL_KB} KB)"
+          echo "Largest chunk:       ${largest_kb} KB — ${largest_path} (budget ${MAX_LARGEST_CHUNK_KB} KB)"
+
+          {
+            echo "## Web bundle budget"
+            echo ""
+            echo "| Metric | Size | Budget |"
+            echo "|---|---|---|"
+            echo "| Total gzipped JS+CSS | ${total_kb} KB | ${MAX_TOTAL_KB} KB |"
+            echo "| Largest single chunk | ${largest_kb} KB | ${MAX_LARGEST_CHUNK_KB} KB |"
+            echo ""
+            echo "Largest chunk path: \`${largest_path#$BUILD_DIR/}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$total_kb" -gt "$MAX_TOTAL_KB" ]; then
+            echo "::error::Total gzipped bundle ${total_kb} KB exceeds budget ${MAX_TOTAL_KB} KB. Either trim deps or bump the env in .github/workflows/web-bundle-budget.yml with a justification."
+            exit 1
+          fi
+          if [ "$largest_kb" -gt "$MAX_LARGEST_CHUNK_KB" ]; then
+            echo "::error::Largest single chunk ${largest_kb} KB exceeds budget ${MAX_LARGEST_CHUNK_KB} KB. Split it (dynamic import) or bump the env."
+            exit 1
+          fi
