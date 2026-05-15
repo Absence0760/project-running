@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -221,5 +222,59 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 			.select('id', { count: 'exact', head: true })
 			.eq('run_id', runId);
 		expect(count).toBe(0);
+	});
+
+	test('Add photo button is NOT visible when no run exists yet (gating sanity)', async ({
+		page
+	}) => {
+		// Sanity that the Add-photo affordance is scoped to a real run
+		// page. A regression that mounted RunPhotos on a non-detail
+		// route (e.g. the run list) would surface here.
+		await page.goto('/runs');
+		await page.waitForLoadState('networkidle');
+		await expect(page.getByRole('button', { name: /Add photo/ })).toHaveCount(0);
+	});
+});
+
+test.describe('/share/run/[id] — RunPhotos read-only for non-owner', () => {
+	// Anon visitor on a public-run share page: photos render in the
+	// gallery but the Add-photo button does NOT (canManage = false).
+	// Pins the owner-gate in RunPhotos.svelte against a refactor that
+	// silently let any signed-in user upload to someone else's run.
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon viewer sees the gallery but no Add-photo button', async ({ page }) => {
+		const adminCtx = getAdminClient();
+		// Reuse the existing public seed run; plant a photo on it so
+		// the gallery has something to render.
+		const photoId = crypto.randomUUID();
+		const path = `${USER_A.id}/${photoId}.png`;
+		try {
+			await adminCtx.storage.from('run-photos').upload(path, ONE_PIXEL_PNG, {
+				contentType: 'image/png',
+				upsert: true
+			});
+			await adminCtx.from('run_photos').insert({
+				id: photoId,
+				run_id: RUNNER_PUBLIC_RUN_ID,
+				owner_id: USER_A.id,
+				storage_path: path,
+				caption: 'e2e share view',
+				position_idx: 99
+			});
+
+			await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+			await page.waitForLoadState('networkidle');
+
+			// The gallery section renders…
+			await expect(page.locator('.tile').first()).toBeVisible({ timeout: 10_000 });
+			// …but Add-photo + Delete + Edit-caption affordances must NOT.
+			await expect(page.getByRole('button', { name: /Add photo/ })).toHaveCount(0);
+			await expect(page.getByRole('button', { name: 'Delete photo' })).toHaveCount(0);
+			await expect(page.getByRole('button', { name: 'Edit caption' })).toHaveCount(0);
+		} finally {
+			await adminCtx.from('run_photos').delete().eq('id', photoId);
+			await adminCtx.storage.from('run-photos').remove([path]);
+		}
 	});
 });
