@@ -152,6 +152,25 @@ git ls-remote https://github.com/<owner>/<repo>.git refs/tags/v5
 
 and update both the SHA and the `# vN` comment together. Don't update one without the other.
 
+## Fix bugs, don't code around them
+
+When a test fails or a behaviour is wrong, fix the **root cause** in the code under test. Don't:
+
+- Soften an assertion to make the failing test pass while the bug stays in place ("the badge stays at `connecting` forever" → "assert the badge isn't `live`" leaves the user stuck on a confusing UI).
+- Catch an exception only to swallow it so a flaky path stops surfacing — find why the path is flaky.
+- Add a special case in a caller that mirrors a missing branch in the callee — fix the callee.
+- Inline-comment "TODO: real fix later" and ship — either fix it now or open a roadmap entry naming the symptom + the deadline.
+
+The opposite is also a rule: don't *over-fix*. A bug fix touches the bug; the surrounding cleanup belongs in a separate change ([preemptive abstractions — don't](#preemptive-abstractions--dont)).
+
+How to spot the "coded around" pattern in review:
+
+- A test was added with a negative assertion (`not.toContainText`, `not.toHaveClass`) where a positive one would say more. Negatives usually pin the *absence* of a leak; if the right user-facing outcome has a positive name (e.g. "shows a not-broadcasting state"), the test should pin that.
+- A test was rewritten with broader matchers (`/connecting|demo|loading|.*/i`) to absorb the bug's ambiguous output.
+- A comment explains why the workaround is OK; if the explanation is "the page sits at X forever, so we just check Y", the page should not sit at X forever.
+
+The `code-reviewer` agent (via `/safe-edit`) actively flags this pattern; the [coverage_snapshot.md](coverage_snapshot.md) gets bumped only when the underlying behaviour is correct, not when the test was rewritten to tolerate it.
+
 ## Preemptive abstractions — don't
 
 Three similar lines is better than a premature helper. A "generic" wrapper written when only one caller exists is worse than the caller's own inline code. Extract when the third caller arrives, not before.

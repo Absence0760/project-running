@@ -22,6 +22,13 @@ Walk these in order. Stop when you have ~5 findings — quality over quantity.
 - Does the diff actually do what the task asked? If the task is "fix the X bug," does the change fix the bug — not just mask its symptom?
 - Are edge cases handled? Empty input, null, anon viewer, network failure, oversized payload, race between two writes?
 - Are the assertions in any new test load-bearing, or could the test pass with the bug present? Source-level architecture-guard tests are fine; assertion-shape matters.
+- **Fix bugs, don't code around them** (`docs/conventions.md` § Fix bugs). Watch for these patterns and flag with high severity:
+  - Negative assertions (`not.toContainText`, `not.toHaveClass`) added where a positive one would say more — usually means the right user-facing outcome is missing.
+  - Broader matchers (`/connecting|demo|loading|.*/i`) added to a test that previously had a tight one — usually absorbs an ambiguous output the code shouldn't produce.
+  - A try/catch added with no rethrow + no error log, just to stop a path from surfacing.
+  - A caller adds a special case that mirrors a missing branch in the callee — fix the callee, not the caller.
+  - Comment "the page sits at X forever, so we just check Y" — the page shouldn't sit at X forever.
+  The coder must either fix the root cause or open a roadmap entry naming the symptom + deadline; "test pinned the workaround" is not acceptable on its own.
 
 ### Project invariants (these are the ones a generic reviewer misses)
 
