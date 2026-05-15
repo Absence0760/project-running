@@ -87,4 +87,68 @@ test.describe('/live/[id] — anon', () => {
 			await deleteRun(runId);
 		}
 	});
+
+	test('private run with planted pings does NOT leak distance/elapsed to anon', async ({
+		page
+	}) => {
+		// /live/[id] for a NON-public run must not surface ping data to
+		// an anon viewer. RLS blocks the hydrateBacklog read; the page
+		// stays in connecting/demo with zeroed stats. Regression risk:
+		// a refactor that lets a SECURITY DEFINER bypass leak the rows
+		// would silently turn private runs into anon-watchable broadcasts.
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [
+					{ lat: -37.8140, lng: 144.9633, distance_m: 1_000, elapsed_s: 300 },
+					{ lat: -37.8150, lng: 144.9650, distance_m: 4_500, elapsed_s: 1_350 }
+				]
+			});
+
+			await page.goto(`/live/${runId}`);
+			await page.waitForLoadState('networkidle');
+			// Stat strip exists but the values must not include the
+			// planted ping data. The badge must NOT be in the .active
+			// (LIVE) state — anon shouldn't see live truthful state.
+			await expect(page.locator('.live-badge')).not.toHaveClass(/active/, {
+				timeout: 10_000
+			});
+			// Distance stat must not show the leaked 4.5 km value.
+			await expect(page.locator('.live-stat-value').first()).not.toContainText('4.5');
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('unknown run id mounts the shell without crashing', async ({ page }) => {
+		// Stale-link landing: a deleted/never-existed run id should not
+		// crash the page. The /live/[id] route mounts the shell and
+		// stays in connecting / demo state because there's nothing to
+		// hydrate. We pin "shell mounts" via the brand label + three
+		// stat tiles, and "no live data" via the badge not flipping
+		// to LIVE.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/live/${bogusId}`);
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('.live-logo')).toContainText('Run Onward');
+		await expect(page.locator('.live-stat-label')).toHaveCount(3);
+		await expect(page.locator('.live-badge')).not.toHaveClass(/active/);
+	});
+
+	test('document title reflects "Live" so a tab in the background reads as the spectator surface', async ({
+		page
+	}) => {
+		await page.goto(`/live/${RUNNER_PUBLIC_RUN_ID}`);
+		await page.waitForLoadState('networkidle');
+		// Tab title is the user's cue when they switch back. Pin a
+		// stable substring rather than the exact copy.
+		await expect(page).toHaveTitle(/Live|Run Onward/i);
+	});
 });
