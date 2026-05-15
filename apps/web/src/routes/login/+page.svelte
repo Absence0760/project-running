@@ -13,6 +13,8 @@
 	let password = $state('');
 	let isSignUp = $state($page.url.searchParams.get('signup') === '1');
 	let isReset = $state($page.url.searchParams.get('reset') === '1');
+	let confirmAdult = $state(false);
+	let acceptTerms = $state(false);
 	// `hydrated` flips after the first onMount fires — i.e. once the
 	// Svelte 5 `onsubmit` binding on the email form is wired up. Until
 	// then the submit button stays disabled, so a fast-clicking user
@@ -84,6 +86,12 @@
 				info = "If that email is registered, we've sent a password reset link.";
 				email = '';
 			} else if (isSignUp) {
+				if (!confirmAdult) {
+					throw new Error('Please confirm you are 16 or older to continue.');
+				}
+				if (!acceptTerms) {
+					throw new Error('Please accept the Terms of Service and Privacy Policy to continue.');
+				}
 				const { error: signUpError } = await supabase.auth.signUp({ email, password });
 				if (signUpError) throw signUpError;
 				await auth.refreshSession();
@@ -176,10 +184,25 @@
 					autocomplete={isSignUp ? 'new-password' : 'current-password'}
 				/>
 			{/if}
+			{#if isSignUp}
+				<label class="signup-check">
+					<input type="checkbox" bind:checked={confirmAdult} required />
+					<span>I confirm I am 16 years of age or older.</span>
+				</label>
+				<label class="signup-check">
+					<input type="checkbox" bind:checked={acceptTerms} required />
+					<span>
+						I have read and agree to the
+						<a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+						and
+						<a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+					</span>
+				</label>
+			{/if}
 			<button
 				type="submit"
 				class="btn btn-email"
-				disabled={!hydrated || loading}
+				disabled={!hydrated || loading || (isSignUp && (!confirmAdult || !acceptTerms))}
 			>
 				{#if loading}
 					{#if isReset}Sending...{:else}Signing {isSignUp ? 'up' : 'in'}...{/if}
@@ -213,9 +236,14 @@
 			{/if}
 		{/if}
 
-		<p class="terms">
-			By signing in, you agree to our Terms of Service and Privacy Policy.
-		</p>
+		{#if !isSignUp}
+			<p class="terms">
+				By signing in, you agree to our
+				<a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+				and
+				<a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+			</p>
+		{/if}
 	</div>
 </div>
 
@@ -477,5 +505,24 @@
 		font-size: 0.75rem;
 		color: var(--color-text-tertiary);
 		line-height: 1.5;
+	}
+	.terms a,
+	.signup-check a {
+		color: inherit;
+		text-decoration: underline;
+	}
+	.signup-check {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-sm);
+		font-size: 0.85rem;
+		color: rgba(255, 255, 255, 0.8);
+		line-height: 1.4;
+		text-align: left;
+		margin-top: var(--space-2xs);
+	}
+	.signup-check input[type='checkbox'] {
+		margin-top: 0.2rem;
+		flex-shrink: 0;
 	}
 </style>
