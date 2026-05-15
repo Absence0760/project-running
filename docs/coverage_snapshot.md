@@ -1,0 +1,189 @@
+# Coverage snapshot — 2026-05-15
+
+**Snapshot, not source of truth.** This is the baseline from which the "push every area to 90%" work starts. Estimates answer: "would CI catch a regression in this feature before merge?" — not measured line coverage. Roll-up at the bottom.
+
+## Auth + identity
+
+| Feature | Baseline | Surface | Biggest gap |
+|---|---|---|---|
+| Email signup (with age gate + ToS) | 90% | `login.spec.ts`, `signup-age-gate.spec.ts` | — |
+| Email sign-in | 90% | `login.spec.ts`, `cross-cutting/sign-in-out.spec.ts` | — |
+| Password reset (full Mailpit flow) | 85% | `login.spec.ts` | — |
+| Google OAuth | 20% | None | Real flow blocked; need Google Cloud creds |
+| Apple OAuth | 10% | None | "Soon" pill; needs Apple Developer |
+| Session refresh / auth walls | 85% | `cross-cutting/auth-walls.spec.ts`, every signed-in spec | — |
+
+## Recording (mobile + watch)
+
+| Feature | Baseline | Surface | Biggest gap |
+|---|---|---|---|
+| Run state machine + GPS filter chain | 80% | `run_recorder` 18 tests + 7 guards | Live-device GPS jitter |
+| `LocalRunStore` persistence + sync | 85% | 23 tests | — |
+| `run_stats` helpers (pace, splits, fastest-window) | 85% | 13 tests | — |
+| BLE chest-strap HR | 75% | 9 parser tests | Real-device pairing flake |
+| Architecture guards (54 source-level asserts) | 95% | `architecture_guards_test.dart` | — |
+| Live run screen widget | 65% | `run_screen_test.dart` + ValueNotifier-mode | No full integration_test |
+| Crash-safe persistence | 70% | LocalRunStore + recovery tests | No power-pull simulation |
+| Wear OS — full feature parity | 45% | Kotlin unit tests | No emulator e2e |
+| watchOS — recording flow | 15% | None automated | macOS runner blocker |
+
+## Runs (web)
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| List / detail / new / cascade-delete | 85% | `runs/{list,detail,new,cascade}.spec.ts` |
+| Run photos | 75% | `runs/photos.spec.ts` |
+| Kudos / comments / engagement | 85% | `runs/social.spec.ts` + `cross-user/{kudos,comments}.spec.ts` |
+| Track preview + decorations | 80% | `track_decorations_test.dart` (10) + widget tests |
+| HR zones | 75% | `hr_zones_test.dart` (8) |
+| Pace segments / heatmap | 80% | `pace_segments_test.dart` (15) |
+| Privacy-zone clipping (non-owner view) | 85% | pgtap + cross-cutting + parity (8/8) |
+
+## Routes
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Library / detail / import (GPX/KML/etc.) | 70% | `routes/{list,detail,import}.spec.ts` |
+| Route builder (OSRM + elevation + geocoding) | 65% | 9+12+7+7+5 helper tests, web e2e thin |
+| Public/private toggle + share | 75% | `share/route.spec.ts` |
+| Segments + leaderboards | 65% | `segments_test.dart` (8) + UI widget tests |
+| Heatmap | 40% | UI exists, migration shipped; no e2e |
+
+## Training plans
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| VDOT generator + Riegel (TS↔Dart parity) | 90% | `training.test.ts` (29) + `training_test.dart` (17) |
+| Wizard / week grid / editor | 75% | `plans/{create,detail,list}.spec.ts` |
+| Workout runner state machine | 70% | `workout_runner_test.dart` (13) + execution-band tests (6) |
+| Adherence + workout-review section | 55% | `workout_review_section_test.dart` (11) |
+| Calendar | 65% | `plan_calendar_test.dart` (3) + e2e |
+
+## Clubs / events / social
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Clubs CRUD + members + posts + invites | 90% | `clubs/*.spec.ts` (13 files) |
+| Events (one-off + recurring + RSVP) | 85% | `clubs/event-*.spec.ts` + `recurrence_test` |
+| Race control (arm / start / end / cancel) | 65% | UI + handler covered; no full multi-client |
+| Activity feed | 80% | `feed.spec.ts` + `cross-cutting/feed-journey.spec.ts` |
+| Profile (`/u/[id]` + follow / notifications) | 80% | `u/*.spec.ts` + `cross-user/{follows,notifications}.spec.ts` |
+
+## AI Coach
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Chat surface mount + plan switcher | 75% | `coach.spec.ts` |
+| SSE streaming (mocked) | 70% | `page.route('**/api/coach', ...)` stub |
+| 429 daily-cap path | 75% | `coach.spec.ts` 429 test |
+| Paywall gating | 80% | `cross-cutting/paywall-wire.spec.ts` |
+| Real Anthropic response | 45% | Mock covers shape; real key burns spend |
+
+## Live spectator
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Web `/live/[id]` render | 70% | `live.spec.ts`, `live-event.spec.ts` |
+| Mobile spectator screen | 55% | Widget tests |
+| Go live-hub auth + privacy + Redis path | 85% | 16 + 8 + 9 + 14 Go tests |
+| Multi-client realtime delivery | 55% | `cross-cutting/realtime.spec.ts` (limited) |
+
+## Settings
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Account / preferences / devices / licenses | 85% | `settings/*.spec.ts` |
+| Privacy zones picker | 80% | `settings/privacy-zones.spec.ts` + cross-cutting |
+| Data export (Go endpoint) | 75% | `dataexport/server_test.go` (14) + `settings/export.spec.ts` |
+| Restore backup | 70% | `settings/restore-backup.spec.ts` |
+| Integrations tab | 70% | `settings/integrations.spec.ts` |
+| Pro upgrade (currency-localised) | 80% | `settings/{upgrade,pricing-localization}.spec.ts` |
+
+## Integrations
+
+| Feature | Baseline | Real-flow gap |
+|---|---|---|
+| Strava ZIP import | 75% | Fixture-driven; OAuth real flow needs creds |
+| Strava live OAuth + webhook | 30% | Needs Strava developer creds |
+| Garmin Connect | 5% | Blocked on developer-program approval |
+| parkrun athlete-number import | 40% | No sandbox; can mock fetch in EF |
+| Health Connect (Android) | 40% | Device-only; can't laptop-test |
+| HealthKit (iOS) | 30% | Device-only |
+| Stripe + RevenueCat paywall | 40% | Needs sandbox keys |
+| Apple IAP / Google Play Billing | 20% | Device + sandbox tester needed |
+
+## Maps + matching
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| MapTiler tile render | 60% | Implicit via every map-bearing spec |
+| OSRM map matching (Go matcher) | 80% | `matcher_osrm_test.go` + worker tests |
+| Run-match pipeline (jobs queue) | 80% | pgtap + worker integration test |
+| Privacy-zone clipping RPC | 90% | pgtap + `cross-cutting/privacy-zones.spec.ts` |
+
+## Backend
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Edge Functions (pure helpers) | 80% | 45 Deno tests across 3 files |
+| Edge Function handler envelopes (auth/HMAC) | 65% | 9 tests on the 3 webhook handlers |
+| pgtap RLS suite | 80% | `apps/backend/supabase/tests/*.sql` |
+| Go job worker (map-match, token-refresh, strava-event) | 85% | 50+ tests across handlers + livehub + dataexport + premium |
+| Schema codegen drift detector | 90% | `parity-types` CI + schema-codegen-drift CI |
+
+## Web public pages
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Landing | 80% | `landing.spec.ts` |
+| `/compare` | 70% | `compare.spec.ts` (new) |
+| `/guided` (preview library) | 70% | `guided.spec.ts` (new) |
+| `/recap/[year]` | 55% | `recap.spec.ts` (new) |
+| `/share/run/[id]`, `/share/route/[id]` | 80% | `share/*.spec.ts` |
+| `/privacy`, `/terms`, `/cookie-notice` | 85% | `legal-pages.spec.ts` (new) |
+| Sitemap + robots.txt | 85% | `sitemap.spec.ts` |
+
+## Cross-cutting + compliance
+
+| Feature | Baseline | Surface |
+|---|---|---|
+| Cookie consent banner + Sentry gate | 85% | `cross-cutting/cookie-consent.spec.ts` |
+| Age gate (GDPR Art 8) | 90% | `signup-age-gate.spec.ts` |
+| Dev/prod isolation guard | 90% | Vite plugin + Playwright globalSetup + 13 unit tests + CI job |
+| Currency localisation | 85% | `format_price.test.ts` (12) + `settings/pricing-localization.spec.ts` (4) |
+| Paywall gating (server-side) | 80% | `cross-cutting/paywall-wire.spec.ts` |
+| Compliance audits (advisory) | 30% | Audit infra built; not yet run against findings |
+| Compliance docs (retention/DPIA/sub-processors) | 20% | Scaffolded; counsel + product TODOs remain |
+| Mobile twin parity | 95% | CI byte-identical guard + diff |
+
+## Roll-up by area
+
+| Area | Baseline | Note |
+|---|---|---|
+| Web app (frontend) | ~80% | Strongest area; Playwright suite is dense |
+| Mobile (Android, Flutter) | ~70% | Strong unit + widget; no integration_test in CI |
+| Mobile (iOS, Flutter) | ~65% | Byte-identical twin inherits Android tests |
+| Wear OS (Kotlin) | ~50% | Unit tests only |
+| watchOS (Swift) | ~25% | Manual only; macOS runner gap |
+| Backend Edge Functions | ~75% | Auth gates + helpers strong; happy paths thinner |
+| Go worker (background + endpoints) | ~85% | Highest backend coverage |
+| Database (RLS / triggers / RPCs) | ~80% | pgtap suite is thorough |
+| Maps + matching | ~75% | Pipeline + privacy-zone clipping strong |
+| Integrations (3rd-party) | ~35% | Most blocked on dev accounts |
+| Compliance posture | ~55% | Infra in place, docs scaffolded |
+
+## What "push to 90%" looks like per area
+
+| Area | Path to 90% |
+|---|---|
+| Web public (`/recap`, `/compare`, `/guided`) | Deepen e2e content assertions — addressable this session |
+| Web auth (OAuth) | Blocked on Google Cloud + Apple Developer creds |
+| Web routes / plans / coach / live | New Playwright specs around mocked-API paths — addressable this session |
+| Web maps | Visual smoke + zoom/pan helpers — partially addressable |
+| Mobile Android | Needs `flutter integration_test` job in CI (~1 day infra) |
+| Mobile iOS (Flutter) | Same as Android, plus macOS runner (~$70/mo) |
+| Wear OS | New widget-test surface (no integration_test on Wear yet) |
+| watchOS | Needs macOS runner + Swift test wiring |
+| Backend Edge Functions | More happy-path tests with HTTP fixtures |
+| Integrations | Dev-account setup per `docs/e2e_dev_accounts.md` |
+| Compliance posture | Counsel review + filling docs/compliance/ TODOs |
