@@ -43,14 +43,26 @@ void main() {
   });
 
   testWidgets('GuidedRunDetailScreen renders one ListTile per cue', (tester) async {
-    final run = kGuidedRunLibrary.first;
+    // Use a small fixture so every cue fits in the viewport — the
+    // library's first run has 8 cues which overflows the test surface.
+    const fixture = GuidedRun(
+      id: 'fixture',
+      title: 'Fixture',
+      subtitle: 'subtitle',
+      durationSec: 180,
+      description: 'desc',
+      cues: [
+        GuidedCue(atSec: 0, text: 'First'),
+        GuidedCue(atSec: 60, text: 'Second'),
+        GuidedCue(atSec: 180, text: 'Third'),
+      ],
+    );
     await tester.pumpWidget(
       MaterialApp(
-        home: GuidedRunDetailScreen(run: run, audioCues: FakeAudioCues()),
+        home: GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues()),
       ),
     );
-    // Each cue's text should appear in the script body.
-    for (final cue in run.cues) {
+    for (final cue in fixture.cues) {
       expect(find.text(cue.text), findsOneWidget, reason: 'cue "${cue.text}" missing');
     }
   });
