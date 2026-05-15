@@ -127,27 +127,38 @@ pnpm install
 
 ## Running each app locally
 
+Root-level `pnpm` shortcuts wrap the per-app commands so the common cases are one line from the repo root. Run `pnpm run` to see the full list; the groups are:
+
+- `dev:db:*` — supabase local stack (`up`, `down`, `reset`, `status`, `studio`, `mailpit`, `psql`, `logs`)
+- `dev:run:*` — `web`, `web:preview`, `fns`, `android`, `ios`, `worker`, `osrm`
+- `emu:android:list` / `emu:android:launch <name>` — Flutter emulators
+- `build:*` — `web`, `android`, `ios`, `worker`
+- `check:*` / `gen:*` / `test:*` — analyzers, type generators, test runners
+- `setup:install` / `setup:flutter` — first-time bootstrap
+
+The per-app recipes below show what each shortcut wraps, plus the device-targeting flags you'll usually want.
+
 ### iOS app
 
 ```bash
-# Open simulator
+# From the repo root:
+pnpm dev:run:ios            # wraps `cd apps/mobile_ios && flutter run`
+
+# Or target a specific simulator:
 open -a Simulator
-
-# Run from workspace root
-cd apps/mobile_ios
-flutter run -d iPhone
-
-# Or target a specific simulator
-flutter devices
-flutter run -d {device-id}
+cd apps/mobile_ios && flutter devices
+cd apps/mobile_ios && flutter run -d {device-id}
 ```
 
 ### Android app
 
 ```bash
-# Start emulator from Android Studio, then:
-cd apps/mobile_android
-flutter run -d emulator-5554
+# Start an emulator first:
+pnpm emu:android:list
+pnpm emu:android:launch Pixel_8_API_34
+
+# Then run:
+pnpm dev:run:android        # wraps `cd apps/mobile_android && flutter run`
 ```
 
 ### Apple Watch app
@@ -165,43 +176,49 @@ The watch app must be run alongside the iOS app — use the "Run" scheme that la
 
 ### Wear OS app
 
-```bash
-# Start a Wear OS emulator in Android Studio:
-# Device Manager → Create → Wear OS → Wear OS Large Round (API 34)
+Native Kotlin + Compose-for-Wear, not Flutter — open in Android Studio:
 
-cd apps/watch_wear
-flutter run -d {wear-emulator-id}
+```bash
+# Start a Wear OS emulator (Device Manager → Create → Wear OS Large Round, API 34)
+# Then in Android Studio: open apps/watch_wear and Run.
 ```
 
 ### Web app
 
 ```bash
-cd apps/web
-
-# Install dependencies
-pnpm install
-
-# Copy environment file
-cp .env.example .env.local
+# First time only:
+cp apps/web/.env.example apps/web/.env.local
 # Fill in PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, PUBLIC_MAPTILER_KEY
 
-pnpm dev
-# Opens at http://localhost:7777
+pnpm setup:install          # workspace bootstrap
+pnpm dev:run:web            # wraps `pnpm -C apps/web dev`, opens http://localhost:7777
+pnpm dev:run:web:preview    # built site on http://localhost:8888
 ```
 
 ### Backend (Edge Functions)
 
 ```bash
-# Install Supabase CLI
-brew install supabase/tap/supabase
+# Install Supabase CLI (Fedora: RPM from GitHub releases per ~/CLAUDE.md;
+# macOS: `brew install supabase/tap/supabase`)
 
-# Start local Supabase stack (Postgres + Auth + Storage)
-supabase start
-
-# Serve Edge Functions locally with hot reload
-supabase functions serve --env-file .env.local
+pnpm dev:db:up              # wraps `cd apps/backend && supabase start` —
+                            # brings up Postgres + Auth + Storage + Studio
+pnpm dev:run:fns            # wraps `supabase functions serve --env-file .env.local`
 
 # Functions available at http://localhost:54321/functions/v1/{function-name}
+# Studio UI: pnpm dev:db:studio   (http://127.0.0.1:54323)
+# Mail catcher: pnpm dev:db:mailpit (http://127.0.0.1:54324)
+# psql shell: pnpm dev:db:psql
+# Reset to a clean seed: pnpm dev:db:reset
+```
+
+### Job worker (Go)
+
+```bash
+# Local Supabase must be up first:
+pnpm dev:db:up
+pnpm dev:run:worker         # wraps `cd apps/job_worker && go run .`
+pnpm dev:run:osrm           # optional: docker-compose the local OSRM stack
 ```
 
 ---
@@ -364,15 +381,26 @@ Full pipeline defined in `.github/workflows/ci.yml`. Key jobs:
 ### Run all tests
 
 ```bash
-# Melos 7 — `melos run` doesn't pick up scripts here (CLAUDE.md gotcha); drive the binary instead.
+# All Flutter packages — Melos 7 needs `melos exec`, not `melos run` (CLAUDE.md gotcha)
+pnpm test:flutter           # wraps `melos exec -- flutter test`
+
+# Targeted Flutter subset (when you don't want every package):
 melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
+
+# Web
+pnpm test:web:unit          # node:test on apps/web/src/lib/*.test.ts
+pnpm test:web:e2e           # Playwright
+pnpm test:web:e2e:ui        # Playwright in headed mode
+
+# Go worker
+pnpm test:worker            # wraps `cd apps/job_worker && go test ./...`
 ```
 
 ### Check for lint issues across all packages
 
 ```bash
-melos exec -- dart analyze
-cd apps/web && pnpm check
+pnpm check:flutter          # wraps `melos exec -- dart analyze`
+pnpm check:web              # wraps `pnpm -C apps/web check`
 ```
 
 ### Add a dependency to a specific package
@@ -392,14 +420,15 @@ cd apps/web && pnpm update
 ### Regenerate schema types after a migration
 
 ```bash
-# TypeScript — requires `supabase start` running in apps/backend
-npm run gen:types
+# Both generators in one go (requires `pnpm dev:db:up` to be running):
+pnpm gen:all                # = pnpm gen:types && pnpm gen:dart
 
-# Dart — reads SQL from apps/backend/supabase/migrations/*.sql
-dart run scripts/gen_dart_models.dart
+# Or individually:
+pnpm gen:types              # TypeScript → apps/web/src/lib/database.types.ts
+pnpm gen:dart               # Dart → packages/core_models/lib/src/generated/db_rows.dart
 
 # Verify the TS file is in sync with the local DB (matches the CI check)
-npm run gen:types:check
+pnpm gen:types:check
 ```
 
 ### Deploy Edge Functions
@@ -416,27 +445,22 @@ supabase functions deploy refresh-tokens --project-ref {project-ref}
 Every schema change has to flow through both client type generators so the TypeScript and Dart row classes stay in sync. The workflow is:
 
 ```bash
-# 1. Create migration file
-cd apps/backend
-supabase migration new add_metadata_to_runs
+# 1. Create migration file (must be cwd'd into apps/backend — the CLI looks for config.toml there)
+cd apps/backend && supabase migration new add_metadata_to_runs
 
 # 2. Edit the generated SQL file in apps/backend/supabase/migrations/
-# 3. Apply locally
-supabase db reset
+# 3. Apply locally (from repo root)
+pnpm dev:db:reset
 
-# 4. Regenerate the TypeScript row types for the web app
-npm run gen:types                       # from repo root, or
-npm run gen:types --workspace=apps/backend
-
-# 5. Regenerate the Dart row classes for the mobile apps
-dart run scripts/gen_dart_models.dart   # from repo root
+# 4. + 5. Regenerate both client row-type files
+pnpm gen:all
 
 # 6. Commit the migration SQL + both regenerated files together
 git add apps/backend/supabase/migrations apps/web/src/lib/database.types.ts \
         packages/core_models/lib/src/generated/db_rows.dart
 
 # 7. Push to production
-supabase db push --project-ref {project-ref}
+cd apps/backend && supabase db push --project-ref {project-ref}
 ```
 
 CI runs `npm run gen:types:check` in the `parity-types` job; if you forget to regenerate, the build fails with a diff against the committed `database.types.ts`. There is no equivalent CI gate for the Dart generator yet — it's on the roadmap but, for now, `dart analyze` will flag any stale column references you left behind in `api_client`.
@@ -445,4 +469,4 @@ See [schema_codegen.md](schema_codegen.md) for how the generators work, when the
 
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026 — root-level `pnpm dev:*` script set*
