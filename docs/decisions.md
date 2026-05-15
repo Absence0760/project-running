@@ -1219,6 +1219,24 @@ Pinned by `apps/backend/supabase/tests/rls_storage_runs_exports_lockdown_test.sq
 
 ---
 
+## 60. Functions that read column-locked tables must be SECURITY DEFINER, and they replicate RLS in the function body
+
+`20260707_001` + `20260810_001` revoked table-level `SELECT` on `user_profiles` and re-granted only `(id, display_name, avatar_url, created_at)` to `authenticated` + `anon`. Every cross-user demographic column (currently `gender`, `date_of_birth`, plus the historical `subscription_tier`, `parkrun_number`) is deny-by-default. The self-read path is `get_my_profile()`, a `SECURITY DEFINER` RPC that returns the calling user's full row.
+
+The audit (May 2026) turned up `segment_leaderboard_tiered` declared `SECURITY INVOKER` but reading `up.date_of_birth` + `up.gender`. Every real call from `anon` (401) and `authenticated` (403) hit `42501 permission denied for table user_profiles`; the web caller masked the error and the v2 leaderboard surface silently returned `[]`. Fixed in `20260830_001` by promoting the function to `SECURITY DEFINER`.
+
+The corollary that bites if you forget: `SECURITY DEFINER` runs as the function owner (which has full SELECT) AND **bypasses RLS by default**. The original `SECURITY INVOKER` posture inherited RLS for free, so `segment_efforts`'s SELECT policy (`exists segment AND private.is_run_visible_to(run_id, auth.uid())`) gated rows automatically. After the promote, the function must **manually replicate the visibility filter** — route must be readable (public OR owner OR active club member) AND each effort's run must pass `private.is_run_visible_to`. Without that, a `SECURITY DEFINER` leaderboard would leak private-route efforts to any authenticated caller.
+
+The rule, in shorthand:
+
+> A `SECURITY DEFINER` function that reads a column-locked table must (a) check `auth.uid() is not null` and reject NULL callers with `42501`, (b) replicate the SELECT RLS of every table it joins, in its `where` clause, and (c) explicitly set `search_path` (Postgres-wide rule, already enforced elsewhere). Cross-user demographic columns in the **return type** must also be masked: `case when row.user_id = caller then col else null end`.
+
+Don't re-litigate unless we either (a) accept widening the table-level grants (then `SECURITY INVOKER` is fine, but every cross-user read across the app inherits the wider grant), or (b) move demographics into a separate side table whose own RLS is sufficient (operationally complex for one feature). The `SECURITY DEFINER` + manual-RLS posture is the same shape `get_my_profile` and the `private.is_*_visible_to` family already use.
+
+Pinned by `apps/backend/supabase/tests/segment_leaderboard_tiered_test.sql` (16 assertions covering anon-rejection, self-row visibility, cross-user demographic masking, private-route filtering, and the `42501`-on-null-`auth.uid()` branch).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
