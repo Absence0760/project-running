@@ -39,7 +39,8 @@
     "test:flutter": "melos exec -- flutter test",
     "test:worker": "cd apps/job_worker && go test ./...",
     "setup:install": "pnpm install",
-    "setup:flutter": "dart pub get && melos bootstrap"
+    "setup:flutter": "dart pub get && melos bootstrap",
+    "test:scripts": "node scripts/check_root_scripts.mjs"
   },
   "dependencies": {
     "html-to-image": "^1.11.13"
