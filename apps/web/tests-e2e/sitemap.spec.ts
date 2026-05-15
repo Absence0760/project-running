@@ -54,4 +54,39 @@ test.describe('/sitemap.xml — prerendered SEO sitemap', () => {
 		const body = await res.text();
 		expect(body).toMatch(/Sitemap:\s*\/sitemap\.xml/);
 	});
+
+	test('sitemap does NOT include private / signed-in surfaces', async ({ request }) => {
+		// /dashboard, /runs, /plans, /settings/* are auth-gated; they
+		// must not appear in the crawler-visible sitemap. A regression
+		// that listed them would invite Googlebot 401s + waste crawl
+		// budget. Pin the negative — these stay out of /sitemap.xml.
+		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
+		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/dashboard<\/loc>/);
+		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/runs<\/loc>/);
+		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/plans<\/loc>/);
+		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/settings/);
+	});
+
+	test('every <url> entry carries a single <loc>', async ({ request }) => {
+		// Sitemaps spec requires one <loc> per <url>. A bug in the
+		// builder that emitted two would still parse but confuse
+		// crawlers. Pin the invariant by counting tags.
+		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
+		const urlCount = (body.match(/<url>/g) ?? []).length;
+		const locCount = (body.match(/<loc>/g) ?? []).length;
+		expect(urlCount).toBeGreaterThan(0);
+		expect(urlCount).toBe(locCount);
+	});
+
+	test('every <loc> is a fully-qualified https URL', async ({ request }) => {
+		// Sitemaps spec: each <loc> must be a fully-qualified URL.
+		// Build-time path-only URLs slip through XML validation but
+		// fail every major crawler.
+		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
+		const matches = body.match(/<loc>([^<]+)<\/loc>/g) ?? [];
+		expect(matches.length).toBeGreaterThan(0);
+		for (const m of matches) {
+			expect(m).toMatch(/<loc>https?:\/\/[^<]+<\/loc>/);
+		}
+	});
 });
