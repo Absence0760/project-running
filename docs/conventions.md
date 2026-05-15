@@ -171,6 +171,31 @@ How to spot the "coded around" pattern in review:
 
 The `code-reviewer` agent (via `/safe-edit`) actively flags this pattern; the [coverage_snapshot.md](coverage_snapshot.md) gets bumped only when the underlying behaviour is correct, not when the test was rewritten to tolerate it.
 
+## If you see something wrong, fix it
+
+A sibling rule to the one above. When you're working in a file and notice something **that doesn't look right, doesn't act correctly, or isn't optimal**, fix it in the same session. Don't walk past it on the grounds of "out of scope" — by the time anyone else looks, the broken thing will still be broken AND your touch in the file's git blame will look like a tacit endorsement.
+
+In scope to fix while you're there:
+
+- **Correctness**: a function with an off-by-one, a Boolean inverted, a comparison that's `>` when it should be `>=`.
+- **UX / behaviour**: a page that hangs on a state with no clear exit, a button that looks enabled when it's not, an error path that leaves the user nowhere to go.
+- **Performance footguns**: a hot-path render that calls `setState` from a per-second callback (see `apps/mobile_android/lib/screens/run_screen.dart` architecture guards), a Postgres query that's missing an obvious index it should have, an N+1 in a list page.
+- **Comments + names that lie**: a `// TODO: deprecated, remove` from 18 months ago that's still in use; a `userId` variable that's actually an `auth.users.id` while the codebase otherwise uses `auth.uid`; a comment whose described behaviour no longer matches the code below it.
+- **Documented invariants that the code is silently violating**: a missing privacy-zone clip on a non-owner view (`decisions.md §33`), an unqualified `is_run_visible_to(...)` call after the function moved to `private` schema (this session's `d39296f`), an Edge Function with no JWT check (`audit/edge-functions`).
+- **Test holes adjacent to the change**: if you're touching a function with no test and the test is one-line obvious, write it.
+
+Out of scope — leave it:
+
+- **Pure style preferences**: a different naming taste, a refactor that re-organises folders, an "I'd write this with a switch instead of an if-chain". Those go in a separate PR if at all (see [Preemptive abstractions — don't](#preemptive-abstractions--dont)).
+- **Working code you simply don't recognise**: read it before you decide it's wrong. The byte-identical-twin convention and the layered-resilience contract look unusual until you've absorbed the why.
+- **Things the user told you to skip explicitly.** Their call.
+
+The 30-second test for whether to fix in-scope: ask yourself "if a reviewer flagged this, would I agree it's a bug / mis-pattern?" If yes, fix it. If "it's a style thing", leave it.
+
+If the fix is genuinely too big for the current change, write a precise roadmap entry naming the symptom + a deadline + the file path. Don't leave inline `TODO:` markers without one.
+
+The `code-reviewer` agent applies the same lens during `/safe-edit` review: it surfaces "the diff is fine but I noticed X in the surrounding file" as a Low-severity finding, never higher, because forced-fix scope creep is its own problem.
+
 ## Preemptive abstractions — don't
 
 Three similar lines is better than a premature helper. A "generic" wrapper written when only one caller exists is worse than the caller's own inline code. Extract when the third caller arrives, not before.
