@@ -45,6 +45,14 @@
 	];
 </script>
 
+<svelte:head>
+	<title>Run Onward — track anywhere, review everywhere</title>
+	<meta
+		name="description"
+		content="Plan routes, track runs, and analyse everything across web, mobile, and watch. Free, open about its data, no paywall on the analysis."
+	/>
+</svelte:head>
+
 {#if !showLanding}
 	<div class="landing-loading">
 		<span>Loading...</span>
