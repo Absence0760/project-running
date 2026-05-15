@@ -20,7 +20,7 @@
 	let elapsed = $state(0);
 	let distance = $state(0);
 	let currentPace = $state('--:--');
-	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error';
+	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error' | 'not-found';
 	let status = $state<Status>('connecting');
 	let demoTicker: ReturnType<typeof setInterval> | null = null;
 	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -205,6 +205,28 @@
 		}, 3000);
 	}
 
+	async function ensureRunIsVisible(): Promise<boolean> {
+		// Visibility check: the spectator surface is a public-broadcast
+		// page, so the visible-runs set is exactly what `public_runs`
+		// exposes (decisions §33, migration 20260626_001).
+		// `runs.SELECT` is gated on the row's owner — anon gets no rows
+		// — so a direct `from('runs')` query would false-negative on
+		// the seeded public run for every anon viewer. The view's
+		// `where is_public = true` is the load-bearing predicate.
+		// Non-public / non-existent ids return null and we render the
+		// not-broadcasting state instead of stalling at Connecting…
+		const { data: row, error } = await supabase
+			.from('public_runs')
+			.select('id')
+			.eq('id', data.id)
+			.maybeSingle();
+		if (error || !row) {
+			status = 'not-found';
+			return false;
+		}
+		return true;
+	}
+
 	onMount(() => {
 		// Kick off the data path FIRST and independently of the map.
 		// hydrateBacklog + subscribeLive don't need the map to be ready;
@@ -214,6 +236,12 @@
 		// exist are buffered in `traceCoords` by pushPing; the map's
 		// `load` handler below replays them once the source is added.
 		(async () => {
+			// Bail to the not-found state before touching the live-hub /
+			// realtime channels for a run we can't see. Without this the
+			// page sits at "Connecting…" then flips to "Demo" — a
+			// confusing UX for a stale-share-link or a private-run anon
+			// viewer.
+			if (!(await ensureRunIsVisible())) return;
 			const hadBacklog = await hydrateBacklog();
 			subscribeLive();
 			if (hadBacklog) {
@@ -285,7 +313,12 @@
 		<div class="live-logo">
 			Run Onward
 		</div>
-		<div class="live-badge" class:active={status === 'live'} class:demo={status === 'demo'}>
+		<div
+			class="live-badge"
+			class:active={status === 'live'}
+			class:demo={status === 'demo'}
+			class:not-found={status === 'not-found'}
+		>
 			{#if status === 'connecting'}
 				Connecting...
 			{:else if status === 'live'}
@@ -294,30 +327,43 @@
 				Demo
 			{:else if status === 'finished'}
 				Finished
+			{:else if status === 'not-found'}
+				Not broadcasting
 			{:else}
 				Connection lost
 			{/if}
 		</div>
 	</header>
 
-	<div class="live-layout">
-		<div class="live-map" bind:this={mapContainer}></div>
+	{#if status === 'not-found'}
+		<div class="live-empty">
+			<h1>This run isn't broadcasting</h1>
+			<p>
+				The link may be stale, the run may have finished, or it may be private. Ask the runner
+				to share a new live link if you expected to see something here.
+			</p>
+			<a href="/" class="btn btn-primary">Back to Run Onward</a>
+		</div>
+	{:else}
+		<div class="live-layout">
+			<div class="live-map" bind:this={mapContainer}></div>
 
-		<div class="live-stats">
-			<div class="live-stat">
-				<span class="live-stat-value">{formatDistance(distance)}</span>
-				<span class="live-stat-label">Distance</span>
-			</div>
-			<div class="live-stat">
-				<span class="live-stat-value">{formatDuration(elapsed)}</span>
-				<span class="live-stat-label">Elapsed</span>
-			</div>
-			<div class="live-stat">
-				<span class="live-stat-value">{currentPace}</span>
-				<span class="live-stat-label">Pace</span>
+			<div class="live-stats">
+				<div class="live-stat">
+					<span class="live-stat-value">{formatDistance(distance)}</span>
+					<span class="live-stat-label">Distance</span>
+				</div>
+				<div class="live-stat">
+					<span class="live-stat-value">{formatDuration(elapsed)}</span>
+					<span class="live-stat-label">Elapsed</span>
+				</div>
+				<div class="live-stat">
+					<span class="live-stat-value">{currentPace}</span>
+					<span class="live-stat-label">Pace</span>
+				</div>
 			</div>
 		</div>
-	</div>
+	{/if}
 </div>
 
 <style>
@@ -368,6 +414,35 @@
 	.live-badge.demo {
 		background: #fef3c7;
 		color: #92400e;
+	}
+
+	.live-badge.not-found {
+		background: #fee2e2;
+		color: #991b1b;
+	}
+
+	.live-empty {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		padding: 2rem;
+		gap: 1rem;
+		color: var(--color-text-secondary);
+	}
+
+	.live-empty h1 {
+		font-size: 1.5rem;
+		color: var(--color-text-primary);
+		margin: 0;
+	}
+
+	.live-empty p {
+		max-width: 32rem;
+		margin: 0;
+		line-height: 1.5;
 	}
 
 	.pulse-dot {

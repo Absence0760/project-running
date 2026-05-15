@@ -88,14 +88,15 @@ test.describe('/live/[id] — anon', () => {
 		}
 	});
 
-	test('private run with planted pings does NOT leak distance/elapsed to anon', async ({
+	test('private run renders the not-broadcasting empty state to anon', async ({
 		page
 	}) => {
-		// /live/[id] for a NON-public run must not surface ping data to
-		// an anon viewer. RLS blocks the hydrateBacklog read; the page
-		// stays in connecting/demo with zeroed stats. Regression risk:
-		// a refactor that lets a SECURITY DEFINER bypass leak the rows
-		// would silently turn private runs into anon-watchable broadcasts.
+		// /live/[id] for a NON-public run must surface a clear "this
+		// run isn't broadcasting" state. The visibility check
+		// (ensureRunIsVisible) runs through anon RLS — a private run
+		// returns no row, the page flips to status='not-found', and the
+		// spectator shell + ping subscription never start. Pins the
+		// security + UX boundaries at the same time.
 		const runId = await insertRun({
 			user_id: USER_A.id,
 			distance_m: 5_000,
@@ -114,32 +115,37 @@ test.describe('/live/[id] — anon', () => {
 
 			await page.goto(`/live/${runId}`);
 			await page.waitForLoadState('networkidle');
-			// Stat strip exists but the values must not include the
-			// planted ping data. The badge must NOT be in the .active
-			// (LIVE) state — anon shouldn't see live truthful state.
-			await expect(page.locator('.live-badge')).not.toHaveClass(/active/, {
+
+			// Not-broadcasting badge + empty-state heading.
+			await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
 				timeout: 10_000
 			});
-			// Distance stat must not show the leaked 4.5 km value.
-			await expect(page.locator('.live-stat-value').first()).not.toContainText('4.5');
+			await expect(page.getByRole('heading', { name: /isn't broadcasting/i }))
+				.toBeVisible();
+			// Stat tiles + map are NOT mounted in the not-found branch —
+			// {:else} guards them. Hard negative on .live-stat-label.
+			await expect(page.locator('.live-stat-label')).toHaveCount(0);
 		} finally {
 			await deleteRun(runId);
 		}
 	});
 
-	test('unknown run id mounts the shell without crashing', async ({ page }) => {
-		// Stale-link landing: a deleted/never-existed run id should not
-		// crash the page. The /live/[id] route mounts the shell and
-		// stays in connecting / demo state because there's nothing to
-		// hydrate. We pin "shell mounts" via the brand label + three
-		// stat tiles, and "no live data" via the badge not flipping
-		// to LIVE.
+	test('unknown run id renders the not-broadcasting empty state', async ({ page }) => {
+		// Stale-link landing: a deleted / never-existed run id must
+		// produce a clear user-facing message + a back-to-home link,
+		// not a stuck-on-Connecting spinner.
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/live/${bogusId}`);
 		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.live-logo')).toContainText('Run Onward');
-		await expect(page.locator('.live-stat-label')).toHaveCount(3);
-		await expect(page.locator('.live-badge')).not.toHaveClass(/active/);
+		await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
+			timeout: 10_000
+		});
+		await expect(page.getByRole('heading', { name: /isn't broadcasting/i })).toBeVisible();
+		await expect(page.getByRole('link', { name: /Back to Run Onward/ })).toHaveAttribute(
+			'href',
+			'/'
+		);
 	});
 
 	test('document title reflects "Live" so a tab in the background reads as the spectator surface', async ({
