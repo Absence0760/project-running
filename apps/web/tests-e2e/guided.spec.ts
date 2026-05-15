@@ -3,55 +3,94 @@ import { expect, test } from '@playwright/test';
 /**
  * /guided + /guided/[id] — guided audio run library.
  *
- * Library lives in apps/web/src/lib/guided_runs.ts as GUIDED_RUN_LIBRARY.
- * Anon-readable public marketing surface; index page lists cards,
- * detail page shows the scripted cue list. The actual playback only
- * happens on mobile — the web is a preview surface (the page literally
- * says "Open these on the mobile app to run them").
+ * Library: apps/web/src/lib/guided_runs.ts → GUIDED_RUN_LIBRARY,
+ * with three runs today: easy-30, tempo-builder-25, first-timer-15.
+ * The detail page calls findGuidedRun(id) and renders the full cue
+ * script. Anon-readable. The actual playback only happens on mobile —
+ * the web is a preview surface.
  */
 
-test.describe('/guided — guided run library', () => {
+const KNOWN_RUNS = [
+	{ id: 'easy-30', title: '30-Minute Easy Run', minutes: 30 },
+	{ id: 'tempo-builder-25', title: '25-Minute Tempo Builder', minutes: 25 },
+	{ id: 'first-timer-15', title: 'First-Timer 15-Minute Run/Walk', minutes: 15 },
+];
+
+test.describe('/guided — index page', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
-	test('index page lists at least one guided run card', async ({ page }) => {
+	test('renders the hero + "preview only" mobile callout', async ({ page }) => {
 		await page.goto('/guided');
-		await expect(
-			page.getByRole('heading', { name: /coach in your ear/i })
-		).toBeVisible();
-		// Each card has a duration + title; assert at least one card link.
-		const firstCard = page.locator('a.card').first();
-		await expect(firstCard).toBeVisible();
-		await expect(firstCard).toHaveAttribute('href', /^\/guided\//);
-	});
-
-	test('mobile-only callout is visible', async ({ page }) => {
-		await page.goto('/guided');
-		// The "preview only — run on mobile" callout is the contract
-		// that prevents a user from expecting the web to play TTS.
+		await expect(page.getByRole('heading', { name: /coach in your ear/i })).toBeVisible();
 		await expect(page.getByText(/Open these on the mobile app/)).toBeVisible();
 	});
 
-	test('detail page for the easy-30 fixture renders the cue list', async ({ page }) => {
-		// easy-30 is the first entry in GUIDED_RUN_LIBRARY — pinned in
-		// the lib file. A regression that removes it would fail loudly.
-		await page.goto('/guided/easy-30');
-		// Title is '30-Minute Easy Run' per the library data. Use a
-		// loose regex so a marketing edit to "30 minute easy" doesn't
-		// break the test.
-		await expect(page.locator('body')).toContainText(/easy/i);
-		// The cue script section is what makes this a guided-run
-		// page rather than a 404. Pin the section heading.
-		await expect(page.getByRole('heading', { name: /script/i })).toBeVisible();
+	test('lists every guided run from the library as a clickable card', async ({ page }) => {
+		await page.goto('/guided');
+		// One card per library entry. Cards are <a class="card">.
+		const cards = page.locator('a.card');
+		await expect(cards).toHaveCount(KNOWN_RUNS.length);
+		for (const r of KNOWN_RUNS) {
+			const card = page.locator(`a.card[href="/guided/${r.id}"]`);
+			await expect(card).toBeVisible();
+			// .duration is the dedicated label slot; matching by the
+			// raw "N min" string would collide with the subtitle copy
+			// ("Coach voice · 30 min · easy effort") in the same card.
+			await expect(card.locator('.duration')).toHaveText(`${r.minutes} min`);
+			await expect(card.getByRole('heading', { name: r.title })).toBeVisible();
+		}
 	});
 
-	test('detail page for an unknown id 404s or shows a not-found state', async ({ page }) => {
+	test('document title is set on the index', async ({ page }) => {
+		await page.goto('/guided');
+		await expect(page).toHaveTitle(/Guided runs/);
+	});
+});
+
+test.describe('/guided/[id] — detail pages', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	for (const r of KNOWN_RUNS) {
+		test(`detail for ${r.id} renders the hero + script + back link`, async ({ page }) => {
+			await page.goto(`/guided/${r.id}`);
+			// Title is in <h1>. Use exact-match to avoid false-positives on
+			// other run titles that appear in document.title.
+			await expect(page.getByRole('heading', { name: r.title, exact: true })).toBeVisible();
+			await expect(page.getByRole('heading', { name: /script/i })).toBeVisible();
+			// "← Library" back link points at the index.
+			await expect(page.getByRole('link', { name: /Library/ })).toHaveAttribute(
+				'href',
+				'/guided'
+			);
+		});
+	}
+
+	test('cue list renders at least one mm:ss entry', async ({ page }) => {
+		// Detail page formats each cue's at_sec as mm:ss in <span class="at">.
+		// Library data guarantees each run has at least one cue at the start
+		// (00:00) or shortly after.
+		await page.goto('/guided/easy-30');
+		const cueEntries = page.locator('.at');
+		await expect(cueEntries.first()).toBeVisible();
+		// First cue is at 0 seconds → '0:00'. Pin the format to catch a
+		// regression in fmtMmSs (e.g. dropping the leading zero).
+		await expect(cueEntries.first()).toHaveText('0:00');
+	});
+
+	test('unknown id renders the "Unknown guided run" empty state', async ({ page }) => {
 		const res = await page.goto('/guided/no-such-run-id');
-		// SvelteKit's default for an unmatched +page.ts load can
-		// either be a 404 or a soft not-found render. Accept either
-		// as a valid contract — the user-facing behaviour is that the
-		// page doesn't crash.
+		// Status may be 200 (SvelteKit static fallback) or 404; the user-
+		// facing contract is "renders an empty state with a back link".
 		expect(res?.status() ?? 200).toBeGreaterThanOrEqual(200);
-		// At minimum, no run title for a bogus id.
-		await expect(page.locator('body')).not.toContainText('Easy 30');
+		await expect(page.getByText(/Unknown guided run/)).toBeVisible();
+		await expect(page.getByRole('link', { name: /Back to library/ })).toHaveAttribute(
+			'href',
+			'/guided'
+		);
+	});
+
+	test('document title falls back to "Guided run" on unknown id', async ({ page }) => {
+		await page.goto('/guided/no-such-run-id');
+		await expect(page).toHaveTitle(/Guided run/);
 	});
 });
