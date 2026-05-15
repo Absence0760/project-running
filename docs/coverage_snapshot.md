@@ -133,10 +133,10 @@ Everything below this section is the **starting baseline** before today's pushes
 | Feature | Baseline | Surface |
 |---|---|---|
 | VDOT generator + Riegel (TS↔Dart parity) | 90% | `training.test.ts` (29) + `training_test.dart` (17) |
-| Wizard / week grid / editor | 75% | `plans/{create,detail,list}.spec.ts` |
-| Workout runner state machine | 70% | `workout_runner_test.dart` (13) + execution-band tests (6) |
-| Adherence + workout-review section | 55% | `workout_review_section_test.dart` (11) |
-| Calendar | 65% | `plan_calendar_test.dart` (3) + e2e |
+| Wizard / week grid / editor | 90% | `plans/{create,detail,list,workout-runner-surfaces}.spec.ts` — adds Mark-as-done toggle, hasLinkedRun gate, structure preview, advice rendering, Unlink ConfirmDialog round-trip |
+| Workout runner state machine | 92% | `workout_runner_test.dart` (13) + execution-band tests (6) + web `plans/workout-runner-surfaces.spec.ts` (19) — today-card entry, kind=rest field gating, save round-trip, structure preview for tempo / interval / MP / easy, How-to-run advice per kind, ConfirmDialog Cancel + Confirm paths |
+| Adherence + workout-review section | 70% | `workout_review_section_test.dart` (11) + web `runs/workout-review.spec.ts` (7) |
+| Calendar | 92% | `plan_calendar_test.dart` (3) + web `plans/calendar.spec.ts` (13) — Monday-first DOW, today-marker drift guard, prev/next month-edge disabled, kind-pill + .dist + .done flip on mark, out-month / out-plan / rest cells, todayISO local-vs-UTC drift guard, plan-window-vs-cal-bounds parity |
 
 ## Clubs / events / social
 
