@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { formatPrice } from '$lib/format_price';
 	import {
 		startProCheckout,
 		managementUrl,
@@ -13,7 +14,8 @@
 	// Sponsors as appropriate.
 	const DONATE_URL = 'https://github.com/sponsors';
 
-	const PRO_PRICE_MONTHLY = 9.99;
+	const PRO_PRICE_MONTHLY_USD = 9.99;
+	const priceLabel = $derived(formatPrice(PRO_PRICE_MONTHLY_USD));
 
 	let purchasing = $state(false);
 
@@ -100,7 +102,7 @@
 			<div>
 				<h2>Pro</h2>
 				<p class="pro-price">
-					<span class="price-amount">${PRO_PRICE_MONTHLY}</span>
+					<span class="price-amount">{priceLabel}</span>
 					<span class="price-period">/ month</span>
 				</p>
 			</div>
@@ -139,7 +141,7 @@
 			</button>
 		{:else}
 			<button class="btn-primary" onclick={handleGetPro} disabled={purchasing}>
-				{purchasing ? 'Redirecting…' : `Get Pro — $${PRO_PRICE_MONTHLY}/mo`}
+				{purchasing ? 'Redirecting…' : `Get Pro — ${priceLabel}/mo`}
 			</button>
 		{/if}
 	</section>
