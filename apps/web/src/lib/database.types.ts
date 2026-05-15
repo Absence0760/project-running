@@ -445,84 +445,6 @@ export type Database = {
           },
         ]
       }
-      gear: {
-        Row: {
-          id: string
-          owner_id: string
-          kind: string
-          name: string
-          brand: string | null
-          model: string | null
-          purchased_at: string | null
-          retired_at: string | null
-          target_distance_m: number | null
-          notes: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          owner_id: string
-          kind: string
-          name: string
-          brand?: string | null
-          model?: string | null
-          purchased_at?: string | null
-          retired_at?: string | null
-          target_distance_m?: number | null
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          owner_id?: string
-          kind?: string
-          name?: string
-          brand?: string | null
-          model?: string | null
-          purchased_at?: string | null
-          retired_at?: string | null
-          target_distance_m?: number | null
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      run_gear: {
-        Row: {
-          run_id: string
-          gear_id: string
-          created_at: string
-        }
-        Insert: {
-          run_id: string
-          gear_id: string
-          created_at?: string
-        }
-        Update: {
-          run_id?: string
-          gear_id?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "run_gear_run_id_fkey"
-            columns: ["run_id"]
-            isOneToOne: false
-            referencedRelation: "runs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "run_gear_gear_id_fkey"
-            columns: ["gear_id"]
-            isOneToOne: false
-            referencedRelation: "gear"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       fitness_snapshots: {
         Row: {
           acute_load: number | null
@@ -565,6 +487,51 @@ export type Database = {
           user_id?: string
           vdot?: number | null
           vo2_max?: number | null
+        }
+        Relationships: []
+      }
+      gear: {
+        Row: {
+          brand: string | null
+          created_at: string
+          id: string
+          kind: string
+          model: string | null
+          name: string
+          notes: string | null
+          owner_id: string
+          purchased_at: string | null
+          retired_at: string | null
+          target_distance_m: number | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          model?: string | null
+          name: string
+          notes?: string | null
+          owner_id: string
+          purchased_at?: string | null
+          retired_at?: string | null
+          target_distance_m?: number | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          model?: string | null
+          name?: string
+          notes?: string | null
+          owner_id?: string
+          purchased_at?: string | null
+          retired_at?: string | null
+          target_distance_m?: number | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1227,6 +1194,53 @@ export type Database = {
           },
         ]
       }
+      run_gear: {
+        Row: {
+          created_at: string
+          gear_id: string
+          run_id: string
+        }
+        Insert: {
+          created_at?: string
+          gear_id: string
+          run_id: string
+        }
+        Update: {
+          created_at?: string
+          gear_id?: string
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_gear_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_gear_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear_with_distance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_gear_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_gear_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       run_kudos: {
         Row: {
           given_at: string
@@ -1726,40 +1740,40 @@ export type Database = {
           avatar_url: string | null
           billing_issue_at: string | null
           created_at: string | null
+          date_of_birth: string | null
           display_name: string | null
+          gender: string | null
           id: string
           parkrun_number: string | null
           preferred_unit: string | null
           subscription_at: string | null
           subscription_tier: string | null
-          gender: string | null
-          date_of_birth: string | null
         }
         Insert: {
           avatar_url?: string | null
           billing_issue_at?: string | null
           created_at?: string | null
+          date_of_birth?: string | null
           display_name?: string | null
+          gender?: string | null
           id: string
           parkrun_number?: string | null
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
-          gender?: string | null
-          date_of_birth?: string | null
         }
         Update: {
           avatar_url?: string | null
           billing_issue_at?: string | null
           created_at?: string | null
+          date_of_birth?: string | null
           display_name?: string | null
+          gender?: string | null
           id?: string
           parkrun_number?: string | null
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
-          gender?: string | null
-          date_of_birth?: string | null
         }
         Relationships: []
       }
@@ -1856,6 +1870,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gear_with_distance: {
+        Row: {
+          brand: string | null
+          created_at: string | null
+          id: string | null
+          kind: string | null
+          model: string | null
+          name: string | null
+          notes: string | null
+          owner_id: string | null
+          purchased_at: string | null
+          retired_at: string | null
+          run_count: number | null
+          target_distance_m: number | null
+          total_distance_m: number | null
+          updated_at: string | null
+        }
+        Relationships: []
       }
       mv_weekly_mileage: {
         Row: {
@@ -2148,7 +2181,9 @@ export type Database = {
           avatar_url: string | null
           billing_issue_at: string | null
           created_at: string | null
+          date_of_birth: string | null
           display_name: string | null
+          gender: string | null
           id: string
           parkrun_number: string | null
           preferred_unit: string | null
@@ -2161,6 +2196,19 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      heatmap_points_in_bbox: {
+        Args: {
+          p_max_lat: number
+          p_max_lng: number
+          p_max_points?: number
+          p_min_lat: number
+          p_min_lng: number
+        }
+        Returns: {
+          lat: number
+          lng: number
+        }[]
       }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
@@ -2344,6 +2392,25 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      segment_leaderboard_tiered: {
+        Args: {
+          p_age_band?: string
+          p_gender?: string
+          p_limit?: number
+          p_segment_id: string
+        }
+        Returns: {
+          age: number
+          avatar_url: string
+          display_name: string
+          effort_id: string
+          gender: string
+          run_id: string
+          started_at: string
+          time_seconds: number
+          user_id: string
+        }[]
       }
       set_integration_tokens: {
         Args: {

@@ -12,7 +12,7 @@
 --     viewport query is fast;
 --   * routes are dense (lots of waypoints per item) and few in
 --     number (thousands, not millions) so server-side
-//     densification + grouping is cheap.
+--     densification + grouping is cheap.
 --
 -- Mobile read-path is deferred to v2 — the v1 ships the RPC + the
 -- web map overlay only. Per `docs/roadmap.md` parity backlog #4.
@@ -38,7 +38,7 @@ returns table (lng double precision, lat double precision)
 language sql
 stable
 parallel safe
-set search_path = public
+set search_path = public, extensions
 as $$
   with bbox as (
     select ST_MakeEnvelope(p_min_lng, p_min_lat, p_max_lng, p_max_lat, 4326)::geography as g

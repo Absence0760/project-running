@@ -48,7 +48,7 @@ create policy "run-photo bytes visible when parent run is visible"
               rp.storage_path = storage.objects.name
               or rp.thumb_512_path = storage.objects.name
             )
-        and is_run_visible_to(rp.run_id, auth.uid())
+        and private.is_run_visible_to(rp.run_id, auth.uid())
     )
   );
 

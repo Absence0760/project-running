@@ -101,7 +101,7 @@ create policy "run_gear visible when parent run is visible"
     exists (
       select 1 from public.runs r
       where r.id = run_gear.run_id
-        and is_run_visible_to(r.id, auth.uid())
+        and private.is_run_visible_to(r.id, auth.uid())
     )
   );
 
