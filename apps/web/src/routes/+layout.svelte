@@ -82,7 +82,8 @@
 		path.startsWith('/live/') ||
 		path.startsWith('/share/') ||
 		path.startsWith('/clubs/join/') ||
-		path.startsWith('/guided/');
+		path.startsWith('/guided/') ||
+		path.startsWith('/recap/');
 
 	function isActive(href: string, path: string): boolean {
 		return path.startsWith(href);
