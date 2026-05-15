@@ -5,6 +5,10 @@ import { dirname } from 'node:path';
 
 import { signIn } from './helpers';
 import { ALL_USERS, type SeededUser } from './users';
+// @ts-expect-error — sibling .mjs imports run fine under tsx but the
+// types are intentionally untyped (this file is plain JS so the same
+// helper can be imported from vite.config.ts too).
+import { checkEnvIsolation, formatGuardError } from '../../scripts/env_isolation.mjs';
 
 /**
  * Playwright globalSetup — sign each seeded user in once via the UI
@@ -27,6 +31,22 @@ import { ALL_USERS, type SeededUser } from './users';
  * Resolved relative to the apps/web/tests-e2e directory.
  */
 export default async function globalSetup(config: FullConfig) {
+	// Dev/prod isolation: refuse to run e2e against a non-local stack.
+	// Same rule as the Vite dev guard. A test run that hits prod can
+	// (a) corrupt prod data via the seeded-user fixtures, and
+	// (b) burn live Stripe / Anthropic spend on every test. Belt-and-
+	// braces: even if PUBLIC_SUPABASE_URL points local for the dev
+	// server, an inherited shell-level SUPABASE_URL pointing at prod
+	// is enough to compromise the test run.
+	const result = checkEnvIsolation(process.env);
+	if (result.override) {
+		console.warn(
+			'[env-isolation] ALLOW_PROD_URL_IN_DEV=true — Playwright guard bypassed.'
+		);
+	} else if (!result.ok) {
+		throw new Error(formatGuardError(result, { scope: 'playwright' }));
+	}
+
 	const baseURL =
 		config.projects[0]?.use?.baseURL ?? 'http://localhost:7777';
 
