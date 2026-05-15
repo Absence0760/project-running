@@ -94,6 +94,8 @@ const _tables = <String>{
   'segment_efforts',
   'notifications',
   'run_matched_tracks',
+  'gear',
+  'run_gear',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule
@@ -266,7 +268,7 @@ List<String> _splitTopLevel(String source, String delimiter) {
 void _parseCreateTable(String stmt, Map<String, Map<String, _Column>> schema) {
   // `create table [if not exists] NAME ( body )`
   final match = RegExp(
-    r'create\s+table\s+(?:if\s+not\s+exists\s+)?(\w+)\s*\(',
+    r'create\s+table\s+(?:if\s+not\s+exists\s+)?(?:\w+\.)?(\w+)\s*\(',
     caseSensitive: false,
   ).firstMatch(stmt);
   if (match == null) return;
@@ -315,7 +317,7 @@ String _extractParens(String source, int openIdx) {
 
 void _parseAlterTable(String stmt, Map<String, Map<String, _Column>> schema) {
   final match = RegExp(
-    r'alter\s+table\s+(\w+)\s+(.*)',
+    r'alter\s+table\s+(?:\w+\.)?(\w+)\s+(.*)',
     caseSensitive: false,
     dotAll: true,
   ).firstMatch(stmt);
@@ -331,12 +333,12 @@ void _parseAlterTable(String stmt, Map<String, Map<String, _Column>> schema) {
     //   alter table t add column a int, add column b jsonb;
     // Split on `add column` so each clause parses independently.
     final clauses = rest
-        .split(RegExp(r',\s*add\s+column\s+', caseSensitive: false))
+        .split(RegExp(r',\s*add\s+column\s+(?:if\s+not\s+exists\s+)?', caseSensitive: false))
         .map((s) => s.trim())
         .toList();
-    // First element retains the leading "add column NAME TYPE …" — strip it.
+    // First element retains the leading "add column [if not exists] NAME TYPE …" — strip it.
     clauses[0] = clauses[0].replaceFirst(
-      RegExp(r'^add\s+column\s+', caseSensitive: false),
+      RegExp(r'^add\s+column\s+(?:if\s+not\s+exists\s+)?', caseSensitive: false),
       '',
     );
     for (final colPart in clauses) {
