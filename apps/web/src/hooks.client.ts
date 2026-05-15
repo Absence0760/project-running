@@ -6,11 +6,12 @@ import {
 	redactEventSignedUrls,
 	type SentryEventWithSpans,
 } from "$lib/sentry/redact";
+import { hasAcceptedConsent } from "$lib/consent.svelte";
 
 const dsn = env.PUBLIC_SENTRY_DSN ?? "";
 const release = env.PUBLIC_APP_RELEASE || "dev";
 
-if (!dev && dsn) {
+if (!dev && dsn && hasAcceptedConsent()) {
 	Sentry.init({
 		dsn,
 		release,

@@ -8,6 +8,7 @@
 	import { initTheme } from '$lib/theme';
 	import { setMapStyle, type MapStyle } from '$lib/map-style.svelte';
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
+	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import NotificationBell from '$lib/components/NotificationBell.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
@@ -123,6 +124,7 @@
 </script>
 
 <ToastContainer />
+<CookieConsentBanner />
 
 {#if isPublic($page.url.pathname)}
 	<!-- Public pages: landing + login — no sidebar -->
