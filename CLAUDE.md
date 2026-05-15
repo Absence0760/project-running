@@ -22,6 +22,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Manually verifying a shipped feature | [docs/manual_testing.md](docs/manual_testing.md) — per-platform recipes for every shipped capability |
 | Running every feature locally (including stubbed payments) | [docs/local_testing_stubs.md](docs/local_testing_stubs.md) — Stripe test mode, RevenueCat sandbox, Apple/Play IAP, Ollama-for-Coach |
 | Adding mobile e2e tests in CI | [docs/mobile_e2e.md](docs/mobile_e2e.md) — Android integration_test on Ubuntu (~free), iOS on macOS (~$$), Firebase Test Lab pre-release |
+| Which features have e2e tests today + what dev accounts unblock the rest | [docs/e2e_dev_accounts.md](docs/e2e_dev_accounts.md) — coverage table + 11-item dev-account checklist (Google, Stripe, Anthropic, …) |
 | Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
 | Touching training plans (VDOT, Riegel, generator, week grid) | [docs/training.md](docs/training.md) — engine shape, pace derivation, what's deferred |
 | Implementing the live structured-workout execution loop | [docs/workout_execution.md](docs/workout_execution.md) — specced runner state machine + UI + persistence |
