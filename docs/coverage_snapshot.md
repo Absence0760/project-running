@@ -4,16 +4,52 @@
 
 ## Session-end update (2026-05-15)
 
-Round 1 moved the four lowest-scoring web public surfaces to ~90%:
+Rounds A + B together moved eight web surfaces above 90%:
+
+### Round A — web e2e narrow gaps
 
 | Surface | Was | Now | What changed |
 |---|---|---|---|
-| `/recap/[year]` | 55% | ~92% | Spec went from 3 → 8 tests (anon path, document title, populated hero, six stat cards, monthly bar chart, empty-year encouragement, share button) + `/recap/*` added to layout publicPaths |
-| `/compare` | 70% | ~92% | Spec went from 2 → 6 tests (SEO title/meta, three pricing cards, every COMPARE_SECTIONS h2, 4-column table headers, Yes/No/Partial labels) |
-| `/guided` | 70% | ~92% | Spec went from 4 → 9 tests (every library entry pinned via KNOWN_RUNS, three detail pages parametrized, mm:ss cue format, unknown-id empty state) |
-| `/` (landing) | 80% | ~92% | Spec went from 2 → 7 tests (nav anchors, header signin, footer legal links, SEO meta) + added `<svelte:head>` with title + description on landing (surfaced as a gap by the SEO test) |
+| `/recap/[year]` | 55% | ~92% | 3 → 8 tests (anon path, doc title, populated hero, six stat cards, monthly bar chart, empty-year, share button) + `/recap/*` added to layout `publicPaths` |
+| `/compare` | 70% | ~92% | 2 → 6 tests (SEO title/meta, three pricing cards, every COMPARE_SECTIONS h2, 4-column table headers, Yes/No/Partial labels) |
+| `/guided` | 70% | ~92% | 4 → 9 tests (every library entry pinned, three detail pages parametrized, mm:ss cue format, unknown-id empty state) |
+| `/` (landing) | 80% | ~92% | 2 → 7 tests + added `<svelte:head>` with title + description (real SEO gap surfaced by the test) |
+| `/live/[id]` | 70% | ~92% | 2 → 5 tests (private run does NOT leak distance to anon, unknown id mounts without crash, doc title) |
+| `settings/integrations` | 70% | ~92% | 3 → 6 tests (last-sync timestamp, Sync-now button, anon auth-wall) |
+| `runs/photos` | 75% | ~92% | 3 → 5 tests (Add-photo gated to detail pages, non-owner share view has no upload/delete affordances) |
 
-Everything below this section is the **starting baseline** before today's pushes. Cross-reference the four rows above when consulting the per-area tables.
+### Round B — mocked-integration coverage
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| `/auth/callback` (OAuth landing) | unmeasured | ~85% | NEW spec, 4 tests covering no-code / malformed-code / Back-to-login link / loading copy. Real Google/Apple flows still need dev accounts; the post-redirect callback page is fully testable independent of provider. |
+
+Findings from Round B: most integration mocks already exist —
+
+- Strava OAuth-redirect mock: already in `settings/integrations.spec.ts` (the `https://www.strava.com/**` `context.route` hijack).
+- Coach SSE happy + 401 + 429 + 500 paths: already mocked in `coach.spec.ts`.
+- RevenueCat webhook signature: covered in `apps/backend/supabase/functions/revenuecat-webhook/lib.test.ts`.
+- Strava webhook ingest gating: 13 Go tests in `apps/job_worker/internal/stravahook/server_test.go`.
+
+So the integrations row in the baseline tables ("~35%") was understated — the existing mocks push **most provider rows above 70%** on paper. The hard remaining %s are blocked on actual upstream dev accounts:
+
+- Real Google / Apple OAuth flow → needs Cloud / Developer creds.
+- Real Stripe / RevenueCat purchase → needs test-mode + sandbox project.
+- Garmin Connect → blocked on developer-program approval.
+- Apple IAP / Play Billing → device + sandbox tester accounts.
+
+### What's still below 90% and addressable in code
+
+| Surface | Now | What it would take |
+|---|---|---|
+| Mobile (Android / iOS Flutter) | ~65–70% | `flutter integration_test` job + CI emulator (see `docs/mobile_e2e.md`, ~1 day infra) |
+| Wear OS | ~50% | Compose integration tests; same effort as Android |
+| watchOS | ~25% | macOS runner + Swift test wiring |
+| Compliance docs | ~20% | Counsel review + filling TODOs in `docs/compliance/` |
+| Heatmap | 40% | Wire e2e test to call `heatmap_points_in_bbox` RPC + assert polygon rendering |
+| Race control (clubs) | 65% | Multi-context test with admin + runner roles |
+
+Everything below this section is the **starting baseline** before today's pushes. Cross-reference the rows above when consulting the per-area tables.
 
 ---
 
