@@ -1,0 +1,32 @@
+name: Compliance drift
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  compliance-drift:
+    name: Compliance drift advisory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # The drift script diffs against origin/<base>; full history not
+          # needed but the base ref must exist locally.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run compliance-drift detector
+        run: node scripts/check_compliance_drift.mjs
+        env:
+          # 'warn' = print findings + summary, never fail the job.
+          # 'fail' = exit 1 when findings exist. Flip when the team is
+          # ready for hard enforcement.
+          COMPLIANCE_DRIFT_MODE: warn
