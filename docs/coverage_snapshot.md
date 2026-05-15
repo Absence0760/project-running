@@ -2,6 +2,21 @@
 
 **Snapshot, not source of truth.** This is the baseline from which the "push every area to 90%" work starts. Estimates answer: "would CI catch a regression in this feature before merge?" — not measured line coverage. Roll-up at the bottom.
 
+## Session-end update (2026-05-15)
+
+Round 1 moved the four lowest-scoring web public surfaces to ~90%:
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| `/recap/[year]` | 55% | ~92% | Spec went from 3 → 8 tests (anon path, document title, populated hero, six stat cards, monthly bar chart, empty-year encouragement, share button) + `/recap/*` added to layout publicPaths |
+| `/compare` | 70% | ~92% | Spec went from 2 → 6 tests (SEO title/meta, three pricing cards, every COMPARE_SECTIONS h2, 4-column table headers, Yes/No/Partial labels) |
+| `/guided` | 70% | ~92% | Spec went from 4 → 9 tests (every library entry pinned via KNOWN_RUNS, three detail pages parametrized, mm:ss cue format, unknown-id empty state) |
+| `/` (landing) | 80% | ~92% | Spec went from 2 → 7 tests (nav anchors, header signin, footer legal links, SEO meta) + added `<svelte:head>` with title + description on landing (surfaced as a gap by the SEO test) |
+
+Everything below this section is the **starting baseline** before today's pushes. Cross-reference the four rows above when consulting the per-area tables.
+
+---
+
 ## Auth + identity
 
 | Feature | Baseline | Surface | Biggest gap |
