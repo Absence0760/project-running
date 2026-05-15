@@ -17,6 +17,11 @@ Rounds A + B together moved eight web surfaces above 90%:
 | `/live/[id]` | 70% | ~92% | 2 → 5 tests + **root-cause fix**: page now surfaces a clear "not broadcasting" state for stale-link / private / unknown-id viewers instead of sitting at "Connecting…" forever. The earlier draft of the test pinned the workaround ("badge not LIVE"); the spec was rewritten to assert the right user outcome after the fix landed. |
 | `settings/integrations` | 70% | ~92% | 3 → 6 tests (last-sync timestamp, Sync-now button, anon auth-wall) |
 | `runs/photos` | 75% | ~92% | 3 → 5 tests (Add-photo gated to detail pages, non-owner share view has no upload/delete affordances) |
+| `/share/route/[id]` | 80% | ~92% | 4 → 6 tests (private route same not-found copy, header brand link points home) |
+| `/privacy`, `/terms`, `/cookie-notice` | 85% | ~92% | 4 → 8 tests (GDPR clauses on /privacy, auto-renewal + 14-day + cancellation on /terms, strict-vs-consent buckets on /cookie-notice, cross-doc link consistency) |
+| Sitemap + robots.txt | 85% | ~92% | 4 → 7 tests (no auth-gated surfaces, single `<loc>` per `<url>`, every `<loc>` fully qualified) |
+
+**Web public pages section is now fully at 90%+** — every row above.
 
 ### Round B — mocked-integration coverage
 
