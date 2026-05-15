@@ -14,7 +14,7 @@ Rounds A + B together moved eight web surfaces above 90%:
 | `/compare` | 70% | ~92% | 2 → 6 tests (SEO title/meta, three pricing cards, every COMPARE_SECTIONS h2, 4-column table headers, Yes/No/Partial labels) |
 | `/guided` | 70% | ~92% | 4 → 9 tests (every library entry pinned, three detail pages parametrized, mm:ss cue format, unknown-id empty state) |
 | `/` (landing) | 80% | ~92% | 2 → 7 tests + added `<svelte:head>` with title + description (real SEO gap surfaced by the test) |
-| `/live/[id]` | 70% | ~92% | 2 → 5 tests (private run does NOT leak distance to anon, unknown id mounts without crash, doc title) |
+| `/live/[id]` | 70% | ~92% | 2 → 5 tests + **root-cause fix**: page now surfaces a clear "not broadcasting" state for stale-link / private / unknown-id viewers instead of sitting at "Connecting…" forever. The earlier draft of the test pinned the workaround ("badge not LIVE"); the spec was rewritten to assert the right user outcome after the fix landed. |
 | `settings/integrations` | 70% | ~92% | 3 → 6 tests (last-sync timestamp, Sync-now button, anon auth-wall) |
 | `runs/photos` | 75% | ~92% | 3 → 5 tests (Add-photo gated to detail pages, non-owner share view has no upload/delete affordances) |
 
@@ -37,6 +37,21 @@ So the integrations row in the baseline tables ("~35%") was understated — the 
 - Real Stripe / RevenueCat purchase → needs test-mode + sandbox project.
 - Garmin Connect → blocked on developer-program approval.
 - Apple IAP / Play Billing → device + sandbox tester accounts.
+
+### Bugs fixed (not coded around) this session
+
+Following the new convention rule (`docs/conventions.md` § Fix bugs, don't code around them):
+
+| Symptom | Root cause | Fix commit |
+|---|---|---|
+| `/recap`, `/privacy`, `/terms`, `/cookie-notice`, `/compare`, `/guided` auth-walled their own anon-render branches | Routes not in layout `publicPaths` list | `a4ca00b`, `d48c6d5` |
+| Landing page had no meta description (broken SEO snippet) | Missing `<svelte:head>` on `/` | `470677b` |
+| `/live/[id]` sat at "Connecting…" forever for stale links / private / unknown ids; would silently fall through to "Demo" after 5 s | No visibility check; the page didn't read the run row to gate on existence + public flag | `95b4b0e` |
+| `supabase db reset` failed past 20260825 on three different migrations | Unqualified `is_run_visible_to(...)` after the function was moved to `private` schema; stray `//` comment; missing `extensions` in a SECURITY-DEFINER function's `search_path` | `d39296f` |
+| Dart row generator silently dropped `create table public.foo (...)` definitions + `alter table … add column if not exists` | Regex didn't accept schema-qualified table names or the `if not exists` form; `gear` + `run_gear` weren't in the allowlist | `3128bda` |
+| `apps/mobile_ios/test/guided_run_detail_screen_test.dart` had drifted from its byte-identical Android twin | Author updated Android-side test to use a small fixture but didn't mirror | `c2b5c18` |
+
+Each entry above is the bug pattern, not the test that masks it.
 
 ### What's still below 90% and addressable in code
 
