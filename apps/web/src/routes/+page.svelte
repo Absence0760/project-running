@@ -125,6 +125,9 @@
 		<a href="/login">Sign In</a>
 		<a href="#apps">Apps</a>
 		<a href="#features">Features</a>
+		<a href="/privacy">Privacy</a>
+		<a href="/terms">Terms</a>
+		<a href="/cookie-notice">Cookies</a>
 	</div>
 </footer>
 {/if}
