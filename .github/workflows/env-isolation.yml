@@ -1,0 +1,80 @@
+name: Env isolation guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/scripts/env_isolation*'
+      - 'apps/web/vite.config.ts'
+      - 'apps/web/tests-e2e/fixtures/auth.ts'
+      - 'apps/web/.env.example'
+      - 'apps/backend/.env.example'
+      - '.github/workflows/env-isolation.yml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  unit:
+    name: env_isolation unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test apps/web/scripts/env_isolation.test.mjs
+
+  env-example-scan:
+    name: .env.example files must not contain live values
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Scan committed env-example files
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=(
+            apps/web/.env.example
+            apps/backend/.env.example
+          )
+          errors=0
+          for f in "${FILES[@]}"; do
+            [ -f "$f" ] || continue
+            echo "Scanning $f"
+            # Live key formats — keep the regex deliberately narrow so a
+            # placeholder like 'sk_live_REPLACE_ME' (which isn't a real
+            # key) doesn't trip it. The marker is sk_live_/pk_live_
+            # followed by 24+ hex/alphanum chars.
+            if grep -E '(sk_live|pk_live)_[A-Za-z0-9]{24,}' "$f"; then
+              echo "::error file=$f::Live Stripe key pattern in committed .env.example. Replace with sk_test_/pk_test_ placeholder."
+              errors=$((errors+1))
+            fi
+            # Supabase project ref pattern is 20 lower-case letters.
+            # Match only when it's wrapped in .supabase.co (live URL).
+            if grep -E '[a-z]{20,}\.supabase\.co' "$f"; then
+              echo "::error file=$f::Live-shaped Supabase URL in committed .env.example. Replace with http://127.0.0.1:54321."
+              errors=$((errors+1))
+            fi
+            # Real Anthropic key prefix sk-ant-api03- followed by enough chars.
+            if grep -E 'sk-ant-api[0-9]+-[A-Za-z0-9_-]{64,}' "$f"; then
+              echo "::error file=$f::Anthropic API key pattern in committed .env.example. Leave the var empty."
+              errors=$((errors+1))
+            fi
+            # ALLOW_PROD_URL_IN_DEV must NEVER be set to true in a
+            # committed file — the override is for ad-hoc shell use.
+            if grep -E '^ALLOW_PROD_URL_IN_DEV\s*=\s*true' "$f"; then
+              echo "::error file=$f::ALLOW_PROD_URL_IN_DEV=true must not be committed. Remove or set to false."
+              errors=$((errors+1))
+            fi
+          done
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::env-example scan found $errors live-pattern violation(s)."
+            exit 1
+          fi
+          echo "Clean."
