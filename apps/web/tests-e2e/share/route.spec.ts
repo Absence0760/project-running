@@ -138,4 +138,45 @@ test.describe('/share/route/[id] — anon', () => {
 			page.getByText('Route not found or is private.')
 		).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('anon visitor cannot see a private route via the share URL', async ({ page }) => {
+		// `public_routes` view filters on is_public = true, so the share
+		// path for a private route should render the same not-found
+		// copy as a missing id. Pins the privacy boundary at the read
+		// site rather than relying on RLS alone.
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const { USER_A } = await import('../fixtures/users');
+		const admin = getAdminClient();
+		const routeId = crypto.randomUUID();
+		try {
+			await admin.from('routes').insert({
+				id: routeId,
+				user_id: USER_A.id,
+				name: 'private route for share test',
+				distance_m: 4000,
+				is_public: false,
+				surface: 'road',
+				waypoints: []
+			});
+			await page.goto(`/share/route/${routeId}`);
+			await page.waitForLoadState('networkidle');
+			await expect(
+				page.getByText('Route not found or is private.')
+			).toBeVisible({ timeout: 10_000 });
+		} finally {
+			await admin.from('routes').delete().eq('id', routeId);
+		}
+	});
+
+	test('share page links back to Run Onward via the brand mark', async ({ page }) => {
+		// Anon viewers landing from a paste-link must have a clear
+		// click-out to the marketing site. The header brand link is
+		// the canonical affordance.
+		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await page.waitForLoadState('networkidle');
+		await expect(page.getByRole('link', { name: 'Run Onward' }).first()).toHaveAttribute(
+			'href',
+			'/'
+		);
+	});
 });
