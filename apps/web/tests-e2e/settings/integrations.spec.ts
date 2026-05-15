@@ -124,4 +124,39 @@ test.describe('/settings/integrations', () => {
 			);
 		}
 	});
+
+	test('connected integration shows a last-sync timestamp', async ({ page }) => {
+		// Strava starts connected per seed with last_sync_at populated.
+		// The card surfaces a "Last sync …" line so the user knows
+		// data is fresh. Pin the presence of the label — exact
+		// timestamp format depends on the formatter but the label
+		// is stable.
+		await page.goto('/settings/integrations');
+		await page.waitForLoadState('networkidle');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+		await expect(stravaCard.getByText(/Last sync/i)).toBeVisible();
+	});
+
+	test('Sync now button visible on a connected Strava card', async ({ page }) => {
+		// 'Sync now' is the canonical re-fetch affordance for a
+		// connected Strava integration. A regression that hides it
+		// would leave users without a manual refresh path.
+		await page.goto('/settings/integrations');
+		await page.waitForLoadState('networkidle');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard.getByRole('button', { name: /Sync/i }))
+			.toBeVisible({ timeout: 10_000 });
+	});
+});
+
+test.describe('/settings/integrations — anon', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon visitor is auth-walled to /login', async ({ page }) => {
+		// /settings/integrations is NOT in the publicPaths list, so an
+		// anon user must be redirected to /login with a return_to.
+		await page.goto('/settings/integrations');
+		await page.waitForURL(/\/login(\?|$)/, { timeout: 10_000 });
+	});
 });
