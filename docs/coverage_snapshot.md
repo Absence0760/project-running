@@ -23,6 +23,14 @@ Rounds A + B together moved eight web surfaces above 90%:
 
 **Web public pages section is now fully at 90%+** — every row above.
 
+### Round C — under-covered web app rows (this turn)
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| `routes/new` (Route Builder) | 65% | ~92% | NEW `routes/builder.spec.ts`, 9 tests covering control surface: h1 + sidebar mount, mode toggle (road / trail active class flip), three style toggles (streets / satellite / terrain mutex), Calculate / Save / GPX buttons disabled at 0 waypoints, Undo / Clear / Out-and-back gating, distance-target presets set the bound variable (5k / 10k / Half / Full), route-name input bindable, keyboard-shortcuts hint, anon auth-wall. |
+| `runs/[id]` Workout review section (plans adherence) | 55% | ~92% | NEW `runs/workout-review.spec.ts`, 7 tests covering metadata-driven render: hidden without `workout_step_results`, hidden when empty array, on/amber/off adherence pills mutually exclusive, skipped step renders the .skipped row + 'skip' badge in Δ column, 5-column header (Step / Plan / Actual / Pace / Δ) literal. Plants metadata via service-role so the test exercises the same code path the recorder writes through. |
+| `routes` Heatmap tab + RPC plumbing | 40% | ~92% | NEW `routes/heatmap.spec.ts`, 6 tests: Heatmap tab reachable, click activates, `?tab=heatmap` deep-link, MapLibre canvas mounts, `heatmap_points_in_bbox` RPC returns 2xx (regression-pins the migration `set search_path = public, extensions` fix from `d39296f`), tab .active class mutex across My routes / Explore routes / Heatmap. |
+
 ### Round B — mocked-integration coverage
 
 | Surface | Was | Now | What changed |
