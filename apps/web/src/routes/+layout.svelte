@@ -67,12 +67,22 @@
 		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];
 
-	const publicPaths = ['/', '/login', '/auth/callback'];
+	const publicPaths = [
+		'/',
+		'/login',
+		'/auth/callback',
+		'/privacy',
+		'/terms',
+		'/cookie-notice',
+		'/compare',
+		'/guided'
+	];
 	const isPublic = (path: string) =>
 		publicPaths.includes(path) ||
 		path.startsWith('/live/') ||
 		path.startsWith('/share/') ||
-		path.startsWith('/clubs/join/');
+		path.startsWith('/clubs/join/') ||
+		path.startsWith('/guided/');
 
 	function isActive(href: string, path: string): boolean {
 		return path.startsWith(href);

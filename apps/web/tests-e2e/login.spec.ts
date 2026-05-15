@@ -53,12 +53,25 @@ test.describe('/login', () => {
 			).toBeVisible({ timeout: 5_000 });
 
 			// Wait for the post-onMount `hydrated` flag — the submit
-			// button stays disabled until the JS handler is wired up.
+			// button stays disabled until both the JS handler is wired
+			// up AND the consent boxes are ticked. Don't assert
+			// `toBeEnabled` here — the age + ToS gate keeps it disabled
+			// until further down. The pre-fill disabled state IS the
+			// contract; signup-age-gate.spec.ts pins that.
 			const submit = page.getByRole('button', { name: 'Sign Up' });
-			await expect(submit).toBeEnabled({ timeout: 5_000 });
 
 			await page.getByPlaceholder('Email address').fill(email);
 			await page.getByPlaceholder('Password').fill(password);
+
+			// Age gate + ToS acceptance: both required to enable Submit.
+			// Re-verify the disabled-until-checked contract here so a
+			// regression that quietly skipped one box would fail loudly.
+			await expect(submit).toBeDisabled();
+			await page.getByLabel(/I confirm I am 16 years of age or older/).check();
+			await expect(submit).toBeDisabled();
+			await page.getByLabel(/I have read and agree to the/).check();
+			await expect(submit).toBeEnabled();
+
 			await submit.click();
 
 			// Successful sign-up triggers refreshSession() then goto('/dashboard').
