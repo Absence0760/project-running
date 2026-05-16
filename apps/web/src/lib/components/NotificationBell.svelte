@@ -278,7 +278,12 @@
 	.popover {
 		position: absolute;
 		left: calc(100% + 0.5rem);
-		bottom: 0;
+		/* Anchor the popover's TOP edge to the bell so it hangs downward.
+		   Earlier the bell lived in the sidebar footer and the popover
+		   anchored bottom: 0 — fine when the bell sat near the bottom of
+		   the viewport, but it clipped off the top of the screen when
+		   the bell moved into the sidebar head. */
+		top: 0;
 		width: 22rem;
 		max-height: 80vh;
 		display: flex;
@@ -294,7 +299,9 @@
 		.popover {
 			left: 0;
 			right: 0;
-			bottom: calc(100% + 0.5rem);
+			/* Mobile: bell still at the top of the sidebar / rail; drop
+			   the popover below it so the body content stays visible. */
+			top: calc(100% + 0.5rem);
 			width: auto;
 			margin: 0 0.5rem;
 		}

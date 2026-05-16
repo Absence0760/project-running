@@ -55,15 +55,20 @@
 		return () => window.removeEventListener('focus', onFocus);
 	});
 
+	// Order is runner-led: log + review + train is the daily loop, then
+	// social, then content, then settings last. Active runners spend most
+	// of their session on Dashboard / History / Plans; Feed / Routes /
+	// Coach / Clubs / Guided runs are secondary; Settings is touched
+	// rarely. Top-down scan time matches frequency-of-use.
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
-		{ href: '/feed', label: 'Feed', icon: 'rss_feed', accent: '#E89C5A' },
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
-		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/plans', label: 'Plans', icon: 'calendar_month', accent: '#89D0B8' },
+		{ href: '/feed', label: 'Feed', icon: 'rss_feed', accent: '#E89C5A' },
+		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
-		{ href: '/guided', label: 'Guided runs', icon: 'headset', accent: '#8FB8DB' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
+		{ href: '/guided', label: 'Guided runs', icon: 'headset', accent: '#8FB8DB' },
 		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];
 
@@ -163,8 +168,12 @@
 		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
 			<div class="sidebar-head">
 				<a href="/dashboard" class="logo" aria-label="Run Onward">
+					<span class="logo-mark material-symbols" aria-hidden="true">directions_run</span>
 					<span class="logo-text">Run Onward</span>
 				</a>
+				<div class="sidebar-head-actions">
+					<NotificationBell />
+				</div>
 			</div>
 
 			<ul class="nav-list">
@@ -191,6 +200,8 @@
 					<button
 						class="profile-btn"
 						onclick={() => (showLogoutModal = true)}
+						aria-haspopup="menu"
+						aria-expanded={showLogoutModal}
 						title={sidebarCollapsed ? auth.user.display_name ?? auth.user.email : undefined}
 					>
 						<div class="user-avatar">
@@ -200,9 +211,9 @@
 							<span class="user-name">{auth.user.display_name ?? auth.user.email}</span>
 							<span class="user-email">{auth.user.email}</span>
 						</div>
+						<span class="profile-chevron material-symbols" aria-hidden="true">unfold_more</span>
 					</button>
 				{/if}
-				<NotificationBell />
 				<button
 					class="collapse-toggle"
 					type="button"
@@ -212,6 +223,7 @@
 					onclick={toggleSidebar}
 				>
 					<span class="material-symbols">{sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
+					{#if !sidebarCollapsed}<span class="collapse-toggle-label">Collapse</span>{/if}
 				</button>
 			</div>
 		</nav>
@@ -244,6 +256,14 @@
 					<span class="material-symbols">person</span>
 					View profile
 				</a>
+				<a
+					class="popover-item"
+					href="/settings"
+					onclick={() => (showLogoutModal = false)}
+				>
+					<span class="material-symbols">settings</span>
+					Settings
+				</a>
 				<div class="popover-divider"></div>
 			{/if}
 			<button class="popover-item popover-danger" onclick={handleLogout}>
@@ -271,6 +291,7 @@
 		left: 0;
 		bottom: 0;
 		z-index: var(--z-sidebar);
+		border-right: 1px solid var(--sidebar-border);
 		transition: width var(--transition-base);
 	}
 
@@ -282,21 +303,35 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-sm);
-		margin-bottom: var(--space-lg);
+		gap: var(--space-xs);
+		padding: var(--space-2xs) 0 var(--space-2xs) var(--space-xs);
+		margin-bottom: var(--space-md);
+	}
+
+	.sidebar-head-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		flex-shrink: 0;
 	}
 
 	.collapse-toggle {
-		display: grid;
-		place-items: center;
-		width: 2rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-xs);
 		height: 2rem;
+		min-width: 2rem;
+		padding: 0 var(--space-sm);
 		border: none;
 		border-radius: var(--radius-md);
 		background: transparent;
 		color: var(--sidebar-text-muted);
+		font-size: 0.78rem;
+		font-weight: 500;
 		cursor: pointer;
 		flex-shrink: 0;
+		align-self: flex-end;
 		transition:
 			background var(--transition-fast),
 			color var(--transition-fast);
@@ -306,17 +341,44 @@
 		color: var(--sidebar-text);
 	}
 	.collapse-toggle .material-symbols {
-		font-size: 1.25rem;
+		font-size: 1.1rem;
+	}
+	.collapse-toggle-label {
+		letter-spacing: var(--section-label-tracking);
+		text-transform: uppercase;
+		font-size: 0.65rem;
 	}
 
 	.logo {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-md);
+		padding: var(--space-2xs) 0;
 		font-weight: 700;
-		font-size: 1.25rem;
+		font-size: 1.05rem;
+		letter-spacing: -0.01em;
 		color: var(--sidebar-logo);
+		min-width: 0;
+		flex: 1;
+	}
+
+	.logo-mark {
+		display: grid;
+		place-items: center;
+		width: 1.85rem;
+		height: 1.85rem;
+		border-radius: var(--radius-md);
+		background: var(--gradient-primary);
+		color: #FFFFFF;
+		font-size: 1.1rem;
+		flex-shrink: 0;
+		box-shadow: var(--shadow-sm);
+	}
+
+	.logo-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.nav-list {
@@ -423,59 +485,73 @@
 	.nav-link.active::before {
 		content: '';
 		position: absolute;
-		left: -8px;
-		top: 20%;
-		bottom: 20%;
+		left: calc(-1 * var(--space-md));
+		top: 18%;
+		bottom: 18%;
 		width: 3px;
-		border-radius: 2px;
+		border-radius: 0 2px 2px 0;
 		background: var(--accent);
+	}
+	.sidebar.collapsed .nav-link.active::before {
+		display: none;
 	}
 
 	.sidebar-footer {
 		border-top: 1px solid var(--sidebar-border);
-		padding-top: var(--space-md);
+		padding-top: var(--space-sm);
+		margin-top: var(--space-sm);
 		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: var(--space-sm);
+		flex-direction: column;
+		align-items: stretch;
+		gap: var(--space-2xs);
 	}
 
 	.profile-btn {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-md);
-		flex: 1;
+		padding: var(--space-sm);
+		width: 100%;
 		min-width: 0;
-		border: none;
+		border: 1px solid transparent;
 		background: none;
 		border-radius: var(--radius-md);
 		cursor: pointer;
 		text-align: left;
-		transition: background var(--transition-fast);
+		transition:
+			background var(--transition-fast),
+			border-color var(--transition-fast);
 	}
 	.profile-btn:hover {
 		background: var(--sidebar-hover-bg);
+		border-color: var(--sidebar-border);
+	}
+	.profile-btn[aria-expanded='true'] {
+		background: var(--sidebar-hover-bg);
+		border-color: var(--sidebar-border);
 	}
 
 	.user-avatar {
-		width: 2rem;
-		height: 2rem;
+		width: 2.25rem;
+		height: 2.25rem;
 		border-radius: 50%;
 		background: var(--gradient-primary);
-		color: white;
+		color: #FFFFFF;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 0.8rem;
+		font-size: 0.85rem;
 		font-weight: 700;
 		flex-shrink: 0;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.user-details {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
+		flex: 1;
+		gap: var(--space-2xs);
 	}
 
 	.user-name {
@@ -485,14 +561,22 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		line-height: 1.15;
 	}
 
 	.user-email {
-		font-size: 0.7rem;
+		font-size: 0.72rem;
 		color: var(--sidebar-text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		line-height: 1.15;
+	}
+
+	.profile-chevron {
+		flex-shrink: 0;
+		font-size: 1.1rem;
+		color: var(--sidebar-text-muted);
 	}
 
 	.popover-backdrop {
@@ -502,7 +586,7 @@
 	}
 	.popover {
 		position: fixed;
-		bottom: 4rem;
+		bottom: calc(var(--space-md) + 4.5rem);
 		left: var(--space-md);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -600,7 +684,10 @@
 	/* Hide labels and trim spacing when collapsed. Icons keep their
 	   layout so the rail stays visually consistent. */
 	.sidebar.collapsed .nav-label,
-	.sidebar.collapsed .user-details {
+	.sidebar.collapsed .user-details,
+	.sidebar.collapsed .profile-chevron,
+	.sidebar.collapsed .collapse-toggle-label,
+	.sidebar.collapsed .logo-text {
 		opacity: 0;
 		visibility: hidden;
 		width: 0;
@@ -614,14 +701,23 @@
 		padding-left: 0;
 		padding-right: 0;
 	}
-	/* When collapsed, the logo would crowd a 4.5rem rail — hide it.
-	   The collapse-toggle in the footer is the user's way back. */
-	.sidebar.collapsed .logo {
+	/* On the narrow rail keep only the logo mark + nav icons + avatar +
+	   collapse-toggle. The bell would crowd the 4.5rem rail and its
+	   popover would clip — surface it only when expanded. */
+	.sidebar.collapsed .sidebar-head {
+		justify-content: center;
+		padding: 0;
+	}
+	.sidebar.collapsed .sidebar-head-actions {
 		display: none;
 	}
-	/* Stack profile + toggle vertically on the narrow rail. */
-	.sidebar.collapsed .sidebar-footer {
-		flex-direction: column;
+	.sidebar.collapsed .logo {
+		padding: 0;
+		justify-content: center;
+	}
+	.sidebar.collapsed .collapse-toggle {
+		align-self: stretch;
+		padding: 0;
 	}
 
 	.loading-screen {
@@ -648,5 +744,56 @@
 		white-space: nowrap;
 		direction: ltr;
 		-webkit-font-smoothing: antialiased;
+	}
+
+	/* Narrow viewports: force the rail-only state so the sidebar stops
+	   eating ~40% of the canvas on phones. The collapse-toggle is
+	   hidden here because the user can't usefully expand to 15rem on
+	   a 480px screen — the rail is the only viable shape. */
+	@media (max-width: 40rem) {
+		.sidebar {
+			width: var(--sidebar-collapsed-width, 4.5rem);
+		}
+		.main-content {
+			margin-left: var(--sidebar-collapsed-width, 4.5rem);
+		}
+		.sidebar .nav-label,
+		.sidebar .user-details,
+		.sidebar .profile-chevron,
+		.sidebar .collapse-toggle-label,
+		.sidebar .logo-text,
+		.sidebar-head-actions,
+		.collapse-toggle {
+			opacity: 0;
+			visibility: hidden;
+			width: 0;
+			overflow: hidden;
+			pointer-events: none;
+		}
+		.sidebar .nav-link,
+		.sidebar .profile-btn {
+			justify-content: center;
+			gap: 0;
+			padding-left: 0;
+			padding-right: 0;
+		}
+		.sidebar .nav-link.active::before {
+			display: none;
+		}
+		.sidebar-head {
+			justify-content: center;
+			padding: 0;
+		}
+		.logo {
+			padding: 0;
+			justify-content: center;
+		}
+		/* The popover is anchored to the left edge — pin it inside the
+		   viewport so it doesn't clip when the rail is only 4.5rem. */
+		.popover {
+			left: calc(var(--sidebar-collapsed-width, 4.5rem) + var(--space-xs));
+			min-width: 13rem;
+			max-width: calc(100vw - var(--sidebar-collapsed-width, 4.5rem) - var(--space-md));
+		}
 	}
 </style>
