@@ -62,13 +62,15 @@ test.describe('/u/[id] — viewing another user', () => {
 		).toBeVisible({ timeout: 10_000 });
 
 		// Followers list rendered with at least one .person-row whose
-		// link points to runner's profile.
-		const runnerRow = page.locator(`a.person-row[href="/u/${USER_A.id}"]`);
+		// inner link points to runner's profile. The row itself is a
+		// <div> so the inline Follow-toggle button can live alongside
+		// the navigable .person-main anchor.
+		const runnerRow = page.locator(`.person-row a.person-main[href="/u/${USER_A.id}"]`);
 		await expect(runnerRow).toBeVisible({ timeout: 10_000 });
 		await expect(runnerRow).toContainText('Jared Howard');
 
-		// Click navigates to runner's profile — proves the row is a
-		// real link, not just a styled div.
+		// Click navigates to runner's profile — proves the row link
+		// still routes (the inline toggle is a separate button).
 		await runnerRow.click();
 		await page.waitForURL(new RegExp(`/u/${USER_A.id}`), { timeout: 10_000 });
 		await expect(

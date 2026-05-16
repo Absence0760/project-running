@@ -55,7 +55,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		// labelled "Events" (with an optional " (n)" suffix when there
 		// are upcoming events) — match by prefix.
 		await page.goto('/clubs/sydney-run-club');
-		await page.getByRole('button', { name: /^Events/ }).click();
+		await page.getByRole('tab', { name: /^Events/ }).click();
 
 		// The event row is an anchor with href ending in /events/<id>.
 		await page.locator(`a[href$="/events/${eventId}"]`).click();

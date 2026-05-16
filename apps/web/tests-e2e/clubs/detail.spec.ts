@@ -30,10 +30,11 @@ test.describe('/clubs/[slug]', () => {
 		// targets that role badge.
 		await page.goto('/clubs/sydney-run-club');
 
-		// Members tab — there's exactly one tab named "Members" on
-		// this page.
+		// Members tab — the tab label now includes the member count
+		// (e.g. "Members (2)"), so anchor on the prefix via the
+		// role="tab" ARIA contract.
 		await page
-			.getByRole('button', { name: 'Members', exact: true })
+			.getByRole('tab', { name: /^Members/ })
 			.click();
 
 		// Runner's display_name (Jared Howard, per seed) must surface in
@@ -58,7 +59,7 @@ test.describe('/clubs/[slug]', () => {
 			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
-		await page.getByRole('button', { name: /^Routes/ }).click();
+		await page.getByRole('tab', { name: /^Routes/ }).click();
 
 		// Both admin affordances mount.
 		await expect(

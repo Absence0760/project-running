@@ -62,7 +62,7 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 
 		// Event no longer in the upcoming list. Switch to Events tab
 		// and assert the row is missing.
-		await page.getByRole('button', { name: /^Events/ }).click();
+		await page.getByRole('tab', { name: /^Events/ }).click();
 		await expect(page.locator('a[href*="/events/"]', { hasText: title }))
 			.toHaveCount(0, { timeout: 10_000 });
 

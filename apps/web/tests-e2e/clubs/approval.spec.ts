@@ -71,7 +71,7 @@ test.describe('/clubs/[slug] — approval flow', () => {
 
 		// Members tab does NOT include alex — rejection should not
 		// have flipped status to active.
-		await page.getByRole('button', { name: /^Members/ }).click();
+		await page.getByRole('tab', { name: /^Members/ }).click();
 		await expect(
 			page.locator('.member-list .member', { hasText: 'Alex Chen' })
 		).toHaveCount(0, { timeout: 10_000 });
@@ -104,7 +104,7 @@ test.describe('/clubs/[slug] — approval flow', () => {
 
 		// Alex now appears in the Members tab (member-list renders a
 		// .member row per active club_members row).
-		await page.getByRole('button', { name: /^Members/ }).click();
+		await page.getByRole('tab', { name: /^Members/ }).click();
 		await expect(
 			page.locator('.member-list .member', { hasText: 'Alex Chen' })
 		).toBeVisible({ timeout: 10_000 });

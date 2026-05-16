@@ -54,7 +54,7 @@ test.describe('/clubs/[slug] — admin role change', () => {
 		page
 	}) => {
 		await page.goto('/clubs/sydney-run-club');
-		await page.getByRole('button', { name: /^Members/ }).click();
+		await page.getByRole('tab', { name: /^Members/ }).click();
 
 		const morganRow = page.locator('.member-list .member', {
 			hasText: 'Morgan'
@@ -69,7 +69,7 @@ test.describe('/clubs/[slug] — admin role change', () => {
 
 		// Reload → server-side state agrees, the dropdown still reads 'admin'.
 		await page.reload();
-		await page.getByRole('button', { name: /^Members/ }).click();
+		await page.getByRole('tab', { name: /^Members/ }).click();
 		const morganAfter = page.locator('.member-list .member', {
 			hasText: 'Morgan'
 		});
@@ -87,7 +87,7 @@ test.describe('/clubs/[slug] — admin role change', () => {
 		// ConfirmDialog gate (a misclick on the trash icon shouldn't
 		// silently boot a member).
 		await page.goto('/clubs/sydney-run-club');
-		await page.getByRole('button', { name: /^Members/ }).click();
+		await page.getByRole('tab', { name: /^Members/ }).click();
 
 		const morganRow = page.locator('.member-list .member', {
 			hasText: 'Morgan'

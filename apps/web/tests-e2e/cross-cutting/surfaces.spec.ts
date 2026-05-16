@@ -99,7 +99,7 @@ test.describe('detail surface — clubs', () => {
 
 	test('/clubs/sydney-run-club renders the Members tab', async ({ page }) => {
 		await page.goto('/clubs/sydney-run-club');
-		await expect(page.getByRole('button', { name: /^Members/ }))
+		await expect(page.getByRole('tab', { name: /^Members/ }))
 			.toBeVisible({ timeout: 10_000 });
 	});
 
@@ -107,7 +107,7 @@ test.describe('detail surface — clubs', () => {
 		page
 	}) => {
 		await page.goto('/clubs/sydney-run-club');
-		await page.getByRole('button', { name: /^Events/ }).click();
+		await page.getByRole('tab', { name: /^Events/ }).click();
 		// Seed has 3 upcoming events on Sydney Run Club.
 		await expect(page.locator('a[href*="/events/"]').first())
 			.toBeVisible({ timeout: 10_000 });
@@ -115,7 +115,7 @@ test.describe('detail surface — clubs', () => {
 
 	test('/clubs/sydney-run-club Routes tab is reachable', async ({ page }) => {
 		await page.goto('/clubs/sydney-run-club');
-		await page.getByRole('button', { name: /^Routes/ }).click();
+		await page.getByRole('tab', { name: /^Routes/ }).click();
 		// The routes panel may be empty in seed, but the tab switch
 		// shouldn't error — just verify we left the feed view.
 		await expect(page.locator('article.post')).toHaveCount(0);
@@ -123,7 +123,7 @@ test.describe('detail surface — clubs', () => {
 
 	test('/clubs/sydney-run-club Templates tab is reachable', async ({ page }) => {
 		await page.goto('/clubs/sydney-run-club');
-		await page.getByRole('button', { name: /^Templates/ }).click();
+		await page.getByRole('tab', { name: /^Templates/ }).click();
 		// Same shape — no posts visible after the tab change.
 		await expect(page.locator('article.post')).toHaveCount(0);
 	});

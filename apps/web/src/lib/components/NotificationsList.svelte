@@ -144,7 +144,7 @@
 				<p>You're all caught up.</p>
 			{:else}
 				<p>No notifications yet — kudos, comments, and new followers show up here.</p>
-				<a href="/feed" class="btn btn-primary">Browse the feed</a>
+				<a href="/clubs" class="btn btn-primary">Find a club</a>
 			{/if}
 		</div>
 	{:else}

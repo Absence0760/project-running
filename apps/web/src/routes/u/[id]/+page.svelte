@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { supabase } from '$lib/supabase';
 	import {
 		fetchPublicProfile,
 		fetchPublicRunsByUser,
@@ -39,6 +40,13 @@
 	let isSelf = $derived(auth.user?.id === userId);
 	let openRunId = $state<string | null>(null);
 
+	// Per-row follow state for the Followers / Following lists. Keys are
+	// target user IDs the viewer currently follows. Hydrated from one
+	// `user_follows` query that intersects the loaded list with the
+	// viewer's outbound edges — no per-row round-trip.
+	let viewerFollows = $state<Set<string>>(new Set());
+	let rowBusy = $state<Set<string>>(new Set());
+
 	// ── Feed state (self-only tab) ─────────────────────────────────
 	// Mirrors the shape /feed used to render: 14-day window over runs
 	// from people you follow, cursor-paginated on (started_at, id), with
@@ -77,6 +85,26 @@
 		followers = fr;
 		following = fg;
 		loading = false;
+		hydrateViewerFollows();
+	}
+
+	// Single-query batch lookup of viewer→target edges over the union of
+	// Followers + Following row IDs (minus self, which is never followed
+	// anyway). Loaded after `load()` so it never blocks first paint.
+	async function hydrateViewerFollows() {
+		const viewerId = auth.user?.id;
+		if (!viewerId) return;
+		const ids = new Set<string>();
+		for (const p of followers) if (p.id !== viewerId) ids.add(p.id);
+		for (const p of following) if (p.id !== viewerId) ids.add(p.id);
+		if (ids.size === 0) return;
+		const { data, error } = await supabase
+			.from('user_follows')
+			.select('followee_id')
+			.eq('follower_id', viewerId)
+			.in('followee_id', [...ids]);
+		if (error || !data) return;
+		viewerFollows = new Set(data.map((r) => r.followee_id as string));
 	}
 
 	$effect(() => {
@@ -217,6 +245,36 @@
 		}
 	}
 
+	async function toggleRowFollow(targetId: string) {
+		if (!auth.loggedIn || targetId === auth.user?.id) return;
+		if (rowBusy.has(targetId)) return;
+		const wasFollowing = viewerFollows.has(targetId);
+		rowBusy = new Set([...rowBusy, targetId]);
+		// Optimistic flip — the action targets the row, not the page-
+		// level profile, so the header counts only adjust when the
+		// viewer is on their OWN profile (the rare case where this row
+		// IS the page).
+		const next = new Set(viewerFollows);
+		if (wasFollowing) next.delete(targetId);
+		else next.add(targetId);
+		viewerFollows = next;
+		try {
+			if (wasFollowing) await unfollowUser(targetId);
+			else await followUser(targetId);
+		} catch (e) {
+			// Roll back the optimistic flip.
+			const rollback = new Set(viewerFollows);
+			if (wasFollowing) rollback.add(targetId);
+			else rollback.delete(targetId);
+			viewerFollows = rollback;
+			showToast(`Could not update follow: ${e}`, 'error');
+		} finally {
+			const done = new Set(rowBusy);
+			done.delete(targetId);
+			rowBusy = done;
+		}
+	}
+
 	function fmtDate(iso: string): string {
 		return new Date(iso).toLocaleDateString(undefined, {
 			month: 'short',
@@ -243,6 +301,32 @@
 			location.href = '/dashboard';
 		}
 	}
+
+	function setTab(t: typeof tab) {
+		tab = t;
+	}
+
+	async function shareProfile() {
+		const url = new URL(`/u/${userId}`, location.origin).toString();
+		const title = profile?.display_name ?? 'Runner';
+		// Try the OS share sheet first (mobile + Safari desktop). Fall
+		// back to clipboard copy on everything else.
+		try {
+			if (navigator.share) {
+				await navigator.share({ title, url });
+				return;
+			}
+		} catch {
+			// User dismissed the share sheet — silent.
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(url);
+			showToast('Profile link copied', 'success');
+		} catch {
+			showToast('Could not copy link', 'error');
+		}
+	}
 </script>
 
 <svelte:head>
@@ -251,19 +335,32 @@
 
 <div class="page">
 	<button type="button" class="back-link" onclick={goBack}>
-		<span class="material-symbols">arrow_back</span>
+		<span class="material-symbols" aria-hidden="true">arrow_back</span>
 		Back
 	</button>
 
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<div class="profile-head skel-head" aria-hidden="true">
+			<span class="skel skel-avatar-xl"></span>
+			<div class="skel-info">
+				<span class="skel skel-line skel-w-50"></span>
+				<span class="skel skel-line skel-w-40"></span>
+			</div>
+		</div>
+		<p class="sr-only" role="status">Loading profile…</p>
 	{:else if !profile}
-		<div class="empty">
-			<p>This runner doesn't exist or their profile isn't visible.</p>
+		<div class="empty-card">
+			<span class="material-symbols empty-icon" aria-hidden="true">person_off</span>
+			<h3>Profile not found</h3>
+			<p class="empty-text">
+				This runner doesn't exist or their profile isn't visible. They may have deleted their
+				account.
+			</p>
+			<a href="/dashboard" class="btn btn-primary">Back to dashboard</a>
 		</div>
 	{:else}
 		<header class="profile-head">
-			<div class="avatar-xl">
+			<div class="avatar-xl" aria-hidden="true">
 				{#if profile.avatar_url}
 					<img src={profile.avatar_url} alt="" />
 				{:else}
@@ -273,55 +370,103 @@
 			<div class="profile-info">
 				<h1>{profile.display_name ?? 'Runner'}</h1>
 				<div class="counts">
-					<button class="count" type="button" onclick={() => (tab = 'runs')}>
+					<button class="count" type="button" onclick={() => setTab('runs')}>
 						<span class="count-num">{runs.length}</span>
 						<span class="count-label">Runs</span>
 					</button>
-					<button class="count" type="button" onclick={() => (tab = 'followers')}>
+					<button class="count" type="button" onclick={() => setTab('followers')}>
 						<span class="count-num">{profile.follower_count}</span>
 						<span class="count-label">Followers</span>
 					</button>
-					<button class="count" type="button" onclick={() => (tab = 'following')}>
+					<button class="count" type="button" onclick={() => setTab('following')}>
 						<span class="count-num">{profile.following_count}</span>
 						<span class="count-label">Following</span>
 					</button>
 				</div>
 			</div>
-			{#if !isSelf && auth.loggedIn}
+			<div class="head-actions">
+				{#if !isSelf && auth.loggedIn}
+					<button
+						class="btn {profile.viewer_follows ? 'btn-outline' : 'btn-primary'} btn-follow"
+						type="button"
+						disabled={busy}
+						onclick={toggleFollow}
+						aria-label={profile.viewer_follows ? 'Unfollow' : 'Follow'}
+					>
+						<span class="material-symbols" aria-hidden="true">
+							{profile.viewer_follows ? 'check' : 'person_add'}
+						</span>
+						<span>{profile.viewer_follows ? 'Following' : 'Follow'}</span>
+					</button>
+				{/if}
 				<button
-					class="btn {profile.viewer_follows ? 'btn-outline' : 'btn-primary'} btn-follow"
+					class="btn btn-outline btn-icon-only"
 					type="button"
-					disabled={busy}
-					onclick={toggleFollow}
+					onclick={shareProfile}
+					aria-label="Share profile"
+					title="Share profile"
 				>
-					<span class="material-symbols">
-						{profile.viewer_follows ? 'check' : 'person_add'}
-					</span>
-					{profile.viewer_follows ? 'Following' : 'Follow'}
+					<span class="material-symbols" aria-hidden="true">share</span>
 				</button>
-			{/if}
+				{#if isSelf}
+					<a
+						href="/settings"
+						class="btn btn-outline btn-icon-only"
+						aria-label="Edit profile"
+						title="Edit profile"
+					>
+						<span class="material-symbols" aria-hidden="true">edit</span>
+					</a>
+				{/if}
+			</div>
 		</header>
 
-		<div class="tabs">
-			<button class="tab" class:active={tab === 'runs'} onclick={() => (tab = 'runs')}>
+		<div class="tabs" role="tablist" aria-label="Profile sections">
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'runs'}
+				aria-selected={tab === 'runs'}
+				onclick={() => setTab('runs')}
+			>
 				Runs
 			</button>
 			{#if isSelf}
-				<button class="tab" class:active={tab === 'feed'} onclick={() => (tab = 'feed')}>
+				<button
+					role="tab"
+					class="tab"
+					class:active={tab === 'feed'}
+					aria-selected={tab === 'feed'}
+					onclick={() => setTab('feed')}
+				>
 					Feed
 				</button>
 			{/if}
-			<button class="tab" class:active={tab === 'followers'} onclick={() => (tab = 'followers')}>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'followers'}
+				aria-selected={tab === 'followers'}
+				onclick={() => setTab('followers')}
+			>
 				Followers
 			</button>
-			<button class="tab" class:active={tab === 'following'} onclick={() => (tab = 'following')}>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'following'}
+				aria-selected={tab === 'following'}
+				onclick={() => setTab('following')}
+			>
 				Following
 			</button>
 			{#if isSelf}
 				<button
+					role="tab"
 					class="tab"
 					class:active={tab === 'notifications'}
-					onclick={() => (tab = 'notifications')}
+					aria-selected={tab === 'notifications'}
+					onclick={() => setTab('notifications')}
 				>
 					Notifications
 					{#if notificationStore.unreadCount > 0}
@@ -333,29 +478,59 @@
 
 		{#if tab === 'runs'}
 			{#if runs.length === 0}
-				<div class="empty">
-					<p>{isSelf ? "You haven't shared any runs yet." : 'No public runs yet.'}</p>
+				<div class="empty-card">
+					{#if isSelf}
+						<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
+						<h3>You haven't shared a run yet</h3>
+						<p class="empty-text">
+							Public runs from your history show up here. Record a run on mobile or import one
+							from Strava, Garmin, or a GPX file.
+						</p>
+						<div class="empty-actions">
+							<a href="/runs" class="btn btn-primary">
+								<span class="material-symbols" aria-hidden="true">history</span>
+								Open run history
+							</a>
+							<a href="/settings?tab=integrations" class="btn btn-outline">
+								<span class="material-symbols" aria-hidden="true">sync</span>
+								Connect an integration
+							</a>
+						</div>
+					{:else}
+						<span class="material-symbols empty-icon" aria-hidden="true">directions_run</span>
+						<h3>No public runs yet</h3>
+						<p class="empty-text">
+							{profile.display_name ?? 'This runner'} hasn't shared a public run. Follow them to see
+							private runs in your feed when they do.
+						</p>
+					{/if}
 				</div>
 			{:else}
-				<div class="run-list">
+				<div class="run-grid">
 					{#each runs as r (r.id)}
-						<button type="button" class="run-row" onclick={() => (openRunId = r.id)}>
-							<div class="run-date">{fmtDate(r.started_at)}</div>
-							<div class="run-main">
-								<h3>Run</h3>
-								<div class="run-meta">
-									<span>
-										<span class="material-symbols">straighten</span>
-										{formatDistance(r.distance_m)}
-									</span>
-									<span>
-										<span class="material-symbols">timer</span>
-										{formatDuration(r.duration_s)}
-									</span>
-									<span>
-										<span class="material-symbols">speed</span>
-										{pace(r.distance_m, r.duration_s)}
-									</span>
+						<button type="button" class="run-card" onclick={() => (openRunId = r.id)}>
+							{#if r.track_url}
+								<div class="run-map-placeholder">
+									<RunTrackPreview trackUrl={r.track_url} />
+								</div>
+							{/if}
+							<div class="run-details">
+								<div class="run-top">
+									<span class="run-date">{fmtDate(r.started_at)}</span>
+								</div>
+								<div class="run-stats">
+									<div class="run-stat">
+										<span class="run-stat-value">{formatDistance(r.distance_m)}</span>
+										<span class="run-stat-label section-label">Distance</span>
+									</div>
+									<div class="run-stat">
+										<span class="run-stat-value">{formatDuration(r.duration_s)}</span>
+										<span class="run-stat-label section-label">Time</span>
+									</div>
+									<div class="run-stat">
+										<span class="run-stat-value">{pace(r.distance_m, r.duration_s)}</span>
+										<span class="run-stat-label section-label">Pace</span>
+									</div>
 								</div>
 							</div>
 						</button>
@@ -364,39 +539,119 @@
 			{/if}
 		{:else if tab === 'followers'}
 			{#if followers.length === 0}
-				<div class="empty"><p>No followers yet.</p></div>
+				<div class="empty-card">
+					<span class="material-symbols empty-icon" aria-hidden="true">group_add</span>
+					<h3>No followers yet</h3>
+					<p class="empty-text">
+						{#if isSelf}
+							When other runners follow you, they'll show up here and see your public runs in
+							their feed.
+						{:else}
+							{profile.display_name ?? 'This runner'} hasn't picked up any followers yet.
+						{/if}
+					</p>
+					{#if isSelf}
+						<a href="/clubs" class="btn btn-primary">
+							<span class="material-symbols" aria-hidden="true">groups</span>
+							Find a club
+						</a>
+					{/if}
+				</div>
 			{:else}
 				<div class="people-list">
 					{#each followers as p (p.id)}
-						<a href="/u/{p.id}" class="person-row">
-							<div class="avatar-sm">
-								{#if p.avatar_url}
-									<img src={p.avatar_url} alt="" />
-								{:else}
-									{(p.display_name?.[0] ?? '?').toUpperCase()}
-								{/if}
-							</div>
-							<span>{p.display_name ?? 'Runner'}</span>
-						</a>
+						{@const isViewer = p.id === auth.user?.id}
+						{@const viewerFollowsRow = viewerFollows.has(p.id)}
+						<div class="person-row">
+							<a href="/u/{p.id}" class="person-main">
+								<div class="avatar-sm" aria-hidden="true">
+									{#if p.avatar_url}
+										<img src={p.avatar_url} alt="" />
+									{:else}
+										{(p.display_name?.[0] ?? '?').toUpperCase()}
+									{/if}
+								</div>
+								<span class="person-name">{p.display_name ?? 'Runner'}</span>
+							</a>
+							{#if auth.loggedIn && !isViewer}
+								<button
+									type="button"
+									class="btn btn-sm {viewerFollowsRow ? 'btn-outline' : 'btn-primary'} person-toggle"
+									disabled={rowBusy.has(p.id)}
+									onclick={() => toggleRowFollow(p.id)}
+									aria-label={viewerFollowsRow
+										? `Unfollow ${p.display_name ?? 'runner'}`
+										: `Follow ${p.display_name ?? 'runner'}`}
+								>
+									<span class="material-symbols" aria-hidden="true">
+										{viewerFollowsRow ? 'check' : 'person_add'}
+									</span>
+									<span class="toggle-label">
+										{viewerFollowsRow ? 'Following' : 'Follow'}
+									</span>
+								</button>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			{/if}
 		{:else if tab === 'following'}
 			{#if following.length === 0}
-				<div class="empty"><p>Not following anyone yet.</p></div>
+				<div class="empty-card">
+					<span class="material-symbols empty-icon" aria-hidden="true">person_search</span>
+					<h3>
+						{isSelf ? 'Not following anyone yet' : 'Not following anyone'}
+					</h3>
+					<p class="empty-text">
+						{#if isSelf}
+							Follow other runners to see their public runs in your feed. Browse a club's Members
+							tab or open a public run to find someone to follow.
+						{:else}
+							{profile.display_name ?? 'This runner'} hasn't followed anyone yet.
+						{/if}
+					</p>
+					{#if isSelf}
+						<a href="/clubs" class="btn btn-primary">
+							<span class="material-symbols" aria-hidden="true">groups</span>
+							Browse clubs
+						</a>
+					{/if}
+				</div>
 			{:else}
 				<div class="people-list">
 					{#each following as p (p.id)}
-						<a href="/u/{p.id}" class="person-row">
-							<div class="avatar-sm">
-								{#if p.avatar_url}
-									<img src={p.avatar_url} alt="" />
-								{:else}
-									{(p.display_name?.[0] ?? '?').toUpperCase()}
-								{/if}
-							</div>
-							<span>{p.display_name ?? 'Runner'}</span>
-						</a>
+						{@const isViewer = p.id === auth.user?.id}
+						{@const viewerFollowsRow = viewerFollows.has(p.id)}
+						<div class="person-row">
+							<a href="/u/{p.id}" class="person-main">
+								<div class="avatar-sm" aria-hidden="true">
+									{#if p.avatar_url}
+										<img src={p.avatar_url} alt="" />
+									{:else}
+										{(p.display_name?.[0] ?? '?').toUpperCase()}
+									{/if}
+								</div>
+								<span class="person-name">{p.display_name ?? 'Runner'}</span>
+							</a>
+							{#if auth.loggedIn && !isViewer}
+								<button
+									type="button"
+									class="btn btn-sm {viewerFollowsRow ? 'btn-outline' : 'btn-primary'} person-toggle"
+									disabled={rowBusy.has(p.id)}
+									onclick={() => toggleRowFollow(p.id)}
+									aria-label={viewerFollowsRow
+										? `Unfollow ${p.display_name ?? 'runner'}`
+										: `Follow ${p.display_name ?? 'runner'}`}
+								>
+									<span class="material-symbols" aria-hidden="true">
+										{viewerFollowsRow ? 'check' : 'person_add'}
+									</span>
+									<span class="toggle-label">
+										{viewerFollowsRow ? 'Following' : 'Follow'}
+									</span>
+								</button>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			{/if}
@@ -413,7 +668,7 @@
 							aria-pressed={activityFilter === act.value}
 							type="button"
 						>
-							<span class="material-symbols">{act.icon}</span>
+							<span class="material-symbols" aria-hidden="true">{act.icon}</span>
 							<span class="activity-label">{act.label}</span>
 						</button>
 					{/each}
@@ -422,30 +677,64 @@
 			</div>
 
 			{#if feedLoading && !feedLoaded}
-				<p class="muted">Loading…</p>
+				<div class="feed" aria-hidden="true">
+					{#each Array(6) as _, i (i)}
+						<div class="skel-card">
+							<span class="skel skel-map"></span>
+							<div class="skel-card-body">
+								<div class="skel-card-top">
+									<span class="skel skel-line skel-w-40"></span>
+									<span class="skel skel-pill"></span>
+								</div>
+								<div class="skel-card-stats">
+									<div class="skel-card-stat">
+										<span class="skel skel-line skel-w-60"></span>
+										<span class="skel skel-line skel-w-30"></span>
+									</div>
+									<div class="skel-card-stat">
+										<span class="skel skel-line skel-w-50"></span>
+										<span class="skel skel-line skel-w-30"></span>
+									</div>
+									<div class="skel-card-stat">
+										<span class="skel skel-line skel-w-50"></span>
+										<span class="skel skel-line skel-w-30"></span>
+									</div>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+				<p class="sr-only" role="status">Loading feed…</p>
 			{:else if feedEntries.length === 0}
-				<div class="empty feed-empty">
-					<span class="material-symbols empty-icon">groups</span>
+				<div class="empty-card">
 					{#if !followsAnyone}
-						<h2>Your feed is empty</h2>
-						<p>
+						<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
+						<h3>Your feed is empty</h3>
+						<p class="empty-text">
 							Follow other runners to see their public runs here. Visit a club's Members tab or
 							open a public run to find a profile to follow.
 						</p>
-						<a href="/clubs" class="btn btn-primary">Browse clubs</a>
+						<a href="/clubs" class="btn btn-primary">
+							<span class="material-symbols" aria-hidden="true">groups</span>
+							Browse clubs
+						</a>
 					{:else if activityFilter !== 'all'}
-						<h2>No matches</h2>
-						<p>Nothing matches the current filter in the last {FEED_WINDOW_DAYS} days.</p>
+						<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
+						<h3>No matches</h3>
+						<p class="empty-text">
+							Nothing matches the current filter in the last {FEED_WINDOW_DAYS} days.
+						</p>
 						<button
-							class="btn btn-outline"
+							class="btn btn-primary"
 							type="button"
 							onclick={() => (activityFilter = 'all')}
 						>
 							Clear filters
 						</button>
 					{:else}
-						<h2>No recent activity</h2>
-						<p>
+						<span class="material-symbols empty-icon" aria-hidden="true">schedule</span>
+						<h3>No recent activity</h3>
+						<p class="empty-text">
 							Nobody you follow has logged a public run in the last {FEED_WINDOW_DAYS} days. Older
 							runs are still on each runner's profile.
 						</p>
@@ -458,7 +747,7 @@
 						<article class="entry">
 							<header class="entry-head">
 								<a href="/u/{entry.author.id}" class="author">
-									<div class="avatar-sm">
+									<div class="avatar-sm" aria-hidden="true">
 										{#if entry.author.avatar_url}
 											<img src={entry.author.avatar_url} alt="" />
 										{:else}
@@ -503,8 +792,9 @@
 									type="button"
 									disabled={kudosBusy.has(entry.id)}
 									onclick={() => toggleKudos(entry.id)}
+									aria-label={eng.viewer_has_kudos ? 'Rescind kudos' : 'Give kudos'}
 								>
-									<span class="material-symbols">
+									<span class="material-symbols" aria-hidden="true">
 										{eng.viewer_has_kudos ? 'favorite' : 'favorite_border'}
 									</span>
 									<span>{eng.kudos_count}</span>
@@ -513,8 +803,9 @@
 									class="comment-pill"
 									type="button"
 									onclick={() => (openRunId = entry.id)}
+									aria-label="View comments"
 								>
-									<span class="material-symbols">chat_bubble_outline</span>
+									<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
 									<span>{eng.comment_count}</span>
 								</button>
 							</footer>
@@ -633,11 +924,19 @@
 		font-size: 1.25rem;
 		font-weight: 700;
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.count-label {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
+	}
+
+	.head-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-left: auto;
 	}
 
 	.btn-follow {
@@ -646,11 +945,31 @@
 		gap: 0.4rem;
 	}
 
+	.btn-follow .material-symbols {
+		font-size: 1.1rem;
+	}
+
+	/* Icon-only action button — same height as `.btn-follow` so the
+	   share / edit pair sits on the same baseline as Follow. */
+	.btn-icon-only {
+		display: inline-grid;
+		place-items: center;
+		width: 2.4rem;
+		height: 2.4rem;
+		padding: 0;
+		flex-shrink: 0;
+	}
+
+	.btn-icon-only .material-symbols {
+		font-size: 1.15rem;
+	}
+
 	.tabs {
 		display: flex;
 		gap: 0.5rem;
 		margin-bottom: var(--space-md);
 		border-bottom: 1px solid var(--color-border);
+		flex-wrap: wrap;
 	}
 
 	.tab {
@@ -663,6 +982,13 @@
 		border-bottom: 2px solid transparent;
 		cursor: pointer;
 		font-weight: 500;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.tab:hover {
+		color: var(--color-text);
 	}
 
 	.tab.active {
@@ -670,77 +996,119 @@
 		border-bottom-color: var(--color-primary);
 	}
 
+	/* Quieter pill than the brand-saturated primary fill — sits beside
+	   the tab label without competing with the active underline. */
 	.tab-badge {
 		display: inline-grid;
 		place-items: center;
 		min-width: 1.2rem;
 		height: 1.2rem;
-		margin-left: 0.4rem;
 		padding: 0 0.4rem;
-		background: var(--color-primary);
-		color: white;
+		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+		color: var(--color-primary);
 		font-size: 0.7rem;
 		font-weight: 700;
 		border-radius: 9999px;
 		font-variant-numeric: tabular-nums;
 	}
 
-	.run-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
+	.tab.active .tab-badge {
+		background: var(--color-primary);
+		color: white;
 	}
 
-	.run-row {
+	/* Runs tab — card grid that mirrors /runs and the Feed-tab archetype
+	   so the page reads as one product rather than two. */
+	.run-grid {
 		display: grid;
-		grid-template-columns: 6rem 1fr;
+		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
 		gap: var(--space-md);
-		align-items: center;
-		width: 100%;
-		padding: var(--space-md) var(--space-lg);
+	}
+
+	.run-card {
+		display: flex;
+		flex-direction: column;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
+		overflow: hidden;
+		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 		text-align: left;
-		text-decoration: none;
-		color: inherit;
 		font: inherit;
+		color: inherit;
 		cursor: pointer;
-		transition: border-color var(--transition-fast);
+		padding: 0;
 	}
 
-	.run-row:hover {
+	.run-card:hover {
 		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+	}
+
+	.run-map-placeholder {
+		width: 100%;
+		height: 8rem;
+		background: var(--color-bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.run-details {
+		flex: 1;
+		min-width: 0;
+		padding: var(--space-md) var(--space-lg);
+	}
+
+	.run-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--space-sm);
+		gap: var(--space-sm);
 	}
 
 	.run-date {
-		color: var(--color-text-secondary);
-		font-size: 0.9rem;
-	}
-
-	.run-main h3 {
-		margin: 0 0 0.2rem 0;
-		font-size: 1rem;
-		font-weight: 600;
-	}
-
-	.run-meta {
-		display: flex;
-		gap: var(--space-md);
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
-		flex-wrap: wrap;
+		font-weight: 500;
 	}
 
-	.run-meta .material-symbols {
-		font-size: 0.95rem;
-		vertical-align: -3px;
-		margin-right: 0.2rem;
+	.run-stats {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+
+	.run-stat {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+
+	.run-stat-value {
+		font-weight: 700;
+		font-size: 1.15rem;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
+	}
+
+	.run-stat:first-child .run-stat-value {
+		font-size: 1.3rem;
+		color: var(--color-primary);
+	}
+
+	.run-stat-label {
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 	}
 
 	.people-list {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
 		gap: var(--space-sm);
 	}
 
@@ -752,13 +1120,50 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
-		text-decoration: none;
-		color: inherit;
 		transition: border-color var(--transition-fast);
 	}
 
 	.person-row:hover {
 		border-color: var(--color-primary);
+	}
+
+	.person-main {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex: 1;
+		min-width: 0;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.person-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 500;
+	}
+
+	.person-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		flex-shrink: 0;
+	}
+
+	.person-toggle .material-symbols {
+		font-size: 1rem;
+	}
+
+	@media (max-width: 30rem) {
+		.toggle-label {
+			display: none;
+		}
+		.person-toggle {
+			padding: 0.35rem 0.55rem;
+		}
 	}
 
 	.avatar-sm {
@@ -781,21 +1186,63 @@
 		object-fit: cover;
 	}
 
-	.empty {
+	/* Empty-state card — same shape as /clubs, /routes, /runs. Card with
+	   icon (or brand mark) + h3 + explainer + CTA. */
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
 		text-align: center;
-		padding: var(--space-2xl);
-		color: var(--color-text-tertiary);
 	}
 
-	.muted {
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.empty-icon {
+		font-family: 'Material Symbols Outlined';
+		font-size: 2.5rem;
 		color: var(--color-text-tertiary);
+		opacity: 0.85;
+	}
+
+	.empty-mark {
+		display: block;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
+	.empty-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+
+	.empty-actions .material-symbols,
+	.empty-card .btn .material-symbols {
+		font-size: 1.1rem;
 	}
 
 	/* ── Feed tab (self-only) ─────────────────────────────────────
-	   Mirrors the card grid the standalone /feed used to render so the
-	   feed reads the same as before — same minmax(22rem, 1fr) shape,
-	   same track preview + stats + kudos pills layout. /feed is now a
-	   thin redirect into this tab. */
+	   Mirrors the card grid the standalone /feed used to render. */
 	.feed-toolbar {
 		display: flex;
 		align-items: center;
@@ -956,6 +1403,7 @@
 		font-size: 1.25rem;
 		font-weight: 700;
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stat-label {
@@ -1014,39 +1462,143 @@
 		color: var(--color-primary);
 	}
 
-	.feed-empty {
-		max-width: 28rem;
-		margin: var(--space-2xl) 0;
-		padding: var(--space-2xl);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-md);
-		text-align: center;
-		align-items: center;
-	}
-
-	.empty-icon {
-		font-family: 'Material Symbols Outlined';
-		font-size: 3rem;
-		color: var(--color-text-tertiary);
-	}
-
-	.feed-empty h2 {
-		font-size: 1.25rem;
-		font-weight: 700;
-		margin: 0;
-	}
-
-	.feed-empty p {
-		color: var(--color-text-secondary);
-		margin: 0;
-	}
-
 	.load-more {
 		text-align: center;
 		padding: var(--space-xl);
+	}
+
+	/* Skeletons — same shimmer language as /clubs, /runs, /routes. */
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+
+	.skel-head {
+		pointer-events: none;
+	}
+
+	.skel-avatar-xl {
+		width: 6rem;
+		height: 6rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.skel-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.skel-line {
+		height: 0.85rem;
+	}
+
+	.skel-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		pointer-events: none;
+	}
+
+	.skel-map {
+		display: block;
+		height: 9rem;
+		width: 100%;
+		border-radius: 0;
+	}
+
+	.skel-card-body {
+		padding: var(--space-md) var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+
+	.skel-card-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.skel-pill {
+		display: block;
+		height: 1rem;
+		width: 3.5rem;
+		border-radius: 9999px;
+	}
+
+	.skel-card-stats {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-md);
+		margin-top: 0.3rem;
+	}
+
+	.skel-card-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.skel-w-30 { width: 30%; }
+	.skel-w-40 { width: 40%; }
+	.skel-w-50 { width: 50%; }
+	.skel-w-60 { width: 60%; }
+
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	@media (max-width: 50rem) {
+		.profile-head {
+			gap: var(--space-md);
+		}
+		.avatar-xl {
+			width: 4.5rem;
+			height: 4.5rem;
+			font-size: 1.6rem;
+		}
+		h1 {
+			font-size: 1.4rem;
+		}
+		.head-actions {
+			margin-left: 0;
+			width: 100%;
+		}
+		.btn-follow {
+			flex: 1;
+			justify-content: center;
+		}
 	}
 </style>

@@ -134,7 +134,7 @@ test.describe('saga: club create → 2 users join → owner sees members → del
 			await expect(
 				alicePage.getByRole('button', { name: /Delete club/ })
 			).toBeVisible({ timeout: 10_000 });
-			await alicePage.getByRole('button', { name: 'Members', exact: true }).click();
+			await alicePage.getByRole('tab', { name: /^Members/ }).click();
 
 			const memberList = alicePage.locator('.member-list');
 			await expect(memberList).toBeVisible({ timeout: 10_000 });

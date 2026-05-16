@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
@@ -51,8 +51,34 @@
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
-	let tab = $state<'feed' | 'events' | 'routes' | 'templates' | 'members'>('feed');
+	type Tab = 'feed' | 'events' | 'routes' | 'templates' | 'members';
+	const TABS: readonly Tab[] = ['feed', 'events', 'routes', 'templates', 'members'];
+	let tab = $state<Tab>('feed');
 	let showEventModal = $state(false);
+
+	function setTab(next: Tab) {
+		tab = next;
+		const path = next === 'feed' ? `/clubs/${slug}` : `/clubs/${slug}?tab=${next}`;
+		goto(path, { replaceState: true, noScroll: true, keepFocus: true });
+	}
+
+	/// Back-link wiring: if the user landed here from /clubs, fire
+	/// history.back so /clubs's snapshot.restore (My-clubs list +
+	/// scroll position) kicks in. Falling through to <a href="/clubs">
+	/// would soft-nav forward, dropping the captured list. Same shape
+	/// as /runs/[id] → /runs, /plans/[id] → /plans.
+	let cameFromClubs = $state(false);
+	afterNavigate(({ from }) => {
+		if (from?.url.pathname === '/clubs' && !cameFromClubs) {
+			cameFromClubs = true;
+		}
+	});
+	function handleBack(e: MouseEvent): void {
+		if (cameFromClubs) {
+			e.preventDefault();
+			history.back();
+		}
+	}
 	let clubRoutes = $state<Route[]>([]);
 	let transferableRoutes = $state<Route[]>([]);
 	let showTransferModal = $state(false);
@@ -159,6 +185,11 @@
 	let channel: RealtimeChannel | null = null;
 
 	onMount(async () => {
+		const initial = $page.url.searchParams.get('tab');
+		if (initial && (TABS as readonly string[]).includes(initial)) {
+			tab = initial as Tab;
+		}
+
 		// fetchClubBySlug uses supabase.auth.getSession() to populate
 		// `viewer_role`, which `isMember` / `isAdmin` derive from. A hard
 		// reload during the auth race would resolve the club row without
@@ -393,7 +424,41 @@
 </script>
 
 {#if loading}
-	<p class="muted centered">Loading…</p>
+	<div class="page">
+		<span class="back-skel" aria-hidden="true">
+			<span class="material-symbols">arrow_back</span>
+			All clubs
+		</span>
+		<div class="hero skel-hero" aria-hidden="true">
+			<span class="skel skel-avatar-lg"></span>
+			<div class="skel-hero-text">
+				<span class="skel skel-line skel-w-40"></span>
+				<span class="skel skel-line skel-w-30"></span>
+				<span class="skel skel-line skel-w-80"></span>
+			</div>
+		</div>
+		<div class="tabs-skel" aria-hidden="true">
+			{#each Array(5) as _, i (i)}
+				<span class="skel skel-line skel-tab"></span>
+			{/each}
+		</div>
+		<div class="feed-skel" aria-hidden="true">
+			{#each Array(3) as _, i (i)}
+				<div class="skel-post">
+					<div class="skel-post-head">
+						<span class="skel skel-avatar"></span>
+						<div class="skel-post-meta">
+							<span class="skel skel-line skel-w-30"></span>
+							<span class="skel skel-line skel-w-20"></span>
+						</div>
+					</div>
+					<span class="skel skel-line skel-w-80"></span>
+					<span class="skel skel-line skel-w-60"></span>
+				</div>
+			{/each}
+		</div>
+	</div>
+	<p class="sr-only" role="status">Loading club…</p>
 {:else if !club}
 	<div class="not-found">
 		<h2>Club not found</h2>
@@ -402,8 +467,8 @@
 	</div>
 {:else}
 	<div class="page">
-		<a class="back" href="/clubs">
-			<span class="material-symbols">arrow_back</span>
+		<a class="back" href="/clubs" onclick={handleBack}>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			All clubs
 		</a>
 
@@ -420,14 +485,40 @@
 				</div>
 				{#if club.location_label}
 					<p class="location">
-						<span class="material-symbols">place</span>
+						<span class="material-symbols" aria-hidden="true">place</span>
 						{club.location_label}
 					</p>
 				{/if}
 				<p class="members-line">
-					<span class="material-symbols">group</span>
+					<span class="material-symbols" aria-hidden="true">group</span>
 					{club.member_count} member{club.member_count === 1 ? '' : 's'}
 				</p>
+				{#if club.viewer_role === 'owner'}
+					<p class="role-line">
+						<span class="material-symbols" aria-hidden="true">shield_person</span>
+						You're the <strong>owner</strong>
+					</p>
+				{:else if club.viewer_role === 'admin'}
+					<p class="role-line">
+						<span class="material-symbols" aria-hidden="true">shield_person</span>
+						You're an <strong>admin</strong>
+					</p>
+				{:else if club.viewer_role === 'event_organiser'}
+					<p class="role-line">
+						<span class="material-symbols" aria-hidden="true">shield_person</span>
+						You're an <strong>event organiser</strong>
+					</p>
+				{:else if club.viewer_role === 'race_director'}
+					<p class="role-line">
+						<span class="material-symbols" aria-hidden="true">shield_person</span>
+						You're a <strong>race director</strong>
+					</p>
+				{:else if club.viewer_role === 'member'}
+					<p class="role-line subtle">
+						<span class="material-symbols" aria-hidden="true">check_circle</span>
+						You're a member
+					</p>
+				{/if}
 				{#if club.description}
 					<p class="desc">{club.description}</p>
 				{/if}
@@ -458,7 +549,7 @@
 				{/if}
 				{#if isAdmin}
 					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
-						<span class="material-symbols">add</span>
+						<span class="material-symbols" aria-hidden="true">add</span>
 						New event
 					</button>
 				{/if}
@@ -472,7 +563,7 @@
 		{#if isAdmin && (club.join_policy === 'invite' || club.invite_token)}
 			<section class="admin-card">
 				<div class="admin-card-title">
-					<span class="material-symbols">link</span>
+					<span class="material-symbols" aria-hidden="true">link</span>
 					<strong>Invite link</strong>
 					<span class="policy-chip">{club.join_policy}</span>
 				</div>
@@ -480,11 +571,11 @@
 					<div class="invite-row">
 						<code class="invite-link">{location.origin}/clubs/join/{club.invite_token}</code>
 						<button class="btn-ghost" onclick={copyInvite}>
-							<span class="material-symbols">content_copy</span>
+							<span class="material-symbols" aria-hidden="true">content_copy</span>
 							Copy
 						</button>
 						<button class="btn-ghost" onclick={regenerateInvite}>
-							<span class="material-symbols">refresh</span>
+							<span class="material-symbols" aria-hidden="true">refresh</span>
 							Rotate
 						</button>
 					</div>
@@ -497,7 +588,7 @@
 		{#if isAdmin && pending.length > 0}
 			<section class="admin-card">
 				<div class="admin-card-title">
-					<span class="material-symbols">hourglass_top</span>
+					<span class="material-symbols" aria-hidden="true">hourglass_top</span>
 					<strong>Pending requests ({pending.length})</strong>
 				</div>
 				<div class="pending-list">
@@ -518,19 +609,51 @@
 			</section>
 		{/if}
 
-		<div class="tabs">
-			<button class="tab" class:active={tab === 'feed'} onclick={() => (tab = 'feed')}>Feed</button>
-			<button class="tab" class:active={tab === 'events'} onclick={() => (tab = 'events')}>
+		<div class="tabs" role="tablist" aria-label="Club sections">
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'feed'}
+				aria-selected={tab === 'feed'}
+				onclick={() => setTab('feed')}
+			>
+				Feed{posts.length ? ` (${posts.length})` : ''}
+			</button>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'events'}
+				aria-selected={tab === 'events'}
+				onclick={() => setTab('events')}
+			>
 				Events{upcoming.length ? ` (${upcoming.length})` : ''}
 			</button>
-			<button class="tab" class:active={tab === 'routes'} onclick={() => (tab = 'routes')}>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'members'}
+				aria-selected={tab === 'members'}
+				onclick={() => setTab('members')}
+			>
+				Members ({club.member_count})
+			</button>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'routes'}
+				aria-selected={tab === 'routes'}
+				onclick={() => setTab('routes')}
+			>
 				Routes{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
 			</button>
-			<button class="tab" class:active={tab === 'templates'} onclick={() => (tab = 'templates')}>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'templates'}
+				aria-selected={tab === 'templates'}
+				onclick={() => setTab('templates')}
+			>
 				Templates{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
-			</button>
-			<button class="tab" class:active={tab === 'members'} onclick={() => (tab = 'members')}>
-				Members
 			</button>
 		</div>
 
@@ -542,17 +665,17 @@
 						<h3>{upcoming[0].title}</h3>
 						<div class="next-event-meta">
 							<span>
-								<span class="material-symbols">calendar_today</span>
+								<span class="material-symbols" aria-hidden="true">calendar_today</span>
 								{fmtDate(upcoming[0].starts_at)}
 							</span>
 							{#if upcoming[0].meet_label}
 								<span>
-									<span class="material-symbols">place</span>
+									<span class="material-symbols" aria-hidden="true">place</span>
 									{upcoming[0].meet_label}
 								</span>
 							{/if}
 							<span>
-								<span class="material-symbols">group</span>
+								<span class="material-symbols" aria-hidden="true">group</span>
 								{upcoming[0].attendee_count} going
 							</span>
 						</div>
@@ -575,10 +698,32 @@
 			{/if}
 
 			{#if posts.length === 0}
-				<div class="empty">
-					<p>No posts yet.</p>
-					{#if isAdmin}
-						<p class="hint">Share course changes, weather calls, or post-run plans with members.</p>
+				<div class="empty-card">
+					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<h3>No posts yet</h3>
+					<p class="empty-text">
+						{#if isMember}
+							Share course changes, weather calls, or post-run plans with members.
+							Posts here notify every active member.
+						{:else}
+							This is where members trade course changes, weather calls, and
+							post-run plans. Join the club to see and add posts.
+						{/if}
+					</p>
+					{#if isMember}
+						<div class="empty-actions">
+							<button
+								type="button"
+								class="btn btn-primary"
+								onclick={() => {
+									const ta = document.querySelector<HTMLTextAreaElement>('.post-form textarea');
+									ta?.focus();
+								}}
+							>
+								<span class="material-symbols" aria-hidden="true">edit</span>
+								Write the first post
+							</button>
+						</div>
 					{/if}
 				</div>
 			{:else}
@@ -597,7 +742,7 @@
 								</a>
 								{#if isAdmin}
 									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label="Delete post">
-										<span class="material-symbols">close</span>
+										<span class="material-symbols" aria-hidden="true">close</span>
 									</button>
 								{/if}
 							</div>
@@ -606,7 +751,7 @@
 							{#if club.viewer_role}
 								<div class="post-actions">
 									<button class="link-btn" onclick={() => toggleReplies(post.id)}>
-										<span class="material-symbols">chat_bubble_outline</span>
+										<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
 										{#if post.reply_count === 0}
 											Reply
 										{:else if expandedThreads[post.id]}
@@ -685,36 +830,54 @@
 								<div class="event-meta">
 									{#if evt.meet_label}
 										<span>
-											<span class="material-symbols">place</span>
+											<span class="material-symbols" aria-hidden="true">place</span>
 											{evt.meet_label}
 										</span>
 									{/if}
 									{#if evt.distance_m != null}
 										<span>
-											<span class="material-symbols">straighten</span>
+											<span class="material-symbols" aria-hidden="true">straighten</span>
 											{fmtKm(evt.distance_m)}
 										</span>
 									{/if}
 									<span>
-										<span class="material-symbols">group</span>
+										<span class="material-symbols" aria-hidden="true">group</span>
 										{evt.attendee_count} going
 									</span>
 								</div>
 							</div>
 							{#if evt.viewer_rsvp === 'going'}
 								<span class="chip chip-going">Going</span>
+							{:else if evt.viewer_rsvp === 'maybe'}
+								<span class="chip chip-maybe">Maybe</span>
 							{/if}
 						</a>
 					{/each}
 				</div>
 			{:else}
-				<div class="empty">
-					<p>No upcoming events.</p>
+				<div class="empty-card">
+					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<h3>No upcoming events</h3>
+					<p class="empty-text">
+						{#if isAdmin}
+							Set up a weekly long run, a tempo session, or a race-day meetup.
+							Members get a tab badge the moment you publish.
+						{:else}
+							Admins post group runs, tempo sessions, and races here. Check
+							back soon — or browse past events below.
+						{/if}
+					</p>
 					{#if isAdmin}
-						<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
-							<span class="material-symbols">add</span>
-							Create the first one
-						</button>
+						<div class="empty-actions">
+							<button
+								class="btn btn-primary"
+								type="button"
+								onclick={() => (showEventModal = true)}
+							>
+								<span class="material-symbols" aria-hidden="true">add</span>
+								Create the first event
+							</button>
+						</div>
 					{/if}
 				</div>
 			{/if}
@@ -734,7 +897,7 @@
 								<h3>{evt.title}</h3>
 								<div class="event-meta">
 									<span>
-										<span class="material-symbols">group</span>
+										<span class="material-symbols" aria-hidden="true">group</span>
 										{evt.attendee_count} attended
 									</span>
 								</div>
@@ -747,20 +910,46 @@
 			{#if isAdmin}
 				<div class="routes-actions">
 					<a href="/routes/new?club={club.id}" class="btn btn-primary">
-						<span class="material-symbols">add</span>
+						<span class="material-symbols" aria-hidden="true">add</span>
 						New route
 					</a>
 					<button class="btn btn-outline" type="button" onclick={openTransferModal}>
-						<span class="material-symbols">arrow_outward</span>
+						<span class="material-symbols" aria-hidden="true">arrow_outward</span>
 						Transfer from My routes
 					</button>
 				</div>
 			{/if}
 			{#if clubRoutes.length === 0}
-				<div class="empty">
-					<p>No club routes yet.</p>
+				<div class="empty-card">
+					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<h3>No club routes yet</h3>
+					<p class="empty-text">
+						{#if isAdmin}
+							Build the official course on the map, or transfer one of your
+							personal routes here so every member can find it.
+						{:else}
+							Admins post the official courses, alternate routes, and race
+							courses here. Build your own under My routes any time.
+						{/if}
+					</p>
 					{#if isAdmin}
-						<p class="muted">Build the official course or transfer one of your personal routes.</p>
+						<div class="empty-actions">
+							<a href="/routes/new?club={club.id}" class="btn btn-primary">
+								<span class="material-symbols" aria-hidden="true">add</span>
+								Build a route
+							</a>
+							<button class="btn btn-outline" type="button" onclick={openTransferModal}>
+								<span class="material-symbols" aria-hidden="true">arrow_outward</span>
+								Transfer one in
+							</button>
+						</div>
+					{:else}
+						<div class="empty-actions">
+							<a href="/routes" class="btn btn-outline">
+								<span class="material-symbols" aria-hidden="true">route</span>
+								Browse my routes
+							</a>
+						</div>
 					{/if}
 				</div>
 			{:else}
@@ -776,7 +965,7 @@
 											ownerUserId={route.user_id}
 										/>
 									{:else}
-										<span class="material-symbols">route</span>
+										<span class="material-symbols" aria-hidden="true">route</span>
 									{/if}
 								</div>
 								<div class="club-route-info">
@@ -801,9 +990,10 @@
 									class="route-remove"
 									type="button"
 									title="Remove from club (returns to uploader's library)"
+									aria-label="Remove route from club"
 									onclick={() => removeRouteFromClub(route.id)}
 								>
-									<span class="material-symbols">link_off</span>
+									<span class="material-symbols" aria-hidden="true">link_off</span>
 								</button>
 							{/if}
 						</div>
@@ -811,20 +1001,12 @@
 				</div>
 			{/if}
 		{:else if tab === 'templates'}
-			<p class="section-hint">
-				Plan templates the club hosts. Members can clone any template into a personal plan with a
-				start date of their choosing — edits won't propagate back to the template.
-			</p>
-			{#if clubTemplates.length === 0}
-				<div class="empty">
-					<p>No plan templates yet.</p>
-					{#if isAdmin}
-						<p class="muted">
-							Create a plan, then on its detail page mark it as a template for this club.
-						</p>
-					{/if}
-				</div>
-			{:else}
+			{#if clubTemplates.length > 0}
+				<p class="section-hint">
+					Members can clone any template into a personal plan with a start date
+					of their choosing. Edits to a clone don't propagate back to the
+					template.
+				</p>
 				<ul class="template-list">
 					{#each clubTemplates as t (t.id)}
 						<li class="template-row">
@@ -835,70 +1017,115 @@
 									· {t.days_per_week}/wk
 								</span>
 							</a>
-							{#if isAdmin}
-								<button
-									class="btn btn-outline btn-sm"
-									type="button"
-									onclick={() => unmakeTemplate(t.id)}
-									title="Remove from club templates (the plan stays in the author's library)"
-								>
-									Unpublish
-								</button>
-							{/if}
+							<div class="template-actions">
+								{#if isMember}
+									<a href="/plans/new?from={t.id}" class="btn btn-primary btn-sm">
+										<span class="material-symbols" aria-hidden="true">content_copy</span>
+										Adopt
+									</a>
+								{/if}
+								{#if isAdmin}
+									<button
+										class="btn btn-outline btn-sm"
+										type="button"
+										onclick={() => unmakeTemplate(t.id)}
+										title="Remove from club templates (the plan stays in the author's library)"
+									>
+										Unpublish
+									</button>
+								{/if}
+							</div>
 						</li>
 					{/each}
 				</ul>
+			{:else}
+				<div class="empty-card">
+					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<h3>No plan templates yet</h3>
+					<p class="empty-text">
+						{#if isAdmin}
+							Templates let members adopt a club-curated training plan with one
+							click. Create a plan first, then on its detail page mark it as a
+							template for this club.
+						{:else}
+							When admins publish training plans, members can adopt them with
+							one click and start training on a schedule of their choosing.
+						{/if}
+					</p>
+					{#if isAdmin}
+						<div class="empty-actions">
+							<a href="/plans/new" class="btn btn-primary">
+								<span class="material-symbols" aria-hidden="true">add</span>
+								Create a plan
+							</a>
+						</div>
+					{/if}
+				</div>
 			{/if}
 		{:else if tab === 'members'}
-			<div class="member-list">
-				{#each members as m (m.user_id)}
-					<div class="member">
-						<a href="/u/{m.user_id}" class="member-link">
-							<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}">
-								{initial(m.display_name)}
-							</div>
-							<strong>{m.display_name ?? 'Member'}</strong>
-						</a>
-						<div class="member-info">
-							{#if isAdmin && m.role !== 'owner' && m.user_id !== club?.owner_id}
-								<select
-									class="role-select"
-									value={m.role}
-									onchange={async (e) => {
-										const target = e.currentTarget as HTMLSelectElement;
-										const newRole = target.value as 'admin' | 'event_organiser' | 'race_director' | 'member';
-										if (!club) return;
-										try {
-											await setMemberRole(club.id, m.user_id, newRole);
-											m.role = newRole;
-										} catch (err) {
-											target.value = m.role;
-											showToast('Failed to change role: ' + err, 'error');
-										}
-									}}
-								>
-									<option value="admin">Admin</option>
-									<option value="event_organiser">Event organiser</option>
-									<option value="race_director">Race director</option>
-									<option value="member">Member</option>
-								</select>
-								{#if m.user_id !== auth.user?.id}
-									<button
-										class="icon-btn danger"
-										title="Remove from club"
-										aria-label="Remove member"
-										onclick={() => (removingMemberId = m.user_id)}
+			{#if members.length === 0}
+				<div class="empty-card">
+					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<h3>No members yet</h3>
+					<p class="empty-text">
+						As soon as someone joins, they'll appear here with their role.
+					</p>
+				</div>
+			{:else}
+				<div class="member-list">
+					{#each members as m (m.user_id)}
+						<div class="member">
+							<a href="/u/{m.user_id}" class="member-link">
+								<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}" aria-hidden="true">
+									{initial(m.display_name)}
+								</div>
+								<div class="member-name">
+									<strong>{m.display_name ?? 'Member'}</strong>
+									{#if m.role !== 'member' && (!isAdmin || m.role === 'owner' || m.user_id === club?.owner_id)}
+										<span class="role-badge role-{m.role}">{m.role.replace('_', ' ')}</span>
+									{/if}
+								</div>
+							</a>
+							<div class="member-info">
+								{#if isAdmin && m.role !== 'owner' && m.user_id !== club?.owner_id}
+									<select
+										class="role-select"
+										value={m.role}
+										aria-label="Change member role"
+										onchange={async (e) => {
+											const target = e.currentTarget as HTMLSelectElement;
+											const newRole = target.value as 'admin' | 'event_organiser' | 'race_director' | 'member';
+											if (!club) return;
+											try {
+												await setMemberRole(club.id, m.user_id, newRole);
+												m.role = newRole;
+											} catch (err) {
+												target.value = m.role;
+												showToast('Failed to change role: ' + err, 'error');
+											}
+										}}
 									>
-										<span class="material-symbols">person_remove</span>
-									</button>
+										<option value="admin">Admin</option>
+										<option value="event_organiser">Event organiser</option>
+										<option value="race_director">Race director</option>
+										<option value="member">Member</option>
+									</select>
+									{#if m.user_id !== auth.user?.id}
+										<button
+											class="icon-btn danger"
+											title="Remove from club"
+											aria-label="Remove member"
+											onclick={() => (removingMemberId = m.user_id)}
+										>
+											<span class="material-symbols" aria-hidden="true">person_remove</span>
+										</button>
+									{/if}
 								{/if}
-							{:else}
-								<span class="role">{m.role.replace('_', ' ')}</span>
-							{/if}
+							</div>
 						</div>
-					</div>
-				{/each}
-			</div>
+					{/each}
+				</div>
+			{/if}
 		{/if}
 	</div>
 
@@ -1494,6 +1721,15 @@
 		font-weight: 600;
 	}
 
+	.chip-maybe {
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text));
+		padding: 0.2rem 0.6rem;
+		border-radius: var(--radius-sm);
+		font-size: 0.8rem;
+		font-weight: 600;
+	}
+
 	.member-list {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
@@ -1551,28 +1787,80 @@
 		color: var(--color-text-secondary);
 		cursor: pointer;
 	}
-	.member-info .role {
-		font-size: 0.75rem;
-		text-transform: capitalize;
-		color: var(--color-text-secondary);
+
+	.member-name {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
 	}
 
-	.empty {
-		padding: var(--space-xl);
-		text-align: center;
+	.role-badge {
+		display: inline-block;
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: capitalize;
+		letter-spacing: 0.02em;
+		padding: 0.05rem 0.45rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-tertiary);
 		color: var(--color-text-secondary);
-		background: var(--color-surface);
-		border: 1px dashed var(--color-border);
-		border-radius: var(--radius-lg);
+		width: fit-content;
+	}
+	.role-badge.role-owner {
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+	}
+	.role-badge.role-admin {
+		background: color-mix(in srgb, var(--color-accent-cyan, var(--color-primary)) 18%, transparent);
+		color: color-mix(in srgb, var(--color-accent-cyan, var(--color-primary)) 80%, var(--color-text));
+	}
+	.role-badge.role-event_organiser,
+	.role-badge.role-race_director {
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text));
+	}
+
+	/* Canonical empty-card pattern (mirrors /clubs, /routes, /runs, /plans).
+	   Card with brand-mark, h3, explainer, primary CTA + secondary actions. */
+	.empty-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-align: center;
 	}
-
-	.empty .hint {
-		color: var(--color-text-tertiary);
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.empty-mark {
+		display: block;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
 		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.empty-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+	.empty-actions .material-symbols {
+		font-size: 1.1rem;
 	}
 
 	.error {
@@ -1758,6 +2046,167 @@
 	.template-meta {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
+	}
+
+	.template-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+		flex-shrink: 0;
+	}
+	.template-actions .material-symbols {
+		font-size: 1rem;
+	}
+
+	.role-line {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--color-primary);
+		font-size: 0.88rem;
+		font-weight: 500;
+		margin: 0.25rem 0 0 0;
+	}
+	.role-line.subtle {
+		color: var(--color-text-secondary);
+		font-weight: 400;
+	}
+	.role-line .material-symbols {
+		font-size: 1rem;
+	}
+	.role-line strong {
+		text-transform: capitalize;
+	}
+
+	/* Skeleton — same shimmer language as /clubs + /routes. The hero / tab
+	   / feed scaffold lands at the real layout's height so the data swap
+	   doesn't shift the page. */
+	.back-skel {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--color-text-tertiary);
+		font-size: 0.9rem;
+		margin-bottom: var(--space-md);
+		opacity: 0.5;
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-hero {
+		grid-template-columns: auto 1fr;
+	}
+	.skel-avatar-lg {
+		width: 4.5rem;
+		height: 4.5rem;
+		border-radius: 50%;
+	}
+	.skel-hero-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		justify-content: center;
+	}
+	.skel-avatar {
+		width: 2.1rem;
+		height: 2.1rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+	.skel-line {
+		height: 0.75rem;
+	}
+	.skel-w-20 { width: 20%; }
+	.skel-w-30 { width: 30%; }
+	.skel-w-40 { width: 40%; }
+	.skel-w-60 { width: 60%; }
+	.skel-w-80 { width: 80%; }
+	.tabs-skel {
+		display: flex;
+		gap: 1.5rem;
+		margin-bottom: var(--space-md);
+		padding-bottom: 0.7rem;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.skel-tab {
+		width: 4rem;
+		height: 0.9rem;
+	}
+	.feed-skel {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+	.skel-post {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-md);
+		pointer-events: none;
+	}
+	.skel-post-head {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+	.skel-post-meta {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		flex: 1;
+	}
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* <=50rem (small tablet / large phone). Stack hero action column
+	   under the text block so it doesn't compress the title. */
+	@media (max-width: 50rem) {
+		.hero {
+			grid-template-columns: auto 1fr;
+		}
+		.hero-actions {
+			grid-column: 1 / -1;
+			flex-direction: row;
+			flex-wrap: wrap;
+		}
+		.tabs {
+			overflow-x: auto;
+			gap: 0.5rem;
+			scrollbar-width: thin;
+		}
+		.tab {
+			flex-shrink: 0;
+		}
 	}
 
 	/* .modal-* classes live in app.css. */

@@ -68,7 +68,7 @@ test.describe('/clubs/[slug] — admin event create', () => {
 
 		// The new event appears in the slug page's upcoming-events
 		// list (Events tab). Switch tabs and find the row.
-		await page.getByRole('button', { name: /^Events/ }).click();
+		await page.getByRole('tab', { name: /^Events/ }).click();
 		const eventRow = page.locator(`a[href*="/events/"]`, { hasText: title });
 		await expect(eventRow).toBeVisible({ timeout: 10_000 });
 
