@@ -706,6 +706,77 @@ test.describe('/runs — filters', () => {
 			const scrollAfter = await page.evaluate(() => window.scrollY);
 			expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);
 		});
+
+		test('clicking the in-page ← back button on /runs/[id] preserves scroll + loaded list (same as browser back)', async ({
+			page,
+			context
+		}) => {
+			// Companion to the goBack() test above. The browser back button
+			// pops history and naturally fires snapshot.restore. But the
+			// in-page back arrow on /runs/[id] is a plain <a href="/runs">
+			// — clicking it does a SvelteKit goto() which PUSHES a fresh
+			// history entry, so snapshot.restore never fires and the user
+			// lands at the top of an empty list. Fix: intercept the click
+			// when we came from /runs and call history.back() so the
+			// captured snapshot is reused.
+			//
+			// Mirrors the user's exact flow: scroll, Load More, scroll
+			// more, open a run, click the ← back arrow.
+			await context.addInitScript(() => {
+				localStorage.setItem(
+					'runs_filters_v1',
+					JSON.stringify({
+						sourceFilter: 'all',
+						activityFilter: 'all',
+						dateRange: 'all',
+						customFrom: '',
+						customTo: '',
+						sortKey: 'newest'
+					})
+				);
+			});
+			await page.goto('/runs');
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+
+			// First scroll — about 6 cards in.
+			await page.locator('.run-card').nth(6).scrollIntoViewIfNeeded();
+
+			// Load More.
+			await page.getByRole('button', { name: /Load.*more/i }).click();
+			await expect(page.locator('.run-card').nth(50)).toBeVisible({
+				timeout: 10_000
+			});
+			const totalCards = await page.locator('.run-card').count();
+			expect(totalCards).toBeGreaterThanOrEqual(100);
+
+			// Scroll a bit more — into the second page.
+			await page.locator('.run-card').nth(70).scrollIntoViewIfNeeded();
+			const scrollBefore = await page.evaluate(() => window.scrollY);
+			expect(scrollBefore).toBeGreaterThan(300);
+
+			// Open the 70th card.
+			await page.locator('.run-card').nth(70).click();
+			await page.waitForURL(/\/runs\/[a-f0-9-]+$/);
+			await page.waitForLoadState('networkidle');
+
+			// Click the in-page back arrow (NOT browser back). The link
+			// text is "All runs" with an arrow_back icon.
+			await page.getByRole('link', { name: /All runs/ }).click();
+			await page.waitForURL(/\/runs$/);
+			await page.waitForLoadState('networkidle');
+
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+
+			const cardsAfter = await page.locator('.run-card').count();
+			expect(cardsAfter).toBe(totalCards);
+
+			const scrollAfter = await page.evaluate(() => window.scrollY);
+			expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);
+		});
 	});
 
 	test.describe('Layout stability — scrollbar gutter', () => {

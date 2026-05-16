@@ -33,7 +33,7 @@
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/run_stats';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -44,6 +44,30 @@
 
 	let run = $state<Run | null>(null);
 	let loading = $state(true);
+
+	/// Track where the user came from so the in-page back button can
+	/// genuinely go BACK (history.back) — which pops the history entry
+	/// and lets /runs's snapshot.restore fire, preserving the loaded
+	/// list + scroll position. Falling through to <a href="/runs"> would
+	/// push a fresh entry and the user would land at the top of an
+	/// empty list. Captured on the first afterNavigate after mount so
+	/// SvelteKit's own forward navigations within this page (rare) don't
+	/// overwrite it.
+	let cameFromRuns = $state(false);
+	afterNavigate(({ from }) => {
+		if (from?.url.pathname === '/runs' && !cameFromRuns) {
+			cameFromRuns = true;
+		}
+	});
+
+	function handleBack(e: MouseEvent): void {
+		if (cameFromRuns) {
+			e.preventDefault();
+			history.back();
+		}
+		// else: <a href="/runs"> falls through and SvelteKit does a
+		// normal soft-nav. The user gets a fresh /runs.
+	}
 	let linkedWorkout = $state<PlanWorkout | null>(null);
 	/// Selected segment from the map. Set when the user clicks a point
 	/// on the trace; cleared by tapping the overlay's close button or
@@ -691,7 +715,7 @@
 	</div>
 {:else}
 <div class="run-detail">
-	<a href="/runs" class="back-link page-back">
+	<a href="/runs" class="back-link page-back" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span> All runs
 	</a>
 	<div class="run-detail-body">
