@@ -11,14 +11,9 @@
 	// Recovery token arrives in the URL hash; supabase-js consumes it
 	// automatically (detectSessionInUrl=true) on this navigation, then
 	// fires onAuthStateChange with a PASSWORD_RECOVERY-tagged session.
-	// Until the auth store settles we show a brief "Verifying..." state.
 	let ready = $state(false);
 
 	onMount(async () => {
-		// Wait briefly for supabase-js to parse the hash and mint the
-		// recovery session. The auth store's onAuthStateChange handler
-		// flips auth.loading -> false once the session is detected;
-		// auth.user is then populated.
 		for (let i = 0; i < 30 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 100));
 		}
@@ -50,121 +45,231 @@
 </script>
 
 <div class="reset-page">
-	<div class="reset-card">
+	<header class="reset-header">
 		<a href="/" class="logo">
 			<img src="/icon-192.png" alt="" class="logo-mark" />
 			<span>Run Onward</span>
 		</a>
-		<h1>Set a new password</h1>
+	</header>
 
-		{#if !ready}
-			<p class="muted">Verifying your reset link…</p>
-		{:else if !auth.user}
-			<p class="error">
-				This reset link is invalid or has expired. Request a fresh one
-				from the <a href="/login?reset=1">forgot-password</a> page.
-			</p>
-		{:else}
-			<p class="subtitle">Choose a new password for {auth.user.email}.</p>
+	<main class="reset-main">
+		<div class="reset-card">
+			<p class="kicker">Almost there</p>
+			<h1>Set a new password</h1>
 
-			{#if error}
-				<div class="error">{error}</div>
+			{#if !ready}
+				<p class="muted">Verifying your reset link…</p>
+			{:else if !auth.user}
+				<p class="muted">This reset link is invalid or has expired.</p>
+				<div class="error-block">
+					<p>
+						Reset links expire after a short window for security. Request a fresh one
+						and we'll send it to the same inbox.
+					</p>
+				</div>
+				<a class="btn btn-primary reset-cta" href="/login?reset=1">Request a new link</a>
+			{:else}
+				<p class="subtitle">Choose a new password for <strong>{auth.user.email}</strong>.</p>
+
+				{#if error}
+					<div class="error">{error}</div>
+				{/if}
+
+				<form class="reset-form" onsubmit={handleSubmit}>
+					<input
+						type="password"
+						bind:value={password}
+						placeholder="New password"
+						required
+						minlength="6"
+						autocomplete="new-password"
+					/>
+					<input
+						type="password"
+						bind:value={confirmPassword}
+						placeholder="Confirm new password"
+						required
+						minlength="6"
+						autocomplete="new-password"
+					/>
+					<button type="submit" class="btn btn-primary reset-cta" disabled={busy}>
+						{busy ? 'Updating…' : 'Update password'}
+					</button>
+				</form>
+				<p class="reset-hint">Pick something at least 6 characters long.</p>
 			{/if}
+		</div>
+	</main>
 
-			<form class="reset-form" onsubmit={handleSubmit}>
-				<input
-					type="password"
-					bind:value={password}
-					placeholder="New password"
-					required
-					minlength="6"
-					autocomplete="new-password"
-				/>
-				<input
-					type="password"
-					bind:value={confirmPassword}
-					placeholder="Confirm new password"
-					required
-					minlength="6"
-					autocomplete="new-password"
-				/>
-				<button type="submit" class="btn btn-primary" disabled={busy}>
-					{busy ? 'Updating…' : 'Update password'}
-				</button>
-			</form>
-		{/if}
-	</div>
+	<footer class="reset-footer">
+		<a href="/login">Back to sign in</a>
+	</footer>
 </div>
 
 <style>
 	.reset-page {
-		display: flex;
-		align-items: center;
-		justify-content: center;
 		min-height: 100vh;
-		padding: var(--space-xl);
-		background: var(--color-bg);
-	}
-	.reset-card {
-		width: 100%;
-		max-width: 24rem;
-		padding: var(--space-2xl);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg, 12px);
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-md);
-		text-align: center;
+		background: var(--color-bg);
 	}
+
+	.reset-header {
+		padding: var(--space-md) var(--space-xl);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+
 	.logo {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-sm);
 		font-weight: 700;
-		font-size: 1.25rem;
-		color: var(--color-primary);
+		font-size: 1.15rem;
+		color: var(--color-text);
 		text-decoration: none;
 	}
-	.logo .logo-mark {
-		width: 2rem;
-		height: 2rem;
+	.logo-mark {
+		width: 1.85rem;
+		height: 1.85rem;
 		border-radius: var(--radius-md);
 		display: block;
 		box-shadow: var(--shadow-sm);
 		object-fit: cover;
 	}
-	h1 {
-		margin: 0;
-		font-size: 1.4rem;
+	.logo span {
+		background: var(--gradient-primary);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 	}
+
+	.reset-main {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-xl) var(--space-md);
+	}
+
+	.reset-card {
+		width: 100%;
+		max-width: 28rem;
+		padding: var(--space-2xl) var(--space-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-lg);
+		text-align: center;
+	}
+
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-xs);
+	}
+
+	h1 {
+		margin: 0 0 var(--space-sm);
+		font-size: 1.6rem;
+		font-weight: 800;
+		letter-spacing: -0.01em;
+		color: var(--color-text);
+	}
+
 	.subtitle {
 		color: var(--color-text-secondary);
-		font-size: 0.9rem;
-		margin: 0;
+		font-size: 0.95rem;
+		margin: 0 0 var(--space-xl);
+		line-height: 1.5;
 	}
+	.subtitle strong {
+		color: var(--color-text);
+		font-weight: 600;
+	}
+
 	.muted {
-		color: var(--color-text-tertiary);
-		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+		margin: 0 0 var(--space-md);
 	}
+
 	.reset-form {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
+		text-align: left;
 	}
 	.reset-form input {
-		padding: 0.6rem 0.8rem;
+		padding: 0.7rem var(--space-md);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		font-size: 0.95rem;
+		font-family: inherit;
+		background: var(--color-surface);
+		color: var(--color-text);
+		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 	}
+	.reset-form input:focus {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+	}
+
+	.reset-cta {
+		width: 100%;
+		padding: 0.85rem var(--space-lg);
+		font-size: 0.95rem;
+		margin-top: var(--space-xs);
+	}
+
+	.reset-hint {
+		margin: var(--space-md) 0 0;
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+
 	.error {
 		background: var(--color-danger-light);
-		border: 1px solid rgba(229, 57, 53, 0.3);
+		border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 		color: var(--color-danger);
 		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
 		text-align: left;
+		margin-bottom: var(--space-md);
+	}
+
+	.error-block {
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		padding: var(--space-md);
+		border-radius: var(--radius-md);
+		text-align: left;
+		margin-bottom: var(--space-md);
+	}
+	.error-block p {
+		margin: 0;
+		font-size: 0.88rem;
+		line-height: 1.5;
+		color: var(--color-text-secondary);
+	}
+
+	.reset-footer {
+		padding: var(--space-lg) var(--space-md);
+		border-top: 1px solid var(--color-border);
+		text-align: center;
+		font-size: 0.85rem;
+		background: var(--color-surface);
+	}
+	.reset-footer a {
+		color: var(--color-text-secondary);
+		text-decoration: none;
+	}
+	.reset-footer a:hover {
+		color: var(--color-primary);
 	}
 </style>

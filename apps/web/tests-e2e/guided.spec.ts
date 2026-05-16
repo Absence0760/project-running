@@ -83,10 +83,14 @@ test.describe('/guided/[id] — detail pages', () => {
 		// facing contract is "renders an empty state with a back link".
 		expect(res?.status() ?? 200).toBeGreaterThanOrEqual(200);
 		await expect(page.getByText(/Unknown guided run/)).toBeVisible();
-		await expect(page.getByRole('link', { name: /Back to library/ })).toHaveAttribute(
-			'href',
-			'/guided'
-		);
+		// The empty state surfaces two paths to the library: a small back-
+		// link at the top and a primary CTA inside the empty card. Both
+		// point at /guided. Assert the CTA (the visible, big one a user
+		// would actually click) so the test fails if the empty state
+		// loses its primary action.
+		await expect(
+			page.locator('.empty').getByRole('link', { name: /Back to library/, exact: true })
+		).toHaveAttribute('href', '/guided');
 	});
 
 	test('document title falls back to "Guided run" on unknown id', async ({ page }) => {

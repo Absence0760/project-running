@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { afterNavigate } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchWorkout, markWorkoutCompleted } from '$lib/data';
 	import { fmtHms, isWorkoutCompleted, WORKOUT_KIND_LABEL } from '$lib/training';
 	import { fmtKm, fmtPace } from '$lib/units.svelte';
@@ -14,13 +16,31 @@
 	let loading = $state(true);
 	let showUnlinkConfirm = $state(false);
 
+	let cameFromPlan = $state(false);
+	afterNavigate(({ from }) => {
+		if (!cameFromPlan && from?.url.pathname === `/plans/${planId}`) {
+			cameFromPlan = true;
+		}
+	});
+	function handleBack(e: MouseEvent): void {
+		if (cameFromPlan) {
+			e.preventDefault();
+			history.back();
+		}
+	}
+
 	async function load() {
 		loading = true;
 		workout = await fetchWorkout(wid);
 		loading = false;
 	}
 
-	onMount(load);
+	onMount(async () => {
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
+		await load();
+	});
 
 	let structure = $derived(
 		(workout?.structure as unknown as WorkoutStructure | null) ?? null
@@ -48,28 +68,113 @@
 			(s.cooldown?.distance_m ?? 0)
 		);
 	}
+
+	type SegmentVisual = {
+		role: 'warmup' | 'work' | 'recovery' | 'steady' | 'cooldown';
+		fraction: number;
+	};
+
+	function segmentVisuals(s: WorkoutStructure): SegmentVisual[] {
+		const total = intervalTotal(s);
+		if (total <= 0) return [];
+		const out: SegmentVisual[] = [];
+		if (s.warmup) out.push({ role: 'warmup', fraction: s.warmup.distance_m / total });
+		if (s.repeats) {
+			for (let i = 0; i < s.repeats.count; i++) {
+				out.push({ role: 'work', fraction: s.repeats.distance_m / total });
+				if (i < s.repeats.count - 1) {
+					out.push({ role: 'recovery', fraction: s.repeats.recovery_distance_m / total });
+				}
+			}
+			out.push({ role: 'recovery', fraction: s.repeats.recovery_distance_m / total });
+		}
+		if (s.steady) out.push({ role: 'steady', fraction: s.steady.distance_m / total });
+		if (s.cooldown) out.push({ role: 'cooldown', fraction: s.cooldown.distance_m / total });
+		return out;
+	}
+
+	function fmtIsoDate(iso: string): string {
+		const [y, m, d] = iso.split('-').map(Number);
+		const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+		return dt.toLocaleDateString('en-GB', {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long',
+			year: 'numeric'
+		});
+	}
+
+	function workoutKindLabel(kind: string): string {
+		return WORKOUT_KIND_LABEL[kind as keyof typeof WORKOUT_KIND_LABEL] ?? kind;
+	}
+
+	let kindForChrome = $derived(workout?.kind ?? 'easy');
 </script>
 
 {#if loading}
-	<p class="centered muted">Loading…</p>
-{:else if !workout}
-	<div class="centered">
-		<h2>Workout not found</h2>
-		<a class="btn-secondary" href="/plans/{planId}">Back to plan</a>
+	<div class="page" aria-busy="true" aria-label="Loading workout">
+		<span class="back-skel" aria-hidden="true">
+			<span class="material-symbols">arrow_back</span>
+			Back to plan
+		</span>
+		<div class="hero skel-hero" aria-hidden="true">
+			<div class="skel-hero-text">
+				<span class="skel skel-line skel-w-20"></span>
+				<span class="skel skel-line skel-w-40"></span>
+				<span class="skel skel-line skel-w-60"></span>
+			</div>
+		</div>
+		<div class="skel-card" aria-hidden="true">
+			<span class="skel skel-line skel-w-20"></span>
+			<span class="skel skel-line skel-w-80"></span>
+			<span class="skel skel-line skel-w-60"></span>
+		</div>
 	</div>
-{:else}
+	<p class="sr-only" role="status">Loading workout…</p>
+{:else if !workout}
 	<div class="page">
 		<a class="back" href="/plans/{planId}">
-			<span class="material-symbols">arrow_back</span>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			Back to plan
+		</a>
+		<div class="empty-card">
+			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<h2>Workout not found</h2>
+			<p class="empty-text">
+				This workout may have been removed from the plan, or the plan no
+				longer exists.
+			</p>
+			<div class="empty-actions">
+				<a class="btn btn-primary" href="/plans/{planId}">Return to plan</a>
+			</div>
+		</div>
+	</div>
+{:else}
+	<div class="page" data-kind={kindForChrome}>
+		<a class="back" href="/plans/{planId}" onclick={handleBack}>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to plan
 		</a>
 
 		<header class="hero">
-			<div>
-				<span class="label">{workout.scheduled_date}</span>
-				<h1>
-					{WORKOUT_KIND_LABEL[workout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? workout.kind}
-				</h1>
+			<div class="hero-body">
+				<span class="kicker">{fmtIsoDate(workout.scheduled_date)}</span>
+				<h1>{workoutKindLabel(workout.kind)}</h1>
+				<p class="tagline">
+					{#if structure}
+						Structured workout — follow each segment as written.
+					{:else if workout.kind === 'easy' || workout.kind === 'recovery'}
+						Free-form easy effort. Run by feel.
+					{:else if workout.kind === 'long'}
+						Free-form long run. Pace yourself for the back half.
+					{:else if workout.kind === 'rest'}
+						Rest day. Light movement only if you feel like it.
+					{:else if workout.kind === 'race'}
+						Race day. Trust the taper.
+					{:else}
+						Free-form run.
+					{/if}
+				</p>
 				<div class="meta">
 					{#if workout.target_distance_m != null}
 						<div class="metric">
@@ -84,7 +189,7 @@
 						</div>
 					{/if}
 					{#if workout.target_pace_sec_per_km}
-						<div class="metric">
+						<div class="metric pace-metric">
 							<span class="m-label">Target pace</span>
 							<strong>
 								{fmtPace(workout.target_pace_sec_per_km)}
@@ -93,20 +198,22 @@
 									{fmtPace(workout.target_pace_end_sec_per_km)}
 								{/if}
 							</strong>
-							{#if workout.target_pace_tolerance_sec}
-								<span class="tol">±{workout.target_pace_tolerance_sec}s</span>
-							{/if}
-							{#if workout.pace_zone}
-								<span class="zone">{workout.pace_zone}</span>
-							{/if}
+							<span class="pace-extras">
+								{#if workout.target_pace_tolerance_sec}
+									<span class="tol">±{workout.target_pace_tolerance_sec}s</span>
+								{/if}
+								{#if workout.pace_zone}
+									<span class="zone">{workout.pace_zone}</span>
+								{/if}
+							</span>
 						</div>
 					{/if}
 				</div>
 			</div>
 			{#if isWorkoutCompleted(workout)}
 				<div class="completed-card">
-					<span class="material-symbols">check_circle</span>
-					<span>Completed</span>
+					<span class="material-symbols" aria-hidden="true">check_circle</span>
+					<span class="completed-label">Completed</span>
 					<button class="btn-ghost" onclick={unlink}>
 						{workout.completed_run_id ? 'Unlink' : 'Mark not done'}
 					</button>
@@ -122,41 +229,73 @@
 		{/if}
 
 		{#if structure}
-			<section class="card">
+			<section class="card structure-card">
 				<h3>Structure</h3>
+				<div class="timeline" role="img" aria-label="Workout segment timeline">
+					{#each segmentVisuals(structure) as seg, i (i)}
+						<span
+							class="tl-seg tl-{seg.role}"
+							style="flex: {Math.max(seg.fraction, 0.01)};"
+							title={seg.role}
+						></span>
+					{/each}
+				</div>
 				<ol class="steps">
 					{#if structure.warmup}
-						<li>
+						<li class="step step-warmup">
 							<span class="step-kind">Warmup</span>
-							<span>{fmtKm(structure.warmup.distance_m, 1)} @ easy</span>
+							<span class="step-body">
+								<span class="step-main">{fmtKm(structure.warmup.distance_m, 1)}</span>
+								<span class="step-pace">@ easy</span>
+							</span>
 						</li>
 					{/if}
 					{#if structure.repeats}
-						<li>
+						<li class="step step-work">
 							<span class="step-kind">Repeats</span>
-							<span>
-								{structure.repeats.count}× {fmtKm(structure.repeats.distance_m, 2)}
-								@ {fmtPace(structure.repeats.pace_sec_per_km)} with
-								{fmtKm(structure.repeats.recovery_distance_m, 2)} {structure.repeats.recovery_pace}
+							<span class="step-body">
+								<span class="step-main">
+									{structure.repeats.count}× {fmtKm(structure.repeats.distance_m, 2)}
+									@ {fmtPace(structure.repeats.pace_sec_per_km)} with
+									{fmtKm(structure.repeats.recovery_distance_m, 2)} {structure.repeats.recovery_pace}
+								</span>
 							</span>
 						</li>
 					{/if}
 					{#if structure.steady}
-						<li>
+						<li class="step step-steady">
 							<span class="step-kind">Steady</span>
-							<span>
-								{fmtKm(structure.steady.distance_m, 1)} @ {fmtPace(structure.steady.pace_sec_per_km)}
+							<span class="step-body">
+								<span class="step-main">{fmtKm(structure.steady.distance_m, 1)}</span>
+								<span class="step-pace">@ {fmtPace(structure.steady.pace_sec_per_km)}</span>
 							</span>
 						</li>
 					{/if}
 					{#if structure.cooldown}
-						<li>
+						<li class="step step-cooldown">
 							<span class="step-kind">Cooldown</span>
-							<span>{fmtKm(structure.cooldown.distance_m, 1)} @ easy</span>
+							<span class="step-body">
+								<span class="step-main">{fmtKm(structure.cooldown.distance_m, 1)}</span>
+								<span class="step-pace">@ easy</span>
+							</span>
 						</li>
 					{/if}
 				</ol>
 				<p class="total">Total: {fmtKm(intervalTotal(structure), 2)}</p>
+			</section>
+		{:else if workout.kind !== 'rest'}
+			<section class="card structure-empty">
+				<h3>Plan it</h3>
+				<div class="structure-empty-body">
+					<span class="material-symbols" aria-hidden="true">timeline</span>
+					<div>
+						<strong>Free-form run</strong>
+						<span class="muted">
+							No segments to follow — just run the distance at the suggested
+							pace.
+						</span>
+					</div>
+				</div>
 			</section>
 		{/if}
 
@@ -205,9 +344,22 @@
 
 <style>
 	.page {
-		max-width: 48rem;
+		max-width: 56rem;
 		padding: var(--space-xl) var(--space-2xl);
+
+		/* Per-kind tint applied to hero accent, step bars, and timeline.
+		   Defaults to the primary palette; specific kinds remap below. */
+		--kind-tint: var(--color-primary);
 	}
+	.page[data-kind="tempo"]      { --kind-tint: #C98ECF; }
+	.page[data-kind="interval"]   { --kind-tint: #D97A54; }
+	.page[data-kind="marathon_pace"] { --kind-tint: #E6A96B; }
+	.page[data-kind="long"]       { --kind-tint: var(--color-primary); }
+	.page[data-kind="easy"]       { --kind-tint: var(--color-text-secondary); }
+	.page[data-kind="recovery"]   { --kind-tint: var(--color-text-tertiary); }
+	.page[data-kind="race"]       { --kind-tint: var(--color-primary); }
+	.page[data-kind="rest"]       { --kind-tint: var(--color-text-tertiary); }
+
 	.back {
 		display: inline-flex;
 		align-items: center;
@@ -215,93 +367,132 @@
 		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		margin-bottom: var(--space-md);
+		text-decoration: none;
 	}
+	.back:hover { color: var(--color-primary); }
+	.back .material-symbols { font-size: 1.05rem; }
+
 	.hero {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--space-lg);
+		align-items: start;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--kind-tint) 14%, var(--color-surface)) 0%,
+			var(--color-surface) 70%
+		);
+		border: 1px solid color-mix(in srgb, var(--kind-tint) 30%, var(--color-border));
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-sm);
+		padding: var(--space-lg) var(--space-xl);
 		margin-bottom: var(--space-md);
 	}
-	.hero h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		margin: 0.3rem 0 0.6rem 0;
+	.hero-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		min-width: 0;
 	}
-	.label {
-		font-size: 0.78rem;
-		letter-spacing: 0.08em;
-		color: var(--color-primary);
+	.hero h1 {
+		font-size: 1.65rem;
+		font-weight: 700;
+		margin: 0;
+		line-height: 1.15;
+	}
+	.kicker {
+		font-size: var(--font-size-section-label);
+		letter-spacing: 0.1em;
+		color: var(--kind-tint);
 		font-weight: 700;
 		text-transform: uppercase;
+	}
+	.tagline {
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+		line-height: 1.5;
+		max-width: 44rem;
+		margin: var(--space-2xs) 0 var(--space-xs) 0;
 	}
 	.meta {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 1.4rem;
+		gap: 2rem;
+		margin-top: var(--space-2xs);
 	}
 	.metric {
 		display: flex;
 		flex-direction: column;
+		gap: 0.1rem;
 	}
 	.m-label {
 		font-size: 0.72rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--color-text-tertiary);
+		font-weight: 600;
+	}
+	.metric strong {
+		font-size: 1.15rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.pace-extras {
+		display: inline-flex;
+		gap: 0.4rem;
+		align-items: center;
+		margin-top: 0.15rem;
 	}
 	.tol {
 		color: var(--color-text-tertiary);
-		margin-left: 0.25rem;
 		font-size: 0.78rem;
+		font-variant-numeric: tabular-nums;
 	}
 	.arrow {
 		color: var(--color-text-tertiary);
-		margin: 0 0.2rem;
+		margin: 0 0.25rem;
 		font-weight: 400;
 	}
 	.zone {
 		display: inline-block;
-		margin-left: 0.45rem;
-		padding: 0.1rem 0.45rem;
+		padding: 0.1rem 0.5rem;
 		border-radius: var(--radius-sm);
-		background: var(--color-primary-light);
-		color: var(--color-primary);
-		font-size: 0.72rem;
+		background: color-mix(in srgb, var(--kind-tint) 18%, transparent);
+		color: var(--kind-tint);
+		font-size: 0.7rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
+		white-space: nowrap;
 	}
 	.completed-card {
-		background: var(--color-primary-light);
-		color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-success) 14%, transparent);
+		color: var(--color-success);
 		padding: 0.55rem 0.85rem;
+		border: 1px solid color-mix(in srgb, var(--color-success) 35%, transparent);
 		border-radius: var(--radius-md);
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: 0.45rem;
 		font-weight: 700;
+		flex-shrink: 0;
 	}
-	.completed-card .material-symbols {
-		font-size: 1.15rem;
-	}
+	.completed-card .material-symbols { font-size: 1.15rem; }
+	.completed-card .completed-label { font-size: 0.92rem; }
 	.btn-ghost {
 		background: none;
 		border: none;
-		color: var(--color-primary);
+		color: var(--color-success);
 		font-weight: 600;
 		text-decoration: underline;
 		cursor: pointer;
 		font-size: 0.85rem;
-		margin-left: 0.45rem;
 	}
+
 	.card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 		margin-bottom: var(--space-md);
 	}
 	.card h3 {
@@ -309,48 +500,210 @@
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--color-text-tertiary);
-		margin-bottom: 0.4rem;
+		margin: 0 0 var(--space-sm) 0;
 	}
-	.card p {
-		line-height: 1.55;
+	.card p { line-height: 1.55; margin: 0; }
+
+	.timeline {
+		display: flex;
+		height: 0.55rem;
+		gap: 2px;
+		margin-bottom: var(--space-sm);
+		border-radius: 9999px;
+		overflow: hidden;
+		background: var(--color-bg-secondary);
 	}
+	.tl-seg { display: block; min-width: 0.15rem; }
+	.tl-warmup   { background: color-mix(in srgb, var(--color-text-secondary) 55%, transparent); }
+	.tl-work     { background: var(--kind-tint); }
+	.tl-recovery { background: color-mix(in srgb, var(--kind-tint) 25%, var(--color-bg-tertiary)); }
+	.tl-steady   { background: var(--kind-tint); }
+	.tl-cooldown { background: color-mix(in srgb, var(--color-text-secondary) 35%, transparent); }
+
 	.steps {
 		list-style: none;
 		padding: 0;
+		margin: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
 	}
-	.steps li {
-		display: flex;
+	.step {
+		display: grid;
+		grid-template-columns: 6rem 1fr;
 		gap: 0.8rem;
-		padding: 0.5rem 0.7rem;
+		align-items: baseline;
+		padding: 0.6rem 0.85rem;
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
+		border-left: 3px solid var(--seg-color, var(--color-text-tertiary));
 	}
+	.step-warmup   { --seg-color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent); }
+	.step-work     { --seg-color: var(--kind-tint); }
+	.step-steady   { --seg-color: var(--kind-tint); }
+	.step-cooldown { --seg-color: color-mix(in srgb, var(--color-text-secondary) 35%, transparent); }
 	.step-kind {
 		font-weight: 700;
-		color: var(--color-primary);
-		min-width: 5.5rem;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--seg-color, var(--color-primary));
+	}
+	.step-body {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.4rem;
+		min-width: 0;
+	}
+	.step-main {
+		font-weight: 600;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.step-pace {
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+		font-size: 0.92rem;
 	}
 	.total {
-		margin-top: 0.6rem;
+		margin: var(--space-sm) 0 0 0;
 		color: var(--color-text-secondary);
 		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
-	.centered {
-		text-align: center;
-		padding: var(--space-2xl);
+
+	.structure-empty .structure-empty-body {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) 0;
 	}
-	.muted {
+	.structure-empty .material-symbols {
+		font-size: 1.5rem;
 		color: var(--color-text-tertiary);
+		flex-shrink: 0;
 	}
-	.btn-secondary {
-		background: transparent;
+	.structure-empty div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+	.structure-empty strong {
 		color: var(--color-text);
-		padding: 0.55rem 1rem;
-		border-radius: var(--radius-md);
+		font-size: 0.95rem;
+	}
+	.muted { color: var(--color-text-tertiary); font-size: 0.88rem; }
+
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		font-weight: 600;
+		border-radius: var(--radius-lg);
+		text-align: center;
+	}
+	.empty-card h2 {
+		margin: 0;
+		font-size: 1.2rem;
+		font-weight: 700;
+	}
+	.empty-mark {
+		display: block;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.empty-actions {
+		display: flex;
+		justify-content: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+
+	.back-skel {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--color-text-tertiary);
+		font-size: 0.9rem;
+		margin-bottom: var(--space-md);
+		opacity: 0.5;
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line { height: 0.75rem; }
+	.skel-w-20 { width: 20%; }
+	.skel-w-40 { width: 40%; }
+	.skel-w-60 { width: 60%; }
+	.skel-w-80 { width: 80%; }
+	.skel-hero {
+		grid-template-columns: 1fr;
+	}
+	.skel-hero-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		min-width: 0;
+	}
+	.skel-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		margin-bottom: var(--space-md);
+	}
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	@media (max-width: 50rem) {
+		.hero {
+			grid-template-columns: 1fr;
+		}
+		.completed-card { align-self: stretch; justify-content: center; }
+		.step {
+			grid-template-columns: 1fr;
+			gap: 0.25rem;
+		}
 	}
 </style>

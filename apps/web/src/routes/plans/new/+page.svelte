@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import {
 		fetchMyClubs,
@@ -21,10 +21,30 @@
 	let startDate = $state(defaultStartDate());
 	let cloning = $state(false);
 
+	let cameFromPlans = $state(false);
+	afterNavigate(({ from }) => {
+		if (cameFromPlans || !from) return;
+		if (from.url.pathname === '/plans' || from.url.pathname.startsWith('/plans?')) {
+			cameFromPlans = true;
+		}
+	});
+
+	function handleBack(e: MouseEvent): void {
+		if (cameFromPlans) {
+			e.preventDefault();
+			history.back();
+		}
+	}
+
+	function handleCancel(): void {
+		if (cameFromPlans) history.back();
+		else goto('/plans');
+	}
+
 	function defaultStartDate(): string {
 		const d = new Date();
-		// Snap to the next Monday by default — that's the canonical
-		// week-start the schedule generator assumes.
+		// Snap to the next Monday — that's the canonical week-start the
+		// schedule generator assumes.
 		const offset = (8 - d.getDay()) % 7;
 		d.setDate(d.getDate() + (offset === 0 ? 7 : offset));
 		const pad = (n: number) => String(n).padStart(2, '0');
@@ -63,16 +83,25 @@
 	}
 </script>
 
+<svelte:head>
+	<title>New plan — Run Onward</title>
+</svelte:head>
+
 <div class="page">
-	<a class="back" href="/plans">
+	<a href="/plans" class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
 		Back to plans
 	</a>
-	<h1>New plan</h1>
-	<p class="sub">
-		Pick a goal race and we'll schedule the phases, long runs, and quality sessions for you.
-		The preview on the right updates as you type.
-	</p>
+
+	<header class="page-header">
+		<p class="kicker">New plan</p>
+		<h1>Build a training plan</h1>
+		<p class="tagline">
+			Pick a goal race and we'll schedule the phases, long runs, and quality sessions for you.
+			Every week is editable before you commit — adjust days per week, target paces, or
+			individual workouts as you go.
+		</p>
+	</header>
 
 	{#if !loadingTemplates && templates.length > 0}
 		<section class="template-picker">
@@ -103,7 +132,12 @@
 					disabled={!selectedTemplateId || !startDate || cloning}
 					onclick={cloneSelected}
 				>
-					{cloning ? 'Cloning…' : 'Clone template'}
+					{#if cloning}
+						<span class="btn-spinner" aria-hidden="true"></span>
+						Cloning…
+					{:else}
+						Clone template
+					{/if}
 				</button>
 			</div>
 		</section>
@@ -113,7 +147,7 @@
 
 	<PlanEditor
 		oncreated={(plan) => goto(`/plans/${plan.id}`)}
-		oncancel={() => history.back()}
+		oncancel={handleCancel}
 	/>
 </div>
 
@@ -121,21 +155,45 @@
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
 	}
-	.back {
+	.back-link {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.3rem;
+		gap: var(--space-2xs);
+		font-size: 0.88rem;
+		font-weight: 500;
 		color: var(--color-text-secondary);
-		font-size: 0.9rem;
+		text-decoration: none;
+		padding: var(--space-xs) 0;
 		margin-bottom: var(--space-md);
+	}
+	.back-link:hover {
+		color: var(--color-primary);
+	}
+	.back-link .material-symbols {
+		font-size: 1.1rem;
+	}
+	.page-header {
+		margin-bottom: var(--space-xl);
+	}
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-2xs);
 	}
 	h1 {
 		font-size: 1.75rem;
-		font-weight: 700;
+		font-weight: 800;
+		line-height: 1.2;
+		margin: 0 0 var(--space-xs);
 	}
-	.sub {
+	.tagline {
 		color: var(--color-text-secondary);
-		margin: 0.3rem 0 var(--space-lg) 0;
+		font-size: 0.95rem;
+		line-height: 1.5;
+		margin: 0;
 		max-width: 44rem;
 	}
 
@@ -198,5 +256,24 @@
 		flex: 1;
 		height: 1px;
 		background: var(--color-border);
+	}
+
+	.btn-spinner {
+		display: inline-block;
+		width: 0.85em;
+		height: 0.85em;
+		margin-right: 0.35em;
+		border: 2px solid color-mix(in srgb, currentColor 40%, transparent);
+		border-top-color: currentColor;
+		border-radius: 50%;
+		vertical-align: -0.1em;
+		animation: btn-spin 0.6s linear infinite;
+	}
+	@keyframes btn-spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.material-symbols {
+		font-family: 'Material Symbols Outlined';
 	}
 </style>

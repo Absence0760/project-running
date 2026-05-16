@@ -18,9 +18,6 @@
 	import type { EventWithMeta } from '$lib/types';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 
-	// Route params: event id + ISO `instance_start`. The instance value
-	// is URL-encoded by the organiser's "Spectator view" link on the
-	// event page.
 	let eventId = $derived($page.params.id as string);
 	let instance = $derived(decodeURIComponent($page.params.instance as string));
 
@@ -50,8 +47,6 @@
 	const TRAIL_CAP = 30;
 	let trailsByUser = $derived.by(() => {
 		const byUser = new Map<string, RacePingRow[]>();
-		// recentPings is newest-first; reverse to chronological so the
-		// LineString runs in time order.
 		for (let i = recentPings.length - 1; i >= 0; i--) {
 			const p = recentPings[i];
 			const arr = byUser.get(p.user_id) ?? [];
@@ -76,6 +71,15 @@
 		return `hsl(${hueFor(userId)}, 70%, 50%)`;
 	}
 
+	function initialsFor(userId: string): string {
+		const name = profiles.get(userId)?.display_name;
+		if (name) {
+			const parts = name.trim().split(/\s+/).slice(0, 2);
+			return parts.map((p) => p.charAt(0).toUpperCase()).join('') || '?';
+		}
+		return userId.slice(0, 2).toUpperCase();
+	}
+
 	async function load() {
 		const [e, rs, ps, rr] = await Promise.all([
 			fetchEventById(eventId),
@@ -87,7 +91,6 @@
 		race = rs;
 		recentPings = ps;
 		results = rr;
-		// Collect display names for every user_id referenced by pings + results.
 		const ids = new Set<string>();
 		for (const p of ps) ids.add(p.user_id);
 		for (const r of rr) ids.add(r.user_id);
@@ -105,33 +108,18 @@
 
 	function subscribe() {
 		// Privacy-zone trust contract: pings are rendered verbatim. The
-		// broadcaster's privacy zones are NOT fetched here (doing so
-		// would defeat the purpose — anyone watching a public-club race
-		// could read off a participant's home / work coordinates).
-		// The single line of defence is the
-		// `race_pings_drop_in_zone` BEFORE-INSERT trigger from
-		// migration `20260704_001_clip_race_pings_to_privacy_zones.sql`,
-		// which silently drops in-zone pings before they reach
-		// Realtime. Pinned by
-		// `apps/backend/supabase/tests/rls_race_pings_trigger_test.sql`
-		// so a future migration can't silently undo it. Mirrors the
-		// trust contract in `apps/web/src/routes/live/[id]/+page.svelte`
-		// for plain-run pings.
+		// broadcaster's privacy zones are NOT fetched here. The single
+		// line of defence is the `race_pings_drop_in_zone` BEFORE-INSERT
+		// trigger from migration 20260704_001. Mirrors the trust
+		// contract in /live/[id].
 		channel = supabase
 			.channel(`live-event-${eventId}-${instance}`)
 			.on(
 				'postgres_changes',
 				{
-					// INSERT-only — race_pings are append-only; spectator
-					// page only needs to see new arrivals. UPDATE/DELETE on
-					// race_pings is admin-side and not relevant here.
 					event: 'INSERT',
 					schema: 'public',
 					table: 'race_pings',
-					// Also filter by instance_start so pings from a different
-					// instance of the same recurring event don't trigger a
-					// refetch on this page. fetchRecentRacePings already scopes
-					// the data correctly — this filter just trims wire traffic.
 					filter: `event_id=eq.${eventId}&instance_start=eq.${instance}`
 				},
 				async () => {
@@ -228,10 +216,27 @@
 		return profiles.get(userId)?.display_name ?? 'Runner';
 	}
 
+	let finishedResults = $derived(results.filter((r) => r.finisher_status === 'finished'));
+	let dnfResults = $derived(results.filter((r) => r.finisher_status !== 'finished'));
+
+	let statusCopy = $derived.by(() => {
+		if (!race) return { label: 'Pre-race', sub: 'Organiser hasn’t armed the race timer yet.' };
+		switch (race.status) {
+			case 'armed':
+				return { label: 'Armed', sub: 'Timer is armed. Waiting for the start.' };
+			case 'running':
+				return { label: 'Running', sub: `Elapsed ${formatDuration(raceElapsedS)}` };
+			case 'finished':
+				return { label: 'Finished', sub: `Final time ${formatDuration(raceElapsedS)}` };
+			case 'cancelled':
+				return { label: 'Cancelled', sub: 'Race was cancelled by the organiser.' };
+			default:
+				return { label: race.status, sub: '' };
+		}
+	});
+
 	// --- Map ---
 
-	// $state because Svelte 5 routes bind:this through the reactivity
-	// graph; without it, mapContainer reads as the initial undefined.
 	let mapContainer: HTMLDivElement | undefined = $state();
 	let map: maplibregl.Map | null = null;
 	let mapReady = $state(false);
@@ -335,8 +340,6 @@
 		trails?.setData(buildTrailsGeoJSON());
 		positions?.setData(buildPositionsGeoJSON());
 
-		// Fit bounds once the first batch of positions arrives. After that
-		// we leave the user in control of pan/zoom.
 		if (!didFitBounds && pings.length > 0) {
 			const lngs = pings.map((p) => p.lng);
 			const lats = pings.map((p) => p.lat);
@@ -350,8 +353,6 @@
 	}
 
 	$effect(() => {
-		// Initialise the map lazily once we have at least one ping. Until
-		// then, the empty-state card is shown instead of a blank map.
 		if (!mapContainer || map || pings.length === 0) return;
 		const first = pings[0];
 		map = new maplibregl.Map({
@@ -368,15 +369,12 @@
 		});
 	});
 
-	// Re-push GeoJSON whenever pings arrive.
 	$effect(() => {
-		// Touch reactive deps so this re-runs.
 		void pings;
 		void trailsByUser;
 		refreshMapData();
 	});
 
-	// Reactive map-style swap (re-attach overlays after style.load).
 	let currentStyle: ReturnType<typeof getMapStyle> = getMapStyle();
 	$effect(() => {
 		const next = getMapStyle();
@@ -397,71 +395,108 @@
 </svelte:head>
 
 <div class="page">
-	<header>
+	<header class="hero">
+		<p class="kicker">Live race</p>
 		<h1>{event?.title ?? 'Live race'}</h1>
-		{#if race}
-			<p class="status-row">
-				<span class="status-dot status-{race.status}"></span>
-				<strong>{race.status.toUpperCase()}</strong>
-				{#if race.status === 'running' || race.status === 'finished'}
-					· elapsed {formatDuration(raceElapsedS)}
-				{/if}
-			</p>
-		{:else}
-			<p class="muted">No race session yet for this instance.</p>
-		{/if}
+		<div class="status-row">
+			<span class="status-dot status-{race?.status ?? 'idle'}"></span>
+			<strong class="status-label">{statusCopy.label}</strong>
+			<span class="status-sub">{statusCopy.sub}</span>
+		</div>
 	</header>
 
 	{#if loading}
 		<p class="muted">Loading…</p>
 	{:else}
-		{#if pings.length > 0}
-			<section class="card map-card">
-				<div bind:this={mapContainer} class="race-map"></div>
+		<div class="layout">
+			<section class="leaderboard">
+				<header class="section-head">
+					<h2>On course</h2>
+					<span class="count">{pings.length}</span>
+				</header>
+				{#if pings.length === 0}
+					<div class="empty-inline">
+						<span class="material-symbols">satellite_alt</span>
+						<p>
+							No live position data yet. Runners' watches and phones push pings every ~10
+							seconds once the race starts.
+						</p>
+					</div>
+				{:else}
+					<ol class="runners">
+						{#each pings as p, i (p.user_id)}
+							<li class="runner">
+								<span class="pos">{i + 1}</span>
+								<span class="avatar" style="background: {colorFor(p.user_id)}20; color: {colorFor(p.user_id)};">
+									{initialsFor(p.user_id)}
+								</span>
+								<span class="name">{nameFor(p.user_id)}</span>
+								<span class="dist">{((p.distance_m ?? 0) / 1000).toFixed(2)} km</span>
+								<span class="pace">{formatPace(paceSecPerKm(p))}</span>
+								<span class="elapsed">{formatDuration(p.elapsed_s ?? 0)}</span>
+							</li>
+						{/each}
+					</ol>
+				{/if}
 			</section>
-		{/if}
 
-		<section class="card">
-			<h2>Runners on course ({pings.length})</h2>
-			{#if pings.length === 0}
-				<p class="muted">No live position data yet. Runners' watches / phones will push pings every ~10 seconds once the race starts.</p>
-			{:else}
-				<ol class="runners">
-					{#each pings as p, i (p.user_id)}
-						<li class="runner">
-							<span class="pos">{i + 1}</span>
-							<span class="swatch" style="background: {colorFor(p.user_id)}"></span>
-							<span class="name">{nameFor(p.user_id)}</span>
-							<span class="dist">{((p.distance_m ?? 0) / 1000).toFixed(2)} km</span>
-							<span class="pace">{formatPace(paceSecPerKm(p))}</span>
-							<span class="elapsed">{formatDuration(p.elapsed_s ?? 0)}</span>
-						</li>
-					{/each}
-				</ol>
-			{/if}
-		</section>
+			<aside class="map-side">
+				{#if pings.length > 0}
+					<div class="map-card">
+						<div bind:this={mapContainer} class="race-map"></div>
+					</div>
+				{:else}
+					<div class="map-card map-card-empty">
+						<span class="material-symbols">map</span>
+						<p>The race map will appear here once the first runners are on course.</p>
+					</div>
+				{/if}
+			</aside>
+		</div>
 
-		{#if results.length > 0}
-			<section class="card">
-				<h2>Finished ({results.filter((r) => r.finisher_status === 'finished').length})</h2>
-				<ol class="runners">
-					{#each results as r (r.user_id)}
-						<li class="runner" class:pending={!r.organiser_approved}>
-							<span class="pos">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
-							<span class="swatch" style="background: {colorFor(r.user_id)}"></span>
-							<span class="name">{nameFor(r.user_id)}</span>
-							{#if r.finisher_status !== 'finished'}
-								<span class="dnf">{r.finisher_status.toUpperCase()}</span>
-							{:else}
+		{#if finishedResults.length > 0 || dnfResults.length > 0}
+			<section class="results">
+				{#if finishedResults.length > 0}
+					<header class="section-head">
+						<h2>Finished</h2>
+						<span class="count">{finishedResults.length}</span>
+					</header>
+					<ol class="runners">
+						{#each finishedResults as r (r.user_id)}
+							<li class="runner" class:pending={!r.organiser_approved}>
+								<span class="pos">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
+								<span class="avatar" style="background: {colorFor(r.user_id)}20; color: {colorFor(r.user_id)};">
+									{initialsFor(r.user_id)}
+								</span>
+								<span class="name">{nameFor(r.user_id)}</span>
 								<span class="dist">{(r.distance_m / 1000).toFixed(2)} km</span>
 								<span class="elapsed">{formatDuration(r.duration_s)}</span>
-							{/if}
-							{#if !r.organiser_approved}
-								<span class="pending-tag">PENDING</span>
-							{/if}
-						</li>
-					{/each}
-				</ol>
+								{#if !r.organiser_approved}
+									<span class="pending-tag">Pending</span>
+								{/if}
+							</li>
+						{/each}
+					</ol>
+				{/if}
+
+				{#if dnfResults.length > 0}
+					<header class="section-head section-head-spaced">
+						<h2>Did not finish</h2>
+						<span class="count">{dnfResults.length}</span>
+					</header>
+					<ol class="runners">
+						{#each dnfResults as r (r.user_id)}
+							<li class="runner dnf-row">
+								<span class="pos">—</span>
+								<span class="avatar" style="background: {colorFor(r.user_id)}20; color: {colorFor(r.user_id)};">
+									{initialsFor(r.user_id)}
+								</span>
+								<span class="name">{nameFor(r.user_id)}</span>
+								<span class="dnf">{r.finisher_status.toUpperCase()}</span>
+							</li>
+						{/each}
+					</ol>
+				{/if}
 			</section>
 		{/if}
 	{/if}
@@ -469,88 +504,224 @@
 
 <style>
 	.page {
-		max-width: 60rem;
+		padding: var(--space-xl) var(--space-2xl);
+		max-width: 88rem;
 		margin: 0 auto;
-		padding: 1.5rem;
+	}
+	.muted {
+		color: var(--color-text-tertiary);
+	}
+
+	.hero {
+		margin-bottom: var(--space-xl);
+	}
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-xs);
 	}
 	h1 {
-		font-size: 1.6rem;
-		font-weight: 700;
-		margin: 0 0 0.3rem;
-	}
-	h2 {
-		font-size: 0.9rem;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--color-text-secondary);
-		margin-bottom: 0.8rem;
-	}
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: 0.6rem;
-		padding: 1rem;
-		margin-bottom: 1.2rem;
-	}
-	.map-card {
-		padding: 0;
-		overflow: hidden;
-	}
-	.race-map {
-		width: 100%;
-		height: 24rem;
+		font-size: 2rem;
+		font-weight: 800;
+		margin: 0 0 var(--space-sm);
+		line-height: 1.2;
 	}
 	.status-row {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
+		gap: var(--space-sm);
+		padding: var(--space-xs) var(--space-md);
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
 	}
 	.status-dot {
 		display: inline-block;
 		width: 0.65rem;
 		height: 0.65rem;
 		border-radius: 50%;
+		background: var(--color-text-tertiary);
 	}
-	.status-armed { background: #f59e0b; }
+	.status-idle { background: var(--color-text-tertiary); }
+	.status-armed { background: var(--color-warning); }
 	.status-running {
-		background: #10b981;
-		animation: pulse 1s infinite;
+		background: var(--color-success);
+		animation: pulse 1.2s ease-in-out infinite;
 	}
-	.status-finished { background: #6b7280; }
-	.status-cancelled { background: #ef4444; }
+	.status-finished { background: var(--color-text-secondary); }
+	.status-cancelled { background: var(--color-danger); }
+	.status-label {
+		font-weight: 700;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+	.status-sub {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+
 	@keyframes pulse {
 		0%, 100% { opacity: 1; }
 		50% { opacity: 0.4; }
 	}
+
+	.layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+		gap: var(--space-lg);
+		margin-bottom: var(--space-xl);
+	}
+	@media (max-width: 64rem) {
+		.layout {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	.leaderboard,
+	.results {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+	}
+	.results {
+		margin-bottom: var(--space-xl);
+	}
+
+	.section-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+	}
+	.section-head-spaced {
+		margin-top: var(--space-lg);
+	}
+	.section-head h2 {
+		font-size: 0.85rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-secondary);
+		margin: 0;
+	}
+	.count {
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+		background: var(--color-bg-secondary);
+		padding: 0.1rem 0.5rem;
+		border-radius: 999px;
+		font-weight: 600;
+	}
+
+	.empty-inline {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-lg);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+		color: var(--color-text-secondary);
+	}
+	.empty-inline .material-symbols {
+		font-size: 1.6rem;
+		color: var(--color-text-tertiary);
+		flex-shrink: 0;
+	}
+	.empty-inline p {
+		margin: 0;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+
+	.map-side {
+		display: flex;
+	}
+	.map-card {
+		flex: 1;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		min-height: 24rem;
+	}
+	.map-card-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-sm);
+		text-align: center;
+		padding: var(--space-xl);
+		color: var(--color-text-tertiary);
+	}
+	.map-card-empty .material-symbols {
+		font-size: 2.5rem;
+	}
+	.map-card-empty p {
+		margin: 0;
+		max-width: 22rem;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+	.race-map {
+		width: 100%;
+		height: 100%;
+		min-height: 24rem;
+	}
+
 	.runners {
 		list-style: none;
 		padding: 0;
 		margin: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-xs);
 	}
 	.runner {
 		display: grid;
-		grid-template-columns: 2rem 0.8rem 1fr auto auto auto auto;
+		grid-template-columns: 2.2rem 2rem 1fr auto auto auto auto;
 		align-items: center;
-		gap: 0.6rem;
-		padding: 0.5rem 0.7rem;
-		background: var(--color-bg);
-		border-radius: 0.4rem;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-bg-secondary);
+		border: 1px solid transparent;
+		border-radius: var(--radius-md);
 		font-size: 0.9rem;
+		transition: border-color 0.12s ease, transform 0.12s ease;
 	}
-	.runner.pending { opacity: 0.7; }
+	.runner:hover {
+		border-color: var(--color-border);
+		transform: translateX(2px);
+	}
+	.runner.pending {
+		opacity: 0.75;
+	}
+	.dnf-row {
+		grid-template-columns: 2.2rem 2rem 1fr auto;
+	}
+
 	.pos {
-		font-weight: 700;
+		font-weight: 800;
 		color: var(--color-primary);
 		font-variant-numeric: tabular-nums;
+		font-size: 0.95rem;
 	}
-	.swatch {
-		width: 0.7rem;
-		height: 0.7rem;
+	.avatar {
+		width: 2rem;
+		height: 2rem;
 		border-radius: 50%;
-		border: 1px solid var(--color-border);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 700;
+		font-size: 0.72rem;
+		letter-spacing: 0.02em;
 	}
 	.name {
 		font-weight: 600;
@@ -558,27 +729,51 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.dist, .pace, .elapsed {
+	.dist,
+	.pace,
+	.elapsed {
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text-secondary);
+		font-size: 0.88rem;
 	}
 	.elapsed {
-		font-weight: 600;
+		font-weight: 700;
 		color: var(--color-text);
 	}
 	.dnf {
 		color: var(--color-danger);
 		font-weight: 700;
 		font-size: 0.75rem;
+		letter-spacing: 0.05em;
 	}
 	.pending-tag {
-		background: #fff3cd;
-		color: #856404;
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning);
 		font-size: 0.7rem;
 		font-weight: 700;
-		padding: 0.1rem 0.35rem;
-		border-radius: 0.3rem;
-		letter-spacing: 0.04em;
+		padding: 0.15rem 0.5rem;
+		border-radius: 999px;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 	}
-	.muted { color: var(--color-text-tertiary); }
+
+	@media (max-width: 48rem) {
+		.runner {
+			grid-template-columns: 1.8rem 1.8rem 1fr;
+			grid-template-areas:
+				'pos avatar name'
+				'. . stats';
+			row-gap: 0.25rem;
+		}
+		.runner .pos { grid-area: pos; }
+		.runner .avatar { grid-area: avatar; }
+		.runner .name { grid-area: name; }
+		.runner .dist,
+		.runner .pace,
+		.runner .elapsed {
+			grid-area: stats;
+			display: inline;
+			margin-right: var(--space-sm);
+		}
+	}
 </style>

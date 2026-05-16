@@ -40,9 +40,17 @@ test.describe('/live/event/[id]/[instance]', () => {
 			await page.goto(`/live/event/${eventId}/${instance}`);
 			await page.waitForLoadState('networkidle');
 
+			// Pre-race shape: status pill reads "Pre-race" with a
+			// sub-message explaining the organiser hasn't armed the
+			// timer, and the leaderboard's "On course" section shows
+			// the zero-pings empty-inline card. Pin both surfaces so
+			// neither regresses silently.
 			await expect(
-				page.getByText('No race session yet for this instance.')
+				page.getByText(/Organiser hasn’t armed the race timer/)
 			).toBeVisible({ timeout: 10_000 });
+			await expect(
+				page.getByText(/No live position data yet/)
+			).toBeVisible();
 		} finally {
 			await getAdminClient().from('events').delete().eq('id', eventId);
 		}

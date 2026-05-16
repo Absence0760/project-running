@@ -20,6 +20,7 @@
 	let elapsed = $state(0);
 	let distance = $state(0);
 	let currentPace = $state('--:--');
+	let runnerName = $state<string | null>(null);
 	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error' | 'not-found';
 	let status = $state<Status>('connecting');
 	let demoTicker: ReturnType<typeof setInterval> | null = null;
@@ -43,6 +44,11 @@
 	// blank during `connecting` or `demo` with no credentials.
 	const fallbackLat = -37.8136;
 	const fallbackLng = 144.9631;
+
+	function initials(name: string): string {
+		const parts = name.trim().split(/\s+/).slice(0, 2);
+		return parts.map((p) => p.charAt(0).toUpperCase()).join('') || '?';
+	}
 
 	function ensureMarker(lat: number, lng: number) {
 		if (!map) return;
@@ -89,16 +95,7 @@
 	}
 
 	async function hydrateBacklog() {
-		// Fetch any pings already logged for this run so a spectator
-		// joining mid-run sees the trace so far, not just what arrives
-		// after they connect.
 		if (isLiveHubConfigured()) {
-			// Hub path: only the last-known ping is durable (Redis 24h
-			// TTL in production). Earlier pings live on `live_run_pings`
-			// only when the legacy transport is still writing — we
-			// don't promise a full backlog here. A single snapshot is
-			// enough to render the runner's current position
-			// immediately on connect.
 			const snap = await fetchLiveSnapshot(data.id);
 			if (snap) {
 				pushPing({
@@ -147,11 +144,6 @@
 					if (status !== 'live') status = 'live';
 				},
 				onStatus: (s) => {
-					// 'closed' surfaces if the hub goes down mid-run;
-					// the openLiveWebSocket helper auto-reconnects, so
-					// we flip the badge back to `connecting` rather
-					// than terminal so the user sees recovery in
-					// progress.
 					if (s === 'closed' && status === 'live') {
 						status = 'connecting';
 					}
@@ -184,11 +176,6 @@
 	}
 
 	function startDemo() {
-		// Keeps the spectator page informative for demos and in
-		// development — when no pings are flowing, a synthesised track
-		// animates around the fallback centre so the surface still
-		// looks alive. Badge flips to "demo" so it's obvious this isn't
-		// a real feed.
 		status = 'demo';
 		if (map) {
 			ensureMarker(fallbackLat, fallbackLng);
@@ -209,38 +196,28 @@
 		// Visibility check: the spectator surface is a public-broadcast
 		// page, so the visible-runs set is exactly what `public_runs`
 		// exposes (decisions §33, migration 20260626_001).
-		// `runs.SELECT` is gated on the row's owner — anon gets no rows
-		// — so a direct `from('runs')` query would false-negative on
-		// the seeded public run for every anon viewer. The view's
-		// `where is_public = true` is the load-bearing predicate.
-		// Non-public / non-existent ids return null and we render the
-		// not-broadcasting state instead of stalling at Connecting…
 		const { data: row, error } = await supabase
 			.from('public_runs')
-			.select('id')
+			.select('id, user_id')
 			.eq('id', data.id)
 			.maybeSingle();
 		if (error || !row) {
 			status = 'not-found';
 			return false;
 		}
+		if (row.user_id) {
+			const { data: profile } = await supabase
+				.from('user_profiles')
+				.select('display_name')
+				.eq('id', row.user_id)
+				.maybeSingle();
+			if (profile?.display_name) runnerName = profile.display_name;
+		}
 		return true;
 	}
 
 	onMount(() => {
-		// Kick off the data path FIRST and independently of the map.
-		// hydrateBacklog + subscribeLive don't need the map to be ready;
-		// gating them behind `map.on('load')` means a slow (or failing)
-		// MapTiler style fetch silently stalls the LIVE badge and the
-		// stat strip. Pings that arrive before the map's source/layer
-		// exist are buffered in `traceCoords` by pushPing; the map's
-		// `load` handler below replays them once the source is added.
 		(async () => {
-			// Bail to the not-found state before touching the live-hub /
-			// realtime channels for a run we can't see. Without this the
-			// page sits at "Connecting…" then flips to "Demo" — a
-			// confusing UX for a stale-share-link or a private-run anon
-			// viewer.
 			if (!(await ensureRunIsVisible())) return;
 			const hadBacklog = await hydrateBacklog();
 			subscribeLive();
@@ -276,12 +253,9 @@
 				id: 'live-trace-line',
 				type: 'line',
 				source: 'live-trace',
-				paint: { 'line-color': '#3b82f6', 'line-width': 3 },
+				paint: { 'line-color': '#2C5F6E', 'line-width': 3 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
-			// Pings that arrived before map readiness already filled
-			// `traceCoords`; centre + marker if we have any so the user
-			// doesn't see the fallback Sydney CBD on first paint.
 			if (traceCoords.length > 0) {
 				const last = traceCoords[traceCoords.length - 1];
 				ensureMarker(last[1], last[0]);
@@ -310,10 +284,10 @@
 <!-- Public page — no sidebar, no auth required -->
 <div class="live-page">
 	<header class="live-header">
-		<div class="live-logo">
+		<a href="/" class="live-logo">
 			<img src="/icon-192.png" alt="" class="live-logo-mark" />
 			Run Onward
-		</div>
+		</a>
 		<div
 			class="live-badge"
 			class:active={status === 'live'}
@@ -321,11 +295,12 @@
 			class:not-found={status === 'not-found'}
 		>
 			{#if status === 'connecting'}
-				Connecting...
+				<span class="badge-spinner" aria-hidden="true"></span>
+				Connecting…
 			{:else if status === 'live'}
 				<span class="pulse-dot"></span> LIVE
 			{:else if status === 'demo'}
-				Demo
+				Demo feed
 			{:else if status === 'finished'}
 				Finished
 			{:else if status === 'not-found'}
@@ -338,6 +313,9 @@
 
 	{#if status === 'not-found'}
 		<div class="live-empty">
+			<div class="live-empty-icon" aria-hidden="true">
+				<span class="material-symbols">satellite_alt</span>
+			</div>
 			<h1>This run isn't broadcasting</h1>
 			<p>
 				The link may be stale, the run may have finished, or it may be private. Ask the runner
@@ -346,10 +324,27 @@
 			<a href="/" class="btn btn-primary">Back to Run Onward</a>
 		</div>
 	{:else}
-		<div class="live-layout">
-			<div class="live-map" bind:this={mapContainer}></div>
-
-			<div class="live-stats">
+		<section class="live-strip" aria-label="Live status">
+			<div class="live-runner">
+				<span class="avatar" aria-hidden="true">{initials(runnerName ?? 'R')}</span>
+				<div class="live-runner-text">
+					<span class="live-runner-name">{runnerName ?? 'Anonymous runner'}</span>
+					<span class="live-runner-sub">
+						{#if status === 'connecting'}
+							Waiting for the first ping
+						{:else if status === 'demo'}
+							Synthesised demo data
+						{:else if status === 'live'}
+							Live from the runner's device
+						{:else if status === 'finished'}
+							Run finished
+						{:else}
+							Reconnecting
+						{/if}
+					</span>
+				</div>
+			</div>
+			<div class="live-stats" role="group" aria-label="Live stats">
 				<div class="live-stat">
 					<span class="live-stat-value">{formatDistance(distance)}</span>
 					<span class="live-stat-label">Distance</span>
@@ -363,6 +358,18 @@
 					<span class="live-stat-label">Pace</span>
 				</div>
 			</div>
+		</section>
+
+		<div class="live-map-wrap">
+			<div class="live-map" bind:this={mapContainer}></div>
+			{#if status === 'connecting'}
+				<div class="map-veil" aria-hidden="true">
+					<div class="map-veil-card">
+						<span class="badge-spinner" aria-hidden="true"></span>
+						<p>Waiting for the runner to start broadcasting…</p>
+					</div>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -391,6 +398,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
+		text-decoration: none;
 	}
 	.live-logo-mark {
 		width: 2rem;
@@ -401,7 +409,7 @@
 	}
 
 	.live-badge {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		gap: var(--space-xs);
 		padding: var(--space-xs) var(--space-md);
@@ -412,21 +420,49 @@
 		letter-spacing: 0.05em;
 		background: var(--color-bg-secondary);
 		color: var(--color-text-secondary);
+		border: 1px solid var(--color-border);
 	}
 
 	.live-badge.active {
-		background: #dcfce7;
-		color: #16a34a;
+		background: var(--color-success-light);
+		color: var(--color-success);
+		border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
 	}
 
 	.live-badge.demo {
-		background: #fef3c7;
-		color: #92400e;
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning);
+		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
 	}
 
 	.live-badge.not-found {
-		background: #fee2e2;
-		color: #991b1b;
+		background: var(--color-danger-light);
+		color: var(--color-danger);
+		border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+	}
+
+	.pulse-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--color-success);
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+	.badge-spinner {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		border: 2px solid currentColor;
+		border-top-color: transparent;
+		animation: spin 0.9s linear infinite;
+		display: inline-block;
+	}
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.3; }
+	}
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	.live-empty {
@@ -436,15 +472,32 @@
 		align-items: center;
 		justify-content: center;
 		text-align: center;
-		padding: 2rem;
-		gap: 1rem;
+		padding: var(--space-2xl) var(--space-xl);
+		gap: var(--space-md);
 		color: var(--color-text-secondary);
 	}
 
+	.live-empty-icon {
+		width: 4rem;
+		height: 4rem;
+		border-radius: 50%;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: var(--space-xs);
+	}
+	.live-empty-icon .material-symbols {
+		font-size: 2rem;
+		color: var(--color-text-tertiary);
+	}
+
 	.live-empty h1 {
-		font-size: 1.5rem;
+		font-size: 1.6rem;
 		color: var(--color-text);
 		margin: 0;
+		font-weight: 800;
 	}
 
 	.live-empty p {
@@ -453,63 +506,141 @@
 		line-height: 1.5;
 	}
 
-	.pulse-dot {
-		width: 8px;
-		height: 8px;
+	.live-strip {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-lg);
+		padding: var(--space-md) var(--space-xl);
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+		flex-wrap: wrap;
+	}
+
+	.live-runner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		min-width: 0;
+	}
+	.avatar {
+		width: 2.75rem;
+		height: 2.75rem;
 		border-radius: 50%;
-		background: #16a34a;
-		animation: pulse 1.5s ease-in-out infinite;
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 800;
+		font-size: 0.95rem;
+		letter-spacing: 0.02em;
+		flex-shrink: 0;
 	}
-
-	@keyframes pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.3; }
-	}
-
-	.live-layout {
-		flex: 1;
+	.live-runner-text {
 		display: flex;
 		flex-direction: column;
+		min-width: 0;
 	}
-
-	.live-map {
-		flex: 1;
+	.live-runner-name {
+		font-weight: 700;
+		font-size: 1rem;
+		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.live-runner-sub {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
 	}
 
 	.live-stats {
 		display: flex;
-		justify-content: center;
 		gap: var(--space-2xl);
-		padding: var(--space-lg) var(--space-xl);
-		background: var(--color-surface);
-		border-top: 1px solid var(--color-border);
+		align-items: center;
 	}
 
 	.live-stat {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: flex-end;
+		min-width: 4.5rem;
 	}
 
 	.live-stat-value {
-		font-size: 1.75rem;
-		font-weight: 700;
-		font-family: 'SF Mono', 'Menlo', monospace;
+		font-size: 1.5rem;
+		font-weight: 800;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
+		line-height: 1.05;
 	}
 
 	.live-stat-label {
-		font-size: 0.7rem;
+		font-size: 0.68rem;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.08em;
+		font-weight: 600;
+		margin-top: var(--space-2xs);
+	}
+
+	@media (max-width: 48rem) {
+		.live-strip {
+			flex-direction: column;
+			align-items: stretch;
+			gap: var(--space-md);
+		}
+		.live-stats {
+			justify-content: space-around;
+			gap: var(--space-md);
+		}
+		.live-stat {
+			align-items: center;
+		}
+	}
+
+	.live-map-wrap {
+		flex: 1;
+		position: relative;
+		min-height: 0;
+	}
+	.live-map {
+		position: absolute;
+		inset: 0;
+	}
+	.map-veil {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		pointer-events: none;
+		background: color-mix(in srgb, var(--color-bg) 35%, transparent);
+	}
+	.map-veil-card {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		color: var(--color-text-secondary);
+		font-size: 0.88rem;
+	}
+	.map-veil-card p {
+		margin: 0;
 	}
 
 	:global(.runner-dot) {
 		width: 16px;
 		height: 16px;
 		border-radius: 50%;
-		background: #3b82f6;
-		border: 3px solid white;
-		box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3), 0 2px 6px rgba(0, 0, 0, 0.3);
+		background: var(--color-primary);
+		border: 3px solid var(--color-surface);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 30%, transparent),
+			0 2px 6px rgba(0, 0, 0, 0.3);
 	}
 </style>

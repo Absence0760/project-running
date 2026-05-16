@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
@@ -67,6 +67,19 @@
 	 * pick any of the next N instances. */
 	let activeInstance = $state<string | null>(null);
 
+	let cameFromClub = $state(false);
+	afterNavigate(({ from }) => {
+		if (!cameFromClub && from?.url.pathname === `/clubs/${slug}`) {
+			cameFromClub = true;
+		}
+	});
+	function handleBack(e: MouseEvent): void {
+		if (cameFromClub) {
+			e.preventDefault();
+			history.back();
+		}
+	}
+
 	let nextInstances = $derived(
 		event
 			? expandInstances(event, new Date(), new Date(Date.now() + 120 * 24 * 3600 * 1000), 6)
@@ -90,6 +103,22 @@
 			(event.recurrence_freq
 				? nextInstances.length === 0
 				: new Date(event.starts_at).getTime() < Date.now())
+	);
+
+	let rsvpCounts = $derived.by(() => {
+		const c = { going: 0, maybe: 0, declined: 0 };
+		for (const a of attendees) {
+			if (a.status === 'going') c.going += 1;
+			else if (a.status === 'maybe') c.maybe += 1;
+			else if (a.status === 'declined') c.declined += 1;
+		}
+		return c;
+	});
+
+	let viewerRsvpForActive = $derived(
+		activeInstance && event && activeInstance === event.next_instance_start
+			? event.viewer_rsvp
+			: null
 	);
 
 	async function load() {
@@ -450,45 +479,82 @@
 </script>
 
 {#if loading}
-	<p class="centered muted">Loading…</p>
+	<div class="page" aria-busy="true" aria-label="Loading event">
+		<span class="back-skel" aria-hidden="true">
+			<span class="material-symbols">arrow_back</span>
+			Back to club
+		</span>
+		<div class="hero skel-hero" aria-hidden="true">
+			<div class="skel-hero-text">
+				<span class="skel skel-line skel-w-20"></span>
+				<span class="skel skel-line skel-w-60"></span>
+				<span class="skel skel-line skel-w-40"></span>
+				<span class="skel skel-line skel-w-80"></span>
+			</div>
+			<div class="skel-hero-actions">
+				<span class="skel skel-block"></span>
+				<span class="skel skel-block"></span>
+				<span class="skel skel-block"></span>
+			</div>
+		</div>
+		<div class="skel-card" aria-hidden="true">
+			<span class="skel skel-line skel-w-30"></span>
+			<span class="skel skel-line skel-w-80"></span>
+		</div>
+	</div>
+	<p class="sr-only" role="status">Loading event…</p>
 {:else if !event || !club}
-	<div class="centered">
-		<h2>Event not found</h2>
-		<a href="/clubs/{slug}" class="btn-secondary">Back to club</a>
+	<div class="page">
+		<a class="back" href="/clubs/{slug}">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			Back to clubs
+		</a>
+		<div class="empty-card">
+			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<h3>Event not found</h3>
+			<p class="empty-text">
+				This event may have been cancelled, or the club is private and you
+				don't have access.
+			</p>
+			<div class="empty-actions">
+				<a href="/clubs/{slug}" class="btn btn-primary">Back to club</a>
+			</div>
+		</div>
 	</div>
 {:else}
 	<div class="page">
-		<a class="back" href="/clubs/{slug}">
-			<span class="material-symbols">arrow_back</span>
+		<a class="back" href="/clubs/{slug}" onclick={handleBack}>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to {club.name}
 		</a>
 
-		{#if isPast}
-			<div class="banner past">This event has already happened.</div>
-		{/if}
-
-		<header class="hero">
-			<div class="hero-left">
-				<h1>{event.title}</h1>
-				{#if event.recurrence_freq}
-					<p class="recurrence-label">
-						<span class="material-symbols">autorenew</span>
+		<header class="hero" class:past={isPast}>
+			<div class="hero-body">
+				<span class="hero-eyebrow">
+					{#if event.recurrence_freq}
 						{recurrenceLabel}
-					</p>
-				{/if}
-				<p class="date-line">
-					<span class="material-symbols">calendar_today</span>
-					{fmtDate(activeInstance ?? event.starts_at)}
+					{:else if isPast}
+						Past event
+					{:else}
+						Upcoming event
+					{/if}
+				</span>
+				<h1>{event.title}</h1>
+				<p class="hero-tagline">
+					<span class="material-symbols" aria-hidden="true">calendar_today</span>
+					<span>{fmtDate(activeInstance ?? event.starts_at)}</span>
 					{#if event.duration_min}
-						<span class="muted">· {event.duration_min} min</span>
+						<span class="dot-sep" aria-hidden="true">·</span>
+						<span>{event.duration_min} min</span>
+					{/if}
+					{#if event.meet_label}
+						<span class="dot-sep" aria-hidden="true">·</span>
+						<span class="meet-inline">
+							<span class="material-symbols" aria-hidden="true">place</span>
+							{event.meet_label}
+						</span>
 					{/if}
 				</p>
-				{#if event.meet_label}
-					<p class="meet">
-						<span class="material-symbols">place</span>
-						{event.meet_label}
-					</p>
-				{/if}
 				{#if event.description}
 					<p class="desc">{event.description}</p>
 				{/if}
@@ -516,41 +582,76 @@
 
 				{#if route}
 					<a class="route-chip" href="/routes/{route.id}">
-						<span class="material-symbols">route</span>
+						<span class="material-symbols" aria-hidden="true">route</span>
 						{route.name}
 						<span class="muted">— {(route.distance_m / 1000).toFixed(2)} km</span>
 					</a>
 				{/if}
 			</div>
-			<div class="hero-actions">
+			<div class="hero-side">
 				{#if !isPast}
-					<button
-						class="btn-primary"
-						class:filled={event.viewer_rsvp === 'going'}
-						onclick={() => rsvp('going')}
-						disabled={busy}
+					<div
+						class="rsvp-tri"
+						role="group"
+						aria-label="Your RSVP"
 					>
-						{event.viewer_rsvp === 'going' ? 'Going' : "I'm in"}
-					</button>
-					<button
-						class="btn-secondary"
-						class:active={event.viewer_rsvp === 'maybe'}
-						onclick={() => rsvp('maybe')}
-						disabled={busy}
-					>
-						Maybe
-					</button>
-					<button
-						class="btn-secondary"
-						class:active={event.viewer_rsvp === 'declined'}
-						onclick={() => rsvp('declined')}
-						disabled={busy}
-					>
-						Can't make it
-					</button>
+						<button
+							type="button"
+							class="rsvp-opt rsvp-going"
+							class:active={viewerRsvpForActive === 'going'}
+							aria-pressed={viewerRsvpForActive === 'going'}
+							aria-label={viewerRsvpForActive === 'going' ? 'Going' : "I'm in"}
+							onclick={() => rsvp('going')}
+							disabled={busy}
+						>
+							<span class="material-symbols" aria-hidden="true">
+								{viewerRsvpForActive === 'going' ? 'check_circle' : 'directions_run'}
+							</span>
+							<span class="rsvp-label">
+								{viewerRsvpForActive === 'going' ? 'Going' : "I'm in"}
+							</span>
+							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.going}</span>
+						</button>
+						<button
+							type="button"
+							class="rsvp-opt rsvp-maybe"
+							class:active={viewerRsvpForActive === 'maybe'}
+							aria-pressed={viewerRsvpForActive === 'maybe'}
+							aria-label="Maybe"
+							onclick={() => rsvp('maybe')}
+							disabled={busy}
+						>
+							<span class="material-symbols" aria-hidden="true">help_outline</span>
+							<span class="rsvp-label">Maybe</span>
+							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.maybe}</span>
+						</button>
+						<button
+							type="button"
+							class="rsvp-opt rsvp-declined"
+							class:active={viewerRsvpForActive === 'declined'}
+							aria-pressed={viewerRsvpForActive === 'declined'}
+							aria-label="Can't make it"
+							onclick={() => rsvp('declined')}
+							disabled={busy}
+						>
+							<span class="material-symbols" aria-hidden="true">close</span>
+							<span class="rsvp-label">Can't make it</span>
+							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.declined}</span>
+						</button>
+					</div>
 				{/if}
 				{#if isAdmin}
-					<button class="btn-secondary danger" onclick={handleDeleteEvent}>Delete event</button>
+					<div class="admin-actions">
+						<button
+							type="button"
+							class="btn-ghost danger"
+							onclick={handleDeleteEvent}
+							aria-label="Delete event"
+						>
+							<span class="material-symbols" aria-hidden="true">delete</span>
+							Delete event
+						</button>
+					</div>
 				{/if}
 			</div>
 		</header>
@@ -759,7 +860,21 @@
 		<section class="card">
 			<h3>Attendees ({attendees.length})</h3>
 			{#if attendees.length === 0}
-				<p class="muted">No RSVPs yet — be the first.</p>
+				<div class="attendees-empty">
+					<span class="material-symbols" aria-hidden="true">group_add</span>
+					<div>
+						<strong>No RSVPs yet</strong>
+						<span class="muted">
+							{#if !isPast && isMember}
+								Be the first to lock in your spot above.
+							{:else if !isPast}
+								Join the club to RSVP.
+							{:else}
+								No-one logged an RSVP for this event.
+							{/if}
+						</span>
+					</div>
+				</div>
 			{:else}
 				<div class="attendees">
 					{#each attendees as a (a.user_id)}
@@ -811,47 +926,69 @@
 		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		margin-bottom: var(--space-md);
+		text-decoration: none;
 	}
-
-	.banner {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-secondary);
-		padding: 0.5rem 0.85rem;
-		border-radius: var(--radius-md);
-		margin-bottom: var(--space-md);
-		font-size: 0.9rem;
-	}
+	.back:hover { color: var(--color-primary); }
+	.back .material-symbols { font-size: 1.05rem; }
 
 	.hero {
 		display: grid;
-		grid-template-columns: 1fr auto;
+		grid-template-columns: minmax(0, 1fr) minmax(16rem, auto);
 		gap: var(--space-lg);
-		padding: var(--space-lg);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		padding: var(--space-lg) var(--space-xl);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)) 0%,
+			var(--color-surface) 70%
+		);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-sm);
 		margin-bottom: var(--space-lg);
+	}
+	.hero.past {
+		background: var(--color-surface);
+		border-color: var(--color-border);
+		box-shadow: none;
+	}
+	.hero-body {
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.hero-eyebrow {
+		font-size: var(--font-size-section-label);
+		letter-spacing: 0.1em;
+		color: var(--color-primary);
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+	.hero.past .hero-eyebrow {
+		color: var(--color-text-tertiary);
 	}
 
 	.hero h1 {
-		font-size: 1.6rem;
+		font-size: 1.65rem;
+		font-weight: 700;
 		margin: 0;
+		line-height: 1.15;
 	}
-
-	.recurrence-label {
+	.hero-tagline {
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem;
+		margin: var(--space-xs) 0 0 0;
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+	}
+	.hero-tagline .material-symbols { font-size: 1.05rem; color: var(--color-text-tertiary); }
+	.hero-tagline .dot-sep { color: var(--color-text-tertiary); }
+	.meet-inline {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		margin: 0.4rem 0 0 0;
-		font-size: 0.78rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--color-primary);
-		font-weight: 700;
-	}
-
-	.recurrence-label .material-symbols {
-		font-size: 1rem;
 	}
 
 	.instance-picker {
@@ -894,43 +1031,34 @@
 		border-color: var(--color-primary);
 	}
 
-	.date-line,
-	.meet {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		color: var(--color-text-secondary);
-		margin: 0.5rem 0 0 0;
-	}
-
-	.date-line .material-symbols,
-	.meet .material-symbols {
-		font-size: 1.05rem;
-	}
-
 	.desc {
-		margin-top: 0.75rem;
+		margin-top: var(--space-sm);
 		line-height: 1.55;
 		white-space: pre-wrap;
 	}
 
 	.metrics {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 2rem;
-		margin-top: 1rem;
+		margin-top: var(--space-sm);
 	}
-
+	.metric {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
 	.metric .label {
-		display: block;
-		font-size: 0.75rem;
+		font-size: 0.72rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--color-text-tertiary);
+		font-weight: 600;
 	}
-
 	.metric .value {
-		font-size: 1.1rem;
+		font-size: 1.15rem;
 		font-weight: 700;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.route-chip {
@@ -941,35 +1069,133 @@
 		color: var(--color-primary);
 		padding: 0.4rem 0.85rem;
 		border-radius: var(--radius-md);
-		margin-top: 1rem;
+		margin-top: var(--space-sm);
 		font-weight: 600;
 		font-size: 0.9rem;
+		width: fit-content;
+		text-decoration: none;
 	}
 
-	.hero-actions {
+	.hero-side {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		min-width: 10rem;
+		gap: var(--space-sm);
+		align-self: start;
 	}
 
-	.btn-primary.filled {
-		background: var(--color-primary-hover);
+	.rsvp-tri {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 0.4rem;
+		padding: 0.5rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		min-width: 14rem;
 	}
-
-	.btn-secondary.active {
-		background: var(--color-primary-light);
-		border-color: var(--color-primary);
-		color: var(--color-primary);
+	.rsvp-opt {
+		display: grid;
+		grid-template-columns: 1.4rem 1fr auto;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.55rem 0.7rem;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		font: inherit;
+		font-weight: 600;
+		font-size: 0.92rem;
+		text-align: left;
+		cursor: pointer;
+		transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 	}
-
-	.btn-secondary.danger {
-		color: var(--color-danger);
-		border-color: var(--color-danger-light);
+	.rsvp-opt:hover:not(:disabled) {
+		background: var(--color-bg-secondary);
 	}
-
-	.btn-secondary.danger:hover {
+	.rsvp-opt:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+	.rsvp-opt .material-symbols {
+		font-size: 1.25rem;
+		color: var(--color-text-tertiary);
+	}
+	.rsvp-opt .rsvp-count {
+		font-variant-numeric: tabular-nums;
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		background: var(--color-bg-tertiary);
+		border-radius: 9999px;
+		padding: 0.1rem 0.5rem;
+		min-width: 1.6rem;
+		text-align: center;
+	}
+	.rsvp-opt.active {
+		font-weight: 700;
+	}
+	.rsvp-going.active {
+		background: color-mix(in srgb, var(--color-success) 14%, transparent);
+		border-color: var(--color-success);
+		color: var(--color-success);
+	}
+	.rsvp-going.active .material-symbols,
+	.rsvp-going.active .rsvp-count {
+		color: var(--color-success);
+		background: color-mix(in srgb, var(--color-success) 18%, transparent);
+	}
+	.rsvp-maybe.active {
+		background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+		border-color: var(--color-warning);
+		color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+	}
+	.rsvp-maybe.active .material-symbols,
+	.rsvp-maybe.active .rsvp-count {
+		color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
+	}
+	.rsvp-declined.active {
 		background: var(--color-danger-light);
+		border-color: var(--color-danger);
+		color: var(--color-danger);
+	}
+	.rsvp-declined.active .material-symbols,
+	.rsvp-declined.active .rsvp-count {
+		color: var(--color-danger);
+		background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+	}
+
+	.admin-actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+	.btn-ghost {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+		padding: 0.4rem 0.75rem;
+		border-radius: var(--radius-md);
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.btn-ghost:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-text);
+	}
+	.btn-ghost .material-symbols { font-size: 1.05rem; }
+	.btn-ghost.danger {
+		color: var(--color-danger);
+		border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
+	}
+	.btn-ghost.danger:hover {
+		background: var(--color-danger-light);
+		color: var(--color-danger);
 	}
 
 	.card {
@@ -1111,6 +1337,159 @@
 
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-align: center;
+	}
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.empty-mark {
+		display: block;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.empty-actions {
+		display: flex;
+		justify-content: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+
+	.attendees-empty {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+		color: var(--color-text-secondary);
+	}
+	.attendees-empty .material-symbols {
+		font-size: 1.5rem;
+		color: var(--color-text-tertiary);
+		flex-shrink: 0;
+	}
+	.attendees-empty div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+	.attendees-empty strong {
+		color: var(--color-text);
+		font-size: 0.95rem;
+	}
+	.attendees-empty span {
+		font-size: 0.85rem;
+	}
+
+	.back-skel {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--color-text-tertiary);
+		font-size: 0.9rem;
+		margin-bottom: var(--space-md);
+		opacity: 0.5;
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line { height: 0.75rem; }
+	.skel-block {
+		height: 2.4rem;
+		border-radius: var(--radius-md);
+	}
+	.skel-w-20 { width: 20%; }
+	.skel-w-30 { width: 30%; }
+	.skel-w-40 { width: 40%; }
+	.skel-w-60 { width: 60%; }
+	.skel-w-80 { width: 80%; }
+	.skel-hero {
+		grid-template-columns: 1fr minmax(14rem, 18rem);
+	}
+	.skel-hero-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		justify-content: center;
+		min-width: 0;
+	}
+	.skel-hero-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+	.skel-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin-bottom: var(--space-md);
+	}
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	@media (max-width: 60rem) {
+		.hero {
+			grid-template-columns: 1fr;
+		}
+		.hero-side {
+			align-self: stretch;
+		}
+		.rsvp-tri { min-width: 0; }
+		.skel-hero {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.results-head {

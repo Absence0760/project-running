@@ -1,45 +1,100 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import RunEditor from '$lib/components/RunEditor.svelte';
+
+	let cameFromRuns = $state(false);
+	afterNavigate(({ from }) => {
+		if (cameFromRuns || !from) return;
+		if (from.url.pathname === '/runs' || from.url.pathname.startsWith('/runs?')) {
+			cameFromRuns = true;
+		}
+	});
+
+	function handleBack(e: MouseEvent): void {
+		if (cameFromRuns) {
+			e.preventDefault();
+			history.back();
+		}
+	}
+
+	function handleCancel(): void {
+		if (cameFromRuns) history.back();
+		else goto('/runs');
+	}
 </script>
 
+<svelte:head>
+	<title>Add a run — Run Onward</title>
+</svelte:head>
+
 <div class="page">
+	<a href="/runs" class="back-link" onclick={handleBack}>
+		<span class="material-symbols">arrow_back</span>
+		Back to runs
+	</a>
+
 	<header class="page-header">
+		<p class="kicker">New run</p>
 		<h1>Add a run</h1>
-		<p class="subtitle">
-			Manually enter a run you did without the app — a treadmill session,
-			a race result from a chip timer, a trail run where GPS failed.
+		<p class="tagline">
+			Manually log a run the app didn't record — a treadmill session, a chip-timed race,
+			or a trail run where GPS dropped out. Distance and duration are enough to start.
 		</p>
 	</header>
 
-	<div class="card">
-		<RunEditor
-			oncreated={(run) => goto(`/runs/${run.id}`)}
-			oncancel={() => goto('/runs')}
-		/>
-	</div>
+	<RunEditor
+		oncreated={(run) => goto(`/runs/${run.id}`)}
+		oncancel={handleCancel}
+	/>
 </div>
 
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
-		max-width: 40rem;
+		max-width: 44rem;
+	}
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.88rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		padding: var(--space-xs) 0;
+		margin-bottom: var(--space-md);
+	}
+	.back-link:hover {
+		color: var(--color-primary);
+	}
+	.back-link .material-symbols {
+		font-size: 1.1rem;
+	}
+	.page-header {
+		margin-bottom: var(--space-xl);
+	}
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-2xs);
 	}
 	h1 {
-		font-size: 1.5rem;
+		font-size: 1.75rem;
 		font-weight: 800;
+		line-height: 1.2;
 		margin: 0 0 var(--space-xs);
 	}
-	.subtitle {
+	.tagline {
 		color: var(--color-text-secondary);
-		font-size: 0.9rem;
-		margin: 0 0 var(--space-xl);
+		font-size: 0.95rem;
 		line-height: 1.5;
+		margin: 0;
+		max-width: 38rem;
 	}
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
+	.material-symbols {
+		font-family: 'Material Symbols Outlined';
 	}
 </style>
