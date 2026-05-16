@@ -38,6 +38,33 @@
 	/// Tracks the last fetch mode so we only refetch on `paginated` ↔
 	/// `full` transitions, not on every filter twiddle.
 	let lastFetchMode = $state<'paginated' | 'full' | ''>('');
+	/// ISO yyyy-mm-dd bounds for the custom-range picker. Empty string
+	/// means unbounded on that side.
+	let customFrom = $state('');
+	let customTo = $state('');
+
+	/// Last non-custom value of `dateRange`. Used to bounce back when
+	/// the user picks Custom from the dropdown then closes the picker
+	/// without committing — without this they'd be stranded in a
+	/// "Custom but no bounds" state (which behaves like All time but
+	/// reads as Custom in the dropdown). Also used as the effective
+	/// range while Custom is selected but bounds are empty.
+	let prevNonCustomRange = $state<DateRange>('today');
+	$effect(() => {
+		if (dateRange !== 'custom') prevNonCustomRange = dateRange;
+	});
+
+	/// While the user has picked Custom from the dropdown but hasn't
+	/// committed bounds via Apply yet, the filter logic AND the fetch
+	/// mode both treat the range as `prevNonCustomRange`. This means
+	/// selecting Custom from the dropdown is a no-op against the
+	/// underlying runs list — it just opens the picker. Only Apply
+	/// (which sets customFrom/customTo) flips the effective range to
+	/// 'custom' and triggers the corresponding refetch.
+	let effectiveDateRange = $derived<DateRange>(
+		dateRange === 'custom' && !customFrom && !customTo ? prevNonCustomRange : dateRange
+	);
+
 	/// Pagination only applies in browse mode — All time with NO source
 	/// + NO activity narrowing. The moment the user adds a filter, the
 	/// list switches to full-fetch and Load More disappears: otherwise
@@ -49,14 +76,10 @@
 	/// fetchRuns query would let us paginate under narrowing — a
 	/// backlog item once accounts grow past that bound.
 	let fetchMode = $derived<'paginated' | 'full'>(
-		dateRange === 'all' && sourceFilter === 'all' && activityFilter === 'all'
+		effectiveDateRange === 'all' && sourceFilter === 'all' && activityFilter === 'all'
 			? 'paginated'
 			: 'full'
 	);
-	/// ISO yyyy-mm-dd bounds for the custom-range picker. Empty string
-	/// means unbounded on that side.
-	let customFrom = $state('');
-	let customTo = $state('');
 
 	/// Filters persist across navigation via localStorage so the user
 	/// doesn't have to rebuild their view every time. Hydration happens
@@ -343,16 +366,6 @@
 
 	let showRunModal = $state(false);
 	let showRangePicker = $state(false);
-
-	/// Last non-custom value of `dateRange`. Used to bounce back when
-	/// the user picks Custom from the dropdown then closes the picker
-	/// without committing — without this they'd be stranded in a
-	/// "Custom but no bounds" state (which behaves like All time but
-	/// reads as Custom in the dropdown).
-	let prevNonCustomRange = $state<DateRange>('today');
-	$effect(() => {
-		if (dateRange !== 'custom') prevNonCustomRange = dateRange;
-	});
 
 	function handleRangePickerClose(): void {
 		showRangePicker = false;

@@ -373,6 +373,69 @@ test.describe('/runs — filters', () => {
 			await page.keyboard.press('Escape');
 		});
 
+		test('selecting Custom from paginated mode (All time + All sources + All activities) keeps the same 50-card paginated view — no refetch flash', async ({
+			page,
+			context
+		}) => {
+			// Real bug: with the paginated defaults (sourceFilter=all,
+			// activityFilter=all, dateRange=all → fetchMode='paginated',
+			// 50 cards + Load More), selecting Custom from the dropdown
+			// flipped dateRange to 'custom'. fetchMode re-derived to
+			// 'full' (because dateRange !== 'all') and triggered a
+			// full refetch — the list visibly jumped from 50 → all
+			// rows before the user had picked any dates.
+			//
+			// Fix: while dateRange='custom' and bounds are empty, the
+			// effective range is prevNonCustomRange (='all' here). The
+			// fetchMode derivation uses that effective range, so it
+			// stays at 'paginated' until the user actually commits
+			// custom bounds via Apply.
+			await context.addInitScript(() => {
+				localStorage.setItem(
+					'runs_filters_v1',
+					JSON.stringify({
+						sourceFilter: 'all',
+						activityFilter: 'all',
+						dateRange: 'all',
+						customFrom: '',
+						customTo: '',
+						sortKey: 'newest'
+					})
+				);
+			});
+			await page.goto('/runs');
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+
+			// Paginated mode: 50 cards, Load More visible.
+			const beforeCount = await page.locator('.run-card').count();
+			expect(beforeCount).toBe(50);
+			await expect(
+				page.getByRole('button', { name: /Load.*more/i })
+			).toBeVisible();
+
+			// Select Custom — the list MUST stay at 50 cards, no Load
+			// More flash, no refetch skeleton.
+			await page.getByLabel('Date range').selectOption('custom');
+			const picker = page.getByRole('dialog', { name: /Select dates/i });
+			await expect(picker).toBeVisible();
+
+			// Inspect the count while the picker is still open. The
+			// underlying list is in the DOM behind it.
+			expect(await page.locator('.run-card').count()).toBe(50);
+			await expect(
+				page.getByRole('button', { name: /Load.*more/i })
+			).toBeVisible();
+
+			// Tidy: Escape closes the picker. dateRange snaps back to
+			// 'all' (prevNonCustomRange) via handleRangePickerClose.
+			await page.keyboard.press('Escape');
+			await expect(picker).toBeHidden();
+			await expect(page.getByLabel('Date range')).toHaveValue('all');
+			expect(await page.locator('.run-card').count()).toBe(50);
+		});
+
 		test('"Pick dates…" chip is HIDDEN until Custom bounds are actually set', async ({
 			page
 		}) => {
