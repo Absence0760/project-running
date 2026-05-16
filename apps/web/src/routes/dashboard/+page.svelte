@@ -313,9 +313,23 @@
 	);
 </script>
 
+<svelte:head>
+	<title>Dashboard — Run Onward</title>
+</svelte:head>
+
 <div class="page">
 	{#if loading}
-		<p class="loading-text">&nbsp;</p>
+		<div class="skeleton-hero"></div>
+		<div class="skeleton-filter"></div>
+		<div class="stat-grid">
+			<div class="stat-card skeleton-card"></div>
+			<div class="stat-card skeleton-card"></div>
+			<div class="stat-card skeleton-card"></div>
+			<div class="stat-card skeleton-card"></div>
+			<div class="stat-card skeleton-card"></div>
+		</div>
+		<div class="skeleton-block skeleton-block-tall"></div>
+		<div class="skeleton-block"></div>
 	{:else}
 		{#if planOverview?.todayWorkout}
 			{@const t = planOverview.todayWorkout}
@@ -626,20 +640,28 @@
 			<!-- Recent runs -->
 			<section class="card">
 				<h2>Recent Runs</h2>
-				<div class="run-list">
-					{#each filteredRuns.slice(0, 7) as run}
-						<a href="/runs/{run.id}" class="run-row">
-							<div class="run-info">
-								<span class="run-date">{formatDateShort(run.started_at)}</span>
-								<span class="run-distance">{formatDistance(run.distance_m)}</span>
-							</div>
-							<div class="run-meta">
-								<span class="run-pace">{formatPace(run.duration_s, run.distance_m)}</span>
-								<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
-							</div>
-						</a>
-					{/each}
-				</div>
+				{#if filteredRuns.length > 0}
+					<div class="run-list">
+						{#each filteredRuns.slice(0, 7) as run}
+							<a href="/runs/{run.id}" class="run-row">
+								<div class="run-info">
+									<span class="run-date">{formatDateShort(run.started_at)}</span>
+									<span class="run-distance">{formatDistance(run.distance_m)}</span>
+								</div>
+								<div class="run-meta">
+									<span class="run-pace">{formatPace(run.duration_s, run.distance_m)}</span>
+									<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
+								</div>
+							</a>
+						{/each}
+					</div>
+				{:else}
+					<p class="empty-text">
+						{sourceFilter === 'all'
+							? 'Record your first run or import from Strava / Garmin to get started.'
+							: `No ${sources.find((s) => s.value === sourceFilter)?.label ?? sourceFilter} runs yet.`}
+					</p>
+				{/if}
 			</section>
 		</div>
 
@@ -891,29 +913,36 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
-	}
-
-	.page-header {
-		margin-bottom: var(--space-xl);
-	}
-
-	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
+		padding: var(--page-padding-y) var(--page-padding-x);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-lg);
 	}
 
 	h2 {
-		font-size: 1rem;
-		font-weight: 600;
-		margin-bottom: var(--space-lg);
+		font-size: var(--font-size-section-title);
+		font-weight: 700;
+		margin: 0 0 var(--space-md);
 		color: var(--color-text);
+		letter-spacing: -0.005em;
 	}
 
-	.loading-text {
-		text-align: center;
-		color: var(--color-text-tertiary);
-		padding: var(--space-2xl);
+	/* Why: groups a section heading + its body without trapping the
+	   heading inside card chrome. The old pattern put h2 inside `.card`
+	   which made every section title visually indistinguishable from
+	   table headers below it. */
+	.section { display: flex; flex-direction: column; gap: var(--space-sm); }
+	.section-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+	.section-head h2 { margin: 0; }
+	.section-desc {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		margin: 0;
 	}
 
 	.empty-text {
@@ -921,12 +950,43 @@
 		font-size: 0.85rem;
 	}
 
+	/* Skeleton loader — replaces the silent &nbsp; with structured
+	   placeholders so the page rhythm is visible before data lands. */
+	.skeleton-hero,
+	.skeleton-filter,
+	.skeleton-block,
+	.skeleton-card {
+		background: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-lg);
+		animation: skeleton-shimmer 1.6s ease-in-out infinite;
+	}
+	.skeleton-hero { height: 5rem; }
+	.skeleton-filter { height: 2rem; width: 22rem; max-width: 100%; }
+	.skeleton-block { height: 12rem; }
+	.skeleton-block-tall { height: 18rem; }
+	.skeleton-card { height: 6.5rem; }
+	@keyframes skeleton-shimmer {
+		0% { background-position: 100% 0; }
+		100% { background-position: -100% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-hero,
+		.skeleton-filter,
+		.skeleton-block,
+		.skeleton-card { animation: none; }
+	}
+
 	.filter-row {
 		display: flex;
 		gap: var(--space-xs);
-		margin-bottom: var(--space-xl);
+		flex-wrap: wrap;
 	}
-
 	.filter-btn {
 		padding: var(--space-xs) var(--space-md);
 		border: 1px solid var(--color-border);
@@ -938,107 +998,108 @@
 		transition: all var(--transition-fast);
 		cursor: pointer;
 	}
-
 	.filter-btn:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
 	}
-
 	.filter-btn.active {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
-		color: white;
-		box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+		color: var(--color-surface);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.chart-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		margin-bottom: var(--space-md);
 	}
-
-	.chart-header h2 {
-		margin-bottom: 0;
-	}
+	.chart-header h2 { margin-bottom: 0; }
 
 	.view-toggle {
-		display: flex;
-		border: 1px solid var(--color-border);
+		display: inline-flex;
+		gap: 0.15rem;
+		background: var(--color-bg-tertiary);
+		padding: 0.2rem;
 		border-radius: var(--radius-md);
-		overflow: hidden;
 	}
-
 	.view-toggle button {
-		padding: var(--space-xs) var(--space-md);
+		padding: 0.3rem 0.85rem;
 		border: none;
-		background: var(--color-surface);
-		font-size: 0.75rem;
-		font-weight: 500;
+		background: transparent;
+		font-size: 0.78rem;
+		font-weight: 600;
 		color: var(--color-text-secondary);
 		cursor: pointer;
+		border-radius: var(--radius-sm);
 		transition: all var(--transition-fast);
 	}
-
-	.view-toggle button:not(:last-child) {
-		border-right: 1px solid var(--color-border);
-	}
-
+	.view-toggle button:hover { color: var(--color-text); }
 	.view-toggle button.active {
-		background: var(--color-primary);
-		color: white;
-		box-shadow: 0 1px 4px rgba(79, 70, 229, 0.3);
+		background: var(--color-surface);
+		color: var(--color-primary);
+		box-shadow: var(--shadow-sm);
 	}
 
+	/* Hero: today's-workout card. Promoted to the loudest surface on
+	   the page — gradient + larger type + a primary-tinted accent. */
 	.today-card {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
-		padding: 1rem 1.2rem;
-		margin-bottom: var(--space-md);
+		gap: var(--space-md);
+		padding: var(--space-lg) var(--space-xl);
 		background: linear-gradient(
 			135deg,
-			color-mix(in srgb, var(--color-primary) 15%, var(--color-surface)),
-			var(--color-surface)
+			color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)) 0%,
+			var(--color-surface) 70%
 		);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+		border-radius: var(--radius-xl);
 		color: inherit;
 		font: inherit;
 		text-align: left;
 		width: 100%;
 		cursor: pointer;
-		transition: transform var(--transition-base), box-shadow var(--transition-base);
+		box-shadow: var(--shadow-sm);
+		transition:
+			transform var(--transition-base),
+			box-shadow var(--transition-base),
+			border-color var(--transition-base);
 	}
 	.today-card:hover {
 		transform: translateY(-1px);
 		box-shadow: var(--shadow-md);
+		border-color: var(--color-primary);
 	}
-	.today-card.done {
-		opacity: 0.85;
-	}
+	.today-card.done { opacity: 0.78; }
 	.today-label {
-		font-size: 0.72rem;
+		font-size: var(--font-size-section-label);
 		letter-spacing: 0.1em;
 		color: var(--color-primary);
 		font-weight: 700;
+		text-transform: uppercase;
 	}
 	.today-card h2 {
-		margin: 0.35rem 0 0.25rem 0;
-		font-size: 1.3rem;
+		margin: var(--space-xs) 0;
+		font-size: 1.4rem;
+		font-weight: 700;
+		color: var(--color-text);
 	}
 	.today-meta {
 		display: flex;
-		gap: 0.8rem;
+		gap: var(--space-md);
 		color: var(--color-text-secondary);
 		font-size: 0.95rem;
+		font-variant-numeric: tabular-nums;
 	}
 	.today-right {
 		text-align: right;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 0.2rem;
+		gap: var(--space-2xs);
 		color: var(--color-text-secondary);
 	}
 	.plan-name {
@@ -1046,55 +1107,71 @@
 		color: var(--color-text);
 		font-size: 0.9rem;
 	}
-	.plan-progress {
-		font-size: 0.8rem;
-	}
+	.plan-progress { font-size: 0.8rem; }
 	.done-icon {
-		color: var(--color-primary);
-		font-size: 1.6rem;
+		color: var(--color-success);
+		font-size: 1.75rem;
 	}
 	.plan-promo {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 0.9rem 1.2rem;
-		margin-bottom: var(--space-md);
-		background: var(--color-surface);
-		border: 1px dashed var(--color-border);
-		border-radius: var(--radius-lg);
+		gap: var(--space-md);
+		padding: var(--space-lg) var(--space-xl);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-accent-orange) 12%, var(--color-surface)) 0%,
+			var(--color-surface) 70%
+		);
+		border: 1px dashed color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+		border-radius: var(--radius-xl);
 		color: inherit;
+		text-decoration: none;
+		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+	}
+	.plan-promo:hover {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-sm);
 	}
 	.plan-promo h3 {
-		font-size: 1.05rem;
-		margin: 0.3rem 0 0.2rem 0;
+		font-size: 1.15rem;
+		font-weight: 700;
+		margin: var(--space-xs) 0 var(--space-2xs);
+		color: var(--color-text);
 	}
 	.plan-promo p {
 		color: var(--color-text-secondary);
-		font-size: 0.88rem;
+		font-size: 0.9rem;
+		margin: 0;
+	}
+	.plan-promo > :global(.material-symbols) {
+		color: var(--color-primary);
+		font-size: 1.5rem;
+		flex-shrink: 0;
 	}
 
 	.stat-grid {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: var(--space-md);
-		margin-bottom: var(--space-xl);
 	}
 
 	.event-card {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		padding: 1rem 1.25rem;
-		margin-bottom: var(--space-lg);
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 		background: var(--color-surface);
-		border: 1px solid var(--color-primary);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+		border-left: 3px solid var(--color-primary);
 		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
-		transition: background 0.15s ease;
+		transition: background var(--transition-fast), box-shadow var(--transition-fast);
 	}
 	.event-card:hover {
-		background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+		background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+		box-shadow: var(--shadow-sm);
 	}
 	.event-icon {
 		display: inline-flex;
@@ -1105,15 +1182,17 @@
 		border-radius: 50%;
 		background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 		color: var(--color-primary);
+		flex-shrink: 0;
 	}
 	.event-body {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
+		gap: var(--space-2xs);
+		min-width: 0;
 	}
 	.event-label {
-		font-size: 0.72rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-primary);
 		text-transform: uppercase;
@@ -1121,31 +1200,34 @@
 	}
 	.event-title {
 		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 	.event-when {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 	}
-	.event-arrow {
-		color: var(--color-text-tertiary);
-	}
+	.event-arrow { color: var(--color-text-tertiary); }
 
 	.coach-promo {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		padding: 0.9rem 1.25rem;
-		margin-bottom: var(--space-lg);
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
-		transition: background 0.15s ease, border-color 0.15s ease;
+		transition:
+			background var(--transition-fast),
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast);
 	}
 	.coach-promo:hover {
 		border-color: var(--color-primary);
 		background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+		box-shadow: var(--shadow-sm);
 	}
 	.coach-icon {
 		display: inline-flex;
@@ -1154,83 +1236,79 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: 50%;
-		background: color-mix(in srgb, var(--color-accent-cyan) 18%, transparent);
+		background: color-mix(in srgb, var(--color-accent-cyan) 22%, transparent);
 		color: var(--color-primary);
 		flex-shrink: 0;
 	}
-	.coach-icon .material-symbols { font-size: 1.4rem; }
+	.coach-icon :global(.material-symbols) { font-size: 1.4rem; }
 	.coach-body {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
+		gap: var(--space-2xs);
 		min-width: 0;
 	}
 	.coach-body strong {
 		font-size: 1rem;
 		font-weight: 600;
+		color: var(--color-text);
 	}
 	.coach-sub {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 	}
-	.coach-arrow {
-		color: var(--color-text-tertiary);
-	}
+	.coach-arrow { color: var(--color-text-tertiary); }
 
 	.fitness-card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: 1rem 1.25rem;
-		margin-bottom: var(--space-lg);
-		color: var(--color-primary);
+		padding: var(--space-lg);
+		box-shadow: var(--shadow-sm);
 	}
 	.fitness-row {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-		gap: 1rem;
-		margin-bottom: 0.75rem;
+		gap: var(--space-md);
+		margin-bottom: var(--space-sm);
 	}
-	.fitness-metric {
-		display: flex;
-		flex-direction: column;
-	}
+	.fitness-metric { display: flex; flex-direction: column; }
 	.fitness-label {
-		font-size: 0.72rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: var(--section-label-tracking);
 	}
 	.fitness-value {
 		font-size: 1.5rem;
 		font-weight: 800;
-		margin-top: 0.1rem;
+		margin-top: var(--space-2xs);
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 	.fitness-value.tsb-neg { color: var(--color-danger); }
-	.fitness-value.tsb-pos { color: #2e7d32; }
+	.fitness-value.tsb-pos { color: var(--color-success); }
 
 	.recap-strip {
 		display: flex;
 		justify-content: flex-end;
-		margin-bottom: var(--space-sm);
 	}
 	.recap-link {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		padding: 0.4rem 0.8rem;
-		background: color-mix(in srgb, #7C3AED 12%, transparent);
-		color: #7C3AED;
-		border-radius: 999px;
+		gap: var(--space-xs);
+		padding: var(--space-xs) var(--space-md);
+		background: color-mix(in srgb, var(--color-secondary) 14%, transparent);
+		color: var(--color-secondary);
+		border-radius: 9999px;
 		font-weight: 600;
 		font-size: 0.85rem;
 		text-decoration: none;
+		transition: background var(--transition-fast);
 	}
 	.recap-link:hover {
-		background: color-mix(in srgb, #7C3AED 20%, transparent);
+		background: color-mix(in srgb, var(--color-secondary) 22%, transparent);
 	}
 
 	.readiness-card {
@@ -1238,20 +1316,14 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
-		margin-bottom: var(--space-xl);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
+		box-shadow: var(--shadow-sm);
 	}
-	.readiness-card.readiness-high {
-		border-left: 4px solid #2e7d32;
-	}
-	.readiness-card.readiness-moderate {
-		border-left: 4px solid #f59e0b;
-	}
-	.readiness-card.readiness-low {
-		border-left: 4px solid #d32f2f;
-	}
+	.readiness-card.readiness-high { border-left: 4px solid var(--color-success); }
+	.readiness-card.readiness-moderate { border-left: 4px solid var(--color-warning); }
+	.readiness-card.readiness-low { border-left: 4px solid var(--color-danger); }
 	.readiness-head {
 		display: flex;
 		justify-content: space-between;
@@ -1263,26 +1335,28 @@
 		color: var(--color-text-secondary);
 	}
 	.readiness-band {
-		padding: 0.1rem 0.5rem;
+		padding: var(--space-2xs) var(--space-sm);
 		border-radius: 999px;
 		background: var(--color-bg-secondary);
 	}
 	.readiness-card.readiness-high .readiness-band {
-		background: color-mix(in srgb, #2e7d32 12%, transparent);
-		color: #2e7d32;
+		background: color-mix(in srgb, var(--color-success) 14%, transparent);
+		color: var(--color-success);
 	}
 	.readiness-card.readiness-moderate .readiness-band {
-		background: color-mix(in srgb, #f59e0b 18%, transparent);
-		color: #b45309;
+		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
+		color: var(--color-warning);
 	}
 	.readiness-card.readiness-low .readiness-band {
-		background: color-mix(in srgb, #d32f2f 14%, transparent);
-		color: #d32f2f;
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+		color: var(--color-danger);
 	}
 	.readiness-score {
-		font-size: 2.5rem;
+		font-size: 2.75rem;
 		font-weight: 800;
 		line-height: 1;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 	.readiness-advice {
 		margin: 0;
@@ -1301,19 +1375,19 @@
 	}
 	.readiness-contribs li {
 		display: inline-flex;
-		gap: 0.4rem;
+		gap: var(--space-xs);
 		align-items: baseline;
 	}
 	.contrib-delta { font-variant-numeric: tabular-nums; font-weight: 700; }
-	.contrib-delta.positive { color: #2e7d32; }
-	.contrib-delta.negative { color: #d32f2f; }
+	.contrib-delta.positive { color: var(--color-success); }
+	.contrib-delta.negative { color: var(--color-danger); }
 	.fitness-unit {
-		font-size: 0.72rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
-		margin-top: 0.15rem;
+		margin-top: var(--space-2xs);
 	}
 	.fitness-advice {
-		margin: 0.25rem 0 0;
+		margin: var(--space-xs) 0 0;
 		font-size: 0.88rem;
 		color: var(--color-text-secondary);
 		line-height: 1.5;
@@ -1321,21 +1395,19 @@
 	.trend {
 		width: 100%;
 		height: 40px;
-		margin-top: 0.5rem;
+		margin-top: var(--space-sm);
 		display: block;
+		color: var(--color-primary);
 	}
 
-	.goals-section {
-		margin-bottom: var(--space-xl);
-	}
+	.goals-section { display: flex; flex-direction: column; gap: var(--space-sm); }
 	.goals-header {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		justify-content: space-between;
-		margin-bottom: var(--space-sm);
 	}
 	.goals-header h2 {
-		font-size: 1rem;
+		font-size: var(--font-size-section-title);
 		font-weight: 700;
 		margin: 0;
 	}
@@ -1346,12 +1418,19 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
-		padding: 0.3rem 0.5rem;
+		padding: var(--space-xs) var(--space-sm);
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast);
 	}
+	.link-btn:hover { background: var(--color-primary-light); }
 	.goals-empty {
 		color: var(--color-text-tertiary);
 		font-size: 0.88rem;
 		margin: 0;
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-lg);
 	}
 	.goal-grid {
 		display: grid;
@@ -1364,44 +1443,57 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: 1rem 1.25rem;
+		padding: var(--space-lg);
 		cursor: pointer;
 		font: inherit;
 		color: inherit;
+		box-shadow: var(--shadow-sm);
+		transition:
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast),
+			transform var(--transition-fast);
 	}
-	.goal-card:hover { border-color: var(--color-primary); }
+	.goal-card:hover {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+	}
 	.goal-card-top {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 0.6rem;
+		margin-bottom: var(--space-md);
 	}
 	.goal-period {
-		font-size: 0.72rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 	}
 	.goal-overall {
-		font-size: 1.1rem;
+		font-size: 1.15rem;
 		font-weight: 800;
 		color: var(--color-primary);
+		font-variant-numeric: tabular-nums;
 	}
 	.goal-targets {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: 0.5rem;
+		gap: var(--space-sm);
 	}
 	.goal-target-top {
 		display: flex;
 		justify-content: space-between;
 		font-size: 0.85rem;
-		margin-bottom: 0.2rem;
+		margin-bottom: var(--space-2xs);
 	}
-	.goal-target-value { color: var(--color-text-secondary); }
+	.goal-target-value {
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
 	.goal-target-bar {
 		height: 0.4rem;
 		background: var(--color-bg-tertiary);
@@ -1413,22 +1505,17 @@
 		background: var(--color-primary);
 		transition: width 0.4s ease;
 	}
-	.goal-target-fill.complete {
-		background: #2e7d32;
-	}
+	.goal-target-fill.complete { background: var(--color-success); }
 	.goal-card-footer {
-		margin: 0.6rem 0 0;
-		font-size: 0.72rem;
+		margin: var(--space-sm) 0 0;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 	}
 
 	/* Goal editor reuses the canonical .modal-* classes from app.css.
 	   Only field-level styling stays local. */
-	.goal-editor-body {
-		display: grid;
-		gap: 0.9rem;
-	}
-	.field { display: grid; gap: 0.3rem; }
+	.goal-editor-body { display: grid; gap: var(--space-md); }
+	.field { display: grid; gap: var(--space-xs); }
 	.field-label {
 		font-size: 0.75rem;
 		font-weight: 600;
@@ -1437,7 +1524,7 @@
 		letter-spacing: 0.05em;
 	}
 	.input {
-		padding: 0.5rem 0.7rem;
+		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-bg);
@@ -1445,9 +1532,14 @@
 		font-size: 0.9rem;
 		font-family: inherit;
 	}
-	.toggle-row { display: flex; gap: 0.3rem; }
+	.input:focus {
+		outline: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+		outline-offset: 1px;
+		border-color: var(--color-primary);
+	}
+	.toggle-row { display: flex; gap: var(--space-xs); }
 	.toggle-btn {
-		padding: 0.4rem 0.9rem;
+		padding: var(--space-sm) var(--space-md);
 		background: transparent;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
@@ -1457,7 +1549,7 @@
 	}
 	.toggle-btn.active {
 		background: var(--color-primary);
-		color: white;
+		color: var(--color-surface);
 		border-color: var(--color-primary);
 	}
 	.goal-editor-hint {
@@ -1468,12 +1560,14 @@
 	.goal-editor-actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.4rem;
+		gap: var(--space-xs);
 	}
-	.goal-editor-actions .btn-danger {
-		margin-right: auto;
-	}
+	.goal-editor-actions .btn-danger { margin-right: auto; }
 
+	/* Stat cards: quiet family. The old per-card rainbow `::before` is
+	   gone; cards share the same surface treatment so the eye reads the
+	   data, not the decoration. The interactive "This Week" tile lifts
+	   on hover; the rest are static. */
 	.stat-card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -1481,68 +1575,45 @@
 		padding: var(--space-lg);
 		display: flex;
 		flex-direction: column;
-		position: relative;
-		overflow: hidden;
-		transition: all var(--transition-base);
+		box-shadow: var(--shadow-sm);
+		transition:
+			box-shadow var(--transition-base),
+			border-color var(--transition-base),
+			transform var(--transition-base);
 	}
-
-	.stat-card::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 3px;
-		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-	}
-
-	.stat-card:nth-child(1)::before { background: linear-gradient(90deg, #4F46E5, #7C3AED); }
-	.stat-card:nth-child(2)::before { background: linear-gradient(90deg, #10B981, #06B6D4); }
-	.stat-card:nth-child(3)::before { background: linear-gradient(90deg, #F97316, #F59E0B); }
-	.stat-card:nth-child(4)::before { background: linear-gradient(90deg, #EC4899, #EF4444); }
-	.stat-card:nth-child(5)::before { background: linear-gradient(90deg, #F5B30A, #F97316); }
-
-	.stat-unit {
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--color-text-tertiary);
-		margin-left: 0.2rem;
-	}
-
-	.streak-active .stat-value {
-		color: #F5B30A;
-	}
-
 	.stat-card:hover {
 		box-shadow: var(--shadow-md);
-		border-color: transparent;
+		border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 	}
-
 	.stat-card-button {
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
 		color: inherit;
 	}
-	.stat-card-button:hover {
-		transform: translateY(-1px);
-	}
-
+	.stat-card-button:hover { transform: translateY(-1px); }
 	.stat-label {
-		font-size: 0.75rem;
-		font-weight: 600;
+		font-size: var(--font-size-section-label);
+		font-weight: 700;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		margin-bottom: var(--space-xs);
 	}
-
 	.stat-value {
-		font-size: 1.5rem;
+		font-size: 1.6rem;
 		font-weight: 700;
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
 	}
-
+	.stat-unit {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text-tertiary);
+		margin-left: var(--space-2xs);
+	}
+	.streak-active .stat-value { color: var(--color-warning); }
 	.stat-sub {
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
@@ -1550,9 +1621,9 @@
 	}
 	.manual-hint {
 		display: block;
-		font-size: 0.7rem;
+		font-size: 0.72rem;
 		color: var(--color-primary);
-		margin-top: 0.15rem;
+		margin-top: var(--space-2xs);
 	}
 
 	.card {
@@ -1560,13 +1631,10 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
-		margin-bottom: var(--space-xl);
-		transition: all var(--transition-base);
+		box-shadow: var(--shadow-sm);
+		transition: box-shadow var(--transition-base);
 	}
-
-	.card:hover {
-		box-shadow: var(--shadow-md);
-	}
+	.card:hover { box-shadow: var(--shadow-md); }
 
 	.chart {
 		display: flex;
@@ -1575,7 +1643,6 @@
 		height: 12rem;
 		padding-top: var(--space-md);
 	}
-
 	.bar-col {
 		flex: 1;
 		display: flex;
@@ -1585,11 +1652,7 @@
 		justify-content: flex-end;
 		position: relative;
 	}
-
-	.bar-col:hover .bar-tooltip {
-		opacity: 1;
-	}
-
+	.bar-col:hover .bar-tooltip { opacity: 1; }
 	.bar-tooltip {
 		position: absolute;
 		top: -1.5rem;
@@ -1599,21 +1662,27 @@
 		opacity: 0;
 		transition: opacity var(--transition-fast);
 		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
 	}
-
 	.bar {
 		width: 100%;
 		max-width: 2.5rem;
-		background: linear-gradient(180deg, #4F46E5, #7C3AED);
+		background: linear-gradient(
+			180deg,
+			var(--color-primary) 0%,
+			color-mix(in srgb, var(--color-secondary) 75%, var(--color-primary)) 100%
+		);
 		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 		min-height: 4px;
-		transition: height var(--transition-base);
+		transition: height var(--transition-base), background var(--transition-fast);
 	}
-
 	.bar-col:hover .bar {
-		background: linear-gradient(180deg, #6366F1, #A78BFA);
+		background: linear-gradient(
+			180deg,
+			var(--color-primary-hover) 0%,
+			var(--color-secondary) 100%
+		);
 	}
-
 	.bar-label {
 		font-size: 0.65rem;
 		color: var(--color-text-tertiary);
@@ -1623,50 +1692,38 @@
 	.two-col {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: var(--space-xl);
+		gap: var(--space-lg);
 	}
 
-	.pr-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
+	.pr-table { width: 100%; border-collapse: collapse; }
 	.pr-table th {
 		text-align: left;
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: 0.72rem;
+		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: var(--space-sm) 0;
 		border-bottom: 1px solid var(--color-border);
 	}
-
 	.pr-table td {
 		padding: var(--space-md) 0;
 		border-bottom: 1px solid var(--color-bg-secondary);
 	}
-
-	.pr-distance {
-		font-weight: 600;
-	}
-
+	.pr-table tbody tr:last-child td { border-bottom: none; }
+	.pr-distance { font-weight: 600; }
 	.pr-time {
 		font-family: 'SF Mono', 'Menlo', monospace;
 		font-weight: 600;
 		color: var(--color-primary);
+		font-variant-numeric: tabular-nums;
 	}
-
 	.pr-date {
 		color: var(--color-text-secondary);
 		font-size: 0.875rem;
 	}
 
-	.run-list {
-		display: flex;
-		flex-direction: column;
-	}
-
+	.run-list { display: flex; flex-direction: column; }
 	.run-row {
 		display: flex;
 		justify-content: space-between;
@@ -1674,60 +1731,81 @@
 		padding: var(--space-sm) 0;
 		border-bottom: 1px solid var(--color-bg-secondary);
 		transition: background var(--transition-fast);
+		text-decoration: none;
+		color: inherit;
 	}
-
-	.run-row:last-child {
-		border-bottom: none;
-	}
-
+	.run-row:last-child { border-bottom: none; }
 	.run-row:hover {
 		background: var(--color-bg-secondary);
 		margin: 0 calc(-1 * var(--space-sm));
 		padding: var(--space-sm);
 		border-radius: var(--radius-sm);
 	}
-
-	.run-info {
-		display: flex;
-		gap: var(--space-md);
-		align-items: baseline;
-	}
-
+	.run-info { display: flex; gap: var(--space-md); align-items: baseline; }
 	.run-date {
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
 		min-width: 4rem;
 	}
-
 	.run-distance {
 		font-weight: 600;
 		font-size: 0.9rem;
+		font-variant-numeric: tabular-nums;
 	}
-
 	.run-meta {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
 	}
-
 	.run-pace {
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
 		font-family: 'SF Mono', 'Menlo', monospace;
+		font-variant-numeric: tabular-nums;
 	}
-
 	.source-badge {
 		font-size: 0.65rem;
 		font-weight: 600;
-		color: white;
+		color: var(--color-surface);
 		padding: 0.15rem 0.5rem;
 		border-radius: 9999px;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
 	}
 
+	/* Why: hero rows reflow before the 4-up stat grid does — keep the
+	   reading order intact. 768px tablet first, then 480px phone. */
 	@media (max-width: 768px) {
-		.stat-grid { grid-template-columns: repeat(2, 1fr); }
+		.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.two-col { grid-template-columns: 1fr; }
+		.today-card,
+		.plan-promo {
+			padding: var(--space-md) var(--space-lg);
+		}
+		.today-card h2 { font-size: 1.2rem; }
+	}
+	@media (max-width: 480px) {
+		.page {
+			padding: var(--space-lg) var(--space-md);
+			gap: var(--space-md);
+		}
+		.stat-grid { gap: var(--space-sm); }
+		.stat-card { padding: var(--space-md); }
+		.stat-value { font-size: 1.35rem; }
+		.today-card,
+		.plan-promo {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-sm);
+		}
+		.today-right { align-items: flex-start; text-align: left; }
+		.fitness-card,
+		.card,
+		.readiness-card,
+		.goal-card {
+			padding: var(--space-md);
+		}
+		.chart { height: 9rem; gap: var(--space-xs); }
+		.bar-label { font-size: 0.6rem; }
 	}
 </style>

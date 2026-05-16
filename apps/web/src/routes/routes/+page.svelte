@@ -184,6 +184,10 @@
 	};
 </script>
 
+<svelte:head>
+	<title>Routes — Run Onward</title>
+</svelte:head>
+
 {#if showImport}
 	<ImportRoute onclose={() => (showImport = false)} onimport={load} />
 {/if}

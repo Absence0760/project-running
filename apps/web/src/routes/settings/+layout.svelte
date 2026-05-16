@@ -12,6 +12,10 @@
 	];
 </script>
 
+<svelte:head>
+	<title>Settings — Run Onward</title>
+</svelte:head>
+
 <div class="settings-shell">
 	<nav class="settings-nav">
 		<h2>Settings</h2>

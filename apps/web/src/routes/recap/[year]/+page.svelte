@@ -79,7 +79,7 @@
 </script>
 
 <svelte:head>
-	<title>My {year} in running</title>
+	<title>My {year} in running — Run Onward</title>
 </svelte:head>
 
 <div class="page">

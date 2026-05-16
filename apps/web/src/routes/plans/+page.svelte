@@ -103,6 +103,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Training plans — Run Onward</title>
+</svelte:head>
+
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">

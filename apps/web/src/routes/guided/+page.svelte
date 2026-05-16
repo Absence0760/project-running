@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Guided runs</title>
+	<title>Guided runs — Run Onward</title>
 	<meta
 		name="description"
 		content="Coach-voice scripted workouts — pace cues, form reminders, intervals."

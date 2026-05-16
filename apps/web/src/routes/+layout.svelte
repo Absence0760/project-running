@@ -145,16 +145,18 @@
 	<!-- Landing, login, share, live, club-invite — these have their own
 	     chrome and render shell-less regardless of auth state. -->
 	<slot />
+{:else if !auth.loggedIn && isAnonAllowed($page.url.pathname)}
+	<!-- Anon viewer on an anon-allowed content page (/privacy, /terms,
+	     /cookie-notice, /compare, /guided, /guided/*, /recap/*). Render
+	     the slot without the signed-in shell. Bypasses the auth.loading
+	     branch so SSR + anon-first-paint serves the real page body
+	     instead of the spinner. The auth guard above redirects anon
+	     viewers on protected paths to /login. -->
+	<slot />
 {:else if auth.loading}
 	<div class="loading-screen">
 		<span class="loading-text">Loading...</span>
 	</div>
-{:else if !auth.loggedIn}
-	<!-- Anon viewer on an anon-allowed content page (/privacy, /terms,
-	     /cookie-notice, /compare, /guided, /guided/*, /recap/*). Render
-	     the slot without the signed-in shell — the auth guard above
-	     already redirected anon viewers on protected paths. -->
-	<slot />
 {:else if auth.loggedIn}
 	<!-- Authenticated app shell -->
 	<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>

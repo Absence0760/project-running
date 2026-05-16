@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-	<title>{run?.title ?? 'Guided run'}</title>
+	<title>{run?.title ?? 'Guided run'} — Run Onward</title>
 </svelte:head>
 
 <div class="page">

@@ -73,6 +73,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Coach — Run Onward</title>
+</svelte:head>
+
 <div class="page">
 	<div class="chat-host">
 		{#if loaded}

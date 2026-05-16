@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-	<title>How we compare to Strava</title>
+	<title>How we compare to Strava — Run Onward</title>
 	<meta
 		name="description"
 		content="Every Strava Pro feature, free. See the side-by-side."

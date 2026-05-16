@@ -338,6 +338,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>My runs — Run Onward</title>
+</svelte:head>
+
 <div class="page">
 	<header class="page-header">
 		<div class="toolbar">
