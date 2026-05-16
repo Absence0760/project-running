@@ -38,7 +38,21 @@
 	/// Tracks the last fetch mode so we only refetch on `paginated` ↔
 	/// `full` transitions, not on every filter twiddle.
 	let lastFetchMode = $state<'paginated' | 'full' | ''>('');
-	let fetchMode = $derived<'paginated' | 'full'>(dateRange === 'all' ? 'paginated' : 'full');
+	/// Pagination only applies in browse mode — All time with NO source
+	/// + NO activity narrowing. The moment the user adds a filter, the
+	/// list switches to full-fetch and Load More disappears: otherwise
+	/// the first 50 rows from the DB might contain only a handful of
+	/// matches (e.g. 5 Strava runs in the first 50 by date) and the
+	/// user has to keep clicking Load More to walk the whole list.
+	/// Filters are still client-side; full-fetch is acceptable because
+	/// even a heavy account has <10k runs. Pushing filters to the
+	/// fetchRuns query would let us paginate under narrowing — a
+	/// backlog item once accounts grow past that bound.
+	let fetchMode = $derived<'paginated' | 'full'>(
+		dateRange === 'all' && sourceFilter === 'all' && activityFilter === 'all'
+			? 'paginated'
+			: 'full'
+	);
 	/// ISO yyyy-mm-dd bounds for the custom-range picker. Empty string
 	/// means unbounded on that side.
 	let customFrom = $state('');

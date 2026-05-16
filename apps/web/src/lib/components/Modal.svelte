@@ -8,6 +8,12 @@
 		wide?: boolean;
 		narrow?: boolean;
 		bodyClass?: string;
+		/// When false, the backdrop is fully transparent — outside-
+		/// click-to-close still works, but the page underneath isn't
+		/// darkened. Useful for lightweight pickers (e.g. the date-
+		/// range picker on /runs) where the page-dim feels heavier
+		/// than the action warrants.
+		dimBackdrop?: boolean;
 		children: Snippet;
 	}
 
@@ -18,6 +24,7 @@
 		wide = false,
 		narrow = false,
 		bodyClass = '',
+		dimBackdrop = true,
 		children,
 	}: Props = $props();
 
@@ -52,7 +59,12 @@
 </script>
 
 {#if open}
-	<div class="modal-backdrop" onclick={onclose} role="presentation"></div>
+	<div
+		class="modal-backdrop"
+		class:transparent={!dimBackdrop}
+		onclick={onclose}
+		role="presentation"
+	></div>
 	<div
 		class="modal"
 		class:modal-wide={wide}

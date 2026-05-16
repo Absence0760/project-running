@@ -99,6 +99,12 @@ test.describe('/runs — filters', () => {
 	test.describe('Activity-type filter', () => {
 		test('All shows everything', async ({ page }) => {
 			await page.getByRole('button', { name: 'All', exact: true }).click();
+			// Switching activity to 'all' transitions fetchMode from
+			// 'full' to 'paginated' (default broad-browse mode); wait
+			// for the first card to be visible before reading count.
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
 			expect(await page.locator('.run-card').count()).toBeGreaterThan(13);
 		});
 
@@ -106,6 +112,9 @@ test.describe('/runs — filters', () => {
 			page
 		}) => {
 			await page.getByRole('button', { name: 'Run', exact: true }).click();
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
 			expect(await page.locator('.run-card').count()).toBeGreaterThan(10);
 		});
 
@@ -436,6 +445,125 @@ test.describe('/runs — filters', () => {
 			await expect(picker).toBeHidden({ timeout: 5_000 });
 			// dateRange should have snapped back to 'week'.
 			await expect(page.getByLabel('Date range')).toHaveValue('week');
+		});
+	});
+
+	test.describe('Pagination + filter interaction', () => {
+		// Bug the user reported: 'given i select Strava as a filter,
+		// it only shows like 10 runs and then i have to click the
+		// "Load 50 more" to load some more, seems like the runs list
+		// and load more button isn't accounting for filters'.
+		//
+		// Root cause: paginated mode (50/page) was active whenever
+		// dateRange='all'. Filtering happens client-side AFTER the
+		// fetch — so Source=Strava narrows the first 50 raw rows to
+		// however few Strava rows happen to be in that first page,
+		// hiding the rest behind Load More.
+		//
+		// Fix: paginated mode is now gated on source='all' AND
+		// activity='all' AND dateRange='all' — the moment ANY filter
+		// is set, the page switches to full-fetch and Load More
+		// disappears.
+
+		test('Source=Strava shows ALL Strava runs immediately — no Load More', async ({
+			page
+		}) => {
+			await page.getByLabel('Source').selectOption('strava');
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+			// All Strava runs in the seed should be visible — the seed
+			// has ~33 Strava runs. The list should reflect that, not
+			// a paginated subset of ~10.
+			const count = await page.locator('.run-card').count();
+			expect(count).toBeGreaterThan(15);
+			// "Load 50 more" must NOT be visible — full-fetch means the
+			// whole filtered set is in view.
+			await expect(
+				page.getByRole('button', { name: /Load.*more/i })
+			).toHaveCount(0);
+		});
+
+		test('Source=parkrun shows ALL parkruns immediately — no Load More', async ({
+			page
+		}) => {
+			await page.getByLabel('Source').selectOption('parkrun');
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+			// Seed has ~30 parkruns. Should all be visible.
+			const count = await page.locator('.run-card').count();
+			expect(count).toBeGreaterThan(15);
+			await expect(
+				page.getByRole('button', { name: /Load.*more/i })
+			).toHaveCount(0);
+		});
+
+		test('Activity narrow (Walk) shows the single seeded walk — no Load More', async ({
+			page
+		}) => {
+			await page.getByRole('button', { name: 'Walk', exact: true }).click();
+			await expect(page.locator('.run-card')).toHaveCount(1, {
+				timeout: 10_000
+			});
+			await expect(
+				page.getByRole('button', { name: /Load.*more/i })
+			).toHaveCount(0);
+		});
+	});
+
+	test.describe('Date picker backdrop', () => {
+		// Bug the user reported: 'i dont like the darkening given i
+		// click on the custom date filter. remove this.'
+		//
+		// Fix: Modal gained a dimBackdrop prop; DateRangePicker passes
+		// dimBackdrop={false} so the .modal-backdrop renders fully
+		// transparent. Outside-click-to-close still works.
+
+		test('selecting Custom does NOT darken the page (transparent backdrop)', async ({
+			page
+		}) => {
+			await page.getByLabel('Date range').selectOption('custom');
+			// The picker's modal-backdrop should be present (for the
+			// click-outside-to-close behaviour) but carry .transparent
+			// so its computed background is fully transparent.
+			const backdrop = page.locator('.modal-backdrop');
+			await expect(backdrop).toBeVisible({ timeout: 10_000 });
+			await expect(backdrop).toHaveClass(/transparent/);
+			// Computed background-color is rgba(0,0,0,0). Any other
+			// backdrop in the app keeps rgba(0,0,0,0.5).
+			const bg = await backdrop.evaluate((el) =>
+				getComputedStyle(el).backgroundColor
+			);
+			expect(bg).toMatch(/rgba\(0,\s*0,\s*0,\s*0\)/);
+			// Cleanup — close the picker so subsequent tests start fresh.
+			await page.keyboard.press('Escape');
+		});
+
+		test('selecting a confirmation modal STILL darkens the page (default behaviour)', async ({
+			page
+		}) => {
+			// Negative regression — make sure the dimBackdrop default
+			// of `true` is preserved for the rest of the app. Use the
+			// bulk-delete confirm dialog as the canonical opaque-modal
+			// surface: select a run, hit Delete, ConfirmDialog opens.
+			await page.getByRole('button', { name: 'Select', exact: true })
+				.click();
+			// Pick the first card.
+			await page.locator('.run-card').first().click();
+			await page
+				.getByRole('button', { name: /Delete/, exact: false })
+				.first()
+				.click();
+			const backdrop = page.locator('.modal-backdrop');
+			await expect(backdrop).toBeVisible({ timeout: 5_000 });
+			await expect(backdrop).not.toHaveClass(/transparent/);
+			// Tidy.
+			await page.getByRole('button', { name: 'Cancel', exact: true })
+				.first()
+				.click();
+			await page.getByRole('button', { name: 'Done', exact: true })
+				.click();
 		});
 	});
 

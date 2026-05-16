@@ -175,7 +175,7 @@
 	let activeStart = $derived(pendingFrom === null || !selectingEnd());
 </script>
 
-<Modal {open} {onclose} title="Select dates" bodyClass="range-body">
+<Modal {open} {onclose} title="Select dates" bodyClass="range-body" dimBackdrop={false}>
 	<div class="range-picker">
 		<div class="chip-row">
 			<div class="chip" class:active={activeStart}>

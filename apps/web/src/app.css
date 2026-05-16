@@ -354,6 +354,13 @@ img {
 	background: rgba(0, 0, 0, 0.5);
 	z-index: 200;
 }
+/* `dimBackdrop={false}` on Modal — outside-click-to-close still works
+   but the page underneath is not darkened. Used by lightweight pickers
+   (e.g. the date-range picker on /runs) where a heavy page-dim feels
+   disproportionate to the action. */
+.modal-backdrop.transparent {
+	background: transparent;
+}
 .modal {
 	/*
 	 * Anchor the top edge — not the centre — to a fixed offset. If we
