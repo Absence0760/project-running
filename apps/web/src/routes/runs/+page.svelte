@@ -53,6 +53,12 @@
 	let filtersHydrated = $state(false);
 
 	onMount(() => {
+		// Snapshot restore (SvelteKit back-nav) runs BEFORE onMount and
+		// sets filtersHydrated=true. Skip the localStorage read in that
+		// case — the snapshot is the authoritative source for this
+		// paint, and re-reading localStorage here would clobber the
+		// user's in-session filter changes.
+		if (filtersHydrated) return;
 		try {
 			const raw = localStorage.getItem(FILTERS_KEY);
 			if (raw) {
@@ -269,21 +275,48 @@
 	/// Preserve the loaded list across in-app navigation so clicking a
 	/// run, then `back`, lands the user at the same scroll position
 	/// they were at — instead of a flash of "Loading…" plus a jump to
-	/// the top. Filters are already in localStorage; what we add here
-	/// is the runs array + pagination cursor so the page renders to
-	/// its full height synchronously and SvelteKit's built-in scroll
-	/// restoration can actually run. Snapshot fires for every internal
-	/// navigation away (link, goto, popstate) and restores on return.
+	/// the top. The snapshot has to carry the FILTER values too, not
+	/// just runs+hasMore+lastFetchMode. Without filters in the
+	/// snapshot, restore would set the list and then onMount() would
+	/// re-read filters from localStorage, fetchMode would re-derive,
+	/// the `fetchMode !== lastFetchMode` effect would fire loadInitial,
+	/// and the restored list would be wiped before the user saw it.
+	/// `filtersHydrated = true` in restore also short-circuits the
+	/// onMount localStorage read — restore is the authoritative source
+	/// for this paint, localStorage is only the fallback for cold loads.
 	export const snapshot: Snapshot<{
 		runs: Run[];
 		hasMore: boolean;
 		lastFetchMode: 'paginated' | 'full' | '';
+		sourceFilter: RunSource | 'all';
+		activityFilter: string;
+		sortKey: SortKey;
+		dateRange: DateRange;
+		customFrom: string;
+		customTo: string;
 	}> = {
-		capture: () => ({ runs, hasMore, lastFetchMode }),
+		capture: () => ({
+			runs,
+			hasMore,
+			lastFetchMode,
+			sourceFilter,
+			activityFilter,
+			sortKey,
+			dateRange,
+			customFrom,
+			customTo,
+		}),
 		restore: (s) => {
 			runs = s.runs;
 			hasMore = s.hasMore;
 			lastFetchMode = s.lastFetchMode;
+			sourceFilter = s.sourceFilter;
+			activityFilter = s.activityFilter;
+			sortKey = s.sortKey;
+			dateRange = s.dateRange;
+			customFrom = s.customFrom;
+			customTo = s.customTo;
+			filtersHydrated = true;
 			loading = false;
 		},
 	};

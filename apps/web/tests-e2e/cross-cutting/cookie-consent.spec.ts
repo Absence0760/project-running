@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
+import { USER_A } from '../fixtures/users';
+
 /**
  * Cookie-consent banner on every page until accepted/rejected.
  *
@@ -110,6 +113,7 @@ test.describe('Cookie consent banner', () => {
 			storageState: 'tests-e2e/.auth/user-a.json'
 		});
 		const page = await ctx.newPage();
+		let plantedId: string | null = null;
 		try {
 			await page.goto('/runs/new');
 			// Banner is visible.
@@ -130,7 +134,14 @@ test.describe('Cookie consent banner', () => {
 			// The form's onCreated handler navigates to /runs/[id].
 			// Wait for the URL change as proof the click landed.
 			await page.waitForURL(/\/runs\/[0-9a-f-]+$/, { timeout: 10_000 });
+			plantedId = page.url().match(/\/runs\/([0-9a-f-]+)$/)?.[1] ?? null;
 		} finally {
+			// Sweep the planted run so the seed's "exactly one walk"
+			// invariant (relied on by runs/list.spec.ts) stays intact.
+			if (plantedId) {
+				const admin = getAdminClient();
+				await admin.from('runs').delete().eq('id', plantedId);
+			}
 			await ctx.close();
 		}
 	});

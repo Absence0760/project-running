@@ -64,6 +64,47 @@ test.describe('/runs', () => {
 		await page.getByRole('button', { name: 'All', exact: true }).click();
 	});
 
+	test('list state survives in-app navigation (snapshot round-trip)', async ({
+		page
+	}) => {
+		// SvelteKit's snapshot API persists in-memory state across
+		// `<a>` + popstate navigation, but ONLY if every reactive piece
+		// that drives the fetch lives in the snapshot. The original
+		// snapshot captured runs + hasMore + lastFetchMode but NOT the
+		// filter values; on back-nav the runs restored, then onMount
+		// re-read localStorage, fetchMode re-derived, the effect-
+		// driven loadInitial wiped the restored list, and the user saw
+		// "Loading…" followed by a list reset to the default filters.
+		// Pin the round-trip: set a non-default filter, walk into a
+		// run, walk back, assert the filter + the list look the same.
+		await page.goto('/runs');
+		await switchRunsToAllTime(page);
+		// Capture the count we expect to see again after back-nav.
+		await expect(page.locator('.run-card').first()).toBeVisible();
+		const beforeCount = await page.locator('.run-card').count();
+		expect(beforeCount).toBeGreaterThanOrEqual(13);
+
+		// Click into the first run.
+		await page.locator('.run-card').first().click();
+		await page.waitForURL(/\/runs\/[0-9a-f-]+$/, { timeout: 10_000 });
+
+		// Back to /runs. The list should restore without a flash of
+		// "Loading…" and the filter UI should still read "All time".
+		await page.goBack();
+		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
+
+		// Filter UI stayed on "All time" (would have reset to "today"
+		// if the snapshot didn't carry dateRange).
+		await expect(page.getByLabel('Date range')).toHaveValue('all');
+		// And the same number of cards is in view.
+		await expect(page.locator('.run-card')).toHaveCount(beforeCount, {
+			timeout: 5_000
+		});
+
+		// Restore so subsequent tests don't inherit the All-time filter.
+		await page.getByLabel('Date range').selectOption('today');
+	});
+
 	test('filter state survives a reload (localStorage round-trip)', async ({
 		page
 	}) => {
