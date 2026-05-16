@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from './fixtures/local-supabase';
 import { USER_A } from './fixtures/users';
+
+const SEED_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
 
 /**
  * /coach — Anthropic-backed chat surface. The LLM round-trip itself
@@ -17,6 +20,28 @@ import { USER_A } from './fixtures/users';
 
 test.describe('/coach', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	test.beforeEach(async () => {
+		// The plan ChipDropdown lists fetchMyPlans() ordered by
+		// created_at DESC, so any test that plants an extra plan for
+		// runner pushes Sydney Half 2026 off the first row of the
+		// dropdown. The keyboard-nav test below (ArrowDown from "No
+		// plan") then picks the wrong plan and fails with a stale
+		// "test · 12w" assertion. Sweep any non-seed plans (including
+		// abandoned and template clones) so the dropdown order is
+		// stable. Restore Sydney Half to active in case a prior run's
+		// Replace-plan flow left it completed.
+		const admin = getAdminClient();
+		await admin
+			.from('training_plans')
+			.delete()
+			.eq('user_id', USER_A.id)
+			.neq('id', SEED_PLAN_ID);
+		await admin
+			.from('training_plans')
+			.update({ status: 'active' })
+			.eq('id', SEED_PLAN_ID);
+	});
 
 	test('chat surface mounts (no LLM call)', async ({ page }) => {
 		// /coach mounts CoachChat which loads conversation history

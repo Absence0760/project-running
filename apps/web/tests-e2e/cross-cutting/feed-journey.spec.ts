@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
 
 /**
@@ -24,6 +25,50 @@ import { USER_A, USER_B } from '../fixtures/users';
 
 test.describe('feed journey', () => {
 	test.use({ storageState: USER_B.storageStatePath });
+
+	let plantedRunId: string | null = null;
+
+	test.beforeEach(async () => {
+		// Two seed dependencies that drift in this test:
+		// 1. The follow edge alex→runner can be left toggled-off by a
+		//    prior run that bailed mid-walk.
+		// 2. The /feed window is the last 14 days, but seed runs are
+		//    pinned to fixed dates that fall out of the window as the
+		//    clock advances. Plant a runner-authored public run in the
+		//    last hour so the window query always returns at least one
+		//    entry for the "initial: feed has entries" step.
+		const admin = getAdminClient();
+		await admin
+			.from('user_follows')
+			.upsert(
+				{ follower_id: USER_B.id, followee_id: USER_A.id },
+				{ onConflict: 'follower_id,followee_id' }
+			);
+
+		const { data: row, error } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+				duration_s: 1800,
+				distance_m: 7000,
+				source: 'app',
+				is_public: true,
+				metadata: { activity_type: 'run' }
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		plantedRunId = (row as { id: string }).id;
+	});
+
+	test.afterEach(async () => {
+		if (plantedRunId) {
+			const admin = getAdminClient();
+			await admin.from('runs').delete().eq('id', plantedRunId);
+			plantedRunId = null;
+		}
+	});
 
 	test('alex unfollows runner → /feed empty → re-follow → /feed has entries again', async ({
 		page
