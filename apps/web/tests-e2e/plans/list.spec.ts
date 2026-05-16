@@ -87,6 +87,85 @@ test.describe('/plans', () => {
 			.toBeVisible({ timeout: 10_000 });
 	});
 
+	test('status filter toolbar narrows the visible cards + Show-all link in the filter-empty state restores them', async ({
+		page
+	}) => {
+		// Polish round adds a status filter row (All / Active / Completed /
+		// Abandoned) above the plan grid. Each button reflects its bucket
+		// count in a chip; aria-pressed flips with the selection; an
+		// inner filter-empty state surfaces when the picked bucket has
+		// no plans, with a "Show all plans" link that resets the filter.
+		// Pin those behaviours so a regression in the filter wiring
+		// shows up here.
+		await page.goto('/plans');
+		await page.waitForLoadState('networkidle');
+
+		const filterRow = page.getByRole('group', {
+			name: /Filter plans by status/
+		});
+		await expect(filterRow).toBeVisible({ timeout: 10_000 });
+
+		// All button is the default; aria-pressed=true.
+		await expect(
+			filterRow.getByRole('button', { name: /^All\b/ })
+		).toHaveAttribute('aria-pressed', 'true');
+
+		// Seeded Sydney Half plan is active — Active button shows a 1-pill
+		// + clicking it keeps the card visible.
+		const activeBtn = filterRow.getByRole('button', { name: /^Active\b/ });
+		await activeBtn.click();
+		await expect(activeBtn).toHaveAttribute('aria-pressed', 'true');
+		await expect(
+			page.getByRole('heading', { name: /Sydney Half 2026/ })
+		).toBeVisible();
+
+		// Completed is empty in the seed → filter-empty state appears
+		// with a Show-all-plans button.
+		await filterRow.getByRole('button', { name: /^Completed\b/ }).click();
+		await expect(page.getByText(/No completed plans/i)).toBeVisible({
+			timeout: 5_000
+		});
+		const showAll = page.getByRole('button', { name: /Show all plans/i });
+		await expect(showAll).toBeVisible();
+		await showAll.click();
+		await expect(
+			filterRow.getByRole('button', { name: /^All\b/ })
+		).toHaveAttribute('aria-pressed', 'true');
+		// The seeded Sydney Half plan is visible again.
+		await expect(
+			page.getByRole('heading', { name: /Sydney Half 2026/ })
+		).toBeVisible();
+	});
+
+	test('active plan card surfaces calendar progress: "Week N of M" + accessible progressbar', async ({
+		page
+	}) => {
+		// Active cards get a calendar-progress block: a "Week N of M" line
+		// plus a progress bar with aria-valuemin / max / now. This pins
+		// (a) the calendar-week math doesn't regress to NaN, (b) the
+		// progressbar role is reachable to screen readers, and (c) the
+		// `card-active` accent applies. The seeded Sydney Half plan runs
+		// 12 weeks ending 2026-06-20 with start 2026-03-29 — today
+		// 2026-05-16 falls inside that window, so the progressbar should
+		// have a non-zero, non-100 aria-valuenow.
+		await page.goto('/plans');
+		await page.waitForLoadState('networkidle');
+
+		const card = page.locator('.card', { hasText: 'Sydney Half 2026' });
+		await expect(card).toBeVisible({ timeout: 10_000 });
+		await expect(card).toHaveClass(/card-active/);
+
+		// "Week N of M" — both numbers present.
+		await expect(card.getByText(/Week \d+ of \d+/)).toBeVisible();
+
+		const bar = card.getByRole('progressbar');
+		await expect(bar).toBeVisible();
+		const valueNow = await bar.getAttribute('aria-valuenow');
+		const pct = Number(valueNow);
+		expect(pct).toBeGreaterThan(0);
+		expect(pct).toBeLessThan(100);
+	});
+
 	test('PlanEditor preview reacts to changes (start date + days/week → preview re-derives)', async ({
 		page
 	}) => {
