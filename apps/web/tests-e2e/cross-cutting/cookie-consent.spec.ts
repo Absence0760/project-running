@@ -91,4 +91,47 @@ test.describe('Cookie consent banner', () => {
 		const link = banner.getByRole('link', { name: 'Learn more' });
 		await expect(link).toHaveAttribute('href', '/cookie-notice');
 	});
+
+	test('banner does NOT block centered primary CTAs (regression pin)', async ({
+		browser
+	}) => {
+		// Earlier the banner spanned a 42rem strip at bottom-centre of
+		// the viewport. It silently intercepted pointer events on
+		// whatever pixels it covered — including the "Save run" button
+		// on /runs/new and the floating bulk-action bar on /runs. The
+		// repro: brand-new visitor enters /runs/new, fills the form,
+		// clicks Save → click never lands → 30s timeout. The fix is the
+		// banner's geometry (compact bottom-RIGHT corner card, not a
+		// centered full-width strip). Pin the invariant by signing in
+		// fresh (no consent in localStorage) and asserting the
+		// /runs/new Save button is clickable while the banner is on
+		// screen.
+		const ctx = await browser.newContext({
+			storageState: 'tests-e2e/.auth/user-a.json'
+		});
+		const page = await ctx.newPage();
+		try {
+			await page.goto('/runs/new');
+			// Banner is visible.
+			await expect(page.getByRole('dialog', { name: /Cookies/ }))
+				.toBeVisible({ timeout: 10_000 });
+			// Save run button is also visible AND clickable. If the
+			// banner blocked pointer events, the click would never
+			// resolve.
+			await page.getByRole('button', { name: 'Walk', exact: true }).click();
+			const numberInputs = page.locator('input[type="number"]');
+			await numberInputs.nth(0).fill('1.0');
+			await numberInputs.nth(1).fill('5');
+			const saveBtn = page.getByRole('button', { name: 'Save run' });
+			await expect(saveBtn).toBeVisible();
+			// Click resolves within the assertion timeout — used to
+			// hang 30s waiting for the banner to release the click.
+			await saveBtn.click({ timeout: 5_000 });
+			// The form's onCreated handler navigates to /runs/[id].
+			// Wait for the URL change as proof the click landed.
+			await page.waitForURL(/\/runs\/[0-9a-f-]+$/, { timeout: 10_000 });
+		} finally {
+			await ctx.close();
+		}
+	});
 });

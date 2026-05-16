@@ -82,15 +82,16 @@
 	--font-size-section-label: 0.7rem;
 	--section-label-tracking: 0.05em;
 
-	/* Layered overlays — z-index hierarchy. Keeps the cookie banner
-	   (consent must be visible above app chrome), toast container (above
-	   the banner so confirmations stack on top), and modals all on the
-	   same scale instead of each surface guessing its own number. */
-	--z-cookie: 90;
+	/* Layered overlays — z-index hierarchy. Cookie consent is the
+	   legal-priority dismissal so it must layer above transient bottom-
+	   of-screen UI (toasts, bulk-action bars) — otherwise a brand-new
+	   visitor entering /runs select mode hits both a banner and the
+	   bulk-bar at the same coordinates and can't see the banner. */
 	--z-sidebar: 10;
 	--z-modal-backdrop: 200;
 	--z-modal: 201;
 	--z-toast: 300;
+	--z-cookie: 400;
 }
 
 /* Dark theme — applied three ways, listed in increasing specificity so

@@ -427,7 +427,33 @@
 	</header>
 
 	{#if loading}
-		<p class="loading-text">&nbsp;</p>
+		<div class="run-list run-list-skel" aria-hidden="true">
+			{#each Array(8) as _, i (i)}
+				<div class="skel-card">
+					<div class="skel-card-body">
+						<div class="skel-card-top">
+							<span class="skel skel-line skel-w-40"></span>
+							<span class="skel skel-pill"></span>
+						</div>
+						<div class="skel-card-stats">
+							<div class="skel-card-stat">
+								<span class="skel skel-line skel-w-60"></span>
+								<span class="skel skel-line skel-w-30"></span>
+							</div>
+							<div class="skel-card-stat">
+								<span class="skel skel-line skel-w-50"></span>
+								<span class="skel skel-line skel-w-30"></span>
+							</div>
+							<div class="skel-card-stat">
+								<span class="skel skel-line skel-w-50"></span>
+								<span class="skel skel-line skel-w-30"></span>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">Loading runs…</p>
 	{:else}
 		<div class="run-list">
 			{#each filteredRuns as run}
@@ -438,6 +464,7 @@
 					class="run-card"
 					class:selecting
 					class:selected={selecting && isSelected}
+					class:has-map={!!run.track_url}
 					href={selecting ? undefined : `/runs/${run.id}`}
 					type={selecting ? 'button' : undefined}
 					onclick={selecting ? () => toggleSelect(run.id) : undefined}
@@ -448,7 +475,9 @@
 							class:checked={isSelected}
 							aria-hidden="true"
 						>
-							{isSelected ? '✓' : ''}
+							{#if isSelected}
+								<span class="material-symbols">check</span>
+							{/if}
 						</span>
 					{/if}
 					{#if run.track_url}
@@ -466,23 +495,26 @@
 						<div class="run-stats">
 							<div class="run-stat">
 								<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
-								<span class="run-stat-label">Distance</span>
+								<span class="run-stat-label section-label">Distance</span>
 							</div>
 							<div class="run-stat">
 								<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
-								<span class="run-stat-label">Time</span>
+								<span class="run-stat-label section-label">Time</span>
 							</div>
 							<div class="run-stat">
 								<span class="run-stat-value"
 									>{formatPace(run.duration_s, run.distance_m)}</span
 								>
-								<span class="run-stat-label">Pace</span>
+								<span class="run-stat-label section-label">Pace</span>
 							</div>
 						</div>
 						{#if run.metadata?.event}
 							<div class="run-event">
-								{run.metadata.event}
-								{#if run.metadata.position} &middot; Position {run.metadata.position}{/if}
+								<span class="material-symbols">event</span>
+								<span class="run-event-text">
+									{run.metadata.event}{#if run.metadata.position}
+										&middot; Position {run.metadata.position}{/if}
+								</span>
 							</div>
 						{/if}
 					</div>
@@ -534,7 +566,11 @@
 		{/if}
 
 		{#if filteredRuns.length === 0}
-			<div class="empty">No runs found for this filter.</div>
+			<div class="empty">
+				<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
+				<p class="empty-text">No runs match these filters.</p>
+				<p class="empty-hint">Try widening the date range or clearing the activity / source.</p>
+			</div>
 		{/if}
 	{/if}
 </div>
@@ -565,17 +601,11 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
 	.page-header {
 		margin-bottom: var(--space-xl);
-	}
-
-	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		margin-bottom: var(--space-md);
 	}
 
 	.toolbar {
@@ -590,24 +620,24 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
-		padding: 2px;
-		gap: 2px;
+		padding: var(--space-2xs);
+		gap: var(--space-2xs);
 	}
 
 	.activity-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
-		padding: 0.35rem 0.7rem;
+		gap: var(--space-xs);
+		padding: var(--space-xs) var(--space-sm);
 		border: none;
-		border-radius: calc(var(--radius-md) - 2px);
+		border-radius: var(--radius-sm);
 		background: transparent;
 		font: inherit;
 		font-size: 0.85rem;
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition: background var(--transition-fast), color var(--transition-fast);
 	}
 	.activity-btn .material-symbols {
 		font-size: 1.05rem;
@@ -618,7 +648,7 @@
 	}
 	.activity-btn.active {
 		background: var(--color-primary);
-		color: white;
+		color: var(--color-surface);
 	}
 	.activity-btn.active:hover {
 		background: var(--color-primary-hover);
@@ -631,7 +661,7 @@
 	}
 
 	.toolbar-select {
-		padding: 0.45rem 2rem 0.45rem 0.75rem;
+		padding: var(--space-xs) calc(var(--space-md) + var(--space-md)) var(--space-xs) var(--space-sm);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
@@ -641,7 +671,7 @@
 		appearance: none;
 		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
 		background-repeat: no-repeat;
-		background-position: right 0.6rem center;
+		background-position: right var(--space-sm) center;
 		background-size: 0.75rem;
 		cursor: pointer;
 		transition: border-color var(--transition-fast);
@@ -657,7 +687,7 @@
 	.toolbar-actions {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: var(--space-sm);
 		margin-left: auto;
 	}
 
@@ -672,10 +702,27 @@
 		}
 	}
 
-	.loading-text {
-		text-align: center;
-		color: var(--color-text-tertiary);
-		padding: var(--space-2xl);
+	/* <480px (phone). Stack the toolbar into rows that don't fight for
+	   horizontal space and let the selects expand to fill the row. */
+	@media (max-width: 30rem) {
+		.toolbar {
+			gap: var(--space-sm);
+		}
+		.select-group {
+			width: 100%;
+		}
+		.select-group .toolbar-select {
+			flex: 1 1 0;
+			min-width: 0;
+		}
+		.activity-group {
+			width: 100%;
+			justify-content: space-between;
+		}
+		.activity-btn {
+			flex: 1 1 0;
+			justify-content: center;
+		}
 	}
 
 	.run-list {
@@ -691,7 +738,8 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
-		transition: all var(--transition-fast);
+		transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+			transform var(--transition-fast);
 		text-decoration: none;
 		color: inherit;
 	}
@@ -733,17 +781,23 @@
 	.run-date {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
+		font-weight: 500;
 	}
 
+	/* Source badge — kept inline-styled with the helper's hex to stay
+	   consistent with /dashboard, /feed, RunShareView, PeriodSummary,
+	   and /runs/[id]. The local rule just controls size, weight, and
+	   the slight desaturation that makes it sit quieter on the row. */
 	.source-badge {
-		font-size: 0.65rem;
+		font-size: 0.625rem;
 		font-weight: 600;
-		color: white;
-		padding: 0.15rem 0.5rem;
+		color: var(--color-surface);
+		padding: var(--space-2xs) var(--space-sm);
 		border-radius: 9999px;
 		text-transform: uppercase;
-		letter-spacing: 0.03em;
+		letter-spacing: 0.04em;
 		white-space: nowrap;
+		opacity: 0.92;
 	}
 
 	.run-stats {
@@ -755,30 +809,67 @@
 	.run-stat {
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-2xs);
 	}
 
 	.run-stat-value {
 		font-weight: 700;
-		font-size: 1.05rem;
+		font-size: 1.15rem;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
 	}
 
-	.run-stat-label {
-		font-size: 0.7rem;
-		color: var(--color-text-tertiary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
+	.run-stat:first-child .run-stat-value {
+		font-size: 1.3rem;
+		color: var(--color-primary);
 	}
 
 	.run-event {
-		margin-top: var(--space-sm);
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+		margin-top: var(--space-md);
+		padding-top: var(--space-sm);
+		border-top: 1px solid var(--color-border);
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
 	}
+	.run-event .material-symbols {
+		font-size: 1rem;
+		color: var(--color-text-tertiary);
+	}
+	.run-event-text {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 
 	.empty {
+		grid-column: 1 / -1;
 		text-align: center;
-		padding: var(--space-2xl);
+		padding: var(--space-2xl) var(--space-md);
 		color: var(--color-text-tertiary);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+	.empty-icon {
+		font-size: 2.25rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.7;
+	}
+	.empty .empty-text {
+		font-size: 0.95rem;
+		color: var(--color-text);
+		padding: 0;
+	}
+	.empty-hint {
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+		max-width: 28rem;
 	}
 
 	.load-more-row {
@@ -794,15 +885,15 @@
 	.date-picker-row {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--space-sm);
 		margin-top: var(--space-sm);
 		flex-wrap: wrap;
 	}
 	.range-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.4rem 0.75rem;
+		gap: var(--space-sm);
+		padding: var(--space-xs) var(--space-sm);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
@@ -810,6 +901,7 @@
 		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
+		transition: border-color var(--transition-fast), background var(--transition-fast);
 	}
 	.range-chip:hover {
 		border-color: var(--color-primary);
@@ -826,7 +918,10 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
-		padding: 0.4rem 0.3rem;
+		padding: var(--space-xs);
+	}
+	.link-btn:hover {
+		color: var(--color-primary-hover);
 	}
 	.add-btn {
 		display: inline-flex;
@@ -834,20 +929,20 @@
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
 		background: var(--color-primary);
-		color: white;
+		color: var(--color-surface);
 		border-radius: var(--radius-md);
 		font-size: 0.875rem;
 		font-weight: 600;
 		text-decoration: none;
 		border: none;
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition: background var(--transition-fast);
 	}
 	.add-btn:hover { background: var(--color-primary-hover); }
-	/* Select mode renders as <button> instead of <a>, but the visual
-	   layout is identical to the link version — same map preview, same
-	   stats grid. The checkbox is positioned over the top-left corner
-	   so the card itself doesn't have to reflow. */
+
+	/* Select-mode renders the card as <button> instead of <a>. Visuals
+	   match the link version; the checkbox overlays the corner so the
+	   stat grid doesn't reflow. */
 	.run-card.selecting {
 		position: relative;
 		text-align: left;
@@ -857,87 +952,170 @@
 		padding: 0;
 		width: 100%;
 	}
-	/* The link version is naturally `position: relative` via the grid
-	   item it sits in; the button version needs it for the absolute
-	   `.select-box` overlay to anchor correctly. */
 	.run-card.selecting .run-map-placeholder { pointer-events: none; }
-	/* Cards without a map preview have their date row at the top of the
-	   card, where the absolute-positioned checkbox sits. Push it right
-	   so the box doesn't sit over the date text. The padding is harmless
-	   when a map is present (the date row is below the map). */
-	.run-card.selecting .run-top { padding-left: 2rem; }
+	/* Without a map preview the date row is at the card's top edge where
+	   the checkbox sits — inset the date so the box doesn't overlap it.
+	   With a map preview the date row is below the thumbnail and needs
+	   no inset. */
+	.run-card.selecting:not(.has-map) .run-top { padding-left: var(--space-xl); }
 	.run-card.selecting.selected {
 		border-color: var(--color-primary);
-		box-shadow: 0 0 0 2px var(--color-primary-light);
+		box-shadow: 0 0 0 2px var(--color-primary-light), var(--shadow-md);
 	}
 	.select-box {
 		position: absolute;
-		top: 0.6rem;
-		left: 0.6rem;
+		top: var(--space-sm);
+		left: var(--space-sm);
 		z-index: 2;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 24px;
-		height: 24px;
+		width: 1.5rem;
+		height: 1.5rem;
 		background: var(--color-surface);
 		border: 1.5px solid var(--color-border);
-		border-radius: 6px;
-		color: var(--color-bg);
+		border-radius: var(--radius-sm);
+		color: var(--color-surface);
 		font-size: 0.95rem;
 		font-weight: 700;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+		box-shadow: var(--shadow-sm);
+		transition: background var(--transition-fast), border-color var(--transition-fast);
+	}
+	.select-box .material-symbols {
+		font-size: 1rem;
+		font-weight: 700;
 	}
 	.select-box.checked {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
-		color: #FFFFFF;
+		color: var(--color-surface);
 	}
+
 	.bulk-bar {
 		position: fixed;
-		bottom: 1.5rem;
+		bottom: var(--space-lg);
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: 50;
+		z-index: var(--z-toast);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1.5rem;
-		padding: 0.75rem 1rem 0.75rem 1.25rem;
+		gap: var(--space-lg);
+		padding: var(--space-sm) var(--space-md);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg, 12px);
-		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.08);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
 		font-size: 0.95rem;
-		min-width: min(28rem, calc(100vw - 2rem));
+		min-width: min(28rem, calc(100vw - var(--space-xl)));
 	}
 	.bulk-count { font-weight: 600; }
-	.bulk-actions { display: flex; align-items: center; gap: 0.5rem; }
+	.bulk-actions { display: flex; align-items: center; gap: var(--space-sm); }
 	.bulk-cancel {
-		padding: 0.5rem 0.9rem;
+		padding: var(--space-sm) var(--space-md);
 		background: transparent;
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		font-weight: 500;
 		cursor: pointer;
+		transition: background var(--transition-fast);
 	}
-	.bulk-cancel:hover { background: var(--color-surface-hover, rgba(0, 0, 0, 0.04)); }
+	.bulk-cancel:hover { background: var(--color-bg-tertiary); }
 	.bulk-delete {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		padding: 0.5rem 1rem;
-		background: #d32f2f;
-		color: white;
+		gap: var(--space-xs);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-danger);
+		color: var(--color-surface);
 		border: none;
 		border-radius: var(--radius-md);
 		font-weight: 600;
 		cursor: pointer;
+		transition: filter var(--transition-fast);
 	}
-	.bulk-delete:hover:not(:disabled) { background: #b71c1c; }
+	.bulk-delete:hover:not(:disabled) { filter: brightness(0.92); }
 	.bulk-delete:disabled { opacity: 0.55; cursor: not-allowed; }
 	.bulk-delete .material-symbols { font-size: 1.1rem; }
+
+	/* Skeleton placeholder for the initial load. Distinct class (not
+	   `.run-card`) so e2e selectors that count run cards don't pick up
+	   skeletons in a race. Layout matches the real card so the page
+	   renders to its true height immediately — no shift on data arrival. */
+	.skel-card {
+		display: flex;
+		flex-direction: column;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		min-height: 7.5rem;
+		pointer-events: none;
+	}
+	.skel-card-body { padding: var(--space-md) var(--space-lg); }
+	.skel-card-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--space-md);
+		gap: var(--space-sm);
+	}
+	.skel-card-stats {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+	.skel-card-stat {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		flex: 1;
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		border-radius: var(--radius-sm);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line {
+		height: 0.75rem;
+	}
+	.skel-pill {
+		width: 3.5rem;
+		height: 1rem;
+		border-radius: 9999px;
+	}
+	.skel-w-30 { width: 30%; }
+	.skel-w-40 { width: 40%; }
+	.skel-w-50 { width: 50%; }
+	.skel-w-60 { width: 60%; }
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
 
 	/* .modal-* classes live in app.css. */
 </style>

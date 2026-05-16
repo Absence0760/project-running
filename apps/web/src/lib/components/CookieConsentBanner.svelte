@@ -47,18 +47,23 @@
 {/if}
 
 <style>
+	/* Compact bottom-right card. The previous full-width centered banner
+	   collided with bottom-of-screen action UI (the /runs bulk-bar, the
+	   /runs/new Save button) and silently intercepted pointer events
+	   wherever it covered. A 24rem corner card keeps the centered
+	   content unobstructed; mobile (<48rem) drops it back to a full-
+	   width strip because corner-pinned banners look orphaned on a
+	   narrow viewport. */
 	.banner {
 		position: fixed;
 		inset-block-end: var(--space-md);
-		inset-inline-start: var(--space-md);
 		inset-inline-end: var(--space-md);
-		max-width: 42rem;
-		margin-inline: auto;
+		width: min(24rem, calc(100vw - 2 * var(--space-md)));
 		background: var(--color-surface);
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: var(--space-md) var(--space-lg);
+		padding: var(--space-md);
 		box-shadow: var(--shadow-lg);
 		display: flex;
 		flex-direction: column;
@@ -67,13 +72,13 @@
 	}
 	.copy strong {
 		display: block;
-		font-size: 1rem;
+		font-size: 0.95rem;
 		margin-bottom: var(--space-2xs);
 	}
 	.copy p {
 		margin: 0;
-		font-size: 0.9rem;
-		line-height: 1.5;
+		font-size: 0.85rem;
+		line-height: 1.45;
 		color: var(--color-text-secondary);
 	}
 	.actions {
@@ -81,13 +86,10 @@
 		gap: var(--space-sm);
 		justify-content: flex-end;
 	}
-	@media (min-width: 640px) {
+	@media (max-width: 48rem) {
 		.banner {
-			flex-direction: row;
-			align-items: center;
-		}
-		.copy {
-			flex: 1;
+			inset-inline-start: var(--space-md);
+			width: auto;
 		}
 	}
 </style>
