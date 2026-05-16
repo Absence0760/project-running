@@ -25,10 +25,10 @@
 	}
 
 	const providers: Omit<IntegrationUI, 'connected' | 'lastSync' | 'loading'>[] = [
-		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically from your Strava account', icon: '🟠' },
-		{ provider: 'parkrun', name: 'parkrun', description: 'Import your complete parkrun history', icon: '🟣' },
-		{ provider: 'garmin', name: 'Garmin Connect', description: 'Bulk-import .fit files (single activity or full Account Data export). Live OAuth needs Garmin developer-program approval.', icon: '🔵' },
-		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Synced on-device via the iOS app', icon: '❤️' },
+		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically from your Strava account', icon: 'directions_run' },
+		{ provider: 'parkrun', name: 'parkrun', description: 'Import your complete parkrun history', icon: 'emoji_events' },
+		{ provider: 'garmin', name: 'Garmin Connect', description: 'Bulk-import .fit files (single activity or full Account Data export). Live OAuth needs Garmin developer-program approval.', icon: 'watch' },
+		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Synced on-device via the iOS app', icon: 'favorite' },
 	];
 
 	let integrations = $state<IntegrationUI[]>(
@@ -201,15 +201,49 @@
 </script>
 
 <div class="page">
-	<p class="page-sub">Connect external services to sync your runs automatically.</p>
+	<header class="page-head">
+		<p class="kicker">Settings</p>
+		<h1>Integrations</h1>
+		<p class="tagline">
+			Pull your runs in from Strava, parkrun, Garmin, and Apple HealthKit — or drop in
+			a bulk export zip if you'd rather not connect an account.
+		</p>
+	</header>
 
 	{#if pageLoading}
-		<p class="loading-text">&nbsp;</p>
+		<div class="skeleton-stack" aria-hidden="true">
+			{#each Array(4) as _, i (i)}
+				<div class="skel-row">
+					<span class="skel skel-icon"></span>
+					<div class="skel-info">
+						<span class="skel skel-line skel-w-30"></span>
+						<span class="skel skel-line skel-w-60"></span>
+					</div>
+					<span class="skel skel-btn"></span>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">Loading integrations…</p>
 	{:else}
-		<div class="integration-list">
+		{#if integrations.every((i) => !i.connected)}
+			<section class="card empty-card">
+				<span class="material-symbols empty-icon" aria-hidden="true">link</span>
+				<h3>No integrations connected</h3>
+				<p class="empty-text">
+					Connect Strava, parkrun, or Garmin below to keep your runs flowing in
+					automatically. Or use the bulk-import cards if you'd rather drop in a
+					one-off export.
+				</p>
+			</section>
+		{/if}
+		<section class="provider-section">
+			<h2>Available integrations</h2>
+			<div class="integration-list">
 			{#each integrations as integration, i}
 				<div class="integration-card" class:connected={integration.connected}>
-					<div class="integration-icon">{integration.icon}</div>
+					<div class="integration-icon" data-provider={integration.provider} aria-hidden="true">
+						<span class="material-symbols">{integration.icon}</span>
+					</div>
 					<div class="integration-info">
 						<h3>{integration.name}</h3>
 						<p>{integration.description}</p>
@@ -250,7 +284,8 @@
 					</div>
 				</div>
 			{/each}
-		</div>
+			</div>
+		</section>
 
 		<section class="card bulk-import">
 			<h2>Bulk import from a Strava export</h2>
@@ -364,26 +399,112 @@
 		max-width: 64rem;
 	}
 
-	.page-header {
+	.page-head { margin-bottom: var(--space-xl); }
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
+	}
+	h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 var(--space-xs); }
+	.tagline {
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+		line-height: 1.5;
+		margin: 0;
+		max-width: 44rem;
+	}
+
+	.provider-section { margin-bottom: var(--space-xl); }
+	.provider-section > h2 {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin: 0 0 var(--space-md);
+	}
+
+	/* Empty-state card — matches /u/[id]'s shape. */
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		text-align: center;
 		margin-bottom: var(--space-xl);
 	}
-
-	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		margin-bottom: var(--space-xs);
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
-
-	.page-sub {
-		color: var(--color-text-secondary);
-		font-size: 0.9rem;
-		margin-bottom: var(--space-lg);
-	}
-
-	.loading-text {
-		text-align: center;
+	.empty-icon {
+		font-family: 'Material Symbols Outlined';
+		font-size: 2.5rem;
 		color: var(--color-text-tertiary);
-		padding: var(--space-2xl);
+		opacity: 0.85;
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
+	/* Skeletons */
+	.skeleton-stack { display: flex; flex-direction: column; gap: var(--space-md); }
+	.skel-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		pointer-events: none;
+	}
+	.skel-icon { width: 2rem; height: 2rem; border-radius: var(--radius-md); flex-shrink: 0; }
+	.skel-info { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+	.skel-btn { width: 6rem; height: 2.2rem; border-radius: var(--radius-md); flex-shrink: 0; }
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line { height: 0.85rem; }
+	.skel-w-30 { width: 30%; }
+	.skel-w-60 { width: 60%; }
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.integration-list {
@@ -409,8 +530,35 @@
 	}
 
 	.integration-icon {
-		font-size: 1.75rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		border-radius: var(--radius-md);
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
 		flex-shrink: 0;
+	}
+	.integration-icon .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.4rem;
+	}
+	.integration-icon[data-provider="strava"] {
+		background: rgba(252, 76, 2, 0.12);
+		color: #fc4c02;
+	}
+	.integration-icon[data-provider="parkrun"] {
+		background: rgba(217, 122, 84, 0.14);
+		color: var(--color-secondary);
+	}
+	.integration-icon[data-provider="garmin"] {
+		background: rgba(0, 119, 200, 0.12);
+		color: #0077c8;
+	}
+	.integration-icon[data-provider="healthkit"] {
+		background: rgba(252, 61, 90, 0.12);
+		color: #fc3d5a;
 	}
 
 	.integration-info {

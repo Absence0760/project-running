@@ -287,13 +287,37 @@
 </script>
 
 <div class="page">
-	<p class="subtitle">Every app and browser that has signed into your account.</p>
+	<header class="page-head">
+		<p class="kicker">Settings</p>
+		<h1>Devices</h1>
+		<p class="tagline">
+			Every app and browser that's ever signed into your account. Override universal
+			preferences per device, or reset one that's gone stale.
+		</p>
+	</header>
 
 	{#if loading}
-		<p class="muted">Loading...</p>
+		<div class="skeleton-stack" aria-hidden="true">
+			{#each Array(3) as _, i (i)}
+				<div class="skel-row">
+					<span class="skel skel-icon"></span>
+					<div class="skel-info">
+						<span class="skel skel-line skel-w-40"></span>
+						<span class="skel skel-line skel-w-60"></span>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">Loading devices…</p>
 	{:else if devices.length === 0}
-		<section class="card">
-			<p class="muted">No devices registered yet. Each app or browser session registers itself on first sign-in.</p>
+		<section class="card empty-card">
+			<span class="material-symbols empty-icon" aria-hidden="true">devices_other</span>
+			<h3>No devices registered yet</h3>
+			<p class="empty-text">
+				Each app or browser session registers itself the first time it signs in and
+				saves a preference. Open the app on your phone or watch and this list will
+				populate.
+			</p>
 		</section>
 	{:else}
 		<div class="device-list">
@@ -441,10 +465,100 @@
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
-	.page-header { margin-bottom: var(--space-xl); }
-	h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-xs); }
-	.subtitle { font-size: 0.88rem; color: var(--color-text-secondary); margin-bottom: var(--space-lg); }
+	.page-head { margin-bottom: var(--space-xl); }
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
+	}
+	h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 var(--space-xs); }
+	.tagline {
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+		line-height: 1.5;
+		margin: 0;
+		max-width: 44rem;
+	}
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); }
+
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		text-align: center;
+	}
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.empty-icon {
+		font-family: 'Material Symbols Outlined';
+		font-size: 2.5rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.85;
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
+	.skeleton-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+	.skel-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem 1.25rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		pointer-events: none;
+	}
+	.skel-icon { width: 1.5rem; height: 1.5rem; border-radius: 50%; flex-shrink: 0; }
+	.skel-info { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; }
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line { height: 0.85rem; }
+	.skel-w-40 { width: 40%; }
+	.skel-w-60 { width: 60%; }
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
 	.device-list { display: flex; flex-direction: column; gap: 0.5rem; }
 	.device {
 		display: flex;

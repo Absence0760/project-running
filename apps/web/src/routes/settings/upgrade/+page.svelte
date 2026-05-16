@@ -92,141 +92,219 @@
 </script>
 
 <div class="page">
-	<p class="subtitle">
-		Upgrade for unlimited coach chat and priority processing, or chip in
-		one-off to help cover server costs.
-	</p>
+	<header class="hero">
+		<p class="kicker">Settings</p>
+		<h1>Pro &amp; support</h1>
+		<p class="tagline">
+			Run Onward is free for the parts that matter — recording, routes, plans,
+			clubs, imports. Pro lifts the daily Coach cap and pushes your map-matching
+			to the front of the queue. Or chip in one-off to help keep the lights on.
+		</p>
+	</header>
 
-	<section class="card pro-card" class:active={isPro}>
-		<header class="pro-header">
-			<div>
-				<h2>Pro</h2>
-				<p class="pro-price">
+	<section class="tier-grid">
+		<article class="tier tier-free" aria-labelledby="tier-free-h">
+			<header class="tier-head">
+				<h2 id="tier-free-h">Free</h2>
+				<p class="tier-price">
+					<span class="price-amount">$0</span>
+					<span class="price-period">forever</span>
+				</p>
+			</header>
+			<p class="tier-blurb">Everything you need to record, plan, and share.</p>
+			<ul class="tier-features">
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<span>Unlimited recording on phone &amp; watch</span>
+				</li>
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<span>Routes, plans, clubs, social feed</span>
+				</li>
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<span>Strava, parkrun, Garmin sync &amp; imports</span>
+				</li>
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<span>AI Coach — 5 chats per day</span>
+				</li>
+			</ul>
+			{#if !isPro}
+				<p class="tier-note">You're on Free.</p>
+			{/if}
+		</article>
+
+		<article class="tier tier-pro" class:active={isPro} aria-labelledby="tier-pro-h">
+			<span class="tier-flag">Most popular</span>
+			<header class="tier-head">
+				<h2 id="tier-pro-h">Pro</h2>
+				{#if isPro}<span class="pro-badge">Active</span>{/if}
+				<p class="tier-price">
 					<span class="price-amount">{priceLabel}</span>
 					<span class="price-period">/ month</span>
 				</p>
-			</div>
-			{#if isPro}<span class="pro-badge">Active</span>{/if}
-		</header>
-		<ul class="pro-features">
-			<li>
-				<span class="check">✓</span>
-				<div>
-					<strong>Unlimited AI Coach</strong>
-					<span class="feat-sub">No 5 / day cap on coach chat.</span>
-				</div>
-			</li>
-			<li>
-				<span class="check">✓</span>
-				<div>
-					<strong>Priority map-matching</strong>
-					<span class="feat-sub">Your GPS tracks get snapped to roads in seconds, not minutes — even under load.</span>
-				</div>
-			</li>
-			<li>
-				<span class="check">✓</span>
-				<div>
-					<strong>Everything in Free</strong>
-					<span class="feat-sub">Recording, routes, plans, clubs, sync, imports — all of it.</span>
-				</div>
-			</li>
-		</ul>
-		{#if isPro}
-			<p class="pro-note">
-				Thanks for supporting Run Onward. Manage your subscription from
-				the App Store, Play Store, or billing portal where you started it.
-			</p>
-			<button class="btn-secondary" onclick={handleManageSubscription}>
-				Manage subscription
-			</button>
-		{:else}
-			<button class="btn-primary" onclick={handleGetPro} disabled={purchasing}>
-				{purchasing ? 'Redirecting…' : `Get Pro — ${priceLabel}/mo`}
-			</button>
-		{/if}
+			</header>
+			<p class="tier-blurb">For runners who live in the app.</p>
+			<ul class="tier-features">
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<div>
+						<strong>Unlimited AI Coach</strong>
+						<span class="feat-sub">No 5/day cap on Coach chat.</span>
+					</div>
+				</li>
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<div>
+						<strong>Priority map-matching</strong>
+						<span class="feat-sub">Your GPS tracks snap to roads in seconds, not minutes.</span>
+					</div>
+				</li>
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<div>
+						<strong>Priority cloud exports</strong>
+						<span class="feat-sub">8 GPX bundle exports per hour vs. 2 on Free.</span>
+					</div>
+				</li>
+				<li>
+					<span class="check material-symbols" aria-hidden="true">check_circle</span>
+					<div>
+						<strong>Everything in Free</strong>
+						<span class="feat-sub">Recording, routes, plans, clubs, sync, imports.</span>
+					</div>
+				</li>
+			</ul>
+			{#if isPro}
+				<p class="pro-note">
+					Thanks for supporting Run Onward. Manage your subscription where
+					you started it — App Store, Play Store, or the web billing portal.
+				</p>
+				<button class="btn btn-outline" onclick={handleManageSubscription}>
+					Manage subscription
+				</button>
+			{:else}
+				<button class="btn btn-primary tier-cta" onclick={handleGetPro} disabled={purchasing}>
+					{purchasing ? 'Redirecting…' : `Get Pro — ${priceLabel}/mo`}
+				</button>
+				<p class="tier-fine">Cancel anytime from the App Store, Play Store, or billing portal.</p>
+			{/if}
+		</article>
 	</section>
 
-	<section class="card donate-card">
-		<h2>Support the project</h2>
-		<p>
-			If a subscription isn't for you, a one-off donation helps keep the
-			app running.
-		</p>
-		<button class="btn-secondary" onclick={handleDonate}>Donate</button>
+	<section class="donate-card">
+		<div class="donate-text">
+			<h2>Not ready for a subscription?</h2>
+			<p>
+				A one-off donation helps cover map tiles, push notifications, and the
+				occasional server invoice. Every chip-in lands directly with the project.
+			</p>
+		</div>
+		<button class="btn btn-outline" onclick={handleDonate}>
+			<span class="material-symbols" aria-hidden="true">favorite</span>
+			Donate
+		</button>
 	</section>
 </div>
 
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
-		max-width: 40rem;
+		max-width: 64rem;
 	}
-	.page-header {
-		margin-bottom: var(--space-xl);
-		text-align: center;
+	.hero {
+		margin-bottom: var(--space-2xl);
+		max-width: 44rem;
 	}
-	h1 {
-		font-size: 1.75rem;
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
+	}
+	.hero h1 {
+		font-size: 2rem;
 		font-weight: 800;
-		margin-bottom: var(--space-xs);
+		margin: 0 0 var(--space-sm);
+		line-height: 1.15;
 	}
-	.subtitle {
+	.tagline {
 		color: var(--color-text-secondary);
-		font-size: 0.95rem;
-		line-height: 1.5;
-		margin-bottom: var(--space-lg);
+		font-size: 1rem;
+		line-height: 1.55;
+		margin: 0;
 	}
 
-	.card {
+	.tier-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+		gap: var(--space-lg);
+		margin-bottom: var(--space-2xl);
+	}
+	.tier {
+		position: relative;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: 1.75rem;
-		margin-bottom: var(--space-xl);
+		padding: var(--space-xl);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
 	}
-	.card h2 {
-		font-size: 1.15rem;
-		font-weight: 700;
-		margin: 0 0 0.5rem;
-	}
-	.card p {
-		color: var(--color-text-secondary);
-		font-size: 0.9rem;
-		line-height: 1.5;
-		margin: 0 0 1rem;
-	}
-
-	.pro-card {
+	.tier-pro {
 		border-color: var(--color-primary);
 		border-width: 1.5px;
+		box-shadow: var(--shadow-md);
 	}
-	.pro-card.active {
+	.tier-pro.active {
 		background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 	}
-	.pro-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		margin-bottom: 1.25rem;
+	.tier-flag {
+		position: absolute;
+		top: -0.6rem;
+		right: var(--space-lg);
+		background: var(--color-primary);
+		color: white;
+		font-size: 0.7rem;
+		font-weight: 700;
+		padding: 0.2rem 0.7rem;
+		border-radius: 9999px;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 	}
-	.pro-price {
+	.tier-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+	.tier-head h2 {
+		font-size: 1.3rem;
+		font-weight: 700;
 		margin: 0;
+	}
+	.tier-price {
+		margin: 0 0 0 auto;
 		display: flex;
 		align-items: baseline;
 		gap: 0.25rem;
 	}
 	.price-amount {
-		font-size: 1.6rem;
+		font-size: 1.5rem;
 		font-weight: 800;
 		color: var(--color-primary);
 		font-variant-numeric: tabular-nums;
 	}
+	.tier-free .price-amount { color: var(--color-text); }
 	.price-period {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 	}
 	.pro-badge {
-		background: #2e7d32;
+		background: var(--color-success);
 		color: white;
 		font-size: 0.7rem;
 		font-weight: 700;
@@ -235,22 +313,31 @@
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 	}
-	.pro-features {
+	.tier-blurb {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.tier-features {
 		list-style: none;
 		padding: 0;
-		margin: 0 0 1.5rem;
-		display: grid;
-		gap: 0.85rem;
-	}
-	.pro-features li {
+		margin: var(--space-sm) 0 auto;
 		display: flex;
-		gap: 0.75rem;
-		align-items: flex-start;
+		flex-direction: column;
+		gap: var(--space-sm);
 	}
-	.pro-features strong {
+	.tier-features li {
+		display: flex;
+		gap: 0.6rem;
+		align-items: flex-start;
+		font-size: 0.9rem;
+		line-height: 1.45;
+	}
+	.tier-features strong {
 		display: block;
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: 0.92rem;
 	}
 	.feat-sub {
 		display: block;
@@ -260,56 +347,66 @@
 		line-height: 1.4;
 	}
 	.check {
-		color: #2e7d32;
-		font-weight: 700;
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
+		color: var(--color-success);
 		flex-shrink: 0;
-		margin-top: 0.1rem;
+		line-height: 1.3;
+	}
+	.tier-cta {
+		width: 100%;
+		justify-content: center;
+		font-size: 0.95rem;
+		padding: 0.85rem 1rem;
+		margin-top: var(--space-sm);
+	}
+	.tier-note {
+		margin: var(--space-sm) 0 0;
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+	}
+	.tier-fine {
+		margin: var(--space-xs) 0 0;
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		text-align: center;
+		line-height: 1.4;
 	}
 	.pro-note {
-		margin: 0;
+		margin: var(--space-sm) 0;
 		padding: 0.75rem 1rem;
-		background: color-mix(in srgb, #2e7d32 8%, transparent);
-		border-left: 3px solid #2e7d32;
+		background: var(--color-success-light);
+		border-left: 3px solid var(--color-success);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
+		line-height: 1.5;
 	}
 
-	.btn-primary {
-		width: 100%;
-		padding: 0.85rem 1rem;
-		background: var(--color-primary);
-		color: white;
-		border: none;
-		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.95rem;
-		cursor: pointer;
-		transition: filter 0.15s ease, transform 0.15s ease;
+	.donate-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-xl);
+		flex-wrap: wrap;
 	}
-	.btn-primary:hover {
-		filter: brightness(1.08);
+	.donate-text { flex: 1; min-width: 16rem; }
+	.donate-text h2 {
+		font-size: 1.1rem;
+		font-weight: 700;
+		margin: 0 0 var(--space-xs);
 	}
-	.btn-primary:active {
-		transform: translateY(1px);
-	}
-	.btn-primary:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		padding: 0.7rem 1.5rem;
-		background: transparent;
-		color: var(--color-primary);
-		border: 1.5px solid var(--color-primary);
-		border-radius: var(--radius-md);
-		font-weight: 600;
+	.donate-text p {
+		margin: 0;
+		color: var(--color-text-secondary);
 		font-size: 0.9rem;
-		cursor: pointer;
-		transition: background 0.15s ease;
+		line-height: 1.5;
 	}
-	.btn-secondary:hover {
-		background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+	.donate-card .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
 	}
 </style>

@@ -27,7 +27,9 @@ test.describe('/share/route/[id] — anon', () => {
 		).toBeVisible({ timeout: 10_000 });
 
 		// The .route-meta strip carries distance + surface tag.
-		await expect(page.locator('.surface-tag')).toContainText('road');
+		// (The hero subtitle also renders a .surface-tag; scope to .route-meta
+		// to keep the assertion pinned at the body-level summary strip.)
+		await expect(page.locator('.route-meta .surface-tag')).toContainText('road');
 		await expect(page.locator('.route-meta')).toContainText('10');
 	});
 

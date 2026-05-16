@@ -9,7 +9,12 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import type { Run, TrackPoint } from '$lib/types';
 
-	let { runId, compact = false }: { runId: string; compact?: boolean } = $props();
+	let {
+		runId,
+		compact = false,
+		headerless = false,
+		hideAnonCta = false,
+	}: { runId: string; compact?: boolean; headerless?: boolean; hideAnonCta?: boolean } = $props();
 
 	let run = $state<Run | null>(null);
 	let track = $state<TrackPoint[]>([]);
@@ -74,7 +79,9 @@
 {:else if notFound}
 	<p class="status">Run not found.</p>
 {:else if run}
-	<h1 class:compact>{formatDate(run.started_at)}</h1>
+	{#if !headerless}
+		<h1 class:compact>{formatDate(run.started_at)}</h1>
+	{/if}
 	<div class="run-meta">
 		<span>{formatDistance(run.distance_m)}</span>
 		<span class="meta-sep">&middot;</span>
@@ -106,7 +113,7 @@
 		<section class="card">
 			<RunSocial runId={run.id} runOwnerId={run.user_id} />
 		</section>
-	{:else}
+	{:else if !hideAnonCta}
 		<div class="cta">
 			<p>Track your own runs and join the conversation</p>
 			<a href="/login?signup=1" class="btn btn-primary">Sign up for Free</a>

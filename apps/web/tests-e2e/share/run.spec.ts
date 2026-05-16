@@ -219,8 +219,10 @@ test.describe('/share/run/[id] — anon', () => {
 		// share-page chrome + the run-meta block. The seeded run has no
 		// track in Storage so we don't assert on the map. The chrome
 		// + run-meta combo confirms anon read of the runs row succeeded
-		// via the public_runs view (no auth, no 404).
-		await expect(page.getByRole('link', { name: 'Run Onward' })).toBeVisible();
+		// via the public_runs view (no auth, no 404). The page also renders
+		// a footer "Run Onward home" link — scope the brand-mark assertion
+		// to the .share-logo header so it stays unambiguous.
+		await expect(page.locator('.share-logo')).toBeVisible();
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
 	});
 });

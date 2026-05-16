@@ -144,14 +144,31 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		}
 	});
 
-	test('route name input is bindable + empty by default', async ({ page }) => {
+	test('Save button gates the save modal which hosts the name input', async ({ page }) => {
+		// The route name + description + visibility form was lifted into a
+		// modal so the sidebar can stay focused on the building action. The
+		// Save button is disabled until the user has calculated a route —
+		// we can't drive OSRM in CI, so this test asserts the gating only,
+		// then confirms the modal contract (name input + Cancel) via the
+		// builder's bound modal state by toggling the gate off in-DOM.
 		await page.goto('/routes/new');
 		await page.waitForLoadState('networkidle');
+		const saveBtn = page.getByRole('button', { name: /Save Route/ });
+		await expect(saveBtn).toBeVisible();
+		await expect(saveBtn).toBeDisabled();
+		// Force-enable so we can verify the modal renders + the name input
+		// is bindable. The disabled gate itself is exercised by the
+		// earlier "Calculate + Save + GPX buttons disabled" test.
+		await saveBtn.evaluate((el: HTMLButtonElement) => (el.disabled = false));
+		await saveBtn.click();
 		const nameInput = page.getByPlaceholder('My Route');
 		await expect(nameInput).toBeVisible();
 		await expect(nameInput).toHaveValue('');
 		await nameInput.fill('e2e route');
 		await expect(nameInput).toHaveValue('e2e route');
+		// Cancel closes without saving.
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect(nameInput).not.toBeVisible();
 	});
 
 	test('keyboard shortcuts hint is visible on initial load', async ({ page }) => {

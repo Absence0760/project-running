@@ -168,8 +168,10 @@
 </script>
 
 <div class="page">
-	<header class="page-header">
-		<p class="subtitle">
+	<header class="page-head">
+		<p class="kicker">Settings</p>
+		<h1>Gear</h1>
+		<p class="tagline">
 			Track shoes and bikes. Tag runs with the gear you wore on the run-detail page;
 			retirement targets nudge you when a pair crosses its planned mileage.
 		</p>
@@ -203,16 +205,44 @@
 	</div>
 
 	{#if loading}
-		<p class="muted">Loading gear…</p>
+		<div class="skeleton-stack" aria-hidden="true">
+			{#each Array(3) as _, i (i)}
+				<div class="skel-row">
+					<div class="skel-info">
+						<span class="skel skel-line skel-w-40"></span>
+						<span class="skel skel-bar"></span>
+						<span class="skel skel-line skel-w-30"></span>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">Loading gear…</p>
 	{:else if visible.length === 0}
-		<div class="empty">
-			<span class="material-symbols">
+		<section class="card empty-card">
+			<span class="material-symbols empty-icon" aria-hidden="true">
 				{activeTab === 'shoe' ? 'directions_run' : 'directions_bike'}
 			</span>
-			<p>
-				No {activeTab === 'shoe' ? 'shoes' : 'bikes'} yet. Add a pair to start tracking mileage.
+			<h3>No {activeTab === 'shoe' ? 'shoes' : 'bikes'} yet</h3>
+			<p class="empty-text">
+				{#if activeTab === 'shoe'}
+					Add a pair to track mileage and get a nudge when they cross their retirement
+					target. Most road shoes are happy for 500–800 km; trail shoes a bit less.
+				{:else}
+					Add a bike to track distance accrued and tag rides on the run-detail page.
+				{/if}
 			</p>
-		</div>
+			<button
+				class="btn btn-primary"
+				type="button"
+				onclick={() => {
+					resetForm();
+					showCreate = true;
+				}}
+			>
+				<span class="material-symbols" aria-hidden="true">add</span>
+				Add {activeTab === 'shoe' ? 'shoes' : 'bike'}
+			</button>
+		</section>
 	{:else}
 		{#if active.length > 0}
 			<ul class="gear-list">
@@ -370,9 +400,22 @@
 		max-width: 64rem;
 		padding: var(--space-xl) var(--space-2xl);
 	}
-	.page-header .subtitle {
+	.page-head { margin-bottom: var(--space-xl); }
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
+	}
+	.page-head h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 var(--space-xs); }
+	.tagline {
 		color: var(--color-text-secondary);
-		margin-bottom: var(--space-lg);
+		font-size: 0.95rem;
+		line-height: 1.5;
+		margin: 0;
+		max-width: 44rem;
 	}
 	.tabs {
 		display: flex;
@@ -402,16 +445,87 @@
 		font-weight: 600;
 	}
 	.spacer { flex: 1; }
-	.empty {
+	.empty-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		padding: var(--space-2xl);
-		color: var(--color-text-tertiary);
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-align: center;
 	}
-	.empty .material-symbols {
-		font-size: 3rem;
-		margin-bottom: var(--space-md);
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.empty-icon {
+		font-family: 'Material Symbols Outlined';
+		font-size: 2.5rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.85;
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
+	.skeleton-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+	.skel-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		pointer-events: none;
+	}
+	.skel-info { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; }
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line { height: 0.85rem; }
+	.skel-bar { height: 0.4rem; border-radius: 3px; }
+	.skel-w-30 { width: 30%; }
+	.skel-w-40 { width: 40%; }
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.gear-list {
 		list-style: none;

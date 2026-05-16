@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
 	import { saveRoute } from '$lib/data';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	// `?club=<uuid>` makes the new route club-owned. The club home page's
 	// Routes tab links here with this param so route creation lands the
@@ -12,6 +14,8 @@
 	let clubId = $derived($page.url.searchParams.get('club'));
 
 	let routeName = $state('');
+	let routeDescription = $state('');
+	let isPublic = $state(false);
 	let mode = $state<'road' | 'trail'>('road');
 	let waypointCount = $state(0);
 	let distance = $state(0);
@@ -22,6 +26,27 @@
 	let saving = $state(false);
 	let saveError = $state('');
 	let routingError = $state<string | null>(null);
+	let showSaveModal = $state(false);
+	let showHelp = $state(false);
+
+	/// Same back-link contract as /plans/[id] and /guided — only pop the
+	/// history entry when we actually came from /routes (or one of its
+	/// tabs) so the parent's tab + filter snapshot survives. Otherwise
+	/// fall through to a normal soft-nav.
+	let cameFromRoutes = $state(false);
+	afterNavigate(({ from }) => {
+		if (cameFromRoutes || !from) return;
+		if (from.url.pathname === '/routes' || from.url.pathname.startsWith('/routes?')) {
+			cameFromRoutes = true;
+		}
+	});
+
+	function handleBack(e: MouseEvent): void {
+		if (cameFromRoutes) {
+			e.preventDefault();
+			history.back();
+		}
+	}
 
 	function handleUpdate(data: {
 		waypoints: number;
@@ -42,7 +67,6 @@
 		if (message) routed = false;
 	}
 
-	// Lap detection: count how many times the route returns to the start point
 	let laps = $derived.by(() => {
 		const routeData = builder?.getRouteData();
 		if (!routeData || routeData.waypoints.length < 3) return { count: 0, lapDistance: 0 };
@@ -53,7 +77,6 @@
 		for (let i = 1; i < routeData.waypoints.length; i++) {
 			const wp = routeData.waypoints[i];
 			const dist = Math.sqrt((wp.lat - start.lat) ** 2 + (wp.lng - start.lng) ** 2);
-			// Within ~10m of start = a lap completion
 			if (dist < 0.0001) {
 				lapCount++;
 			}
@@ -112,6 +135,8 @@
 		return `~${m}m ${s}s`;
 	});
 
+	let canSave = $derived(routed && routeName.trim().length > 0);
+
 	async function handleCalculateRoute() {
 		await builder?.calculateRoute();
 		routed = true;
@@ -149,7 +174,6 @@
 		pickingPoint = target;
 	}
 
-	// Called from RouteBuilder when user clicks while picking
 	function handleMapPick(lngLat: { lng: number; lat: number }) {
 		if (!pickingPoint) return false;
 		const point = { lat: lngLat.lat, lng: lngLat.lng };
@@ -157,24 +181,30 @@
 		if (pickingPoint === 'start') { startPoint = point; startLabel = label; }
 		else { endPoint = point; endLabel = label; }
 		pickingPoint = null;
-		return true; // consumed the click
+		return true;
 	}
 
 	async function handleGenerateLoop() {
-		// Default start to map center if not set
 		const start = startPoint ?? (() => {
 			const c = builder?.getMapCenter?.();
 			return c ? { lat: c.lat, lng: c.lng } : undefined;
 		})();
-
-		// End defaults to start (loop) if not set
 		const end = endPoint ?? undefined;
 
 		await builder?.generateLoop(targetKm * 1000, start, end);
 		routed = true;
 	}
 
+	function openSaveModal() {
+		saveError = '';
+		showSaveModal = true;
+	}
+
 	async function handleSaveRoute() {
+		if (!routeName.trim()) {
+			saveError = 'Give your route a name.';
+			return;
+		}
 		saving = true;
 		saveError = '';
 		try {
@@ -182,15 +212,17 @@
 			if (!routeData) return;
 
 			const saved = await saveRoute({
-				name: routeName || 'Untitled Route',
+				name: routeName.trim(),
 				waypoints: routeData.waypoints,
 				distance_m: Math.round(distance * 100) / 100,
 				elevation_m: elevation > 0 ? elevation : null,
 				surface: mode === 'trail' ? 'trail' : 'road',
-				is_public: false,
+				is_public: isPublic,
 				club_id: clubId,
 			});
 
+			showSaveModal = false;
+			showToast('Route saved.', 'success');
 			goto(`/routes/${saved.id}`);
 		} catch (err) {
 			saveError = err instanceof Error ? err.message : 'Failed to save route';
@@ -200,23 +232,28 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Route Builder — Run Onward</title>
+</svelte:head>
+
 <div class="builder-layout">
 	<aside class="sidebar">
-		<a href="/routes" class="back-link">
+		<a href="/routes" class="back-link" onclick={handleBack}>
 			<span class="material-symbols">arrow_back</span>
-			Routes
+			My routes
 		</a>
 
-		<h1>Route Builder</h1>
+		<header class="sidebar-head">
+			<p class="kicker">New route</p>
+			<h1>Route Builder</h1>
+			<p class="tagline">
+				Click the map to drop waypoints, then snap to roads or trails. Save when you're happy.
+			</p>
+		</header>
 
 		<div class="controls">
-			<label>
-				<span class="label-text">Route Name</span>
-				<input type="text" placeholder="My Route" bind:value={routeName} />
-			</label>
-
-			<fieldset>
-				<legend class="label-text">Mode</legend>
+			<fieldset class="control-group">
+				<legend class="section-label">Surface</legend>
 				<div class="mode-buttons">
 					<button
 						class="mode-btn"
@@ -237,29 +274,30 @@
 				</div>
 			</fieldset>
 
-			<!-- Map style toggle -->
-			<div class="style-toggle">
-				<button class="style-btn" class:active={currentMapStyle === 'streets'} onclick={() => handleMapStyle('streets')}>Streets</button>
-				<button class="style-btn" class:active={currentMapStyle === 'satellite'} onclick={() => handleMapStyle('satellite')}>Satellite</button>
-				<button class="style-btn" class:active={currentMapStyle === 'terrain'} onclick={() => handleMapStyle('terrain')}>Terrain</button>
-			</div>
+			<fieldset class="control-group">
+				<legend class="section-label">Map style</legend>
+				<div class="style-toggle">
+					<button class="style-btn" class:active={currentMapStyle === 'streets'} onclick={() => handleMapStyle('streets')}>Streets</button>
+					<button class="style-btn" class:active={currentMapStyle === 'satellite'} onclick={() => handleMapStyle('satellite')}>Satellite</button>
+					<button class="style-btn" class:active={currentMapStyle === 'terrain'} onclick={() => handleMapStyle('terrain')}>Terrain</button>
+				</div>
+			</fieldset>
 
 			<div class="stats-row">
 				<div class="builder-stat">
-					<span class="builder-stat-value">{(distance / 1000).toFixed(2)} km</span>
-					<span class="builder-stat-label">Distance</span>
+					<span class="builder-stat-value">{(distance / 1000).toFixed(2)}</span>
+					<span class="builder-stat-label">km</span>
 				</div>
 				<div class="builder-stat">
-					<span class="builder-stat-value">{elevation} m</span>
-					<span class="builder-stat-label">Elevation</span>
+					<span class="builder-stat-value">{elevation}</span>
+					<span class="builder-stat-label">m gain</span>
 				</div>
 				<div class="builder-stat">
 					<span class="builder-stat-value">{waypointCount}</span>
-					<span class="builder-stat-label">Points</span>
+					<span class="builder-stat-label">points</span>
 				</div>
 			</div>
 
-			<!-- Time estimate -->
 			{#if distance > 0}
 				<div class="time-estimate">
 					<span class="time-value">{estimatedTime}</span>
@@ -284,33 +322,32 @@
 			{/if}
 
 			<div class="elevation-preview">
-				<span class="label-text">Elevation Profile</span>
+				<span class="section-label">Elevation profile</span>
 				{#if elevations.length >= 2}
 					<ElevationProfile {elevations} totalDistance={distance} />
 				{:else}
 					<div class="elevation-empty">
 						<span class="material-symbols">show_chart</span>
-						<span>Add waypoints to see profile</span>
+						<span>Add waypoints to see the profile</span>
 					</div>
 				{/if}
 			</div>
 
-			<div class="action-row">
-				<button class="btn btn-ghost" disabled={waypointCount === 0} onclick={handleUndo}>
+			<div class="toolbar-group" role="toolbar" aria-label="Waypoint actions">
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0} onclick={handleUndo} title="Undo last waypoint (Ctrl+Z)">
 					<span class="material-symbols">undo</span>
 					Undo
 				</button>
-				<button class="btn btn-ghost" disabled={waypointCount < 2} onclick={handleOutAndBack}>
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount < 2} onclick={handleOutAndBack} title="Mirror the route back to start">
 					<span class="material-symbols">swap_horiz</span>
-					Out & Back
+					Out &amp; back
 				</button>
-				<button class="btn btn-ghost" disabled={waypointCount === 0} onclick={handleClear}>
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0} onclick={handleClear} title="Clear all waypoints (Esc)">
 					<span class="material-symbols">delete</span>
 					Clear
 				</button>
 			</div>
 
-			<!-- Distance target -->
 			<button
 				class="target-btn"
 				class:active={showDistanceTarget}
@@ -318,53 +355,53 @@
 			>
 				<span class="material-symbols">route</span>
 				<span class="target-btn-text">
-					{showDistanceTarget ? 'Hide Distance Target' : 'Generate a route by distance'}
+					{showDistanceTarget ? 'Hide distance target' : 'Generate a route by distance'}
 				</span>
-				<span class="target-btn-sub">Set a target like 5k, 10k, or marathon</span>
+				<span class="target-btn-sub">5k, 10k, half, full — or any distance</span>
 			</button>
 			{#if showDistanceTarget}
 				<div class="target-panel">
-					<span class="label-text">Start</span>
+					<span class="section-label">Start</span>
 					<div class="point-row">
 						{#if startPoint}
 							<span class="point-set">{startLabel}</span>
 						{:else}
 							<span class="point-unset">Not set (uses map center)</span>
 						{/if}
-						<button class="btn-sm" onclick={() => useMyLocation('start')}>
+						<button class="point-btn" onclick={() => useMyLocation('start')} aria-label="Use my location for start">
 							<span class="material-symbols">my_location</span>
 						</button>
-						<button class="btn-sm" class:active={pickingPoint === 'start'} onclick={() => pickOnMap('start')}>
+						<button class="point-btn" class:active={pickingPoint === 'start'} onclick={() => pickOnMap('start')} aria-label="Pick start on map">
 							<span class="material-symbols">pin_drop</span>
 						</button>
 						{#if startPoint}
-							<button class="btn-sm" onclick={() => { startPoint = null; startLabel = ''; }}>
+							<button class="point-btn" onclick={() => { startPoint = null; startLabel = ''; }} aria-label="Clear start">
 								<span class="material-symbols">close</span>
 							</button>
 						{/if}
 					</div>
 
-					<span class="label-text">End <span class="label-hint">(optional — defaults to start for loop)</span></span>
+					<span class="section-label">End <span class="label-hint">(optional — defaults to start for loop)</span></span>
 					<div class="point-row">
 						{#if endPoint}
 							<span class="point-set">{endLabel}</span>
 						{:else}
 							<span class="point-unset">Same as start (loop)</span>
 						{/if}
-						<button class="btn-sm" onclick={() => useMyLocation('end')}>
+						<button class="point-btn" onclick={() => useMyLocation('end')} aria-label="Use my location for end">
 							<span class="material-symbols">my_location</span>
 						</button>
-						<button class="btn-sm" class:active={pickingPoint === 'end'} onclick={() => pickOnMap('end')}>
+						<button class="point-btn" class:active={pickingPoint === 'end'} onclick={() => pickOnMap('end')} aria-label="Pick end on map">
 							<span class="material-symbols">pin_drop</span>
 						</button>
 						{#if endPoint}
-							<button class="btn-sm" onclick={() => { endPoint = null; endLabel = ''; }}>
+							<button class="point-btn" onclick={() => { endPoint = null; endLabel = ''; }} aria-label="Clear end">
 								<span class="material-symbols">close</span>
 							</button>
 						{/if}
 					</div>
 
-					<span class="label-text">Distance</span>
+					<span class="section-label">Distance</span>
 					<div class="target-row">
 						<input type="range" min="1" max="42" step="0.5" bind:value={targetKm} class="target-slider" />
 						<span class="target-value">{targetKm} km</span>
@@ -375,72 +412,76 @@
 						<button onclick={() => (targetKm = 21.1)}>Half</button>
 						<button onclick={() => (targetKm = 42.2)}>Full</button>
 					</div>
-					<button class="btn btn-accent" onclick={handleGenerateLoop}>
-						Generate {targetKm} km {endPoint ? 'Route' : 'Loop'}
+					<button class="btn btn-secondary" onclick={handleGenerateLoop}>
+						Generate {targetKm} km {endPoint ? 'route' : 'loop'}
 					</button>
 				</div>
 			{/if}
 
 			{#if pickingPoint}
-				<div class="pick-hint">
-					Click on the map to set {pickingPoint} point
+				<div class="pick-hint" role="status">
+					Click on the map to set the {pickingPoint} point
 				</div>
 			{/if}
 
-			{#if saveError}
-				<div class="save-error">{saveError}</div>
-			{/if}
-
-			<div class="action-row">
+			<div class="primary-actions">
 				<button
-					class="btn btn-accent"
+					class="btn btn-secondary"
 					disabled={waypointCount < 2}
 					onclick={handleCalculateRoute}
 				>
 					{routed ? 'Recalculate' : 'Calculate Route'}
 				</button>
 				{#if routed}
-					<button class="btn btn-ghost" onclick={handleUndoCalculate}>
+					<button class="btn btn-outline btn-sm" onclick={handleUndoCalculate} aria-label="Undo calculation">
 						<span class="material-symbols">undo</span>
 					</button>
 				{/if}
 			</div>
 
-			<div class="action-row">
+			<div class="primary-actions">
 				<button
 					class="btn btn-primary"
-					disabled={!routed || saving}
-					onclick={handleSaveRoute}
+					disabled={!routed}
+					onclick={openSaveModal}
 				>
-					{saving ? 'Saving...' : 'Save Route'}
+					<span class="material-symbols" aria-hidden="true">save</span>
+					Save Route
 				</button>
 				<button
-					class="btn btn-outline"
+					class="btn btn-outline btn-sm"
 					disabled={!routed}
 					onclick={handleExportGpx}
+					title="Export as GPX"
 				>
 					GPX
 				</button>
 				<button
-					class="btn btn-outline"
+					class="btn btn-outline btn-sm"
 					disabled={!routed}
 					onclick={handleExportKml}
+					title="Export as KML"
 				>
 					KML
 				</button>
 			</div>
 		</div>
 
-		<div class="sidebar-hint">
-			<span class="material-symbols">info</span>
-			{#if waypointCount === 0}
-				Click on the map to place waypoints along your route.
-			{:else if !routed}
-				Keep adding waypoints, then hit Calculate Route to snap to {mode === 'road' ? 'roads' : 'walking paths'}.
-			{:else}
-				Route calculated. Save, export, or add more waypoints.
-			{/if}
-		</div>
+		<details class="help" bind:open={showHelp}>
+			<summary>
+				<span class="material-symbols">keyboard</span>
+				Tips &amp; shortcuts
+			</summary>
+			<ul>
+				<li><kbd>Click</kbd> map to drop a waypoint</li>
+				<li><kbd>Click</kbd> the green start marker to close a loop</li>
+				<li><kbd>Click</kbd> the route line to insert a mid-route point</li>
+				<li><kbd>Drag</kbd> a marker to reposition it</li>
+				<li><kbd>Right-click</kbd> a marker to delete</li>
+				<li><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo last waypoint</li>
+				<li><kbd>Esc</kbd> clear everything</li>
+			</ul>
+		</details>
 	</aside>
 
 	<main class="map-area">
@@ -451,12 +492,21 @@
 			onmapclick={handleMapPick}
 			onerror={handleRoutingError}
 		/>
+
+		{#if waypointCount === 0 && !pickingPoint}
+			<div class="canvas-empty" role="status">
+				<span class="material-symbols">add_location</span>
+				<h3>Click anywhere to start</h3>
+				<p>Drop waypoints to sketch your route. Hit <strong>Calculate route</strong> when you're ready to snap to {mode === 'road' ? 'roads' : 'trails'}.</p>
+			</div>
+		{/if}
+
 		{#if routingError}
 			<div class="routing-error" role="alert">
 				<span class="material-symbols">error</span>
 				<div class="routing-error-text">{routingError}</div>
 				<button
-					class="btn-ghost routing-error-dismiss"
+					class="routing-error-dismiss"
 					aria-label="Dismiss"
 					onclick={() => (routingError = null)}
 				>
@@ -467,119 +517,180 @@
 	</main>
 </div>
 
+<Modal open={showSaveModal} title="Save route" onclose={() => (showSaveModal = false)}>
+	<form
+		class="save-form"
+		onsubmit={(e) => { e.preventDefault(); handleSaveRoute(); }}
+	>
+		<label class="field">
+			<span class="section-label">Name</span>
+			<input
+				type="text"
+				placeholder="My Route"
+				bind:value={routeName}
+				required
+			/>
+		</label>
+
+		<label class="field">
+			<span class="section-label">Description <span class="label-hint">(optional)</span></span>
+			<textarea
+				rows="3"
+				placeholder="Notes about the route — terrain, water stops, parking…"
+				bind:value={routeDescription}
+			></textarea>
+		</label>
+
+		<div class="save-summary">
+			<div>
+				<span class="save-summary-value">{(distance / 1000).toFixed(2)} km</span>
+				<span class="save-summary-label">Distance</span>
+			</div>
+			<div>
+				<span class="save-summary-value">{elevation} m</span>
+				<span class="save-summary-label">Elevation</span>
+			</div>
+			<div>
+				<span class="save-summary-value">{mode === 'trail' ? 'Trail' : 'Road'}</span>
+				<span class="save-summary-label">Surface</span>
+			</div>
+		</div>
+
+		<label class="visibility">
+			<input type="checkbox" bind:checked={isPublic} />
+			<span>
+				<strong>Public</strong>
+				<span class="visibility-hint">Anyone with the link can view this route.</span>
+			</span>
+		</label>
+
+		{#if saveError}
+			<div class="save-error" role="alert">{saveError}</div>
+		{/if}
+
+		<div class="save-actions">
+			<button
+				type="button"
+				class="btn btn-outline"
+				onclick={() => (showSaveModal = false)}
+				disabled={saving}
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				class="btn btn-primary"
+				disabled={!canSave || saving}
+			>
+				{#if saving}
+					<span class="btn-spinner" aria-hidden="true"></span>
+					Saving…
+				{:else}
+					Save route
+				{/if}
+			</button>
+		</div>
+	</form>
+</Modal>
+
 <style>
 	.builder-layout {
 		display: flex;
 		height: 100vh;
-	}
-
-	.routing-error {
-		position: absolute;
-		top: 1rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 10;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		max-width: 28rem;
-		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
-		background: #dc2626;
-		color: white;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-		font-size: 0.9rem;
-	}
-
-	.routing-error-text {
-		flex: 1;
-		line-height: 1.35;
-	}
-
-	.routing-error-dismiss {
-		background: transparent;
-		border: 0;
-		color: white;
-		cursor: pointer;
-		padding: 0;
-		display: inline-flex;
-		align-items: center;
+		min-height: 0;
 	}
 
 	.sidebar {
 		width: 22rem;
+		flex-shrink: 0;
 		border-right: 1px solid var(--color-border);
-		padding: var(--space-lg);
+		padding: var(--space-lg) var(--space-lg) var(--space-xl);
 		overflow-y: auto;
 		background: var(--color-surface);
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-lg);
 	}
 
 	.back-link {
 		display: inline-flex;
 		align-items: center;
-		gap: var(--space-xs);
-		font-size: 0.8rem;
+		gap: var(--space-2xs);
+		font-size: 0.85rem;
+		font-weight: 500;
 		color: var(--color-text-secondary);
-		margin-bottom: var(--space-lg);
-		transition: color var(--transition-fast);
+		text-decoration: none;
+		padding: var(--space-xs) 0;
 	}
-
 	.back-link:hover {
 		color: var(--color-primary);
 	}
+	.back-link .material-symbols {
+		font-size: 1.05rem;
+	}
 
-	h1 {
-		font-size: 1.25rem;
+	.sidebar-head .kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-2xs);
+	}
+	.sidebar-head h1 {
+		font-size: 1.4rem;
 		font-weight: 700;
-		margin-bottom: var(--space-lg);
+		line-height: 1.2;
+		margin: 0 0 var(--space-xs);
+	}
+	.sidebar-head .tagline {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		line-height: 1.45;
+		margin: 0;
 	}
 
 	.controls {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-lg);
-		flex: 1;
+		gap: var(--space-md);
 	}
 
-	.label-text {
-		display: block;
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--color-text-secondary);
-		margin-bottom: var(--space-xs);
+	.control-group {
+		border: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+	.control-group legend {
+		padding: 0;
+		margin-bottom: var(--space-2xs);
 	}
 
-	input {
+	input[type="text"],
+	input[type="number"],
+	textarea {
 		width: 100%;
 		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		font-size: 0.9rem;
+		font-family: inherit;
 		transition: border-color var(--transition-fast);
 		background: var(--color-bg);
+		color: var(--color-text);
 	}
-
-	input:focus {
+	input:focus,
+	textarea:focus {
 		outline: none;
 		border-color: var(--color-primary);
-	}
-
-	fieldset {
-		border: none;
-		padding: 0;
-	}
-
-	legend {
-		margin-bottom: var(--space-sm);
 	}
 
 	.mode-buttons {
 		display: flex;
 		gap: var(--space-sm);
 	}
-
 	.mode-btn {
 		flex: 1;
 		display: flex;
@@ -593,14 +704,13 @@
 		font-size: 0.85rem;
 		font-weight: 500;
 		color: var(--color-text-secondary);
+		cursor: pointer;
 		transition: all var(--transition-fast);
 	}
-
 	.mode-btn:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
 	}
-
 	.mode-btn.active {
 		background: var(--color-primary-light);
 		border-color: var(--color-primary);
@@ -612,20 +722,18 @@
 		grid-template-columns: repeat(3, 1fr);
 		gap: var(--space-sm);
 	}
-
 	.builder-stat {
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
 		padding: var(--space-sm) var(--space-md);
 		text-align: center;
 	}
-
 	.builder-stat-value {
 		display: block;
-		font-size: 1rem;
+		font-size: 1.05rem;
 		font-weight: 700;
+		line-height: 1.1;
 	}
-
 	.builder-stat-label {
 		font-size: 0.65rem;
 		color: var(--color-text-tertiary);
@@ -634,9 +742,10 @@
 	}
 
 	.elevation-preview {
-		margin-top: var(--space-sm);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
 	}
-
 	.elevation-empty {
 		display: flex;
 		align-items: center;
@@ -653,33 +762,29 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: var(--space-sm) var(--space-md);
-		background: rgba(139, 92, 246, 0.1);
-		border: 1px solid rgba(139, 92, 246, 0.25);
+		background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
 		border-radius: var(--radius-md);
 	}
-
 	.lap-badge {
 		display: flex;
 		align-items: center;
 		gap: var(--space-xs);
 		font-weight: 700;
 		font-size: 0.85rem;
-		color: #7c3aed;
+		color: var(--color-primary);
 	}
-
 	.lap-detail {
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
 	}
 
-	/* Map style toggle */
 	.style-toggle {
 		display: flex;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		overflow: hidden;
 	}
-
 	.style-btn {
 		flex: 1;
 		padding: var(--space-xs) var(--space-sm);
@@ -691,17 +796,14 @@
 		cursor: pointer;
 		transition: all var(--transition-fast);
 	}
-
 	.style-btn:not(:last-child) {
 		border-right: 1px solid var(--color-border);
 	}
-
 	.style-btn.active {
 		background: var(--color-primary);
 		color: white;
 	}
 
-	/* Time estimate */
 	.time-estimate {
 		display: flex;
 		align-items: center;
@@ -710,12 +812,10 @@
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
 	}
-
 	.time-value {
 		font-weight: 700;
 		font-size: 1rem;
 	}
-
 	.pace-input {
 		display: flex;
 		align-items: center;
@@ -723,9 +823,8 @@
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
 	}
-
 	.pace-num {
-		width: 2.2rem;
+		width: 2.4rem;
 		padding: 2px 4px;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
@@ -733,29 +832,25 @@
 		text-align: center;
 		background: var(--color-surface);
 	}
-
 	.pace-label {
 		font-size: 0.75rem;
 		color: var(--color-text-tertiary);
 	}
 
-	/* Distance target panel */
 	.target-panel {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-sm);
+		gap: var(--space-xs);
 		padding: var(--space-md);
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
 	}
-
 	.point-row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-xs);
 		margin-bottom: var(--space-sm);
 	}
-
 	.point-set {
 		flex: 1;
 		font-size: 0.75rem;
@@ -765,7 +860,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-
 	.point-unset {
 		flex: 1;
 		font-size: 0.75rem;
@@ -773,7 +867,7 @@
 		font-style: italic;
 	}
 
-	.btn-sm {
+	.point-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -787,19 +881,16 @@
 		flex-shrink: 0;
 		transition: all var(--transition-fast);
 	}
-
-	.btn-sm:hover {
+	.point-btn:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
 	}
-
-	.btn-sm.active {
+	.point-btn.active {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
 		color: white;
 	}
-
-	.btn-sm .material-symbols {
+	.point-btn .material-symbols {
 		font-size: 0.85rem;
 	}
 
@@ -807,6 +898,8 @@
 		font-weight: 400;
 		color: var(--color-text-tertiary);
 		font-size: 0.7rem;
+		text-transform: none;
+		letter-spacing: 0;
 	}
 
 	.pick-hint {
@@ -819,7 +912,6 @@
 		text-align: center;
 		animation: pulse-bg 1.5s ease-in-out infinite;
 	}
-
 	@keyframes pulse-bg {
 		0%, 100% { opacity: 1; }
 		50% { opacity: 0.7; }
@@ -829,25 +921,22 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
+		margin-top: var(--space-xs);
 	}
-
 	.target-slider {
 		flex: 1;
 		accent-color: var(--color-primary);
 	}
-
 	.target-value {
 		font-weight: 700;
 		font-size: 0.9rem;
 		min-width: 4rem;
 		text-align: right;
 	}
-
 	.target-presets {
 		display: flex;
 		gap: var(--space-xs);
 	}
-
 	.target-presets button {
 		flex: 1;
 		padding: var(--space-xs) var(--space-sm);
@@ -857,9 +946,9 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
+		color: var(--color-text);
 		transition: all var(--transition-fast);
 	}
-
 	.target-presets button:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
@@ -870,7 +959,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-xs);
+		gap: var(--space-2xs);
 		padding: var(--space-md);
 		border: 2px dashed var(--color-primary);
 		border-radius: var(--radius-lg);
@@ -879,85 +968,45 @@
 		transition: all var(--transition-fast);
 		color: var(--color-primary);
 	}
-
 	.target-btn:hover {
-		background: var(--color-primary-light);
 		border-style: solid;
 	}
-
 	.target-btn.active {
 		border-style: solid;
 		background: var(--color-primary);
 		color: white;
 	}
-
 	.target-btn .material-symbols {
 		font-size: 1.5rem;
 	}
-
 	.target-btn-text {
 		font-weight: 600;
 		font-size: 0.85rem;
 	}
-
 	.target-btn-sub {
 		font-size: 0.7rem;
 		opacity: 0.7;
 	}
 
-	.action-row {
+	/*
+	 * `.toolbar-group` and `.primary-actions` are local layout, not
+	 * button variants — the buttons themselves use `.btn` / `.btn-ghost`
+	 * / `.btn-primary` etc. from app.css (per conventions § Web buttons).
+	 */
+	.toolbar-group {
 		display: flex;
-		gap: var(--space-sm);
-	}
-
-	.btn {
-		flex: 1;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-xs);
-		padding: var(--space-sm) var(--space-md);
+		gap: var(--space-2xs);
+		padding: var(--space-2xs);
+		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
-		font-weight: 600;
-		font-size: 0.85rem;
-		transition: all var(--transition-fast);
 	}
-
-	.btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
+	.toolbar-group .btn {
+		flex: 1;
+		justify-content: center;
+		padding: var(--space-xs) var(--space-sm);
 	}
-
-	.btn-accent {
-		background: var(--color-secondary, #43A047);
-		color: white;
-		border: none;
-		width: 100%;
-	}
-
-	.btn-accent:hover:not(:disabled) {
-		background: var(--color-secondary-hover, #388E3C);
-	}
-
-	.btn-primary {
-		background: var(--color-primary);
-		color: white;
-		border: none;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		background: var(--color-primary-hover);
-	}
-
-	.btn-outline {
-		background: transparent;
-		border: 1.5px solid var(--color-border);
-		color: var(--color-text);
-	}
-
-	.btn-outline:hover:not(:disabled) {
-		border-color: var(--color-primary);
-		color: var(--color-primary);
+	.toolbar-group .material-symbols {
+		font-size: 1rem;
 	}
 
 	.btn-ghost {
@@ -965,45 +1014,255 @@
 		border: none;
 		color: var(--color-text-secondary);
 	}
-
 	.btn-ghost:hover:not(:disabled) {
-		background: var(--color-bg-secondary);
+		background: var(--color-surface);
 		color: var(--color-text);
 	}
 
-	.save-error {
-		padding: var(--space-sm) var(--space-md);
-		background: var(--color-danger-light, #fef2f2);
-		border: 1px solid rgba(229, 57, 53, 0.3);
-		border-radius: var(--radius-md);
-		color: var(--color-danger, #e53935);
-		font-size: 0.8rem;
-	}
-
-	.sidebar-hint {
+	.primary-actions {
 		display: flex;
 		gap: var(--space-sm);
-		padding: var(--space-md);
-		background: var(--color-primary-light);
-		border-radius: var(--radius-md);
-		font-size: 0.8rem;
-		color: var(--color-primary);
-		margin-top: var(--space-lg);
-		line-height: 1.4;
+	}
+	.primary-actions .btn:first-child {
+		flex: 1;
 	}
 
-	.sidebar-hint .material-symbols {
-		flex-shrink: 0;
+	/*
+	 * Map-overlay empty state. Rendered on top of the MapLibre canvas
+	 * when no waypoints exist — pointer-events disabled so a click on
+	 * the card still drops a waypoint behind it.
+	 */
+	.canvas-empty {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: var(--space-xs);
+		padding: var(--space-xl) var(--space-2xl);
+		background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		backdrop-filter: blur(8px);
+		max-width: 22rem;
+		pointer-events: none;
+	}
+	.canvas-empty .material-symbols {
+		font-size: 2.4rem;
+		color: var(--color-primary);
+		margin-bottom: var(--space-2xs);
+	}
+	.canvas-empty h3 {
+		font-size: 1.05rem;
+		font-weight: 700;
+		margin: 0;
+	}
+	.canvas-empty p {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		line-height: 1.45;
+		margin: 0;
+	}
+
+	.help {
+		margin-top: auto;
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+		font-size: 0.8rem;
+	}
+	.help summary {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		cursor: pointer;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		list-style: none;
+	}
+	.help summary::-webkit-details-marker {
+		display: none;
+	}
+	.help summary .material-symbols {
+		font-size: 1rem;
+	}
+	.help[open] summary {
+		margin-bottom: var(--space-sm);
+		color: var(--color-text);
+	}
+	.help ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		color: var(--color-text-secondary);
+	}
+	.help kbd {
+		display: inline-block;
+		padding: 0 0.35em;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		font-family: inherit;
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 
 	.map-area {
 		flex: 1;
+		min-width: 0;
 		background: var(--color-bg-tertiary);
 		position: relative;
+	}
+
+	.routing-error {
+		position: absolute;
+		top: 1rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		max-width: 28rem;
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		background: var(--color-danger);
+		color: white;
+		box-shadow: var(--shadow-lg);
+		font-size: 0.9rem;
+	}
+	.routing-error-text {
+		flex: 1;
+		line-height: 1.35;
+	}
+	.routing-error-dismiss {
+		background: transparent;
+		border: 0;
+		color: white;
+		cursor: pointer;
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
+	}
+
+	/* Save modal */
+	.save-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+	.save-summary {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-sm);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+		text-align: center;
+	}
+	.save-summary-value {
+		display: block;
+		font-size: 1rem;
+		font-weight: 700;
+	}
+	.save-summary-label {
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.visibility {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+	}
+	.visibility input[type="checkbox"] {
+		width: auto;
+		margin-top: 3px;
+		flex-shrink: 0;
+		accent-color: var(--color-primary);
+	}
+	.visibility strong {
+		display: block;
+		font-size: 0.9rem;
+	}
+	.visibility-hint {
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+	}
+	.save-error {
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-danger-light);
+		border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+		border-radius: var(--radius-md);
+		color: var(--color-danger);
+		font-size: 0.85rem;
+	}
+	.save-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-sm);
+		padding-top: var(--space-xs);
+	}
+
+	.btn-spinner {
+		display: inline-block;
+		width: 0.9em;
+		height: 0.9em;
+		border: 2px solid color-mix(in srgb, currentColor 40%, transparent);
+		border-top-color: currentColor;
+		border-radius: 50%;
+		animation: btn-spin 0.6s linear infinite;
+	}
+	@keyframes btn-spin {
+		to { transform: rotate(360deg); }
 	}
 
 	.material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.1rem;
+	}
+
+	/*
+	 * At < 720px the 22rem sidebar + map flex side-by-side leaves the
+	 * map too narrow to actually plan on. Stack vertically with the map
+	 * dominant — sidebar caps at 60vh and scrolls.
+	 */
+	@media (max-width: 720px) {
+		.builder-layout {
+			flex-direction: column-reverse;
+		}
+		.sidebar {
+			width: 100%;
+			max-height: 60vh;
+			border-right: none;
+			border-top: 1px solid var(--color-border);
+		}
+		.map-area {
+			flex: 1;
+			min-height: 50vh;
+		}
+		.canvas-empty {
+			max-width: calc(100vw - 2rem);
+			padding: var(--space-lg) var(--space-xl);
+		}
 	}
 </style>

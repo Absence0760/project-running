@@ -14,6 +14,7 @@
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/privacy';
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -190,21 +191,48 @@
 			date_of_birth: dateOfBirth || null,
 		}).eq('id', auth.user.id);
 
-		await updateUniversal(auth.user.id, changes);
-		// Propagate to the app-wide unit signal so every view re-renders
-		// with the new label without a full reload.
-		setUnit(preferredUnit);
-		setMapStyle(mapStyle);
-		saving = false; saved = true;
-		setTimeout(() => (saved = false), 2000);
+		try {
+			await updateUniversal(auth.user.id, changes);
+			// Propagate to the app-wide unit signal so every view re-renders
+			// with the new label without a full reload.
+			setUnit(preferredUnit);
+			setMapStyle(mapStyle);
+			saved = true;
+			showToast('Preferences saved.', 'success');
+			setTimeout(() => (saved = false), 2000);
+		} catch (e) {
+			showToast(`Save failed: ${(e as Error).message}`, 'error');
+		} finally {
+			saving = false;
+		}
 	}
 </script>
 
 <div class="page">
-	<p class="subtitle">Settings sync to every device you sign into.</p>
+	<header class="page-head">
+		<p class="kicker">Settings</p>
+		<h1>Preferences</h1>
+		<p class="tagline">
+			Units, defaults, privacy, and the knobs that shape how every run is recorded
+			and shown. These sync across every device you sign into.
+		</p>
+	</header>
 
 	{#if loading}
-		<p class="muted">Loading...</p>
+		<div class="skeleton-stack" aria-hidden="true">
+			{#each Array(4) as _, i (i)}
+				<div class="skel-card">
+					<span class="skel skel-line skel-w-30"></span>
+					<div class="skel-grid">
+						<span class="skel skel-field"></span>
+						<span class="skel skel-field"></span>
+						<span class="skel skel-field"></span>
+						<span class="skel skel-field"></span>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">Loading preferences…</p>
 	{:else}
 		<!-- Units -->
 		<section class="card">
@@ -380,7 +408,10 @@
 			</p>
 
 			{#if privacyZones.length === 0}
-				<p class="muted">No privacy zones yet.</p>
+				<div class="inline-empty">
+					<span class="material-symbols" aria-hidden="true">my_location</span>
+					<p>No privacy zones yet. Add one around your home or workplace to hide it from public shares.</p>
+				</div>
 			{:else}
 				<ul class="zone-list">
 					{#each privacyZones as zone, idx (idx)}
@@ -439,10 +470,97 @@
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
-	.page-header { margin-bottom: var(--space-xl); }
-	h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-xs); }
-	.subtitle { font-size: 0.88rem; color: var(--color-text-secondary); margin-bottom: var(--space-lg); }
+	.page-head { margin-bottom: var(--space-xl); }
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
+	}
+	h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 var(--space-xs); }
+	.tagline {
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+		line-height: 1.5;
+		margin: 0;
+		max-width: 44rem;
+	}
 	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
+	.inline-empty {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-md);
+		background: var(--color-bg-tertiary);
+		border-radius: var(--radius-md);
+		margin-bottom: var(--space-md);
+	}
+	.inline-empty .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.4rem;
+		color: var(--color-text-tertiary);
+		flex-shrink: 0;
+	}
+	.inline-empty p {
+		margin: 0;
+		font-size: 0.88rem;
+		color: var(--color-text-secondary);
+		line-height: 1.4;
+	}
+
+	/* Skeletons — same shape language as /u/[id], /runs, /clubs. */
+	.skeleton-stack { display: flex; flex-direction: column; gap: var(--space-xl); }
+	.skel-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		pointer-events: none;
+	}
+	.skel-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-md);
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line { height: 0.85rem; }
+	.skel-w-30 { width: 30%; }
+	.skel-field { height: 2.4rem; border-radius: var(--radius-md); }
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }
 	.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-lg); }
 	.form-grid.zones { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }

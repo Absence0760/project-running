@@ -197,6 +197,7 @@
 		}
 		saved = true;
 		saving = false;
+		showToast('Profile saved.', 'success');
 		setTimeout(() => (saved = false), 2000);
 	}
 
@@ -446,6 +447,15 @@
 </script>
 
 <div class="page">
+	<header class="page-head">
+		<p class="kicker">Settings</p>
+		<h1>Account</h1>
+		<p class="tagline">
+			Your identity, sign-in methods, notifications, backups, and the controls for
+			leaving — everything that's about you, not how you record.
+		</p>
+	</header>
+
 	<!-- Profile -->
 	<section class="card">
 		<h2>Profile</h2>
@@ -731,8 +741,23 @@
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
-	.page-header { margin-bottom: var(--space-xl); }
-	h1 { font-size: 1.5rem; font-weight: 700; }
+	.page-head { margin-bottom: var(--space-xl); }
+	.kicker {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
+	}
+	h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 var(--space-xs); }
+	.tagline {
+		color: var(--color-text-secondary);
+		font-size: 0.95rem;
+		line-height: 1.5;
+		margin: 0;
+		max-width: 44rem;
+	}
 	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }
 	.card-danger { border-color: rgba(229, 57, 53, 0.3); }
