@@ -1,14 +1,32 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 
-	const tabs = [
-		{ href: '/settings/account', label: 'Account', icon: 'person' },
-		{ href: '/settings/preferences', label: 'Preferences', icon: 'tune' },
-		{ href: '/settings/integrations', label: 'Integrations', icon: 'link' },
-		{ href: '/settings/devices', label: 'Devices', icon: 'devices' },
-		{ href: '/settings/gear', label: 'Gear', icon: 'directions_run' },
-		{ href: '/settings/upgrade', label: 'Pro & support', icon: 'favorite' },
-		{ href: '/settings/licenses', label: 'Licenses', icon: 'description' },
+	type Tab = { href: string; label: string; icon: string };
+	type Section = { label: string; tabs: Tab[] };
+
+	const sections: Section[] = [
+		{
+			label: 'Profile',
+			tabs: [
+				{ href: '/settings/account', label: 'Account', icon: 'person' },
+				{ href: '/settings/preferences', label: 'Preferences', icon: 'tune' },
+			],
+		},
+		{
+			label: 'Apps & data',
+			tabs: [
+				{ href: '/settings/integrations', label: 'Integrations', icon: 'link' },
+				{ href: '/settings/devices', label: 'Devices', icon: 'devices' },
+				{ href: '/settings/gear', label: 'Gear', icon: 'directions_run' },
+			],
+		},
+		{
+			label: 'Account & legal',
+			tabs: [
+				{ href: '/settings/upgrade', label: 'Pro & support', icon: 'favorite' },
+				{ href: '/settings/licenses', label: 'Licenses', icon: 'description' },
+			],
+		},
 	];
 </script>
 
@@ -19,15 +37,18 @@
 <div class="settings-shell">
 	<nav class="settings-nav">
 		<h2>Settings</h2>
-		{#each tabs as tab}
-			<a
-				href={tab.href}
-				class="nav-item"
-				class:active={$page.url.pathname.startsWith(tab.href)}
-			>
-				<span class="material-symbols">{tab.icon}</span>
-				{tab.label}
-			</a>
+		{#each sections as section}
+			<div class="nav-section-label">{section.label}</div>
+			{#each section.tabs as tab}
+				<a
+					href={tab.href}
+					class="nav-item"
+					class:active={$page.url.pathname.startsWith(tab.href)}
+				>
+					<span class="material-symbols">{tab.icon}</span>
+					{tab.label}
+				</a>
+			{/each}
 		{/each}
 	</nav>
 	<div class="settings-content">
@@ -56,6 +77,17 @@
 		letter-spacing: 0.08em;
 		color: var(--color-text-tertiary);
 		margin-bottom: var(--space-md);
+	}
+	.nav-section-label {
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-tertiary);
+		padding: var(--space-md) 0.75rem var(--space-2xs);
+	}
+	.nav-section-label:first-of-type {
+		padding-top: 0;
 	}
 	.nav-item {
 		display: flex;
