@@ -1,7 +1,19 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { consent } from '$lib/consent.svelte';
 
+	// `mounted` gates the banner so it's NEVER in the prerendered HTML.
+	// Without this, the static build ships with `consent.pending = true`
+	// (no localStorage available at prerender time), the browser parses
+	// the HTML and shows the banner instantly, then the hydration tick
+	// re-reads localStorage and hides it — a visible flash for every
+	// returning user. Cost of this gate: a single tick of delay before
+	// the banner appears for genuine first-time visitors.
+	let mounted = $state(false);
 	let dismissed = $state(false);
+	onMount(() => {
+		mounted = true;
+	});
 
 	function accept() {
 		consent.set('accepted');
@@ -15,7 +27,7 @@
 	}
 </script>
 
-{#if consent.pending && !dismissed}
+{#if mounted && consent.pending && !dismissed}
 	<div class="banner" role="dialog" aria-modal="false" aria-labelledby="cookie-title" aria-describedby="cookie-desc">
 		<div class="copy">
 			<strong id="cookie-title">Cookies + error monitoring</strong>
@@ -42,16 +54,16 @@
 		inset-inline-end: var(--space-md);
 		max-width: 42rem;
 		margin-inline: auto;
-		background: var(--color-bg-elev-2);
-		color: var(--color-text-primary);
+		background: var(--color-surface);
+		color: var(--color-text);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-md) var(--space-lg);
-		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+		box-shadow: var(--shadow-lg);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		z-index: 1000;
+		z-index: var(--z-cookie);
 	}
 	.copy strong {
 		display: block;

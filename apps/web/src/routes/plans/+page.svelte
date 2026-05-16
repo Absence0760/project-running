@@ -106,6 +106,7 @@
 <div class="page">
 	<header class="page-header">
 		<div class="title-row">
+			<h1>Training plans</h1>
 			<button class="btn-primary" type="button" onclick={() => (showPlanModal = true)}>
 				<span class="material-symbols">add</span>
 				New plan
@@ -218,7 +219,8 @@
 	.title-row {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
+		justify-content: space-between;
+		gap: var(--space-md);
 	}
 	h1 {
 		font-size: 1.75rem;

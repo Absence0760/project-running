@@ -1302,7 +1302,7 @@
 	.match-pill .material-symbols {
 		font-size: 0.95rem;
 	}
-	.match-pill-failed { color: var(--color-text-primary); }
+	.match-pill-failed { color: var(--color-text); }
 	.match-pill-skipped { color: var(--color-text-tertiary); }
 
 	.match-pill-action {

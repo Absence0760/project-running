@@ -15,20 +15,20 @@
 <style>
 	.toast-container {
 		position: fixed;
-		bottom: 1.5rem;
-		right: 1.5rem;
+		bottom: var(--space-lg);
+		right: var(--space-lg);
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		z-index: 300;
+		gap: var(--space-sm);
+		z-index: var(--z-toast);
 		max-width: 24rem;
 	}
 	.toast {
-		padding: 0.7rem 1.2rem;
+		padding: var(--space-sm) var(--space-lg);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
 		font-weight: 500;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+		box-shadow: var(--shadow-lg);
 		animation: slide-in 0.2s ease-out;
 	}
 	.toast-info {
@@ -37,7 +37,7 @@
 		color: var(--color-text);
 	}
 	.toast-success {
-		background: #2e7d32;
+		background: var(--color-success);
 		color: white;
 	}
 	.toast-error {

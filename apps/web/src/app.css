@@ -43,6 +43,7 @@
 	--sidebar-logo: #1F2328;
 
 	/* Spacing */
+	--space-2xs: 0.125rem;
 	--space-xs: 0.25rem;
 	--space-sm: 0.5rem;
 	--space-md: 1rem;
@@ -69,6 +70,27 @@
 	/* Nav */
 	--nav-height: 3.5rem;
 	--sidebar-width: 15rem;
+
+	/* Page rhythm — used by every top-level page wrapper. Defined as
+	   tokens so the `.page` + `.page-header` + `h1` / `h2` shape stays
+	   consistent across routes without each page hard-coding values. */
+	--page-padding-y: var(--space-xl);
+	--page-padding-x: var(--space-2xl);
+	--page-header-gap: var(--space-xl);
+	--font-size-page-title: 1.5rem;
+	--font-size-section-title: 1rem;
+	--font-size-section-label: 0.7rem;
+	--section-label-tracking: 0.05em;
+
+	/* Layered overlays — z-index hierarchy. Keeps the cookie banner
+	   (consent must be visible above app chrome), toast container (above
+	   the banner so confirmations stack on top), and modals all on the
+	   same scale instead of each surface guessing its own number. */
+	--z-cookie: 90;
+	--z-sidebar: 10;
+	--z-modal-backdrop: 200;
+	--z-modal: 201;
+	--z-toast: 300;
 }
 
 /* Dark theme — applied three ways, listed in increasing specificity so
@@ -394,4 +416,29 @@ img {
 .modal-body {
 	padding: var(--space-lg);
 	overflow-y: auto;
+}
+
+/*
+ * Canonical small uppercase-tracked label used above stat values,
+ * inside section headers, and on metric grids. Pages used to roll
+ * their own copy with slight font-size / colour drift — pin it here
+ * so labels read identically on /runs/[id], /plans/[id], /dashboard.
+ */
+.section-label {
+	font-size: var(--font-size-section-label);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: var(--section-label-tracking);
+	color: var(--color-text-tertiary);
+}
+
+/*
+ * Generic "nothing here yet" placeholder. Pages mount this with a
+ * single <p class="empty-text">…</p> instead of inventing a custom
+ * class each time. Spacing matches the surrounding card body.
+ */
+.empty-text {
+	color: var(--color-text-tertiary);
+	font-size: 0.85rem;
+	padding: var(--space-md) 0;
 }

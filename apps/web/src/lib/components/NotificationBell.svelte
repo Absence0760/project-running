@@ -254,16 +254,16 @@
 		right: -2px;
 		min-width: 1rem;
 		height: 1rem;
-		padding: 0 0.25rem;
+		padding: 0 var(--space-xs);
 		display: inline-grid;
 		place-items: center;
-		background: #ef4444;
+		background: var(--color-danger);
 		color: white;
 		font-size: 0.62rem;
 		font-weight: 700;
 		border-radius: 9999px;
 		font-variant-numeric: tabular-nums;
-		box-shadow: 0 0 0 2px var(--gradient-sidebar, #1B1628);
+		box-shadow: 0 0 0 2px var(--color-bg-secondary);
 		line-height: 1;
 	}
 

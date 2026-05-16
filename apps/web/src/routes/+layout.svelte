@@ -67,21 +67,25 @@
 		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];
 
-	const publicPaths = [
-		'/',
-		'/login',
-		'/auth/callback',
-		'/privacy',
-		'/terms',
-		'/cookie-notice',
-		'/compare',
-		'/guided'
-	];
-	const isPublic = (path: string) =>
-		publicPaths.includes(path) ||
-		path.startsWith('/live/') ||
+	// "Shell-less" surfaces: rendered without the app sidebar regardless of
+	// auth state. Landing, auth flows, and the share / spectator pages that
+	// have their own chrome. A signed-in user visiting /share/run/<id> sees
+	// the share view, not the dashboard's sidebar wrapped around it.
+	const shellLessExact = ['/', '/login', '/auth/callback'];
+	const isShellless = (path: string) =>
+		shellLessExact.includes(path) ||
 		path.startsWith('/share/') ||
-		path.startsWith('/clubs/join/') ||
+		path.startsWith('/live/') ||
+		path.startsWith('/clubs/join/');
+
+	// "Anon-allowed" surfaces: reachable without auth. Superset of shell-less
+	// — also includes the legal pages, marketing pages, and the guided /
+	// recap content surfaces. When a signed-in user visits one of these,
+	// the app shell still wraps it (sidebar stays put).
+	const anonExtraExact = ['/privacy', '/terms', '/cookie-notice', '/compare', '/guided'];
+	const isAnonAllowed = (path: string) =>
+		isShellless(path) ||
+		anonExtraExact.includes(path) ||
 		path.startsWith('/guided/') ||
 		path.startsWith('/recap/');
 
@@ -96,7 +100,7 @@
 	// to /runs/<id> gets bounced to the dashboard after sign-in and has to
 	// hunt for the destination.
 	$effect(() => {
-		if (browser && !auth.loading && !auth.loggedIn && !isPublic($page.url.pathname)) {
+		if (browser && !auth.loading && !auth.loggedIn && !isAnonAllowed($page.url.pathname)) {
 			const returnTo = $page.url.pathname + $page.url.search;
 			const isDefault = returnTo === '/dashboard' || returnTo === '/';
 			goto(isDefault ? '/login' : `/login?return_to=${encodeURIComponent(returnTo)}`);
@@ -137,13 +141,20 @@
 <ToastContainer />
 <CookieConsentBanner />
 
-{#if isPublic($page.url.pathname)}
-	<!-- Public pages: landing + login — no sidebar -->
+{#if isShellless($page.url.pathname)}
+	<!-- Landing, login, share, live, club-invite — these have their own
+	     chrome and render shell-less regardless of auth state. -->
 	<slot />
 {:else if auth.loading}
 	<div class="loading-screen">
 		<span class="loading-text">Loading...</span>
 	</div>
+{:else if !auth.loggedIn}
+	<!-- Anon viewer on an anon-allowed content page (/privacy, /terms,
+	     /cookie-notice, /compare, /guided, /guided/*, /recap/*). Render
+	     the slot without the signed-in shell — the auth guard above
+	     already redirected anon viewers on protected paths. -->
+	<slot />
 {:else if auth.loggedIn}
 	<!-- Authenticated app shell -->
 	<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>
@@ -257,7 +268,7 @@
 		top: 0;
 		left: 0;
 		bottom: 0;
-		z-index: 10;
+		z-index: var(--z-sidebar);
 		transition: width var(--transition-base);
 	}
 
@@ -496,14 +507,14 @@
 		border-radius: var(--radius-lg);
 		padding: var(--space-sm);
 		min-width: 14rem;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+		box-shadow: var(--shadow-lg);
 		z-index: 100;
 	}
 	.popover-header {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		padding: 0.5rem 0.6rem;
+		gap: var(--space-sm);
+		padding: var(--space-sm);
 	}
 	.popover-avatar {
 		width: 2rem;
