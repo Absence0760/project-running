@@ -63,6 +63,19 @@ async function signInAndSaveState(baseURL: string, user: SeededUser) {
 	try {
 		await signIn(page, user);
 
+		// Bake an accepted cookie-consent into the persisted storageState so
+		// every signed-in spec inherits it. Without this the GDPR banner
+		// floats above the page footer and silently intercepts pointer
+		// events on .kudos-btn, .star-btn, and review-form submits during
+		// e2e — manifesting as cascading "element is not stable" failures
+		// far from the real cause.
+		await page.evaluate(() => {
+			localStorage.setItem(
+				'cookie_consent',
+				JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+			);
+		});
+
 		// Wait for the post-login navigation to settle. The login flow
 		// redirects to /dashboard on success; on failure the form
 		// re-renders with the same /login URL and an error banner.

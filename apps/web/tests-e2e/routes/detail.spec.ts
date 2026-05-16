@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { USER_A } from '../fixtures/users';
 
@@ -15,6 +16,14 @@ import { USER_A } from '../fixtures/users';
 
 test.describe('/routes/[id]', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	test.beforeEach(async () => {
+		const admin = getAdminClient();
+		await admin
+			.from('routes')
+			.update({ is_starred: false, is_public: true })
+			.eq('id', RUNNER_PUBLIC_ROUTE_ID);
+	});
 
 	test('public toggle: Public → Private, reload persists, back to Public', async ({
 		page
@@ -91,7 +100,7 @@ test.describe('/routes/[id]', () => {
 		// route should appear in the narrowed list.
 		await page.goto('/routes');
 		await page.waitForLoadState('networkidle');
-		await page.getByRole('button', { name: /Show starred only/ }).click();
+		await page.getByRole('button', { name: /Show starred routes only/ }).click();
 		await expect(
 			page.locator(`.route-card[href$="${RUNNER_PUBLIC_ROUTE_ID}"]`)
 		).toBeVisible({ timeout: 10_000 });
@@ -99,8 +108,9 @@ test.describe('/routes/[id]', () => {
 		// Cleanup: clear the filter + unstar so the next test sees a
 		// clean slate. (filteredRoutes is in localStorage as
 		// `routes_filters_v1`; the search test in routes/list.spec.ts
-		// would otherwise inherit starredOnly=true.)
-		await page.getByRole('button', { name: /Show starred only/ }).click();
+		// would otherwise inherit starredOnly=true.) After the first
+		// click above the aria-label flipped to "Show all routes".
+		await page.getByRole('button', { name: /Show all routes/ }).click();
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
 		await page.waitForLoadState('networkidle');
 		await page.locator('button.star-btn').click();

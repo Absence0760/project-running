@@ -34,7 +34,10 @@ import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
  * demographics — both are part of the fixture set-up.
  */
 
-const BATTERSEA_ROUTE_ID = '225a576a-6108-4157-bc71-d42d8d6d1bf4';
+// Resolved at beforeAll. Seed plants the Battersea Park route under a
+// generated uuid (the seed.sql user_id column is constant, the routes.id
+// is auto-generated), so hardcoding a uuid drifts on every fresh seed.
+let BATTERSEA_ROUTE_ID = '';
 let segmentId: string;
 let plantedRunIds: string[] = [];
 
@@ -52,6 +55,19 @@ test.describe('/routes/[id] — SegmentsPanel (v2 tiered leaderboards)', () => {
 
 	test.beforeAll(async () => {
 		const admin = getAdminClient();
+
+		const { data: bRoute, error: bErr } = await admin
+			.from('routes')
+			.select('id')
+			.eq('name', 'Battersea Park Out & Back')
+			.eq('user_id', USER_A.id)
+			.single();
+		if (bErr || !bRoute) {
+			throw new Error(
+				`segments.spec: could not resolve Battersea Park route id from seed (${bErr?.message ?? 'no row'}).`
+			);
+		}
+		BATTERSEA_ROUTE_ID = (bRoute as { id: string }).id;
 
 		// 1. Plant gender + date_of_birth on USER_B (cohort: female 30-34)
 		//    so the tier-filter narrowing test has a definite match.
