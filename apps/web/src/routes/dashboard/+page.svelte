@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import CalendarHeatmap from '$lib/components/CalendarHeatmap.svelte';
 	import {
 		formatDuration,
 		formatPace,
@@ -66,6 +65,45 @@
 	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
 	let trainingLoadSeries = $derived(computeTrainingLoadSeries(runs, trimpPrefs, 90));
 	let trainingLoadHasHr = $derived(hasTrimpSignal(runs, trimpPrefs));
+
+	/// HR zone thresholds (z1..z5 = upper bound of each zone, bpm) live in
+	/// `user_settings.prefs.hr_zones`. Null until loaded; null means the
+	/// user hasn't configured zones, so the intensity card shows the
+	/// configure-zones empty state.
+	let hrZones = $state<{ z1: number; z2: number; z3: number; z4: number; z5: number } | null>(null);
+
+	/// Time spent in each HR zone over the configurable mileage window.
+	/// MVP classifies the whole run by `metadata.avg_bpm` against the
+	/// thresholds; per-point analysis from the gzipped track would be
+	/// more accurate but requires a per-run fetch. The card carries an
+	/// in-line note that this is the upgrade path.
+	let intensityWindow = $derived<'30d' | '90d' | '365d'>(
+		mileageView === 'weekly' ? '30d' : mileageView === 'monthly' ? '365d' : '365d',
+	);
+	let intensityBreakdown = $derived.by(() => {
+		if (!hrZones) return null;
+		const z = hrZones;
+		const days = intensityWindow === '30d' ? 30 : intensityWindow === '90d' ? 90 : 365;
+		const cutoff = Date.now() - days * 86_400_000;
+		const zoneSeconds: number[] = [0, 0, 0, 0, 0];
+		let hrTrackedRuns = 0;
+		for (const r of filteredRuns) {
+			const started = new Date(r.started_at).getTime();
+			if (started < cutoff) continue;
+			const avg = (r.metadata as { avg_bpm?: number } | null)?.avg_bpm;
+			if (typeof avg !== 'number' || avg <= 0) continue;
+			hrTrackedRuns += 1;
+			let idx: number;
+			if (avg < z.z1) idx = 0;
+			else if (avg < z.z2) idx = 1;
+			else if (avg < z.z3) idx = 2;
+			else if (avg < z.z4) idx = 3;
+			else idx = 4;
+			zoneSeconds[idx] += r.duration_s;
+		}
+		const total = zoneSeconds.reduce((a, b) => a + b, 0);
+		return { zoneSeconds, total, hrTrackedRuns };
+	});
 
 	/// Normalised VO2 max sparkline points for the trend chart. Kept
 	/// in the script (not as `{@const}` under `<svg>`, which Svelte 5
@@ -222,6 +260,21 @@
 					resting_hr_bpm: effective<number>(settings, 'resting_hr_bpm') ?? null,
 					max_hr_bpm: effective<number>(settings, 'max_hr_bpm') ?? null,
 				};
+				try {
+					// Layered resilience: a bad shape in the jsonb bag must
+					// not crash the dashboard. If the read or the validation
+					// throws, the intensity card falls through to its
+					// configure-zones empty state.
+					const z = effective<Record<string, number>>(settings, 'hr_zones');
+					if (
+						z &&
+						[z.z1, z.z2, z.z3, z.z4, z.z5].every((v) => typeof v === 'number' && v > 0)
+					) {
+						hrZones = { z1: z.z1, z2: z.z2, z3: z.z3, z4: z.z4, z5: z.z5 };
+					}
+				} catch (_) {
+					// silent — intensity card is additive, not load-blocking
+				}
 			}
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
@@ -325,6 +378,17 @@
 		}
 		return { weekIndex, totalWeeks, calendarPct, relation, raceState };
 	});
+
+	/// Compact "1h 12m" / "12m" duration for the HR-zone bar labels —
+	/// the standard `formatDuration` is HH:MM:SS which reads as a per-run
+	/// time, not an aggregate.
+	function fmtCompactDuration(seconds: number): string {
+		if (seconds < 60) return '<1m';
+		const h = Math.floor(seconds / 3600);
+		const m = Math.floor((seconds % 3600) / 60);
+		if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+		return `${m}m`;
+	}
 
 	function fmtHms(seconds: number): string {
 		const h = Math.floor(seconds / 3600);
@@ -575,21 +639,22 @@
 
 		<!-- Source filter — applies to every metric below the today
 		     card / upcoming event. Sits up here so the user understands
-		     which slice of their data drives the analytics that follow. -->
+		     which slice of their data drives the analytics that follow.
+		     Year-recap link rides on the right side of the same row so
+		     the dashboard doesn't burn two horizontal rails on a single
+		     line of controls. -->
 		<div class="filter-row">
-			{#each sources as src}
-				<button
-					class="filter-btn"
-					class:active={sourceFilter === src.value}
-					onclick={() => (sourceFilter = src.value)}
-				>
-					{src.label}
-				</button>
-			{/each}
-		</div>
-
-		<!-- Stat cards -->
-		<div class="recap-strip">
+			<div class="filter-chips">
+				{#each sources as src}
+					<button
+						class="filter-btn"
+						class:active={sourceFilter === src.value}
+						onclick={() => (sourceFilter = src.value)}
+					>
+						{src.label}
+					</button>
+				{/each}
+			</div>
 			<a href="/recap/{new Date().getFullYear()}" class="recap-link">
 				<span class="material-symbols">auto_awesome</span>
 				View {new Date().getFullYear()} recap →
@@ -652,6 +717,93 @@
 				</span>
 			</div>
 		</div>
+
+		<!-- Multi-metric goals — local-only. Lives directly under the
+		     stat-grid so the "what am I working toward?" lens sits next
+		     to the "where am I right now?" stats. Empty state is a
+		     proper card (icon + heading + explainer + primary CTA), not
+		     a one-line grey sentence. The legacy `weekly_mileage_goal_m`
+		     setting (still shared with Android via Settings → Preferences)
+		     is surfaced as a synthetic weekly distance goal so it shows
+		     up here without needing a separate card. -->
+		<section class="goals-section">
+			<header class="goals-header">
+				<h2>Goals</h2>
+				{#if displayGoals.length > 0}
+					<button type="button" class="link-btn" onclick={openNewGoal}>
+						+ Add goal
+					</button>
+				{/if}
+			</header>
+			{#if displayGoals.length === 0}
+				<div class="goals-empty-card">
+					<span class="material-symbols goals-empty-icon" aria-hidden="true">flag</span>
+					<div class="goals-empty-body">
+						<h3>No goals set</h3>
+						<p>
+							Track weekly or monthly targets for distance, time, average pace,
+							or number of runs.
+						</p>
+					</div>
+					<button type="button" class="btn btn-primary" onclick={openNewGoal}>
+						<span class="material-symbols">add</span>
+						Add goal
+					</button>
+				</div>
+			{:else}
+				<div class="goal-grid">
+					{#each displayGoals as g (g.id)}
+						{@const p = evaluateGoal(g, runs, new Date(), weekStartDay)}
+						{@const isSynthetic = g.id === SYNTHETIC_WEEKLY_GOAL_ID}
+						{@const isDone = p.overallPercent >= 1}
+						<button
+							class="goal-card"
+							class:goal-card-done={isDone}
+							type="button"
+							onclick={() =>
+								isSynthetic ? goto('/settings/preferences') : openEditGoal(g)}
+						>
+							<header class="goal-card-top">
+								<span class="goal-period">{periodLabel(g.period)}</span>
+								<span class="goal-card-top-right">
+									{#if isDone}
+										<span class="goal-done-badge">
+											<span class="material-symbols">check_circle</span>
+											Done
+										</span>
+									{/if}
+									<span class="goal-overall">
+										{Math.round(p.overallPercent * 100)}%
+									</span>
+								</span>
+							</header>
+							<ul class="goal-targets">
+								{#each p.targets as t}
+									<li>
+										<div class="goal-target-top">
+											<span>{t.label}</span>
+											<span class="goal-target-value">
+												{t.currentLabel} / {t.targetLabel}
+											</span>
+										</div>
+										<div class="goal-target-bar">
+											<div
+												class="goal-target-fill"
+												class:complete={t.complete}
+												style="width: {Math.round(t.percent * 100)}%"
+											></div>
+										</div>
+									</li>
+								{/each}
+							</ul>
+							{#if isSynthetic}
+								<p class="goal-card-footer">From Settings · Edit there</p>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</section>
 
 		<!-- Fitness snapshot — VO2 max + training-load (ATL / CTL / TSB)
 		     + a rule-based recovery advice line. Computed client-side
@@ -772,10 +924,66 @@
 			</div>
 		</section>
 
-		<!-- Calendar heatmap -->
-		<section class="card">
-			<h2>Activity</h2>
-			<CalendarHeatmap runs={filteredRuns} />
+		<!-- Training intensity — time in HR zones over the last 30/365 days
+		     (window mirrors the Mileage view). Empty state links to
+		     /settings/preferences#heart-rate-zones when the user hasn't set zones,
+		     or to the same anchor with a "no HR data" hint when zones
+		     are set but no run in window carries avg_bpm.
+		     Layered resilience: hrZones load is wrapped in onMount; a
+		     failure leaves the card in its empty state and never blocks
+		     the rest of the dashboard. Per-point analysis from the
+		     gzipped track is the eventual accuracy upgrade. -->
+		<section class="card intensity-card">
+			<div class="card-head">
+				<h2>Training intensity</h2>
+				{#if hrZones && intensityBreakdown && intensityBreakdown.total > 0}
+					<span class="intensity-window">
+						Last {intensityWindow === '30d' ? '30 days' : intensityWindow === '90d' ? '90 days' : '12 months'}
+						· {intensityBreakdown.hrTrackedRuns} {intensityBreakdown.hrTrackedRuns === 1 ? 'run' : 'runs'} with HR
+					</span>
+				{/if}
+			</div>
+			{#if !hrZones}
+				<div class="intensity-empty">
+					<span class="material-symbols intensity-empty-icon">favorite</span>
+					<div class="intensity-empty-body">
+						<strong>Set your HR zones to see intensity breakdown</strong>
+						<p>Configure z1–z5 thresholds in preferences and we'll classify your runs.</p>
+					</div>
+					<a class="btn btn-primary btn-sm" href="/settings/preferences#heart-rate-zones">
+						Set zones
+					</a>
+				</div>
+			{:else if !intensityBreakdown || intensityBreakdown.total === 0}
+				<div class="intensity-empty">
+					<span class="material-symbols intensity-empty-icon">monitoring</span>
+					<div class="intensity-empty-body">
+						<strong>No HR data in this window</strong>
+						<p>Record a run with a chest strap or watch, or import from Strava / Garmin / HealthKit.</p>
+					</div>
+					<a class="btn btn-secondary btn-sm" href="/settings/preferences#heart-rate-zones">
+						Review zones
+					</a>
+				</div>
+			{:else}
+				{@const zb = intensityBreakdown}
+				<ul class="zone-list">
+					{#each zb.zoneSeconds as secs, i}
+						{@const pct = secs / zb.total}
+						<li class="zone-row zone-row-{i + 1}">
+							<span class="zone-name">Z{i + 1}</span>
+							<div class="zone-bar-wrap">
+								<div class="zone-bar" style="width: {Math.max(pct * 100, secs > 0 ? 1.5 : 0)}%"></div>
+							</div>
+							<span class="zone-duration">{fmtCompactDuration(secs)}</span>
+							<span class="zone-pct">{Math.round(pct * 100)}%</span>
+						</li>
+					{/each}
+				</ul>
+				<p class="intensity-foot">
+					Total {fmtCompactDuration(zb.total)} · classified by each run's average HR.
+				</p>
+			{/if}
 		</section>
 
 		<div class="two-col">
@@ -833,69 +1041,6 @@
 				{/if}
 			</section>
 		</div>
-
-		<!-- Multi-metric goals — local-only. Shows a card per goal with
-		     a progress row per target. Empty by default; header button
-		     opens the editor. The legacy `weekly_mileage_goal_m` setting
-		     (still shared with Android via Settings → Preferences) is
-		     surfaced as a synthetic weekly distance goal so it shows up
-		     here without needing a separate card. -->
-		<section class="goals-section">
-			<header class="goals-header">
-				<h2>Goals</h2>
-				<button type="button" class="link-btn" onclick={openNewGoal}>
-					+ Add goal
-				</button>
-			</header>
-			{#if displayGoals.length === 0}
-				<p class="goals-empty">
-					No goals yet. Set a weekly or monthly target for distance, time,
-					avg pace, or number of runs.
-				</p>
-			{:else}
-				<div class="goal-grid">
-					{#each displayGoals as g (g.id)}
-						{@const p = evaluateGoal(g, runs, new Date(), weekStartDay)}
-						{@const isSynthetic = g.id === SYNTHETIC_WEEKLY_GOAL_ID}
-						<button
-							class="goal-card"
-							type="button"
-							onclick={() =>
-								isSynthetic ? goto('/settings/preferences') : openEditGoal(g)}
-						>
-							<header class="goal-card-top">
-								<span class="goal-period">{periodLabel(g.period)}</span>
-								<span class="goal-overall">
-									{Math.round(p.overallPercent * 100)}%
-								</span>
-							</header>
-							<ul class="goal-targets">
-								{#each p.targets as t}
-									<li>
-										<div class="goal-target-top">
-											<span>{t.label}</span>
-											<span class="goal-target-value">
-												{t.currentLabel} / {t.targetLabel}
-											</span>
-										</div>
-										<div class="goal-target-bar">
-											<div
-												class="goal-target-fill"
-												class:complete={t.complete}
-												style="width: {Math.round(t.percent * 100)}%"
-											></div>
-										</div>
-									</li>
-								{/each}
-							</ul>
-							{#if isSynthetic}
-								<p class="goal-card-footer">From Settings · Edit there</p>
-							{/if}
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</section>
 
 		<a class="coach-promo" href="/coach">
 			<div class="coach-icon">
@@ -1152,6 +1297,13 @@
 	}
 
 	.filter-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+	}
+	.filter-chips {
 		display: flex;
 		gap: var(--space-xs);
 		flex-wrap: wrap;
@@ -1512,7 +1664,7 @@
 
 	.stat-grid {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(5, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 
@@ -1650,10 +1802,6 @@
 	.fitness-value.tsb-neg { color: var(--color-danger); }
 	.fitness-value.tsb-pos { color: var(--color-success); }
 
-	.recap-strip {
-		display: flex;
-		justify-content: flex-end;
-	}
 	.recap-link {
 		display: inline-flex;
 		align-items: center;
@@ -1783,15 +1931,48 @@
 		transition: background var(--transition-fast);
 	}
 	.link-btn:hover { background: var(--color-primary-light); }
-	.goals-empty {
-		color: var(--color-text-tertiary);
-		font-size: 0.88rem;
-		margin: 0;
-		padding: var(--space-md) var(--space-lg);
-		background: var(--color-surface);
-		border: 1px dashed var(--color-border);
-		border-radius: var(--radius-lg);
+
+	/* Goals empty state — full card surface to mirror the plan-promo
+	   peer when both are absent. Icon + heading + explainer + primary
+	   CTA, not a one-line grey sentence. */
+	.goals-empty-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-lg);
+		padding: var(--space-lg) var(--space-xl);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-secondary) 10%, var(--color-surface)) 0%,
+			var(--color-surface) 70%
+		);
+		border: 1px dashed color-mix(in srgb, var(--color-secondary) 35%, var(--color-border));
+		border-radius: var(--radius-xl);
 	}
+	.goals-empty-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--color-secondary) 16%, transparent);
+		color: var(--color-secondary);
+		font-size: 1.5rem;
+		flex-shrink: 0;
+	}
+	.goals-empty-body { flex: 1; min-width: 0; }
+	.goals-empty-body h3 {
+		margin: 0 0 var(--space-2xs);
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.goals-empty-body p {
+		margin: 0;
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+	}
+	.goals-empty-card .btn :global(.material-symbols) { font-size: 1.05rem; }
 	.goal-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
@@ -1824,6 +2005,11 @@
 		align-items: center;
 		margin-bottom: var(--space-md);
 	}
+	.goal-card-top-right {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
 	.goal-period {
 		font-size: var(--font-size-section-label);
 		font-weight: 700;
@@ -1837,6 +2023,27 @@
 		color: var(--color-primary);
 		font-variant-numeric: tabular-nums;
 		line-height: 1;
+	}
+	.goal-card-done .goal-overall { color: var(--color-success); }
+	.goal-card-done {
+		border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+		background: color-mix(in srgb, var(--color-success) 4%, var(--color-surface));
+	}
+	.goal-done-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		padding: var(--space-2xs) var(--space-sm);
+		background: color-mix(in srgb, var(--color-success) 16%, transparent);
+		color: var(--color-success);
+		border-radius: 9999px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.goal-done-badge :global(.material-symbols) {
+		font-size: 0.95rem;
 	}
 	.goal-targets {
 		list-style: none;
@@ -1998,6 +2205,121 @@
 	}
 	.card:hover { box-shadow: var(--shadow-md); }
 
+	/* Generic card header row reused by the intensity card and any
+	   future card that wants a heading + small right-side meta. */
+	.card-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+		flex-wrap: wrap;
+	}
+	.card-head h2 { margin: 0; }
+
+	/* Training-intensity card — replaces the calendar-heatmap "Activity"
+	   card. Cool → hot ramp from Z1 (cyan) to Z5 (danger) matches the
+	   palette already in `app.css`. Zone rows use a fixed-template grid
+	   so the bars align across rows regardless of label length. */
+	.intensity-card { transition: box-shadow var(--transition-base); }
+	.intensity-window {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.zone-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-sm);
+	}
+	.zone-row {
+		display: grid;
+		grid-template-columns: 2.25rem 1fr 4.5rem 2.5rem;
+		align-items: center;
+		gap: var(--space-md);
+	}
+	.zone-name {
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+	.zone-bar-wrap {
+		height: 0.7rem;
+		background: var(--color-bg-tertiary);
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+	.zone-bar {
+		height: 100%;
+		border-radius: inherit;
+		transition: width 0.4s ease;
+	}
+	.zone-row-1 .zone-bar { background: var(--color-accent-cyan); }
+	.zone-row-2 .zone-bar { background: color-mix(in srgb, var(--color-accent-cyan) 35%, var(--color-success)); }
+	.zone-row-3 .zone-bar { background: var(--color-warning); }
+	.zone-row-4 .zone-bar { background: var(--color-accent-orange); }
+	.zone-row-5 .zone-bar { background: var(--color-danger); }
+	.zone-row-1 .zone-name { color: var(--color-accent-cyan); }
+	.zone-row-3 .zone-name { color: var(--color-warning); }
+	.zone-row-4 .zone-name { color: var(--color-accent-orange); }
+	.zone-row-5 .zone-name { color: var(--color-danger); }
+	.zone-duration {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+	.zone-pct {
+		font-size: 0.9rem;
+		font-weight: 700;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+	.intensity-foot {
+		margin: var(--space-md) 0 0;
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.intensity-empty {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) 0;
+	}
+	.intensity-empty-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+		color: var(--color-primary);
+		font-size: 1.4rem;
+		flex-shrink: 0;
+	}
+	.intensity-empty-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.intensity-empty-body strong {
+		font-weight: 600;
+		color: var(--color-text);
+		font-size: 0.95rem;
+	}
+	.intensity-empty-body p {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+
 	.chart {
 		display: flex;
 		align-items: flex-end;
@@ -2152,6 +2474,16 @@
 			flex-wrap: wrap;
 		}
 	}
+	/* Tablet: tighten the wide grids so cards don't crash into each
+	   other at typical 1024 widths. Two-col PRs/Recent stays side by
+	   side here — it doesn't have a hero band of metrics inside. */
+	@media (max-width: 1100px) {
+		/* 5 cards collapse straight to 2-up at this width — going via
+		   3-up first would leave an awkward 3+2 split (which is exactly
+		   what we just escaped at the wider size). */
+		.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.fitness-row { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+	}
 	@media (max-width: 768px) {
 		.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.two-col { grid-template-columns: 1fr; }
@@ -2160,6 +2492,19 @@
 			padding: var(--space-md) var(--space-lg);
 		}
 		.plan-hero-name { font-size: 1.25rem; }
+		.goals-empty-card {
+			flex-direction: column;
+			align-items: flex-start;
+			text-align: left;
+		}
+		.intensity-empty {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+		.zone-row {
+			grid-template-columns: 2rem 1fr 3.75rem 2.25rem;
+			gap: var(--space-sm);
+		}
 	}
 	@media (max-width: 480px) {
 		.page {

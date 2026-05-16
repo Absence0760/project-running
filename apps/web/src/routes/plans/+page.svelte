@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
 	import { formatDateShort } from '$lib/mock-data';
@@ -18,6 +18,24 @@
 
 	type StatusFilter = 'all' | PlanStatus;
 	let statusFilter = $state<StatusFilter>('all');
+
+	/// Mirror the /runs/[id] pattern so the back link can pop the history
+	/// entry when the user came from /dashboard — that restores the
+	/// dashboard's stat-card filter + scroll snapshot. Otherwise the link
+	/// falls through to a normal /dashboard soft-nav.
+	let cameFromDashboard = $state(false);
+	afterNavigate(({ from }) => {
+		if (from?.url.pathname === '/dashboard' && !cameFromDashboard) {
+			cameFromDashboard = true;
+		}
+	});
+
+	function handleBack(e: MouseEvent): void {
+		if (cameFromDashboard) {
+			e.preventDefault();
+			history.back();
+		}
+	}
 
 	async function load() {
 		loading = true;
@@ -207,6 +225,9 @@
 </svelte:head>
 
 <div class="page">
+	<a href="/dashboard" class="back-link" onclick={handleBack}>
+		<span class="material-symbols">arrow_back</span> Dashboard
+	</a>
 	<header class="page-header">
 		<div class="toolbar">
 			<div class="activity-group" role="group" aria-label="Filter plans by status">
@@ -393,6 +414,20 @@
 	.page-header {
 		margin-bottom: var(--space-xl);
 	}
+
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		margin-bottom: var(--space-md);
+		transition: color var(--transition-fast);
+	}
+	.back-link:hover { color: var(--color-primary); }
+	.back-link .material-symbols { font-size: 1.05rem; }
 
 	.toolbar {
 		display: flex;

@@ -166,10 +166,21 @@ test.describe('/dashboard', () => {
 		await expect(labels.filter({ hasText: /Pace/ }).first()).toBeVisible();
 	});
 
-	test('Activity heatmap renders below the Mileage chart', async ({ page }) => {
+	test('Training intensity card renders (replaces the old Activity heatmap)', async ({
+		page
+	}) => {
+		// The previous Activity card was a calendar heatmap that
+		// duplicated the Mileage chart's presence signal. It's now a
+		// Training intensity card showing HR-zone time breakdown
+		// (Z1–Z5). Pin the new title + the absence of the old.
 		await page.goto('/dashboard');
-		await expect(page.getByRole('heading', { level: 2, name: 'Activity' }))
-			.toBeVisible({ timeout: 10_000 });
+		await page.waitForLoadState('networkidle');
+		await expect(
+			page.getByRole('heading', { level: 2, name: /Training intensity/ })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.getByRole('heading', { level: 2, name: 'Activity' })
+		).toHaveCount(0);
 	});
 
 	test('Mileage chart Year toggle is reachable and stays selected', async ({
@@ -318,6 +329,44 @@ test.describe('/dashboard', () => {
 		await expect(viewPlan).toBeVisible();
 		const href = await viewPlan.getAttribute('href');
 		expect(href).toMatch(/^\/plans\/[a-f0-9-]+$/);
+	});
+
+	test('stat-grid lays out as one row on a wide viewport + filter chips share the row with the recap link', async ({
+		page
+	}) => {
+		// User feedback: stat-grid was 5 cards but rendering as 4+1
+		// across two rows; the recap-link sat on its own horizontal rail
+		// above the source-filter chips, burning a line for one element.
+		// Fix: stat-grid → 5-up at >=1100px, recap-link rides on the
+		// right side of the same row as the .filter-chips group.
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/dashboard');
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('.stat-grid .stat-card').first()).toBeVisible({
+			timeout: 10_000
+		});
+
+		// Filter chips + recap link sit in the same .filter-row.
+		const filterRow = page.locator('.filter-row');
+		await expect(filterRow.locator('.filter-chips')).toBeVisible();
+		await expect(filterRow.locator('.recap-link')).toBeVisible();
+		const chipsBox = await filterRow.locator('.filter-chips').boundingBox();
+		const recapBox = await filterRow.locator('.recap-link').boundingBox();
+		// Recap is to the right of the chips on the same horizontal line.
+		expect(recapBox!.x).toBeGreaterThan(chipsBox!.x);
+		expect(Math.abs(recapBox!.y - chipsBox!.y)).toBeLessThan(30);
+
+		// 5 stat cards all share the same top edge → 1 row.
+		const cards = page.locator('.stat-grid .stat-card');
+		await expect(cards).toHaveCount(5);
+		const tops: number[] = [];
+		for (let i = 0; i < 5; i++) {
+			const b = await cards.nth(i).boundingBox();
+			tops.push(b!.y);
+		}
+		const minTop = Math.min(...tops);
+		const maxTop = Math.max(...tops);
+		expect(maxTop - minTop).toBeLessThan(8); // all on the same line
 	});
 
 	test('Plans is NOT in the sidebar nav — dashboard is the entry point + Manage-plans link surfaces it', async ({
