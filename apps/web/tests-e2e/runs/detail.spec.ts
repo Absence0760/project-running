@@ -324,6 +324,121 @@ test.describe('/runs/[id]', () => {
 		}
 	});
 
+	test('owner tags gear via RunGearChips → chip renders → DB row created → untag removes the row', async ({
+		page
+	}) => {
+		// Closes a coverage gap: every other interactive surface on
+		// /runs/[id] (edit, delete, share, photos, kudos, comments,
+		// save-as-route, segment efforts, workout review) has an e2e
+		// pinned somewhere in tests-e2e/, but gear-tagging had none.
+		// Round-trip: plant a run + a piece of gear, open /runs/[id],
+		// click "+ Tag gear", check the box, Save, assert the chip
+		// renders + the run_gear row landed. Then re-open the picker,
+		// uncheck, Save, assert the chip is gone + the row is gone.
+		const admin = getAdminClient();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5000,
+			duration_s: 1800,
+			source: 'app',
+			is_public: false
+		});
+
+		const { data: gear, error: gearErr } = await admin
+			.from('gear')
+			.insert({
+				owner_id: USER_A.id,
+				kind: 'shoe',
+				name: uniqueText('Test Pegasus')
+			})
+			.select('id, name')
+			.single();
+		if (gearErr || !gear) throw new Error(`gear plant failed: ${gearErr?.message}`);
+
+		try {
+			await page.goto(`/runs/${runId}`);
+			await page.waitForLoadState('networkidle');
+
+			// Before tagging: only the "+ Tag gear" affordance is visible
+			// (no chip yet).
+			const gearStrip = page.locator('.gear-strip');
+			await expect(gearStrip).toBeVisible({ timeout: 10_000 });
+			await expect(gearStrip.locator('.gear-chip')).toHaveCount(0);
+			const tagBtn = gearStrip.getByRole('button', { name: '+ Tag gear' });
+			await expect(tagBtn).toBeVisible();
+
+			// Open the picker modal.
+			await tagBtn.click();
+			const dialog = page.getByRole('dialog', { name: /Tag gear used on this run/ });
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+			// Check our planted gear's box, hit Save.
+			await dialog
+				.locator('label', { hasText: gear.name })
+				.locator('input[type="checkbox"]')
+				.check();
+			await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+			await expect(dialog).toBeHidden({ timeout: 5_000 });
+
+			// Chip now renders with the gear name + a shoe icon (kind='shoe').
+			await expect(
+				gearStrip.locator('.gear-chip', { hasText: gear.name })
+			).toBeVisible({ timeout: 5_000 });
+
+			// Backend: run_gear row exists.
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('run_gear')
+							.select('gear_id')
+							.eq('run_id', runId)
+							.eq('gear_id', gear.id)
+							.maybeSingle();
+						return data?.gear_id ?? null;
+					},
+					{ timeout: 5_000 }
+				)
+				.toBe(gear.id);
+
+			// Untag: re-open picker, uncheck, Save.
+			await gearStrip.getByRole('button', { name: 'Edit' }).click();
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog
+				.locator('label', { hasText: gear.name })
+				.locator('input[type="checkbox"]')
+				.uncheck();
+			await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+			await expect(dialog).toBeHidden({ timeout: 5_000 });
+
+			// Chip gone, "+ Tag gear" affordance back.
+			await expect(gearStrip.locator('.gear-chip')).toHaveCount(0);
+			await expect(
+				gearStrip.getByRole('button', { name: '+ Tag gear' })
+			).toBeVisible();
+
+			// Backend: run_gear row gone.
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('run_gear')
+							.select('gear_id')
+							.eq('run_id', runId)
+							.eq('gear_id', gear.id)
+							.maybeSingle();
+						return data;
+					},
+					{ timeout: 5_000 }
+				)
+				.toBeNull();
+		} finally {
+			await admin.from('run_gear').delete().eq('run_id', runId);
+			await admin.from('gear').delete().eq('id', gear.id);
+			await deleteRun(runId);
+		}
+	});
+
 	test('not-found: visiting a missing run id shows "Run not found" with a way back', async ({
 		page
 	}) => {
