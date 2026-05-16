@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createTrainingPlan } from '$lib/data';
+	import { createTrainingPlan, fetchActivePlanOverview } from '$lib/data';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import {
 		GOAL_DISTANCES_M,
 		defaultPlanWeeks,
@@ -162,9 +163,39 @@
 		{ value: 'distance_full', label: 'Marathon' }
 	];
 
+	/// The schema enforces one active plan per user via a partial unique
+	/// index, and `createTrainingPlan` enforces it by auto-completing
+	/// any existing active plan inside the same transaction. That used
+	/// to happen silently — clicking "Create plan" on the wizard would
+	/// transparently flip the user's current plan to `completed` with
+	/// no warning. This dialog gates the create on an explicit
+	/// confirmation when a previous active plan exists; the user gets
+	/// to see what they're about to retire and can cancel.
+	let showReplaceConfirm = $state(false);
+	let existingActiveName = $state<string | null>(null);
+
 	async function submit(e: Event) {
 		e.preventDefault();
 		if (!name.trim() || !plan || busy) return;
+		busy = true;
+		error = null;
+		try {
+			const active = await fetchActivePlanOverview();
+			if (active?.plan) {
+				existingActiveName = active.plan.name;
+				showReplaceConfirm = true;
+				busy = false;
+				return;
+			}
+			await proceedWithCreate();
+		} catch (e: unknown) {
+			error = describeError(e);
+			console.error('Plan create failed', e);
+			busy = false;
+		}
+	}
+
+	async function proceedWithCreate() {
 		busy = true;
 		error = null;
 		try {
@@ -176,7 +207,7 @@
 				recent5kSec: recent5kTotal,
 				startDate,
 				daysPerWeek,
-				generated: plan,
+				generated: plan!,
 			});
 			oncreated?.(created);
 		} catch (e: unknown) {
@@ -184,7 +215,14 @@
 			console.error('Plan create failed', e);
 		} finally {
 			busy = false;
+			showReplaceConfirm = false;
+			existingActiveName = null;
 		}
+	}
+
+	function cancelReplace() {
+		showReplaceConfirm = false;
+		existingActiveName = null;
 	}
 </script>
 
@@ -379,6 +417,19 @@
 		</aside>
 	</div>
 </form>
+
+<ConfirmDialog
+	open={showReplaceConfirm}
+	title="Replace your active plan?"
+	message={existingActiveName
+		? `You already have an active plan: "${existingActiveName}". Creating a new plan will mark the current one as completed (you can still find it under Manage plans). Continue?`
+		: 'You already have an active plan. Creating a new plan will mark the current one as completed. Continue?'}
+	confirmLabel="Replace plan"
+	cancelLabel="Keep current"
+	danger={true}
+	onconfirm={proceedWithCreate}
+	oncancel={cancelReplace}
+/>
 
 <style>
 	.plan-editor {

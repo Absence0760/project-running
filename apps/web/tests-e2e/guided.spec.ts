@@ -94,3 +94,37 @@ test.describe('/guided/[id] — detail pages', () => {
 		await expect(page).toHaveTitle(/Guided run/);
 	});
 });
+
+import { USER_A } from './fixtures/users';
+
+test.describe('/guided — signed-in back navigation', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('signed-in user sees a ← Back to Coach link at the top of the library', async ({
+		page
+	}) => {
+		// /guided is reached from the /coach right-rail "See the full
+		// library →" link. Without an in-page back affordance the user
+		// has to dig through the sidebar to return. Pin the back link
+		// so a regression that drops it fails here.
+		await page.goto('/guided');
+		const back = page.getByRole('link', { name: /Back to Coach/ });
+		await expect(back).toBeVisible({ timeout: 10_000 });
+		await expect(back).toHaveAttribute('href', '/coach');
+	});
+
+	test('anon viewer does NOT see the Back-to-Coach link (no /coach route for anon)', async ({
+		browser
+	}) => {
+		// /guided is anon-readable but /coach is not — gating the back
+		// link on auth.loggedIn keeps the link from leading anon
+		// visitors into a route they can't reach.
+		const ctx = await browser.newContext({ storageState: undefined });
+		const page = await ctx.newPage();
+		await page.goto('/guided');
+		await expect(
+			page.getByRole('link', { name: /Back to Coach/ })
+		).toHaveCount(0);
+		await ctx.close();
+	});
+});

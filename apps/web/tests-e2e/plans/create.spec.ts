@@ -68,6 +68,14 @@ test.describe('/plans/new — create wizard', () => {
 			const submit = modal.getByRole('button', { name: /Create plan/ });
 			await expect(submit).toBeEnabled({ timeout: 5_000 });
 			await submit.click();
+			// Seed has an active plan; the create flow gates on a
+			// Replace-plan ConfirmDialog. Wait for the dialog and
+			// confirm so we proceed to the actual create.
+			const replace = page.locator('.modal.modal-narrow', {
+				hasText: /Replace your active plan/
+			});
+			await expect(replace).toBeVisible({ timeout: 5_000 });
+			await replace.getByRole('button', { name: 'Replace plan' }).click();
 		});
 
 		// ── Phase 2: land on detail, multi-week grid renders ──────
@@ -114,5 +122,67 @@ test.describe('/plans/new — create wizard', () => {
 			});
 			plantedPlanId = null; // UI cleanup completed; afterEach skips.
 		});
+	});
+
+	test('creating a new plan when one is already active shows the Replace-plan confirm dialog; Cancel keeps the current plan active', async ({
+		page
+	}) => {
+		// Real bug surfaced by the user: clicking Create plan on the
+		// wizard silently auto-completed the existing active plan.
+		// The schema enforces one-active-per-user via a partial unique
+		// index, but the data layer's auto-complete-then-insert flow
+		// did the swap without telling the user. Fix: ConfirmDialog
+		// gates the create when an active plan exists; Cancel keeps
+		// the existing plan untouched, Confirm proceeds with the
+		// (now intentional) replace.
+		await page.goto('/plans');
+		await page.waitForLoadState('networkidle');
+
+		// Seed has an active plan ("Sydney Half 2026"); confirm it's
+		// active before we start.
+		await expect(
+			page.locator('.card', { hasText: 'Sydney Half 2026' })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Open the New-plan wizard.
+		await page.getByRole('button', { name: /New plan/ }).first().click();
+		const modal = page.locator('.modal');
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+
+		// Fill the minimum to enable Create.
+		await modal.getByPlaceholder('Autumn half marathon').fill('e2e replace-confirm');
+		const start = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+		await modal.locator('input[type="date"]').first().fill(
+			start.toISOString().slice(0, 10)
+		);
+		await expect(modal.locator('.preview')).toBeVisible({ timeout: 5_000 });
+
+		// Click Create plan — confirm dialog should appear, NOT the
+		// silent auto-complete. ConfirmDialog renders via narrow Modal,
+		// so .modal-narrow disambiguates from the wizard modal that's
+		// still open behind it.
+		await modal.getByRole('button', { name: 'Create plan' }).click();
+		const confirm = page.locator('.modal.modal-narrow', {
+			hasText: /Replace your active plan/
+		});
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		// Dialog names the plan being replaced so the user can see
+		// exactly what they're about to retire.
+		await expect(confirm).toContainText('Sydney Half 2026');
+
+		// Cancel: dialog closes, no replace happens, the original plan
+		// stays visible on /plans.
+		await confirm.getByRole('button', { name: 'Keep current' }).click();
+		await expect(confirm).toHaveCount(0, { timeout: 5_000 });
+
+		// Close the wizard.
+		await page.locator('.modal-close').first().click();
+		await page.waitForLoadState('networkidle');
+
+		// Seed plan is still on /plans + still active (no abandon /
+		// complete flip).
+		const seedCard = page.locator('.card', { hasText: 'Sydney Half 2026' });
+		await expect(seedCard).toBeVisible({ timeout: 10_000 });
+		await expect(seedCard).toHaveClass(/card-active/);
 	});
 });

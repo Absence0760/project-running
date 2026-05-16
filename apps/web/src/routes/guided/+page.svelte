@@ -1,9 +1,29 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { GUIDED_RUN_LIBRARY } from '$lib/guided_runs';
 
 	function fmtMinutes(seconds: number): string {
 		const m = Math.round(seconds / 60);
 		return `${m} min`;
+	}
+
+	/// /coach surfaces a "Guided runs" rail with "See the full library →"
+	/// pointing here. When the user did come from /coach, the back link
+	/// pops the history entry so any /coach state is preserved; otherwise
+	/// it falls through to a normal soft-nav.
+	let cameFromCoach = $state(false);
+	afterNavigate(({ from }) => {
+		if (from?.url.pathname === '/coach' && !cameFromCoach) {
+			cameFromCoach = true;
+		}
+	});
+
+	function handleBack(e: MouseEvent): void {
+		if (cameFromCoach) {
+			e.preventDefault();
+			history.back();
+		}
 	}
 </script>
 
@@ -16,6 +36,12 @@
 </svelte:head>
 
 <div class="page">
+	{#if auth.loggedIn}
+		<a href="/coach" class="back-link" onclick={handleBack}>
+			<span class="material-symbols">arrow_back</span>
+			Back to Coach
+		</a>
+	{/if}
 	<header class="hero">
 		<p class="kicker">Guided runs</p>
 		<h1>A coach in your ear, free.</h1>
@@ -48,6 +74,23 @@
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; margin: 0 auto; }
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.88rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		padding: var(--space-xs) 0;
+		margin-bottom: var(--space-md);
+	}
+	.back-link:hover {
+		color: var(--color-primary);
+	}
+	.back-link .material-symbols {
+		font-size: 1.1rem;
+	}
 	.hero { text-align: center; padding: var(--space-2xl) 0 var(--space-xl); }
 	.kicker {
 		text-transform: uppercase;
