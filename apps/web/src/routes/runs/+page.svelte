@@ -117,6 +117,12 @@
 			case 'custom': {
 				const from = customFrom ? new Date(customFrom + 'T00:00:00') : null;
 				const to = customTo ? new Date(customTo + 'T23:59:59.999') : null;
+				// While the user has picked Custom but hasn't entered any
+				// bounds yet, keep the previously-active range applied —
+				// otherwise the list flashes to "All time" for the brief
+				// moment between selecting Custom in the dropdown and the
+				// picker actually rendering / the user choosing dates.
+				if (!from && !to) return rangeBounds(prevNonCustomRange);
 				return { from, to };
 			}
 			case 'all':
@@ -342,9 +348,9 @@
 	}
 
 	/// Compact label for the toolbar chip when a custom range is set.
-	/// "May 1 – May 7" (cross-year picks add the year suffix). When the
-	/// user is in custom mode but hasn't set bounds yet (e.g. just
-	/// flipped to Custom in the dropdown), we show "Pick dates…" instead.
+	/// "May 1 – May 7" (cross-year picks add the year suffix). The chip
+	/// itself is hidden when both bounds are empty, so this function
+	/// only runs in states where at least one bound is set.
 	function customRangeChipLabel(): string {
 		const months = [
 			'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -357,7 +363,6 @@
 				? base
 				: `${base}, ${d.getFullYear()}`;
 		};
-		if (!customFrom && !customTo) return 'Pick dates…';
 		if (customFrom && customTo) return `${fmt(customFrom)} – ${fmt(customTo)}`;
 		if (customFrom) return `From ${fmt(customFrom)}`;
 		return `Until ${fmt(customTo)}`;
@@ -435,7 +440,13 @@
 			</div>
 		</div>
 
-		{#if dateRange === 'custom'}
+		{#if dateRange === 'custom' && (customFrom || customTo)}
+			<!-- Chip-row only appears once Custom dates are set. The
+			     dropdown itself auto-opens the picker on Custom selection
+			     (onchange above), so a "Pick dates…" placeholder button
+			     below it would just be a second control for the same
+			     intent. Once dates are picked the chip shows the range
+			     as a status + click-to-edit handle. -->
 			<div class="date-picker-row">
 				<button
 					type="button"
@@ -446,15 +457,20 @@
 					<span class="material-symbols">calendar_month</span>
 					{customRangeChipLabel()}
 				</button>
-				{#if customFrom || customTo}
-					<button
-						type="button"
-						class="link-btn"
-						onclick={() => {
-							customFrom = '';
-							customTo = '';
-						}}>Clear</button>
-				{/if}
+				<button
+					type="button"
+					class="link-btn"
+					onclick={() => {
+						customFrom = '';
+						customTo = '';
+						// Clearing the bounds while still in Custom mode
+						// would strand the user in a state where the
+						// dropdown reads "Custom…" but the visible list
+						// reflects the previous (non-custom) range —
+						// inconsistent. Flip dateRange back so the
+						// dropdown matches the visible state.
+						dateRange = prevNonCustomRange;
+					}}>Clear</button>
 			</div>
 		{/if}
 	</header>
