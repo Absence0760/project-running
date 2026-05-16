@@ -125,7 +125,7 @@ Everything below this section is the **starting baseline** before today's pushes
 | Library / detail / import (GPX/KML/etc.) | 70% | `routes/{list,detail,import}.spec.ts` |
 | Route builder (OSRM + elevation + geocoding) | 65% | 9+12+7+7+5 helper tests, web e2e thin |
 | Public/private toggle + share | 75% | `share/route.spec.ts` |
-| Segments + leaderboards | 65% | `segments_test.dart` (8) + UI widget tests |
+| Segments + leaderboards | 92% | `segments_test.dart` (8) + UI widget tests + web `routes/segments.spec.ts` (14) + web `runs/segment-efforts.spec.ts` (7) — silent-empty-leaderboard regression pin for the SECURITY DEFINER fix (decisions §60), tier-filter narrowing on planted demographics, crown banner gating, viewer-row highlight, create + delete round-trip, ConfirmDialog cancel/confirm, athlete-row navigation to /u/[id], rank-pill colour-codes (.gold / .silver), section gating by route_id on /runs/[id], 100m-minimum validation toast |
 | Heatmap | 40% | UI exists, migration shipped; no e2e |
 
 ## Training plans
