@@ -273,6 +273,57 @@ test.describe('/runs/[id]', () => {
 		}
 	});
 
+	test('run without a GPS track shows a real empty-state instead of a fake Melbourne circle', async ({
+		page
+	}) => {
+		// Real bug surfaced during the /runs/[id] polish round: when a
+		// run has no track (manual entry, parkrun row, HealthKit summary
+		// without polyline) the page synthesised a fake circular track
+		// centred on (-37.8136, 144.9631) — Melbourne — and rendered it
+		// on the map as if it were real GPS. Users would see a route
+		// they never ran. Fix: drop the synthesised fallback, gate the
+		// map render on the track being non-empty, and surface a clear
+		// empty-state instead. The elevation profile is also hidden in
+		// this case because every point would read as 0m.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5000,
+			duration_s: 1800,
+			source: 'app',
+			is_public: false
+			// no `track` passed → run.track stays null
+		});
+		try {
+			await page.goto(`/runs/${planted}`);
+			await page.waitForLoadState('networkidle');
+
+			// The empty-state copy is visible.
+			await expect(
+				page.getByText('No GPS track for this run')
+			).toBeVisible({ timeout: 10_000 });
+
+			// The fake map canvas (MapLibre) is NOT mounted.
+			await expect(page.locator('.maplibregl-map')).toHaveCount(0);
+
+			// And the elevation profile section is suppressed too
+			// (every-point-is-0 would otherwise read as a flat line).
+			await expect(
+				page.getByRole('heading', { name: 'Elevation Profile' })
+			).toHaveCount(0);
+
+			// Download GPX + Save as route both stay disabled because
+			// there's nothing to export.
+			await expect(
+				page.getByRole('button', { name: 'Download GPX file' })
+			).toBeDisabled();
+			await expect(
+				page.getByRole('button', { name: 'Save this track as a reusable route' })
+			).toBeDisabled();
+		} finally {
+			await deleteRun(planted);
+		}
+	});
+
 	test('not-found: visiting a missing run id shows "Run not found" with a way back', async ({
 		page
 	}) => {

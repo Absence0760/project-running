@@ -642,43 +642,42 @@
 
 	/// Map track. Prefer the matched line when the worker has produced
 	/// one (status='matched' AND non-empty payload); fall back to the
-	/// raw recorded track; last resort is the mock circle so the page
-	/// still has something to render. Stats below the map continue to
-	/// derive from `run.track` (raw) — distance, splits, elevation,
-	/// pace zones are all attributes of what the runner actually did,
-	/// independent of how it's projected for display.
+	/// raw recorded track. If neither exists (Strava sync without GPS,
+	/// manual parkrun entry, HealthKit summary without polyline), the
+	/// map panel renders an empty state — we deliberately do NOT
+	/// synthesise a placeholder track. Stats below the map continue to
+	/// derive from `run.track` directly so distance / splits / pace
+	/// zones reflect what the runner actually did.
 	let baseTrack = $derived(
 		matchInfo?.track && matchInfo.track.length >= 2
 			? matchInfo.track
-			: run
-			? (run.track ?? generateMockTrack(run.distance_m))
-			: [],
+			: run?.track ?? [],
 	);
-	let elevations = $derived(baseTrack.map((p) => p.ele ?? 20 + Math.random() * 30));
+	let hasMapTrack = $derived(baseTrack.length >= 2);
+	let elevations = $derived(baseTrack.map((p) => p.ele ?? 0));
 
 	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
-
-	function generateMockTrack(distanceM: number) {
-		const points = Math.max(50, Math.round(distanceM / 20));
-		const baseLat = -37.8136;
-		const baseLng = 144.9631;
-		const track = [];
-		for (let i = 0; i < points; i++) {
-			const angle = (i / points) * Math.PI * 2;
-			const radius = (distanceM / 1000) * 0.004;
-			track.push({
-				lat: baseLat + Math.sin(angle) * radius + (Math.random() - 0.5) * 0.0005,
-				lng: baseLng + Math.cos(angle) * radius + (Math.random() - 0.5) * 0.0005,
-				ele: 20 + Math.sin(angle * 3) * 15 + Math.random() * 5,
-			});
-		}
-		track.push(track[0]);
-		return track;
-	}
 </script>
 
 {#if loading}
-	<div class="run-detail"><p class="loading-text">&nbsp;</p></div>
+	<div class="run-detail">
+		<div class="page-back back-link-skeleton" aria-hidden="true"></div>
+		<div class="loading-grid" aria-busy="true" aria-label="Loading run">
+			<div class="loading-map skeleton-shimmer"></div>
+			<div class="loading-stats">
+				<div class="skeleton-shimmer skeleton-title"></div>
+				<div class="skeleton-shimmer skeleton-line"></div>
+				<div class="loading-key-stats">
+					<div class="skeleton-shimmer skeleton-stat"></div>
+					<div class="skeleton-shimmer skeleton-stat"></div>
+					<div class="skeleton-shimmer skeleton-stat"></div>
+					<div class="skeleton-shimmer skeleton-stat"></div>
+				</div>
+				<div class="skeleton-shimmer skeleton-block"></div>
+				<div class="skeleton-shimmer skeleton-block"></div>
+			</div>
+		</div>
+	</div>
 {:else if !run}
 	<div class="run-detail">
 		<a href="/runs" class="back-link page-back">
@@ -700,12 +699,22 @@
 		{#snippet left()}
 		{#if run}
 	<main class="map-panel">
-		<RunMap
-			track={baseTrack}
-			animatable
-			activity={paceHeatmapActivity}
-			onSegmentSelect={(seg) => (selectedSegment = seg)}
-		/>
+		{#if hasMapTrack}
+			<RunMap
+				track={baseTrack}
+				animatable
+				activity={paceHeatmapActivity}
+				onSegmentSelect={(seg) => (selectedSegment = seg)}
+			/>
+		{:else}
+			<div class="map-empty">
+				<span class="material-symbols">map</span>
+				<p class="map-empty-title">No GPS track for this run</p>
+				<p class="map-empty-sub">
+					Imports from sources that don't carry GPS data (manual entries, some parkrun rows, HealthKit summaries) show stats only.
+				</p>
+			</div>
+		{/if}
 		<!-- Map-match status pill. Only renders when we have a status
 		     to communicate — pending / failed / skipped are the
 		     informational cases ("the worker hasn't produced a
@@ -802,36 +811,53 @@
 		{#if run}
 	<aside class="stats-panel">
 		<header class="detail-header">
-			<div>
-				<h1>{runTitle || formatDate(run.started_at)}</h1>
-				{#if runTitle}
-					<div class="run-date-sub">{formatDate(run.started_at)}</div>
-				{/if}
-				{#if runNotes}
-					<p class="run-notes">{runNotes}</p>
-				{/if}
-				{#if activity}
+			<div class="detail-header-top">
+				<div class="detail-title-block">
+					<h1>{runTitle || formatDate(run.started_at)}</h1>
 					<div class="detail-meta">
-						<span class="activity-badge">
-							<span class="material-symbols">{activity.icon}</span>
-							{activity.label}
+						{#if runTitle}
+							<span class="meta-item">
+								<span class="material-symbols">event</span>
+								{formatDate(run.started_at)}
+							</span>
+						{/if}
+						{#if activity}
+							<span class="meta-item">
+								<span class="material-symbols">{activity.icon}</span>
+								{activity.label}
+							</span>
+						{/if}
+						<span class="meta-item meta-source" style:--source-color={sourceColor(run.source)}>
+							<span class="meta-source-dot"></span>
+							{sourceLabel(run.source)}
+						</span>
+						<span class="meta-item visibility-chip" class:is-public={run.is_public}>
+							<span class="material-symbols">{run.is_public ? 'public' : 'lock'}</span>
+							{run.is_public ? 'Public' : 'Private'}
 						</span>
 					</div>
-				{/if}
-			</div>
-			<div class="header-actions">
-				<span class="source-badge" style="background: {sourceColor(run.source)}"
-					>{sourceLabel(run.source)}</span>
+				</div>
 				{#if auth.loggedIn}
-					<div class="action-btns">
-						<button class="icon-btn" title="Edit" onclick={startEdit}>
+					<div class="action-btns" role="toolbar" aria-label="Run actions">
+						<button
+							class="icon-btn"
+							aria-label="Edit title and notes"
+							title="Edit"
+							onclick={startEdit}
+						>
 							<span class="material-symbols">edit</span>
 						</button>
-						<button class="icon-btn" title="Share link" onclick={handleShare}>
+						<button
+							class="icon-btn"
+							aria-label={run.is_public ? 'Copy share link' : 'Make public and copy share link'}
+							title={run.is_public ? 'Copy share link' : 'Share link'}
+							onclick={handleShare}
+						>
 							<span class="material-symbols">share</span>
 						</button>
 						<button
 							class="icon-btn"
+							aria-label="Download GPX file"
 							title="Download GPX"
 							onclick={handleDownloadGpx}
 							disabled={!run?.track || run.track.length < 2}
@@ -840,6 +866,7 @@
 						</button>
 						<button
 							class="icon-btn"
+							aria-label="Save this track as a reusable route"
 							title="Save as route"
 							onclick={handleSaveAsRoute}
 							disabled={!run?.track || run.track.length < 2}
@@ -848,18 +875,28 @@
 						</button>
 						<button
 							class="icon-btn"
+							aria-label="Share as image"
 							title="Share as image"
 							onclick={handleShareImage}
 							disabled={generatingImage}
 						>
 							<span class="material-symbols">image</span>
 						</button>
-						<button class="icon-btn danger" title="Delete" onclick={handleDelete}>
+						<span class="action-divider" aria-hidden="true"></span>
+						<button
+							class="icon-btn danger"
+							aria-label="Delete run"
+							title="Delete"
+							onclick={handleDelete}
+						>
 							<span class="material-symbols">delete</span>
 						</button>
 					</div>
 				{/if}
 			</div>
+			{#if runNotes}
+				<p class="run-notes">{runNotes}</p>
+			{/if}
 		</header>
 
 		<!-- Auto-link suggestion: when the run isn't linked to a route
@@ -958,11 +995,15 @@
 			{/if}
 		</div>
 
-		<!-- Elevation Profile -->
-		<section class="section">
-			<h2>Elevation Profile</h2>
-			<ElevationProfile {elevations} totalDistance={run.distance_m} />
-		</section>
+		<!-- Elevation Profile — only render when we have real elevation
+		     samples. Without a track every point is 0 and the chart
+		     reads as a deceptive flat line. -->
+		{#if hasMapTrack}
+			<section class="section">
+				<h2>Elevation Profile</h2>
+				<ElevationProfile {elevations} totalDistance={run.distance_m} />
+			</section>
+		{/if}
 
 		<section class="section">
 			<RunGearChips runId={run.id} runOwnerId={run.user_id} />
@@ -1208,10 +1249,53 @@
 {/if}
 
 <style>
-	.loading-text {
-		text-align: center;
-		color: var(--color-text-tertiary);
-		padding: var(--space-2xl);
+	.loading-grid {
+		flex: 1;
+		display: grid;
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+		min-height: 0;
+	}
+	.loading-map {
+		min-height: 0;
+		border-right: 1px solid var(--color-border);
+	}
+	.loading-stats {
+		padding: var(--space-xl);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		background: var(--color-surface);
+	}
+	.loading-key-stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: var(--space-md);
+		margin-top: var(--space-sm);
+	}
+	.skeleton-shimmer {
+		background: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		border-radius: var(--radius-md);
+	}
+	.skeleton-title { height: 1.8rem; width: 60%; }
+	.skeleton-line { height: 0.9rem; width: 40%; }
+	.skeleton-stat { height: 3.5rem; }
+	.skeleton-block { height: 8rem; margin-top: var(--space-sm); }
+	.back-link-skeleton { height: 2.5rem; }
+	@keyframes skeleton-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (max-width: 900px) {
+		.loading-grid { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }
+		.loading-map { border-right: none; border-bottom: 1px solid var(--color-border); }
+		.loading-key-stats { grid-template-columns: repeat(2, 1fr); }
 	}
 	.not-found {
 		text-align: center;
@@ -1236,12 +1320,51 @@
 		min-height: 0;
 	}
 
+	/* Stack map above stats on narrow viewports — overrides SplitPane's
+	   horizontal layout without forking the primitive. */
+	@media (max-width: 900px) {
+		.run-detail-body :global(.split-pane) {
+			flex-direction: column;
+		}
+		.run-detail-body :global(.split-left) {
+			width: 100% !important;
+			height: 45vh;
+			min-height: 320px;
+		}
+		.run-detail-body :global(.split-right) {
+			width: 100%;
+			height: auto;
+			flex: 1;
+		}
+		.run-detail-body :global(.split-divider) {
+			display: none;
+		}
+		.stats-panel {
+			padding: var(--space-lg);
+		}
+	}
+
+	@media (max-width: 640px) {
+		.key-stats {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		.key-stat-value {
+			font-size: 1.3rem;
+		}
+		h1 {
+			font-size: 1.3rem;
+		}
+	}
+
 	.page-back {
-		padding: 0.6rem var(--space-lg);
-		font-size: 0.9rem;
+		padding: var(--space-sm) var(--space-xl);
+		font-size: 0.85rem;
 		font-weight: 500;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
+	}
+	.page-back:hover {
+		background: var(--color-bg-secondary);
 	}
 	.page-back .material-symbols {
 		font-family: 'Material Symbols Outlined';
@@ -1253,6 +1376,34 @@
 		min-height: 0;
 		background: var(--color-bg-tertiary);
 		position: relative;
+	}
+
+	.map-empty {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-xs);
+		padding: var(--space-2xl);
+		text-align: center;
+		color: var(--color-text-secondary);
+	}
+	.map-empty > .material-symbols {
+		font-size: 3rem;
+		color: var(--color-text-tertiary);
+	}
+	.map-empty-title {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.map-empty-sub {
+		margin: 0;
+		font-size: 0.85rem;
+		max-width: 32rem;
+		line-height: 1.5;
 	}
 
 	.route-suggest-banner {
@@ -1415,22 +1566,83 @@
 
 	.detail-header {
 		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
+		flex-direction: column;
+		gap: var(--space-sm);
 		margin-bottom: var(--space-xl);
 	}
 
+	.detail-header-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: var(--space-md);
+	}
+
+	.detail-title-block {
+		min-width: 0;
+		flex: 1;
+	}
+
 	h1 {
-		font-size: 1.25rem;
+		font-size: 1.5rem;
 		font-weight: 700;
+		line-height: 1.2;
+		margin: 0;
+		color: var(--color-text);
+		overflow-wrap: anywhere;
 	}
 
 	.detail-meta {
 		display: flex;
 		align-items: center;
-		gap: var(--space-md);
-		margin-top: var(--space-xs);
+		gap: var(--space-sm) var(--space-md);
+		margin-top: var(--space-sm);
 		flex-wrap: wrap;
+	}
+
+	.meta-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+		line-height: 1;
+	}
+
+	.meta-item .material-symbols {
+		font-size: 1rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.meta-source {
+		gap: 0.4rem;
+	}
+
+	.meta-source-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--source-color, var(--color-text-tertiary));
+		flex-shrink: 0;
+	}
+
+	.visibility-chip {
+		padding: 0.2rem 0.55rem;
+		border-radius: 9999px;
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+		font-weight: 600;
+		font-size: 0.72rem;
+	}
+
+	.visibility-chip.is-public {
+		background: var(--color-success-light);
+		border-color: transparent;
+		color: var(--color-success);
+	}
+
+	.visibility-chip.is-public .material-symbols {
+		color: var(--color-success);
 	}
 
 	.back-link {
@@ -1446,58 +1658,40 @@
 		color: var(--color-primary);
 	}
 
-	.activity-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.2rem 0.6rem;
-		border-radius: 9999px;
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-secondary);
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.activity-badge .material-symbols {
-		font-size: 0.95rem;
-	}
-
 	h2 {
-		font-size: 0.9rem;
+		font-size: 0.95rem;
 		font-weight: 600;
-		margin-bottom: var(--space-md);
-		color: var(--color-text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.source-badge {
-		font-size: 0.65rem;
-		font-weight: 600;
-		color: white;
-		padding: 0.15rem 0.5rem;
-		border-radius: 9999px;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
+		margin: 0 0 var(--space-md);
+		color: var(--color-text);
+		letter-spacing: 0;
 	}
 
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: var(--space-md);
+		grid-template-columns: repeat(4, 1fr);
+		gap: var(--space-sm);
 		margin-bottom: var(--space-xl);
-		padding-bottom: var(--space-xl);
-		border-bottom: 1px solid var(--color-border);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-lg);
 	}
 
 	.key-stat {
 		display: flex;
 		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
 	}
 
 	.key-stat-value {
-		font-size: 1.1rem;
+		font-size: 1.5rem;
 		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text);
+		line-height: 1.1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.key-stat-label {
@@ -1509,6 +1703,13 @@
 
 	.section {
 		margin-bottom: var(--space-xl);
+		padding-top: var(--space-xl);
+		border-top: 1px solid var(--color-border);
+	}
+
+	.section:first-of-type {
+		padding-top: 0;
+		border-top: none;
 	}
 
 	.splits-table {
@@ -1530,7 +1731,11 @@
 	.splits-table td {
 		padding: var(--space-sm) 0;
 		font-size: 0.85rem;
-		border-bottom: 1px solid var(--color-bg-secondary);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.splits-table tr:last-child td {
+		border-bottom: none;
 	}
 
 	.split-pace {
@@ -1612,7 +1817,11 @@
 	.workout-table td {
 		padding: var(--space-sm) 0;
 		font-size: 0.82rem;
-		border-bottom: 1px solid var(--color-bg-secondary);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.workout-table tr:last-child td {
+		border-bottom: none;
 	}
 
 	.workout-table tr.skipped td {
@@ -1707,49 +1916,70 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.run-date-sub {
-		font-size: 0.8rem;
-		color: var(--color-text-secondary);
-	}
-
 	.run-notes {
-		margin-top: var(--space-xs);
-		font-size: 0.85rem;
+		margin: 0;
+		padding: var(--space-sm) var(--space-md);
+		font-size: 0.88rem;
 		color: var(--color-text-secondary);
-		line-height: 1.4;
-	}
-
-	.header-actions {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: var(--space-sm);
+		line-height: 1.5;
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+		border-left: 3px solid var(--color-primary);
 	}
 
 	.action-btns {
 		display: flex;
-		gap: var(--space-xs);
+		align-items: center;
+		gap: var(--space-2xs);
+		flex-shrink: 0;
+	}
+
+	.action-divider {
+		width: 1px;
+		height: 1.4rem;
+		background: var(--color-border);
+		margin: 0 var(--space-xs);
 	}
 
 	.icon-btn {
-		background: none;
-		border: 1px solid var(--color-border);
+		background: transparent;
+		border: 1px solid transparent;
 		border-radius: var(--radius-sm);
-		padding: var(--space-xs);
+		width: 2.25rem;
+		height: 2.25rem;
+		padding: 0;
 		cursor: pointer;
 		color: var(--color-text-secondary);
-		display: flex;
+		display: inline-flex;
 		align-items: center;
+		justify-content: center;
+		transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 	}
 
-	.icon-btn:hover {
-		border-color: var(--color-primary);
+	.icon-btn:hover:not(:disabled) {
+		background: var(--color-bg-tertiary);
 		color: var(--color-primary);
+		border-color: var(--color-border);
 	}
 
-	.icon-btn.danger:hover {
-		border-color: var(--color-danger, #ef4444);
-		color: var(--color-danger, #ef4444);
+	.icon-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
+	.icon-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.icon-btn.danger:hover:not(:disabled) {
+		background: var(--color-danger-light);
+		color: var(--color-danger);
+		border-color: transparent;
+	}
+
+	.icon-btn .material-symbols {
+		font-size: 1.1rem;
 	}
 
 	.edit-form {
