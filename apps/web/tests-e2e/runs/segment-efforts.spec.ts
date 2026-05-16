@@ -27,7 +27,10 @@ import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
  * Cleanup via afterAll keeps the seed pristine.
  */
 
-const BATTERSEA_ROUTE_ID = '225a576a-6108-4157-bc71-d42d8d6d1bf4';
+// Resolved at beforeAll. seed.sql plants Battersea Park with a generated
+// uuid that drifts on every fresh seed, so hardcoding the id leads to
+// segments_route_id_fkey violations.
+let BATTERSEA_ROUTE_ID = '';
 let segmentId: string;
 let plantedRunIds: string[] = [];
 let myRunId: string;
@@ -46,6 +49,19 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 
 	test.beforeAll(async () => {
 		const admin = getAdminClient();
+
+		const { data: bRoute, error: bErr } = await admin
+			.from('routes')
+			.select('id')
+			.eq('name', 'Battersea Park Out & Back')
+			.eq('user_id', USER_A.id)
+			.single();
+		if (bErr || !bRoute) {
+			throw new Error(
+				`segment-efforts.spec: could not resolve Battersea Park route id from seed (${bErr?.message ?? 'no row'}).`
+			);
+		}
+		BATTERSEA_ROUTE_ID = (bRoute as { id: string }).id;
 
 		// Plant a segment on the Battersea Park route.
 		const { data: segRow, error: segErr } = await admin

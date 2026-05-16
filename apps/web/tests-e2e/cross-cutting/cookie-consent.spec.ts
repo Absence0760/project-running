@@ -113,6 +113,13 @@ test.describe('Cookie consent banner', () => {
 			storageState: 'tests-e2e/.auth/user-a.json'
 		});
 		const page = await ctx.newPage();
+		// globalSetup bakes an accepted cookie_consent into every user's
+		// storageState so the banner doesn't intercept clicks across the
+		// suite. This regression-pin specifically needs the banner to
+		// render — strip the key before navigating.
+		await page.addInitScript(() => {
+			localStorage.removeItem('cookie_consent');
+		});
 		let plantedId: string | null = null;
 		try {
 			await page.goto('/runs/new');

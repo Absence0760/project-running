@@ -151,12 +151,14 @@ test.describe('privacy-zone share guardrail', () => {
 
 		// Reload so the in-memory `run.is_public` is rebuilt from the DB.
 		// A second Share click should NOT show the dialog (the guard
-		// short-circuits when the run is already public).
+		// short-circuits when the run is already public). After the first
+		// click flipped is_public to true the button's title flipped
+		// from "Share link" to "Copy share link".
 		await page.reload();
 		await expect(
 			page.getByRole('heading', { level: 1 })
 		).toBeVisible({ timeout: 10_000 });
-		await page.locator('button[title="Share link"]').click();
+		await page.locator('button[title="Copy share link"]').click();
 		// Toast appears immediately; dialog does not.
 		await expect(
 			page.locator('.modal', { hasText: 'Share through a privacy zone' })

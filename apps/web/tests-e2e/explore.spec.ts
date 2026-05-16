@@ -17,9 +17,11 @@ test.describe('/explore', () => {
 	test('redirects to /routes?tab=explore', async ({ page }) => {
 		await page.goto('/explore');
 		await page.waitForURL(/\/routes\?tab=explore/, { timeout: 10_000 });
-		// The Explore tab is the active one after the redirect.
+		// The Explore tab is the active one after the redirect. The /routes
+		// polish made the tab strip ARIA-compliant: role="tab" with
+		// aria-selected reflecting the URL ?tab= param.
 		await expect(
-			page.getByRole('button', { name: /Explore/ })
-		).toHaveClass(/active/, { timeout: 10_000 });
+			page.getByRole('tab', { name: /Explore/ })
+		).toHaveAttribute('aria-selected', 'true', { timeout: 10_000 });
 	});
 });

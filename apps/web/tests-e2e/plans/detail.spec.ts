@@ -135,9 +135,9 @@ test.describe('/plans/[id]', () => {
 		await expect(
 			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
 		).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: /^Templates/ }).click();
+		await page.getByRole('tab', { name: /^Templates/ }).click();
 		await expect(
-			page.locator('.template-row', { hasText: 'Sydney Half 2026' })
+			page.locator('.template-row', { hasText: 'Sydney Half 2026' }).first()
 		).toBeVisible({ timeout: 10_000 });
 
 		// Cleanup — find the cloned template id (any plan row with
