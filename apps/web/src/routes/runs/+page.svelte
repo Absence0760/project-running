@@ -425,7 +425,21 @@
 					class="toolbar-select"
 					aria-label="Date range"
 					onchange={() => {
-						if (dateRange === 'custom') showRangePicker = true;
+						if (dateRange === 'custom') {
+							// Clear any persisted bounds before opening the
+							// picker. Without this, a customFrom/customTo
+							// left over from an earlier session (or earlier
+							// in this session) re-applies the moment Custom
+							// is re-selected — the list changes before the
+							// user has picked anything. The expectation is
+							// that selecting Custom opens an empty picker
+							// and the visible list keeps showing the
+							// previous (non-custom) range until the user
+							// taps Apply.
+							customFrom = '';
+							customTo = '';
+							showRangePicker = true;
+						}
 					}}
 				>
 					<option value="all">All time</option>

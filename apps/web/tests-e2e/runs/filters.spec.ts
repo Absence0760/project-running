@@ -326,6 +326,53 @@ test.describe('/runs — filters', () => {
 			await page.keyboard.press('Escape');
 		});
 
+		test('selecting Custom with stale bounds in localStorage does NOT apply them — picker opens fresh', async ({
+			page,
+			context
+		}) => {
+			// Real-world regression: a user picks Custom May 5–15, then
+			// switches to Today. customFrom/customTo are still in local-
+			// Storage. When they re-select Custom, rangeBounds('custom')
+			// reads those stale values and silently re-applies the May
+			// 5–15 filter before the picker even opens. Expectation:
+			// selecting Custom always opens a fresh picker; the list
+			// stays at the previous (non-custom) range until Apply.
+			await context.addInitScript(() => {
+				localStorage.setItem(
+					'runs_filters_v1',
+					JSON.stringify({
+						sourceFilter: 'all',
+						activityFilter: 'all',
+						dateRange: 'today',
+						customFrom: '2020-01-01',
+						customTo: '2020-12-31',
+						sortKey: 'newest'
+					})
+				);
+			});
+			await page.goto('/runs');
+			// Hydrated state should be dateRange='today' + a hidden stale
+			// customFrom/To pair. Capture today's count as the baseline.
+			await expect(page.getByLabel('Date range')).toHaveValue('today');
+			const todayCount = await page.locator('.run-card').count();
+
+			// Select Custom. Picker auto-opens. The list MUST stay at
+			// todayCount — not flash to "2020 runs only" (which would be
+			// zero rows in the seed).
+			await page.getByLabel('Date range').selectOption('custom');
+			expect(await page.locator('.run-card').count()).toBe(todayCount);
+
+			// The picker should also show empty start/end chips — the
+			// stale bounds were cleared, not silently pre-loaded into
+			// pendingFrom/pendingTo.
+			const picker = page.getByRole('dialog', { name: /Select dates/i });
+			await expect(picker).toBeVisible();
+			await expect(picker.getByText('Tap a date').first()).toBeVisible();
+			await expect(picker.getByText('Tap a date').nth(1)).toBeVisible();
+
+			await page.keyboard.press('Escape');
+		});
+
 		test('"Pick dates…" chip is HIDDEN until Custom bounds are actually set', async ({
 			page
 		}) => {
