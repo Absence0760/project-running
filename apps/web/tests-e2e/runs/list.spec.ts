@@ -322,6 +322,91 @@ test.describe('/runs', () => {
 		}
 	});
 
+	test('Select 10 + bulk-delete removes EVERY selected run from the DB (concurrency-safe)', async ({
+		page
+	}) => {
+		// Real bug surfaced during /runs polish: selecting 10 runs and
+		// hitting Delete only actually deleted ~5 of them. Root cause was
+		// the `runs_personal_records_delete` trigger calling
+		// refresh_personal_records_for_user, which DELETEs then INSERTs
+		// against personal_records. With parallel run-deletes from the
+		// client, two trigger invocations raced on the personal_records
+		// PK and threw 23505. supabase-js surfaced the 409 as a delete
+		// error, the runs.DELETE rolled back, and the rows survived.
+		//
+		// Fix: the trigger function now takes a pg_advisory_xact_lock
+		// keyed on the user id so per-user PR refreshes serialize.
+		// This test plants 12 throwaway runs and asserts that selecting
+		// 10 + hitting Delete actually removes all 10 from the DB. A
+		// regression in either the trigger or the client bulk-delete
+		// path would fail here.
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const { insertRun } = await import('../fixtures/simulate');
+		const admin = getAdminClient();
+
+		// Plant 12 runs with distinctive 12345+i distances so accidental
+		// matches against seed runs are impossible. Sorted newest-first
+		// so they land at the top of the list under the default sort.
+		const plantedIds: string[] = [];
+		const now = Date.now();
+		for (let i = 0; i < 12; i++) {
+			plantedIds.push(
+				await insertRun({
+					user_id: USER_A.id,
+					distance_m: 12345 + i,
+					duration_s: 4321,
+					is_public: false,
+					started_at: new Date(now - i * 1000).toISOString()
+				})
+			);
+		}
+
+		try {
+			await page.goto('/runs');
+			await switchRunsToAllTime(page);
+			await page.locator('select[aria-label="Sort"]').selectOption('newest');
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+
+			// Enter select mode + click the first 10 cards (= our planted
+			// runs, sorted newest-first).
+			await page.getByRole('button', { name: 'Select', exact: true }).click();
+			for (let i = 0; i < 10; i++) {
+				await page.locator('.run-card').nth(i).click();
+			}
+
+			const bulkBar = page.locator('.bulk-bar');
+			await expect(bulkBar).toContainText('10 selected');
+
+			await bulkBar.getByRole('button', { name: 'Delete' }).click();
+			const dialog = page.locator('.modal', { hasText: /Delete 10 run/ });
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+			await expect(dialog).toHaveCount(0, { timeout: 15_000 });
+
+			// Poll the DB: the 10 newest planted ids should all be gone,
+			// leaving exactly 2 of the 12 still present. Without the
+			// trigger fix this would settle at ~7 (5 deleted, 5 raced).
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('runs')
+							.select('id')
+							.in('id', plantedIds);
+						return data?.length ?? 0;
+					},
+					{ timeout: 10_000 }
+				)
+				.toBe(2);
+		} finally {
+			// Best-effort sweep so the seed stays clean even if the test
+			// asserted-then-failed mid-way.
+			await admin.from('runs').delete().in('id', plantedIds);
+		}
+	});
+
 	test('manual run CRUD round-trip via the Add-run modal', async ({ page }) => {
 		const title = uniqueText('e2e-crud');
 
@@ -425,18 +510,33 @@ test.describe('/runs', () => {
 		// The page composes filters AND-style — Activity, Source, Date,
 		// search box are all $derived together. A regression that
 		// dropped one of them on combined paths would show up here as
-		// a count that reflects only one filter. Seed has 5 parkruns
-		// (all activity_type=run); combining Source=parkrun + Run
-		// stays at 5.
+		// a count that reflects only one filter.
+		//
+		// Seed contains 30+ parkruns (all activity_type=run by design).
+		// Rather than pin a brittle exact number that drifts with seed
+		// evolution, pin the invariants that matter for filter
+		// composition: every visible card carries the parkrun source
+		// badge, and the count matches Source=parkrun alone (no rows
+		// dropped by the Activity overlay).
 		await page.goto('/runs');
 		await page.getByLabel('Date range').selectOption('all');
 		await expect(page.locator('.run-card').first()).toBeVisible({
 			timeout: 10_000
 		});
 
-		await page.getByRole('button', { name: 'Run', exact: true }).click();
+		// Baseline: Source=parkrun alone.
 		await page.locator('select[aria-label="Source"]').selectOption('parkrun');
-		await expect(page.locator('.run-card')).toHaveCount(5);
+		await expect(page.locator('.run-card').first()).toBeVisible();
+		const parkrunOnlyCount = await page.locator('.run-card').count();
+		expect(parkrunOnlyCount).toBeGreaterThan(0);
+
+		// Compose with Activity=Run — count stays identical because
+		// every parkrun is a run.
+		await page.getByRole('button', { name: 'Run', exact: true }).click();
+		await expect(page.locator('.run-card')).toHaveCount(parkrunOnlyCount);
+		const badges = page.locator('.run-card .source-badge');
+		expect(await badges.count()).toBe(parkrunOnlyCount);
+		await expect(badges.first()).toHaveText(/parkrun/i);
 
 		// Restore so subsequent tests start clean.
 		await page.locator('select[aria-label="Source"]').selectOption('all');
