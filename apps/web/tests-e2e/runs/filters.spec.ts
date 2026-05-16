@@ -344,88 +344,49 @@ test.describe('/runs — filters', () => {
 			await expect(page.getByText('Pick dates…')).toHaveCount(0);
 		});
 
-		test.skip('Custom picker cell-click round-trip — open → pick → apply', async ({
+		test('Custom picker cell-click round-trip — open → pick → apply', async ({
 			page
 		}) => {
-			// SKIPPED until the Svelte 5 + Modal event-delegation
-			// interop is resolved. Repro: dispatch click on a picker
-			// cell button (any of the date cells) via Playwright OR
-			// DOM-level .click() — the Svelte onclick handler does not
-			// fire (verified via a probe script: the DOM node lacks
-			// the `__listeners` property Svelte 5 attaches when
-			// delegated handlers are bound). The picker works in a
-			// real browser. Likely a Svelte 5 delegation issue with
-			// content mounted inside a Modal's conditional {#if open}
-			// branch. Until that's resolved, the chip + Clear + no-
-			// flash + escape-doesn't-strand behaviour is pinned by
-			// the four sibling tests in this describe block; only
-			// the full pick-cells round-trip is deferred.
+			// Baseline: list at "All time" before we narrow.
+			const allCount = await page.locator('.run-card').count();
+
 			await page.getByLabel('Date range').selectOption('custom');
-			// Picker auto-opens. Wait for the post-mount $effect to
-			// reset pendingFrom/pendingTo from initialFrom/initialTo
-			// before the first cell click — otherwise the click can
-			// land while the effect is still resetting state, and the
-			// click is silently dropped.
+
 			const picker = page.getByRole('dialog', { name: /Select dates/i });
 			await expect(picker).toBeVisible({ timeout: 10_000 });
-			// The START chip shows "Tap a date" until pendingFrom is
-			// non-null — proves the post-mount reset completed.
-			await expect(picker.getByText('Tap a date').first())
-				.toBeVisible({ timeout: 5_000 });
+			await expect(picker.getByText('Tap a date').first()).toBeVisible({
+				timeout: 5_000
+			});
 
-			// Tap the 5th + 15th of the current month. The cells are
-			// <button class="cell"> with a `<span class="day">N</span>`
-			// child. `:has-text` with a regex-anchored value avoids
-			// matching "15" against the day-25 cell.
-			// Dispatch clicks via the DOM directly. Playwright's regular
-			// click() resolves successfully on the cell buttons but the
-			// Svelte onclick handler never fires — likely a Svelte 5
-			// $effect timing interaction with the Modal's focus-trap +
-			// the picker's open-time pendingFrom reset. The DOM-level
-			// .click() bypasses the actionability re-check and directly
-			// triggers the bound handler.
-			// Click two cells through the regular Playwright click path,
-			// matching by aria-label so the selector targets the
-			// click-handler element directly. The picker mounts inside
-			// a Modal that focuses the dialog on open — give it a
-			// 200ms beat for that focus dance to settle so the cell's
-			// first click isn't swallowed.
-			await page.waitForTimeout(200);
 			const cells = picker.locator('button.cell:not(.empty)');
 			await expect(cells.first()).toBeVisible();
 			await cells.nth(4).click();
-			await expect(picker.locator('.chip').first())
-				.not.toContainText('Tap a date', { timeout: 5_000 });
+			await expect(picker.locator('.chip').first()).not.toContainText(
+				'Tap a date',
+				{ timeout: 5_000 }
+			);
 			await cells.nth(14).click();
-			await expect(picker.locator('.chip').nth(1))
-				.not.toContainText('Tap a date', { timeout: 5_000 });
+			await expect(picker.locator('.chip').nth(1)).not.toContainText(
+				'Tap a date',
+				{ timeout: 5_000 }
+			);
 
-			// Apply enables once both bounds are set.
 			const apply = picker.getByRole('button', { name: 'Apply', exact: true });
 			await expect(apply).toBeEnabled();
 			await apply.click();
 			await expect(picker).toBeHidden({ timeout: 5_000 });
 
-			// Chip is now visible (custom dates are set).
-			await expect(page.locator('.range-chip')).toBeVisible({
-				timeout: 5_000
-			});
+			await expect(page.locator('.range-chip')).toBeVisible({ timeout: 5_000 });
 
-			// List narrowed.
 			const narrowedCount = await page.locator('.run-card').count();
 			expect(narrowedCount).toBeLessThanOrEqual(allCount);
 
-			// Click the chip → picker re-opens.
 			await page.locator('.range-chip').click();
 			await expect(picker).toBeVisible({ timeout: 5_000 });
 			await page.keyboard.press('Escape');
 
-			// Clear button next to the chip wipes the bounds AND flips
-			// dateRange back to prevNonCustomRange ('all' in this test).
 			await page.getByRole('button', { name: 'Clear', exact: true }).click();
-			await expect(page.locator('.range-chip')).toHaveCount(0, {
-				timeout: 5_000
-			});
+			await expect(page.locator('.range-chip')).toHaveCount(0, { timeout: 5_000 });
 			await expect(page.getByLabel('Date range')).toHaveValue('all');
 		});
 

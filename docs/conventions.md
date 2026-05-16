@@ -254,6 +254,17 @@ Canonical button styles live in `apps/web/src/app.css` under the comma-separated
 
 The `/settings/upgrade`, `/login`, and `/` (landing) surfaces deliberately ship larger marketing-CTA buttons; those override the canonical sizes via Svelte-scoped local rules and are documented exceptions, not the pattern.
 
+## Svelte 5 `$effect` — never read state you write in the same effect
+
+A `$effect` that both reads AND writes the same `$state` rune builds a self-trigger loop: the write changes the value, the effect's dep set marks it dirty, the effect re-runs, the write resets it. When the effect is a "reset on prop change" body (`if (open) { foo = parseInitial(); ...; const anchor = foo ?? today; ... }`), the read inside `?? today` adds `foo` to the dep set; any later code path that writes `foo` (e.g. a click handler) re-triggers the reset, silently erasing the user's input.
+
+Two fixes — pick by intent:
+
+- The body should run **only when the trigger prop changes**: `$effect(() => { if (!open) return; untrack(() => { ... }); })`. The reset reads (`foo ?? today`) are wrapped in `untrack` so they don't register as deps. `open` remains the sole signal.
+- The body should run **whenever any of its inputs change**: leave the deps as-is, but don't write back to a value the body reads — store the derived result in a separate `$state` or `$derived` so the cycle can't close.
+
+Reproduced concretely on `DateRangePicker.svelte` — a cell click set `pendingFrom`, the open-time `$effect` re-fired because it read `pendingFrom ?? today`, the reset wrote `pendingFrom = null`, and the chip never updated. The diagnostic giveaway: handler runs (verifiable with a `console.log`), state updates to the new value (also visible in the log), but the template re-renders to the prop-reset value.
+
 ## Web modals
 
 Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.modal`, `.modal-header`, `.modal-close`, `.modal-body`, plus `.modal-wide` for the form-with-side-panel case and `.modal-narrow` for confirmation-style dialogs). Every dialog in the app uses this shape: a horizontally-centered card **anchored to a fixed top offset** (`top: 4rem`, `transform: translateX(-50%)`), on a 50%-opacity backdrop, with a header bar that holds the title + an `×` close button, and a scrollable body. The top-anchor is deliberate — vertically centring the card pinned its midpoint, so any content-height change inside (tab switch, list grow / shrink, autocomplete suggestions appearing) made the entire card visibly shift up or down. Anchoring the top edge keeps the header still while the body grows downward into the available `max-height: calc(100vh - 6rem)`. Side-drawer / right-rail variants are not the convention — when you find one (`apps/web/src/lib/components/WorkoutEditor.svelte` was the last holdout), convert it.

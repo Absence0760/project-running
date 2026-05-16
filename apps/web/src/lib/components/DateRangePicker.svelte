@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Modal from './Modal.svelte';
 
 	interface Props {
@@ -64,14 +65,21 @@
 	// silently keep stale picks from a previous session. Also re-anchors
 	// the visible month on the user's last `from` pick (or today) so a
 	// reopen doesn't dump them on January of the earliest allowed year.
+	//
+	// untrack on the body so reads (`pendingFrom ?? today`) inside the
+	// reset block do NOT add pendingFrom/pendingTo as effect deps. Without
+	// untrack, picking a cell re-runs this effect, which resets the
+	// state back to null and erases the user's click. The only signal
+	// that should re-trigger the reset is `open` flipping false→true.
 	$effect(() => {
-		if (open) {
+		if (!open) return;
+		untrack(() => {
 			pendingFrom = parseIso(initialFrom);
 			pendingTo = parseIso(initialTo);
 			const anchor = pendingFrom ?? today;
 			viewYear = anchor.getFullYear();
 			viewMonth = anchor.getMonth();
-		}
+		});
 	});
 
 	/// List of years spanned by the navigable range. Drives the year
@@ -146,6 +154,20 @@
 		} else {
 			pendingTo = d;
 		}
+	}
+
+	// Single delegated click listener on the grid div. Reads `data-day`
+	// off the clicked cell button. Wired via Svelte 5's `onclick={...}`
+	// on the grid (not on each cell inside the {#each}) so the reactivity
+	// scheduler observes the pendingFrom write and re-renders the chip.
+	function onGridClick(e: MouseEvent): void {
+		const target = (e.target as HTMLElement | null)?.closest(
+			'button.cell[data-day]'
+		) as HTMLButtonElement | null;
+		if (!target) return;
+		const day = Number(target.dataset.day);
+		if (!Number.isFinite(day) || day < 1) return;
+		onTapDate(new Date(viewYear, viewMonth, day));
 	}
 
 	function clearPending(): void {
@@ -265,7 +287,11 @@
 		</div>
 
 		<div class="month-pane">
-			<div class="grid">
+			<!-- Delegated click handler reaches the cell buttons via closest().
+			     Each cell is a real <button> so Enter/Space keyboard activation
+			     is handled natively; no keyboard listener needed on the grid. -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<div class="grid" onclick={onGridClick} role="grid" tabindex="-1">
 				{#each Array.from({ length: leading }, (_, k) => k) as pad (pad)}
 					<span class="cell empty"></span>
 				{/each}
@@ -286,7 +312,7 @@
 						class:end={isEnd}
 						class:in-range={inRange}
 						class:today={isToday && !isStart && !isEnd}
-						onclick={() => onTapDate(date)}
+						data-day={day}
 						aria-label={formatChip(date)}
 					>
 						<span class="day">{day}</span>
