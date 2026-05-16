@@ -273,4 +273,36 @@ test.describe('/dashboard', () => {
 			{ timeout: 10_000 }
 		);
 	});
+
+	test('Plans is NOT in the sidebar nav — dashboard is the entry point + Manage-plans link surfaces it', async ({
+		page
+	}) => {
+		// Plans used to be its own top-level sidebar tab. Most users keep
+		// one active plan at a time, so the dedicated tab + list page was
+		// mostly redundant with the today-card already on the dashboard.
+		// New shape: drop /plans from the sidebar, treat the dashboard as
+		// the plan entry-point (today-card + Manage-plans link), keep the
+		// /plans route around for archive / multi-plan management.
+		await page.goto('/dashboard');
+		await page.waitForLoadState('networkidle');
+
+		// Sidebar no longer carries a Plans link.
+		const sidebar = page.locator('.sidebar');
+		await expect(sidebar.getByRole('link', { name: /^Plans$/ })).toHaveCount(0);
+
+		// The seeded plan surfaces via the today-card + the secondary
+		// row of links (Full plan / Manage plans). Both are clickable.
+		const fullPlan = page.getByRole('link', { name: /Full plan/i });
+		const managePlans = page.getByRole('link', { name: /Manage plans/i });
+		await expect(fullPlan).toBeVisible({ timeout: 10_000 });
+		await expect(managePlans).toBeVisible();
+
+		// "Manage plans" still routes to /plans (we kept the list page
+		// for archive / multi-plan management).
+		await managePlans.click();
+		await expect(page).toHaveURL(/\/plans$/);
+		await expect(
+			page.getByRole('heading', { name: /Sydney Half 2026/ })
+		).toBeVisible({ timeout: 10_000 });
+	});
 });

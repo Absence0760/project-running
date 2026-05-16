@@ -374,6 +374,18 @@
 			</a>
 		{/if}
 
+		{#if planOverview}
+			<div class="plan-secondary">
+				<a class="plan-secondary-link" href="/plans/{planOverview.plan.id}">
+					Full plan
+					<span class="material-symbols">chevron_right</span>
+				</a>
+				<a class="plan-secondary-link plan-secondary-quiet" href="/plans">
+					Manage plans
+				</a>
+			</div>
+		{/if}
+
 		<!-- Upcoming RSVP'd event within 48h — promotes to the top of
 		     the dashboard so runners remember to show up. Mirrors
 		     Android's upcoming_event_card. Hides when nothing matches. -->
@@ -1150,6 +1162,37 @@
 		flex-shrink: 0;
 	}
 
+	.plan-secondary {
+		display: flex;
+		gap: var(--space-md);
+		margin-top: calc(var(--space-md) * -1 + 0.1rem);
+		padding: 0 var(--space-md);
+	}
+	.plan-secondary-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--color-primary);
+		text-decoration: none;
+		padding: var(--space-2xs) 0;
+		transition: color var(--transition-fast);
+	}
+	.plan-secondary-link :global(.material-symbols) {
+		font-size: 1.1rem;
+	}
+	.plan-secondary-link:hover {
+		color: var(--color-primary-dark, var(--color-primary));
+		text-decoration: underline;
+	}
+	.plan-secondary-quiet {
+		color: var(--color-text-tertiary);
+	}
+	.plan-secondary-quiet:hover {
+		color: var(--color-text);
+	}
+
 	.stat-grid {
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1434,8 +1477,8 @@
 	}
 	.goal-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-		gap: var(--space-md);
+		grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+		gap: var(--space-lg);
 	}
 	.goal-card {
 		display: block;
@@ -1443,7 +1486,7 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
+		padding: var(--space-xl);
 		cursor: pointer;
 		font: inherit;
 		color: inherit;
@@ -1472,30 +1515,32 @@
 		letter-spacing: 0.08em;
 	}
 	.goal-overall {
-		font-size: 1.15rem;
+		font-size: 1.65rem;
 		font-weight: 800;
 		color: var(--color-primary);
 		font-variant-numeric: tabular-nums;
+		line-height: 1;
 	}
 	.goal-targets {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: var(--space-sm);
+		gap: var(--space-md);
 	}
 	.goal-target-top {
 		display: flex;
 		justify-content: space-between;
-		font-size: 0.85rem;
-		margin-bottom: var(--space-2xs);
+		font-size: 0.95rem;
+		font-weight: 500;
+		margin-bottom: var(--space-xs);
 	}
 	.goal-target-value {
 		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
 	.goal-target-bar {
-		height: 0.4rem;
+		height: 0.55rem;
 		background: var(--color-bg-tertiary);
 		border-radius: 9999px;
 		overflow: hidden;
