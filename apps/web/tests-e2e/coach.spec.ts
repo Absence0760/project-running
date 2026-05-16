@@ -338,4 +338,60 @@ test.describe('/coach', () => {
 		await expect(page.getByRole('button', { name: 'Recent runs' }))
 			.toBeVisible();
 	});
+
+	test('Guided-runs right rail mounts with intensity chips + bottom mobile-CTA panel + forward-arrow library link', async ({
+		page
+	}) => {
+		// The polish round restructured the right rail: ALSO-FOR-YOU
+		// eyebrow + h2, per-card intensity chip with tone-coded dot,
+		// bottom-anchored mobile-CTA panel that fills empty space on
+		// tall viewports, and a forward-arrow "See the full library →"
+		// link (was a back-arrow, read as a return). Pin those so the
+		// hierarchy/CTA changes can't silently regress.
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/coach');
+		const rail = page.locator('aside.guided');
+		await expect(rail).toBeVisible({ timeout: 10_000 });
+
+		// Eyebrow + h2 reads as the rail's heading hierarchy.
+		await expect(rail.getByText(/ALSO FOR YOU/i)).toBeVisible();
+		await expect(
+			rail.getByRole('heading', { level: 2, name: /Guided runs/i })
+		).toBeVisible();
+
+		// At least one card carries an intensity chip + dot.
+		const cards = rail.locator('.guided-card');
+		await expect(cards.first()).toBeVisible();
+		await expect(cards.first().locator('.intensity-dot')).toBeVisible();
+
+		// Bottom-anchored mobile-CTA fills the empty rail space at desktop width.
+		await expect(rail.locator('.mobile-cta')).toBeVisible();
+		await expect(rail.locator('.mobile-cta')).toContainText(
+			/Run these on mobile/i
+		);
+
+		// Library link reads as a forward action — material-symbol
+		// arrow_forward icon sits AFTER the text node so the link
+		// reads as a forward CTA, not a back-link.
+		const libraryLink = rail.getByRole('link', { name: /See the full library/i });
+		await expect(libraryLink).toBeVisible();
+		const arrowText = await libraryLink
+			.locator('.material-symbols')
+			.textContent();
+		expect(arrowText?.trim()).toBe('arrow_forward');
+	});
+
+	test('mobile-CTA panel is hidden on narrow viewports (user is already on mobile)', async ({
+		page
+	}) => {
+		// The "Run these on mobile" bridge messaging is desktop-only —
+		// telling a user on their phone to "run these on mobile" is
+		// nonsense chrome. Pin the responsive hide at <=64rem.
+		await page.setViewportSize({ width: 720, height: 900 });
+		await page.goto('/coach');
+		await expect(page.locator('aside.guided')).toBeVisible({
+			timeout: 10_000
+		});
+		await expect(page.locator('aside.guided .mobile-cta')).toBeHidden();
+	});
 });
