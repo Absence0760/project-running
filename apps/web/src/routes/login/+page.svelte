@@ -113,7 +113,8 @@
 <div class="login-page">
 	<div class="login-card">
 		<a href="/" class="logo">
-			Run Onward
+			<img src="/icon-192.png" alt="" class="logo-mark" />
+			<span>Run Onward</span>
 		</a>
 
 		<h1>
@@ -309,11 +310,23 @@
 		gap: var(--space-sm);
 		font-weight: 700;
 		font-size: 1.5rem;
+		color: var(--color-text);
+		text-decoration: none;
+		margin-bottom: var(--space-2xl);
+	}
+	.logo .logo-mark {
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: var(--radius-md);
+		display: block;
+		box-shadow: var(--shadow-sm);
+		object-fit: cover;
+	}
+	.logo span {
 		background: var(--gradient-primary);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
-		margin-bottom: var(--space-2xl);
 	}
 
 	h1 {

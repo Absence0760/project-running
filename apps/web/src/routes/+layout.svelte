@@ -168,7 +168,7 @@
 		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
 			<div class="sidebar-head">
 				<a href="/dashboard" class="logo" aria-label="Run Onward">
-					<span class="logo-mark material-symbols" aria-hidden="true">directions_run</span>
+					<img src="/icon-192.png" alt="" class="logo-mark" />
 					<span class="logo-text">Run Onward</span>
 				</a>
 				<div class="sidebar-head-actions">
@@ -363,16 +363,13 @@
 	}
 
 	.logo-mark {
-		display: grid;
-		place-items: center;
 		width: 1.85rem;
 		height: 1.85rem;
 		border-radius: var(--radius-md);
-		background: var(--gradient-primary);
-		color: #FFFFFF;
-		font-size: 1.1rem;
 		flex-shrink: 0;
 		box-shadow: var(--shadow-sm);
+		object-fit: cover;
+		display: block;
 	}
 
 	.logo-text {

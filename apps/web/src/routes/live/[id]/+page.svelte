@@ -311,6 +311,7 @@
 <div class="live-page">
 	<header class="live-header">
 		<div class="live-logo">
+			<img src="/icon-192.png" alt="" class="live-logo-mark" />
 			Run Onward
 		</div>
 		<div
@@ -390,6 +391,13 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
+	}
+	.live-logo-mark {
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+		display: block;
+		object-fit: cover;
 	}
 
 	.live-badge {

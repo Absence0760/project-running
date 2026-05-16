@@ -60,6 +60,7 @@
 {:else}
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
+		<img src="/icon-192.png" alt="" class="landing-logo-mark" />
 		Run Onward
 	</a>
 	<div class="nav-links">
@@ -169,6 +170,14 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
+		text-decoration: none;
+	}
+	.landing-logo-mark {
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+		display: block;
+		object-fit: cover;
 	}
 
 	.nav-links {

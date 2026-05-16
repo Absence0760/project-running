@@ -51,7 +51,10 @@
 
 <div class="reset-page">
 	<div class="reset-card">
-		<a href="/" class="logo">Run Onward</a>
+		<a href="/" class="logo">
+			<img src="/icon-192.png" alt="" class="logo-mark" />
+			<span>Run Onward</span>
+		</a>
 		<h1>Set a new password</h1>
 
 		{#if !ready}
@@ -115,10 +118,21 @@
 		text-align: center;
 	}
 	.logo {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
 		font-weight: 700;
 		font-size: 1.25rem;
 		color: var(--color-primary);
 		text-decoration: none;
+	}
+	.logo .logo-mark {
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+		display: block;
+		box-shadow: var(--shadow-sm);
+		object-fit: cover;
 	}
 	h1 {
 		margin: 0;
