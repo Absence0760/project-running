@@ -8,6 +8,7 @@
 		retireGear,
 		unretireGear,
 		deleteGear,
+		setDefaultGear,
 		type GearKind,
 		type GearWithDistance,
 	} from '$lib/data';
@@ -112,6 +113,19 @@
 		}
 	}
 
+	async function handleToggleDefault(g: GearWithDistance) {
+		try {
+			// If this is already the default, clear it (no current gear).
+			// Otherwise mark it — setDefaultGear handles unsetting any
+			// sibling of the same kind first so the partial-unique index
+			// stays honoured.
+			await setDefaultGear(g.is_default ? null : g.id, g.kind);
+			gear = await fetchMyGear();
+		} catch (e) {
+			showToast(`Failed: ${(e as Error).message}`, 'error');
+		}
+	}
+
 	async function handleRetire(g: GearWithDistance) {
 		try {
 			if (g.retired_at) {
@@ -204,10 +218,13 @@
 			<ul class="gear-list">
 				{#each active as g (g.id)}
 					{@const prog = progressFor(g)}
-					<li class="gear-row">
+					<li class="gear-row" class:is-default={g.is_default}>
 						<button class="gear-main" onclick={() => openEdit(g)}>
 							<div class="gear-name">
 								<strong>{g.name}</strong>
+								{#if g.is_default}
+									<span class="default-pill" title="Auto-tagged on new runs">Current</span>
+								{/if}
 								{#if g.brand || g.model}
 									<span class="muted">{[g.brand, g.model].filter(Boolean).join(' ')}</span>
 								{/if}
@@ -223,6 +240,20 @@
 							</div>
 						</button>
 						<div class="gear-actions">
+							<button
+								type="button"
+								class="star-btn"
+								class:active={g.is_default}
+								aria-label={g.is_default
+									? `Unmark ${g.name} as current`
+									: `Mark ${g.name} as current — new runs will auto-tag with this gear`}
+								aria-pressed={g.is_default}
+								onclick={() => handleToggleDefault(g)}
+							>
+								<span class="material-symbols">
+									{g.is_default ? 'star' : 'star_outline'}
+								</span>
+							</button>
 							<button class="btn-outline btn-sm" onclick={() => handleRetire(g)}>
 								Retire
 							</button>
@@ -438,8 +469,51 @@
 	}
 	.gear-actions {
 		display: flex;
+		align-items: center;
 		gap: 0.4rem;
 		flex-shrink: 0;
+	}
+	.gear-row.is-default {
+		border-color: var(--color-primary);
+		box-shadow: inset 3px 0 0 var(--color-primary);
+	}
+	.default-pill {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.1rem 0.5rem;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+		border-radius: 999px;
+		margin-left: 0.5rem;
+	}
+	.star-btn {
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		color: var(--color-text-tertiary);
+		transition: color var(--transition-fast), background var(--transition-fast);
+	}
+	.star-btn:hover {
+		color: var(--color-primary);
+		background: var(--color-bg-tertiary);
+	}
+	.star-btn.active {
+		color: var(--color-primary);
+	}
+	.star-btn .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.3rem;
 	}
 	.section-title {
 		font-size: 0.85rem;

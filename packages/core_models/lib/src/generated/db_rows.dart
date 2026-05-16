@@ -641,6 +641,7 @@ class GearRow {
   static const String colNotes = 'notes';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colIsDefault = 'is_default';
 
   final String id;
   final String ownerId;
@@ -654,6 +655,7 @@ class GearRow {
   final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isDefault;
 
   const GearRow({
     required this.id,
@@ -668,6 +670,7 @@ class GearRow {
     this.notes,
     required this.createdAt,
     required this.updatedAt,
+    required this.isDefault,
   });
 
   factory GearRow.fromJson(Map<String, dynamic> json) => GearRow(
@@ -683,6 +686,7 @@ class GearRow {
     notes: json['notes'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    isDefault: json['is_default'] as bool,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -698,6 +702,7 @@ class GearRow {
     colNotes: notes,
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colIsDefault: isDefault,
   };
 }
 

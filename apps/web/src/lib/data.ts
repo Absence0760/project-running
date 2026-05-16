@@ -3289,6 +3289,7 @@ export interface Gear {
 	retired_at: string | null;
 	target_distance_m: number | null;
 	notes: string | null;
+	is_default: boolean;
 	created_at: string;
 	updated_at: string;
 }
@@ -3361,6 +3362,32 @@ export async function updateGear(
 ): Promise<void> {
 	const { error } = await supabase.from('gear').update(patch).eq('id', id);
 	if (error) throw error;
+}
+
+/// Mark this gear as the user's current default for its kind. Unsets
+/// any sibling (same owner + same kind) first so the partial-unique
+/// constraint `(owner_id, kind) where is_default and not retired`
+/// never trips. Pass null to clear the default for this kind entirely.
+export async function setDefaultGear(
+	gearId: string | null,
+	kind: GearKind,
+): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error: clearErr } = await supabase
+		.from('gear')
+		.update({ is_default: false })
+		.eq('owner_id', userId)
+		.eq('kind', kind)
+		.eq('is_default', true);
+	if (clearErr) throw clearErr;
+	if (gearId !== null) {
+		const { error: setErr } = await supabase
+			.from('gear')
+			.update({ is_default: true })
+			.eq('id', gearId);
+		if (setErr) throw setErr;
+	}
 }
 
 /// Stamp retired_at to today and clear nothing else — the row stays

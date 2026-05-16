@@ -104,6 +104,21 @@ SET is_starred = true
 WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
   AND name IN ('Richmond Park Loop', 'Thames Path 5K', 'Sunday Long Run');
 
+-- 3b. Gear. Two pairs of shoes — one current (default), one rotation.
+-- Inserted BEFORE the runs table so the auto-tag trigger
+-- (migration 20260901_001) stamps every shoe-eligible run with the
+-- current default at insert time. The "default" flag is what makes
+-- the gear chip appear on /runs/[id] without the user lifting a
+-- finger; the second pair shows up as an option in the per-run gear
+-- picker for runs where the user wore something different.
+INSERT INTO gear (id, owner_id, kind, name, brand, model, purchased_at, target_distance_m, is_default) VALUES
+  ('11111111-aaaa-bbbb-cccc-222222222201',
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'shoe', 'Pegasus 40', 'Nike', 'Pegasus 40', '2026-02-15', 800000, true),
+  ('11111111-aaaa-bbbb-cccc-222222222202',
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'shoe', 'Ghost 16', 'Brooks', 'Ghost 16', '2026-03-20', 700000, false);
+
 -- 4. Runs (spanning ~6 weeks of realistic training, anchored on 2026-04-26
 -- as "today"). Metadata carries activity_type + HR + perceived effort so
 -- the coach has signal to talk about effort drift, zone splits, and easy /

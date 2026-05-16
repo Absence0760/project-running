@@ -495,6 +495,7 @@ export type Database = {
           brand: string | null
           created_at: string
           id: string
+          is_default: boolean
           kind: string
           model: string | null
           name: string
@@ -509,6 +510,7 @@ export type Database = {
           brand?: string | null
           created_at?: string
           id?: string
+          is_default?: boolean
           kind: string
           model?: string | null
           name: string
@@ -523,6 +525,7 @@ export type Database = {
           brand?: string | null
           created_at?: string
           id?: string
+          is_default?: boolean
           kind?: string
           model?: string | null
           name?: string
@@ -1876,6 +1879,7 @@ export type Database = {
           brand: string | null
           created_at: string | null
           id: string | null
+          is_default: boolean | null
           kind: string | null
           model: string | null
           name: string | null

@@ -355,12 +355,19 @@ test.describe('/runs/[id]', () => {
 			.single();
 		if (gearErr || !gear) throw new Error(`gear plant failed: ${gearErr?.message}`);
 
+		// Strip the auto-tagged seed default so this test starts from
+		// a clean "no gear" state and asserts the manual tag flow
+		// specifically, not the auto-tag-on-insert flow (which has its
+		// own test).
+		await admin.from('run_gear').delete().eq('run_id', runId);
+
 		try {
 			await page.goto(`/runs/${runId}`);
 			await page.waitForLoadState('networkidle');
 
-			// Before tagging: only the "+ Tag gear" affordance is visible
-			// (no chip yet).
+			// Before tagging: only the "Edit" / "+ Tag gear" affordance
+			// is visible. (Label is "+ Tag gear" because we cleared the
+			// auto-tagged Pegasus row above.)
 			const gearStrip = page.locator('.gear-strip');
 			await expect(gearStrip).toBeVisible({ timeout: 10_000 });
 			await expect(gearStrip.locator('.gear-chip')).toHaveCount(0);
@@ -435,6 +442,55 @@ test.describe('/runs/[id]', () => {
 		} finally {
 			await admin.from('run_gear').delete().eq('run_id', runId);
 			await admin.from('gear').delete().eq('id', gear.id);
+			await deleteRun(runId);
+		}
+	});
+
+	test('current gear auto-tags newly-inserted runs — chip appears with no manual tagging', async ({
+		page
+	}) => {
+		// New "is_default" gear concept (migration 20260901_001):
+		// marking a piece of gear as the user's current default
+		// auto-tags every subsequently-inserted run of the matching
+		// activity kind (run/walk/hike → shoe, cycle → bike) via the
+		// auto_tag_default_gear trigger on runs.
+		//
+		// The seed marks the "Pegasus 40" shoe as the current default
+		// for USER_A. This test plants a new shoe-eligible run and
+		// asserts the chip renders without the user opening the
+		// gear picker. A regression in the trigger, the partial-unique
+		// index, or the data-layer chip read would fail here.
+		const admin = getAdminClient();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 6000,
+			duration_s: 2100,
+			source: 'app',
+			is_public: false
+			// activity_type defaults to 'run' in insertRun's metadata
+		});
+		try {
+			await page.goto(`/runs/${runId}`);
+			await page.waitForLoadState('networkidle');
+
+			// Chip is visible with the default shoe's name. NO manual
+			// picker interaction was performed.
+			const gearStrip = page.locator('.gear-strip');
+			await expect(
+				gearStrip.locator('.gear-chip', { hasText: 'Pegasus 40' })
+			).toBeVisible({ timeout: 10_000 });
+
+			// Backend mirrors it: a run_gear row was created by the trigger.
+			const { data } = await admin
+				.from('run_gear')
+				.select('gear_id, gear:gear_id(name)')
+				.eq('run_id', runId);
+			expect(data?.length ?? 0).toBe(1);
+			expect((data?.[0] as { gear: { name: string } } | undefined)?.gear?.name).toBe(
+				'Pegasus 40'
+			);
+		} finally {
+			await admin.from('run_gear').delete().eq('run_id', runId);
 			await deleteRun(runId);
 		}
 	});
