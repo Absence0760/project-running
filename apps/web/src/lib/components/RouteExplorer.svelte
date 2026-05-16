@@ -228,10 +228,43 @@
 	{/if}
 
 	{#if routes.length === 0 && !loading}
-		<div class="empty">
-			<span class="material-symbols empty-icon">explore</span>
-			<p>{query ? 'No routes match your search' : 'No public routes yet'}</p>
-			<p class="empty-sub">Routes shared from the route builder appear here</p>
+		<div class="empty-card">
+			<span class="material-symbols empty-icon" aria-hidden="true">explore</span>
+			<h3>{query ? 'No routes match your search' : 'No public routes here yet'}</h3>
+			<p class="empty-text">
+				{#if query}
+					Try a broader search term, switch the surface to "any", or widen
+					the distance bucket.
+				{:else if mode === 'nearby'}
+					No public routes within 50 km of you yet. Try Search and a city
+					name, or be the first to share one from the route builder.
+				{:else}
+					Routes shared from the route builder appear here. Build one and
+					flip it public to seed the map.
+				{/if}
+			</p>
+			<div class="empty-actions">
+				<a href="/routes/new" class="btn btn-primary">
+					<span class="material-symbols" aria-hidden="true">add</span>
+					Build a route
+				</a>
+				{#if query || selectedTags.size > 0 || distanceFilter !== 'any' || surfaceFilter !== 'any' || featuredOnly}
+					<button
+						type="button"
+						class="btn btn-outline"
+						onclick={() => {
+							query = '';
+							distanceFilter = 'any';
+							surfaceFilter = 'any';
+							selectedTags = new Set();
+							featuredOnly = false;
+							search();
+						}}
+					>
+						Clear filters
+					</button>
+				{/if}
+			</div>
 		</div>
 	{:else}
 		<div class="route-grid">
@@ -303,7 +336,18 @@
 	{/if}
 
 	{#if loading && routes.length === 0}
-		<p class="loading-text">Searching...</p>
+		<div class="route-grid" aria-hidden="true">
+			{#each Array(6) as _, i (i)}
+				<div class="skel-card">
+					<span class="skel skel-thumb"></span>
+					<div class="skel-card-body">
+						<span class="skel skel-line skel-w-60"></span>
+						<span class="skel skel-line skel-w-40"></span>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">Searching public routes…</p>
 	{/if}
 </div>
 
@@ -355,11 +399,6 @@
 		border-radius: var(--radius-md);
 		color: var(--color-text);
 		font-size: 0.85rem;
-	}
-
-	.subtitle {
-		color: var(--color-text-secondary);
-		font-size: 0.9rem;
 	}
 
 	.search-bar {
@@ -427,32 +466,108 @@
 		outline: none;
 	}
 
-	.empty {
+	.empty-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: var(--space-sm);
-		padding: var(--space-2xl);
-		color: var(--color-text-tertiary);
-	}
-
-	.empty-icon {
-		font-size: 3rem;
-	}
-
-	.empty-sub {
-		font-size: 0.85rem;
-	}
-
-	.loading-text {
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
 		text-align: center;
+	}
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.empty-icon {
+		font-size: 2.5rem;
 		color: var(--color-text-tertiary);
-		padding: var(--space-2xl);
+		opacity: 0.85;
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.empty-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+	.empty-actions .material-symbols {
+		font-size: 1.1rem;
+	}
+
+	/* Skeleton loader — same shimmer language as /routes + /runs.
+	   Card layout mirrors the real route-card so the grid stays at its
+	   true height through the data swap. */
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		pointer-events: none;
+	}
+	.skel-thumb {
+		display: block;
+		width: 100%;
+		height: 8rem;
+		border-radius: 0;
+	}
+	.skel-card-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		padding: var(--space-md) var(--space-lg);
+	}
+	.skel-line {
+		height: 0.75rem;
+	}
+	.skel-w-40 { width: 40%; }
+	.skel-w-60 { width: 60%; }
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.route-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
 		gap: var(--space-md);
 	}
 

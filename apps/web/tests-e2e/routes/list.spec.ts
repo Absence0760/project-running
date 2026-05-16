@@ -31,7 +31,7 @@ test.describe('/routes', () => {
 		const myCount = await page.locator('.route-card').count();
 
 		// My tab is the default; switch to Explore.
-		const exploreTab = page.getByRole('button', { name: /Explore/ });
+		const exploreTab = page.getByRole('tab', { name: 'Explore', exact: true });
 		await exploreTab.click();
 		await expect(exploreTab).toHaveClass(/active/);
 
@@ -41,11 +41,11 @@ test.describe('/routes', () => {
 		// flipped, that's the load-bearing assertion. Explore
 		// sometimes empty in this seed; don't pin a count.
 		await expect(
-			page.getByRole('button', { name: /My routes/ })
+			page.getByRole('tab', { name: 'My routes', exact: true })
 		).not.toHaveClass(/active/);
 
 		// Switch back so subsequent tests see My-routes default.
-		await page.getByRole('button', { name: /My routes/ }).click();
+		await page.getByRole('tab', { name: 'My routes', exact: true }).click();
 		await expect(page.locator('.route-card')).toHaveCount(myCount);
 	});
 
@@ -170,5 +170,64 @@ test.describe('/routes', () => {
 		});
 		await page.locator('select[aria-label="Sort"]').selectOption('newest');
 		await expect(page.locator('.route-card').first()).toBeVisible();
+	});
+
+	test('tab strip uses role="tab" with aria-selected (a11y contract)', async ({
+		page
+	}) => {
+		// The /routes tab strip used to render <button> elements with
+		// no ARIA role. Post-polish, they're proper role="tab" with
+		// aria-selected reflecting the active tab. Pin so a future
+		// regression that drops the role can't slip past — screen
+		// readers rely on this for navigation cue.
+		await page.goto('/routes');
+		const tabs = page.getByRole('tab');
+		await expect(tabs).toHaveCount(3, { timeout: 10_000 });
+
+		const my = page.getByRole('tab', { name: 'My routes', exact: true });
+		const explore = page.getByRole('tab', { name: 'Explore', exact: true });
+		const heatmap = page.getByRole('tab', { name: 'Heatmap', exact: true });
+
+		await expect(my).toHaveAttribute('aria-selected', 'true');
+		await expect(explore).toHaveAttribute('aria-selected', 'false');
+		await expect(heatmap).toHaveAttribute('aria-selected', 'false');
+
+		await explore.click();
+		await expect(explore).toHaveAttribute('aria-selected', 'true');
+		await expect(my).toHaveAttribute('aria-selected', 'false');
+	});
+
+	test('filters-too-narrow empty state is a card with icon + h3 + Clear-filters CTA', async ({
+		page
+	}) => {
+		// The polish round replaced the single-line grey "No routes
+		// match these filters" with a proper card empty state. Pin the
+		// shape so a regression that drops it back to one-line text
+		// fails here. Drive the empty state by combining a narrow
+		// distance filter with a surface that has no rows.
+		await page.goto('/routes');
+		await page.waitForLoadState('networkidle');
+		// Drive empty via a search string that won't match anything in
+		// the seed — simpler than coercing surface+distance to a void
+		// combo and survives seed evolution.
+		await page
+			.getByRole('textbox', { name: /Search routes/ })
+			.fill('zzzz_no_match_zzzz');
+
+		// Empty state is a card (icon + heading + explainer + CTA), not
+		// a bare paragraph.
+		await expect(
+			page.getByRole('heading', { name: /No routes match these filters/i })
+		).toBeVisible({ timeout: 10_000 });
+		// Clear-filters CTA resets the filter selection so the list
+		// re-populates. Scope to the empty-state card so we don't grab
+		// the search-box clear button.
+		const emptyCard = page
+			.getByRole('heading', { name: /No routes match these filters/i })
+			.locator('xpath=ancestor::*[1]');
+		await emptyCard.getByRole('button', { name: /Clear filters/i }).click();
+		await expect(page.locator('.route-card').first()).toBeVisible({
+			timeout: 10_000
+		});
 	});
 });

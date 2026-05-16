@@ -29,15 +29,15 @@ test.describe('/routes — Heatmap tab', () => {
 	test('Heatmap tab button is reachable from /routes', async ({ page }) => {
 		await page.goto('/routes');
 		await page.waitForLoadState('networkidle');
-		const heatmapTab = page.getByRole('button', { name: 'Heatmap', exact: true });
+		const heatmapTab = page.getByRole('tab', { name: 'Heatmap', exact: true });
 		await expect(heatmapTab).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('clicking Heatmap activates the tab (My routes deactivates)', async ({ page }) => {
 		await page.goto('/routes');
 		await page.waitForLoadState('networkidle');
-		const heatmapTab = page.getByRole('button', { name: 'Heatmap', exact: true });
-		const mineTab = page.getByRole('button', { name: 'My routes', exact: true });
+		const heatmapTab = page.getByRole('tab', { name: 'Heatmap', exact: true });
+		const mineTab = page.getByRole('tab', { name: 'My routes', exact: true });
 		// Default: My routes is active.
 		await expect(mineTab).toHaveClass(/active/);
 		await heatmapTab.click();
@@ -52,7 +52,7 @@ test.describe('/routes — Heatmap tab', () => {
 		await page.goto('/routes?tab=heatmap');
 		await page.waitForLoadState('networkidle');
 		await expect(
-			page.getByRole('button', { name: 'Heatmap', exact: true })
+			page.getByRole('tab', { name: 'Heatmap', exact: true })
 		).toHaveClass(/active/, { timeout: 10_000 });
 	});
 
@@ -108,17 +108,17 @@ test.describe('/routes — Heatmap tab', () => {
 	});
 
 	test('tab labels are mutually exclusive (only one .active at a time)', async ({ page }) => {
-		// Tab state machine: My routes / Explore routes / Heatmap. The
+		// Tab state machine: My routes / Explore / Heatmap. The
 		// .active CSS class drives the underline + colour. A regression
 		// in setTab that left two active simultaneously would visually
 		// confuse the page but not error — pin the count.
 		await page.goto('/routes');
 		await page.waitForLoadState('networkidle');
-		await page.getByRole('button', { name: 'Heatmap', exact: true }).click();
+		await page.getByRole('tab', { name: 'Heatmap', exact: true }).click();
 		await expect(page.locator('button.tab.active')).toHaveCount(1);
-		await page.getByRole('button', { name: 'Explore routes', exact: true }).click();
+		await page.getByRole('tab', { name: 'Explore', exact: true }).click();
 		await expect(page.locator('button.tab.active')).toHaveCount(1);
-		await page.getByRole('button', { name: 'My routes', exact: true }).click();
+		await page.getByRole('tab', { name: 'My routes', exact: true }).click();
 		await expect(page.locator('button.tab.active')).toHaveCount(1);
 	});
 });

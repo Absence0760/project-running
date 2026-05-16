@@ -48,10 +48,18 @@
 		}
 	});
 
+	/// Monotonic generation counter. Matches the /runs page pattern —
+	/// snapshot.restore bumps the gen so an in-flight load() kicked off
+	/// on mount discards its result instead of clobbering the captured
+	/// list on back-nav from a route-detail page.
+	let fetchGen = $state(0);
+
 	async function load() {
 		loading = true;
 		fetchError = null;
+		const gen = ++fetchGen;
 		const result = await fetchRoutesWithError();
+		if (gen !== fetchGen) return;
 		routes = result.routes;
 		fetchError = result.error;
 		loading = false;
@@ -71,22 +79,27 @@
 		const initial = $page.url.searchParams.get('tab');
 		if (initial === 'explore') tab = 'explore';
 		else if (initial === 'heatmap') tab = 'heatmap';
-		try {
-			const raw = localStorage.getItem(FILTERS_KEY);
-			if (raw) {
-				const saved = JSON.parse(raw);
-				if (typeof saved.search === 'string') search = saved.search;
-				if (saved.surfaceFilter) surfaceFilter = saved.surfaceFilter;
-				if (saved.distanceFilter) distanceFilter = saved.distanceFilter;
-				if (saved.sortKey) sortKey = saved.sortKey;
-				if (typeof saved.starredOnly === 'boolean') starredOnly = saved.starredOnly;
+		// Snapshot restore (SvelteKit back-nav) runs BEFORE onMount and
+		// will have already flipped filtersHydrated. Skip the localStorage
+		// read in that case — the snapshot is authoritative for this paint.
+		if (!filtersHydrated) {
+			try {
+				const raw = localStorage.getItem(FILTERS_KEY);
+				if (raw) {
+					const saved = JSON.parse(raw);
+					if (typeof saved.search === 'string') search = saved.search;
+					if (saved.surfaceFilter) surfaceFilter = saved.surfaceFilter;
+					if (saved.distanceFilter) distanceFilter = saved.distanceFilter;
+					if (saved.sortKey) sortKey = saved.sortKey;
+					if (typeof saved.starredOnly === 'boolean') starredOnly = saved.starredOnly;
+				}
+			} catch (_) {
+				/* leave defaults */
 			}
-		} catch (_) {
-			/* leave defaults */
+			filtersHydrated = true;
 		}
-		filtersHydrated = true;
-		// Skip the fetch when snapshot already restored a list — see
-		// the snapshot block below.
+		// Snapshot restore populates `routes` synchronously and flips
+		// loading=false — only fetch when neither happened.
 		if (routes.length === 0 && loading) load();
 	});
 
@@ -174,12 +187,47 @@
 		}
 	}
 
-	export const snapshot: Snapshot<{ routes: Route[]; tab: 'mine' | 'explore' | 'heatmap' }> = {
-		capture: () => ({ routes, tab }),
+	export const snapshot: Snapshot<{
+		routes: Route[];
+		tab: 'mine' | 'explore' | 'heatmap';
+		search: string;
+		surfaceFilter: SurfaceFilter;
+		distanceFilter: DistanceBucket;
+		sortKey: SortKey;
+		starredOnly: boolean;
+		scrollY: number;
+	}> = {
+		capture: () => ({
+			routes,
+			tab,
+			search,
+			surfaceFilter,
+			distanceFilter,
+			sortKey,
+			starredOnly,
+			scrollY: typeof window === 'undefined' ? 0 : window.scrollY,
+		}),
 		restore: (s) => {
+			// Invalidate any in-flight load() the mount-time path may have
+			// already kicked off so it doesn't overwrite the captured list.
+			fetchGen++;
 			routes = s.routes;
 			tab = s.tab;
+			search = s.search;
+			surfaceFilter = s.surfaceFilter;
+			distanceFilter = s.distanceFilter;
+			sortKey = s.sortKey;
+			starredOnly = s.starredOnly;
+			filtersHydrated = true;
 			loading = false;
+			// SvelteKit's auto scroll-restoration runs before the list has
+			// rendered, so the page is too short and scroll falls back to
+			// 0. Re-apply the captured scrollY after the DOM updates.
+			if (typeof window !== 'undefined' && s.scrollY > 0) {
+				queueMicrotask(() => {
+					requestAnimationFrame(() => window.scrollTo(0, s.scrollY));
+				});
+			}
 		},
 	};
 </script>
@@ -194,26 +242,32 @@
 
 <div class="page">
 	<header class="page-header">
-		<div class="header-actions">
-			{#if tab === 'mine'}
-				<button class="btn btn-outline" onclick={() => (showImport = true)}>
-					<span class="material-symbols">upload_file</span>
-					Import
-				</button>
-				<a href="/routes/new" class="btn btn-primary">
-					<span class="material-symbols">add</span>
-					New Route
-				</a>
-			{/if}
-		</div>
-		<div class="tabs">
-			<button class="tab" class:active={tab === 'mine'} onclick={() => setTab('mine')}>
+		<div class="tabs" role="tablist" aria-label="Routes section">
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'mine'}
+				aria-selected={tab === 'mine'}
+				onclick={() => setTab('mine')}
+			>
 				My routes
 			</button>
-			<button class="tab" class:active={tab === 'explore'} onclick={() => setTab('explore')}>
-				Explore routes
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'explore'}
+				aria-selected={tab === 'explore'}
+				onclick={() => setTab('explore')}
+			>
+				Explore
 			</button>
-			<button class="tab" class:active={tab === 'heatmap'} onclick={() => setTab('heatmap')}>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'heatmap'}
+				aria-selected={tab === 'heatmap'}
+				onclick={() => setTab('heatmap')}
+			>
 				Heatmap
 			</button>
 		</div>
@@ -221,10 +275,27 @@
 
 	{#if tab === 'mine'}
 		{#if loading}
-			<p class="loading">&nbsp;</p>
+			<div class="filter-row filter-row-skel" aria-hidden="true">
+				<span class="skel skel-search"></span>
+				<span class="skel skel-pill"></span>
+				<span class="skel skel-pill"></span>
+				<span class="skel skel-pill"></span>
+			</div>
+			<div class="route-grid" aria-hidden="true">
+				{#each Array(6) as _, i (i)}
+					<div class="skel-card">
+						<span class="skel skel-thumb"></span>
+						<div class="skel-card-body">
+							<span class="skel skel-line skel-w-60"></span>
+							<span class="skel skel-line skel-w-40"></span>
+						</div>
+					</div>
+				{/each}
+			</div>
+			<p class="sr-only" role="status">Loading your routes…</p>
 		{:else if fetchError}
-			<div class="error-banner">
-				<span class="material-symbols">error</span>
+			<div class="error-banner" role="alert">
+				<span class="material-symbols" aria-hidden="true">error</span>
 				<div>
 					<strong>Couldn't load your routes.</strong>
 					<span class="error-detail">{fetchError}</span>
@@ -232,15 +303,42 @@
 				<button class="btn btn-outline" onclick={load}>Retry</button>
 			</div>
 		{:else if routes.length === 0}
-			<div class="empty">
-				<span class="material-symbols empty-icon">route</span>
-				<p>No routes yet. Create your first route!</p>
-				<a href="/routes/new" class="btn btn-primary">New Route</a>
+			<div class="empty-card">
+				<span class="material-symbols empty-icon" aria-hidden="true">route</span>
+				<h3>No saved routes yet</h3>
+				<p class="empty-text">
+					Build a route on the map, import one from a GPX/TCX file, or save
+					one from a recorded run. Starred routes appear on your paired Wear OS
+					watch.
+				</p>
+				<div class="empty-actions">
+					<a href="/routes/new" class="btn btn-primary">
+						<span class="material-symbols" aria-hidden="true">add</span>
+						Build a route
+					</a>
+					<button class="btn btn-outline" type="button" onclick={() => (showImport = true)}>
+						<span class="material-symbols" aria-hidden="true">upload_file</span>
+						Import file
+					</button>
+					<button
+						class="btn btn-outline"
+						type="button"
+						onclick={() => setTab('explore')}
+					>
+						<span class="material-symbols" aria-hidden="true">explore</span>
+						Browse community routes
+					</button>
+				</div>
 			</div>
 		{:else}
-			<div class="filter-toolbar">
+			<!-- Single-rail toolbar: search grows to fill, selects + chips +
+			     meta share the same row so the toolbar never burns more than
+			     one horizontal line on a wide viewport. Matches the
+			     filter-row + space-between pattern used by /dashboard and
+			     /runs. -->
+			<div class="filter-row">
 				<div class="search-wrap">
-					<span class="material-symbols">search</span>
+					<span class="material-symbols" aria-hidden="true">search</span>
 					<input
 						type="text"
 						class="search-input"
@@ -255,7 +353,7 @@
 							aria-label="Clear search"
 							onclick={() => (search = '')}
 						>
-							<span class="material-symbols">close</span>
+							<span class="material-symbols" aria-hidden="true">close</span>
 						</button>
 					{/if}
 				</div>
@@ -286,70 +384,97 @@
 						class:active={starredOnly}
 						onclick={() => (starredOnly = !starredOnly)}
 						aria-pressed={starredOnly}
-						aria-label="Show starred only"
+						aria-label={starredOnly ? 'Show all routes' : 'Show starred routes only'}
+						title="Starred routes sync to your paired watch"
 					>
-						<span class="material-symbols">star</span>
+						<span class="material-symbols" aria-hidden="true">star</span>
 						Starred
 					</button>
 				</div>
-				<div class="filter-meta">
-					<span>
-						{filteredRoutes.length} of {routes.length}
-						{routes.length === 1 ? 'route' : 'routes'}
-					</span>
-					{#if filtersActive}
-						<button type="button" class="link-btn" onclick={clearFilters}>Clear filters</button>
-					{/if}
+				<div class="toolbar-actions">
+					<button class="btn btn-outline btn-sm" type="button" onclick={() => (showImport = true)}>
+						<span class="material-symbols" aria-hidden="true">upload_file</span>
+						Import
+					</button>
+					<a href="/routes/new" class="btn btn-primary btn-sm">
+						<span class="material-symbols" aria-hidden="true">add</span>
+						New route
+					</a>
 				</div>
 			</div>
+
+			<div class="filter-meta">
+				<span>
+					{filteredRoutes.length} of {routes.length}
+					{routes.length === 1 ? 'route' : 'routes'}
+					{#if filtersActive}<span class="meta-sep"> · </span>filtered{/if}
+				</span>
+				{#if filtersActive}
+					<button type="button" class="link-btn" onclick={clearFilters}>Clear filters</button>
+				{/if}
+			</div>
+
 			{#if filteredRoutes.length === 0}
-				<div class="empty">
-					<span class="material-symbols empty-icon">filter_alt_off</span>
-					<p>No routes match these filters.</p>
-					<button type="button" class="btn btn-outline" onclick={clearFilters}>Clear filters</button>
+				<div class="empty-card">
+					<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
+					<h3>No routes match these filters</h3>
+					<p class="empty-text">
+						Try widening the surface or distance bucket, clear the search
+						box, or turn off the starred-only filter.
+					</p>
+					<div class="empty-actions">
+						<button type="button" class="btn btn-primary" onclick={clearFilters}>
+							Clear filters
+						</button>
+					</div>
 				</div>
 			{:else}
-			<div class="route-grid">
-				{#each filteredRoutes as route (route.id)}
-					<a href="/routes/{route.id}" class="route-card">
-						<div class="route-map-placeholder">
-							{#if route.waypoints && route.waypoints.length > 1}
-								<RouteTrackPreview
-									routeId={route.id}
-									waypoints={route.waypoints}
-									ownerUserId={route.user_id}
-								/>
-							{:else}
-								<span class="material-symbols">route</span>
-							{/if}
-							{#if auth.user?.id === route.user_id}
-								<button
-									type="button"
-									class="star-btn"
-									class:starred={route.is_starred}
-									title={route.is_starred ? 'Unstar route' : 'Star route (shows on watch)'}
-									aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
-									onclick={(e) => toggleStar(e, route.id)}
-								>
-									<span class="material-symbols">star</span>
-								</button>
-							{/if}
-						</div>
-						<div class="route-info">
-							<h3>{route.name}</h3>
-							<div class="route-meta">
-								<span>{formatDistance(route.distance_m)}</span>
-								{#if route.elevation_m}
-									<span class="meta-sep">&middot;</span>
-									<span>{route.elevation_m} m elev</span>
+				<div class="route-grid">
+					{#each filteredRoutes as route (route.id)}
+						<a href="/routes/{route.id}" class="route-card">
+							<div class="route-map-placeholder">
+								{#if route.waypoints && route.waypoints.length > 1}
+									<RouteTrackPreview
+										routeId={route.id}
+										waypoints={route.waypoints}
+										ownerUserId={route.user_id}
+									/>
+								{:else}
+									<span class="material-symbols" aria-hidden="true">route</span>
 								{/if}
-								<span class="meta-sep">&middot;</span>
-								<span class="surface-tag">{route.surface}</span>
+								{#if auth.user?.id === route.user_id}
+									<button
+										type="button"
+										class="star-btn"
+										class:starred={route.is_starred}
+										title={route.is_starred
+											? 'Unstar route (removes from watch)'
+											: 'Star route (shows on watch)'}
+										aria-label={route.is_starred
+											? `Unstar ${route.name ?? 'route'}`
+											: `Star ${route.name ?? 'route'} — shows on paired watch`}
+										aria-pressed={route.is_starred}
+										onclick={(e) => toggleStar(e, route.id)}
+									>
+										<span class="material-symbols" aria-hidden="true">star</span>
+									</button>
+								{/if}
 							</div>
-						</div>
-					</a>
-				{/each}
-			</div>
+							<div class="route-info">
+								<h3>{route.name}</h3>
+								<div class="route-meta">
+									<span>{formatDistance(route.distance_m)}</span>
+									{#if route.elevation_m}
+										<span class="meta-sep">&middot;</span>
+										<span>{route.elevation_m} m elev</span>
+									{/if}
+									<span class="meta-sep">&middot;</span>
+									<span class="surface-tag">{route.surface}</span>
+								</div>
+							</div>
+						</a>
+					{/each}
+				</div>
 			{/if}
 		{/if}
 	{:else if tab === 'explore'}
@@ -361,25 +486,11 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
 	.page-header {
 		margin-bottom: var(--space-xl);
-	}
-
-	h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-	}
-
-	.header-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
-		flex-wrap: wrap;
-		min-height: 2.5rem;
-		margin-bottom: var(--space-md);
 	}
 
 	.tabs {
@@ -400,15 +511,13 @@
 		font-weight: 500;
 	}
 
+	.tab:hover {
+		color: var(--color-text);
+	}
+
 	.tab.active {
 		color: var(--color-primary);
 		border-bottom-color: var(--color-primary);
-	}
-
-	.loading {
-		text-align: center;
-		color: var(--color-text-tertiary);
-		padding: var(--space-2xl);
 	}
 
 	.error-banner {
@@ -437,22 +546,51 @@
 		font-size: 1.4rem;
 	}
 
-	.empty {
+	/* Empty-state card — same shape as /runs, /plans, /dashboard. Card
+	   with icon, h3, explainer, primary CTA + secondary actions. */
+	.empty-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-md);
-		padding: var(--space-2xl);
-		color: var(--color-text-tertiary);
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-align: center;
 	}
-
+	.empty-card h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
 	.empty-icon {
-		font-size: 3rem;
+		font-size: 2.5rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.85;
+	}
+	.empty-text {
+		max-width: 36rem;
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.empty-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+	.empty-actions .material-symbols {
+		font-size: 1.1rem;
 	}
 
 	.route-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
 		gap: var(--space-md);
 	}
 
@@ -461,7 +599,9 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
-		transition: all var(--transition-fast);
+		transition:
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast);
 		text-decoration: none;
 		color: inherit;
 	}
@@ -473,7 +613,7 @@
 
 	.route-map-placeholder {
 		position: relative;
-		height: 8rem;
+		height: 9rem;
 		background: linear-gradient(
 			135deg,
 			color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-tertiary)),
@@ -512,6 +652,11 @@
 		transform: scale(1.05);
 	}
 
+	.star-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+
 	.star-btn.starred {
 		background: rgba(0, 0, 0, 0.65);
 		color: #fbbf24;
@@ -527,7 +672,7 @@
 		font-variation-settings: 'FILL' 1;
 	}
 
-	.route-map-placeholder .material-symbols {
+	.route-map-placeholder > .material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 2rem;
 		color: var(--color-text-tertiary);
@@ -563,16 +708,23 @@
 		font-family: 'Material Symbols Outlined';
 	}
 
-	.filter-toolbar {
+	/* Single-rail filter toolbar — mirrors /dashboard's .filter-row.
+	   Search grows to fill, the select group + action group sit on the
+	   right edge of the same row. Flex-wrap means we collapse to two
+	   rails only when the viewport is too narrow to host all three. */
+	.filter-row {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-		margin-bottom: var(--space-lg);
+		align-items: center;
+		gap: var(--space-sm) var(--space-md);
+		margin-bottom: var(--space-sm);
+		flex-wrap: wrap;
 	}
 	.search-wrap {
 		position: relative;
 		display: flex;
 		align-items: center;
+		flex: 1 1 18rem;
+		min-width: 12rem;
 	}
 	.search-wrap > .material-symbols:first-child {
 		position: absolute;
@@ -618,18 +770,31 @@
 		font-size: 1rem;
 	}
 	.select-group {
-		display: flex;
+		display: inline-flex;
 		gap: 0.5rem;
 		flex-wrap: wrap;
 	}
 	.toolbar-select {
-		padding: 0.4rem 0.6rem;
+		padding: 0.4rem calc(var(--space-md) + var(--space-md)) 0.4rem 0.6rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
 		color: var(--color-text);
 		font-size: 0.85rem;
 		cursor: pointer;
+		appearance: none;
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+		background-repeat: no-repeat;
+		background-position: right 0.6rem center;
+		background-size: 0.75rem;
+		transition: border-color var(--transition-fast);
+	}
+	.toolbar-select:hover {
+		border-color: var(--color-primary);
+	}
+	.toolbar-select:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 	}
 	.starred-toggle {
 		display: inline-flex;
@@ -644,6 +809,9 @@
 		font-weight: 500;
 		cursor: pointer;
 	}
+	.starred-toggle:hover {
+		border-color: var(--color-primary);
+	}
 	.starred-toggle .material-symbols {
 		font-size: 1rem;
 		font-variation-settings: 'FILL' 0;
@@ -657,11 +825,26 @@
 		font-variation-settings: 'FILL' 1;
 		color: #f59e0b;
 	}
+	.toolbar-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-left: auto;
+	}
+	.toolbar-actions .btn {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs);
+	}
+	.toolbar-actions .material-symbols {
+		font-size: 1.05rem;
+	}
 	.filter-meta {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-md);
+		margin-bottom: var(--space-lg);
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
 	}
@@ -673,5 +856,113 @@
 		font-weight: 600;
 		cursor: pointer;
 		padding: 0.2rem 0.3rem;
+	}
+	.link-btn:hover {
+		color: var(--color-primary-hover);
+	}
+
+	/* Skeleton — same shimmer language as /runs + /dashboard. Mirrors
+	   the real card layout so the page lands at its true height
+	   immediately and the data swap doesn't shift the grid. */
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-search {
+		flex: 1 1 18rem;
+		min-width: 12rem;
+		height: 2.25rem;
+		border-radius: var(--radius-md);
+	}
+	.skel-pill {
+		width: 7rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+	}
+	.skel-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		pointer-events: none;
+	}
+	.skel-thumb {
+		display: block;
+		width: 100%;
+		height: 9rem;
+		border-radius: 0;
+	}
+	.skel-card-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		padding: var(--space-md) var(--space-lg);
+	}
+	.skel-line {
+		height: 0.75rem;
+	}
+	.skel-w-40 { width: 40%; }
+	.skel-w-60 { width: 60%; }
+	.filter-row-skel {
+		gap: var(--space-sm);
+	}
+	@keyframes skel-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* <=50rem (small tablet / large phone). Collapse the right-edge
+	   action group to its own row so the toolbar reads as two clean
+	   rails rather than three crammed ones. */
+	@media (max-width: 50rem) {
+		.toolbar-actions {
+			margin-left: 0;
+			width: 100%;
+			justify-content: flex-end;
+		}
+		.search-wrap {
+			flex-basis: 100%;
+		}
+	}
+
+	/* <=30rem (phone). Single column for the toolbar — search, then
+	   selects stretched to fill, then actions. */
+	@media (max-width: 30rem) {
+		.select-group {
+			width: 100%;
+		}
+		.select-group .toolbar-select,
+		.select-group .starred-toggle {
+			flex: 1 1 0;
+			min-width: 0;
+		}
+		.toolbar-actions .btn {
+			flex: 1 1 0;
+			justify-content: center;
+		}
 	}
 </style>
