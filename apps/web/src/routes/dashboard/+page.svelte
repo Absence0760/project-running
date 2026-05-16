@@ -261,6 +261,84 @@
 		thisWeekManualWorkouts.reduce((sum, w) => sum + (w.target_distance_m ?? 0), 0)
 	);
 
+	/// Calendar-position helpers for the active-plan hero card. Match
+	/// the shape of the corresponding helpers on /plans/+page.svelte so
+	/// the two surfaces line up (week index, calendar percentage, time
+	/// relation). Inlined here rather than lifted to $lib so the only
+	/// other caller — the plan list — keeps owning its own copy until a
+	/// third surface needs them.
+	const GOAL_EVENT_LABEL: Record<string, string> = {
+		distance_5k: '5K',
+		distance_10k: '10K',
+		distance_half: 'Half marathon',
+		distance_full: 'Marathon',
+		custom: 'Custom',
+	};
+	function planMidnight(iso: string): Date {
+		const [y, m, d] = iso.split('-').map(Number);
+		return new Date(y, (m ?? 1) - 1, d ?? 1);
+	}
+	const todayMidnight = $derived.by(() => {
+		const t = new Date();
+		t.setHours(0, 0, 0, 0);
+		return t;
+	});
+	let planPosition = $derived.by(() => {
+		const overview = planOverview;
+		if (!overview) return null;
+		const start = planMidnight(overview.plan.start_date);
+		const end = planMidnight(overview.plan.end_date);
+		const startMs = start.getTime();
+		const endMs = end.getTime();
+		const todayMs = todayMidnight.getTime();
+		const dayMs = 86_400_000;
+		const totalDays = Math.max(1, Math.round((endMs - startMs) / dayMs) + 1);
+		const totalWeeks = Math.max(1, Math.ceil(totalDays / 7));
+		let weekIndex: number;
+		if (todayMs < startMs) weekIndex = 1;
+		else weekIndex = Math.min(totalWeeks, Math.floor((todayMs - startMs) / (7 * dayMs)) + 1);
+		let calendarPct: number;
+		if (todayMs <= startMs) calendarPct = 0;
+		else if (todayMs >= endMs) calendarPct = 100;
+		else calendarPct = Math.round(((todayMs - startMs) / (endMs - startMs)) * 100);
+		let relation: string;
+		let raceState: 'upcoming' | 'today' | 'past';
+		if (todayMs < startMs) {
+			const d = Math.round((startMs - todayMs) / dayMs);
+			relation = d === 1 ? 'Starts tomorrow' : `Starts in ${d} days`;
+			raceState = 'upcoming';
+		} else if (todayMs > endMs) {
+			relation = 'Race day past';
+			raceState = 'past';
+		} else {
+			const d = Math.round((endMs - todayMs) / dayMs);
+			if (d === 0) {
+				relation = 'Race day';
+				raceState = 'today';
+			} else if (d === 1) {
+				relation = 'Race tomorrow';
+				raceState = 'upcoming';
+			} else {
+				relation = `Race in ${d} days`;
+				raceState = 'upcoming';
+			}
+		}
+		return { weekIndex, totalWeeks, calendarPct, relation, raceState };
+	});
+
+	function fmtHms(seconds: number): string {
+		const h = Math.floor(seconds / 3600);
+		const m = Math.floor((seconds % 3600) / 60);
+		const s = seconds % 60;
+		if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+		return `${m}:${String(s).padStart(2, '0')}`;
+	}
+
+	function fmtRaceDate(iso: string): string {
+		const d = planMidnight(iso);
+		return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+	}
+
 	/// Combined distance + activity count for the "This Week" card.
 	/// Distance includes manually-completed workouts' target distance;
 	/// the count includes them too so "X runs / workouts" reflects
@@ -331,38 +409,129 @@
 		<div class="skeleton-block skeleton-block-tall"></div>
 		<div class="skeleton-block"></div>
 	{:else}
-		{#if planOverview?.todayWorkout}
+		{#if planOverview && planPosition}
 			{@const t = planOverview.todayWorkout}
-			<button
-				class="today-card"
-				class:done={t.manually_completed === true || t.completed_run_id != null}
-				type="button"
-				onclick={() => (editingWorkout = t)}
-			>
-				<div class="today-left">
-					<span class="today-label">TODAY'S WORKOUT</span>
-					<h2>
-						{WORKOUT_KIND_LABEL[t.kind as keyof typeof WORKOUT_KIND_LABEL] ?? t.kind}
-					</h2>
-					<div class="today-meta">
-						{#if t.target_distance_m != null}
-							<span>{fmtKm(t.target_distance_m)}</span>
-						{/if}
-						{#if t.target_pace_sec_per_km}
-							<span>@ {fmtPace(t.target_pace_sec_per_km)}</span>
-						{/if}
+			{@const todayDone = t != null && (t.manually_completed === true || t.completed_run_id != null)}
+			<section class="plan-hero" class:race-today={planPosition.raceState === 'today'}>
+				<header class="plan-hero-head">
+					<div class="plan-hero-ident">
+						<span class="plan-hero-label">Training plan</span>
+						<h2 class="plan-hero-name">{planOverview.plan.name}</h2>
+						<div class="plan-hero-goal">
+							<span>
+								<span class="material-symbols">flag</span>
+								{GOAL_EVENT_LABEL[planOverview.plan.goal_event] ?? 'Custom'}
+							</span>
+							{#if planOverview.plan.goal_time_seconds}
+								<span>
+									<span class="material-symbols">timer</span>
+									{fmtHms(planOverview.plan.goal_time_seconds)}
+								</span>
+							{/if}
+							<span>
+								<span class="material-symbols">event</span>
+								{fmtRaceDate(planOverview.plan.end_date)}
+							</span>
+						</div>
 					</div>
+					<div class="plan-hero-position">
+						<span class="plan-hero-week">
+							Week {planPosition.weekIndex} <em>of {planPosition.totalWeeks}</em>
+						</span>
+						<span
+							class="plan-hero-relation"
+							class:race-today={planPosition.raceState === 'today'}
+							class:race-past={planPosition.raceState === 'past'}
+						>
+							{planPosition.relation}
+						</span>
+					</div>
+				</header>
+
+				<div class="plan-hero-progress">
+					<div
+						class="plan-hero-progress-bar"
+						role="progressbar"
+						aria-valuemin="0"
+						aria-valuemax="100"
+						aria-valuenow={planPosition.calendarPct}
+						aria-label="Calendar progress through plan"
+					>
+						<span
+							class="plan-hero-progress-fill"
+							style="width: {planPosition.calendarPct}%"
+						></span>
+					</div>
+					<span class="plan-hero-progress-meta">
+						{planPosition.calendarPct}% of calendar
+						<span class="plan-hero-progress-sep">·</span>
+						{planOverview.completionPct}% of workouts
+					</span>
 				</div>
-				<div class="today-right">
-					{#if t.manually_completed === true || t.completed_run_id != null}
-						<span class="material-symbols done-icon">check_circle</span>
+
+				<div class="plan-hero-today">
+					{#if t}
+						<button
+							type="button"
+							class="plan-hero-today-btn"
+							class:done={todayDone}
+							onclick={() => (editingWorkout = t)}
+						>
+							<div class="plan-hero-today-icon">
+								{#if todayDone}
+									<span class="material-symbols done-icon">check_circle</span>
+								{:else if t.kind === 'rest'}
+									<span class="material-symbols">self_improvement</span>
+								{:else}
+									<span class="material-symbols">directions_run</span>
+								{/if}
+							</div>
+							<div class="plan-hero-today-body">
+								<span class="plan-hero-today-label">Today</span>
+								<span class="plan-hero-today-kind">
+									{WORKOUT_KIND_LABEL[t.kind as keyof typeof WORKOUT_KIND_LABEL] ?? t.kind}
+								</span>
+								<div class="plan-hero-today-meta">
+									{#if t.target_distance_m != null}
+										<span>{fmtKm(t.target_distance_m)}</span>
+									{/if}
+									{#if t.target_pace_sec_per_km}
+										<span>@ {fmtPace(t.target_pace_sec_per_km)}</span>
+									{/if}
+									{#if todayDone}
+										<span class="plan-hero-today-done">Completed</span>
+									{/if}
+								</div>
+							</div>
+							<span class="material-symbols plan-hero-today-arrow">chevron_right</span>
+						</button>
 					{:else}
-						<span class="material-symbols">chevron_right</span>
+						<div class="plan-hero-today-btn plan-hero-today-rest">
+							<div class="plan-hero-today-icon">
+								<span class="material-symbols">self_improvement</span>
+							</div>
+							<div class="plan-hero-today-body">
+								<span class="plan-hero-today-label">Today</span>
+								<span class="plan-hero-today-kind">Rest day</span>
+								<span class="plan-hero-today-meta-quiet">
+									No workout scheduled — recover and roll into tomorrow.
+								</span>
+							</div>
+						</div>
 					{/if}
-					<span class="plan-name">{planOverview.plan.name}</span>
-					<span class="plan-progress">{planOverview.completionPct}% done</span>
 				</div>
-			</button>
+
+				<footer class="plan-hero-actions">
+					<a class="btn btn-primary btn-sm plan-hero-cta" href="/plans/{planOverview.plan.id}">
+						<span class="material-symbols">calendar_month</span>
+						View full plan
+					</a>
+					<a class="plan-hero-manage" href="/plans">
+						Manage plans
+						<span class="material-symbols">chevron_right</span>
+					</a>
+				</footer>
+			</section>
 		{:else if !planOverview}
 			<a class="plan-promo" href="/plans?new=1">
 				<div>
@@ -372,18 +541,6 @@
 				</div>
 				<span class="material-symbols">chevron_right</span>
 			</a>
-		{/if}
-
-		{#if planOverview}
-			<div class="plan-secondary">
-				<a class="plan-secondary-link" href="/plans/{planOverview.plan.id}">
-					Full plan
-					<span class="material-symbols">chevron_right</span>
-				</a>
-				<a class="plan-secondary-link plan-secondary-quiet" href="/plans">
-					Manage plans
-				</a>
-			</div>
 		{/if}
 
 		<!-- Upcoming RSVP'd event within 48h — promotes to the top of
@@ -1054,12 +1211,14 @@
 		box-shadow: var(--shadow-sm);
 	}
 
-	/* Hero: today's-workout card. Promoted to the loudest surface on
-	   the page — gradient + larger type + a primary-tinted accent. */
-	.today-card {
+	/* Active-plan hero. Single rich card: identity row, calendar
+	   position + progress bar, embedded today's-workout panel, primary
+	   CTA to the plan detail, secondary "Manage plans" link. Replaces
+	   the old standalone today-card + footnote links so the user reads
+	   the plan as one surface, not three loose fragments. */
+	.plan-hero {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
+		flex-direction: column;
 		gap: var(--space-md);
 		padding: var(--space-lg) var(--space-xl);
 		background: linear-gradient(
@@ -1069,23 +1228,239 @@
 		);
 		border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-sm);
+		transition: box-shadow var(--transition-base), border-color var(--transition-base);
+	}
+	.plan-hero.race-today {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md), var(--shadow-glow, 0 0 0 0 transparent);
+	}
+	.plan-hero-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: var(--space-lg);
+		flex-wrap: wrap;
+	}
+	.plan-hero-ident {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+	.plan-hero-label {
+		font-size: var(--font-size-section-label);
+		letter-spacing: 0.1em;
+		color: var(--color-primary);
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+	.plan-hero-name {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--color-text);
+		line-height: 1.15;
+	}
+	.plan-hero-goal {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-md);
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+		margin-top: var(--space-xs);
+		font-variant-numeric: tabular-nums;
+	}
+	.plan-hero-goal > span {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+	}
+	.plan-hero-goal :global(.material-symbols) {
+		font-size: 1.1rem;
+		color: var(--color-text-tertiary);
+	}
+	.plan-hero-position {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: var(--space-2xs);
+		text-align: right;
+		flex-shrink: 0;
+	}
+	.plan-hero-week {
+		font-size: 1.05rem;
+		font-weight: 700;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.plan-hero-week em {
+		font-style: normal;
+		font-weight: 500;
+		color: var(--color-text-tertiary);
+	}
+	.plan-hero-relation {
+		display: inline-flex;
+		align-items: center;
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: 9999px;
+		background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+		color: var(--color-primary);
+		font-size: 0.8rem;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+	}
+	.plan-hero-relation.race-today {
+		background: var(--color-primary);
+		color: var(--color-surface);
+	}
+	.plan-hero-relation.race-past {
+		background: color-mix(in srgb, var(--color-text-tertiary) 18%, transparent);
+		color: var(--color-text-tertiary);
+	}
+
+	.plan-hero-progress {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.plan-hero-progress-bar {
+		height: 0.5rem;
+		background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-tertiary, var(--color-bg-secondary)));
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+	.plan-hero-progress-fill {
+		display: block;
+		height: 100%;
+		background: linear-gradient(90deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, var(--color-accent-orange, var(--color-primary))));
+		border-radius: inherit;
+		transition: width var(--transition-base);
+	}
+	.plan-hero-progress-meta {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+		display: inline-flex;
+		gap: var(--space-2xs);
+		align-items: center;
+	}
+	.plan-hero-progress-sep { color: var(--color-text-tertiary); opacity: 0.7; }
+
+	.plan-hero-today {
+		display: block;
+	}
+	.plan-hero-today-btn {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		width: 100%;
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
 		color: inherit;
 		font: inherit;
 		text-align: left;
-		width: 100%;
 		cursor: pointer;
-		box-shadow: var(--shadow-sm);
-		transition:
-			transform var(--transition-base),
-			box-shadow var(--transition-base),
-			border-color var(--transition-base);
+		transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
 	}
-	.today-card:hover {
+	button.plan-hero-today-btn:hover {
 		transform: translateY(-1px);
-		box-shadow: var(--shadow-md);
+		box-shadow: var(--shadow-sm);
 		border-color: var(--color-primary);
 	}
-	.today-card.done { opacity: 0.78; }
+	.plan-hero-today-btn.done { opacity: 0.85; }
+	.plan-hero-today-rest {
+		cursor: default;
+		background: color-mix(in srgb, var(--color-text-tertiary) 4%, var(--color-surface));
+	}
+	.plan-hero-today-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+		color: var(--color-primary);
+		flex-shrink: 0;
+	}
+	.plan-hero-today-icon :global(.material-symbols) { font-size: 1.5rem; }
+	.plan-hero-today-rest .plan-hero-today-icon {
+		background: color-mix(in srgb, var(--color-text-tertiary) 14%, transparent);
+		color: var(--color-text-tertiary);
+	}
+	.plan-hero-today-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.plan-hero-today-label {
+		font-size: var(--font-size-section-label);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+	}
+	.plan-hero-today-kind {
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: var(--color-text);
+		line-height: 1.2;
+	}
+	.plan-hero-today-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.plan-hero-today-meta-quiet {
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+	}
+	.plan-hero-today-done {
+		color: var(--color-success);
+		font-weight: 600;
+	}
+	.plan-hero-today-arrow {
+		color: var(--color-text-tertiary);
+		flex-shrink: 0;
+	}
+
+	.plan-hero-actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+	}
+	.plan-hero-cta {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+	}
+	.plan-hero-cta :global(.material-symbols) { font-size: 1.1rem; }
+	.plan-hero-manage {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		transition: color var(--transition-fast);
+	}
+	.plan-hero-manage:hover {
+		color: var(--color-primary);
+	}
+	.plan-hero-manage :global(.material-symbols) { font-size: 1.05rem; }
+
 	.today-label {
 		font-size: var(--font-size-section-label);
 		letter-spacing: 0.1em;
@@ -1093,33 +1468,6 @@
 		font-weight: 700;
 		text-transform: uppercase;
 	}
-	.today-card h2 {
-		margin: var(--space-xs) 0;
-		font-size: 1.4rem;
-		font-weight: 700;
-		color: var(--color-text);
-	}
-	.today-meta {
-		display: flex;
-		gap: var(--space-md);
-		color: var(--color-text-secondary);
-		font-size: 0.95rem;
-		font-variant-numeric: tabular-nums;
-	}
-	.today-right {
-		text-align: right;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: var(--space-2xs);
-		color: var(--color-text-secondary);
-	}
-	.plan-name {
-		font-weight: 600;
-		color: var(--color-text);
-		font-size: 0.9rem;
-	}
-	.plan-progress { font-size: 0.8rem; }
 	.done-icon {
 		color: var(--color-success);
 		font-size: 1.75rem;
@@ -1160,37 +1508,6 @@
 		color: var(--color-primary);
 		font-size: 1.5rem;
 		flex-shrink: 0;
-	}
-
-	.plan-secondary {
-		display: flex;
-		gap: var(--space-md);
-		margin-top: calc(var(--space-md) * -1 + 0.1rem);
-		padding: 0 var(--space-md);
-	}
-	.plan-secondary-link {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-2xs);
-		font-size: 0.82rem;
-		font-weight: 600;
-		color: var(--color-primary);
-		text-decoration: none;
-		padding: var(--space-2xs) 0;
-		transition: color var(--transition-fast);
-	}
-	.plan-secondary-link :global(.material-symbols) {
-		font-size: 1.1rem;
-	}
-	.plan-secondary-link:hover {
-		color: var(--color-primary-dark, var(--color-primary));
-		text-decoration: underline;
-	}
-	.plan-secondary-quiet {
-		color: var(--color-text-tertiary);
-	}
-	.plan-secondary-quiet:hover {
-		color: var(--color-text);
 	}
 
 	.stat-grid {
@@ -1819,15 +2136,30 @@
 	}
 
 	/* Why: hero rows reflow before the 4-up stat grid does — keep the
-	   reading order intact. 768px tablet first, then 480px phone. */
+	   reading order intact. 900px collapses the plan-hero head into a
+	   vertical stack so the position chip slots under the identity
+	   block; 768 tablet first, then 480 phone for the smaller widgets. */
+	@media (max-width: 900px) {
+		.plan-hero-head {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+		.plan-hero-position {
+			align-items: flex-start;
+			text-align: left;
+			flex-direction: row;
+			gap: var(--space-sm);
+			flex-wrap: wrap;
+		}
+	}
 	@media (max-width: 768px) {
 		.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.two-col { grid-template-columns: 1fr; }
-		.today-card,
+		.plan-hero,
 		.plan-promo {
 			padding: var(--space-md) var(--space-lg);
 		}
-		.today-card h2 { font-size: 1.2rem; }
+		.plan-hero-name { font-size: 1.25rem; }
 	}
 	@media (max-width: 480px) {
 		.page {
@@ -1837,13 +2169,16 @@
 		.stat-grid { gap: var(--space-sm); }
 		.stat-card { padding: var(--space-md); }
 		.stat-value { font-size: 1.35rem; }
-		.today-card,
 		.plan-promo {
 			flex-direction: column;
 			align-items: flex-start;
 			gap: var(--space-sm);
 		}
-		.today-right { align-items: flex-start; text-align: left; }
+		.plan-hero { gap: var(--space-sm); }
+		.plan-hero-today-btn { padding: var(--space-sm) var(--space-md); }
+		.plan-hero-actions { flex-direction: column; align-items: stretch; }
+		.plan-hero-actions .plan-hero-cta { justify-content: center; }
+		.plan-hero-actions .plan-hero-manage { justify-content: space-between; }
 		.fitness-card,
 		.card,
 		.readiness-card,

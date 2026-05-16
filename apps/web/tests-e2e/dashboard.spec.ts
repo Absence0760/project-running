@@ -274,6 +274,52 @@ test.describe('/dashboard', () => {
 		);
 	});
 
+	test('active-plan hero card surfaces plan identity + position + today/rest workout panel + CTA', async ({
+		page
+	}) => {
+		// The dashboard's plan integration used to be a tiny today-card
+		// + two footnote-grade text links ("Full plan", "Manage plans").
+		// Replaced with a richer `.plan-hero` block that carries the
+		// plan name, goal-event + target time + race date, week-of-N
+		// position, calendar progress bar with race-relation chip,
+		// today's workout (or rest-day affordance) embedded inside,
+		// and a button-grade `/plans/[id]` CTA.
+		await page.goto('/dashboard');
+		await page.waitForLoadState('networkidle');
+
+		const hero = page.locator('.plan-hero');
+		await expect(hero).toBeVisible({ timeout: 10_000 });
+
+		// Plan identity: name + the "Training plan" kicker label.
+		await expect(hero.getByText('Training plan', { exact: false }))
+			.toBeVisible();
+		await expect(hero.locator('.plan-hero-name')).toHaveText(
+			/Sydney Half 2026/
+		);
+
+		// Position: "Week N of M" — both numbers present, neither stale.
+		await expect(hero.getByText(/Week \d+ of \d+/)).toBeVisible();
+
+		// Progress bar carries an accessible progressbar role with
+		// non-trivial aria-valuenow (between 0 and 100 for an in-flight
+		// plan).
+		const bar = hero.getByRole('progressbar');
+		await expect(bar).toBeVisible();
+		const pct = Number(await bar.getAttribute('aria-valuenow'));
+		expect(pct).toBeGreaterThan(0);
+		expect(pct).toBeLessThan(100);
+
+		// Time-to-race relation chip: matches "Race in N days" while
+		// the race is in the future.
+		await expect(hero.getByText(/Race in \d+ day/)).toBeVisible();
+
+		// Primary CTA: "View full plan" routes to /plans/[id].
+		const viewPlan = hero.getByRole('link', { name: /View full plan/i });
+		await expect(viewPlan).toBeVisible();
+		const href = await viewPlan.getAttribute('href');
+		expect(href).toMatch(/^\/plans\/[a-f0-9-]+$/);
+	});
+
 	test('Plans is NOT in the sidebar nav — dashboard is the entry point + Manage-plans link surfaces it', async ({
 		page
 	}) => {
