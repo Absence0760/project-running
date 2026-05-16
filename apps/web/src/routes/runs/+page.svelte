@@ -275,15 +275,30 @@
 		{ value: 'hike', label: 'Hike', icon: 'terrain' },
 	];
 
+	/// Monotonic generation counter. Every loadInitial() captures the
+	/// current value before its async fetch and discards its result if
+	/// another loader (or snapshot.restore) bumped the generation in
+	/// the meantime. This is what stops back-nav from blowing away
+	/// the restored 100-card list with a freshly-fetched 50-card page:
+	/// snapshot.restore bumps the generation, so the in-flight
+	/// loadInitial that was kicked off on mount aborts on return.
+	let fetchGen = $state(0);
+
 	async function loadInitial() {
 		loading = true;
+		const gen = ++fetchGen;
+		let fresh: Run[];
+		let nextHasMore: boolean;
 		if (fetchMode === 'paginated') {
-			runs = await fetchRuns({ limit: PAGE_SIZE, offset: 0 });
-			hasMore = runs.length === PAGE_SIZE;
+			fresh = await fetchRuns({ limit: PAGE_SIZE, offset: 0 });
+			nextHasMore = fresh.length === PAGE_SIZE;
 		} else {
-			runs = await fetchRuns();
-			hasMore = false;
+			fresh = await fetchRuns();
+			nextHasMore = false;
 		}
+		if (gen !== fetchGen) return;
+		runs = fresh;
+		hasMore = nextHasMore;
 		loading = false;
 	}
 
@@ -309,6 +324,15 @@
 		// (fetchUser is in flight, profile not yet loaded). The
 		// $effect re-fires when auth.user becomes set.
 		if (auth.loading || !auth.user) return;
+		// Wait for the authoritative state source before firing the
+		// initial fetch. On a cold load that's onMount (reads filters
+		// from localStorage, sets filtersHydrated=true). On back-nav
+		// that's snapshot.restore (also sets filtersHydrated=true plus
+		// runs + lastFetchMode from the captured page state). Without
+		// this gate, the effect fires with lastFetchMode='' on mount,
+		// starts an async loadInitial(), and that async write overwrites
+		// the 100 restored cards back to a fresh 50-card page.
+		if (!filtersHydrated) return;
 		if (fetchMode !== lastFetchMode) {
 			lastFetchMode = fetchMode;
 			loadInitial();
@@ -337,6 +361,7 @@
 		dateRange: DateRange;
 		customFrom: string;
 		customTo: string;
+		scrollY: number;
 	}> = {
 		capture: () => ({
 			runs,
@@ -348,8 +373,14 @@
 			dateRange,
 			customFrom,
 			customTo,
+			scrollY: typeof window === 'undefined' ? 0 : window.scrollY,
 		}),
 		restore: (s) => {
+			// Invalidate any in-flight loadInitial that the mount-time
+			// fetch-effect already kicked off. Without this the async
+			// fetch returns after restore and overwrites the captured
+			// runs with a fresh first-page-of-50.
+			fetchGen++;
 			runs = s.runs;
 			hasMore = s.hasMore;
 			lastFetchMode = s.lastFetchMode;
@@ -361,6 +392,15 @@
 			customTo = s.customTo;
 			filtersHydrated = true;
 			loading = false;
+			// SvelteKit's auto scroll-restoration runs before our list
+			// has had a chance to render, so the page is too short and
+			// scroll falls back to 0. After the DOM has updated with
+			// the restored cards, re-apply the captured scrollY.
+			if (typeof window !== 'undefined' && s.scrollY > 0) {
+				queueMicrotask(() => {
+					requestAnimationFrame(() => window.scrollTo(0, s.scrollY));
+				});
+			}
 		},
 	};
 

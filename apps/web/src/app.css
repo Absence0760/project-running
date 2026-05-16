@@ -197,6 +197,14 @@
 	margin: 0;
 }
 
+html {
+	/* Reserve the vertical scrollbar gutter at all times. Without this,
+	   when a modal opens and sets body { overflow: hidden } the scroll-
+	   bar disappears, the viewport widens by ~15px, and every element
+	   on the page visibly jumps. */
+	scrollbar-gutter: stable;
+}
+
 body {
 	background: var(--color-bg-secondary);
 	color: var(--color-text);

@@ -638,6 +638,108 @@ test.describe('/runs — filters', () => {
 		});
 	});
 
+	test.describe('Back-navigation state preservation', () => {
+		test('clicking a run, then Back, restores the scroll position AND the loaded list (Load More results are preserved)', async ({
+			page,
+			context
+		}) => {
+			// Real bug: a fetch-effect on mount kicked off loadInitial()
+			// with lastFetchMode='' BEFORE snapshot.restore could run.
+			// snapshot.restore later set runs=100 from the captured page
+			// state, but the async loadInitial finished after and
+			// overwrote runs back to a fresh first-page-of-50. Layered
+			// on top: SvelteKit's automatic scroll restoration ran
+			// against a 50-card-tall page, so 444px target → 0px floor.
+			//
+			// Fix: a `fetchGen` generation counter that loadInitial
+			// captures pre-await and re-checks post-await. snapshot.restore
+			// bumps the gen to invalidate any in-flight fetch. The
+			// snapshot also captures + restores window.scrollY itself
+			// (via rAF after the runs are populated) so scroll doesn't
+			// fall back to 0 before the list has rendered.
+			await context.addInitScript(() => {
+				localStorage.setItem(
+					'runs_filters_v1',
+					JSON.stringify({
+						sourceFilter: 'all',
+						activityFilter: 'all',
+						dateRange: 'all',
+						customFrom: '',
+						customTo: '',
+						sortKey: 'newest'
+					})
+				);
+			});
+			await page.goto('/runs');
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+			await page.getByRole('button', { name: /Load.*more/i }).click();
+			await expect(page.locator('.run-card').nth(50)).toBeVisible({
+				timeout: 10_000
+			});
+			const totalCards = await page.locator('.run-card').count();
+			expect(totalCards).toBeGreaterThanOrEqual(100);
+
+			// Scroll down to the 10th card so scrollY is non-zero.
+			await page.locator('.run-card').nth(10).scrollIntoViewIfNeeded();
+			const scrollBefore = await page.evaluate(() => window.scrollY);
+			expect(scrollBefore).toBeGreaterThan(100);
+
+			// Open the 10th card.
+			await page.locator('.run-card').nth(10).click();
+			await page.waitForURL(/\/runs\/[a-f0-9-]+$/);
+			await page.waitForLoadState('networkidle');
+
+			// Back to /runs.
+			await page.goBack();
+			await page.waitForURL(/\/runs$/);
+			await page.waitForLoadState('networkidle');
+			// Give the snapshot.restore + scroll-restore a beat to settle.
+			await expect(page.locator('.run-card').first()).toBeVisible({
+				timeout: 10_000
+			});
+
+			const cardsAfter = await page.locator('.run-card').count();
+			expect(cardsAfter).toBe(totalCards);
+
+			const scrollAfter = await page.evaluate(() => window.scrollY);
+			expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);
+		});
+	});
+
+	test.describe('Layout stability — scrollbar gutter', () => {
+		test('opening the Custom date picker does NOT shift page content right (scrollbar gutter is reserved)', async ({
+			page
+		}) => {
+			// Real bug: Modal.svelte locks body scroll with
+			// overflow:hidden while open. Without scrollbar-gutter:stable
+			// the vertical scrollbar disappears, the body widens by
+			// ~15px, and every element on the page (including the run
+			// cards behind the transparent backdrop) shifts right.
+			const card = page.locator('.run-card').first();
+			await expect(card).toBeVisible({ timeout: 10_000 });
+			const widthBefore = await card.evaluate((el) =>
+				(el as HTMLElement).getBoundingClientRect().width
+			);
+
+			await page.getByLabel('Date range').selectOption('custom');
+			const picker = page.getByRole('dialog', { name: /Select dates/i });
+			await expect(picker).toBeVisible();
+
+			const widthDuring = await card.evaluate((el) =>
+				(el as HTMLElement).getBoundingClientRect().width
+			);
+
+			// Width should be identical (or off by ≤1px from sub-pixel
+			// rounding). Without scrollbar-gutter:stable the diff is
+			// ~15px on Chrome/Linux.
+			expect(Math.abs(widthDuring - widthBefore)).toBeLessThan(2);
+
+			await page.keyboard.press('Escape');
+		});
+	});
+
 	test.describe('Combined filters', () => {
 		test('Source=Strava + Activity=Run + Sort=Longest narrows + sorts as expected', async ({
 			page
