@@ -65,7 +65,7 @@
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
-		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
+		{ href: '/social', label: 'Social', icon: 'public', accent: '#C98ECF' },
 	];
 
 	// "Shell-less" surfaces: rendered without the app sidebar regardless of

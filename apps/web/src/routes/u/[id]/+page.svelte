@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import {
 		fetchPublicProfile,
@@ -111,17 +112,20 @@
 		if (userId) load();
 	});
 
-	// Deep-link the followers / following / notifications / feed tab
-	// via `?tab=…` so the feed-header chips, the bell popover, and the
-	// /feed redirect can link straight into the right panel. The
-	// notifications + feed tabs are self-only — even if a deep link asks
-	// for them on someone else's profile, RLS hides the rows anyway, so
-	// collapse the invalid case to the runs tab.
+	// Deep-link the followers / following / notifications tab via
+	// `?tab=…`. The activity feed used to live here too as a self-only
+	// tab — it's now hosted at /social?tab=feed, so any legacy ?tab=feed
+	// link bounces over there.
 	$effect(() => {
 		const t = $page.url.searchParams.get('tab');
+		if (t === 'feed') {
+			// Out-of-band navigation — defer so we don't fire during the
+			// initial $effect chain.
+			queueMicrotask(() => goto('/social?tab=feed', { replaceState: true }));
+			return;
+		}
 		if (t === 'followers' || t === 'following' || t === 'runs') tab = t;
 		else if (t === 'notifications' && isSelf) tab = 'notifications';
-		else if (t === 'feed' && isSelf) tab = 'feed';
 	});
 
 	// Lazy-load the feed when the self-viewer first switches to the tab.
@@ -431,17 +435,6 @@
 			>
 				Runs
 			</button>
-			{#if isSelf}
-				<button
-					role="tab"
-					class="tab"
-					class:active={tab === 'feed'}
-					aria-selected={tab === 'feed'}
-					onclick={() => setTab('feed')}
-				>
-					Feed
-				</button>
-			{/if}
 			<button
 				role="tab"
 				class="tab"

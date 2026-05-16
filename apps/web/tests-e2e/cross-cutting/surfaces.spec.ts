@@ -187,10 +187,11 @@ test.describe('navigation — sidebar links wire up', () => {
 	test('clicking sidebar nav links lands on the right URL', async ({
 		page
 	}) => {
-		// Sidebar shape: Dashboard · History · Routes · Coach · Clubs.
+		// Sidebar shape: Dashboard · History · Routes · Coach · Social.
 		// Plans moved off the sidebar to be reached from the dashboard
-		// today-card. Feed + Guided runs collapsed into /u/[me]?tab=feed
-		// and /coach respectively. Settings is in the profile popover.
+		// today-card. Feed + People + Clubs collapsed under /social.
+		// Guided runs surfaces from /coach. Settings is in the profile
+		// popover.
 		await page.goto('/dashboard');
 		const sidebar = page.locator('.sidebar');
 		await sidebar.getByRole('link', { name: /History/ }).click();
@@ -199,12 +200,14 @@ test.describe('navigation — sidebar links wire up', () => {
 		await expect(page).toHaveURL(/\/routes(\?.*)?$/, { timeout: 10_000 });
 		await sidebar.getByRole('link', { name: /Coach/ }).click();
 		await expect(page).toHaveURL(/\/coach(\?.*)?$/, { timeout: 10_000 });
-		await sidebar.getByRole('link', { name: /Clubs/ }).click();
-		await expect(page).toHaveURL(/\/clubs(\?.*)?$/, { timeout: 10_000 });
+		await sidebar.getByRole('link', { name: /Social/ }).click();
+		await expect(page).toHaveURL(/\/social(\?.*)?$/, { timeout: 10_000 });
 		// Settings is in the profile popover, not in the main nav.
 		await expect(sidebar.getByRole('link', { name: /^Settings$/ })).toHaveCount(0);
-		// Feed + Guided runs moved off the sidebar too.
+		// Feed + Guided runs + the old top-level Clubs link moved off
+		// the sidebar.
 		await expect(sidebar.getByRole('link', { name: /^Feed$/ })).toHaveCount(0);
 		await expect(sidebar.getByRole('link', { name: /^Guided runs$/ })).toHaveCount(0);
+		await expect(sidebar.getByRole('link', { name: /^Clubs$/ })).toHaveCount(0);
 	});
 });

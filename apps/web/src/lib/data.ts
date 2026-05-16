@@ -2738,6 +2738,128 @@ export async function unfollowUser(targetUserId: string): Promise<void> {
 	if (error) throw error;
 }
 
+export interface PeopleSuggestion extends PublicProfile {
+	public_runs_count: number;
+	shared_clubs: number;
+	viewer_follows: boolean;
+}
+
+/// Free-text people search for /social People tab. Matches user_profiles
+/// display_name with ILIKE, excludes self, hydrates viewer→target follow
+/// edges so the row's Follow toggle starts in the right state. RLS on
+/// user_profiles is public-read so this works for any signed-in viewer.
+export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggestion[]> {
+	const term = q.trim();
+	if (term.length < 1) return [];
+	const { data: sessionData } = await supabase.auth.getSession();
+	const viewerId = sessionData.session?.user?.id ?? null;
+	const { data: profiles, error } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.ilike('display_name', `%${term}%`)
+		.limit(limit);
+	if (error || !profiles) return [];
+	const ids = profiles
+		.map((p) => p.id as string)
+		.filter((id) => id !== viewerId);
+	if (ids.length === 0) return [];
+	return hydratePeopleSuggestions(ids, viewerId);
+}
+
+/// Suggested people for the Social People tab: members of the viewer's
+/// clubs they don't already follow, plus self-exclusion. Ordered by
+/// shared-club count desc, then by display_name. Single round-trip via
+/// client-composed queries (no SECURITY DEFINER RPC — every table read
+/// is covered by existing RLS).
+export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion[]> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const viewerId = sessionData.session?.user?.id ?? null;
+	if (!viewerId) return [];
+
+	const { data: myMemberRows } = await supabase
+		.from('club_members')
+		.select('club_id')
+		.eq('user_id', viewerId)
+		.eq('status', 'active');
+	const myClubIds = (myMemberRows ?? []).map((r) => r.club_id as string);
+	if (myClubIds.length === 0) return [];
+
+	const { data: coMemberRows } = await supabase
+		.from('club_members')
+		.select('user_id, club_id')
+		.in('club_id', myClubIds)
+		.eq('status', 'active')
+		.neq('user_id', viewerId);
+	if (!coMemberRows || coMemberRows.length === 0) return [];
+
+	const shared = new Map<string, number>();
+	for (const row of coMemberRows) {
+		const uid = row.user_id as string;
+		shared.set(uid, (shared.get(uid) ?? 0) + 1);
+	}
+
+	const { data: followedRows } = await supabase
+		.from('user_follows')
+		.select('followee_id')
+		.eq('follower_id', viewerId)
+		.in('followee_id', [...shared.keys()]);
+	for (const r of followedRows ?? []) {
+		shared.delete(r.followee_id as string);
+	}
+	if (shared.size === 0) return [];
+
+	const ids = [...shared.keys()];
+	const hydrated = await hydratePeopleSuggestions(ids, viewerId);
+	// Rank by shared-club count desc, then display_name.
+	return hydrated
+		.map((p) => ({ ...p, shared_clubs: shared.get(p.id) ?? 0 }))
+		.sort((a, b) => {
+			if (b.shared_clubs !== a.shared_clubs) return b.shared_clubs - a.shared_clubs;
+			return (a.display_name ?? '').localeCompare(b.display_name ?? '');
+		})
+		.slice(0, limit);
+}
+
+async function hydratePeopleSuggestions(
+	ids: string[],
+	viewerId: string | null
+): Promise<PeopleSuggestion[]> {
+	if (ids.length === 0) return [];
+	const [profilesRes, runsRes, followsRes] = await Promise.all([
+		supabase
+			.from('user_profiles')
+			.select('id, display_name, avatar_url')
+			.in('id', ids),
+		supabase
+			.from('runs')
+			.select('user_id')
+			.in('user_id', ids)
+			.eq('is_public', true),
+		viewerId
+			? supabase
+					.from('user_follows')
+					.select('followee_id')
+					.eq('follower_id', viewerId)
+					.in('followee_id', ids)
+			: Promise.resolve({ data: [] as { followee_id: string }[] } as { data: { followee_id: string }[] }),
+	]);
+	const counts = new Map<string, number>();
+	for (const row of (runsRes.data ?? []) as { user_id: string }[]) {
+		counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
+	}
+	const follows = new Set<string>(
+		((followsRes.data ?? []) as { followee_id: string }[]).map((r) => r.followee_id)
+	);
+	return (profilesRes.data ?? []).map((p) => ({
+		id: p.id as string,
+		display_name: (p.display_name as string) ?? null,
+		avatar_url: (p.avatar_url as string) ?? null,
+		public_runs_count: counts.get(p.id as string) ?? 0,
+		shared_clubs: 0,
+		viewer_follows: follows.has(p.id as string),
+	}));
+}
+
 /// People who follow `userId`, paginated client-side after fetch.
 export async function fetchFollowers(userId: string, limit = 50): Promise<PublicProfile[]> {
 	const { data: edges } = await supabase

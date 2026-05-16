@@ -3,28 +3,25 @@ import { expect, test } from '@playwright/test';
 import { USER_A } from './fixtures/users';
 
 /**
- * The activity feed (recent public runs from people the viewer
- * follows) used to live at /feed as a top-level tab. It now lives
- * as a self-only "Feed" tab on the runner's own profile —
- * /u/[me]?tab=feed. The old /feed URL stays alive as a thin
- * redirect for the sitemap, the bell-popover CTA, and external
- * deep links.
+ * The activity feed (recent public runs from people the viewer follows)
+ * lives as the default tab under /social. /feed and /u/[me]?tab=feed are
+ * kept alive as thin redirects so the sitemap, the bell-popover CTA, and
+ * external deep links keep resolving.
  */
 
-const FEED_URL = `/u/${USER_A.id}?tab=feed`;
+const FEED_URL = '/social?tab=feed';
 
-test.describe('Feed (lives under /u/[me]?tab=feed)', () => {
+test.describe('Feed (lives under /social?tab=feed)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('/feed redirects to the profile Feed tab', async ({ page }) => {
-		// The old top-level /feed URL is a thin client-side redirect to
-		// /u/[me]?tab=feed. Anyone landing on /feed (sitemap, email
-		// links, the bell-popover CTA, mobile push deep links) ends up
-		// on the right surface.
+	test('/feed redirects to /social?tab=feed', async ({ page }) => {
 		await page.goto('/feed');
-		await expect(page).toHaveURL(/\/u\/[a-f0-9-]+\?tab=feed/, {
-			timeout: 10_000
-		});
+		await expect(page).toHaveURL(/\/social\?tab=feed/, { timeout: 10_000 });
+	});
+
+	test('/u/[me]?tab=feed (legacy) also redirects to /social?tab=feed', async ({ page }) => {
+		await page.goto(`/u/${USER_A.id}?tab=feed`);
+		await expect(page).toHaveURL(/\/social\?tab=feed/, { timeout: 10_000 });
 	});
 
 	test('activity-type filter narrows feed to matching runs (Cycle = empty)', async ({
