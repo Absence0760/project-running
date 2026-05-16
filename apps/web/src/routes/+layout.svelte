@@ -56,19 +56,16 @@
 	});
 
 	// Order is runner-led: log + review + train is the daily loop, then
-	// social, then content, then settings last. Active runners spend most
-	// of their session on Dashboard / History / Plans; Feed / Routes /
-	// Coach / Clubs / Guided runs are secondary; Settings is touched
-	// rarely. Top-down scan time matches frequency-of-use.
+	// content, then social. Five items total — Settings lives in the
+	// profile popover at the bottom of the sidebar; Feed is a self-only
+	// tab on /u/[me]; Guided runs are surfaced from /coach (both are
+	// coach-driven). Top-down scan time matches frequency-of-use.
 	const navItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
 		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
-		{ href: '/feed', label: 'Feed', icon: 'rss_feed', accent: '#E89C5A' },
 		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/clubs', label: 'Clubs', icon: 'groups', accent: '#C98ECF' },
-		{ href: '/guided', label: 'Guided runs', icon: 'headset', accent: '#8FB8DB' },
-		{ href: '/settings', label: 'Settings', icon: 'settings', accent: '#9CA3AF' },
 	];
 
 	// "Shell-less" surfaces: rendered without the app sidebar regardless of

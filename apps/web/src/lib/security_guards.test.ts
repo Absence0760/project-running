@@ -32,21 +32,23 @@ test('RunTrackPreview routes non-owner fetches through clip-public-track EF', ()
 	);
 });
 
-test('feed page passes runId + ownerUserId to RunTrackPreview', () => {
+test('feed tab on /u/[id] passes runId + ownerUserId to RunTrackPreview', () => {
 	// Reason: the EF non-owner clip path needs the run id (server
 	// resolves track_url + clips inline). Without the prop,
 	// RunTrackPreview can't reach the EF and renders a placeholder
-	// instead of the clipped polyline.
-	const source = read('src/routes/feed/+page.svelte');
+	// instead of the clipped polyline. The activity feed now lives as
+	// a self-only "Feed" tab on /u/[id] (the standalone /feed route is
+	// a thin redirect into it); the guard moved with it.
+	const source = read('src/routes/u/[id]/+page.svelte');
 	assert.match(
 		source,
 		/<RunTrackPreview[^>]*runId=/s,
-		'Feed page must thread the run id into RunTrackPreview so the clip-public-track EF can resolve it.',
+		'Feed tab on /u/[id] must thread the run id into RunTrackPreview so the clip-public-track EF can resolve it.',
 	);
 	assert.match(
 		source,
 		/<RunTrackPreview[^>]*ownerUserId=/s,
-		'Feed page must thread the run owner id into RunTrackPreview so the privacy-zone clip kicks in.',
+		'Feed tab on /u/[id] must thread the run owner id into RunTrackPreview so the privacy-zone clip kicks in.',
 	);
 });
 

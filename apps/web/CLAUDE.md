@@ -58,7 +58,7 @@ src/
     route_history.ts  # "Past efforts on this route" panel data (10 unit tests in route_history.test.ts). Mounted on /routes/[id] under the map.
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
-    feed/           # Activity feed — public runs from people you follow, time-windowed to last 14 days (FEED_WINDOW_DAYS in data.ts). Cursor-paginated on (started_at, id) at 20-per-page. Full-width card grid with per-entry track preview. Toolbar: activity-segmented + author searchable combobox + window hint. Cards open RunShareView in a modal. (decisions §31)
+    feed/           # Thin client-side redirect to `/u/[me]?tab=feed`. The activity feed (public runs from people you follow, 14-day window, cursor-paginated) now lives as a self-only "Feed" tab on the runner's own profile page so it sits alongside Runs / Followers / Following / Notifications instead of being a separate top-level surface. The route stays alive only for the sitemap entry, the bell-popover "Browse the feed" CTA, and mobile deep links. (decisions §31)
     u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs (open in a modal), Follow toggle. Honours ?tab=runs|followers|following|notifications (notifications gated to isSelf — decisions §38). Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31).
     dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links

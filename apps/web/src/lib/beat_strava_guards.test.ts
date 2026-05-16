@@ -140,9 +140,16 @@ test('/guided/[id] uses findGuidedRun for the lookup', () => {
 	assert.match(source, /findGuidedRun/, 'detail page must use the lookup helper');
 });
 
-test('Sidebar nav includes a Guided runs entry', () => {
-	const source = read('src/routes/+layout.svelte');
-	assert.match(source, /'\/guided',\s*label:\s*'Guided runs'/, 'sidebar entry missing');
+test('/coach surfaces the Guided runs library on its page', () => {
+	// Reason: the dedicated `/guided` sidebar entry was removed when the
+	// nav tightened to 5 items. Guided + Coach are both coach-driven,
+	// so the library is reachable from /coach via a side rail / section
+	// that iterates GUIDED_RUN_LIBRARY. A regression that drops the
+	// reference would leave guided runs only accessible by typing the
+	// URL — effectively orphaning the library.
+	const source = read('src/routes/coach/+page.svelte');
+	assert.match(source, /GUIDED_RUN_LIBRARY/, '/coach must surface the guided-run library');
+	assert.match(source, /\{#each GUIDED_RUN_LIBRARY as g/, 'each-block over the library missing on /coach');
 });
 
 // ─────────── audio_cues.dart speakGuidedCue ───────────

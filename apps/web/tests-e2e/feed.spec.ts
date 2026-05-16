@@ -3,15 +3,29 @@ import { expect, test } from '@playwright/test';
 import { USER_A } from './fixtures/users';
 
 /**
- * /feed — activity feed of recent public runs from people the viewer
- * follows. Cursor-paginated on (started_at, id), filtered by the
- * 14-day FEED_WINDOW. Empty state has three flavours (no follows,
- * filters too narrow, no recent activity) that should each be
- * exercised here as the file deepens.
+ * The activity feed (recent public runs from people the viewer
+ * follows) used to live at /feed as a top-level tab. It now lives
+ * as a self-only "Feed" tab on the runner's own profile —
+ * /u/[me]?tab=feed. The old /feed URL stays alive as a thin
+ * redirect for the sitemap, the bell-popover CTA, and external
+ * deep links.
  */
 
-test.describe('/feed', () => {
+const FEED_URL = `/u/${USER_A.id}?tab=feed`;
+
+test.describe('Feed (lives under /u/[me]?tab=feed)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	test('/feed redirects to the profile Feed tab', async ({ page }) => {
+		// The old top-level /feed URL is a thin client-side redirect to
+		// /u/[me]?tab=feed. Anyone landing on /feed (sitemap, email
+		// links, the bell-popover CTA, mobile push deep links) ends up
+		// on the right surface.
+		await page.goto('/feed');
+		await expect(page).toHaveURL(/\/u\/[a-f0-9-]+\?tab=feed/, {
+			timeout: 10_000
+		});
+	});
 
 	test('activity-type filter narrows feed to matching runs (Cycle = empty)', async ({
 		page
@@ -23,7 +37,7 @@ test.describe('/feed', () => {
 		// empty state. Pins both the filter wiring AND the empty-
 		// state branch (we hit the "filters too narrow" variant, not
 		// the "no follows" variant).
-		await page.goto('/feed');
+		await page.goto(FEED_URL);
 		await page.waitForLoadState('networkidle');
 
 		// Click the Cycle activity button (aria-label="Cycle").
@@ -53,7 +67,7 @@ test.describe('/feed', () => {
 		// the empty state. Empty would mean either the follow graph
 		// dropped, the public_runs view broke, or the date window
 		// regressed.
-		await page.goto('/feed');
+		await page.goto(FEED_URL);
 		await page.waitForLoadState('networkidle');
 
 		// Should NOT see any of the empty-state headings.
@@ -71,14 +85,14 @@ test.describe('/feed', () => {
 	test('activity-type "Run" filter still shows entries (default activity)', async ({
 		page
 	}) => {
-		await page.goto('/feed');
+		await page.goto(FEED_URL);
 		await page.getByRole('button', { name: 'Run', exact: true }).first().click();
 		await expect(page.getByText(/Alex Chen|Morgan Lee/).first())
 			.toBeVisible({ timeout: 10_000 });
 	});
 
 	test('feed window-hint label is visible (last 14 days)', async ({ page }) => {
-		await page.goto('/feed');
+		await page.goto(FEED_URL);
 		// The toolbar shows a small window hint — match the literal
 		// "14 days" string which is part of the FEED_WINDOW_DAYS label.
 		await expect(page.getByText(/14 days/i).first())
