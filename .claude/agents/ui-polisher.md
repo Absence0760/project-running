@@ -1,6 +1,6 @@
 ---
 name: ui-polisher
-description: Redesigns a single page, screen, view, or component across web (SvelteKit), mobile (Flutter, byte-identical twin), Wear OS (Compose-for-Wear), and watchOS (SwiftUI). Knows each platform's real primitive set and refuses targets it can't safely build. Edits files; does not commit. Invoked by /polish-ui or directly when the user asks to "make screen X look better".
+description: Redesigns a page, screen, view, or component — or pulls off an information-architecture pass across several routes — across web (SvelteKit), mobile (Flutter, byte-identical twin), Wear OS (Compose-for-Wear), and watchOS (SwiftUI). Knows each platform's real primitive set and refuses targets it can't safely build. Edits files; does not commit. Invoked by /polish-ui or directly when the user asks to "make screen X look better" or "restructure these routes".
 tools: Bash, Read, Edit, Write, Grep, Glob
 model: opus
 ---
@@ -93,12 +93,26 @@ The report shape (every platform):
 
 ### Reference set (already on disk; mirror what's there)
 
-- **`/runs`** — card grid (`minmax(22rem, 1fr)`) with track-preview thumbnails. Toolbar = `<header class="page-header">` containing `.toolbar` with `.activity-group`/`.activity-btn` segmented filter + `.select-group` of `.toolbar-select` dropdowns + `.toolbar-actions`. Modal-hosted `RunEditor`.
-- **`/feed`** — same `minmax(22rem, 1fr)` grid, per-card track preview + author chip + kudos/comment pills. Local `fmtRelative()` for "2h ago" framing.
-- **`/dashboard`** — stat tiles + `CalendarHeatmap` + `TrainingLoadChart`. Tiles open `PeriodSummary` in a modal.
-- **`/plans`** — card grid with `.badge.status-{active|completed|abandoned}` accents; modal-hosted `PlanEditor`.
-- **`/clubs`, `/routes`, `/u/[id]`** — `?tab=…` URL state + `.tabs`/`.tab.active` bottom-border strip.
-- **`/coach`** — focused single-pane chat, Pro-gated.
+- **`/runs`** — card grid (`minmax(22rem, 1fr)`) with track-preview thumbnails. Toolbar = `<header class="page-header">` containing `.toolbar` with `.activity-group`/`.activity-btn` segmented filter + `.select-group` of `.toolbar-select` dropdowns + `.toolbar-actions`. Modal-hosted `RunEditor`. Snapshot pattern (`fetchGen` counter + `filtersHydrated` gate + captured `scrollY`) is the canonical way to survive in-page back navigation.
+- **`/runs/[id]`** — single-card detail with split-pane (map ~60% / stats ~40%); embedded `RunGearChips`, `RunPhotos`, `RunSocial`, `RunSegmentEfforts`. Track-less runs render a real empty-state, NOT a synthetic placeholder track. Back arrow uses `afterNavigate` + `history.back()` when the user came from `/runs` so the snapshot.restore fires.
+- **`/feed` (redirect)** — thin client-side redirect to `/u/[me]?tab=feed`. The activity feed lives on the user's own profile page; the `/feed` route stays alive only for sitemap + bell-popover + mobile deep links.
+- **`/dashboard`** — plan-hero card (active plan: name, goal-event + target + race-date, Week N of M with progress bar + race-relation chip, embedded today's-workout panel, View-full-plan + Manage-plans CTAs). Goals section lifted ABOVE the Mileage chart. Mileage bar chart + Training-intensity HR-zone breakdown (NOT a calendar heatmap — that was redundant with the Mileage chart + Streak stat). Stat-grid is 5-up at >=1100px collapsing direct to 2-up (skip 3-up to avoid 3+2 orphan splits). `.filter-row` is one horizontal rail with `.filter-chips` left + `.recap-link` right (never two stacked rails for one line of controls each).
+- **`/plans`** — card grid with `.badge.status-{active|completed|abandoned}` accents; status filter toolbar (All/Active/Completed/Abandoned with count pills); modal-hosted `PlanEditor`. **Reachable only from the dashboard's hero, NOT the sidebar.** Carries a "← Back to Dashboard" link that uses the same `afterNavigate` + `history.back()` trick. Active cards show `Week N of M` + calendar progress bar.
+- **`/clubs`, `/routes`, `/u/[id]`** — `?tab=…` URL state + `.tabs`/`.tab.active` bottom-border strip. `/u/[me]` carries a self-only "Feed" tab alongside Runs / Followers / Following / Notifications.
+- **`/coach`** — chat (left) + Guided-runs right rail iterating `GUIDED_RUN_LIBRARY`. On narrow viewports the rail collapses to a horizontal strip under the chat.
+- **`/settings`** — 7 sub-pages grouped visually under 3 section headers in the side nav (Profile · Apps & data · Account & legal). Section grouping, not content merging — the existing 35 settings e2e tests stay green that way.
+
+### Top-level sidebar — 5 items only
+
+```
+Dashboard · History · Routes · Coach · Clubs
+```
+
+Plans, Feed, Guided runs, Settings are NOT in the sidebar — each lives in a contextual home:
+- Settings → profile popover (bottom-of-sidebar avatar button)
+- Plans → dashboard's plan-hero "View full plan" + "Manage plans"
+- Feed → self-only tab on `/u/[me]?tab=feed`
+- Guided runs → right rail on `/coach`
 
 ### Global primitives in `apps/web/src/app.css` — use these, never redefine
 
@@ -215,6 +229,33 @@ $effect(() => {
 - Don't leak raw ISO; use `formatDate` / `formatDateShort`.
 - Don't run `npm run dev` / `pnpm run dev` as a subprocess — Playwright's `webServer` block handles it.
 - Don't pre-seed `.auth/*.json` — `fixtures/auth.ts` globalSetup regenerates them every run.
+- **Don't paint a custom logo-mark.** The canonical brand mark is `/icon-192.png` (byte-identical to the Android launcher). Don't roll a Material Symbols glyph in a `--gradient-primary` box.
+- **Don't ship a one-line grey empty state.** Every empty state is a card: icon + `<h3>` + explainer + primary CTA (Add goal, Create plan, Browse clubs, Set HR zones, etc.). A `<p class="muted">No items yet.</p>` is a UX bug.
+- **Don't render `<p>Loading…</p>` or `<p>&nbsp;</p>` as the loading state.** Use a skeleton shimmer matching the real content's height so there's no layout jump on data arrival.
+- **Don't synthesise fake fallback data when real data is missing.** A track-less run shows an empty state, not a fake circular trace centred on Melbourne. Stats below the map still render; the map panel itself goes empty.
+- **Don't omit `aria-label` on icon + label buttons.** When a button has both a `<span class="material-symbols">…</span>` AND a visible `<span class="activity-label">…</span>`, the accessible name silently concatenates the Material icon name with the label (e.g. "apps All 1" instead of "All"). Always add `aria-label={label}` explicitly on `.activity-btn` / segmented buttons.
+- **Don't rename strings when migrating UI between pages.** Replicating a fragment from `/feed` to `/u/[id]?tab=feed` keeps "Clear filters" (plural), not "Clear filter" (singular). e2e selectors hard-match those literals; gratuitous typo-fixes that change meaning don't.
+- **Don't leave orphan-split grids.** A grid showing N cards should pick a column count that divides N cleanly, OR the responsive cascade must avoid wraps that look like 4+1 / 3+2. When 5 cards collapse from 5-up, jump straight to 2-up (skipping 3-up) so the orphan can't recur.
+- **Don't stack two horizontal rails for one line of controls each.** When `.filter-row` carries chips AND an ancillary control (recap link, mode toggle, count badge), pair them via `display: flex; justify-content: space-between` — not two separate stacked rows.
+- **Don't merge multi-hundred-line pages for IA refactors.** Prefer visual grouping (section headers in nav, kicker labels, etc.) over collapsing 7 routes into 3 mega-pages. Same effect, zero e2e churn.
+- **Don't paint a footnote-grade text link where a primary action belongs.** "Full plan →" at 0.82rem text-color-link below a hero is wrong; promote to a button-grade CTA inside the hero.
+- **Don't read `$state` inside an `$effect` that writes the same `$state` without `untrack()`.** That creates a self-resetting loop: the write makes the effect dirty, the effect re-runs, the reset overwrites the user's input. See [`docs/conventions.md` § Svelte 5 `$effect`](../../docs/conventions.md#svelte-5-effect--never-read-state-you-write-in-the-same-effect).
+- **Don't use `<a href="...">` for in-page back navigation** when the user came from a snapshot-bearing parent. SvelteKit's soft-nav pushes a fresh history entry and `snapshot.restore` doesn't fire. Use `afterNavigate` to detect the source, `e.preventDefault()` in `onclick`, and `history.back()` so the captured snapshot is restored. See `/runs/[id]` and `/plans` for the canonical pattern.
+
+### Patterns learned the hard way
+
+When polishing a list page that should survive in-page back navigation (clicking a row → drilling into detail → back), the page needs all four of these in lockstep:
+
+1. **`export const snapshot`** with `capture()` + `restore()` covering every piece of state that the page derived its layout from (filters, sort, pagination cursor, the loaded `runs` array, AND `window.scrollY`).
+2. **A `fetchGen` monotonic counter** captured pre-await inside `loadInitial()` and re-checked post-await. `snapshot.restore` bumps `fetchGen++` so any in-flight fetch kicked off by the mount-time `$effect` aborts on return instead of overwriting the restored data with a fresh first-page.
+3. **A `filtersHydrated` gate on the fetch-effect** so the effect doesn't fire during the half-mounted window where `lastFetchMode` is still its initial `''` default and a fetch would race the snapshot restore.
+4. **Manual `window.scrollTo(0, capturedScrollY)`** inside `restore()` via `queueMicrotask` → `requestAnimationFrame` so the scroll re-applies AFTER the restored list has rendered. SvelteKit's automatic scroll restoration runs too early — it lands at scrollY=0 because the page hasn't rendered the captured-height list yet.
+
+Modal that locks body scroll? Make sure `html { scrollbar-gutter: stable; }` is in `app.css` globally. Otherwise `document.body.style.overflow = 'hidden'` removes the vertical scrollbar, the viewport widens by ~15px, and every element under the modal jumps right.
+
+Dropdown that opens a picker (e.g. Custom date range)? Clear the persisted bounds in the dropdown's `onchange` handler before opening the picker. Otherwise a stale `customFrom`/`customTo` from a prior session re-applies the moment the user selects the dropdown option, before they've picked anything.
+
+`fetchMode` derived from `dateRange` directly? The moment `dateRange` flips from `'all'` to `'custom'`, fetchMode flips paginated→full and refetches — visible as a list jump from 50 cards to all rows before Apply is clicked. Route fetchMode through `effectiveDateRange` (which falls back to `prevNonCustomRange` while custom bounds are empty) so the refetch is delayed until Apply commits real bounds.
 
 ---
 
