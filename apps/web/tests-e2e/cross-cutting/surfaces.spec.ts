@@ -64,7 +64,7 @@ test.describe('detail surface — plans', () => {
 
 	test('/plans/<seeded> renders the progress ring', async ({ page }) => {
 		await page.goto('/plans/a1a1eada-aaaa-0000-0000-000000000001');
-		await expect(page.locator('.progress-circle .pct'))
+		await expect(page.locator('.progress-ring .pct'))
 			.toBeVisible({ timeout: 10_000 });
 	});
 

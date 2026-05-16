@@ -198,10 +198,10 @@ test.describe('/plans/[id]', () => {
 		await page.goto(`/plans/${bogusId}`);
 		await page.waitForLoadState('networkidle');
 
-		// PlanDetail's not-found branch renders an h2 (not h1) with
-		// "Plan not found".
+		// PlanDetail's not-found branch renders the canonical empty
+		// state (icon + h3 + explainer + CTA).
 		await expect(
-			page.getByRole('heading', { name: 'Plan not found', level: 2 })
+			page.getByRole('heading', { name: 'Plan not found', level: 3 })
 		).toBeVisible({ timeout: 10_000 });
 	});
 

@@ -52,7 +52,7 @@ test.describe('surface smoke — authed', () => {
 
 	test('/clubs mounts with the My-clubs / Browse tabs', async ({ page }) => {
 		await page.goto('/clubs');
-		await expect(page.getByRole('button', { name: /Browse/ }).first())
+		await expect(page.getByRole('tab', { name: 'Browse', exact: true }))
 			.toBeVisible({ timeout: 10_000 });
 	});
 

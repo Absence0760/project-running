@@ -429,9 +429,14 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		await expect(prev).toBeDisabled();
 		await expect(page.locator('.cal-head h3')).toHaveText(/March 2026/);
 
-		// And the plan's start/end dates render on the hero strip
-		// matching PLAN_START / PLAN_END.
-		await expect(page.locator('.meta'))
-			.toContainText(`${PLAN_START} → ${PLAN_END}`);
+		// And the formatted race date renders on the hero meta strip,
+		// matching PLAN_END. The hero used to print the literal
+		// `start_date → end_date` ISO pair; the polished detail page
+		// now mirrors the dashboard plan-hero by showing only the
+		// formatted race date (en-GB "20 Jun 2026").
+		const [y, m, d] = PLAN_END.split('-').map(Number);
+		const fmtRaceDate = new Date(y, m - 1, d)
+			.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+		await expect(page.locator('.meta')).toContainText(fmtRaceDate);
 	});
 });

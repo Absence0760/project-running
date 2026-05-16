@@ -124,10 +124,10 @@ test.describe('Workout-runner surfaces (web)', () => {
 				await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 				const today_section = page.locator('section.today');
 				await expect(today_section).toBeVisible({ timeout: 10_000 });
-				// The today-card carries the kind heading + distance.
-				await expect(today_section.locator('.label')).toHaveText('TODAY');
-				await expect(today_section.getByRole('heading', { name: /Easy|easy/ }))
-					.toBeVisible();
+				// The today-card carries the "Today" eyebrow + kind label.
+				await expect(today_section.locator('.today-label')).toHaveText('Today');
+				await expect(today_section.locator('.today-kind'))
+					.toContainText(/Easy/i);
 				// Clicking opens WorkoutEditor (the host wires the
 				// today-link to set `editing = todayWorkout`).
 				await today_section.locator('.today-link').click();
@@ -143,12 +143,15 @@ test.describe('Workout-runner surfaces (web)', () => {
 			}
 		});
 
-		test('is HIDDEN when no workout is scheduled today (negative)', async ({
+		test('falls back to "Next up" or "Rest day" when no workout is scheduled today', async ({
 			page
 		}) => {
-			// Without a today-workout, `section.today` is gated off.
-			// Pin the negative so a regression that started rendering
-			// the today-card on every plan would surface here.
+			// Without a today-workout, the today section now renders a
+			// "Next up" card pointing at the next non-rest workout (or a
+			// "Rest day" placeholder if there isn't one). The previous
+			// hidden-section behaviour silently dropped the most useful
+			// surface on the page — runners on a rest day need to see
+			// what's tomorrow, not nothing.
 			const today = new Date().toISOString().slice(0, 10);
 			const admin = getAdminClient();
 			const { data: weeks } = await admin
@@ -162,13 +165,15 @@ test.describe('Workout-runner surfaces (web)', () => {
 				.in('week_id', weekIds)
 				.eq('scheduled_date', today)
 				.maybeSingle();
-			// Skip if a test left a stray today-workout (no test
-			// dependency on a clean DB pre-state).
-			test.skip(hit != null, 'a today-workout exists; negative test cannot run');
+			// Skip if a test left a stray today-workout.
+			test.skip(hit != null, 'a today-workout exists; this fallback test cannot run');
 
 			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 			await page.waitForLoadState('networkidle');
-			await expect(page.locator('section.today')).toHaveCount(0);
+			const today_section = page.locator('section.today');
+			await expect(today_section).toBeVisible({ timeout: 10_000 });
+			await expect(today_section.locator('.today-label'))
+				.toHaveText(/Next up|Today|Race day/);
 		});
 	});
 

@@ -23,7 +23,7 @@ test.describe('/clubs', () => {
 		// "Tempo Tuesday" visible from the seeded public clubs.
 		await page.goto('/clubs');
 		await page.waitForLoadState('networkidle');
-		await page.getByRole('button', { name: /Browse/, exact: true }).click();
+		await page.getByRole('tab', { name: 'Browse', exact: true }).click();
 
 		// Wait for browse to settle with multiple cards.
 		await expect(
@@ -57,7 +57,7 @@ test.describe('/clubs', () => {
 		await page.goto('/clubs');
 		await page.waitForLoadState('networkidle');
 
-		await page.getByRole('button', { name: /Browse/, exact: true }).click();
+		await page.getByRole('tab', { name: 'Browse', exact: true }).click();
 		// Wait for the browse fetch to settle.
 		await expect(
 			page.getByRole('heading', { name: 'Sydney Run Club' })
@@ -122,7 +122,7 @@ test.describe('/clubs', () => {
 		// result would surface here as a list that doesn't grow back
 		// when the user clears their query.
 		await page.goto('/clubs');
-		await page.getByRole('button', { name: /Browse/, exact: true }).click();
+		await page.getByRole('tab', { name: 'Browse', exact: true }).click();
 
 		await expect(
 			page.getByRole('heading', { name: 'Sydney Run Club' })

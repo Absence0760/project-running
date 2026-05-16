@@ -92,4 +92,13 @@
 			width: auto;
 		}
 	}
+
+	/* When a modal is open the cookie banner steps aside. The previous
+	   geometry put the corner-pinned banner over the modal Save button
+	   at common viewport widths (1280-1440px), making the PlanMetaEditor
+	   Save click flake. Modals are the more time-sensitive surface; the
+	   banner reappears the moment the modal closes. */
+	:global(body:has(.modal-backdrop)) .banner {
+		display: none;
+	}
 </style>
