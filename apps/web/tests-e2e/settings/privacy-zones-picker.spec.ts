@@ -121,16 +121,11 @@ test.describe('/settings/preferences — PrivacyZonePicker (MapLibre modal)', ()
 		if (!fired) {
 			const canvas = modal.locator('.maplibregl-canvas');
 			const box = await canvas.boundingBox();
-			if (!box) test.skip(true, 'MapLibre canvas not measurable; map-click bridge unreachable.');
+			expect(box, 'MapLibre canvas should be measurable in headless chrome').not.toBeNull();
 			await canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 		}
 
-		try {
-			await expect(addButton).toBeEnabled({ timeout: 5_000 });
-		} catch {
-			test.skip(true, 'MapLibre click did not register a marker; falling through to data-layer test.');
-			return;
-		}
+		await expect(addButton).toBeEnabled({ timeout: 5_000 });
 
 		await addButton.click();
 		await expect(modal).toHaveCount(0);
