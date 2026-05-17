@@ -33,6 +33,7 @@ src/
                     # SegmentsPanel + RunSegmentEfforts (segment leaderboards on /routes/[id] + per-run effort chips on /runs/[id]; decisions §37),
                     # NotificationBell (compact bell icon next to the profile button in the sidebar footer — unread badge + popover for kudos/comments/follows; full inbox lives on /u/[me]?tab=notifications; decisions §38).
                     # NotificationsList (the inbox body — All / Unread tabs, per-row dismiss, bulk Mark-all-read; mounted under the Notifications tab on /u/[id] when isSelf).
+                    # SocialFeed, SocialPeople, SocialClubs — the three tab panels of /social. SocialPeople is the only top-level surface for finding other runners (name search + suggested-from-clubs). decisions §54.
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications), notifications.svelte.ts (unread badge for the sidebar bell — decisions §38)
     data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types
@@ -57,9 +58,10 @@ src/
     track_projection.ts  # Pure projection helper for the SVG track-preview thumbnails (`projectTrack` with cos(midLat) longitude correction so a square loop renders square at any latitude). Mirrors the `projectTrack` helper in `apps/mobile_android/lib/widgets/track_preview.dart` — keep in lockstep. Used by `TrackPreview.svelte` and `RunTrackPreview.svelte`. 4 unit tests in `track_projection.test.ts`. See [decisions.md § 51](../../docs/decisions.md).
     route_history.ts  # "Past efforts on this route" panel data (10 unit tests in route_history.test.ts). Mounted on /routes/[id] under the map.
   routes/
-    +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`)
-    feed/           # Thin client-side redirect to `/u/[me]?tab=feed`. The activity feed (public runs from people you follow, 14-day window, cursor-paginated) now lives as a self-only "Feed" tab on the runner's own profile page so it sits alongside Runs / Followers / Following / Notifications instead of being a separate top-level surface. The route stays alive only for the sitemap entry, the bell-popover "Browse the feed" CTA, and mobile deep links. (decisions §31)
-    u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs (open in a modal), Follow toggle. Honours ?tab=runs|followers|following|notifications (notifications gated to isSelf — decisions §38). Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31).
+    +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`). Sidebar shape: Dashboard · History · Routes · Coach · Social (5 items).
+    social/         # Top-level social hub. ARIA tab strip (Feed default, People, Clubs) with ?tab= URL state. Hosts the SocialFeed + SocialPeople + SocialClubs components.
+    feed/           # Thin client-side redirect to `/social?tab=feed`. Kept alive for the sitemap entry, the bell-popover CTA, mobile push deep links, and any external links pinned to the old URL.
+    u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs, Follow toggle. Honours ?tab=runs|followers|following|notifications (notifications gated to isSelf — decisions §38). Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31). The activity feed used to live here as a self-only tab; it's now under /social and any legacy ?tab=feed deep link bounces over.
     dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
     runs/           # Run history with source + activity type filters
@@ -67,7 +69,7 @@ src/
     routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab.
     routes/new/     # Route builder (MapLibre + OSRM)
     routes/[id]/    # Route detail
-    clubs/          # Social layer — browse + My clubs
+    clubs/          # Thin client-side redirect to `/social?tab=clubs` (preserves `?tab=browse` as `clubs-sub=browse`). The /clubs/[slug] + /clubs/new + /clubs/[slug]/events/* + /clubs/join/[token] sub-routes are unchanged — only the top-level browse landing moved.
     clubs/new/      # Create a club (visibility + join policy)
     clubs/[slug]/   # Club home: feed (threaded) / events / routes / members tabs, pending-requests + invite-link panels for admins. Routes tab lists routes where club_id = this club; admins can create new (links to /routes/new?club=<id>) or transfer one of their personal routes in.
     clubs/[slug]/events/new/      # Admin: create event (one-off OR weekly/biweekly/monthly recurrence)

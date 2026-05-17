@@ -1237,6 +1237,28 @@ Pinned by `apps/backend/supabase/tests/segment_leaderboard_tiered_test.sql` (16 
 
 ---
 
+## 61. Social hub IA: rename Clubs → Social, host Feed/People/Clubs as tabs under /social
+
+The activity feed used to live under `/u/[me]?tab=feed` (a self-only tab on the user's own profile) and the top-level "Clubs" sidebar entry pointed at `/clubs`. There was no top-level surface for finding *other runners* — the only paths to a non-followed runner were drilling into `/clubs/[slug]` members, tapping the author chip on a feed/share card, or pasting a `/u/<uuid>` URL. Discovery failed when the user didn't already share a club.
+
+The IA refactor in this commit:
+
+- Sidebar item "Clubs" → "Social", icon `groups` → `public`, href `/clubs` → `/social`.
+- `/social` hosts an ARIA tab strip with `?tab=` URL state — **Feed** (default), **People**, **Clubs**.
+- **Feed** is the same activity feed (fetchFollowingFeed + 14-day window + activity-type filter chips + kudos pill + load-more cursor), extracted into `SocialFeed.svelte`.
+- **People** is the new surface — name-search (debounced 300ms, ILIKE on `user_profiles.display_name`, self-excluded) plus a Suggested-for-you list (members of viewer's clubs they don't follow yet, ranked by shared-club count). Inline Follow toggle with optimistic flip + rollback.
+- **Clubs** is the previous `/clubs/+page.svelte` body lifted into `SocialClubs.svelte`.
+
+The `/clubs` and `/feed` top-level routes stay alive as thin client-side redirects (`/clubs[?tab=browse]` → `/social?tab=clubs[&clubs-sub=browse]`; `/feed` → `/social?tab=feed`; legacy `/u/[id]?tab=feed` → `/social?tab=feed`). All sub-routes (`/clubs/[slug]`, `/clubs/new`, `/clubs/[slug]/events/*`, `/clubs/join/[token]`) are unchanged so invites, bookmarks, mobile deep links, and external links keep resolving.
+
+**Trade-off accepted:** the Feed tab no longer renders on `/u/[me]` (removed from the profile's tab list). The viewer's feed is conceptually about *who they follow*, not about the profile being viewed, so it never really fit on the profile page. The new home makes Feed visible to every signed-in user without a profile drill-in.
+
+**Don't re-litigate** by re-introducing `/feed` or `/clubs` as top-level tabs, or by adding back a Feed tab on the profile, unless the People surface gets demoted to a sub-tab somewhere else (the gap it closes is the load-bearing part of this refactor).
+
+Pinned by `apps/web/tests-e2e/social.spec.ts` (11 tests covering tab ARIA + URL state, both legacy redirects, People search + Follow toggle + Clear, suggested empty state, feed entry render + Cycle filter empty). Sidebar nav contract is pinned by `apps/web/tests-e2e/cross-cutting/surfaces.spec.ts`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
