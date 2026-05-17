@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { getAdminClient } from './fixtures/local-supabase';
-import { USER_A } from './fixtures/users';
+import { getAdminClient } from '../fixtures/local-supabase';
+import { USER_A } from '../fixtures/users';
 
 const SEED_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
 

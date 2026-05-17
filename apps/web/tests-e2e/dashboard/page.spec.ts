@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { deleteRun, insertRun } from './fixtures/simulate';
-import { USER_A } from './fixtures/users';
+import { deleteRun, insertRun } from '../fixtures/simulate';
+import { USER_A } from '../fixtures/users';
 
 /**
  * /dashboard — User A's home screen after sign-in.

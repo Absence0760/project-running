@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { USER_A } from './fixtures/users';
+import { USER_A } from '../fixtures/users';
 
 /**
  * /recap/[year] — Year in Running recap surface.

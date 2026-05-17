@@ -99,7 +99,7 @@ test.describe('/guided/[id] — detail pages', () => {
 	});
 });
 
-import { USER_A } from './fixtures/users';
+import { USER_A } from '../fixtures/users';
 
 test.describe('/guided — signed-in back navigation', () => {
 	test.use({ storageState: USER_A.storageStatePath });

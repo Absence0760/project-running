@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { USER_A } from './fixtures/users';
+import { USER_A } from '../fixtures/users';
 
 /**
  * /dashboard/period/[type]/[date] — standalone period summary deep link.

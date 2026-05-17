@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-import { signIn } from './fixtures/helpers';
-import { getAdminClient } from './fixtures/local-supabase';
-import { clearMailpit, extractLink, waitForEmail } from './fixtures/mailpit';
-import { USER_A } from './fixtures/users';
+import { signIn } from '../fixtures/helpers';
+import { getAdminClient } from '../fixtures/local-supabase';
+import { clearMailpit, extractLink, waitForEmail } from '../fixtures/mailpit';
+import { USER_A } from '../fixtures/users';
 
 /**
  * /login — auth surface for the email-form path.

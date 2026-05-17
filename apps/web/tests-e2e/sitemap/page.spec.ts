@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { RUNNER_PUBLIC_ROUTE_ID, RUNNER_PUBLIC_RUN_ID } from './fixtures/seeded-data';
+import { RUNNER_PUBLIC_ROUTE_ID, RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 
 /**
  * /sitemap.xml — the prerendered, build-time XML sitemap.
