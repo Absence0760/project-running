@@ -1075,6 +1075,7 @@ export type Database = {
         Row: {
           club_id: string | null
           created_at: string | null
+          description: string | null
           distance_m: number
           elevation_m: number | null
           featured: boolean
@@ -1096,6 +1097,7 @@ export type Database = {
         Insert: {
           club_id?: string | null
           created_at?: string | null
+          description?: string | null
           distance_m: number
           elevation_m?: number | null
           featured?: boolean
@@ -1117,6 +1119,7 @@ export type Database = {
         Update: {
           club_id?: string | null
           created_at?: string | null
+          description?: string | null
           distance_m?: number
           elevation_m?: number | null
           featured?: boolean

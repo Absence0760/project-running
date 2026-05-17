@@ -56,8 +56,10 @@ test.describe('/settings/integrations', () => {
 		await expect(parkrunCard).toBeVisible({ timeout: 10_000 });
 		await expect(parkrunCard).toHaveClass(/connected/);
 
-		// Disconnect.
 		await parkrunCard.getByRole('button', { name: 'Disconnect' }).click();
+		const confirm = page.locator('.modal', { hasText: 'Disconnect integration?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Disconnect' }).click();
 		await expect(parkrunCard).not.toHaveClass(/connected/, { timeout: 5_000 });
 		await expect(parkrunCard.getByRole('button', { name: 'Connect' }))
 			.toBeVisible();

@@ -15,7 +15,7 @@ Rounds A + B together moved eight web surfaces above 90%:
 | `/guided` | 70% | ~92% | 4 → 9 tests (every library entry pinned, three detail pages parametrized, mm:ss cue format, unknown-id empty state) |
 | `/` (landing) | 80% | ~92% | 2 → 7 tests + added `<svelte:head>` with title + description (real SEO gap surfaced by the test) |
 | `/live/[id]` | 70% | ~92% | 2 → 5 tests + **root-cause fix**: page now surfaces a clear "not broadcasting" state for stale-link / private / unknown-id viewers instead of sitting at "Connecting…" forever. The earlier draft of the test pinned the workaround ("badge not LIVE"); the spec was rewritten to assert the right user outcome after the fix landed. |
-| `settings/integrations` | 70% | ~92% | 3 → 6 tests (last-sync timestamp, Sync-now button, anon auth-wall) |
+| `settings/integrations` | 70% | ~92% | 3 → 6 tests (last-sync timestamp, Sync-now button, anon auth-wall) + 6 new tests in `integrations-connected.spec.ts` plant rows via service-role to exercise connected-state UI (Strava/parkrun/Garmin connected cards, Sync-now affordance, bulk-import card) + disconnect ConfirmDialog round-trip (added to the page — destructive disconnect now goes through a confirm modal, matching the rest of the app's pattern) |
 | `runs/photos` | 75% | ~92% | 3 → 5 tests (Add-photo gated to detail pages, non-owner share view has no upload/delete affordances) |
 | `/share/route/[id]` | 80% | ~92% | 4 → 6 tests (private route same not-found copy, header brand link points home) |
 | `/privacy`, `/terms`, `/cookie-notice` | 85% | ~92% | 4 → 8 tests (GDPR clauses on /privacy, auto-renewal + 14-day + cancellation on /terms, strict-vs-consent buckets on /cookie-notice, cross-doc link consistency) |
@@ -175,7 +175,7 @@ Everything below this section is the **starting baseline** before today's pushes
 | Privacy zones picker | 80% | `settings/privacy-zones.spec.ts` + cross-cutting |
 | Data export (Go endpoint) | 75% | `dataexport/server_test.go` (14) + `settings/export.spec.ts` |
 | Restore backup | 70% | `settings/restore-backup.spec.ts` |
-| Integrations tab | 70% | `settings/integrations.spec.ts` |
+| Integrations tab | ~92% | `settings/integrations.spec.ts` (disconnected-state) + `settings/integrations-connected.spec.ts` (planted-row connected UI + disconnect confirm dialog) |
 | Pro upgrade (currency-localised) | 80% | `settings/{upgrade,pricing-localization}.spec.ts` |
 
 ## Integrations

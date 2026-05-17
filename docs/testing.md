@@ -643,12 +643,13 @@ tests-e2e/
   landing.spec.ts              — /
   explore.spec.ts              — /explore (redirects to /routes?tab=explore)
   dashboard-period.spec.ts     — /dashboard/period/[type]/[date] (week + month deep links + invalid-date fallback)
-  live-event.spec.ts           — /live/event/[id]/[instance] (no-race-session empty state)
   login.spec.ts                — /login (failed sign-in; sign-up: ?signup=1; forgot-password full round-trip via Mailpit; happy sign-in path in cross-cutting/sign-in-out)
   dashboard.spec.ts            — /dashboard
   feed.spec.ts                 — /feed
   coach.spec.ts                — /coach (mount, dropdowns, send → mocked SSE assistant bubble)
-  live.spec.ts                 — /live/[id] (anon spectator: mount + planted-pings backlog hydrate → status flips to LIVE + stat strip fills)
+  live/
+    spectator.spec.ts          — /live/[id] (anon: shell mount + planted-pings backlog hydrate → LIVE + named runner via public_profiles + stat strip; finished-state for a run whose duration places it >2 min in the past; private + bogus-id not-broadcasting)
+    event.spec.ts              — /live/event/[id]/[instance] (pre-race empty state; running race + 3 runners → status pill, leaderboard sorted distance-desc with per-user avatar tint)
   runs/
     list.spec.ts               — /runs (filter, sort, search, multi-select, create, delete; bulk-delete actually-deletes round-trip)
     new.spec.ts                — /runs/new standalone create form (RunEditor → land on /runs/[new])

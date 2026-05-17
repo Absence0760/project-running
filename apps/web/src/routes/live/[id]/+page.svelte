@@ -192,22 +192,41 @@
 		}, 3000);
 	}
 
+	type VisibleRun = {
+		user_id: string;
+		started_at: string;
+		duration_s: number;
+		distance_m: number;
+	};
+	let visibleRun: VisibleRun | null = null;
+
 	async function ensureRunIsVisible(): Promise<boolean> {
 		// Visibility check: the spectator surface is a public-broadcast
 		// page, so the visible-runs set is exactly what `public_runs`
 		// exposes (decisions §33, migration 20260626_001).
 		const { data: row, error } = await supabase
 			.from('public_runs')
-			.select('id, user_id')
+			.select('id, user_id, started_at, duration_s, distance_m')
 			.eq('id', data.id)
 			.maybeSingle();
 		if (error || !row) {
 			status = 'not-found';
 			return false;
 		}
+		visibleRun = {
+			user_id: row.user_id as string,
+			started_at: row.started_at as string,
+			duration_s: Number(row.duration_s ?? 0),
+			distance_m: Number(row.distance_m ?? 0),
+		};
 		if (row.user_id) {
+			// `public_profiles` is the anon-readable projection of
+			// user_profiles (migration 20260824_001). The base table is
+			// owner-only via RLS, so reading it directly from an anon
+			// spectator session returns no rows and the runner falls
+			// back to "Anonymous runner".
 			const { data: profile } = await supabase
-				.from('user_profiles')
+				.from('public_profiles')
 				.select('display_name')
 				.eq('id', row.user_id)
 				.maybeSingle();
@@ -216,9 +235,33 @@
 		return true;
 	}
 
+	// A run is treated as already finished if its saved duration places
+	// its end >2 minutes in the past. The 2 min slack covers the gap
+	// between the last ping and the recorder posting the final row +
+	// any clock skew. While finished, the spectator surface freezes on
+	// the saved totals and skips the demo / realtime paths — opening a
+	// stale share link to a completed run should read "Finished" with
+	// final stats, not loop forever on "Connecting…" or "LIVE".
+	function runIsFinished(r: VisibleRun): boolean {
+		if (!r.duration_s || r.duration_s <= 0) return false;
+		const endedMs = new Date(r.started_at).getTime() + r.duration_s * 1000;
+		return Number.isFinite(endedMs) && endedMs < Date.now() - 2 * 60 * 1000;
+	}
+
 	onMount(() => {
 		(async () => {
 			if (!(await ensureRunIsVisible())) return;
+			if (visibleRun && runIsFinished(visibleRun)) {
+				distance = visibleRun.distance_m;
+				elapsed = visibleRun.duration_s;
+				if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
+				// Best-effort backlog hydrate so the map still gets the
+				// trace shape, but don't open realtime / demo — the run
+				// is over.
+				await hydrateBacklog();
+				status = 'finished';
+				return;
+			}
 			const hadBacklog = await hydrateBacklog();
 			subscribeLive();
 			if (hadBacklog) {
@@ -292,6 +335,7 @@
 			class="live-badge"
 			class:active={status === 'live'}
 			class:demo={status === 'demo'}
+			class:finished={status === 'finished'}
 			class:not-found={status === 'not-found'}
 		>
 			{#if status === 'connecting'}
@@ -439,6 +483,12 @@
 		background: var(--color-danger-light);
 		color: var(--color-danger);
 		border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+	}
+
+	.live-badge.finished {
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
+		border-color: var(--color-border);
 	}
 
 	.pulse-dot {

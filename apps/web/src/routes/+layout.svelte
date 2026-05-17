@@ -72,7 +72,7 @@
 	// auth state. Landing, auth flows, and the share / spectator pages that
 	// have their own chrome. A signed-in user visiting /share/run/<id> sees
 	// the share view, not the dashboard's sidebar wrapped around it.
-	const shellLessExact = ['/', '/login', '/auth/callback'];
+	const shellLessExact = ['/', '/login', '/auth/callback', '/auth/reset'];
 	const isShellless = (path: string) =>
 		shellLessExact.includes(path) ||
 		path.startsWith('/share/') ||

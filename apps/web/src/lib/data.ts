@@ -1011,6 +1011,7 @@ export async function saveRoute(route: {
 	surface: 'road' | 'trail' | 'mixed';
 	is_public: boolean;
 	club_id?: string | null;
+	description?: string | null;
 }): Promise<Route> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
@@ -1026,6 +1027,7 @@ export async function saveRoute(route: {
 			surface: route.surface,
 			is_public: route.is_public,
 			club_id: route.club_id ?? null,
+			description: route.description?.trim() || null,
 		})
 		.select()
 		.single();

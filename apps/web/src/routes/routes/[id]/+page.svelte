@@ -326,6 +326,9 @@
 							<span class="featured-pill">★ Featured</span>
 						{/if}
 					</div>
+					{#if route.description}
+						<p class="route-description">{route.description}</p>
+					{/if}
 					{#if (route.tags && route.tags.length > 0) || isOwner}
 						<div class="tags-row">
 							{#each route.tags ?? [] as t (t)}
@@ -657,6 +660,14 @@
 
 	.surface-tag {
 		text-transform: capitalize;
+	}
+
+	.route-description {
+		margin: var(--space-sm) 0 0;
+		color: var(--color-text-secondary);
+		font-size: 0.92rem;
+		line-height: 1.5;
+		white-space: pre-wrap;
 	}
 
 	.actions {

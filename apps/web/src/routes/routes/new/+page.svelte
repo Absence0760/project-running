@@ -219,6 +219,7 @@
 				surface: mode === 'trail' ? 'trail' : 'road',
 				is_public: isPublic,
 				club_id: clubId,
+				description: routeDescription,
 			});
 
 			showSaveModal = false;

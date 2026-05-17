@@ -13,6 +13,7 @@
 	} from '$lib/strava';
 	import { importStravaZip, type StravaZipProgress } from '$lib/strava-zip';
 	import { importGarminBundle, type GarminZipProgress } from '$lib/garmin-zip';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	interface IntegrationUI {
 		provider: string;
@@ -36,6 +37,7 @@
 	);
 
 	let pageLoading = $state(true);
+	let confirmingDisconnect = $state<number | null>(null);
 
 	async function refreshIntegrations() {
 		const saved = await fetchIntegrations();
@@ -86,19 +88,12 @@
 	async function toggle(index: number) {
 		const item = integrations[index];
 
+		if (item.connected) {
+			confirmingDisconnect = index;
+			return;
+		}
+
 		if (item.provider === 'strava') {
-			if (item.connected) {
-				item.loading = true;
-				try {
-					await disconnectIntegration('strava');
-					item.connected = false;
-					item.lastSync = null;
-					showToast('Strava disconnected.', 'success');
-				} finally {
-					item.loading = false;
-				}
-				return;
-			}
 			if (!isStravaConfigured()) {
 				showToast('Strava is not configured on this build (missing PUBLIC_STRAVA_CLIENT_ID).', 'error');
 				return;
@@ -109,19 +104,33 @@
 			return;
 		}
 
-		// Fallback for the non-OAuth providers (placeholder-connect).
+		// Placeholder-connect for the non-OAuth providers.
 		item.loading = true;
 		try {
-			if (item.connected) {
-				await disconnectIntegration(item.provider);
-				item.connected = false;
-				item.lastSync = null;
-			} else {
-				await connectIntegration(item.provider);
-				item.connected = true;
+			await connectIntegration(item.provider);
+			item.connected = true;
+		} catch (err) {
+			console.error('Integration connect failed:', err);
+		} finally {
+			item.loading = false;
+		}
+	}
+
+	async function performDisconnect() {
+		const index = confirmingDisconnect;
+		if (index == null) return;
+		const item = integrations[index];
+		confirmingDisconnect = null;
+		item.loading = true;
+		try {
+			await disconnectIntegration(item.provider);
+			item.connected = false;
+			item.lastSync = null;
+			if (item.provider === 'strava') {
+				showToast('Strava disconnected.', 'success');
 			}
 		} catch (err) {
-			console.error('Integration toggle failed:', err);
+			console.error('Integration disconnect failed:', err);
 		} finally {
 			item.loading = false;
 		}
@@ -392,6 +401,18 @@
 		</section>
 	{/if}
 </div>
+
+<ConfirmDialog
+	open={confirmingDisconnect !== null}
+	title="Disconnect integration?"
+	message={confirmingDisconnect !== null
+		? `Disconnect ${integrations[confirmingDisconnect].name}? Stored tokens will be removed and automatic syncing will stop. You can reconnect at any time.`
+		: ''}
+	confirmLabel="Disconnect"
+	danger
+	onconfirm={performDisconnect}
+	oncancel={() => (confirmingDisconnect = null)}
+/>
 
 <style>
 	.page {

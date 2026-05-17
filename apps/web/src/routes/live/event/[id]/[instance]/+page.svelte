@@ -71,6 +71,10 @@
 		return `hsl(${hueFor(userId)}, 70%, 50%)`;
 	}
 
+	function tintFor(userId: string): string {
+		return `hsla(${hueFor(userId)}, 70%, 50%, 0.18)`;
+	}
+
 	function initialsFor(userId: string): string {
 		const name = profiles.get(userId)?.display_name;
 		if (name) {
@@ -427,7 +431,7 @@
 						{#each pings as p, i (p.user_id)}
 							<li class="runner">
 								<span class="pos">{i + 1}</span>
-								<span class="avatar" style="background: {colorFor(p.user_id)}20; color: {colorFor(p.user_id)};">
+								<span class="avatar" style="background: {tintFor(p.user_id)}; color: {colorFor(p.user_id)};">
 									{initialsFor(p.user_id)}
 								</span>
 								<span class="name">{nameFor(p.user_id)}</span>
@@ -465,7 +469,7 @@
 						{#each finishedResults as r (r.user_id)}
 							<li class="runner" class:pending={!r.organiser_approved}>
 								<span class="pos">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
-								<span class="avatar" style="background: {colorFor(r.user_id)}20; color: {colorFor(r.user_id)};">
+								<span class="avatar" style="background: {tintFor(r.user_id)}; color: {colorFor(r.user_id)};">
 									{initialsFor(r.user_id)}
 								</span>
 								<span class="name">{nameFor(r.user_id)}</span>
@@ -488,7 +492,7 @@
 						{#each dnfResults as r (r.user_id)}
 							<li class="runner dnf-row">
 								<span class="pos">—</span>
-								<span class="avatar" style="background: {colorFor(r.user_id)}20; color: {colorFor(r.user_id)};">
+								<span class="avatar" style="background: {tintFor(r.user_id)}; color: {colorFor(r.user_id)};">
 									{initialsFor(r.user_id)}
 								</span>
 								<span class="name">{nameFor(r.user_id)}</span>

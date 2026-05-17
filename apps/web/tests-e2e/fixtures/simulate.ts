@@ -288,6 +288,78 @@ export async function insertLivePings(opts: {
 	}
 }
 
+export async function insertRaceSession(opts: {
+	event_id: string;
+	instance_start: string;
+	status: 'armed' | 'running' | 'finished' | 'cancelled';
+	started_at?: string | null;
+	finished_at?: string | null;
+	started_by?: string | null;
+	auto_approve?: boolean;
+}): Promise<void> {
+	const { error } = await getAdminClient()
+		.from('race_sessions')
+		.upsert(
+			{
+				event_id: opts.event_id,
+				instance_start: opts.instance_start,
+				status: opts.status,
+				started_at: opts.started_at ?? null,
+				finished_at: opts.finished_at ?? null,
+				started_by: opts.started_by ?? null,
+				auto_approve: opts.auto_approve ?? true
+			},
+			{ onConflict: 'event_id,instance_start' }
+		);
+	if (error) {
+		throw new Error(`simulate.insertRaceSession failed: ${error.message}`);
+	}
+}
+
+export async function insertRacePings(opts: {
+	event_id: string;
+	instance_start: string;
+	runners: Array<{
+		user_id: string;
+		points: Array<{
+			lat: number;
+			lng: number;
+			distance_m?: number;
+			elapsed_s?: number;
+			at?: string;
+		}>;
+	}>;
+}): Promise<void> {
+	// Plant a sequence of race_pings for each runner. Inserts go through
+	// service-role to bypass the running-state RLS insert check, but the
+	// race_pings_drop_in_zone BEFORE-INSERT trigger still fires — keep
+	// test points clear of any seeded privacy zones (runner has a 200 m
+	// zone around Melbourne CBD).
+	const baseAt = Date.now();
+	const rows: Array<Record<string, unknown>> = [];
+	for (const r of opts.runners) {
+		r.points.forEach((p, i) => {
+			rows.push({
+				event_id: opts.event_id,
+				instance_start: opts.instance_start,
+				user_id: r.user_id,
+				at:
+					p.at ??
+					new Date(baseAt - (r.points.length - i) * 1000).toISOString(),
+				lat: p.lat,
+				lng: p.lng,
+				distance_m: p.distance_m ?? null,
+				elapsed_s: p.elapsed_s ?? null
+			});
+		});
+	}
+	if (rows.length === 0) return;
+	const { error } = await getAdminClient().from('race_pings').insert(rows);
+	if (error) {
+		throw new Error(`simulate.insertRacePings failed: ${error.message}`);
+	}
+}
+
 export async function clearNotifications(userId: string): Promise<void> {
 	// Wipe the user's notifications. Tests that need a deterministic
 	// starting state (bell-badge tests asserting exact counts, inbox
