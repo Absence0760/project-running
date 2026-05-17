@@ -9,6 +9,8 @@
 	let map: maplibregl.Map | null = null;
 	let loading = $state(false);
 	let lastUpdated = $state<Date | null>(null);
+	let mapLoaded = false;
+	let cachedFeatures: GeoJSON.Feature[] = [];
 
 	// Debounce key for moveend → fetch. We don't want to fire a new
 	// PostGIS query on every pixel of a drag.
@@ -37,9 +39,10 @@
 
 		map.on('load', () => {
 			if (!map) return;
+			mapLoaded = true;
 			map.addSource(HEATMAP_SOURCE, {
 				type: 'geojson',
-				data: { type: 'FeatureCollection', features: [] },
+				data: { type: 'FeatureCollection', features: cachedFeatures },
 			});
 			// Standard MapLibre heatmap paint — interpolated by intensity
 			// (the density of sampled points). Higher zooms taper the
@@ -79,6 +82,14 @@
 					'heatmap-opacity': 0.85,
 				},
 			});
+			// First fetch fires on mount in parallel with the style load
+			// so the legend's "Updated" timestamp shows even when the
+			// basemap can't render (no MapTiler key, network-blocked
+			// vendor, etc.). If the style does load, we also refresh
+			// once more here to cover the case where the mount-fetch
+			// raced ahead of the source being added (cachedFeatures
+			// covers that path) AND to pick up any bounds drift between
+			// the constructor's centre/zoom and the first painted frame.
 			refresh();
 		});
 
@@ -86,6 +97,12 @@
 			if (pendingFetch) clearTimeout(pendingFetch);
 			pendingFetch = setTimeout(refresh, 350);
 		});
+
+		// Kick off the first fetch immediately. The HTTP RPC doesn't
+		// care whether MapLibre has loaded a style yet — and decoupling
+		// the legend's status from the basemap means the user gets an
+		// "Updated …" stamp even on a keyless deploy.
+		refresh();
 	});
 
 	onDestroy(() => {
@@ -105,15 +122,16 @@
 				maxLng: b.getEast(),
 				maxLat: b.getNorth(),
 			});
-			const src = map.getSource(HEATMAP_SOURCE) as maplibregl.GeoJSONSource | undefined;
-			src?.setData({
-				type: 'FeatureCollection',
-				features: pts.map((p) => ({
-					type: 'Feature',
-					geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-					properties: {},
-				})),
-			});
+			const features: GeoJSON.Feature[] = pts.map((p) => ({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+				properties: {},
+			}));
+			cachedFeatures = features;
+			if (mapLoaded) {
+				const src = map.getSource(HEATMAP_SOURCE) as maplibregl.GeoJSONSource | undefined;
+				src?.setData({ type: 'FeatureCollection', features });
+			}
 			lastUpdated = new Date();
 		} catch (e) {
 			console.error('heatmap refresh failed', e);

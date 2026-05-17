@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { refreshStorageState } from '../fixtures/helpers';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { clearMailpit, extractLink, waitForEmail } from '../fixtures/mailpit';
 import { USER_A } from '../fixtures/users';
@@ -17,9 +18,13 @@ import { USER_A } from '../fixtures/users';
  *      strongest possible test that the planted-user variant in
  *      login.spec.ts can't make (a fresh user has no seeded data;
  *      this one proves the recovery doesn't damage an account that
- *      already has runs, plans, etc.). Cleanup MUST reset the
- *      password back to `testtest` via the admin client or every
- *      downstream spec breaks.
+ *      already has runs, plans, etc.). Cleanup MUST (a) reset the
+ *      password back to `testtest` via the admin client AND (b)
+ *      refresh USER_A's saved storage state. Supabase revokes ALL
+ *      refresh tokens on every password write (even admin-driven
+ *      resets to the same literal value); without (b), every
+ *      downstream spec that loads .auth/user-a.json bounces to
+ *      /login on its first navigation.
  *   2. Direct visit with no recovery hash → "invalid link" branch
  *      rendered (NOT bounced to /login by the layout's auth guard).
  *   3. Client-side length validation blocks submit on a too-short
@@ -31,7 +36,9 @@ test.describe('/auth/reset', () => {
 
 	test('full round-trip: seeded user → email → reset → sign in with new password', async ({
 		page,
-		context
+		context,
+		browser,
+		baseURL
 	}) => {
 		const newPassword = 'newpass-987';
 		const admin = getAdminClient();
@@ -98,6 +105,18 @@ test.describe('/auth/reset', () => {
 			} catch (_) {
 				/* best-effort */
 			}
+			// Supabase revokes ALL of a user's refresh tokens on password
+			// change — including the admin-driven reset above. Re-mint
+			// USER_A's saved storage state so the rest of the suite (which
+			// reads .auth/user-a.json once per spec) doesn't bounce back
+			// to /login.
+			try {
+				await refreshStorageState(browser, baseURL ?? 'http://localhost:7777', USER_A);
+			} catch (_) {
+				/* best-effort — the user's downstream specs will skip-skip
+				   anyway if this also fails, but most likely the form
+				   sign-in works as soon as admin sets the password back. */
+			}
 		}
 	});
 
@@ -151,7 +170,12 @@ test.describe('/auth/reset', () => {
 			expect(page.url()).toContain('/auth/reset');
 		});
 
-	test('client-side length validation blocks a too-short password', async ({ page, context }) => {
+	test('client-side length validation blocks a too-short password', async ({
+		page,
+		context,
+		browser,
+		baseURL
+	}) => {
 		const admin = getAdminClient();
 		try {
 			await clearMailpit();
@@ -200,6 +224,14 @@ test.describe('/auth/reset', () => {
 			// can't poison the suite.
 			try {
 				await admin.auth.admin.updateUserById(USER_A.id, { password: USER_A.password });
+			} catch (_) {
+				/* best-effort */
+			}
+			// Admin password write revokes refresh tokens whether the
+			// password actually changed value or not, so re-mint the
+			// saved storage state for the rest of the suite.
+			try {
+				await refreshStorageState(browser, baseURL ?? 'http://localhost:7777', USER_A);
 			} catch (_) {
 				/* best-effort */
 			}

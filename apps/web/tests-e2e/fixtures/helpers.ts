@@ -1,4 +1,6 @@
-import { expect, type Page } from '@playwright/test';
+import { chromium, expect, type Browser, type Page } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 import type { SeededUser } from './users';
 
@@ -26,6 +28,44 @@ export async function signIn(page: Page, user: SeededUser) {
 	await page.locator('input[type="password"]').fill(user.password);
 	await page.locator('form button[type="submit"]').click();
 }
+
+/**
+ * Re-mint the user's persisted storage state via the UI sign-in form.
+ * Use after any test that rotates the user's password (or admin-resets
+ * it). Supabase revokes ALL of a user's refresh tokens whenever the
+ * password changes — including the one captured during globalSetup —
+ * so without this every downstream spec that reads `storageStatePath`
+ * bounces back to /login.
+ *
+ * The browser arg lets the caller share its existing chromium instance
+ * (the test fixture's `browser`) instead of paying a fresh launch.
+ */
+export async function refreshStorageState(
+	browser: Browser,
+	baseURL: string,
+	user: SeededUser
+) {
+	const ctx = await browser.newContext({ baseURL });
+	const page = await ctx.newPage();
+	try {
+		await signIn(page, user);
+		await page.waitForURL(/\/(dashboard|runs|coach)$/, { timeout: 10_000 });
+		await page.evaluate(() => {
+			localStorage.setItem(
+				'cookie_consent',
+				JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+			);
+		});
+		await mkdir(dirname(user.storageStatePath), { recursive: true });
+		await ctx.storageState({ path: user.storageStatePath });
+	} finally {
+		await ctx.close();
+	}
+}
+
+// chromium import kept available for callers that need to spin up a
+// fresh browser when no fixture-managed one is in scope.
+export { chromium };
 
 /**
  * Click through the sidebar profile menu → Sign out. Asserts the

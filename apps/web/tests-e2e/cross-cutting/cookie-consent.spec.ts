@@ -129,7 +129,7 @@ test.describe('Cookie consent banner', () => {
 			// Save run button is also visible AND clickable. If the
 			// banner blocked pointer events, the click would never
 			// resolve.
-			await page.getByRole('button', { name: 'Walk', exact: true }).click();
+			await page.getByRole('radio', { name: 'Walk', exact: true }).click();
 			const numberInputs = page.locator('input[type="number"]');
 			await numberInputs.nth(0).fill('1.0');
 			await numberInputs.nth(1).fill('5');
