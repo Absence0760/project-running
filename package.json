@@ -47,15 +47,19 @@
   },
   "overrides": {
     "cookie": "^1.0.2",
+    "devalue": "^5.8.1",
     "@sveltejs/kit": {
-      "cookie": "^1.0.2"
+      "cookie": "^1.0.2",
+      "devalue": "^5.8.1"
     }
   },
   "pnpm": {
     "overrides": {
       "cookie": "^1.0.2",
-      "@sveltejs/kit>cookie": "^1.0.2"
+      "devalue": "^5.8.1",
+      "@sveltejs/kit>cookie": "^1.0.2",
+      "@sveltejs/kit>devalue": "^5.8.1"
     }
   },
-  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Top-level override deduplicates direct copies but npm leaves SvelteKit's nested node_modules/@sveltejs/kit/node_modules/cookie@0.6.0 in place because the v0.x → v1.x range jump is outside SvelteKit's declared dependency range. The nested @sveltejs/kit > cookie override forces that transitive copy too. The API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop both entries once @sveltejs/kit ships its own bump."
+  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Top-level override deduplicates direct copies but npm leaves SvelteKit's nested node_modules/@sveltejs/kit/node_modules/cookie@0.6.0 in place because the v0.x → v1.x range jump is outside SvelteKit's declared dependency range. The nested @sveltejs/kit > cookie override forces that transitive copy too. The API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop both entries once @sveltejs/kit ships its own bump. devalue override: @sveltejs/kit@2.59.1 declares devalue ^5.6.4 which still resolves to 5.8.0 (GHSA-77vg-94rm-hx3p — sparse-array DoS). Patch fix is in 5.8.1, inside Kit's declared range, so the override just nudges resolution to the patched version. Drop once Kit's lockfile picks it up upstream."
 }
