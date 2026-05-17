@@ -40,24 +40,109 @@ test.describe('Workout structured-interval edit (web)', () => {
 		});
 	});
 
-	test.skip(
-		'edit interval structure (warmup + reps + recovery) and persist',
-		async () => {
-			// TODO: wire a structure editor into WorkoutEditor (or onto
-			// the /plans/[id]/workouts/[wid] detail page) before this
-			// can be unskipped. Today the only `structure` mutations
-			// from a client are:
-			//   - `structure: null` (when kind transitions to an
-			//     unstructured kind), and
-			//   - `structure: undefined` (no-op).
-			// Neither path covers add/remove an interval, change a
-			// rep count, or tweak a pace target. Pinning the read
-			// side already lives in plans/workout-runner-surfaces.spec
-			// .ts ("Interval workout renders warmup + repeats +
-			// cooldown") so the rendering invariant is safe; the
-			// missing leg is the writable round-trip.
+	test('edit interval structure (warmup + reps + recovery) and persist', async ({
+		page
+	}) => {
+		// 2026-04-14 is the seeded interval: 1.5 km warmup + 5×1000m @
+		// 4:00 with 400 m jog recovery + 1.5 km cooldown. Drive the
+		// WorkoutEditor's structure block: bump warmup to 2 km, count
+		// to 6, recovery to 500 m, rep pace to 4:10. Save → re-read
+		// the DB row and assert each field round-tripped.
+		const admin = getAdminClient();
+		const { data: weeks } = await admin
+			.from('plan_weeks')
+			.select('id')
+			.eq('plan_id', SYDNEY_HALF_PLAN_ID);
+		const weekIds = (weeks ?? []).map((w) => (w as { id: string }).id);
+		const { data: wo } = await admin
+			.from('plan_workouts')
+			.select('id, structure')
+			.in('week_id', weekIds)
+			.eq('scheduled_date', '2026-04-14')
+			.maybeSingle();
+		expect(wo).not.toBeNull();
+		const workoutId = (wo as { id: string }).id;
+		const beforeStructure = (wo as { structure: unknown }).structure;
+
+		try {
+			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+			const intervalDay = page
+				.locator('.weeks .week .day:not(.completed) .day-link', {
+					hasText: /Interval/
+				})
+				.first();
+			await expect(intervalDay).toBeVisible({ timeout: 10_000 });
+			await intervalDay.click();
+
+			const modal = page.locator('.modal');
+			await expect(modal).toBeVisible({ timeout: 5_000 });
+
+			const structure = modal.locator('fieldset.structure');
+			await expect(structure).toBeVisible();
+
+			await structure.locator('label.warmup input').fill('2');
+			await structure.locator('label.cooldown input').fill('2');
+
+			const repeats = structure.locator('fieldset.repeats');
+			await expect(repeats).toBeVisible();
+			const repeatInputs = repeats.locator('> label input[type="number"]');
+			await repeatInputs.nth(0).fill('6');
+			await repeatInputs.nth(1).fill('1');
+			const pace = repeats.locator('fieldset .pace-row input');
+			await pace.nth(0).fill('4');
+			await pace.nth(1).fill('10');
+			await repeats.locator('label.recovery input').fill('0.5');
+
+			await modal.getByRole('button', { name: /^Save/ }).click();
+			await expect(modal).toHaveCount(0);
+
+			const { data: after } = await admin
+				.from('plan_workouts')
+				.select('structure')
+				.eq('id', workoutId)
+				.maybeSingle();
+			const next = (after as { structure: Record<string, unknown> }).structure;
+			expect(next).not.toBeNull();
+			const warmup = next.warmup as { distance_m: number };
+			const repeatsRow = next.repeats as {
+				count: number;
+				distance_m: number;
+				pace_sec_per_km: number;
+				recovery_distance_m: number;
+				recovery_pace: string;
+			};
+			const cooldown = next.cooldown as { distance_m: number };
+			expect(warmup.distance_m).toBe(2000);
+			expect(cooldown.distance_m).toBe(2000);
+			expect(repeatsRow.count).toBe(6);
+			expect(repeatsRow.distance_m).toBe(1000);
+			expect(repeatsRow.pace_sec_per_km).toBe(250);
+			expect(repeatsRow.recovery_distance_m).toBe(500);
+			expect(repeatsRow.recovery_pace).toBe('jog');
+
+			// Reload + re-open: editor reflects the persisted values.
+			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+			const reopened = page
+				.locator('.weeks .week .day:not(.completed) .day-link', {
+					hasText: /Interval/
+				})
+				.first();
+			await reopened.click();
+			const modal2 = page.locator('.modal');
+			await expect(modal2).toBeVisible({ timeout: 5_000 });
+			const structure2 = modal2.locator('fieldset.structure');
+			await expect(structure2.locator('label.warmup input')).toHaveValue('2');
+			const repeats2 = structure2.locator('fieldset.repeats');
+			await expect(repeats2.locator('> label input[type="number"]').nth(0))
+				.toHaveValue('6');
+			await expect(repeats2.locator('label.recovery input')).toHaveValue('0.5');
+		} finally {
+			await admin
+				.from('plan_workouts')
+				.update({ structure: beforeStructure })
+				.eq('id', workoutId);
 		}
-	);
+	});
 
 	test('structure column is cleared when kind transitions to an unstructured kind', async ({
 		page

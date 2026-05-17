@@ -281,24 +281,25 @@ In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column 
 
 ### `notifications`
 
-Inbox rows for the social loop (decisions §38). Materialised by `after insert` SECURITY DEFINER triggers on `run_kudos`, `run_comments`, and `user_follows` so the notification lands in the same transaction as the source write.
+Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, and `event_attendees` so the notification lands in the same transaction as the source write.
 
 ```sql
 create table notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid references auth.users(id) on delete cascade not null,
   actor_id    uuid references auth.users(id) on delete set null,
-  kind        text not null check (kind in ('kudos','comment','comment_reply','follow')),
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp')),
   run_id      uuid references runs(id) on delete cascade,
   comment_id  uuid references run_comments(id) on delete cascade,
+  event_id    uuid references events(id) on delete cascade,
   read_at     timestamptz,
   created_at  timestamptz not null default now()
 );
 ```
 
-Two indexes: `(user_id, created_at desc)` for the list view, and a **partial** `(user_id, created_at desc) where read_at is null` so the bell-badge count query is O(unread). Source FKs use `on delete cascade` so notifications die with their parent (deleted run, deleted comment), keeping the inbox honest without a cleanup job.
+Two indexes for the read path: `(user_id, created_at desc)` for the list view, and a **partial** `(user_id, created_at desc) where read_at is null` so the bell-badge count query is O(unread). A third partial unique `(user_id, actor_id, event_id) where kind = 'event_rsvp'` de-dupes RSVP-status flips (Going → Maybe → Going re-fires the trigger but `on conflict do nothing` keeps one row). Source FKs use `on delete cascade` so notifications die with their parent (deleted run, deleted comment, deleted event), keeping the inbox honest without a cleanup job.
 
-RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them.
+RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them. `notify_event_rsvp` fires for the event's `created_by` only and only when `status = 'going'`; Maybe / Declined intentionally produce no inbox row.
 
 ### `segments` / `segment_efforts`
 

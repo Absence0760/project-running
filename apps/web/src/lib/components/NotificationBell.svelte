@@ -69,6 +69,10 @@
 				return r.run_id ? `/runs/${r.run_id}` : null;
 			case 'follow':
 				return r.actor_id ? `/u/${r.actor_id}` : null;
+			case 'event_rsvp':
+				return r.event_id && item.event_club_slug
+					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
+					: null;
 		}
 	}
 
@@ -86,6 +90,10 @@
 				return `${name} replied to your comment`;
 			case 'follow':
 				return `${name} started following you`;
+			case 'event_rsvp':
+				return item.event_title
+					? `${name} RSVP'd Going to your event "${item.event_title}"`
+					: `${name} RSVP'd Going to your event`;
 		}
 	}
 

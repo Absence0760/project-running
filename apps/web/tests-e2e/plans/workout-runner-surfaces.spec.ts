@@ -159,21 +159,38 @@ test.describe('Workout-runner surfaces (web)', () => {
 				.select('id')
 				.eq('plan_id', SYDNEY_HALF_PLAN_ID);
 			const weekIds = (weeks ?? []).map((w) => (w as { id: string }).id);
-			const { data: hit } = await admin
+			// Sweep any today-workout (seeded OR leaked from another spec)
+			// so the fallback branch is reachable. Capture the rows so
+			// the finally block can restore them — the seed plants today's
+			// workout deterministically and other tests in this file
+			// depend on it being there.
+			const { data: existing } = await admin
 				.from('plan_workouts')
-				.select('id')
+				.select('*')
 				.in('week_id', weekIds)
-				.eq('scheduled_date', today)
-				.maybeSingle();
-			// Skip if a test left a stray today-workout.
-			test.skip(hit != null, 'a today-workout exists; this fallback test cannot run');
+				.eq('scheduled_date', today);
+			const restored = (existing ?? []) as Record<string, unknown>[];
+			if (restored.length > 0) {
+				await admin
+					.from('plan_workouts')
+					.delete()
+					.in('id', restored.map((r) => r.id as string));
+			}
 
-			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-			await page.waitForLoadState('networkidle');
-			const today_section = page.locator('section.today');
-			await expect(today_section).toBeVisible({ timeout: 10_000 });
-			await expect(today_section.locator('.today-label'))
-				.toHaveText(/Next up|Today|Race day/);
+			try {
+				await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+				await page.waitForLoadState('networkidle');
+				const today_section = page.locator('section.today');
+				await expect(today_section).toBeVisible({ timeout: 10_000 });
+				await expect(today_section.locator('.today-label'))
+					.toHaveText(/Next up|Today|Race day/);
+			} finally {
+				// Restore the swept today-workout rows so adjacent specs
+				// that depend on them keep passing.
+				if (restored.length > 0) {
+					await admin.from('plan_workouts').insert(restored);
+				}
+			}
 		});
 	});
 

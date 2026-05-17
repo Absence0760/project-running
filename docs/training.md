@@ -6,6 +6,8 @@ Runna / Garmin-Coach parity. Web-first in v1. The data model is shared so the An
 
 The plan detail page now supports inline workout edits. Hovering a day-tile reveals an edit button (`apps/web/src/lib/components/WorkoutEditor.svelte`) that opens a side-drawer: kind, distance, target pace (single value or a start → end progression for phase-based pace bumps), tolerance, zone label, and notes. Backed by `updatePlanWorkout` in `data.ts`.
 
+For structured kinds (`tempo`, `interval`, `marathon_pace`, `race`) the editor also exposes a Structure block: warmup distance, a Repeats / Steady mode toggle, and cooldown distance. Repeats mode edits the count + per-rep distance + per-rep pace + recovery distance + recovery pace (`easy` / `jog`); Steady mode edits distance + pace. The block writes the `plan_workouts.structure` jsonb in the canonical `WorkoutStructure` shape from `training.ts` so the read-side on `/plans/[id]/workouts/[wid]` renders the new values without translation. Flipping kind to an unstructured kind (easy / long / recovery / rest) clears `structure` to `null`.
+
 Migration `20260420_001_plan_editor.sql` adds:
 - `plan_workouts.pace_zone` — free-text label (E, T, I, MP, etc.) for UI colouring
 - `plan_workouts.target_pace_end_sec_per_km` — for pace progressions (null = flat pace)
@@ -98,7 +100,7 @@ Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will gro
 
 Two paths land in the same UI state (the green check on the calendar, the progress-ring counter ticking up):
 
-1. **Auto-match from a tracked run.** `autoMatchRunToPlanWorkout(runId, runIsoDate, runDistanceM)` links a run to the same-day plan workout whose target distance is within ±25% of the recorded distance. Wrong matches are manually clearable via the "Unlink" control on the workout-detail page. Not called automatically by `ApiClient.saveRun` yet — the wiring is on the roadmap once we've validated the matching logic in the wild.
+1. **Auto-match from a tracked run.** `autoMatchRunToPlanWorkout(runId, runIsoDate, runDistanceM)` links a run to the same-day plan workout whose target distance is within ±25% of the recorded distance. Wrong matches are manually clearable via the "Unlink" control on the workout-detail page. Called automatically on the web client after both `createManualRun` and `saveRun` (importer path) succeed; wrapped in its own try/catch so an auto-match failure cannot block the run insert (auxiliary effect per the layered-resilience contract).
 2. **Manual mark from the calendar editor.** The "Mark as done" button in `WorkoutEditor.svelte` calls `markWorkoutCompleted(id, null, { manual: true })`, which sets `manually_completed = true` and stamps `completed_at`. The same button toggles back to "Mark not done" — clearing both flags — when the workout is already completed via the manual path. If a workout already has a linked run, the button is disabled with a tooltip pointing the user at the workout-detail page's Unlink flow so the run/workout link is severed deliberately.
 
 ## Deferred

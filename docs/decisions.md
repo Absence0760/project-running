@@ -781,7 +781,9 @@ The social loop (kudos, comments, replies, follows) was discoverable only by vis
 
 **RLS:** users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed off — only the trigger functions write, and they run as SECURITY DEFINER to bypass RLS for the recipient (who isn't auth.uid() at insert time).
 
-**v1 scope:** kudos on your runs, comments on your runs, replies to your comments, new followers. Deliberately **not** included: event RSVPs (large fan-out per-event when many people RSVP), club post replies (high noise), realtime push (poll on focus is enough). When realtime + mobile push are needed, layer on top — `notifications` is the durable record, push is a delivery mechanism.
+**v1 scope:** kudos on your runs, comments on your runs, replies to your comments, new followers. Deliberately **not** included: club post replies (high noise), realtime push (poll on focus is enough). When realtime + mobile push are needed, layer on top — `notifications` is the durable record, push is a delivery mechanism.
+
+**v1.1 scope (migration `20260903_001_notify_event_rsvp.sql`):** event RSVPs. Originally deferred over fan-out concerns; in practice the fan-out goes the *other* way (one row per RSVP into the event creator's inbox, not the reverse). Only the event `created_by` is notified — not the club admins, since the creator already is one and broadcasting to every admin on every RSVP turns into spam on bigger clubs. Only `status = 'going'` fires. The trigger is wired AFTER INSERT OR UPDATE so a Maybe→Going flip notifies; a partial unique index `(user_id, actor_id, event_id) where kind = 'event_rsvp'` + `on conflict do nothing` keeps Going→Maybe→Going churn from duplicating rows.
 
 **UI:** sidebar bell with an unread badge and a popover showing the last 15. The full inbox is mounted as the Notifications tab on `/u/[id]` (own profile only) with all / unread sub-filters — collapsing it onto the profile page keeps the social surfaces in one place rather than scattering them across sibling top-level routes. Marking-as-read is optimistic + best-effort — the badge updates immediately and the row write is fire-and-forget.
 

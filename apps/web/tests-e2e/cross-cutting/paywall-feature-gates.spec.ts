@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
@@ -27,27 +25,22 @@ import { USER_A, USER_C_PRO } from '../fixtures/users';
  *      surfaces the AI Coach unlimited bullet.
  *   6. /settings/upgrade as Pro user — "Active" badge visible, "Manage
  *      subscription" CTA visible, "Get Pro" CTA absent.
+ *   7. /coach as free user with `paywall_force_locked` → <ProGate>
+ *      lock-card visible with Upgrade CTA, chat surface absent.
+ *   8. /coach as Pro user with `paywall_force_locked` → chat surface
+ *      visible, no ProGate (tier check still runs regardless of the
+ *      env-bypass).
  *
- * Tests for a true `<ProGate>` lock-card on a feature page are
- * test.skip-with-TODO today: `lib/features.ts::isLocked()` is
- * hard-coded to return `false` for every key, so no screen renders the
- * ProGate. When a future feature flips that, replace the skip with the
- * lock-card assertion + the `<a href="/settings/upgrade">Upgrade</a>`
- * CTA check.
+ * `lib/features.ts::isLocked('ai_coach')` returns `!isPro()` (unless the
+ * dev escape hatch `PUBLIC_BYPASS_PAYWALL=true` is set against the local
+ * Supabase stack), so /coach now renders `<ProGate>` for a free user
+ * with the bypass off. The tier-aware copy tests above run with the
+ * bypass on locally (so the chat surface is visible regardless of
+ * tier); the new ProGate describe-block at the bottom pins the
+ * lock-card path that fires when the bypass is off.
  */
 
 const TODAY = new Date().toISOString().slice(0, 10);
-
-function bypassPaywallActive(): boolean {
-	for (const path of ['.env', '.env.local']) {
-		if (!existsSync(path)) continue;
-		const txt = readFileSync(path, 'utf-8');
-		if (/^BYPASS_PAYWALL\s*=\s*['"]?true['"]?\s*$/m.test(txt)) {
-			return true;
-		}
-	}
-	return false;
-}
 
 test.describe('paywall — per-feature gates', () => {
 	test.beforeEach(async ({ context }) => {
@@ -92,11 +85,6 @@ test.describe('paywall — per-feature gates', () => {
 		test('hitting the 5-msg daily cap replaces composer with limit-bar', async ({
 			page,
 		}) => {
-			test.skip(
-				bypassPaywallActive(),
-				'BYPASS_PAYWALL=true in apps/web/.env.local; the cap is intentionally off in this environment',
-			);
-
 			const admin = getAdminClient();
 			await admin.from('user_coach_usage').upsert(
 				{ user_id: USER_A.id, usage_date: TODAY, message_count: 5 },
@@ -206,15 +194,67 @@ test.describe('paywall — per-feature gates', () => {
 	});
 
 	test.describe('ProGate per-feature lock-cards', () => {
-		test.skip(
-			true,
-			'TODO: lib/features.ts::isLocked() is hard-coded to return false for every feature today (see docs/paywall.md — Pro is a perks-only tier, no gated screens). When a future feature flips isLocked() to !isPro(), replace this skip with: free user navigates to the gated feature → asserts <ProGate> renders (.pro-gate locator) → asserts the <a href="/settings/upgrade"> CTA is present → negative path with BYPASS_PAYWALL or USER_C_PRO storageState verifies the feature is reachable.',
-		);
+		test('free user lands on /coach -> sees <ProGate> with Upgrade CTA', async ({
+			browser,
+		}) => {
+			const ctx = await browser.newContext({
+				storageState: USER_A.storageStatePath,
+			});
+			const page = await ctx.newPage();
+			try {
+				// Force the gate armed even on a dev machine running with
+				// PUBLIC_BYPASS_PAYWALL=true. Mirrors how CI behaves
+				// without the bypass: free user hits a Pro-only feature
+				// and gets the lock-card.
+				await ctx.addInitScript(() => {
+					localStorage.setItem(
+						'cookie_consent',
+						JSON.stringify({ choice: 'accepted', timestamp: Date.now() }),
+					);
+					localStorage.setItem('paywall_force_locked', '1');
+				});
+				await page.goto('/coach');
 
-		test('placeholder — ProGate not wired to any feature today', () => {
-			// Intentional no-op; the describe-level skip above is the
-			// signal. Keep the test() call so the file always reports a
-			// known-skipped row in the test summary.
+				const gate = page.locator('.pro-gate');
+				await expect(gate).toBeVisible({ timeout: 10_000 });
+				await expect(gate).toContainText(/AI Coach/);
+				await expect(gate.locator('.pro-badge', { hasText: 'PRO' }))
+					.toBeVisible();
+				await expect(gate.locator('a[href="/settings/upgrade"]'))
+					.toBeVisible();
+				await expect(page.locator('.usage-bar')).toHaveCount(0);
+				await expect(page.locator('form.composer')).toHaveCount(0);
+			} finally {
+				await ctx.close();
+			}
+		});
+
+		test('Pro user lands on /coach -> sees the chat surface, no <ProGate>', async ({
+			browser,
+		}) => {
+			const ctx = await browser.newContext({
+				storageState: USER_C_PRO.storageStatePath,
+			});
+			const page = await ctx.newPage();
+			try {
+				await ctx.addInitScript(() => {
+					localStorage.setItem(
+						'cookie_consent',
+						JSON.stringify({ choice: 'accepted', timestamp: Date.now() }),
+					);
+					// Even with the force-locked override, a Pro user is
+					// never gated — the override only suppresses the env
+					// bypass, the tier check still runs.
+					localStorage.setItem('paywall_force_locked', '1');
+				});
+				await page.goto('/coach');
+
+				await expect(page.locator('.pro-gate')).toHaveCount(0);
+				await expect(page.locator('.usage-bar'))
+					.toBeVisible({ timeout: 10_000 });
+			} finally {
+				await ctx.close();
+			}
 		});
 	});
 });

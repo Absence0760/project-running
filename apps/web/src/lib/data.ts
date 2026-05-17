@@ -24,8 +24,10 @@ import type {
 	PlanWeek,
 	PlanWorkout,
 	ActivePlanOverview,
-	PlanStatus
+	PlanStatus,
+	NotificationKind
 } from './types';
+export type { NotificationKind };
 import { parseRunSource } from './types';
 import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
@@ -578,7 +580,16 @@ export async function createManualRun(input: {
 		.select('id')
 		.single();
 	if (error) throw error;
-	return { id: data.id };
+	const runId = data.id as string;
+
+	try {
+		const runDate = input.startedAt.slice(0, 10);
+		await autoMatchRunToPlanWorkout(runId, runDate, input.distanceM);
+	} catch (e) {
+		console.warn('autoMatchRunToPlanWorkout failed', e);
+	}
+
+	return { id: runId };
 }
 
 /// Insert a run from an importer (Strava zip, GPX bulk, etc). Uploads
@@ -658,6 +669,13 @@ export async function saveRun(input: {
 		} catch (e) {
 			trackError = e instanceof Error ? e.message : String(e);
 		}
+	}
+
+	try {
+		const runDate = input.started_at.slice(0, 10);
+		await autoMatchRunToPlanWorkout(runId, runDate, input.distance_m);
+	} catch (e) {
+		console.warn('autoMatchRunToPlanWorkout failed', e);
 	}
 
 	return { id: runId, trackUploaded, trackError };
@@ -3827,8 +3845,6 @@ export async function computeSegmentEffortsForRun(input: {
 
 // --- Notifications (decisions §38) ---
 
-export type NotificationKind = 'kudos' | 'comment' | 'comment_reply' | 'follow';
-
 export interface NotificationRow {
 	id: string;
 	user_id: string;
@@ -3836,6 +3852,7 @@ export interface NotificationRow {
 	kind: NotificationKind;
 	run_id: string | null;
 	comment_id: string | null;
+	event_id: string | null;
 	read_at: string | null;
 	created_at: string;
 }
@@ -3846,6 +3863,8 @@ export interface NotificationView {
 	run_distance_m: number | null;
 	run_started_at: string | null;
 	comment_excerpt: string | null;
+	event_title: string | null;
+	event_club_slug: string | null;
 }
 
 /**
@@ -3867,8 +3886,9 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 	const actorIds = Array.from(new Set(rows.map((r) => r.actor_id).filter((x): x is string => !!x)));
 	const runIds = Array.from(new Set(rows.map((r) => r.run_id).filter((x): x is string => !!x)));
 	const commentIds = Array.from(new Set(rows.map((r) => r.comment_id).filter((x): x is string => !!x)));
+	const eventIds = Array.from(new Set(rows.map((r) => (r as { event_id?: string | null }).event_id).filter((x): x is string => !!x)));
 
-	const [profiles, runs, comments] = await Promise.all([
+	const [profiles, runs, comments, events] = await Promise.all([
 		actorIds.length > 0
 			? supabase.from('user_profiles').select('id, display_name, avatar_url').in('id', actorIds)
 			: Promise.resolve({ data: [] as PublicProfile[] }),
@@ -3878,6 +3898,9 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 		commentIds.length > 0
 			? supabase.from('run_comments').select('id, body').in('id', commentIds)
 			: Promise.resolve({ data: [] as { id: string; body: string }[] }),
+		eventIds.length > 0
+			? supabase.from('events').select('id, title, club_id, clubs(slug)').in('id', eventIds)
+			: Promise.resolve({ data: [] as { id: string; title: string; clubs: { slug: string } | { slug: string }[] | null }[] }),
 	]);
 
 	const profileBy = new Map<string, PublicProfile>();
@@ -3890,17 +3913,25 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 	for (const c of (comments.data ?? []) as { id: string; body: string }[]) {
 		commentBy.set(c.id, c.body);
 	}
+	const eventBy = new Map<string, { title: string; club_slug: string | null }>();
+	for (const e of (events.data ?? []) as { id: string; title: string; clubs: { slug: string } | { slug: string }[] | null }[]) {
+		const club = Array.isArray(e.clubs) ? e.clubs[0] ?? null : e.clubs;
+		eventBy.set(e.id, { title: e.title, club_slug: club?.slug ?? null });
+	}
 
 	return rows.map((row) => {
 		const r = row as NotificationRow;
 		const run = r.run_id ? runBy.get(r.run_id) ?? null : null;
 		const body = r.comment_id ? commentBy.get(r.comment_id) ?? null : null;
+		const ev = r.event_id ? eventBy.get(r.event_id) ?? null : null;
 		return {
 			row: r,
 			actor: r.actor_id ? profileBy.get(r.actor_id) ?? null : null,
 			run_distance_m: run?.distance_m ?? null,
 			run_started_at: run?.started_at ?? null,
 			comment_excerpt: body ? (body.length > 120 ? body.slice(0, 117) + '…' : body) : null,
+			event_title: ev?.title ?? null,
+			event_club_slug: ev?.club_slug ?? null,
 		};
 	});
 }

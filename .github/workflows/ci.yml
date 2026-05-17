@@ -413,6 +413,13 @@ jobs:
             echo "PUBLIC_REVENUECAT_WEB_API_KEY="
             echo "PUBLIC_VAPID_PUBLIC_KEY="
             echo "ANTHROPIC_API_KEY=ci-test-key-not-actually-called"
+            # Client-side gate bypass: lets free-tier tests see the
+            # chat surface so the tier-badge / usage-bar / limit-bar
+            # assertions hold. The ProGate tests opt back into the
+            # armed-gate path via the `paywall_force_locked`
+            # localStorage override. Server-side BYPASS_PAYWALL stays
+            # unset so paywall-wire.spec.ts still exercises the 429.
+            echo "PUBLIC_BYPASS_PAYWALL=true"
           } > ../web/.env
       - name: Run Playwright suite
         working-directory: apps/web

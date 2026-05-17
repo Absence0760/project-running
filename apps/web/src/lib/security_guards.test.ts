@@ -382,6 +382,46 @@ test('BYPASS_PAYWALL gate requires three independent conditions', () => {
 	);
 });
 
+test('Client PUBLIC_BYPASS_PAYWALL gate requires three independent conditions', () => {
+	// Reason: the client-side bypass in `$lib/features.ts::bypassEnabled`
+	// mirrors the server gate in `/api/coach/+server.ts`. Loosening any
+	// one of (vite dev, local Supabase URL, literal 'true' env var) to
+	// `||` re-opens the gate in production builds — a vendored
+	// PUBLIC_BYPASS_PAYWALL=true env in a misbuilt artefact would
+	// silently unlock Pro screens for free users.
+	const source = read('src/lib/features.ts');
+	const block = source.match(/function bypassEnabled\([\s\S]*?\n\}/);
+	assert.ok(block, 'Could not locate bypassEnabled() in features.ts.');
+	const body = block![0];
+	assert.match(body, /import\.meta\.env\.DEV/, 'bypassEnabled must check import.meta.env.DEV.');
+	assert.match(body, /isLocalSupabase/, 'bypassEnabled must check the Supabase URL is local.');
+	assert.match(
+		body,
+		/PUBLIC_BYPASS_PAYWALL\s*===\s*['"]true['"]/,
+		'bypassEnabled must check the env var is the literal string "true".',
+	);
+	const envExpr = body.match(/envBypass\s*=\s*[\s\S]*?;/);
+	assert.ok(envExpr, 'envBypass assignment not found.');
+	assert.doesNotMatch(envExpr![0], /\|\|/, 'bypassEnabled gate must AND its three conditions, not OR.');
+});
+
+test('isLocked() fails closed on unknown tier (default = locked)', () => {
+	// Reason: a transient auth-store load shouldn't briefly unlock a
+	// Pro-only screen. `isLocked(feature)` reads `auth.isPro`, which is
+	// false during loading; the implementation must return `!isPro()` so
+	// the gate stays armed until the profile lands. Pinned because a
+	// subtle refactor (e.g. checking `auth.user.tier === 'free'`)
+	// inverts to "default unlocked" when `auth.user` is null.
+	const source = read('src/lib/features.ts');
+	const block = source.match(/export function isLocked[\s\S]*?\n\}/);
+	assert.ok(block, 'Could not locate isLocked() in features.ts.');
+	assert.match(
+		block![0],
+		/!isPro\(\)/,
+		'isLocked() must return !isPro() for Pro-only keys so an unknown tier defaults to locked.',
+	);
+});
+
 test('Mobile coach screen sends `x-supabase-authorization`, not `Authorization`', () => {
 	// Reason: production Lambda's Function URL is AWS_IAM-auth — CloudFront
 	// signs `Authorization` via sigv4, so forwarding the viewer JWT in

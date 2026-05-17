@@ -33,6 +33,7 @@ const PAIRS = [
 	{ tableColumn: 'user_profiles.preferred_unit', tsUnion: 'PreferredUnit' },
 	{ tableColumn: 'user_profiles.subscription_tier', tsUnion: 'SubscriptionTier' },
 	{ tableColumn: 'club_members.role', tsUnion: 'ClubRole' },
+	{ tableColumn: 'notifications.kind', tsUnion: 'NotificationKind' },
 ];
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or

@@ -2,12 +2,17 @@
 
 ## Current model: Pro subscription + optional donations
 
-**Every feature is available to every signed-in user** — `isLocked()` in
-`features.ts` always returns `false`, so no screen is hidden behind a
-paywall. What the Pro tier changes is behaviour *inside* two features:
+AI Coach is the first Pro-only screen: `isLocked('ai_coach')` in
+`apps/web/src/lib/features.ts` returns `!isPro()`, so a free user
+landing on `/coach` sees a `<ProGate>` lock-card with an Upgrade CTA
+pointing at `/settings/upgrade`. The rest of the product remains free
+for every signed-in user. What the Pro tier changes is the gated
+screen plus behaviour *inside* the unlocked surface:
 
-- **AI Coach.** Free users get 5 messages / day (cost-control for the
-  Claude API bill). Pro users get no cap.
+- **AI Coach.** Free users see `<ProGate>` at `/coach`. Pro users get
+  the chat surface with no daily cap. (The 5-message free cap on the
+  server endpoint stays armed defence-in-depth for any future surface
+  that re-exposes the chat to free users.)
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
   longer / more thorough answers, and up to 75 runs of context per
@@ -32,8 +37,8 @@ dropped); reviving transparent funding later is a one-page revert.
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Every feature. AI coach capped at 5 messages / day. Standard request priority. |
-| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + unlimited AI coach + priority processing. |
+| `free` | Default for every new account | Every feature except the AI Coach screen. Standard request priority. |
+| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + the AI Coach screen (unlimited daily messages) + priority processing. |
 | `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
@@ -55,18 +60,18 @@ attempting to self-promote via `PATCH /rest/v1/user_profiles` gets a
 403 `insufficient_privilege`. Bumping the tier outside the webhook
 flow requires an admin SQL session; from a client there is no way.
 
-## Pro perks and where they're enforced
+## Pro gates and perks
 
 | Perk | Feature key | Enforcement point |
 |---|---|---|
-| Unlimited AI Coach messages | `ai_coach` | Server: `/api/coach/+server.ts` calls `is_pro()` before `increment_coach_usage` — the cap and 429 response only fire for free users. |
+| AI Coach (gated screen) | `ai_coach` | Client: `isLocked('ai_coach')` in `apps/web/src/lib/features.ts` returns `!isPro()` — CoachChat mounts a `<ProGate>` when locked. Server: `/api/coach/+server.ts` calls `is_pro()` before `increment_coach_usage` so a free user that slips past the client (curl, etc.) still hits the 5-msg daily cap and the resulting 429. |
 | Priority processing — coach context | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 75-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 | Priority map-matching | `priority_processing` | DB: every enqueue site for `kind='map_match'` jobs (the auto-trigger `runs_enqueue_match_job` and the manual-rematch RPC `enqueue_run_rematch`) calls `job_scheduled_at_for_user(uuid)` from migration `20260730_001`. Pro / lifetime → `now()` (front of queue); free → `now() + 30 s` (defers behind Pro). The worker's `claim_next_job` orders by `(scheduled_at, id)` so Pro jobs are always claimable strictly before free jobs enqueued at the same instant. **Future job kinds follow the same pattern** — call the helper at enqueue time; don't inline `case ... subscription_tier ...`. See [decisions.md § 57](decisions.md#57-map-matching-is-free-queue-priority-is-the-pro-perk). |
 
-These perks are **behaviour changes**, not gated screens, so they do
-not call through `isLocked()`. `isLocked()` remains the correct hook
-for a future feature that should be hidden entirely behind Pro (e.g.
-"live spectator link") — flip it to return `!isPro()` for the key.
+`ai_coach` is the only key currently in the `PRO_ONLY_FEATURES` set in
+`features.ts`. The `priority_processing` perks are **behaviour
+changes**, not gated screens, so they don't call through `isLocked()`.
+Add a new key to `PRO_ONLY_FEATURES` to gate a new screen behind Pro.
 
 ## Client-side `isPro()` helper
 
@@ -138,13 +143,12 @@ server-side with the `is_pro()` RPC.
 
 ## BYPASS_PAYWALL
 
-A dev-only escape hatch on the **web `/api/coach` endpoint only**.
-There is no equivalent flag on mobile, the watch, or any other web
-endpoint — server-side enforcement on `/api/coach` is the only
-surface that currently checks subscription_tier, so it's the only
-surface a bypass needs to model.
+Two independent dev-only escape hatches: `BYPASS_PAYWALL` for the
+server-side `/api/coach` daily-cap, and `PUBLIC_BYPASS_PAYWALL` for the
+client-side `isLocked()` UI gate. Both stay off by default and must be
+opted into per dev machine via `apps/web/.env.local`.
 
-### Web — `/api/coach` only
+### Server — `BYPASS_PAYWALL` for `/api/coach`
 
 The flag is honoured *only when all three conditions are
 simultaneously true*:
@@ -167,6 +171,24 @@ immediately in CloudWatch.
 The flag is intentionally **not exported** in `apps/web/.env.example`
 — it should never be set in a checked-in template. Add it ad-hoc to
 your own `.env.local` if you need it.
+
+### Client — `PUBLIC_BYPASS_PAYWALL` for `isLocked()`
+
+`apps/web/src/lib/features.ts::isLocked('ai_coach')` returns `!isPro()`
+by default. To unblock local iteration on the gated screen as a free
+user, set `PUBLIC_BYPASS_PAYWALL=true` in `apps/web/.env.local`. Same
+three-condition AND as the server flag (`import.meta.env.DEV`, local
+Supabase URL, literal `'true'`), with one extra opt-out: a
+`localStorage.paywall_force_locked = '1'` entry re-arms the gate for
+the current page so e2e tests can exercise the lock-card path on a
+machine that otherwise has the bypass on. The override is gated on
+`import.meta.env.DEV` so it's inert in production.
+
+The two flags are separate by design — leaking one (e.g. into a prod
+bundle) doesn't leak the other. `PUBLIC_BYPASS_PAYWALL` is fine to
+commit to `apps/web/.env.example` because the public-prefix surface is
+already client-readable; `BYPASS_PAYWALL` (no prefix) stays out of any
+template.
 
 ### Mobile / watch / other web endpoints
 

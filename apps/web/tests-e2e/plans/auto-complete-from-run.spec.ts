@@ -114,22 +114,83 @@ test.describe('Plan auto-complete from linked run', () => {
 		});
 	});
 
-	test.skip(
-		'log a matching run via /runs/new → today\'s workout auto-marks done',
-		async () => {
-			// TODO: wire `autoMatchRunToPlanWorkout` into the
-			// /runs/new create path (RunEditor → createManualRun)
-			// before this can be unskipped. The match helper exists
-			// in apps/web/src/lib/data.ts:2565 with a tested ±25 %
-			// distance threshold + same-calendar-date scoping; the
-			// missing leg is a call site that invokes it after
-			// createManualRun returns. See the existing seed UPDATE
-			// in apps/backend/supabase/seed.sql for the SQL-side
-			// shape (`completed_run_id = (select id from runs where
-			// started_at::date = scheduled_date and …)`); the
-			// runtime path is the symmetric one.
+	test('log a matching run via /runs/new → today\'s workout auto-marks done', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const { workoutId, prevDate } = await plantTodayWorkout();
+		const { data: workoutRow } = await admin
+			.from('plan_workouts')
+			.select('target_distance_m, completed_run_id, manually_completed, completed_at')
+			.eq('id', workoutId)
+			.maybeSingle();
+		const target = (workoutRow as { target_distance_m: number })
+			.target_distance_m;
+
+		const original = {
+			completed_run_id:
+				(workoutRow as { completed_run_id: string | null })
+					.completed_run_id ?? null,
+			manually_completed:
+				(workoutRow as { manually_completed: boolean })
+					.manually_completed ?? false,
+			completed_at:
+				(workoutRow as { completed_at: string | null }).completed_at ?? null
+		};
+
+		let newRunId: string | null = null;
+		try {
+			await page.goto('/runs/new');
+			await expect(
+				page.getByRole('heading', { level: 1, name: 'Add a run' })
+			).toBeVisible({ timeout: 10_000 });
+
+			const distanceKm = target / 1000;
+			const numberInputs = page.locator('input[type="number"]');
+			await numberInputs.nth(0).fill(distanceKm.toString());
+			await numberInputs.nth(1).fill('30');
+
+			await page.getByRole('button', { name: 'Save run' }).click();
+			await page.waitForURL(/\/runs\/[0-9a-f-]+$/, { timeout: 15_000 });
+			newRunId = page.url().match(/\/runs\/([0-9a-f-]+)$/)![1];
+
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('plan_workouts')
+							.select('completed_run_id')
+							.eq('id', workoutId)
+							.maybeSingle();
+						return (data as { completed_run_id: string | null } | null)
+							?.completed_run_id;
+					},
+					{ timeout: 10_000 }
+				)
+				.toBe(newRunId);
+
+			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}/workouts/${workoutId}`);
+			await expect(page.locator('.completed-card')).toBeVisible({
+				timeout: 10_000
+			});
+			await expect(
+				page.getByRole('button', { name: 'Unlink' })
+			).toBeVisible({ timeout: 10_000 });
+		} finally {
+			await admin
+				.from('plan_workouts')
+				.update({
+					completed_run_id: original.completed_run_id,
+					manually_completed: original.manually_completed,
+					completed_at: original.completed_at
+				})
+				.eq('id', workoutId);
+			if (newRunId) {
+				await deleteRun(newRunId).catch(() => {});
+			}
+			await restoreWorkoutDate(workoutId, prevDate);
 		}
-	);
+	});
 
 	test('planted completed_run_id surfaces as a completed-card on workout-detail', async ({
 		page

@@ -95,23 +95,20 @@ test.describe('search — by name', () => {
 test.describe('suggested — empty state', () => {
 	test.use({ storageState: USER_C_PRO.storageStatePath });
 
+	// Morgan starts seeded with no clubs, but other tests in the suite
+	// may join her into one and skip cleanup. Sweep + restore the
+	// no-clubs invariant in beforeEach so this test is deterministic.
+	test.beforeEach(async () => {
+		const admin = getAdminClient();
+		await admin
+			.from('club_members')
+			.delete()
+			.eq('user_id', USER_C_PRO.id);
+	});
+
 	test('viewer with no clubs sees the "Browse clubs" empty-state CTA', async ({
 		page
 	}) => {
-		// USER_C_PRO (morgan) is in no clubs by seed → suggestion query
-		// has no source, so the People tab shows the "Browse clubs"
-		// empty-state CTA.
-		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('club_members')
-			.select('club_id')
-			.eq('user_id', USER_C_PRO.id)
-			.eq('status', 'active');
-		test.skip(
-			(rows ?? []).length > 0,
-			'morgan has joined clubs already in this DB; skip the no-clubs branch'
-		);
-
 		await page.goto('/social?tab=people');
 		await expect(
 			page.getByRole('heading', { name: 'No suggestions yet' })

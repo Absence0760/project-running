@@ -108,6 +108,7 @@ export type MembershipStatus = 'active' | 'pending';
 export type JoinPolicy = 'open' | 'request' | 'invite';
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+export type NotificationKind = 'kudos' | 'comment' | 'comment_reply' | 'follow' | 'event_rsvp';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)

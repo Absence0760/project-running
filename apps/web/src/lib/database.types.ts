@@ -711,6 +711,7 @@ export type Database = {
           actor_id: string | null
           comment_id: string | null
           created_at: string
+          event_id: string | null
           id: string
           kind: string
           read_at: string | null
@@ -721,6 +722,7 @@ export type Database = {
           actor_id?: string | null
           comment_id?: string | null
           created_at?: string
+          event_id?: string | null
           id?: string
           kind: string
           read_at?: string | null
@@ -731,6 +733,7 @@ export type Database = {
           actor_id?: string | null
           comment_id?: string | null
           created_at?: string
+          event_id?: string | null
           id?: string
           kind?: string
           read_at?: string | null
@@ -743,6 +746,13 @@ export type Database = {
             columns: ["comment_id"]
             isOneToOne: false
             referencedRelation: "run_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
