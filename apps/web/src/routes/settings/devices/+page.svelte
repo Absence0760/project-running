@@ -3,6 +3,14 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
 	import { getDeviceId } from '$lib/settings';
+	import {
+		isPushSupported,
+		pushPermission,
+		subscribeToPush,
+		unsubscribeFromPush,
+		getCurrentSubscription,
+	} from '$lib/push';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
@@ -19,6 +27,11 @@
 	let loading = $state(true);
 	let currentDeviceId = $state('');
 	let confirmingRemove = $state<string | null>(null);
+
+	let pushSupported = $state(false);
+	let pushPermissionState = $state<NotificationPermission | 'unsupported'>('default');
+	let pushSubscribed = $state(false);
+	let pushBusy = $state(false);
 
 	onMount(async () => {
 		// Same auth-race fix as /settings/account + /settings/preferences:
@@ -37,7 +50,83 @@
 			.order('last_seen_at', { ascending: false });
 		devices = (data as DeviceRow[]) ?? [];
 		loading = false;
+
+		pushSupported = isPushSupported();
+		await refreshPushState();
 	});
+
+	async function refreshPushState() {
+		pushPermissionState = pushPermission();
+		if (!pushSupported) return;
+		pushSubscribed = !!(await getCurrentSubscription());
+	}
+
+	async function handleEnablePush() {
+		pushBusy = true;
+		try {
+			await subscribeToPush();
+			await refreshPushState();
+			await refreshCurrentDeviceRow();
+			showToast('Notifications enabled on this device.', 'success');
+		} catch (e) {
+			showToast(`Could not enable notifications: ${(e as Error).message}`, 'error');
+		} finally {
+			pushBusy = false;
+		}
+	}
+
+	async function handleDisablePush() {
+		pushBusy = true;
+		try {
+			await unsubscribeFromPush();
+			await refreshPushState();
+			await refreshCurrentDeviceRow();
+			showToast('Notifications disabled on this device.', 'success');
+		} finally {
+			pushBusy = false;
+		}
+	}
+
+	async function refreshCurrentDeviceRow() {
+		if (!auth.user || !currentDeviceId) return;
+		const { data } = await supabase
+			.from('user_device_settings')
+			.select('prefs')
+			.eq('user_id', auth.user.id)
+			.eq('device_id', currentDeviceId)
+			.maybeSingle();
+		if (!data) return;
+		devices = devices.map((d) =>
+			d.device_id === currentDeviceId
+				? { ...d, prefs: (data.prefs as Record<string, unknown>) ?? {} }
+				: d,
+		);
+	}
+
+	function hasPushSubscription(prefs: Record<string, unknown>): boolean {
+		return prefs && typeof prefs === 'object' && 'push_subscription' in prefs;
+	}
+
+	async function renameDevice(deviceId: string, nextLabel: string) {
+		if (!auth.user) return;
+		const device = devices.find((d) => d.device_id === deviceId);
+		if (!device) return;
+		const trimmed = nextLabel.trim();
+		const current = device.label ?? '';
+		if (trimmed === current) return;
+		const { error } = await supabase
+			.from('user_device_settings')
+			.update({ label: trimmed || null, updated_at: new Date().toISOString() })
+			.eq('user_id', auth.user.id)
+			.eq('device_id', deviceId);
+		if (error) {
+			showToast(`Rename failed: ${error.message}`, 'error');
+			return;
+		}
+		devices = devices.map((d) =>
+			d.device_id === deviceId ? { ...d, label: trimmed || null } : d,
+		);
+	}
 
 	async function removeDevice(deviceId: string) {
 		if (!auth.user) return;
@@ -322,11 +411,26 @@
 	{:else}
 		<div class="device-list">
 			{#each devices as d (d.device_id)}
-				<div class="device" class:current={d.device_id === currentDeviceId}>
+				<div
+					class="device"
+					class:current={d.device_id === currentDeviceId}
+					data-device-id={d.device_id}
+					data-device-label={d.label ?? ''}
+				>
 					<span class="material-symbols device-icon">{platformIcon(d.platform)}</span>
 					<div class="device-info">
 						<div class="device-name">
-							<strong>{d.label || platformLabel(d.platform)}</strong>
+							<input
+								type="text"
+								class="device-label-input"
+								aria-label="Device label"
+								value={d.label ?? ''}
+								placeholder={platformLabel(d.platform)}
+								onblur={(e) => renameDevice(d.device_id, (e.currentTarget as HTMLInputElement).value)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+								}}
+							/>
 							{#if d.device_id === currentDeviceId}
 								<span class="current-badge">This device</span>
 							{/if}
@@ -346,7 +450,43 @@
 									{expanded === d.device_id ? 'expand_less' : 'expand_more'}
 								</span>
 							</button>
+							{#if d.device_id !== currentDeviceId && hasPushSubscription(d.prefs)}
+								<span class="sep">&middot;</span>
+								<span class="push-state" title="This device is subscribed to push notifications">
+									<span class="material-symbols">notifications_active</span>
+									Push on
+								</span>
+							{/if}
 						</div>
+						{#if d.device_id === currentDeviceId}
+							<div class="device-push" data-testid="device-push-row">
+								{#if !pushSupported}
+									<span class="push-hint">Push not supported on this browser / build.</span>
+								{:else if pushPermissionState === 'denied'}
+									<span class="push-hint">Notifications blocked at the browser level.</span>
+								{:else if pushSubscribed}
+									<button
+										type="button"
+										class="btn btn-outline btn-sm"
+										onclick={handleDisablePush}
+										disabled={pushBusy}
+									>
+										<span class="material-symbols">notifications_off</span>
+										{pushBusy ? 'Updating…' : 'Disable push'}
+									</button>
+								{:else}
+									<button
+										type="button"
+										class="btn btn-primary btn-sm"
+										onclick={handleEnablePush}
+										disabled={pushBusy}
+									>
+										<span class="material-symbols">notifications_active</span>
+										{pushBusy ? 'Enabling…' : 'Enable push'}
+									</button>
+								{/if}
+							</div>
+						{/if}
 						{#if expanded === d.device_id}
 							<ul class="overrides">
 								{#each Object.entries(d.prefs) as [k, v]}
@@ -583,6 +723,45 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.device-label-input {
+		font: inherit;
+		font-weight: 700;
+		color: var(--color-text);
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
+		padding: 0.15rem 0.4rem;
+		margin: -0.15rem -0.4rem;
+		min-width: 8rem;
+		max-width: 22rem;
+		flex: 0 1 auto;
+	}
+	.device-label-input:hover {
+		border-color: var(--color-border);
+	}
+	.device-label-input:focus {
+		outline: none;
+		border-color: var(--color-primary);
+		background: var(--color-bg);
+	}
+	.push-state {
+		color: var(--color-text-secondary);
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+	}
+	.push-state .material-symbols { font-size: 0.95rem; }
+	.device-push {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.4rem;
+	}
+	.device-push .material-symbols { font-size: 1.05rem; }
+	.push-hint {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
 	}
 	.current-badge {
 		font-size: 0.7rem;

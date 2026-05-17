@@ -79,12 +79,14 @@
 		<input type="datetime-local" bind:value={startedAt} required class="input" />
 	</label>
 
-	<label class="field">
-		<span class="field-label">Activity</span>
-		<div class="chip-row">
+	<fieldset class="field activity-field">
+		<legend class="field-label">Activity</legend>
+		<div class="chip-row" role="radiogroup" aria-label="Activity">
 			{#each ['run', 'walk', 'hike', 'cycle'] as a}
 				<button
 					type="button"
+					role="radio"
+					aria-checked={activityType === a}
 					class="chip"
 					class:active={activityType === a}
 					onclick={() => (activityType = a as typeof activityType)}
@@ -93,7 +95,7 @@
 				</button>
 			{/each}
 		</div>
-	</label>
+	</fieldset>
 
 	<div class="row">
 		<label class="field">
@@ -156,6 +158,8 @@
 		gap: 1.1rem;
 	}
 	.field { display: grid; gap: 0.35rem; }
+	.activity-field { border: 0; padding: 0; margin: 0; }
+	.activity-field .field-label { padding: 0; }
 	.field-label {
 		font-size: 0.78rem;
 		font-weight: 600;

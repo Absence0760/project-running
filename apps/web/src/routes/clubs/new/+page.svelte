@@ -5,7 +5,8 @@
 	let cameFromClubs = $state(false);
 	afterNavigate(({ from }) => {
 		if (cameFromClubs || !from) return;
-		if (from.url.pathname === '/clubs' || from.url.pathname.startsWith('/clubs?')) {
+		const p = from.url.pathname;
+		if (p === '/clubs' || p.startsWith('/clubs?') || p === '/social') {
 			cameFromClubs = true;
 		}
 	});
@@ -19,7 +20,7 @@
 
 	function handleCancel(): void {
 		if (cameFromClubs) history.back();
-		else goto('/clubs');
+		else goto('/social?tab=clubs');
 	}
 </script>
 
@@ -28,7 +29,7 @@
 </svelte:head>
 
 <div class="page">
-	<a href="/clubs" class="back-link" onclick={handleBack}>
+	<a href="/social?tab=clubs" class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
 		Back to clubs
 	</a>

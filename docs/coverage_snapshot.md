@@ -1,6 +1,46 @@
-# Coverage snapshot — 2026-05-15
+# Coverage snapshot — 2026-05-16
 
 **Snapshot, not source of truth.** This is the baseline from which the "push every area to 90%" work starts. Estimates answer: "would CI catch a regression in this feature before merge?" — not measured line coverage. Roll-up at the bottom.
+
+## Session-end update — 2026-05-16
+
+This session moved 13 web surfaces above 75%, added the People tab to fill the find-other-runners gap, restructured `tests-e2e/` to mirror app routes, and fixed 6 real app bugs surfaced by the new tests. `/recap/[year]` and `/explore` were the last two web rows lifted in the session; both now pin invalid-input and anon paths in addition to the happy-path render.
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| `/social` | — | 90% | NEW top-level hub (didn't exist) — ARIA tab strip (Feed / People / Clubs) with `?tab=` URL state; replaces the `/u/[me]?tab=feed` self-only feed and the old `/clubs` browse landing |
+| `/social?tab=people` | — | 90% | NEW — search saga + suggestion empty state covered; only top-level surface for finding other runners (fills the gap left when feed moved off `/u/[me]`) |
+| `/social?tab=feed` | 75% (under `/u/[me]`) | 75% | NEW location — feed migrated from `/u/[me]?tab=feed`; legacy `?tab=feed` deep links bounce through |
+| `/auth/reset` | 0% | 75% | Full Mailpit round-trip (request → email → token → new password → re-login). **Fix**: `/auth/reset` was missing from `shellLessExact` in `+layout.svelte`, so the reset link silently rendered through the signed-in shell |
+| `/plans/new` | 50% | 90% | Full wizard, replace-active path, week-edit persistence (clicking a week to expand the day-by-day editor — edits now persist on submit) |
+| `/routes/new` | 50% | 75% | Save modal round-trip + description persisted. **Fix**: route description was silently dropped on Save Route — migration `20260902_001_routes_description.sql` + `saveRoute` + render |
+| `/settings/integrations` | 50% | 90% | Connected-state UI + disconnect ConfirmDialog. **Fix**: Disconnect had no confirm dialog — added a `ConfirmDialog` so destructive disconnect goes through a confirm modal (matches the rest of the app) |
+| `/live/[id]` | 50% | 75% | Finished state + named-runner + planted pings. **Fix**: dead `'finished'` status path + Anonymous-runner anon read + invalid `hsl()` avatar alpha (avatar fell through to white) |
+| `/live/event/[id]/[instance]` | 50% | 75% | 3-runner leaderboard with planted positions; mutex on leader badge |
+| `/runs/new` | 50% | 90% | 15 tests: page chrome, save round-trip → /runs/[id], distance/duration validation (zero/negative blocked), decimal km, activity-chip persistence (run/walk/hike/cycle), source pinned to `app` with `metadata.manual_entry=true` (the CHECK constraint rejects `'manual'`), no-prefill contract on `?distance=...&activity=...`, started_at near-now defaulting, discard-mid-form plants no row. **Fix**: RunEditor activity chips were rendered inside a `<label class="field">` wrapping a `<span class="field-label">Activity</span>` — the wrapping label leaked into the accessible name of the active chip (it appeared as `button "Activity Walk Hike Cycle": Run`). Switched to `<fieldset>/<legend>` with `role="radiogroup"` + `role="radio"` + `aria-checked` so each chip has a clean name. |
+| `/clubs/new` | 50% | 90% | 9 tests: page chrome (kicker + h1 + tagline + back-link to `/social?tab=clubs`), visibility × join-policy matrix (public+open, public+request, private→invite with token generated, public→private→public coercion back to open), slug derivation + `/clubs/[slug]` resolves, viewer auto-enrolled as owner (`enroll_club_owner_trigger`), Create-club disabled until name, discard mid-form plants no row, Cancel returns to social. **Fix**: back-link pointed to `/clubs` (which redirects to `/social?tab=clubs`); now points directly to the canonical URL, and `cameFromClubs` recognises arrivals from `/social` too. |
+| `/recap/[year]` | 50% | 90% | 8 → 12 tests: future-year `2099` empty hero, year-before-join `2011` empty hero, non-numeric year `/recap/foo` ≤ 4xx (not 500), Share-recap **clipboard round-trip** (clipboard-write permission + `navigator.share = undefined` so the fall-through path fires + `page.on('dialog')` captures the success alert + `navigator.clipboard.readText()` asserts the recap summary lines), Wrap-it-up closing CTA also triggers copy. Page contract: no `/og/recap/<year>.png` endpoint — the affordance is `navigator.share` ➜ clipboard + alert fallback. |
+| `/explore` | 25% | 75% | 1 → 5 tests: redirect resolves to `/routes?tab=explore`, Explore tab is `aria-selected="true"` post-redirect, mutex against My routes / Heatmap, URL preserves no extra query params, **anon redirect chain** — anon visitor hits `/explore` → auth-wall redirects through `/login` with `?return_to=` |
+| `/settings/devices` | — | (parallel agent) | (parallel agent output) |
+| `/settings/licenses` | — | (parallel agent) | (parallel agent output) |
+| `/compare` | 92% | (parallel agent) | (parallel agent output) |
+
+### Bugs fixed this session (not coded around)
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| `/auth/reset` rendered through the signed-in shell (sidebar wrapped around the reset form) | Missing from `shellLessExact` in `apps/web/src/routes/+layout.svelte` | Added `/auth/reset` to `shellLessExact` |
+| Route description silently dropped on Save Route — typed text never round-tripped to the saved row | Column existed on the form but not in the table; `saveRoute` payload omitted it | Migration `20260902_001_routes_description.sql` + `saveRoute` payload + detail-page render |
+| Integrations Disconnect was destructive with no confirmation | Direct mutation behind a plain `<button>` | Wired the `ConfirmDialog` component (already in the app shell) onto the Disconnect button |
+| `/live/[id]` had a dead `'finished'` status path that never rendered | Status enum had `'finished'` but the page's `{#if}` ladder skipped it | Added the finished-state branch with the post-race summary card |
+| `/live/[id]` couldn't load an anon-readable Anonymous-runner row | RLS policy excluded the row when `display_name` was NULL | Policy widened to allow anon read when the run is_public + live broadcast is active |
+| `/live/[id]` runner avatar fell through to plain white | `hsl(...)` template literal embedded an invalid alpha unit | Switched to `oklch(...)` with the correct three-channel form |
+| RunEditor active activity-chip exposed a polluted accessible name (`button "Activity Walk Hike Cycle": Run`) — `getByRole('button', { name: 'Run' })` couldn't find it | A `<label class="field">` wrapped both the field-label span and the chip row; HTML labels associate with their first inner form control, so the active chip inherited the label's text | Replaced with `<fieldset>/<legend>` + `role="radiogroup"`/`role="radio"`/`aria-checked` on the chips so each has a clean name |
+| `/clubs/new` back-link pointed at `/clubs` (which itself redirects to `/social?tab=clubs`) — two-hop nav for a known canonical URL | Stale URL after the social-hub consolidation | Back-link now points at `/social?tab=clubs` directly; the `cameFromClubs` history detector also accepts arrivals from `/social` |
+
+### Test surface reshuffle
+
+`tests-e2e/` was restructured to mirror the app routes — `tests-e2e/recap/page.spec.ts`, `tests-e2e/explore/page.spec.ts`, `tests-e2e/social/{people,feed,clubs}.spec.ts`, `tests-e2e/auth/reset.spec.ts`, etc. The old flat layout is gone; `git mv` preserved history. Spec filenames now follow `<surface>.spec.ts` so a future contributor pulling up `/recap/[year]` finds the spec at the obvious path.
 
 ## Session-end update (2026-05-15)
 
@@ -217,7 +257,7 @@ Everything below this section is the **starting baseline** before today's pushes
 | Landing | 80% | `landing.spec.ts` |
 | `/compare` | 70% | `compare.spec.ts` (new) |
 | `/guided` (preview library) | 70% | `guided.spec.ts` (new) |
-| `/recap/[year]` | 55% | `recap.spec.ts` (new) |
+| `/recap/[year]` | 90% | `recap/page.spec.ts` — 12 tests; happy + invalid-year + future-year + before-joined + clipboard round-trip |
 | `/share/run/[id]`, `/share/route/[id]` | 80% | `share/*.spec.ts` |
 | `/privacy`, `/terms`, `/cookie-notice` | 85% | `legal-pages.spec.ts` (new) |
 | Sitemap + robots.txt | 85% | `sitemap.spec.ts` |
