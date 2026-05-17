@@ -92,12 +92,16 @@ class NotificationView {
   final PublicProfile? actor;
   final double? runDistanceM;
   final String? commentExcerpt;
+  final String? eventTitle;
+  final String? eventClubSlug;
 
   const NotificationView({
     required this.row,
     this.actor,
     this.runDistanceM,
     this.commentExcerpt,
+    this.eventTitle,
+    this.eventClubSlug,
   });
 }
 
@@ -128,6 +132,25 @@ class SegmentLeaderboardEntry {
     required this.effort,
     required this.athlete,
     required this.rank,
+  });
+}
+
+/// One row of the social-people search / suggested list: profile +
+/// public-runs count + how many of the viewer's clubs they share +
+/// whether the viewer follows them. Drives the People discovery
+/// surface (web: `/social?tab=people`, mobile: feed AppBar entry).
+class PeopleSuggestion extends PublicProfile {
+  final int publicRunsCount;
+  final int sharedClubs;
+  final bool viewerFollows;
+
+  const PeopleSuggestion({
+    required super.id,
+    super.displayName,
+    super.avatarUrl,
+    required this.publicRunsCount,
+    required this.sharedClubs,
+    required this.viewerFollows,
   });
 }
 

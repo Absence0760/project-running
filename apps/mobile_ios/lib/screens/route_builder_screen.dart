@@ -279,6 +279,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       elevationGainMetres: _elevationGainM,
       isPublic: result.isPublic,
       surface: _surfaceFor(_mode),
+      description: result.description,
     );
     try {
       await (widget.saveRouteFn ?? widget.apiClient.saveRoute)(route);
@@ -831,7 +832,12 @@ class _WaypointPinState extends State<_WaypointPin>
 class _SaveDialogResult {
   final String name;
   final bool isPublic;
-  const _SaveDialogResult({required this.name, required this.isPublic});
+  final String? description;
+  const _SaveDialogResult({
+    required this.name,
+    required this.isPublic,
+    this.description,
+  });
 }
 
 class _SaveRouteDialog extends StatefulWidget {
@@ -842,11 +848,13 @@ class _SaveRouteDialog extends StatefulWidget {
 
 class _SaveRouteDialogState extends State<_SaveRouteDialog> {
   final _name = TextEditingController();
+  final _description = TextEditingController();
   bool _isPublic = false;
 
   @override
   void dispose() {
     _name.dispose();
+    _description.dispose();
     super.dispose();
   }
 
@@ -864,6 +872,15 @@ class _SaveRouteDialogState extends State<_SaveRouteDialog> {
               labelText: 'Name',
               hintText: 'e.g. River loop',
             ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _description,
+            decoration: const InputDecoration(
+              labelText: 'Description (optional)',
+              hintText: 'Surface, hills, parking, anything worth noting',
+            ),
+            maxLines: 3,
           ),
           const SizedBox(height: 8),
           SwitchListTile(
@@ -884,9 +901,11 @@ class _SaveRouteDialogState extends State<_SaveRouteDialog> {
           onPressed: () {
             final trimmed = _name.text.trim();
             if (trimmed.isEmpty) return;
+            final desc = _description.text.trim();
             Navigator.of(context).pop(_SaveDialogResult(
               name: trimmed,
               isPublic: _isPublic,
+              description: desc.isEmpty ? null : desc,
             ));
           },
           child: const Text('Save'),

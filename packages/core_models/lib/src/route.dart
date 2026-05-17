@@ -48,6 +48,11 @@ class Route {
   /// `20260520_001_club_owned_routes.sql`.
   final String? clubId;
 
+  /// Free-form description set in the route builder's Save modal.
+  /// Migration `20260902_001_routes_description.sql`. Rendered below
+  /// the title on the route detail surfaces.
+  final String? description;
+
   const Route({
     required this.id,
     required this.name,
@@ -63,6 +68,7 @@ class Route {
     this.runCount = 0,
     this.isStarred = false,
     this.clubId,
+    this.description,
   });
 
   factory Route.fromJson(Map<String, dynamic> json) => _$RouteFromJson(json);

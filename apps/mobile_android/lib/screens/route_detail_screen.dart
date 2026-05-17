@@ -231,6 +231,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           featured: r.featured,
           runCount: r.runCount,
           isStarred: starred,
+          description: r.description,
         );
     setState(() => _isStarred = newValue);
     await widget.routeStore.save(buildRoute(newValue));
@@ -443,6 +444,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               ),
             ),
 
+            if (route.description != null && route.description!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: Text(
+                  route.description!,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+
             if (route.surface != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
@@ -619,6 +632,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       featured: widget.route.featured,
       runCount: widget.route.runCount,
       isStarred: widget.route.isStarred,
+      description: widget.route.description,
     );
     if (format == 'image') {
       await showRouteShareSheet(

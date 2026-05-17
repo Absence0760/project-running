@@ -3,8 +3,10 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
+import '../social_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
+import 'event_detail_screen.dart';
 
 /// Page size for the followers / following tabs. Same value as the
 /// runs + routes screens — the convention is one consistent page size
@@ -220,10 +222,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     commentId: n.row.commentId,
                     readAt: now,
                     createdAt: n.row.createdAt,
+                    eventId: n.row.eventId,
                   ),
                   actor: n.actor,
                   runDistanceM: n.runDistanceM,
                   commentExcerpt: n.commentExcerpt,
+                  eventTitle: n.eventTitle,
+                  eventClubSlug: n.eventClubSlug,
                 )
               : n)
           .toList();
@@ -252,10 +257,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     commentId: n.row.commentId,
                     readAt: n.row.readAt ?? now,
                     createdAt: n.row.createdAt,
+                    eventId: n.row.eventId,
                   ),
                   actor: n.actor,
                   runDistanceM: n.runDistanceM,
                   commentExcerpt: n.commentExcerpt,
+                  eventTitle: n.eventTitle,
+                  eventClubSlug: n.eventClubSlug,
                 ))
             .toList();
       });
@@ -563,9 +571,27 @@ class _ProfileScreenState extends State<ProfileScreen>
           tooltip: 'Dismiss',
           onPressed: () => _dismissNotif(item.row.id),
         ),
-        onTap: () => _markNotifRead(item),
+        onTap: () => _onNotifTap(item),
       ),
     );
+  }
+
+  Future<void> _onNotifTap(NotificationView item) async {
+    await _markNotifRead(item);
+    if (!mounted) return;
+    if (item.row.kind == 'event_rsvp' &&
+        item.row.eventId != null &&
+        item.eventClubSlug != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => EventDetailScreen(
+            social: SocialService(),
+            clubSlug: item.eventClubSlug!,
+            eventId: item.row.eventId!,
+          ),
+        ),
+      );
+    }
   }
 
   // ─────────────── format helpers ───────────────
@@ -612,6 +638,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         return '$name replied to your comment';
       case 'follow':
         return '$name started following you';
+      case 'event_rsvp':
+        return item.eventTitle != null
+            ? '$name RSVP\'d Going to your event "${item.eventTitle}"'
+            : '$name RSVP\'d Going to your event';
       default:
         return '$name interacted with your activity';
     }

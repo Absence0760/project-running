@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:core_models/core_models.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -164,6 +165,14 @@ class ApiClient {
     } else {
       await _client.from(RunRow.table).upsert(json);
     }
+    // L4 — best-effort plan-workout link. Mirrors `apps/web/src/lib/data.ts`
+    // `saveRun` / `createManualRun`. RPC failure must not break the core
+    // upsert above (layered-resilience contract).
+    try {
+      await autoMatchRunToPlanWorkout(run.id, run.startedAt.toUtc());
+    } catch (e) {
+      debugPrint('autoMatchRunToPlanWorkout failed: $e');
+    }
   }
 
   /// Mark a run as publicly visible so it can be viewed at
@@ -254,6 +263,16 @@ class ApiClient {
       }
       saved += chunk.length;
       onProgress?.call(saved);
+    }
+    // L4 — best-effort plan-workout link for batch ingest (Strava ZIP,
+    // Health Connect, etc.). Same auto-match the web `saveRun` path
+    // uses; a per-row RPC failure must not break the batch upsert.
+    for (final run in runs) {
+      try {
+        await autoMatchRunToPlanWorkout(run.id, run.startedAt.toUtc());
+      } catch (e) {
+        debugPrint('autoMatchRunToPlanWorkout failed: $e');
+      }
     }
   }
 
@@ -646,6 +665,7 @@ class ApiClient {
       featured: route.featured,
       runCount: route.runCount,
       isStarred: route.isStarred,
+      description: route.description,
     );
     // Drop null / server-default columns so Postgres fills them in.
     final body = Map<String, dynamic>.from(row.toJson())
@@ -878,6 +898,157 @@ class ApiClient {
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
         .toList();
+  }
+
+  /// Free-text people search. Matches `user_profiles.display_name`
+  /// with ILIKE, excludes self, hydrates viewer→target follow edges
+  /// so the row's Follow toggle starts in the right state. Mirrors
+  /// `searchPeople` in `apps/web/src/lib/data.ts`.
+  Future<List<PeopleSuggestion>> searchPeople(
+    String query, {
+    int limit = 20,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final viewerId = _client.auth.currentUser?.id;
+    final profiles = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .ilike(UserProfileRow.colDisplayName, '%$term%')
+        .limit(limit);
+    final ids = profiles
+        .map<String>((p) => p['id'] as String)
+        .where((id) => id != viewerId)
+        .toList();
+    if (ids.isEmpty) return const [];
+    return _hydratePeopleSuggestions(ids, viewerId, sharedCounts: const {});
+  }
+
+  /// Suggested people for the social People surface: members of the
+  /// viewer's clubs they don't already follow. Ordered by shared-club
+  /// count desc, then by display_name. Mirrors `fetchSuggestedPeople`
+  /// in `apps/web/src/lib/data.ts`.
+  Future<List<PeopleSuggestion>> fetchSuggestedPeople({int limit = 12}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+    final myMemberRows = await _client
+        .from(ClubMemberRow.table)
+        .select(ClubMemberRow.colClubId)
+        .eq(ClubMemberRow.colUserId, viewerId)
+        .eq(ClubMemberRow.colStatus, 'active');
+    final myClubIds = myMemberRows
+        .map<String>((r) => r[ClubMemberRow.colClubId] as String)
+        .toList();
+    if (myClubIds.isEmpty) return const [];
+
+    final coMemberRows = await _client
+        .from(ClubMemberRow.table)
+        .select('${ClubMemberRow.colUserId}, ${ClubMemberRow.colClubId}')
+        .inFilter(ClubMemberRow.colClubId, myClubIds)
+        .eq(ClubMemberRow.colStatus, 'active')
+        .neq(ClubMemberRow.colUserId, viewerId);
+    if (coMemberRows.isEmpty) return const [];
+
+    final shared = <String, int>{};
+    for (final row in coMemberRows) {
+      final uid = row[ClubMemberRow.colUserId] as String;
+      shared[uid] = (shared[uid] ?? 0) + 1;
+    }
+
+    final followedRows = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFolloweeId)
+        .eq(UserFollowRow.colFollowerId, viewerId)
+        .inFilter(UserFollowRow.colFolloweeId, shared.keys.toList());
+    for (final r in followedRows) {
+      shared.remove(r[UserFollowRow.colFolloweeId] as String);
+    }
+    if (shared.isEmpty) return const [];
+
+    final hydrated = await _hydratePeopleSuggestions(
+      shared.keys.toList(),
+      viewerId,
+      sharedCounts: shared,
+    );
+    hydrated.sort((a, b) {
+      if (b.sharedClubs != a.sharedClubs) {
+        return b.sharedClubs.compareTo(a.sharedClubs);
+      }
+      return (a.displayName ?? '').compareTo(b.displayName ?? '');
+    });
+    return hydrated.take(limit).toList();
+  }
+
+  Future<List<PeopleSuggestion>> _hydratePeopleSuggestions(
+    List<String> ids,
+    String? viewerId, {
+    required Map<String, int> sharedCounts,
+  }) async {
+    if (ids.isEmpty) return const [];
+    final profilesF = _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, ids);
+    final runsF = _client
+        .from(RunRow.table)
+        .select(RunRow.colUserId)
+        .inFilter(RunRow.colUserId, ids)
+        .eq(RunRow.colIsPublic, true);
+    final followsF = viewerId == null
+        ? Future.value(<dynamic>[])
+        : _client
+            .from(UserFollowRow.table)
+            .select(UserFollowRow.colFolloweeId)
+            .eq(UserFollowRow.colFollowerId, viewerId)
+            .inFilter(UserFollowRow.colFolloweeId, ids);
+    final results = await Future.wait([profilesF, runsF, followsF]);
+    final profileRows = results[0];
+    final runRows = results[1];
+    final followRows = results[2];
+
+    final counts = <String, int>{};
+    for (final r in runRows) {
+      final row = r as Map<String, dynamic>;
+      final uid = row[RunRow.colUserId] as String;
+      counts[uid] = (counts[uid] ?? 0) + 1;
+    }
+    final follows = <String>{};
+    for (final r in followRows) {
+      final row = r as Map<String, dynamic>;
+      follows.add(row[UserFollowRow.colFolloweeId] as String);
+    }
+    return profileRows.map<PeopleSuggestion>((p) {
+      final row = p as Map<String, dynamic>;
+      final id = row['id'] as String;
+      return PeopleSuggestion(
+        id: id,
+        displayName: row['display_name'] as String?,
+        avatarUrl: row['avatar_url'] as String?,
+        publicRunsCount: counts[id] ?? 0,
+        sharedClubs: sharedCounts[id] ?? 0,
+        viewerFollows: follows.contains(id),
+      );
+    }).toList();
+  }
+
+  /// Best-effort auto-link of a freshly-saved run to a plan workout
+  /// scheduled for the same calendar date. Wraps the
+  /// `auto_match_run_to_plan_workout` SECURITY DEFINER RPC. Returns
+  /// the matched workout id, or null when no match is found. Mirrors
+  /// `autoMatchRunToPlanWorkout` in `apps/web/src/lib/data.ts`.
+  Future<String?> autoMatchRunToPlanWorkout(
+    String runId,
+    DateTime runDate,
+  ) async {
+    final iso =
+        '${runDate.year.toString().padLeft(4, '0')}-${runDate.month.toString().padLeft(2, '0')}-${runDate.day.toString().padLeft(2, '0')}';
+    final result = await _client.rpc(
+      'auto_match_run_to_plan_workout',
+      params: {'p_run_id': runId, 'p_run_date': iso},
+    );
+    if (result == null) return null;
+    if (result is String && result.isNotEmpty) return result;
+    return null;
   }
 
   /// Recent public runs from a single user — drives the runs tab on
@@ -2416,9 +2587,11 @@ class ApiClient {
         .toList();
   }
 
-  /// Notifications with actor profiles + lightweight run / comment
-  /// metadata joined for the verb line. Three round-trips: notifs,
-  /// actors, runs (only the rows referenced).
+  /// Notifications with actor profiles + lightweight run / comment /
+  /// event metadata joined for the verb line. Notifs, then a parallel
+  /// Future.wait over actors / runs / comments / events; events fan
+  /// out into a follow-up clubs query for the slug so the inbox can
+  /// deep-link `event_rsvp` rows into `/clubs/<slug>/events/<id>`.
   Future<List<NotificationView>> fetchNotificationViews({
     int limit = 100,
   }) async {
@@ -2440,6 +2613,11 @@ class ApiClient {
         .map<String>((r) => r.commentId!)
         .toSet()
         .toList();
+    final eventIds = rows
+        .where((r) => r.eventId != null)
+        .map<String>((r) => r.eventId!)
+        .toSet()
+        .toList();
 
     final actorRowsF = actorIds.isEmpty
         ? Future.value(<dynamic>[])
@@ -2459,11 +2637,23 @@ class ApiClient {
             .from(RunCommentRow.table)
             .select('${RunCommentRow.colId}, ${RunCommentRow.colBody}')
             .inFilter(RunCommentRow.colId, commentIds);
+    final eventRowsF = eventIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _client
+            .from(EventRow.table)
+            .select('${EventRow.colId}, ${EventRow.colTitle}, ${EventRow.colClubId}')
+            .inFilter(EventRow.colId, eventIds);
 
-    final results = await Future.wait([actorRowsF, runRowsF, commentRowsF]);
+    final results = await Future.wait([
+      actorRowsF,
+      runRowsF,
+      commentRowsF,
+      eventRowsF,
+    ]);
     final actorRows = results[0];
     final runRows = results[1];
     final commentRows = results[2];
+    final eventRows = results[3];
 
     final actorsById = <String, PublicProfile>{};
     for (final r in actorRows) {
@@ -2482,6 +2672,30 @@ class ApiClient {
       commentBodyById[row[RunCommentRow.colId] as String] =
           (row[RunCommentRow.colBody] as String?) ?? '';
     }
+    final eventById = <String, ({String title, String clubId})>{};
+    for (final r in eventRows) {
+      final row = r as Map<String, dynamic>;
+      eventById[row[EventRow.colId] as String] = (
+        title: (row[EventRow.colTitle] as String?) ?? '',
+        clubId: (row[EventRow.colClubId] as String?) ?? '',
+      );
+    }
+    final clubIds = eventById.values
+        .map((e) => e.clubId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final clubSlugById = <String, String>{};
+    if (clubIds.isNotEmpty) {
+      final clubRows = await _client
+          .from(ClubRow.table)
+          .select('${ClubRow.colId}, ${ClubRow.colSlug}')
+          .inFilter(ClubRow.colId, clubIds);
+      for (final row in clubRows) {
+        clubSlugById[row[ClubRow.colId] as String] =
+            (row[ClubRow.colSlug] as String?) ?? '';
+      }
+    }
 
     String? excerpt(String? id) {
       if (id == null) return null;
@@ -2490,15 +2704,24 @@ class ApiClient {
       return body.length > 140 ? '${body.substring(0, 140)}…' : body;
     }
 
-    return rows
-        .map((row) => NotificationView(
-              row: row,
-              actor: row.actorId == null ? null : actorsById[row.actorId!],
-              runDistanceM:
-                  row.runId == null ? null : runDistanceById[row.runId!],
-              commentExcerpt: excerpt(row.commentId),
-            ))
-        .toList();
+    return rows.map((row) {
+      final event = row.eventId == null ? null : eventById[row.eventId!];
+      final clubSlug = event != null && event.clubId.isNotEmpty
+          ? (clubSlugById[event.clubId]?.isNotEmpty ?? false
+              ? clubSlugById[event.clubId]
+              : null)
+          : null;
+      return NotificationView(
+        row: row,
+        actor: row.actorId == null ? null : actorsById[row.actorId!],
+        runDistanceM:
+            row.runId == null ? null : runDistanceById[row.runId!],
+        commentExcerpt: excerpt(row.commentId),
+        eventTitle:
+            event != null && event.title.isNotEmpty ? event.title : null,
+        eventClubSlug: clubSlug,
+      );
+    }).toList();
   }
 
   /// Segment leaderboard with athlete profiles + ranks. Sorted
@@ -2699,6 +2922,7 @@ class ApiClient {
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
       isStarred: row['is_starred'] == true,
       clubId: row['club_id'] as String?,
+      description: row['description'] as String?,
     );
   }
 

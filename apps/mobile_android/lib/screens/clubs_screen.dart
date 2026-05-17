@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../social_service.dart';
@@ -8,6 +9,7 @@ import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/error_state.dart';
 import 'club_detail_screen.dart';
+import 'people_screen.dart';
 
 class ClubsScreen extends StatefulWidget {
   final SocialService social;
@@ -99,6 +101,19 @@ class _ClubsScreenState extends State<ClubsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clubs'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_search),
+            tooltip: 'Find people',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PeopleScreen(api: ApiClient()),
+                ),
+              );
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: Size.fromHeight(bottomHeight),
           child: Column(

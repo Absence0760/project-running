@@ -9,7 +9,11 @@ import '../lib/preferences.dart';
 import '../lib/screens/route_detail_screen.dart';
 import '../lib/social_service.dart' show ClubView;
 
-cm.Route _route({String name = 'River Loop', bool isPublic = false}) =>
+cm.Route _route({
+  String name = 'River Loop',
+  bool isPublic = false,
+  String? description,
+}) =>
     cm.Route(
       id: 'r1',
       userId: 'test-user',
@@ -18,6 +22,7 @@ cm.Route _route({String name = 'River Loop', bool isPublic = false}) =>
       distanceMetres: 8500,
       elevationGainMetres: 45,
       isPublic: isPublic,
+      description: description,
     );
 
 ClubView _club({
@@ -105,6 +110,25 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, -400));
       await tester.pump();
       expect(find.text('Reviews'), findsOneWidget);
+    });
+
+    testWidgets('renders the route description when set', (tester) async {
+      // Mirrors web `/routes/[id]` description block. Migration
+      // 20260902_001_routes_description.sql adds the column; the detail
+      // screen surfaces it under the title when non-null/non-empty.
+      await _pump(
+        tester,
+        _route(description: 'Out-and-back along the canal, flat.'),
+      );
+      expect(
+          find.text('Out-and-back along the canal, flat.'), findsOneWidget);
+    });
+
+    testWidgets('omits the description row when null', (tester) async {
+      await _pump(tester, _route(description: null));
+      // No description text means no surface for the empty-string
+      // sentinel either; the route's name still renders as the title.
+      expect(find.text(''), findsNothing);
     });
   });
 

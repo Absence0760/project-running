@@ -124,6 +124,17 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
             followRunner: false,
           ),
         ),
+        if (route.description != null && route.description!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Text(
+              route.description!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.all(20),
           child: Row(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
+import 'people_screen.dart';
 import 'profile_screen.dart';
 import 'public_run_screen.dart';
 import '../widgets/top_banner.dart';
@@ -149,7 +150,22 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Feed')),
+      appBar: AppBar(
+        title: const Text('Feed'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_search),
+            tooltip: 'Find people',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PeopleScreen(api: widget.api),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
