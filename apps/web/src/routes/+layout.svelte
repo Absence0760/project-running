@@ -88,7 +88,12 @@
 		isShellless(path) ||
 		anonExtraExact.includes(path) ||
 		path.startsWith('/guided/') ||
-		path.startsWith('/recap/');
+		path.startsWith('/recap/') ||
+		// Public clubs + their event detail pages are RLS-visible to
+		// anon (clubs.is_public + events FK). The page-level guards on
+		// /clubs/new and /clubs/[slug]/events/new still kick non-admins,
+		// so adding the prefix here only unblocks the read surfaces.
+		path.startsWith('/clubs/');
 
 	function isActive(href: string, path: string): boolean {
 		return path.startsWith(href);

@@ -1259,6 +1259,18 @@ Pinned by `apps/web/tests-e2e/social.spec.ts` (11 tests covering tab ARIA + URL 
 
 ---
 
+## 62. `/clubs/` is anon-allowed at the layout layer; page-level guards still gate write surfaces
+
+The layout's `isAnonAllowed()` helper now whitelists `/clubs/`. Without this, an anon visitor hitting `/clubs/sydney-run-club/events/<id>` from a shared link was bounced to `/login` even though the `events` / `clubs` RLS already allows the read (`clubs.is_public = true`).
+
+The page-level guards on the write surfaces still hold: `/clubs/[slug]/events/new` redirects to the parent club page when `viewer_role` isn't owner/admin. The event-detail page hides the RSVP buttons, admin-actions row, and post composer when `auth.user` is null. Private clubs render the not-found card because RLS drops the row before it reaches the client.
+
+**Don't re-litigate** by gating `/clubs/` at the layout level again — moving the guard up the stack hides the public-club share path that already worked at the RLS layer.
+
+Pinned by `apps/web/tests-e2e/clubs/event-rsvp.spec.ts` (anon visitor test — public-club event detail renders, RSVP row absent, post composer absent).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

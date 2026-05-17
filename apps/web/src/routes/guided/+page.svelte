@@ -38,7 +38,7 @@
 <div class="page">
 	{#if auth.loggedIn}
 		<a href="/coach" class="back-link" onclick={handleBack}>
-			<span class="material-symbols">arrow_back</span>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to Coach
 		</a>
 	{/if}
@@ -50,12 +50,12 @@
 			subscription, no in-app purchase, and you don't need a fancy watch.
 		</p>
 		<p class="note">
-			<span class="material-symbols">phone_iphone</span>
+			<span class="material-symbols" aria-hidden="true">phone_iphone</span>
 			Open these on the mobile app to run them. The library here is a preview.
 		</p>
 	</header>
 
-	<section class="library">
+	<section class="library" aria-label="Guided run library">
 		{#each GUIDED_RUN_LIBRARY as g (g.id)}
 			<a class="card" href="/guided/{g.id}">
 				<header>

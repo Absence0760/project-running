@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
-import { USER_A } from '../fixtures/users';
+import { USER_A, USER_C_PRO } from '../fixtures/users';
 
 /**
  * /settings/gear — current-gear (is_default) star toggle.
@@ -123,5 +123,342 @@ test.describe('/settings/gear — current-gear toggle', () => {
 		await expect(pegasusRow.locator('.default-pill')).toBeVisible({
 			timeout: 5_000
 		});
+	});
+});
+
+test.describe('/settings/gear — CRUD', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	// Sweep anything the tests below plant on USER_A. Seed gear lives at
+	// the pinned UUIDs 11111111-aaaa-bbbb-cccc-222222222201 (Pegasus 40,
+	// default) and ...02 (Ghost 16). Anything else under USER_A is a
+	// test artifact. Restoring Pegasus as default protects downstream
+	// specs (gear-auto-tag-flow + the current-gear toggle suite above)
+	// from a half-finished test that flipped the star.
+	const PEGASUS_GEAR_ID = '11111111-aaaa-bbbb-cccc-222222222201';
+	const SEED_IDS = [
+		PEGASUS_GEAR_ID,
+		'11111111-aaaa-bbbb-cccc-222222222202',
+	];
+
+	test.afterEach(async () => {
+		const admin = getAdminClient();
+		await admin
+			.from('gear')
+			.delete()
+			.eq('owner_id', USER_A.id)
+			.not('id', 'in', `(${SEED_IDS.join(',')})`);
+		await admin
+			.from('gear')
+			.update({ is_default: false })
+			.eq('owner_id', USER_A.id);
+		await admin
+			.from('gear')
+			.update({ is_default: true, retired_at: null })
+			.eq('id', PEGASUS_GEAR_ID);
+		await admin
+			.from('gear')
+			.update({ retired_at: null })
+			.in('id', SEED_IDS);
+	});
+
+	test('add a new shoe via the modal — appears in the list + DB row exists', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const planted = `E2E Endorphin ${Date.now()}`;
+
+		await page.goto('/settings/gear');
+		await expect(page.locator('.gear-list')).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: /New shoes/, exact: false }).first().click();
+		await page.locator('input[placeholder="Pegasus 39"]').fill(planted);
+		await page.locator('input[placeholder="Nike"]').fill('Saucony');
+		await page.locator('input[placeholder="Air Zoom Pegasus 39"]').fill('Endorphin Pro 4');
+		await page.locator('input[type="number"]').fill('600');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+
+		await expect(
+			page.locator('.gear-row', { hasText: planted })
+		).toBeVisible({ timeout: 10_000 });
+
+		const { data } = await admin
+			.from('gear')
+			.select('kind, brand, model, target_distance_m')
+			.eq('owner_id', USER_A.id)
+			.eq('name', planted)
+			.maybeSingle();
+		expect(data?.kind).toBe('shoe');
+		expect(data?.brand).toBe('Saucony');
+		expect(data?.model).toBe('Endorphin Pro 4');
+		// km tab default = 600 km × 1000 m/km.
+		expect(data?.target_distance_m).toBe(600_000);
+	});
+
+	test('edit an existing shoe — retirement target round-trips via the modal', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const planted = `E2E Edit Pair ${Date.now()}`;
+		const { data: created } = await admin
+			.from('gear')
+			.insert({
+				owner_id: USER_A.id,
+				kind: 'shoe',
+				name: planted,
+				target_distance_m: 400_000,
+			})
+			.select('id')
+			.single();
+
+		await page.goto('/settings/gear');
+		const row = page.locator('.gear-row', { hasText: planted });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		// Click the row body to open the edit modal.
+		await row.locator('.gear-main').click();
+		const dialog = page.locator('.modal');
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+		const targetInput = dialog.locator('input[type="number"]');
+		await expect(targetInput).toHaveValue('400');
+		await targetInput.fill('750');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+		await expect(dialog).toBeHidden({ timeout: 5_000 });
+
+		// Reload — the new target persisted.
+		await page.reload();
+		await expect(page.locator('.gear-row', { hasText: planted })).toBeVisible({
+			timeout: 10_000
+		});
+		const { data } = await admin
+			.from('gear')
+			.select('target_distance_m')
+			.eq('id', created!.id)
+			.maybeSingle();
+		expect(data?.target_distance_m).toBe(750_000);
+	});
+
+	test('retire + restore a shoe — Retired section + Restore button toggle', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const planted = `E2E Retire Pair ${Date.now()}`;
+		await admin.from('gear').insert({
+			owner_id: USER_A.id,
+			kind: 'shoe',
+			name: planted,
+			target_distance_m: 500_000,
+		});
+
+		await page.goto('/settings/gear');
+		const row = page.locator('.gear-row', { hasText: planted });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+		await expect(row).not.toHaveClass(/retired/);
+
+		await row.getByRole('button', { name: 'Retire', exact: true }).click();
+
+		// After retire, the row is now under the retired list and renders
+		// a Restore button instead.
+		const retiredRow = page
+			.locator('.gear-row.retired', { hasText: planted });
+		await expect(retiredRow).toBeVisible({ timeout: 10_000 });
+		await expect(
+			retiredRow.getByRole('button', { name: 'Restore' })
+		).toBeVisible();
+		await expect(
+			page.getByRole('heading', { name: 'Retired', level: 3 })
+		).toBeVisible();
+
+		// Restore — row leaves the retired list, comes back into active.
+		await retiredRow.getByRole('button', { name: 'Restore' }).click();
+		await expect(
+			page.locator('.gear-row.retired', { hasText: planted })
+		).toHaveCount(0, { timeout: 5_000 });
+		await expect(
+			page.locator('.gear-row', { hasText: planted })
+		).not.toHaveClass(/retired/);
+	});
+
+	test('add a bike — kind=bike row appears on the Bikes tab, not Shoes', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const planted = `E2E Allroad ${Date.now()}`;
+
+		await page.goto('/settings/gear');
+		// Default tab is Shoes. Flip to Bikes first.
+		await page.getByRole('button', { name: /^Bikes$/ }).click();
+		await page.getByRole('button', { name: /New bike/, exact: false }).first().click();
+
+		await page.locator('input[placeholder="Pegasus 39"]').fill(planted);
+		await page.locator('input[placeholder="Nike"]').fill('Specialized');
+		await page.locator('input[placeholder="Air Zoom Pegasus 39"]').fill('Allez');
+		await page.locator('input[type="number"]').fill('5000');
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+
+		await expect(
+			page.locator('.gear-row', { hasText: planted })
+		).toBeVisible({ timeout: 10_000 });
+
+		// Backend: kind is bike, target = 5000 km.
+		const { data } = await admin
+			.from('gear')
+			.select('kind, target_distance_m')
+			.eq('owner_id', USER_A.id)
+			.eq('name', planted)
+			.maybeSingle();
+		expect(data?.kind).toBe('bike');
+		expect(data?.target_distance_m).toBe(5_000_000);
+
+		// Flip back to Shoes tab — the bike must not render there.
+		await page.getByRole('button', { name: /^Shoes$/ }).click();
+		await expect(
+			page.locator('.gear-row', { hasText: planted })
+		).toHaveCount(0);
+	});
+
+	test('delete a shoe via the confirmation dialog — row disappears + DB row gone', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const planted = `E2E Delete Pair ${Date.now()}`;
+		const { data: created } = await admin
+			.from('gear')
+			.insert({
+				owner_id: USER_A.id,
+				kind: 'shoe',
+				name: planted,
+			})
+			.select('id')
+			.single();
+
+		await page.goto('/settings/gear');
+		const row = page.locator('.gear-row', { hasText: planted });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		await row.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		// Confirmation dialog comes up — title pinned, message references
+		// the gear name. Confirm.
+		const dialog = page.locator('.modal');
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		await expect(
+			dialog.getByRole('heading', { name: 'Delete gear?' })
+		).toBeVisible();
+		await expect(dialog).toContainText(planted);
+		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		await expect(
+			page.locator('.gear-row', { hasText: planted })
+		).toHaveCount(0, { timeout: 5_000 });
+
+		const { data } = await admin
+			.from('gear')
+			.select('id')
+			.eq('id', created!.id)
+			.maybeSingle();
+		expect(data).toBeNull();
+	});
+
+	test('per-kind defaults — shoe default and bike default coexist; partial-unique invariant holds independently per kind', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const bikeName = `E2E Default Bike ${Date.now()}`;
+		await admin
+			.from('gear')
+			.insert({
+				owner_id: USER_A.id,
+				kind: 'bike',
+				name: bikeName,
+			});
+
+		await page.goto('/settings/gear');
+		await page.getByRole('button', { name: /^Bikes$/ }).click();
+		const bikeRow = page.locator('.gear-row', { hasText: bikeName });
+		await expect(bikeRow).toBeVisible({ timeout: 10_000 });
+
+		await bikeRow
+			.getByRole('button', { name: new RegExp(`Mark ${bikeName} as current`) })
+			.click();
+		await expect(bikeRow.locator('.default-pill')).toBeVisible({
+			timeout: 5_000
+		});
+
+		// Backend: exactly one bike default + exactly one shoe default
+		// for this owner. The partial-unique index keys on (owner_id,
+		// kind), so a bike default cannot displace the existing shoe
+		// default — pinning this guards against a regression that
+		// over-broadened the clear-defaults UPDATE in setDefaultGear.
+		await expect
+			.poll(
+				async () => {
+					const { data } = await admin
+						.from('gear')
+						.select('kind, name')
+						.eq('owner_id', USER_A.id)
+						.eq('is_default', true);
+					return (data ?? [])
+						.map((g) => `${g.kind}:${g.name}`)
+						.sort();
+				},
+				{ timeout: 5_000 }
+			)
+			.toEqual([`bike:${bikeName}`, 'shoe:Pegasus 40']);
+
+		// Sanity: shoe tab still shows Pegasus 40 with the Current pill.
+		await page.getByRole('button', { name: /^Shoes$/ }).click();
+		await expect(
+			page
+				.locator('.gear-row', { hasText: 'Pegasus 40' })
+				.locator('.default-pill')
+		).toBeVisible();
+	});
+});
+
+test.describe('/settings/gear — empty state', () => {
+	// USER_C_PRO has no gear in the seed; the empty card with the
+	// "No shoes yet" header + per-kind CTA should render. After adding a
+	// pair the empty card disappears and the list takes over.
+	test.use({ storageState: USER_C_PRO.storageStatePath });
+
+	test.afterEach(async () => {
+		const admin = getAdminClient();
+		await admin.from('gear').delete().eq('owner_id', USER_C_PRO.id);
+	});
+
+	test('fresh user sees the empty card; adding a pair flips into the list', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+
+		await page.goto('/settings/gear');
+		await expect(
+			page.getByRole('heading', { name: 'No shoes yet' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.gear-list')).toHaveCount(0);
+
+		// CTA inside the empty card opens the same create modal.
+		await page
+			.locator('.empty-card')
+			.getByRole('button', { name: /Add shoes/ })
+			.click();
+		const planted = `E2E First Pair ${Date.now()}`;
+		await page.locator('input[placeholder="Pegasus 39"]').fill(planted);
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
+
+		await expect(
+			page.locator('.gear-row', { hasText: planted })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.empty-card')).toHaveCount(0);
+
+		// Sanity: backend row exists with owner_id = USER_C_PRO.
+		const { data } = await admin
+			.from('gear')
+			.select('name')
+			.eq('owner_id', USER_C_PRO.id);
+		expect(data?.map((g) => g.name)).toContain(planted);
 	});
 });

@@ -39,7 +39,7 @@
 <div class="page">
 	{#if run == null}
 		<a href="/guided" class="back-link" onclick={handleBack}>
-			<span class="material-symbols">arrow_back</span>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to library
 		</a>
 		<div class="empty">
@@ -52,7 +52,7 @@
 		</div>
 	{:else}
 		<a href="/guided" class="back-link" onclick={handleBack}>
-			<span class="material-symbols">arrow_back</span>
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Library
 		</a>
 
@@ -65,12 +65,12 @@
 			<p class="subtitle">{run.subtitle}</p>
 			<p class="desc">{run.description}</p>
 			<p class="note">
-				<span class="material-symbols">phone_iphone</span>
+				<span class="material-symbols" aria-hidden="true">phone_iphone</span>
 				Open the mobile app to run this. Cues fire automatically as you go.
 			</p>
 		</header>
 
-		<section class="script">
+		<section class="script" aria-label="Cue script">
 			<header class="script-head">
 				<h2>The full script</h2>
 				<span class="cue-count">{run.cues.length} cues</span>

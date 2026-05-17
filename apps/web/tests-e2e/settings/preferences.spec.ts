@@ -222,4 +222,88 @@ test.describe('/settings/preferences', () => {
 		await page.getByRole('button', { name: 'Auto', exact: true }).click();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'auto');
 	});
+
+	test('Save flow emits the success toast + the button re-arms after 2s', async ({
+		page
+	}) => {
+		// The Save handler emits a `showToast('Preferences saved.', 'success')`
+		// after `updateUniversal` resolves AND flips the button label to
+		// "Saved!" for 2s before reverting to "Save Preferences". Pin both —
+		// a regression that swallowed the toast (e.g. removing the
+		// ToastContainer mount, or throwing inside the upsert) would leave
+		// users with no feedback that the save took.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+
+		const toast = page.locator('.toast.toast-success', {
+			hasText: 'Preferences saved.'
+		});
+		await expect(toast).toBeVisible({ timeout: 5_000 });
+
+		// Button label cycle: Saving... → Saved! → Save Preferences. The
+		// "Saved!" state lasts ~2s; assert the rearm so a regression that
+		// stuck the button on "Saved!" (broken setTimeout) surfaces here.
+		await expect(
+			page.getByRole('button', { name: /Saved!/ })
+		).toBeVisible({ timeout: 5_000 });
+		await expect(
+			page.getByRole('button', { name: 'Save Preferences', exact: true })
+		).toBeVisible({ timeout: 5_000 });
+	});
+
+	test('skeleton renders during initial load + is replaced by real content', async ({
+		page
+	}) => {
+		// The polished-this-session page paints a content-shape skeleton
+		// (four card placeholders, each with a grid of field placeholders)
+		// while `loading` is true. Once the settings fetch resolves the
+		// skeleton is replaced by the real form. Pin both: a regression
+		// that dropped the skeleton would show a blank page during the
+		// fetch, and a regression that left `loading` stuck would leave
+		// the skeleton up forever.
+		//
+		// On a fast local stack the real fetch resolves in <100ms which
+		// races with Playwright's first assertion. Delay the user_settings
+		// PostgREST call by 750ms so the skeleton is observable.
+		await page.route('**/rest/v1/user_settings*', async (route) => {
+			await new Promise((r) => setTimeout(r, 750));
+			await route.continue();
+		});
+
+		await page.goto('/settings/preferences');
+
+		await expect(page.locator('.skel-card').first()).toBeVisible({
+			timeout: 5_000
+		});
+
+		// Then the real form replaces the skeletons.
+		await expect(
+			page.getByRole('heading', { name: 'Units & Display' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.skel-card')).toHaveCount(0);
+	});
+});
+
+test.describe('/settings/preferences — anon', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon visitor is auth-walled to /login with return_to', async ({
+		page,
+		context
+	}) => {
+		await context.addInitScript(() => {
+			localStorage.setItem(
+				'cookie_consent',
+				JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+			);
+		});
+		await page.goto('/settings/preferences');
+		await page.waitForURL(/\/login(\?|$)/, { timeout: 10_000 });
+		// return_to round-trip: the layout guard preserves the original
+		// destination so post-sign-in the user lands back on the prefs
+		// page (not the default dashboard).
+		expect(page.url()).toMatch(/return_to=%2Fsettings%2Fpreferences/);
+	});
 });

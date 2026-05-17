@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { USER_A } from '../fixtures/users';
+
 /**
  * /guided + /guided/[id] — guided audio run library.
  *
@@ -11,86 +13,190 @@ import { expect, test } from '@playwright/test';
  */
 
 const KNOWN_RUNS = [
-	{ id: 'easy-30', title: '30-Minute Easy Run', minutes: 30 },
-	{ id: 'tempo-builder-25', title: '25-Minute Tempo Builder', minutes: 25 },
-	{ id: 'first-timer-15', title: 'First-Timer 15-Minute Run/Walk', minutes: 15 },
+	{
+		id: 'easy-30',
+		title: '30-Minute Easy Run',
+		minutes: 30,
+		firstCueAt: '0:00',
+		// Hand-picked cues that exercise the mm:ss formatter — the
+		// 5-minute mark renders as "5:00" (single-digit m, padded s)
+		// and the 29-minute mark as "29:00" (double-digit m).
+		expectedCues: ['0:00', '5:00', '29:00']
+	},
+	{
+		id: 'tempo-builder-25',
+		title: '25-Minute Tempo Builder',
+		minutes: 25,
+		firstCueAt: '0:00',
+		expectedCues: ['0:00', '4:00', '18:00']
+	},
+	{
+		id: 'first-timer-15',
+		title: 'First-Timer 15-Minute Run/Walk',
+		minutes: 15,
+		firstCueAt: '0:00',
+		expectedCues: ['0:00', '3:00', '14:00']
+	}
 ];
 
-test.describe('/guided — index page', () => {
+function setConsentAccepted() {
+	localStorage.setItem(
+		'cookie_consent',
+		JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+	);
+}
+
+test.describe('/guided — index page (anon)', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
-	test('renders the hero + "preview only" mobile callout', async ({ page }) => {
+	test.beforeEach(async ({ context }) => {
+		await context.addInitScript(setConsentAccepted);
+	});
+
+	test('renders the kicker, h1, tagline + "preview only" mobile callout', async ({ page }) => {
 		await page.goto('/guided');
-		await expect(page.getByRole('heading', { name: /coach in your ear/i })).toBeVisible();
+		await expect(page.getByText('Guided runs', { exact: true }).first()).toBeVisible();
+		await expect(page.getByRole('heading', { level: 1, name: /coach in your ear/i })).toBeVisible();
+		await expect(page.getByText(/Scripted coach-voice workouts/)).toBeVisible();
 		await expect(page.getByText(/Open these on the mobile app/)).toBeVisible();
+	});
+
+	test('library section is labelled for assistive tech', async ({ page }) => {
+		await page.goto('/guided');
+		await expect(page.getByRole('region', { name: /guided run library/i })).toBeVisible();
+	});
+
+	test('icons in the hero callout are aria-hidden (no ligature leak)', async ({ page }) => {
+		await page.goto('/guided');
+		// The note's icon span carries `phone_iphone` as text content
+		// (Material Symbols ligature). Without aria-hidden the icon
+		// ligature reaches the accessibility tree as raw text.
+		const iconCount = await page
+			.locator('.note .material-symbols:not([aria-hidden="true"])')
+			.count();
+		expect(iconCount).toBe(0);
 	});
 
 	test('lists every guided run from the library as a clickable card', async ({ page }) => {
 		await page.goto('/guided');
-		// One card per library entry. Cards are <a class="card">.
 		const cards = page.locator('a.card');
 		await expect(cards).toHaveCount(KNOWN_RUNS.length);
 		for (const r of KNOWN_RUNS) {
 			const card = page.locator(`a.card[href="/guided/${r.id}"]`);
 			await expect(card).toBeVisible();
-			// .duration is the dedicated label slot; matching by the
-			// raw "N min" string would collide with the subtitle copy
-			// ("Coach voice · 30 min · easy effort") in the same card.
 			await expect(card.locator('.duration')).toHaveText(`${r.minutes} min`);
 			await expect(card.getByRole('heading', { name: r.title })).toBeVisible();
 		}
+	});
+
+	test('card cue-count footer matches the library data', async ({ page }) => {
+		await page.goto('/guided');
+		// Each card surfaces "N cues across the run". The number is
+		// the library's cue array length — pin a known one to fail
+		// loudly if the formatter drifts. easy-30 has 8 cues.
+		const easyCard = page.locator('a.card[href="/guided/easy-30"]');
+		await expect(easyCard.locator('.cue-count')).toContainText('8 cues');
 	});
 
 	test('document title is set on the index', async ({ page }) => {
 		await page.goto('/guided');
 		await expect(page).toHaveTitle(/Guided runs/);
 	});
+
+	test('anon viewer does NOT see the Back-to-Coach link', async ({ page }) => {
+		// /guided is anon-readable but /coach is not — gating the back
+		// link on auth.loggedIn keeps anon visitors out of a route
+		// they can't reach.
+		await page.goto('/guided');
+		await expect(page.getByRole('link', { name: /Back to Coach/ })).toHaveCount(0);
+	});
+
+	test('anon viewer loads /guided/[id] without redirect to login', async ({ page }) => {
+		const res = await page.goto('/guided/easy-30');
+		expect(res?.status() ?? 200).toBeLessThan(400);
+		await expect(page).toHaveURL(/\/guided\/easy-30$/);
+		await expect(page.getByRole('heading', { level: 1, name: '30-Minute Easy Run' })).toBeVisible();
+	});
 });
 
-test.describe('/guided/[id] — detail pages', () => {
+test.describe('/guided/[id] — detail pages (anon)', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
+	test.beforeEach(async ({ context }) => {
+		await context.addInitScript(setConsentAccepted);
+	});
+
 	for (const r of KNOWN_RUNS) {
-		test(`detail for ${r.id} renders the hero + script + back link`, async ({ page }) => {
+		test(`detail for ${r.id} renders hero, duration badge, cues, and ← Library link`, async ({
+			page
+		}) => {
 			await page.goto(`/guided/${r.id}`);
-			// Title is in <h1>. Use exact-match to avoid false-positives on
-			// other run titles that appear in document.title.
 			await expect(page.getByRole('heading', { name: r.title, exact: true })).toBeVisible();
-			await expect(page.getByRole('heading', { name: /script/i })).toBeVisible();
-			// "← Library" back link points at the index.
-			await expect(page.getByRole('link', { name: /Library/ })).toHaveAttribute(
-				'href',
-				'/guided'
-			);
+			// Hero duration badge — the small pill next to the kicker.
+			await expect(page.locator('.hero .duration')).toHaveText(`${r.minutes} min`);
+			// Script section + heading.
+			await expect(page.getByRole('region', { name: /cue script/i })).toBeVisible();
+			await expect(page.getByRole('heading', { name: /full script/i })).toBeVisible();
+			// Back link → /guided. Use exact accessible name now that
+			// the arrow_back icon is aria-hidden.
+			const back = page.getByRole('link', { name: 'Library', exact: true });
+			await expect(back).toHaveAttribute('href', '/guided');
+			// Every cue's at_sec renders inside the timeline.
+			const cueEntries = page.locator('ol.timeline .at');
+			await expect(cueEntries.first()).toHaveText(r.firstCueAt);
+			for (const stamp of r.expectedCues) {
+				await expect(cueEntries.filter({ hasText: new RegExp(`^${stamp}$`) })).toHaveCount(1);
+			}
+		});
+
+		test(`document title for ${r.id} includes the run title`, async ({ page }) => {
+			await page.goto(`/guided/${r.id}`);
+			await expect(page).toHaveTitle(new RegExp(r.title.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')));
 		});
 	}
 
-	test('cue list renders at least one mm:ss entry', async ({ page }) => {
-		// Detail page formats each cue's at_sec as mm:ss in <span class="at">.
-		// Library data guarantees each run has at least one cue at the start
-		// (00:00) or shortly after.
+	test('cue formatter pads seconds to two digits across mm:ss boundaries', async ({ page }) => {
+		// The fmtMmSs helper in /guided/[id]/+page.svelte must produce
+		// `0:00`, `5:00`, `10:00`, `29:00` for the library's cues —
+		// dropping the leading zero on seconds (e.g. "5:0") would
+		// silently break the layout. Pin a sample from each known run
+		// that exercises both single- and double-digit minutes.
 		await page.goto('/guided/easy-30');
-		const cueEntries = page.locator('.at');
-		await expect(cueEntries.first()).toBeVisible();
-		// First cue is at 0 seconds → '0:00'. Pin the format to catch a
-		// regression in fmtMmSs (e.g. dropping the leading zero).
-		await expect(cueEntries.first()).toHaveText('0:00');
+		const stamps = page.locator('ol.timeline .at');
+		await expect(stamps.nth(0)).toHaveText('0:00');
+		await expect(stamps.nth(1)).toHaveText('5:00');
+		await expect(stamps.nth(2)).toHaveText('10:00');
+		// 29:00 — double-digit minutes, seconds still zero-padded.
+		await expect(stamps.filter({ hasText: /^29:00$/ })).toHaveCount(1);
 	});
 
-	test('unknown id renders the "Unknown guided run" empty state', async ({ page }) => {
+	test('detail-page icons are aria-hidden (no ligature leak)', async ({ page }) => {
+		await page.goto('/guided/easy-30');
+		const leakedIcons = await page
+			.locator('.material-symbols:not([aria-hidden="true"])')
+			.count();
+		expect(leakedIcons).toBe(0);
+	});
+
+	test('unknown id renders the "Unknown guided run" empty state with a Back to library CTA', async ({
+		page
+	}) => {
 		const res = await page.goto('/guided/no-such-run-id');
-		// Status may be 200 (SvelteKit static fallback) or 404; the user-
-		// facing contract is "renders an empty state with a back link".
 		expect(res?.status() ?? 200).toBeGreaterThanOrEqual(200);
 		await expect(page.getByText(/Unknown guided run/)).toBeVisible();
-		// The empty state surfaces two paths to the library: a small back-
-		// link at the top and a primary CTA inside the empty card. Both
-		// point at /guided. Assert the CTA (the visible, big one a user
-		// would actually click) so the test fails if the empty state
-		// loses its primary action.
 		await expect(
 			page.locator('.empty').getByRole('link', { name: /Back to library/, exact: true })
 		).toHaveAttribute('href', '/guided');
+	});
+
+	test('empty-state Back to library CTA round-trips to /guided', async ({ page }) => {
+		await page.goto('/guided/no-such-run-id');
+		await page
+			.locator('.empty')
+			.getByRole('link', { name: /Back to library/, exact: true })
+			.click();
+		await expect(page).toHaveURL(/\/guided$/);
+		await expect(page.getByRole('heading', { level: 1, name: /coach in your ear/i })).toBeVisible();
 	});
 
 	test('document title falls back to "Guided run" on unknown id', async ({ page }) => {
@@ -99,36 +205,59 @@ test.describe('/guided/[id] — detail pages', () => {
 	});
 });
 
-import { USER_A } from '../fixtures/users';
+test.describe('/guided ↔ /guided/[id] — navigation round-trip', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('/guided — signed-in back navigation', () => {
+	test.beforeEach(async ({ context }) => {
+		await context.addInitScript(setConsentAccepted);
+	});
+
+	test('library card click → detail → Library back link → library', async ({ page }) => {
+		await page.goto('/guided');
+		await page.locator('a.card[href="/guided/easy-30"]').click();
+		await expect(page).toHaveURL(/\/guided\/easy-30$/);
+		await expect(page.getByRole('heading', { level: 1, name: '30-Minute Easy Run' })).toBeVisible();
+		await page.getByRole('link', { name: 'Library', exact: true }).click();
+		await expect(page).toHaveURL(/\/guided$/);
+		await expect(page.getByRole('heading', { level: 1, name: /coach in your ear/i })).toBeVisible();
+	});
+});
+
+test.describe('/guided — signed-in back-to-Coach round-trip', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('signed-in user sees a ← Back to Coach link at the top of the library', async ({
-		page
-	}) => {
-		// /guided is reached from the /coach right-rail "See the full
-		// library →" link. Without an in-page back affordance the user
-		// has to dig through the sidebar to return. Pin the back link
-		// so a regression that drops it fails here.
+	test('signed-in user sees a Back-to-Coach link with href=/coach', async ({ page }) => {
 		await page.goto('/guided');
 		const back = page.getByRole('link', { name: /Back to Coach/ });
 		await expect(back).toBeVisible({ timeout: 10_000 });
 		await expect(back).toHaveAttribute('href', '/coach');
 	});
 
-	test('anon viewer does NOT see the Back-to-Coach link (no /coach route for anon)', async ({
-		browser
+	test('/coach → "See the full library" → /guided → Back to Coach → /coach', async ({ page }) => {
+		// Pins the snapshot-restoring history pop pattern: the
+		// /guided afterNavigate hook flips cameFromCoach when the
+		// previous route was /coach, and Back-to-Coach calls
+		// history.back() so the original coach state survives.
+		await page.goto('/coach');
+		await expect(page).toHaveURL(/\/coach/);
+		await page.getByRole('link', { name: /See the full library/ }).click();
+		await expect(page).toHaveURL(/\/guided$/);
+		const back = page.getByRole('link', { name: /Back to Coach/ });
+		await expect(back).toBeVisible({ timeout: 10_000 });
+		await back.click();
+		await expect(page).toHaveURL(/\/coach/);
+	});
+
+	test('cold-load /guided (no /coach referrer) keeps the back-link as a normal nav', async ({
+		page
 	}) => {
-		// /guided is anon-readable but /coach is not — gating the back
-		// link on auth.loggedIn keeps the link from leading anon
-		// visitors into a route they can't reach.
-		const ctx = await browser.newContext({ storageState: undefined });
-		const page = await ctx.newPage();
+		// When the user lands on /guided directly (not from /coach),
+		// cameFromCoach stays false — clicking Back to Coach is a
+		// plain soft-nav with no history.back() side effect.
 		await page.goto('/guided');
-		await expect(
-			page.getByRole('link', { name: /Back to Coach/ })
-		).toHaveCount(0);
-		await ctx.close();
+		const back = page.getByRole('link', { name: /Back to Coach/ });
+		await expect(back).toBeVisible({ timeout: 10_000 });
+		await back.click();
+		await expect(page).toHaveURL(/\/coach/);
 	});
 });

@@ -419,4 +419,136 @@ test.describe('/coach', () => {
 		});
 		await expect(page.locator('aside.guided .mobile-cta')).toBeHidden();
 	});
+
+	test('composer Send button is disabled on empty draft and enables once the user types', async ({
+		page
+	}) => {
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+
+		const sendBtn = page.locator('form.composer button[type="submit"]');
+		await expect(sendBtn).toBeDisabled();
+
+		await composer.fill('hi');
+		await expect(sendBtn).toBeEnabled();
+
+		await composer.fill('   ');
+		await expect(sendBtn).toBeDisabled();
+
+		await composer.fill('what pace for tomorrow?');
+		await expect(sendBtn).toBeEnabled();
+	});
+
+	test('composer supports Shift+Enter for newline; Enter alone submits', async ({
+		page
+	}) => {
+		// Contract: Enter submits, Shift+Enter inserts a newline. The
+		// onkeydown handler in CoachChat.svelte hard-pins this — without
+		// it, multi-line questions would be impossible.
+		await page.route('**/api/coach', async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'stub' })
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+
+		await composer.focus();
+		await composer.type('line one');
+		await page.keyboard.press('Shift+Enter');
+		await composer.type('line two');
+
+		await expect(composer).toHaveValue('line one\nline two');
+
+		await page.keyboard.press('Enter');
+		await expect(page.getByText(/stub/)).toBeVisible({ timeout: 5_000 });
+	});
+
+	test('picking a real plan via mouse-click switches the chat-host (planId key remount)', async ({
+		page
+	}) => {
+		// Plan-context chip — `value=""` is the "No plan" option. Picking
+		// a real plan must update the URL AND the chat-host remounts
+		// (`{#key planId}`) so the thread reloads for the new plan
+		// scope.
+		await page.goto('/coach?plan=none');
+		const planTrigger = page.getByRole('button', { name: 'Plan context' });
+		await expect(planTrigger).toContainText('No plan', { timeout: 10_000 });
+
+		await planTrigger.click();
+		const popover = page.locator('[role="listbox"]');
+		await popover.getByRole('option', { name: /Sydney Half 2026/ }).click();
+		await expect(planTrigger).toContainText('Sydney Half 2026');
+
+		// Header sub-copy adapts to the plan-present state.
+		await expect(
+			page.locator('header .sub', { hasText: /Second opinion on your plan and runs/i })
+		).toBeVisible({ timeout: 5_000 });
+
+		await page.reload();
+		await expect(planTrigger).toContainText('Sydney Half 2026', { timeout: 10_000 });
+		await expect(page).toHaveURL(/[?&]plan=[0-9a-f-]{36}\b/);
+	});
+
+	test('grounded-in context strip surfaces the active plan name', async ({
+		page
+	}) => {
+		// The "what the coach has loaded" chip-strip is the user's read
+		// on grounding. Pin that the active plan name lands in the
+		// trigger AND the runs-window chip is alongside it — both must
+		// render together for the strip to be useful.
+		await page.goto('/coach');
+		const planTrigger = page.getByRole('button', { name: 'Plan context' });
+		const runsTrigger = page.getByRole('button', { name: 'Recent runs to include' });
+
+		await expect(planTrigger).toContainText('Sydney Half 2026', { timeout: 10_000 });
+		await expect(runsTrigger).toBeVisible();
+		await expect(runsTrigger).toContainText('Last 20');
+	});
+
+	test('chat-history sidebar toggles open + closed via the menu button', async ({
+		page
+	}) => {
+		// Collapses by default — the toggle must show + hide the panel
+		// without a navigation, so a user can sweep history mid-thread.
+		await page.goto('/coach');
+		await expect(page.getByPlaceholder(/Ask about today/)).toBeVisible({
+			timeout: 10_000
+		});
+
+		const sidebar = page.locator('.shell aside.sidebar');
+		await expect(sidebar).toHaveClass(/collapsed/);
+
+		const toggle = page.getByRole('button', { name: /Show conversations/i });
+		await toggle.click();
+		await expect(sidebar).not.toHaveClass(/collapsed/);
+
+		// "New chat" affordance lives in the open sidebar header.
+		await expect(sidebar.getByRole('button', { name: /New chat/i }))
+			.toBeVisible();
+
+		// The active-thread row renders with the "Active" meta line.
+		await expect(sidebar.locator('.thread-row.active')).toBeVisible();
+		await expect(sidebar.locator('.thread-row.active')).toContainText(/Active/);
+
+		const closeToggle = page.getByRole('button', { name: /Hide conversations/i });
+		await closeToggle.click();
+		await expect(sidebar).toHaveClass(/collapsed/);
+	});
+});
+
+test.describe('/coach — anon', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon visitor is auth-walled to /login', async ({ page }) => {
+		// /coach is NOT in the anon-allowed list, so an anon user must
+		// be redirected to /login with a return_to.
+		await page.goto('/coach');
+		await page.waitForURL(/\/login(\?|$)/, { timeout: 10_000 });
+	});
 });

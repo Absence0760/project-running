@@ -115,20 +115,25 @@
 		return c;
 	});
 
-	let viewerRsvpForActive = $derived(
-		activeInstance && event && activeInstance === event.next_instance_start
-			? event.viewer_rsvp
-			: null
-	);
+	let viewerRsvpForActive = $derived.by(() => {
+		if (!event || !activeInstance) return null;
+		if (activeInstance === event.next_instance_start) return event.viewer_rsvp;
+		const me = attendees.find((a) => a.user_id === auth.user?.id);
+		return (me?.status as RsvpStatus | undefined) ?? null;
+	});
 
 	async function load() {
 		loading = true;
+		const prevInstance = activeInstance;
 		[club, event] = await Promise.all([fetchClubBySlug(slug), fetchEventById(eventId)]);
 		if (!event) {
 			loading = false;
 			return;
 		}
-		activeInstance = event.next_instance_start;
+		// Preserve the user's instance selection across loads — otherwise
+		// rsvp() (which calls load()) silently warps the user back to the
+		// next instance after every click on a later one.
+		activeInstance = prevInstance ?? event.next_instance_start;
 		await reloadInstance();
 		loading = false;
 	}
@@ -390,16 +395,13 @@
 		if (!event || !activeInstance || busy) return;
 		busy = true;
 		try {
-			// `viewer_rsvp` only reflects the NEXT instance; when the user is
-			// viewing a later instance we don't compare against it.
-			const shouldClear =
-				activeInstance === event.next_instance_start && event.viewer_rsvp === status;
+			const shouldClear = viewerRsvpForActive === status;
 			if (shouldClear) {
 				await clearRsvp(event.id, activeInstance);
 			} else {
 				await rsvpEvent(event.id, status, activeInstance);
 			}
-			await load(); // reload for updated counts
+			await load();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'RSVP failed';
 		} finally {
@@ -589,7 +591,7 @@
 				{/if}
 			</div>
 			<div class="hero-side">
-				{#if !isPast}
+				{#if !isPast && auth.user}
 					<div
 						class="rsvp-tri"
 						role="group"

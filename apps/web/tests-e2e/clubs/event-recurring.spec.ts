@@ -1,0 +1,220 @@
+import { expect, test } from '@playwright/test';
+
+import { getAdminClient } from '../fixtures/local-supabase';
+import { deleteEvent } from '../fixtures/simulate';
+import { USER_A } from '../fixtures/users';
+
+/**
+ * /clubs/[slug]/events/new — recurrence editor depth.
+ *
+ * `event-create.spec.ts` covers the one-off create path (title +
+ * date + time, recurrence=none). This file pins the recurring
+ * variants: weekly with multi-day byday, monthly, until-date
+ * validation, and the byday-persistence-across-recurrence-switches
+ * contract that the EventEditor exposes.
+ *
+ * All assertions hit the events row via service-role after submit
+ * so a regression that drops a column from the insert payload is
+ * caught at the DB level, not just the UI.
+ */
+
+const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+
+test.describe('/clubs/[slug]/events/new — recurrence', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	let eventId: string | null = null;
+
+	test.afterEach(async () => {
+		if (eventId) {
+			try {
+				await deleteEvent(eventId);
+			} catch (_) {
+				/* best-effort */
+			}
+			eventId = null;
+		}
+	});
+
+	test('weekly recurring event: Mon+Wed+Fri until 4 weeks out → row carries byday + until + freq, detail page expands instances', async ({
+		page
+	}) => {
+		const title = `e2e-recurring-weekly ${Date.now()}`;
+		const startDate = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+		const startIso = startDate.toISOString().slice(0, 10);
+		const untilDate = new Date(Date.now() + 28 * 24 * 3600 * 1000);
+		const untilIso = untilDate.toISOString().slice(0, 10);
+
+		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByPlaceholder('Sunday long run').fill(title);
+		await page.locator('input[type="date"]').first().fill(startIso);
+		await page.locator('input[type="time"]').first().fill('07:30');
+
+		await page.getByRole('radio', { name: 'Weekly' }).check();
+		await page.getByRole('button', { name: 'Mon' }).click();
+		await page.getByRole('button', { name: 'Wed' }).click();
+		await page.getByRole('button', { name: 'Fri' }).click();
+
+		const untilInput = page.locator('fieldset input[type="date"]');
+		await untilInput.fill(untilIso);
+
+		await page.getByRole('button', { name: /Create event/ }).click();
+
+		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+			timeout: 10_000
+		});
+		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
+		eventId = match![1];
+
+		await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible({
+			timeout: 10_000
+		});
+
+		const admin = getAdminClient();
+		const { data: row } = await admin
+			.from('events')
+			.select('recurrence_freq, recurrence_byday, recurrence_until, title')
+			.eq('id', eventId)
+			.single();
+		expect(row?.recurrence_freq).toBe('weekly');
+		expect(row?.recurrence_byday).toEqual(expect.arrayContaining(['MO', 'WE', 'FR']));
+		expect(row?.recurrence_byday).toHaveLength(3);
+		expect(row?.recurrence_until).not.toBeNull();
+
+		const recurrenceLabel = page.locator('.hero-eyebrow', {
+			hasText: /every week/i
+		});
+		await expect(recurrenceLabel).toBeVisible({ timeout: 10_000 });
+
+		const instanceChips = page.locator('.instance-chip');
+		const chipCount = await instanceChips.count();
+		expect(chipCount).toBeGreaterThanOrEqual(2);
+	});
+
+	test('monthly recurring event: row carries freq=monthly, no byday required', async ({
+		page
+	}) => {
+		const title = `e2e-recurring-monthly ${Date.now()}`;
+		const startDate = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+		const startIso = startDate.toISOString().slice(0, 10);
+
+		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByPlaceholder('Sunday long run').fill(title);
+		await page.locator('input[type="date"]').first().fill(startIso);
+		await page.locator('input[type="time"]').first().fill('08:00');
+
+		await page.getByRole('radio', { name: 'Monthly' }).check();
+
+		await expect(page.getByRole('button', { name: 'Mon' })).toHaveCount(0);
+
+		await page.getByRole('button', { name: /Create event/ }).click();
+
+		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+			timeout: 10_000
+		});
+		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
+		eventId = match![1];
+
+		const admin = getAdminClient();
+		const { data: row } = await admin
+			.from('events')
+			.select('recurrence_freq, recurrence_byday')
+			.eq('id', eventId)
+			.single();
+		expect(row?.recurrence_freq).toBe('monthly');
+		expect(row?.recurrence_byday).toBeNull();
+
+		await expect(
+			page.locator('.hero-eyebrow', { hasText: /repeats monthly/i })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('until-date in the past produces no instances: detail page shows Past event', async ({
+		page
+	}) => {
+		const title = `e2e-recurring-stale-until ${Date.now()}`;
+		const startDate = new Date(Date.now() - 14 * 24 * 3600 * 1000);
+		const startIso = startDate.toISOString().slice(0, 10);
+		const untilDate = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+		const untilIso = untilDate.toISOString().slice(0, 10);
+
+		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByPlaceholder('Sunday long run').fill(title);
+		await page.locator('input[type="date"]').first().fill(startIso);
+		await page.locator('input[type="time"]').first().fill('07:00');
+		await page.getByRole('radio', { name: 'Weekly' }).check();
+		await page.getByRole('button', { name: 'Tue' }).click();
+		const untilInput = page.locator('fieldset input[type="date"]');
+		await untilInput.fill(untilIso);
+
+		await page.getByRole('button', { name: /Create event/ }).click();
+
+		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+			timeout: 10_000
+		});
+		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
+		eventId = match![1];
+
+		await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await expect(page.locator('.rsvp-tri')).toHaveCount(0);
+	});
+
+	test('switching recurrence type: byday selections persist across weekly→monthly→weekly', async ({
+		page
+	}) => {
+		const title = `e2e-recurrence-switch ${Date.now()}`;
+		const startIso = new Date(Date.now() + 7 * 24 * 3600 * 1000)
+			.toISOString()
+			.slice(0, 10);
+
+		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByPlaceholder('Sunday long run').fill(title);
+		await page.locator('input[type="date"]').first().fill(startIso);
+		await page.locator('input[type="time"]').first().fill('07:00');
+
+		await page.getByRole('radio', { name: 'Weekly' }).check();
+		await page.getByRole('button', { name: 'Mon' }).click();
+		await expect(page.getByRole('button', { name: 'Mon' })).toHaveClass(/active/);
+
+		await page.getByRole('radio', { name: 'Monthly' }).check();
+		await expect(page.getByRole('button', { name: 'Mon' })).toHaveCount(0);
+
+		await page.getByRole('radio', { name: 'Weekly' }).check();
+		await expect(page.getByRole('button', { name: 'Mon' })).toHaveClass(/active/);
+
+		await page.getByRole('button', { name: /Create event/ }).click();
+		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+			timeout: 10_000
+		});
+		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
+		eventId = match![1];
+
+		const admin = getAdminClient();
+		const { data: row } = await admin
+			.from('events')
+			.select('recurrence_freq, recurrence_byday')
+			.eq('id', eventId)
+			.single();
+		expect(row?.recurrence_freq).toBe('weekly');
+		expect(row?.recurrence_byday).toEqual(['MO']);
+	});
+});

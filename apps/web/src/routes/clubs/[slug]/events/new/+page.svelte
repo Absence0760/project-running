@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { fetchClubBySlug } from '$lib/data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
@@ -24,6 +25,15 @@
 	}
 
 	onMount(async () => {
+		// Wait for auth.user before resolving the club — fetchClubBySlug
+		// derives `viewer_role` against the caller's identity. Without
+		// this guard a fast page-load can hit the fetch while auth is
+		// still hydrating, viewer_role comes back null even for the
+		// real owner, and the admin-gate goto kicks them back to the
+		// club page.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		club = await fetchClubBySlug(slug);
 		if (club?.viewer_role !== 'owner' && club?.viewer_role !== 'admin') {
 			goto(`/clubs/${slug}`);

@@ -183,14 +183,14 @@
 			class:active={activeTab === 'shoe'}
 			onclick={() => (activeTab = 'shoe')}
 		>
-			<span class="material-symbols">directions_run</span> Shoes
+			<span class="material-symbols" aria-hidden="true">directions_run</span> Shoes
 		</button>
 		<button
 			class="tab"
 			class:active={activeTab === 'bike'}
 			onclick={() => (activeTab = 'bike')}
 		>
-			<span class="material-symbols">directions_bike</span> Bikes
+			<span class="material-symbols" aria-hidden="true">directions_bike</span> Bikes
 		</button>
 		<div class="spacer"></div>
 		<button
@@ -280,7 +280,7 @@
 								aria-pressed={g.is_default}
 								onclick={() => handleToggleDefault(g)}
 							>
-								<span class="material-symbols">
+								<span class="material-symbols" aria-hidden="true">
 									{g.is_default ? 'star' : 'star_outline'}
 								</span>
 							</button>
