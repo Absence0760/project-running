@@ -5,6 +5,12 @@
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
 	// routing.ts still available for individual segment calls if needed
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
+	import {
+		OSRM_SNAP_RADIUS_M,
+		qualityWarning,
+		validateRouteQuality,
+		type RoutedSegment,
+	} from '$lib/routing_quality';
 	import type { TrackPoint } from '$lib/types';
 
 	let {
@@ -230,7 +236,15 @@
 
 			async function fetchSegment(from: TrackPoint, to: TrackPoint, retries = 2): Promise<unknown> {
 				const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-				const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=geojson`;
+				// `radiuses=` caps how far OSRM can reach to find a road for
+				// each waypoint. Default OSRM is "unlimited" — that's how a
+				// click near a stream ends up snapping to a road 800m away.
+				// 100m is loose enough that a click near a known path still
+				// snaps but rejects the absurd cases. OSRM returns
+				// `code: "NoSegment"` when no road is in range; we treat
+				// that as a normal segment failure (counted in okSegments).
+				const radius = OSRM_SNAP_RADIUS_M;
+				const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=geojson&radiuses=${radius};${radius}`;
 				for (let attempt = 0; attempt <= retries; attempt++) {
 					try {
 						const res = await fetch(url, {
@@ -266,32 +280,54 @@
 
 			// Stitch segments together. Count how many succeeded so we can
 			// surface an error when the upstream is completely unreachable.
+			// Also track per-segment polyline + distance so the post-routing
+			// quality validator can flag waypoints that snapped far away or
+			// segments that took absurd detours (see routing_quality.ts).
 			const allCoords: [number, number][] = [];
+			const routedSegments: RoutedSegment[] = [];
 			let okSegments = 0;
-			for (const data of results as { code: string; routes?: { geometry: { coordinates: [number, number][] } }[] }[]) {
-				if (data.code !== 'Ok' || !data.routes?.[0]) continue;
+			(results as {
+				code: string;
+				routes?: { geometry: { coordinates: [number, number][] }; distance?: number }[];
+			}[]).forEach((data, i) => {
+				if (data.code !== 'Ok' || !data.routes?.[0]) return;
 				okSegments++;
 				const segCoords = data.routes[0].geometry.coordinates;
+				const segDistance = data.routes[0].distance ?? 0;
+				routedSegments.push({
+					from: segments[i].from,
+					to: segments[i].to,
+					polyline: segCoords,
+					distanceM: segDistance,
+				});
 				if (allCoords.length > 0 && segCoords.length > 0) {
 					allCoords.push(...segCoords.slice(1));
 				} else {
 					allCoords.push(...segCoords);
 				}
-			}
+			});
 
 			if (currentVersion !== routeVersion) return false;
 
 			if (okSegments === 0) {
 				throw new Error(
-					'Routing service unavailable — all segment requests timed out or failed. The public OSRM demo server is unreliable; see docs/roadmap.md.'
+					'Routing service unavailable — no segments could be routed. Some waypoints may be too far from any path (try moving them closer to a road), or the public OSRM demo server is unreachable.'
 				);
 			}
 			if (okSegments < segments.length) {
 				// Partial success — show a softer warning but keep the route.
 				onerror(
-					`Routed ${okSegments} of ${segments.length} segments — some requests failed. The line is incomplete.`,
+					`Routed ${okSegments} of ${segments.length} segments — ${segments.length - okSegments} waypoint pair${segments.length - okSegments === 1 ? '' : 's'} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m. Try dragging those markers closer to a road.`,
 					'warning'
 				);
+			} else {
+				// Every segment came back. Now check whether the route
+				// actually sticks close to the user's clicks — radiuses=
+				// caps the snap at the endpoints but doesn't stop OSRM
+				// from routing via a wild detour BETWEEN waypoints.
+				const quality = validateRouteQuality(routedSegments);
+				const warn = qualityWarning(quality);
+				if (warn) onerror(warn, 'warning');
 			}
 
 			routeCoordinates = allCoords;
