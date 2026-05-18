@@ -413,6 +413,13 @@ create table clubs (
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
+-- Anti-spam phase 2 (migration 20260907_001): BEFORE INSERT trigger
+-- `clubs_enforce_create_rate_limit` calls `enforce_create_rate_limit`
+-- which delegates to the existing `check_rate_limit` infrastructure.
+-- Cap: 5 clubs / hour per owner. service_role + null-auth (migrations,
+-- seed) + forged inserts (auth.uid() != owner_id, rejected by RLS
+-- with 42501 anyway) all bypass the trigger so the existing RLS
+-- pgtap suites still see the right errcode.
 
 create table club_members (
   club_id     uuid references clubs on delete cascade not null,
