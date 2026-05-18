@@ -14,7 +14,7 @@
 // missing. Once the graph exists, it falls through to the same
 // `docker compose up` as before.
 
-import { existsSync } from 'node:fs';
+import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,35 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const osrmDir = resolve(repoRoot, 'apps/job_worker/osrm');
 const dataDir = resolve(osrmDir, 'data');
+
+// Detect the common "data/ owned by root from a prior bare
+// `docker compose up`" trap. The Makefile guards the same way, but
+// catching it here gives a single error path for either entrypoint
+// (`pnpm dev:run:osrm` or `pnpm dev:setup:osrm`).
+if (existsSync(dataDir)) {
+	try {
+		accessSync(dataDir, constants.W_OK);
+	} catch {
+		const owner = (() => {
+			try {
+				return statSync(dataDir).uid;
+			} catch {
+				return null;
+			}
+		})();
+		console.error('');
+		console.error(`  ✗ ${dataDir} exists but isn't writable by you${owner === 0 ? ' (owned by root)' : ''}.`);
+		console.error('');
+		console.error('    A previous `docker compose up` ran as root and created the bind-mount');
+		console.error('    target. One-line fix:');
+		console.error('');
+		console.error(`      sudo chown -R $USER:$USER ${dataDir}`);
+		console.error('');
+		console.error('    Then re-run `pnpm dev:setup:osrm` to build the graph.');
+		console.error('');
+		process.exit(1);
+	}
+}
 
 // Files osrm-routed errors out on if any are missing. Pick a handful
 // from each stage of the build pipeline so a partial / interrupted

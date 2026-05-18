@@ -14,6 +14,11 @@ PBF        := data/region.osm.pbf
 OSRM_BASE  := data/region.osrm
 PROFILE    := /opt/foot.lua
 IMAGE      := osrm/osrm-backend:latest
+# Run docker as the invoking host user so build outputs land owned by
+# the user, not root. Without this, the bind-mount target ends up
+# `root:root` and subsequent `curl --output` / make runs hit
+# "Permission denied". `id -u` / `id -g` resolve at make-time.
+DOCKER_USER := --user $(shell id -u):$(shell id -g)
 
 # `osrm-extract --profile foot.lua` produces a graph tuned for foot
 # traffic: pedestrian-permitted ways, no motorway-only, slower default
@@ -21,9 +26,28 @@ IMAGE      := osrm/osrm-backend:latest
 # running tracks — using `car.lua` would discard half the parks +
 # trails the runners actually care about.
 
-.PHONY: download build clean serve stop logs ps smoke
+.PHONY: download build clean serve stop logs ps smoke check-perms
 
-download: $(PBF)
+# Bail early if `data/` already exists but isn't writable by the
+# invoking user — almost always the result of a prior
+# `docker compose up` running as root and creating the bind-mount
+# target. Tell the user the one-line fix instead of letting curl /
+# docker fail mid-build with a stack of confusing errors.
+check-perms:
+	@if [ -d data ] && [ ! -w data ]; then \
+		echo ""; \
+		echo "  ✗ apps/job_worker/osrm/data/ exists but isn't writable by $$USER."; \
+		echo "    A previous \`docker compose up\` ran as root and created this"; \
+		echo "    directory. Fix with:"; \
+		echo ""; \
+		echo "      sudo chown -R $$USER:$$USER apps/job_worker/osrm/data"; \
+		echo ""; \
+		echo "    Then re-run \`pnpm dev:setup:osrm\`."; \
+		echo ""; \
+		exit 1; \
+	fi
+
+download: check-perms $(PBF)
 
 $(PBF):
 	@mkdir -p data
@@ -31,15 +55,15 @@ $(PBF):
 	curl -L --fail --output $(PBF) $(REGION_URL)
 	@echo "✓ Saved $$(du -h $(PBF) | cut -f1) to $(PBF)"
 
-build: $(PBF)
+build: check-perms $(PBF)
 	@echo "→ Extracting (osrm-extract, foot profile)…"
-	docker run --rm -v "$(PWD)/data:/data" $(IMAGE) \
+	docker run --rm $(DOCKER_USER) -v "$(PWD)/data:/data" $(IMAGE) \
 		osrm-extract -p $(PROFILE) /data/region.osm.pbf
 	@echo "→ Partitioning (osrm-partition)…"
-	docker run --rm -v "$(PWD)/data:/data" $(IMAGE) \
+	docker run --rm $(DOCKER_USER) -v "$(PWD)/data:/data" $(IMAGE) \
 		osrm-partition $(OSRM_BASE)
 	@echo "→ Customizing (osrm-customize)…"
-	docker run --rm -v "$(PWD)/data:/data" $(IMAGE) \
+	docker run --rm $(DOCKER_USER) -v "$(PWD)/data:/data" $(IMAGE) \
 		osrm-customize $(OSRM_BASE)
 	@echo "✓ Build complete. Run 'docker compose up' to serve."
 
