@@ -20,6 +20,10 @@ const KNOWN_ENV_VARS = [
 	'SUPABASE_URL',
 	'OPENAI_BASE_URL',
 	'LIVE_HUB_URL',
+	// Bundled into the client at build time and read by routing.ts /
+	// RouteBuilder.svelte. The legacy `OSRM_URL` is kept in the
+	// allow-list below for any external tooling that still uses it.
+	'PUBLIC_OSRM_URL',
 	'OSRM_URL',
 	'PUBLIC_SITE_URL',
 ];

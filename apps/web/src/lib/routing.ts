@@ -1,6 +1,19 @@
+import { env as publicEnv } from '$env/dynamic/public';
 import type { TrackPoint } from './types';
 
-const OSRM_BASE = 'https://router.project-osrm.org';
+/**
+ * Base URL for the OSRM routing service. Defaults to the public demo
+ * server (rate-limited, occasionally overloaded); set PUBLIC_OSRM_URL
+ * to point at a self-hosted instance (see apps/job_worker/osrm/ for
+ * the docker-compose recipe and `npm run dev:run:osrm`). Single source
+ * of truth — RouteBuilder.svelte imports OSRM_BASE_URL from here so a
+ * future env flip doesn't leave two hardcoded URLs out of sync.
+ *
+ * Read via `$env/dynamic/public` rather than the static variant so a
+ * fresh clone with no local `.env.local` still type-checks — the
+ * dynamic API tolerates undeclared keys and returns `undefined`.
+ */
+export const OSRM_BASE_URL = (publicEnv.PUBLIC_OSRM_URL || 'https://router.project-osrm.org').replace(/\/+$/, '');
 
 interface OsrmRoute {
 	geometry: {
@@ -28,7 +41,7 @@ export async function snapToRoad(
 	point: { lng: number; lat: number },
 	profile: 'foot' | 'car' = 'foot'
 ): Promise<[number, number]> {
-	const url = `${OSRM_BASE}/nearest/v1/${profile}/${point.lng},${point.lat}`;
+	const url = `${OSRM_BASE_URL}/nearest/v1/${profile}/${point.lng},${point.lat}`;
 	const res = await fetch(url);
 	if (!res.ok) return [point.lng, point.lat];
 
@@ -50,7 +63,7 @@ export async function fetchRoute(
 	profile: 'foot' | 'car' = 'foot'
 ): Promise<{ coordinates: [number, number][]; distance: number; snappedFrom: [number, number]; snappedTo: [number, number] }> {
 	const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-	const url = `${OSRM_BASE}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
+	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
 
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`OSRM error: ${res.status}`);
@@ -84,7 +97,7 @@ export async function fetchFullRoute(
 	}
 
 	const coords = waypoints.map((w) => `${w.lng},${w.lat}`).join(';');
-	const url = `${OSRM_BASE}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
+	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
 
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`OSRM error: ${res.status}`);

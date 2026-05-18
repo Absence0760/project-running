@@ -3,7 +3,10 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
-	// routing.ts still available for individual segment calls if needed
+	// Single source of truth for the OSRM endpoint — env-overridable via
+	// PUBLIC_OSRM_URL so a self-hosted backend can replace the public
+	// demo server without code edits.
+	import { OSRM_BASE_URL } from '$lib/routing';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
 		closestPointDistanceM,
@@ -321,7 +324,7 @@
 				// `code: "NoSegment"` when no road is in range; we treat
 				// that as a normal segment failure (counted in okSegments).
 				const radius = OSRM_SNAP_RADIUS_M;
-				const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=geojson&radiuses=${radius};${radius}`;
+				const url = `${OSRM_BASE_URL}/route/v1/foot/${coords}?overview=full&geometries=geojson&radiuses=${radius};${radius}`;
 				for (let attempt = 0; attempt <= retries; attempt++) {
 					try {
 						const res = await fetch(url, {

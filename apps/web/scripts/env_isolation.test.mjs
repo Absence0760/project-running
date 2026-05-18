@@ -7,11 +7,20 @@ test('passes when only loopback URLs are set', () => {
 	const r = checkEnvIsolation({
 		PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
 		SUPABASE_URL: 'http://localhost:54321',
+		PUBLIC_OSRM_URL: 'http://127.0.0.1:5000',
 		OSRM_URL: 'http://127.0.0.1:5000',
 	});
 	assert.equal(r.ok, true);
 	assert.equal(r.override, false);
 	assert.equal(r.findings.length, 0);
+});
+
+test('fails when PUBLIC_OSRM_URL points at a remote host', () => {
+	const r = checkEnvIsolation({
+		PUBLIC_OSRM_URL: 'https://osrm.example.com',
+	});
+	assert.equal(r.ok, false);
+	assert.equal(r.findings[0].envVar, 'PUBLIC_OSRM_URL');
 });
 
 test('passes when env is empty', () => {
