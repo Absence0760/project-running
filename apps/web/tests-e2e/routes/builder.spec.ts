@@ -365,6 +365,112 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(page.locator('.shortcuts-hint')).toBeVisible({ timeout: 10_000 });
 	});
 
+	test('Generate-by-distance: distance presets update the slider label', async ({ page }) => {
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+		// Open the distance-target panel.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		// 5k preset → slider value reads ~5.0 km or ~3.1 mi depending
+		// on the user's preference (default seed is km).
+		await page.getByRole('button', { name: '5k', exact: true }).click();
+		const value = page.locator('.target-value');
+		const text = (await value.textContent()) ?? '';
+		// Either "5.0 km" or "3.1 mi" — both are valid renderings of
+		// the 5km preset.
+		expect(text).toMatch(/(5\.0\s*km|3\.1\s*mi)/);
+	});
+
+	test('Generate without zoom OR start emits the pan-first guard', async ({ page }) => {
+		// Pre-audit: generateLoop fell back to map.getCenter() and
+		// happily ran from the default [0, 20] (mid-Atlantic) when
+		// geolocation was denied — every waypoint missed the road
+		// network and the user got a confusing "Routing service
+		// unavailable." The zoom < 6 guard now refuses early with a
+		// clear message.
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		// Generate button is visible (no start picked, busy=false).
+		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();
+		const banner = page.locator('.routing-error').first();
+		await expect(banner).toBeVisible({ timeout: 5_000 });
+		await expect(banner).toContainText(/Pan to your area|pick a start/i);
+	});
+
+	test('Generate hard-failure surfaces a generation-specific message', async ({ page }) => {
+		// Every OSRM call comes back 503. Audit #6: the user should
+		// see "Couldn't generate a Xkm loop here", not the generic
+		// "Routing service unavailable" — service IS reachable, the
+		// scaffolding seeds just missed the road network.
+		await page.route('https://router.project-osrm.org/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+
+		// Pick a start so the zoom guard doesn't intercept.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await page.getByRole('button', { name: 'Pick start on map' }).click();
+		await page.locator('.maplibregl-canvas').click({ position: { x: 200, y: 200 } });
+
+		// If the picker didn't capture the click (test env), skip — the
+		// behaviour is still covered by the unit tests on the pure
+		// helpers and the type-level boolean return.
+		const startSet = await page
+			.locator('.point-set')
+			.first()
+			.isVisible()
+			.catch(() => false);
+		test.skip(!startSet, 'MapLibre canvas pick did not register a start point.');
+
+		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();
+		const banner = page.locator('.routing-error').first();
+		await expect(banner).toBeVisible({ timeout: 30_000 });
+		await expect(banner).toContainText(/Couldn't generate/i);
+	});
+
+	test('Cancel button appears while generate is in flight', async ({ page }) => {
+		// Audit #8: long-running batches were unstoppable short of Esc
+		// (which dumped the whole route). The Cancel button replaces
+		// Generate while isRouting=true and calls cancelGeneration(),
+		// which bumps routeVersion → the in-flight recalculateRoute
+		// bails at its next checkpoint.
+		//
+		// Slow-walk every OSRM call so we have time to observe the
+		// busy state before any of them finishes.
+		await page.route('https://router.project-osrm.org/**', async (route) => {
+			await new Promise((r) => setTimeout(r, 4000));
+			await route.fulfill({ status: 503, body: '{}' });
+		});
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await page.getByRole('button', { name: 'Pick start on map' }).click();
+		await page.locator('.maplibregl-canvas').click({ position: { x: 200, y: 200 } });
+
+		const startSet = await page
+			.locator('.point-set')
+			.first()
+			.isVisible()
+			.catch(() => false);
+		test.skip(!startSet, 'MapLibre canvas pick did not register a start point.');
+
+		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();
+
+		// Cancel button shows up within a couple seconds.
+		const cancel = page.getByRole('button', { name: /Cancel generating/i });
+		await expect(cancel).toBeVisible({ timeout: 5_000 });
+
+		await cancel.click();
+		// After cancel, the Generate button comes back (onbusy(false)).
+		await expect(page.getByRole('button', { name: /Generate .* (loop|route)/ })).toBeVisible({
+			timeout: 5_000,
+		});
+	});
+
 	test('anon visitor is auth-walled to /login', async ({ browser }) => {
 		// /routes/new is not in publicPaths. Use a fresh context with
 		// no storage state to simulate anon.
