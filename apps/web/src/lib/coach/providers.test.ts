@@ -40,7 +40,12 @@ test('401 → API key guidance', () => {
 		REMOTE,
 	);
 	assert.match(out, /401/);
-	assert.match(out, /OPENAI_API_KEY/);
+	// The 401 helper deliberately stays provider-neutral — naming the
+	// specific env var (e.g. OPENAI_API_KEY) leaks which provider the
+	// server is wired against to anyone probing the chat error bar.
+	// See commit 55e9e81 ("audit: address /audit/all Lows").
+	assert.match(out, /upstream API key configuration/);
+	assert.doesNotMatch(out, /OPENAI_API_KEY|ANTHROPIC_API_KEY/);
 	assert.match(out, /gpt-4o/);
 });
 
