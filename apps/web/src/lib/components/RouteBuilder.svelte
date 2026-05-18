@@ -40,6 +40,7 @@
 			elevation: number;
 			elevations: number[];
 			coordinates: [number, number][];
+			routed: boolean;
 		}) => {},
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
 		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
@@ -52,6 +53,13 @@
 			elevation: number;
 			elevations: number[];
 			coordinates: [number, number][];
+			/// True only when `coordinates` is an OSRM-snapped polyline
+			/// (calculateRoute / generateLoop succeeded). False during the
+			/// straight-line preview between dropped waypoints, and false
+			/// after any clear / failure. The parent uses this to gate
+			/// Save without having to guess from coordinate counts (which
+			/// can match either preview or snapped polyline).
+			routed: boolean;
 		}) => void;
 		onmapclick?: (lngLat: { lng: number; lat: number }) => boolean;
 		/**
@@ -387,14 +395,25 @@
 				const radius = OSRM_SNAP_RADIUS_M;
 				const url = `${OSRM_BASE_URL}/route/v1/foot/${coords}?overview=full&geometries=geojson&radiuses=${radius};${radius}`;
 				for (let attempt = 0; attempt <= retries; attempt++) {
+					// Honor cancellation between retries. Without this check,
+					// a cancelGeneration() call mid-batch had to wait for all
+					// 3 retries × FETCH_TIMEOUT_MS per segment to drain
+					// before the batch-loop check upstream could fire (up to
+					// ~25s of dead-end work per segment). Checking here
+					// short-circuits inside the slow path too.
+					if (currentVersion !== routeVersion) return { code: 'Error' };
 					try {
 						const res = await fetch(url, {
 							signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
 						});
+						// Same check after the await — the cancel might've
+						// landed while the fetch was in flight.
+						if (currentVersion !== routeVersion) return { code: 'Error' };
 						if (res.ok) return res.json();
 						if (attempt < retries) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
 					} catch {
 						// Timeouts land here as AbortError; network errors too.
+						if (currentVersion !== routeVersion) return { code: 'Error' };
 						if (attempt < retries) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
 					}
 				}
@@ -705,7 +724,8 @@
 		}
 		onupdate({
 			waypoints: waypoints.length, distance, elevation: gain,
-			elevations: routeElevations, coordinates: routeCoordinates
+			elevations: routeElevations, coordinates: routeCoordinates,
+			routed: routeCoordinates.length >= 2,
 		});
 	}
 
@@ -1260,7 +1280,11 @@
 		}
 		onupdate({
 			waypoints: waypoints.length, distance, elevation: 0,
-			elevations: [], coordinates: coords
+			elevations: [], coordinates: coords,
+			// Straight-line preview, not a snapped path — Save must
+			// stay disabled until the user actually calculates or
+			// generates a route.
+			routed: false,
 		});
 	}
 

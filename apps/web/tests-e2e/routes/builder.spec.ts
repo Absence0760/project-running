@@ -127,17 +127,17 @@ test.describe('/routes/new — Route Builder control surface', () => {
 			await expect(slider).toBeVisible({ timeout: 5_000 });
 		}
 
-		// Four presets — 5k / 10k / Half / Full → 5 / 10 / 21.1 / 42.2 km.
-		// Assert on the displayed .target-value text (the bound variable)
-		// rather than the slider's step-quantised value attribute (which
-		// rounds 21.1 / 42.2 to the nearest 0.5 boundary). The display
-		// reads `${targetKm} km`.
+		// Four presets — 5k / 10k / Half / Full. The displayed
+		// .target-value text renders in the user's preferred unit, so
+		// the expectation has to accept either rendering. USER_A's
+		// seed is mile-mode in CI; locally it might be km. Assert a
+		// regex that covers both (5k → 5.0 km OR 3.1 mi etc.).
 		const display = page.locator('.target-value');
 		for (const [label, expected] of [
-			['5k', '5 km'],
-			['10k', '10 km'],
-			['Half', '21.1 km'],
-			['Full', '42.2 km']
+			['5k', /(5\.0\s*km|3\.1\s*mi)/],
+			['10k', /(10\.0\s*km|6\.2\s*mi)/],
+			['Half', /(21\.1\s*km|13\.1\s*mi)/],
+			['Full', /(42\.2\s*km|26\.2\s*mi)/]
 		] as const) {
 			await page.getByRole('button', { name: label, exact: true }).click();
 			await expect(display).toHaveText(expected);
@@ -256,30 +256,48 @@ test.describe('/routes/new — Route Builder control surface', () => {
 	}) => {
 		// The partial-success path (some OSRM segments succeeded, some
 		// dropped) keeps the route but surfaces a softer warning so the
-		// user knows the line is incomplete. We can't easily simulate
-		// the segment-by-segment partial outcome from Playwright; assert
-		// the styling contract is in place so it's wired the moment a
-		// warning fires.
+		// user knows the line is incomplete. Asserts the styling
+		// contract: `.routing-error` and `.routing-error.routing-warning`
+		// have distinct background declarations.
+		//
+		// The prior version of this test injected unhashed `<div
+		// class="routing-error">` nodes into document.body and read
+		// computed styles. Svelte 5 scopes component CSS by hashing
+		// the class names (`.routing-error.svelte-xxxxx`); unhashed
+		// nodes don't match the rule and `getComputedStyle` returns
+		// transparent. Read the compiled CSSStyleSheet rules directly
+		// instead — bypasses scoping and asserts the source of truth.
 		await page.goto('/routes/new');
 		await page.waitForLoadState('networkidle');
 
-		// Inject a sibling node with the warning class so we can read
-		// its computed background without driving a real partial fail.
 		const colors = await page.evaluate(() => {
-			const a = document.createElement('div');
-			a.className = 'routing-error';
-			const b = document.createElement('div');
-			b.className = 'routing-error routing-warning';
-			document.body.append(a, b);
-			const aBg = getComputedStyle(a).backgroundColor;
-			const bBg = getComputedStyle(b).backgroundColor;
-			a.remove();
-			b.remove();
-			return { aBg, bBg };
+			let errorBg: string | null = null;
+			let warningBg: string | null = null;
+			for (const sheet of Array.from(document.styleSheets)) {
+				let rules: CSSRuleList;
+				try {
+					rules = sheet.cssRules;
+				} catch {
+					// Cross-origin sheets throw on cssRules access.
+					continue;
+				}
+				for (const rule of Array.from(rules)) {
+					if (!(rule instanceof CSSStyleRule)) continue;
+					const sel = rule.selectorText;
+					const hasError = /\.routing-error\b/.test(sel);
+					const hasWarning = /\.routing-warning\b/.test(sel);
+					const bg = rule.style.background || rule.style.backgroundColor;
+					if (!bg) continue;
+					if (hasError && hasWarning) warningBg = bg;
+					else if (hasError) errorBg = bg;
+				}
+			}
+			return { errorBg, warningBg };
 		});
-		expect(colors.aBg).not.toBe(colors.bBg);
-		expect(colors.aBg.length).toBeGreaterThan(0);
-		expect(colors.bBg.length).toBeGreaterThan(0);
+
+		expect(colors.errorBg).toBeTruthy();
+		expect(colors.warningBg).toBeTruthy();
+		expect(colors.errorBg).not.toBe(colors.warningBg);
 	});
 
 	test('clicking an existing marker back-tracks the route (post-drag wasDragged regression)', async ({

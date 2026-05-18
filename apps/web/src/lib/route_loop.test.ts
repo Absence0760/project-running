@@ -293,6 +293,165 @@ test('bisectScale — pure (does not mutate the input range)', () => {
 	assert.deepEqual(range, before);
 });
 
+// ---------------------------------------------------------------------------
+// Coverage: field coordinate (37.6519, -77.3611) — Richmond, VA suburb. This
+// is the start the user actually exercises. We pin the math at this exact
+// lat/lng so a future refactor that drifts (e.g. accidentally swapping cos
+// for sin in the radial offset, or losing the start-exact-equality at index
+// 0 / N) gets caught before it ships.
+// ---------------------------------------------------------------------------
+
+const FIELD_START = { lat: 37.6519, lng: -77.3611 };
+
+const TARGET_DISTANCES_M = [
+	{ name: '3.1mi (4.99km)', m: 4988.78 },
+	{ name: '5km', m: 5000 },
+	{ name: '10km', m: 10000 },
+	{ name: 'half marathon (21.1km)', m: 21100 },
+	{ name: 'full marathon (42.2km)', m: 42200 },
+];
+
+for (const target of TARGET_DISTANCES_M) {
+	test(`field-coord loop @ ${target.name} — emits 8 waypoints`, () => {
+		const wps = generateLoopWaypoints({
+			start: FIELD_START,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		assert.equal(wps.length, 8);
+	});
+
+	test(`field-coord loop @ ${target.name} — waypoint[0] is the user-supplied start exactly`, () => {
+		// Bit-exact equality matters: the visible green pin must land
+		// where the user clicked, not where OSRM snapped them.
+		const wps = generateLoopWaypoints({
+			start: FIELD_START,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		assert.equal(wps[0].lat, FIELD_START.lat);
+		assert.equal(wps[0].lng, FIELD_START.lng);
+	});
+
+	test(`field-coord loop @ ${target.name} — closing waypoint equals start (a true loop)`, () => {
+		const wps = generateLoopWaypoints({
+			start: FIELD_START,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		assert.equal(wps[wps.length - 1].lat, FIELD_START.lat);
+		assert.equal(wps[wps.length - 1].lng, FIELD_START.lng);
+	});
+
+	test(`field-coord loop @ ${target.name} — interior waypoints orbit start at expected radius`, () => {
+		const wps = generateLoopWaypoints({
+			start: FIELD_START,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		const expectedRadiusM = (target.m * DEFAULT_SCALE_FACTOR) / (2 * Math.PI);
+		// Verify the 6 interior waypoints are all within 7% of the
+		// expected radius (cos(lat) correction is the main source of
+		// drift). Catches "I accidentally divided by 111320 twice".
+		for (let i = 1; i < wps.length - 1; i++) {
+			const d = haversineM(FIELD_START, wps[i]);
+			assert.ok(
+				Math.abs(d - expectedRadiusM) < expectedRadiusM * 0.07,
+				`waypoint ${i} at ${target.name}: expected ~${expectedRadiusM.toFixed(0)}m from start, got ${d.toFixed(0)}m`,
+			);
+		}
+	});
+
+	test(`field-coord loop @ ${target.name} — endAt close to start is treated as a loop (closes at start, not endAt)`, () => {
+		// 10m offset — well within NEAR_POINT_M=50.
+		const nearEnd = { lat: FIELD_START.lat + 0.00009, lng: FIELD_START.lng };
+		const wps = generateLoopWaypoints({
+			start: FIELD_START,
+			end: nearEnd,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		// The closing waypoint should snap to START, not nearEnd —
+		// proves the NEAR_POINT_M shortcut fired.
+		assert.equal(wps[wps.length - 1].lat, FIELD_START.lat);
+		assert.equal(wps[wps.length - 1].lng, FIELD_START.lng);
+	});
+
+	test(`field-coord point-to-point @ ${target.name} — distant endAt keeps both endpoints exact`, () => {
+		// 5km north of start — well outside the NEAR_POINT_M shortcut.
+		const distantEnd = { lat: FIELD_START.lat + 0.045, lng: FIELD_START.lng };
+		assert.ok(
+			haversineM(FIELD_START, distantEnd) > NEAR_POINT_M * 50,
+			'precondition: endAt is far from start',
+		);
+		const wps = generateLoopWaypoints({
+			start: FIELD_START,
+			end: distantEnd,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		assert.equal(wps[0].lat, FIELD_START.lat);
+		assert.equal(wps[0].lng, FIELD_START.lng);
+		assert.equal(wps[wps.length - 1].lat, distantEnd.lat);
+		assert.equal(wps[wps.length - 1].lng, distantEnd.lng);
+	});
+
+	test(`field-coord loop @ ${target.name} — radialSeedRad rotates the whole pattern (deterministic)`, () => {
+		// Same coordinates + scale + numPoints, different seed → all
+		// interior waypoints rotate. Endpoints are pinned to start.
+		const a = generateLoopWaypoints({
+			start: FIELD_START,
+			targetDistanceM: target.m,
+			radialSeedRad: 0,
+		});
+		const b = generateLoopWaypoints({
+			start: FIELD_START,
+			targetDistanceM: target.m,
+			radialSeedRad: Math.PI / 2,
+		});
+		assert.deepEqual(a[0], b[0]); // start pinned
+		assert.deepEqual(a[a.length - 1], b[b.length - 1]); // close pinned
+		// Interior waypoints differ (rotated 90°).
+		for (let i = 1; i < a.length - 1; i++) {
+			const moved = Math.abs(a[i].lat - b[i].lat) + Math.abs(a[i].lng - b[i].lng);
+			assert.ok(moved > 1e-6, `interior waypoint ${i} should differ across seeds`);
+		}
+	});
+
+	test(`field-coord loop @ ${target.name} — selectLoopAnchors collapses to a closed sequence`, () => {
+		// Synthesise an "OSRM-like" polyline forming a closed loop
+		// around FIELD_START (the bisection-converged output would
+		// look like this). Verify selectLoopAnchors:
+		//   - keeps start[0] exactly equal to the user's start
+		//   - keeps last anchor exactly equal to start (loop closure)
+		//   - emits up to 4 anchors
+		const radiusM = (target.m * DEFAULT_SCALE_FACTOR) / (2 * Math.PI);
+		const radiusDeg = radiusM / 111320;
+		const cosLat = Math.cos((FIELD_START.lat * Math.PI) / 180);
+		const polyline: [number, number][] = [];
+		const stepCount = 60;
+		for (let i = 0; i <= stepCount; i++) {
+			const angle = (i / stepCount) * 2 * Math.PI;
+			polyline.push([
+				FIELD_START.lng + (Math.cos(angle) * radiusDeg) / cosLat,
+				FIELD_START.lat + Math.sin(angle) * radiusDeg,
+			]);
+		}
+		const anchors = selectLoopAnchors(polyline, FIELD_START, FIELD_START);
+		assert.ok(anchors.length >= 2 && anchors.length <= 4);
+		assert.equal(anchors[0].lat, FIELD_START.lat);
+		assert.equal(anchors[0].lng, FIELD_START.lng);
+		assert.equal(anchors[anchors.length - 1].lat, FIELD_START.lat);
+		assert.equal(anchors[anchors.length - 1].lng, FIELD_START.lng);
+	});
+
+	test(`field-coord ${target.name} — isValidTargetDistance accepts the target`, () => {
+		// Trivial but worth asserting — guards against accidentally
+		// tightening MAX_TARGET_DISTANCE_M below the marathon row.
+		assert.equal(isValidTargetDistance(target.m), true);
+	});
+}
+
 test('regression — field bug coords (start ≈ end, target 5km) produce on-pin waypoints', () => {
 	// The exact coordinates from the user's bug screenshot.
 	const start = { lat: 37.652, lng: -77.3612 };

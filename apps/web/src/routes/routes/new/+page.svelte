@@ -39,6 +39,20 @@
 	// UI up for ~30s with no way out short of clearing the whole route.
 	let builderBusy = $state(false);
 
+	// Dev-only test hook: Playwright drives the page against `vite dev`
+	// (where import.meta.env.DEV is true). Exposing the builder lets
+	// e2e specs invoke `generateLoop` with exact lat/lng — converting
+	// a target coord to a canvas pixel position is unreliable across
+	// viewports + zoom levels and would couple every spec to MapTiler's
+	// projection. Production builds (`adapter-static` with DEV=false)
+	// never reach this branch, so no leak.
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		if (!import.meta.env.DEV) return;
+		if (!builder) return;
+		(window as unknown as Record<string, unknown>).__routeBuilder = builder;
+	});
+
 	// Reactive: tracks the module-level unit signal so every km/mi
 	// label in the template re-renders the instant the user flips the
 	// preference on /settings/preferences. Without these derived
@@ -74,19 +88,20 @@
 		elevation: number;
 		elevations: number[];
 		coordinates: [number, number][];
+		routed: boolean;
 	}) {
 		waypointCount = data.waypoints;
 		distance = data.distance;
 		elevation = data.elevation;
 		elevations = data.elevations;
 		coordinates = data.coordinates;
-		// Sync routed from the builder. The builder clears its
-		// routeCoordinates whenever a waypoint mutation invalidates
-		// the snapped polyline (add / insert / remove / drag), so a
-		// stale calculation can't stay "saveable" if the user
-		// back-tracks via clicking an existing marker and forgets
-		// to recalculate.
-		if (data.coordinates.length < 2) routed = false;
+		// The builder tells us explicitly whether the emitted
+		// `coordinates` is an OSRM-snapped polyline (Save-eligible) or
+		// the straight-line preview between dropped waypoints. Reading
+		// the flag instead of guessing from coords.length lets a
+		// 2-waypoint snapped route enable Save without also enabling
+		// it for the 2-waypoint preview that fires before Calculate.
+		routed = data.routed;
 	}
 
 	function handleRoutingError(message: string | null, severity: 'error' | 'warning' = 'error') {
@@ -246,10 +261,14 @@
 	}
 
 	async function handleGenerateLoop() {
-		const start = startPoint ?? (() => {
-			const c = builder?.getMapCenter?.();
-			return c ? { lat: c.lat, lng: c.lng } : undefined;
-		})();
+		// Pass startPoint through verbatim (or undefined when the user
+		// hasn't picked one). The builder's own zoom-sanity guard
+		// refuses with a pan-first message when start is undefined AND
+		// the map is still in world view — falling back to
+		// map.getCenter() here would mask that guard, since the
+		// builder receives a defined start and skips the check, then
+		// runs from a useless [0, 20] (mid-Atlantic) origin.
+		const start = startPoint ?? undefined;
 		const end = endPoint ?? undefined;
 
 		const ok = await builder?.generateLoop(targetKm * 1000, start, end);
