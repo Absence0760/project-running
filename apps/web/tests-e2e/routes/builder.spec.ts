@@ -171,6 +171,36 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(nameInput).not.toBeVisible();
 	});
 
+	test('empty-state overlay renders + fades when the cursor enters the map area', async ({
+		page
+	}) => {
+		// The "Click anywhere to start" card sits centered over the map
+		// when no waypoints exist. It has pointer-events: none so clicks
+		// pass through, but it visually obscures where the cursor is —
+		// the .map-area:hover rule drops its opacity so the user can
+		// see what they're about to click. Regressing the fade puts us
+		// back at the "I can't see my map" complaint.
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+
+		const card = page.locator('.canvas-empty');
+		await expect(card).toBeVisible({ timeout: 10_000 });
+		await expect(card).toContainText('Click anywhere to start');
+
+		// Baseline: cursor outside the map area, opacity = 1.
+		await page.locator('aside.sidebar').hover();
+		// Wait for the 180ms CSS transition.
+		await page.waitForTimeout(250);
+		const baseline = await card.evaluate((el) => getComputedStyle(el).opacity);
+		expect(parseFloat(baseline)).toBeGreaterThan(0.9);
+
+		// Hover the map area — the card fades toward 0.15.
+		await page.locator('.map-area').hover();
+		await page.waitForTimeout(250);
+		const hovered = await card.evaluate((el) => getComputedStyle(el).opacity);
+		expect(parseFloat(hovered)).toBeLessThan(0.5);
+	});
+
 	test('keyboard shortcuts hint is visible on initial load', async ({ page }) => {
 		// The .shortcuts-hint affordance is the discoverability hook
 		// for power users. A regression that hid it removes the

@@ -1031,7 +1031,9 @@
 	/*
 	 * Map-overlay empty state. Rendered on top of the MapLibre canvas
 	 * when no waypoints exist — pointer-events disabled so a click on
-	 * the card still drops a waypoint behind it.
+	 * the card still drops a waypoint behind it. Fades out when the
+	 * cursor is over the map so the user can see where they're about
+	 * to drop the first waypoint; comes back when the cursor leaves.
 	 */
 	.canvas-empty {
 		position: absolute;
@@ -1052,6 +1054,10 @@
 		backdrop-filter: blur(8px);
 		max-width: 22rem;
 		pointer-events: none;
+		transition: opacity 180ms ease-out;
+	}
+	.map-area:hover .canvas-empty {
+		opacity: 0.15;
 	}
 	.canvas-empty .material-symbols {
 		font-size: 2.4rem;
