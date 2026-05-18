@@ -137,7 +137,7 @@ This command costs more than a normal edit (per-platform: a screenshot pass, a f
 - `/check` (web only) for the pre-commit gate.
 - `/safe-edit` for security-sensitive or invariant-crossing changes.
 - `/audit/*` for periodic broad sweeps.
-- The `mobile-twin-mirror` / `schema-change-coordinator` / `metadata-key-keeper` agents — those run from inside the polish flow when the edit touches their domain.
+- The `mobile-twin-mirror` / `migration-coordinator` / `metadata-key-keeper` agents — those run from inside the polish flow when the edit touches their domain.
 
 ## Tone
 

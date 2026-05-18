@@ -10,6 +10,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 
 | Command | What it checks |
 |---|---|
+| [/audit/auth](auth.md) | Every server-side trust boundary (SvelteKit `+server` / Edge Functions / Lambda) verifies the caller before doing work on user data |
 | [/audit/rls](rls.md) | RLS policies + `SECURITY DEFINER` RPCs across every migration |
 | [/audit/storage](storage.md) | Storage bucket policies + path guessability + signed-URL TTL |
 | [/audit/edge-functions](edge-functions.md) | Every Edge Function for JWT verification, input validation, HMAC |
@@ -85,7 +86,7 @@ Diff-time enforcement is handled by complementary agents:
 - `mobile-twin-mirror` — mirrors mobile_android → mobile_ios after Dart edits
 - `shared-library-syncer` — proactive on edits to TS↔Dart parity helpers (`training`, `segments`, `privacy`, `recurrence`, `pace_segments`, `training_load`, `fitness`, `track_projection`)
 - `metadata-key-keeper` — diff-time sweep of `runs.metadata.<key>` writes vs the registry
-- `schema-change-coordinator` — applies a migration + regen + check + doc updates
+- `migration-coordinator` — applies a migration + regen + check + doc updates
 - `doc-hygiene-checker` — surveys docs after a change for stale references
 
 These audit commands are for periodic broad sweeps and pre-deploy checks; the diff-time agents handle per-PR enforcement.
@@ -95,7 +96,7 @@ These audit commands are for periodic broad sweeps and pre-deploy checks; the di
 - **Before a release** — `/audit/all` once, fix Critical/High before tagging.
 - **Before opening signup to a new country / region** — `/audit/all compliance` once; fix every Critical / High before publishing the country expansion.
 - **After a sweeping refactor** — at minimum `/audit/architecture-guards` + `/audit/twin-parity` + `/audit/schema-drift`.
-- **After adding a new Edge Function** — `/audit/edge-functions`.
+- **After adding a new Edge Function or SvelteKit server route** — `/audit/auth` + `/audit/edge-functions`.
 - **After a new migration** — `/audit/rls` + `/audit/schema-drift` + `/audit/public-rows`.
   - Plus `/audit/data-export-completeness` + `/audit/account-deletion-completeness` if the migration touches personal data.
 - **After adding a new third-party SDK / API call** — `/audit/third-party-data-flows` + `/audit/cookie-consent` + `/audit/secrets`.

@@ -33,12 +33,12 @@ cd ../.. && dart run scripts/gen_dart_models.dart
 git diff --stat   # confirm only generated files changed
 ```
 
-The `schema-change-coordinator` agent automates this for an in-progress migration. Recommend it for the user if drift is from a migration not yet committed.
+The `migration-coordinator` agent automates this for an in-progress migration. Recommend it for the user if drift is from a migration not yet committed.
 
 ## Useful starting points
 
 - `docs/schema_codegen.md` — the canonical workflow
 - `apps/web/scripts/check_constraint_unions.mjs` — the CI guard
 - `scripts/gen_dart_models.dart` — the Dart generator
-- `.claude/agents/schema-change-coordinator.md` — the diff-time agent
+- `.claude/agents/migration-coordinator.md` — the diff-time agent
 - `CLAUDE.md` § "Schema and row types" — gotchas

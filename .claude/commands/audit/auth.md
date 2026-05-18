@@ -1,71 +1,73 @@
 ---
-description: Sweep every backend route for auth-middleware gating + tenant-context wrapper discipline
+description: Sweep every server-side trust boundary (SvelteKit +server / Edge Functions / Lambda) for caller-identity verification before doing work on user data
 ---
 
-Audit auth gating and tenant-context enforcement across the backend API.
+Audit auth gating across every server trust boundary in the project: SvelteKit server endpoints, Supabase Edge Functions, and the production AWS Lambda (`apps/web/lambda/coach/`).
 
 ## Goal
 
-A single route registered without the auth middleware exposes whatever it does to anonymous callers. A single route that bypasses the tenant-aware query wrapper reads across tenant boundaries — RLS policies (or whatever isolation mechanism this stack uses) don't apply because the per-connection tenant marker (`SET app.current_org_id = …`, or the equivalent) was never set. Find both classes of bug in one pass.
+A trust boundary that does work on user data without first verifying who's calling it is a mass-exfil or impersonation bug. RLS catches a lot of this at the data layer (`/audit/rls`), but it does **not** save you from:
+
+- A `+server.ts` handler that uses the service-role client (which bypasses RLS) without re-checking ownership.
+- An Edge Function with `verify_jwt = false` that reads `request.body.user_id` and trusts it.
+- A Lambda that reads a Supabase JWT from the Authorization header but never verifies the signature.
+- A `:resourceId` handler that fetches the row without confirming the caller owns it.
+- A streaming endpoint (SSE / WebSocket) that accepts `?token=` in the query string and skips the same verification the header path runs.
+
+`/audit/auth` is the cross-cutting sweep over every boundary; `/audit/rls` is the data-layer complement; `/audit/edge-functions` is the per-function deep-dive (input validation, HMAC, body limits) that this audit links to but doesn't duplicate.
 
 ## What to check
 
-1. **Global route registration.** Read the entrypoint that mounts every router/handler (e.g. `backend/src/index.ts`, `app.py`, `main.go`). The default should be "auth middleware applied at the mount". Public-by-design mounts are an explicit allowlist:
-   - `/health` and similar liveness/readiness probes
-   - Pre-auth endpoints (`/auth/login`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/verify-email`)
-   - Public read endpoints intended for unauthenticated consumption (status badges, public webhooks, OAuth callbacks)
+1. **SvelteKit server endpoints.** Walk every `+server.ts` and `+page.server.ts` under `apps/web/src/routes/`. For each:
+   - Identify the request handler (`GET`/`POST`/`PUT`/`DELETE`/`load`).
+   - Confirm the handler resolves the caller via `locals.supabase` / `locals.session` (which is set in `hooks.server.ts` from the Supabase auth cookie) **before** touching user data.
+   - Public-by-design endpoints (sitemap, OG image renderers, public-route lookups, OAuth callbacks) are an explicit allowlist — flag any that *aren't* documented as public but skip the auth check.
+   - Any use of the service-role client (`createClient(..., SERVICE_ROLE_KEY)` or `serverSupabase()`) in a handler is a finding **unless** the handler re-validates the caller's ownership of the targeted row.
 
-   Anything else mounted without the auth middleware is a finding. Anything mounted *with* the auth middleware but with sub-routers that re-expose a handler via a different public mount needs re-checking — the middleware applies at the mount point, not per-handler.
+2. **Edge Functions `verify_jwt` discipline.** Read `apps/backend/supabase/config.toml`. For every `[functions.<name>]` block:
+   - `verify_jwt = false` requires a documented reason (cron-only, webhook with HMAC verification, public-by-design). Cross-check the function's `index.ts` confirms the alternative auth mechanism.
+   - `verify_jwt = true` (or the default) still requires the function to derive caller identity from the verified JWT — never from `request.body.user_id` or a header the client supplies.
+   - Functions known to use the service-role key (`delete-account`, `export-data`, `refresh-tokens`, `strava-import`) must re-validate the caller's ownership of every row they touch before mutating it.
 
-2. **Non-null `user` assertions in handlers.** Inside any route handler, code like `req.user!.id` (TS) / `request.user.id` (Python) / `ctx.User.OrgID` (Go) is only safe when the auth middleware actually ran upstream. Grep route handlers for these accesses and confirm each lives in a router gated by the auth middleware.
+3. **AWS Lambda (production coach proxy).** Read `apps/web/lambda/coach/`. The Lambda receives the user's Supabase JWT in the Authorization header. Confirm:
+   - The handler verifies the JWT signature (not just decoding the claims).
+   - The `user_id` used to enforce the coach paywall + quota comes from the verified JWT subject, never from the request body.
+   - The transport-agnostic core in `apps/web/src/lib/coach/` is the same logic the Lambda wraps — drift between the two would let the Lambda accept requests `/api/coach` would reject.
 
-3. **Tenant-aware query wrapper discipline.** Routes that read or write tenant-scoped data must use the tenant-aware wrapper (e.g. `tenantQuery(orgId, sql, params)` / `tenant_db(org_id).query(...)` / `WithTenant(ctx, orgId, ...)`). The wrapper's job is to set the per-connection tenant marker before queries fire so RLS sees an org context. The DB connects as a **non-superuser role** so RLS is actually enforced — confirm this in the project's DB-connection docs.
+4. **Resource-ownership checks on path-param handlers.** Endpoints with a resource id in the URL (`/runs/[id]`, `/routes/[id]`, `/clubs/[id]/...`, `/og/run/[id].png`) must verify ownership/visibility **before** doing the work. The canonical pattern is `clipTrackForUser` for tracks (decisions §33) and `auth.uid() = user_id` for owner-only routes — but at the boundary, you still need the explicit row read with the right RLS context.
+   - The streaming/event-emitter endpoints (`live-broadcaster` in Edge Functions, any planned SSE in SvelteKit) are the canonical footgun — verify ownership on subscribe, not just on initial connect.
 
-   **Pre-tenant queries are legitimate** (don't flag) when they're explicitly cross-tenant by design:
-   - Auth middleware itself — looking up the API key / JWT subject before tenant context can be set
-   - Login / registration / invite acceptance — pre-tenant by definition
-   - Background jobs / cron sweeps that iterate every org
-   - Public-read endpoints (badges, OAuth handshake)
-   - Admin-only DB introspection
+5. **Token-in-query-string.** Grep for `?token=` / `searchParams.get('token')` / similar. For any endpoint that accepts a token outside the Authorization header (browser `EventSource`, `<img>` with credentials, OG card share-links), verify the token-from-query path runs through the same Supabase JWT verification as the header path. Token-in-URL is an accepted footgun for SSE; the mitigation is short TTL + HTTPS + scoping to that single endpoint.
 
-   Any **new** raw query in a tenant-scoped route is a finding unless the file has a comment explaining why it's cross-tenant by design.
-
-4. **Resource-level authorization on path-param handlers.** Endpoints that take a resource id in the URL (`/orders/:id`, `/runs/:id`, `/reports/:id`) must verify the resource belongs to the caller's org/user **before** doing the work:
-
-   ```
-   tenantQuery(orgId, "SELECT 1 FROM <table> WHERE id = $1", [resourceId])
-   ```
-
-   then fail closed if no row returns. The canonical gotcha is the *streaming* endpoint (SSE / WebSocket) — without the gate, an authenticated user from a different org can subscribe to another org's live events.
-
-5. **Token in query string.** For endpoints that can't accept `Authorization: Bearer` (browser `EventSource` for SSE, `<img>` with credentials), tokens are sometimes accepted as `?token=…`. Verify the token-from-query path runs through the same JWT verification + org binding as the header path. Token-in-URL is an accepted footgun for SSE; the mitigation is short TTL + HTTPS + scoping to that single path.
-
-6. **API key paths.** If the project supports machine-to-machine API keys, confirm:
-   - Keys are hashed at rest (with a non-secret prefix retained for fast lookup, not the full hash).
-   - Key lookup runs *before* tenant context is set (a legitimate pre-tenant query).
-   - The resulting user/org context is established from the *stored* `api_keys.org_id`, never from a request header or body.
+6. **Webhook receivers.** `strava-webhook` and `revenuecat-webhook` don't have a Supabase JWT — they authenticate via HMAC / shared secret + provider IP. Confirm each:
+   - Verifies the signature with `crypto.subtle.timingSafeEqual` (not raw `===`).
+   - Maps the incoming external user id to a project `user_id` via a stored mapping table, never via a header.
+   - This overlaps `/audit/edge-functions` step 3 — call it out but defer detail.
 
 ## Report
 
 Group findings by severity:
 
-- **Critical** — a route exposes tenant data to anonymous callers; a route lets one tenant read/write another tenant's rows because the tenant marker wasn't set.
-- **High** — non-null user assertions reachable in a path that isn't gated; a `:resourceId` handler doesn't verify ownership.
-- **Medium** — new raw query in a tenant-scoped route without a comment explaining why; a per-route auth check that duplicates (and could drift from) the global one.
-- **Low** — public mount missing a comment explaining why it's public.
+- **Critical** — a boundary lets an anonymous caller act on user data; a path-param handler doesn't verify ownership and lets one user read/modify another user's row; the Lambda accepts a JWT without verifying the signature.
+- **High** — service-role client used in a handler with no caller-identity re-check; Edge Function with `verify_jwt = false` that trusts `request.body.user_id`; webhook handler uses `===` for signature comparison.
+- **Medium** — public endpoint missing a comment explaining why it's public; token-in-query path that re-implements verification instead of reusing the header path.
+- **Low** — undocumented public mount; verbose error responses that leak schema.
 
-For each: file:line, the concrete fix, the worst-case blast radius.
+For each: file:line, the specific missing check, the worst-case blast radius (one-line). Don't fix without explicit confirmation — report only.
 
 ## Useful starting points
 
-- The entrypoint that mounts all routers — the full picture of who's gated.
-- The auth middleware — JWT and/or API key resolution.
-- The tenant-aware DB wrapper — the `set_config('app.current_org_id', …)` (or equivalent) is what closes the loop.
-- Any streaming endpoint (SSE / WebSocket) — the canonical "verify the resource belongs to the caller's org" gate.
-- The project's CLAUDE.md or `docs/security.md` for the documented constraint about which DB role runtime traffic uses.
+- `apps/web/src/routes/` — every SvelteKit server endpoint
+- `apps/web/src/hooks.server.ts` — where `locals.supabase` / `locals.session` are populated
+- `apps/web/lambda/coach/` — production Lambda wrapper, plus its transport-agnostic core in `apps/web/src/lib/coach/`
+- `apps/backend/supabase/functions/` + `apps/backend/supabase/config.toml` — Edge Functions + their `verify_jwt` settings
+- `docs/web_app_auth.md` — the documented web auth flow
+- `apps/backend/CLAUDE.md` — function-by-function notes
+- `docs/decisions.md` §33 (privacy-zone clipping), §53 (Lambda for coach) — relevant boundary ADRs
+- The recent `fix(backend): auth-guard refresh-tokens Edge Function` commit (b3373c6) — canonical pattern for retrofitting JWT verification
 
 ## Delegate to
 
-Use the `repo-security-auditor` agent: `"Audit auth gating and tenant-context enforcement across the backend API."`
+Use the `repo-security-auditor` agent: `"Audit every server-side trust boundary for caller-identity verification before doing work on user data."`
 
 Read-only. Findings only.

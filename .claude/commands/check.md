@@ -19,7 +19,7 @@ Run a parallel three-agent audit on the working diff, aggregate findings, and re
 
 - It does NOT apply any fixes. Each agent is read-only by design. The output is a list of gaps; the user picks what to fix.
 - It does NOT replace `/safe-edit`'s coder ↔ reviewer loop. `/safe-edit` is for security / migration / parity-helper changes that warrant the 2-3x cost of a fix-and-re-review cycle. `/check` is the lighter pre-commit gate.
-- It does NOT re-run the diff-time agents (`mobile-twin-mirror`, `metadata-key-keeper`, `schema-change-coordinator`, `shared-library-syncer`). Those should already have fired during the coder pass — `/check` is the third pass after them.
+- It does NOT re-run the diff-time agents (`mobile-twin-mirror`, `metadata-key-keeper`, `migration-coordinator`, `shared-library-syncer`). Those should already have fired during the coder pass — `/check` is the third pass after them.
 
 ## Procedure
 

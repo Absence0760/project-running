@@ -7,7 +7,7 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
 
 ## Areas
 
-- **security** — `audit/rls`, `audit/storage`, `audit/edge-functions`, `audit/xss`, `audit/secrets`, `audit/public-rows`, `audit/paywall`
+- **security** — `audit/auth`, `audit/rls`, `audit/storage`, `audit/edge-functions`, `audit/xss`, `audit/secrets`, `audit/public-rows`, `audit/paywall`
 - **privacy** — `audit/privacy-zones`
 - **invariants** — `audit/twin-parity`, `audit/schema-drift`, `audit/metadata-keys`, `audit/architecture-guards`, `audit/layered-resilience`
 - **deps** — `audit/deps`
@@ -26,7 +26,7 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
    - `cost` → cost-controls only
    - `compliance` → compliance subset (international launch readiness)
 2. **Spawn the right agent per audit area, in parallel.** Send all dispatches in a single message with multiple tool calls.
-   - Security + privacy areas (`rls`, `storage`, `edge-functions`, `xss`, `secrets`, `public-rows`, `paywall`, `privacy-zones`): each is a separate `repo-security-auditor` invocation, with the audit area passed as the prompt's first sentence. Seven of these run together; each gets the corresponding `.claude/commands/audit/<name>.md` body as its full instruction.
+   - Security + privacy areas (`auth`, `rls`, `storage`, `edge-functions`, `xss`, `secrets`, `public-rows`, `paywall`, `privacy-zones`): each is a separate `repo-security-auditor` invocation, with the audit area passed as the prompt's first sentence. Each gets the corresponding `.claude/commands/audit/<name>.md` body as its full instruction.
    - Compliance areas (`gdpr`, `data-export-completeness`, `account-deletion-completeness`, `third-party-data-flows`, `cookie-consent`, `regional-availability`, `accessibility`): each is a separate `compliance-auditor` invocation with the audit area as the prompt's first sentence.
    - `app-store-privacy`: separate `app-store-privacy-auditor` invocation.
    - `i18n-readiness`: separate `i18n-readiness-auditor` invocation.
@@ -37,7 +37,7 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
 3. While the agents run, run the local checks that don't need an agent:
    - `audit/twin-parity` — single `diff -rq` (or invoke `mobile-twin-mirror` if there's drift to fix; otherwise handle inline)
    - `audit/architecture-guards` — run the three test suites inline
-   - `audit/schema-drift` — `gen:types:check` + `dart run scripts/gen_dart_models.dart` + `git diff --stat` (or invoke `schema-change-coordinator` if drift is from an in-progress migration)
+   - `audit/schema-drift` — `gen:types:check` + `dart run scripts/gen_dart_models.dart` + `git diff --stat` (or invoke `migration-coordinator` if drift is from an in-progress migration)
    - `audit/layered-resilience` — read-walk the recording stack inline (no agent today; Explore is overkill for a single-file walk)
 4. **Consolidate findings** into a single report grouped by severity (Critical / High / Medium / Low), then by audit area. For each finding: file:line, what's wrong, the audit that found it.
 5. **Recommend a fix order**, but don't apply fixes without explicit confirmation. Critical/High findings should be flagged with "fix this before next deploy"; Medium/Low can be batched.

@@ -1,5 +1,5 @@
 ---
-description: Add or land a Postgres migration with the migration-coordinator agent in the loop. Applies locally, verifies RLS, surfaces type-sync edits across the backend types file and the frontend API types file (the project has no codegen), proposes smoke tests, flags doc updates.
+description: Add or land a Supabase migration with the migration-coordinator agent in the loop. Applies locally, runs both type generators (npm gen:types + dart gen_dart_models), runs the CHECK ↔ TS-union guard, proposes doc + smoke-test updates.
 argument-hint: <migration slug or path>
 ---
 
@@ -9,7 +9,7 @@ Run the new-migration workflow for `$ARGUMENTS`. Either author + coordinate the 
 
 **Right fit:**
 
-- About to add a new file under `the migrations directory`
+- About to add a new file under `apps/backend/supabase/migrations/`
 - Just finished drafting a migration and want to verify before committing
 - Modifying an unmerged migration and want to re-run the coordination steps
 
@@ -20,7 +20,7 @@ Run the new-migration workflow for `$ARGUMENTS`. Either author + coordinate the 
 
 ## What this command does
 
-It is **not** the per-change reviewer (`/safe-edit`). It is the per-migration workflow that catches drift the reviewer can't easily see — RLS coverage on new tenant tables, manual type-sync between SQL and TS (no codegen exists for the project), idempotency markers, and which smoke-test files need to grow.
+It is **not** the per-change reviewer (`/safe-edit`). It is the per-migration workflow that catches drift the reviewer can't easily see — RLS coverage on new tables, drift between SQL and the two generated row-type files (`apps/web/src/lib/database.types.ts` + `packages/core_models/lib/src/generated/db_rows.dart`), CHECK-constraint vs TS-union lockstep, idempotency markers, and which docs need to grow.
 
 The actual work is done by the `migration-coordinator` agent. This command is the orchestrator: figure out which migration we're talking about, invoke the agent, then prompt the user for the follow-up edits.
 
@@ -30,15 +30,15 @@ The actual work is done by the `migration-coordinator` agent. This command is th
 
 If `$ARGUMENTS` is:
 
-- A **path** under `the migrations directory` → use that file directly.
-- A **slug** without a number → find the highest-numbered existing migration in `the migrations directory` and propose `NNN_<slug>.sql` for the next slot. If the file doesn't exist yet, ask the user to draft it first (or prompt them with a starter template) — do not invent SQL on their behalf.
-- **Empty** → run `git status` + `ls the migrations directory` and identify the new or modified `.sql` file. If there's no candidate, abort with "no migration to coordinate."
+- A **path** under `apps/backend/supabase/migrations/` → use that file directly.
+- A **slug** without a date prefix → find the most recent file under `apps/backend/supabase/migrations/` and propose `YYYYMMDD_NNN_<slug>.sql` for the next slot, matching the existing zero-padded `YYYYMMDD_NNN_slug.sql` shape. If the file doesn't exist yet, ask the user to draft it first — do not invent SQL on their behalf.
+- **Empty** → run `git status` + `ls apps/backend/supabase/migrations/` and identify the new or modified `.sql` file. If there's no candidate, abort with "no migration to coordinate."
 
 ### 2. Spawn the migration-coordinator agent
 
 Once you have a concrete file path, invoke the agent with the prompt:
 
-> "Coordinate the migration at `the migrations directory<file>`. Apply locally via your migration runner, verify RLS coverage on any new tenant table, surface the manual type-sync edits needed across the backend types file and the frontend API types file, propose smoke-test additions, and flag doc updates. Output the format from your spec."
+> "Coordinate the migration at `apps/backend/supabase/migrations/<file>`. Apply locally via `supabase db reset`, regenerate both row-type files (`npm run gen:types --workspace=apps/backend` + `dart run scripts/gen_dart_models.dart`), run the CHECK ↔ TS-union guard (`npm run check:check-constraints --workspace=apps/web`), and flag doc updates. Output the format from your spec."
 
 ### 3. Relay the agent's report
 
@@ -48,11 +48,11 @@ The agent's output is the deliverable — relay it verbatim to the user. Do not 
 
 After the agent returns, ask the user one focused question:
 
-> "Want me to apply the type-sync edits to the backend types file and the frontend API types file now? [The agent proposed: ...]"
+> "Want me to apply the TS-union updates to `apps/web/src/lib/types.ts` (and `PAIRS` in `apps/web/scripts/check_constraint_unions.mjs` if needed)? [The agent proposed: ...]"
 
-If yes, apply only the proposed changes (no scope creep into adjacent interfaces). If no, end the turn — the user will handle it.
+If yes, apply only the proposed changes (no scope creep into adjacent unions). If no, end the turn — the user will handle it.
 
-Same offer for the smoke-test stubs and doc updates, in that order. Each is opt-in.
+Same offer for doc updates (`docs/api_database.md`, `docs/metadata.md`, `docs/parity.md`, `docs/decisions.md`, `docs/schema_codegen.md`, `docs/conventions.md`), in priority order. Each is opt-in.
 
 ### 5. Hand off the commit
 
@@ -64,9 +64,10 @@ When all the follow-up edits the user accepted are applied, hand off:
 
 ## What this command does NOT replace
 
-- `/audit/migrations` — broad sweep over **all** migrations checking idempotency + RLS + type drift across the whole tree. `/safe-migration` is per-migration.
-- `/check` — pre-commit gate that runs once you're ready to commit. Use it after `/safe-migration` if you want the doc-hygiene + test-gap pass on the working diff.
-- `/safe-edit` — coder ↔ reviewer loop for non-migration changes. The two are complementary; for a migration that also touches Express routes (e.g. new endpoint backed by the new table), run `/safe-migration` first, then `/safe-edit` on the route work.
+- `/audit/schema-drift` — broad sweep that confirms generated row types match every migration on the tree, plus the CHECK ↔ TS-union pairs in `apps/web/scripts/check_constraint_unions.mjs`. `/safe-migration` is per-migration; `/audit/schema-drift` is the codebase-wide sweep.
+- `/audit/rls` — per-migration RLS coverage is part of this workflow, but `/audit/rls` is the broader sweep across every existing policy + `SECURITY DEFINER` RPC.
+- `/check` — pre-commit gate (review + test-gap + doc-hygiene) that runs once you're ready to commit. Use it after `/safe-migration` if you want the doc-hygiene + test-gap pass on the working diff.
+- `/safe-edit` — coder ↔ reviewer loop for non-migration changes. The two are complementary; for a migration that also touches an Edge Function (e.g. new endpoint backed by the new table), run `/safe-migration` first, then `/safe-edit` on the function work.
 
 ## Tone
 
