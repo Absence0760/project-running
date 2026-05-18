@@ -64,16 +64,20 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 		return results;
 	}
 
-	// Weekly / biweekly: for each week-block (size 7 or 14 days), emit every
-	// weekday in `byday` that falls on or after the block start and matches.
-	// Simpler: step the cursor day-by-day, and only emit days in `byday`, but
-	// only when the week index (0, 1, 2, ...) is a multiple of step/7.
-	const anchor = startOfWeek(start); // Sunday anchor, so weekIndex * 7 == elapsed weeks
+	// Weekly / biweekly: step day-by-day, anchored at the Monday of starts_at's
+	// week so weekIndex * 7 == elapsed weeks. The loop guards compare *calendar
+	// day* (cursor d is at midnight) — the precise checks happen against the
+	// `stamped` time (d stamped at starts_at's time-of-day). Mirrors the Dart
+	// twin in apps/mobile_android/lib/recurrence.dart; without the split, the
+	// first-week instance is silently dropped whenever starts_at has a non-
+	// midnight time-of-day (d at midnight < start at, say, 09:00).
+	const anchor = startOfWeek(start);
+	const startDayOnly = startOfDay(start);
 	for (let dayOffset = 0; dayOffset < max * step * 7; dayOffset++) {
 		const d = addDays(anchor, dayOffset);
-		if (d < start) continue;
-		if (until && d > until) break;
-		if (d > to) break;
+		if (d < startDayOnly) continue;
+		if (until && d > addDays(until, 1)) break;
+		if (d > addDays(to, 1)) break;
 
 		const weekIndex = Math.floor(dayOffset / 7);
 		if (weekIndex % (step / 7) !== 0) continue;
@@ -81,12 +85,14 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 		const wd = indexToWeekday(d.getDay());
 		if (!byday.includes(wd)) continue;
 
-		// Preserve the time-of-day of the original starts_at.
-		d.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
-		if (d < start) continue;
+		const stamped = new Date(d);
+		stamped.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+		if (until && stamped > until) continue;
+		if (stamped > to) continue;
+		if (stamped < start) continue;
 
-		if (d >= from) {
-			results.push(new Date(d));
+		if (stamped >= from) {
+			results.push(stamped);
 			produced++;
 			if (results.length >= max) break;
 			if (produced >= hardCap) break;
@@ -139,5 +145,11 @@ function startOfWeek(d: Date): Date {
 	const c = new Date(d);
 	c.setHours(0, 0, 0, 0);
 	c.setDate(c.getDate() - ((c.getDay() + 6) % 7)); // Monday anchor, matches recurrence.dart
+	return c;
+}
+
+function startOfDay(d: Date): Date {
+	const c = new Date(d);
+	c.setHours(0, 0, 0, 0);
 	return c;
 }

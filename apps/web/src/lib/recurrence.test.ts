@@ -42,9 +42,30 @@ test('expandInstances — weekly event produces multiple instances in a month', 
 		new Date('2026-04-01T00:00:00Z'),
 		new Date('2026-04-30T23:59:59Z'),
 	);
-	// Apr 1 (Wed), Apr 8, Apr 15, Apr 22, Apr 29 → 5 instances. Allow
-	// 4-5 to absorb timezone-edge slip on the loader's host.
-	assert.ok(out.length >= 4 && out.length <= 5, `got ${out.length} instances`);
+	// Apr 1 (Wed), Apr 8, Apr 15, Apr 22, Apr 29 → 5 instances. The Apr 1
+	// instance used to slip on UTC hosts because the loop compared a
+	// midnight cursor against starts_at's 08:00 time-of-day — the fix
+	// separates calendar-day and stamped-time comparisons so the first-
+	// week instance is no longer silently dropped.
+	assert.equal(out.length, 5);
+});
+
+test('expandInstances — weekly emits the starts_at week even when start has a non-midnight time-of-day', () => {
+	// Regression: this used to drop the Tuesday instance because the
+	// midnight cursor for the start day was < starts_at (Tuesday 19:00),
+	// so the entire first week's matching day was filtered out before
+	// time-of-day was stamped.
+	const e = ev({
+		starts_at: '2026-04-07T19:00:00Z', // Tue
+		recurrence_freq: 'weekly',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-04-01T00:00:00Z'),
+		new Date('2026-04-30T23:59:59Z'),
+	);
+	const firstDay = out[0]?.toISOString().slice(0, 10);
+	assert.equal(firstDay, '2026-04-07', `first instance should be Apr 7, got ${firstDay}`);
 });
 
 test('expandInstances — biweekly produces fewer instances than weekly in the same window', () => {
