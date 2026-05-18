@@ -12,6 +12,7 @@ import {
 	isValidTargetDistance,
 	isWithinAcceptBand,
 	nextScaleFactor,
+	selectLoopAnchors,
 } from './route_loop';
 import { haversineM } from './routing_quality';
 
@@ -199,6 +200,81 @@ test('isValidTargetDistance — rejects non-numbers', () => {
 	assert.equal(isValidTargetDistance(null as unknown as number), false);
 	assert.equal(isValidTargetDistance(undefined as unknown as number), false);
 	assert.equal(isValidTargetDistance({} as unknown as number), false);
+});
+
+test('selectLoopAnchors — long polyline produces 4 anchors (start, two midpoints, close)', () => {
+	const start = { lat: 37.65, lng: -77.36 };
+	const close = { lat: 37.65, lng: -77.36 };
+	// Synthesised polyline: 100 points along a meridional line.
+	const polyline: [number, number][] = [];
+	for (let i = 0; i < 100; i++) {
+		polyline.push([-77.36, 37.65 + i * 0.0001]);
+	}
+	const anchors = selectLoopAnchors(polyline, start, close);
+	assert.equal(anchors.length, 4);
+	// Endpoints come from the user-supplied start / close, not the
+	// polyline, so the green pin stays where the user clicked.
+	assert.equal(anchors[0].lat, start.lat);
+	assert.equal(anchors[0].lng, start.lng);
+	assert.equal(anchors[3].lat, close.lat);
+	assert.equal(anchors[3].lng, close.lng);
+	// Midpoints fall on the polyline.
+	assert.ok(anchors[1].lat > polyline[0][1]);
+	assert.ok(anchors[1].lat < polyline[polyline.length - 1][1]);
+	assert.ok(anchors[2].lat > anchors[1].lat);
+});
+
+test('selectLoopAnchors — anchors at distinct indices for the typical case', () => {
+	const start = { lat: 0, lng: 0 };
+	const close = { lat: 0, lng: 0 };
+	const polyline: [number, number][] = Array.from({ length: 30 }, (_, i) => [i, i]);
+	const anchors = selectLoopAnchors(polyline, start, close);
+	// 4 anchors, midpoints from index 10 and 20 ish.
+	assert.equal(anchors.length, 4);
+	assert.notDeepEqual(anchors[1], anchors[2]);
+});
+
+test('selectLoopAnchors — very short polyline collapses to start + close only', () => {
+	const start = { lat: 1, lng: 1 };
+	const close = { lat: 2, lng: 2 };
+	const polyline: [number, number][] = [
+		[1, 1],
+		[2, 2],
+	];
+	const anchors = selectLoopAnchors(polyline, start, close);
+	assert.equal(anchors.length, 2);
+	assert.deepEqual(anchors[0], start);
+	assert.deepEqual(anchors[1], close);
+});
+
+test('selectLoopAnchors — single-midpoint case (polyline barely long enough)', () => {
+	const start = { lat: 0, lng: 0 };
+	const close = { lat: 0, lng: 0 };
+	// length 4 → mid1Idx = 1, mid2Idx = 2 → emits both.
+	// length 5 → mid1Idx = 2, mid2Idx = max(3, mid1+1) = 3 → emits both.
+	// Test length 4 — both midpoints distinct.
+	const polyline: [number, number][] = [
+		[0, 0],
+		[1, 1],
+		[2, 2],
+		[3, 3],
+	];
+	const anchors = selectLoopAnchors(polyline, start, close);
+	// 4 entries: start, mid1, mid2, close.
+	assert.equal(anchors.length, 4);
+});
+
+test('selectLoopAnchors — point-to-point honours distinct end', () => {
+	const start = { lat: 0, lng: 0 };
+	const end = { lat: 1, lng: 1 };
+	const polyline: [number, number][] = Array.from({ length: 50 }, (_, i) => [
+		i * 0.02,
+		i * 0.02,
+	]);
+	const anchors = selectLoopAnchors(polyline, start, end);
+	assert.equal(anchors.length, 4);
+	assert.deepEqual(anchors[0], start);
+	assert.deepEqual(anchors[3], end);
 });
 
 test('regression — field bug coords (start ≈ end, target 5km) produce on-pin waypoints', () => {

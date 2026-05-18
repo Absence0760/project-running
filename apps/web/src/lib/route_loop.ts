@@ -179,3 +179,41 @@ export function isValidTargetDistance(m: unknown): m is number {
 		m <= MAX_TARGET_DISTANCE_M
 	);
 }
+
+/// Select the visible waypoints we want to keep AFTER a successful
+/// generate. The 8 scaffolding waypoints generateLoopWaypoints
+/// emitted at the start of the call are an implementation detail —
+/// the user wanted a loop, not 8 pins. We collapse to 4 anchors:
+///
+///   - The user's `start` (always — keeps the visible green pin
+///     exactly where the user placed it, not where OSRM snapped it).
+///   - Two midpoints sampled from the snapped polyline at ~1/3 and
+///     ~2/3 along. Sampling FROM the polyline guarantees they have
+///     zero deviation, so the deviation/detour warnings don't fire.
+///     For a polyline too short to support two distinct midpoints
+///     we drop one or both.
+///   - `close` (start for a loop, or `endAt` for point-to-point).
+///
+/// 4 is the minimum that preserves loop fidelity on a subsequent
+/// Recalculate — a 3-anchor sample collapses a loop into an
+/// out-and-back, and 2 anchors degenerate entirely (OSRM refuses to
+/// route start → start).
+export function selectLoopAnchors(
+	polyline: ReadonlyArray<[number, number]>,
+	start: { lat: number; lng: number },
+	close: { lat: number; lng: number },
+): { lat: number; lng: number }[] {
+	const out: { lat: number; lng: number }[] = [{ lat: start.lat, lng: start.lng }];
+	if (polyline.length >= 4) {
+		const mid1Idx = Math.max(1, Math.round(polyline.length / 3));
+		const mid2Idx = Math.min(polyline.length - 2, Math.round((2 * polyline.length) / 3));
+		const [m1Lng, m1Lat] = polyline[mid1Idx];
+		out.push({ lat: m1Lat, lng: m1Lng });
+		if (mid2Idx > mid1Idx) {
+			const [m2Lng, m2Lat] = polyline[mid2Idx];
+			out.push({ lat: m2Lat, lng: m2Lng });
+		}
+	}
+	out.push({ lat: close.lat, lng: close.lng });
+	return out;
+}

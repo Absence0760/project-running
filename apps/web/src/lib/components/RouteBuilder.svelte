@@ -13,6 +13,7 @@
 		isValidTargetDistance,
 		isWithinAcceptBand,
 		nextScaleFactor,
+		selectLoopAnchors,
 	} from '$lib/route_loop';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
@@ -941,7 +942,57 @@
 		}
 
 		updateStraightLine();
-		return routeCoordinates.length >= 2;
+
+		// Collapse the algorithm's 8 scaffolding waypoints down to the
+		// 4 anchors the user actually cares about: their start, two
+		// midpoints sampled from the snapped polyline (at ~1/3 and
+		// ~2/3 along), and the close. The 6 interior radial seeds
+		// were implementation detail — leaving them in the waypoint
+		// list dumps 6 random pins on the map, paints most of them
+		// red because they don't line up with the snapped road, and
+		// emits a "drag the red markers closer to a road" warning
+		// that makes no sense (the user didn't drop those markers).
+		//
+		// 4 anchors is the minimum that lets a manual Recalculate
+		// reproduce the loop — start → close on its own would
+		// degenerate (no route, or a straight shortcut for
+		// point-to-point); 3 collapses a loop into an out-and-back.
+		// Anchors sampled FROM the polyline have zero deviation, so
+		// the deviation/detour warnings stay quiet by construction.
+		if (routeCoordinates.length >= 2) {
+			collapseGeneratedScaffolding(start, endAt);
+			onerror(null);
+			return true;
+		}
+		return false;
+	}
+
+	function collapseGeneratedScaffolding(
+		start: { lat: number; lng: number },
+		endAt?: { lat: number; lng: number },
+	) {
+		if (routeCoordinates.length < 2) return;
+		const close = endAt ?? start;
+		const anchors = selectLoopAnchors(routeCoordinates, start, close);
+
+		markers.forEach((m) => m.remove());
+		markers = [];
+		waypoints = anchors.map((a) => ({ lat: a.lat, lng: a.lng }));
+		// The previous implicated-waypoint indices referenced the
+		// scaffolding set we just discarded; clear before rebuilding
+		// markers so updateMarkerStyles doesn't paint random pins red.
+		implicatedWaypoints = new Set();
+		for (let i = 0; i < waypoints.length; i++) {
+			const marker = createWaypointMarker(
+				{ lng: waypoints[i].lng, lat: waypoints[i].lat },
+				i,
+			);
+			markers.push(marker);
+		}
+		updateMarkerStyles();
+		// Sync the parent's waypointCount stat (collapsed from 8 to 4
+		// or fewer) without changing the snapped polyline.
+		emitUpdate();
 	}
 
 	export function getMapStyle() { return mapStyle; }
