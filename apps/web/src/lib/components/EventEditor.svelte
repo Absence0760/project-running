@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/data';
 	import { WEEKDAY_CHOICES } from '$lib/recurrence';
+	import { formatDistance } from '$lib/units.svelte';
 	import type { Route, RecurrenceFreq, Weekday } from '$lib/types';
 
 	interface Props {
@@ -143,14 +144,14 @@
 			{#if clubRoutes.length > 0}
 				<optgroup label="{clubName} routes">
 					{#each clubRoutes as r}
-						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
 					{/each}
 				</optgroup>
 			{/if}
 			{#if myRoutes.length > 0}
 				<optgroup label="My routes">
 					{#each myRoutes as r}
-						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
 					{/each}
 				</optgroup>
 			{/if}

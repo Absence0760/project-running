@@ -398,8 +398,12 @@
 	}
 
 	function fmtKm(m: number | null | undefined): string {
+		// Defers to the unit-aware formatter in $lib/units.svelte so a
+		// km → mi preference flip on /settings/preferences re-renders
+		// every distance string on this page. The previous local
+		// implementation hardcoded " km" — the audit caught it.
 		if (m == null) return '';
-		return `${(m / 1000).toFixed(2)} km`;
+		return formatDistance(m);
 	}
 
 	function fmtRelative(iso: string): string {
@@ -1026,7 +1030,7 @@
 							<a href="/plans/{t.id}" class="template-link">
 								<strong>{t.name}</strong>
 								<span class="template-meta">
-									{t.goal_event} · {(Number(t.goal_distance_m) / 1000).toFixed(1)} km
+									{t.goal_event} · {formatDistance(Number(t.goal_distance_m))}
 									· {t.days_per_week}/wk
 								</span>
 							</a>
@@ -1236,7 +1240,7 @@
 				<select bind:value={transferRouteId} required>
 					<option value="">— select —</option>
 					{#each transferableRoutes as r (r.id)}
-						<option value={r.id}>{r.name} ({(r.distance_m / 1000).toFixed(1)} km)</option>
+						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
 					{/each}
 				</select>
 			</label>

@@ -17,6 +17,7 @@
 	} from '$lib/data';
 	import type { EventWithMeta } from '$lib/types';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
+	import { formatDistance } from '$lib/units.svelte';
 
 	let eventId = $derived($page.params.id as string);
 	let instance = $derived(decodeURIComponent($page.params.instance as string));
@@ -435,7 +436,7 @@
 									{initialsFor(p.user_id)}
 								</span>
 								<span class="name">{nameFor(p.user_id)}</span>
-								<span class="dist">{((p.distance_m ?? 0) / 1000).toFixed(2)} km</span>
+								<span class="dist">{formatDistance(p.distance_m ?? 0)}</span>
 								<span class="pace">{formatPace(paceSecPerKm(p))}</span>
 								<span class="elapsed">{formatDuration(p.elapsed_s ?? 0)}</span>
 							</li>
@@ -473,7 +474,7 @@
 									{initialsFor(r.user_id)}
 								</span>
 								<span class="name">{nameFor(r.user_id)}</span>
-								<span class="dist">{(r.distance_m / 1000).toFixed(2)} km</span>
+								<span class="dist">{formatDistance(r.distance_m)}</span>
 								<span class="elapsed">{formatDuration(r.duration_s)}</span>
 								{#if !r.organiser_approved}
 									<span class="pending-tag">Pending</span>

@@ -1085,7 +1085,7 @@
 					<p class="workout-name">
 						{linkedWorkout.notes ?? linkedWorkout.kind}
 						<span class="workout-target">
-							· {Math.round((linkedWorkout.target_distance_m ?? 0) / 1000 * 10) / 10} km planned
+							· {formatDistance(linkedWorkout.target_distance_m ?? 0)} planned
 						</span>
 					</p>
 				{/if}
@@ -1107,14 +1107,14 @@
 									{#if isDurationStep(s)}
 										{formatStepDuration(s.target_duration_s ?? 0)}
 									{:else}
-										{(s.target_distance_m / 1000).toFixed(2)} km
+										{formatDistance(s.target_distance_m)}
 									{/if}
 								</td>
 								<td class="num">
 									{#if isDurationStep(s)}
 										{formatStepDuration(s.duration_s)}
 									{:else}
-										{(s.actual_distance_m / 1000).toFixed(2)} km
+										{formatDistance(s.actual_distance_m)}
 									{/if}
 								</td>
 								<td class="num">{formatPaceSec(s.actual_pace_sec_per_km)}</td>

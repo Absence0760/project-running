@@ -123,6 +123,64 @@ test.describe('/settings/preferences', () => {
 		).toBeVisible({ timeout: 5_000 });
 	});
 
+	test('Distance unit km → mi propagates to /routes/new builder sidebar + distance-target slider', async ({
+		page,
+	}) => {
+		// Route-builder regression test. The sidebar's stat row and the
+		// distance-target slider both used to hardcode " km" / " /km"
+		// in the template — flipping the preference made every other
+		// surface in the app re-render except this one. The audit
+		// caught it; this test pins the new unit-aware bindings so it
+		// can't silently regress.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+		await page.getByRole('button', { name: 'Miles', exact: true }).click();
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(
+			page.getByRole('button', { name: /Saved!/ }),
+		).toBeVisible({ timeout: 5_000 });
+
+		try {
+			await page.goto('/routes/new');
+			await page.waitForLoadState('networkidle');
+			await expect(
+				page.getByRole('heading', { level: 1, name: 'Route Builder' }),
+			).toBeVisible({ timeout: 10_000 });
+
+			// ── Sidebar stat label ──
+			// The "0.00 km" / "0.00 mi" pair lives in .builder-stat;
+			// with zero waypoints the value is 0.00 and the unit label
+			// is what we care about. Distance stat is the first one in
+			// the row.
+			const distLabel = page.locator('.builder-stat .builder-stat-label').first();
+			await expect(distLabel).toHaveText('mi', { timeout: 10_000 });
+
+			// ── Distance-target slider label ──
+			// The "Generate a route by distance" panel is collapsed by
+			// default; open it and assert the slider value reads mi.
+			await page
+				.getByRole('button', { name: /Generate a route by distance/ })
+				.click();
+			const targetValue = page.locator('.target-value');
+			await expect(targetValue).toContainText('mi', { timeout: 5_000 });
+			await expect(targetValue).not.toContainText('km');
+
+			// ── Generate-button label ──
+			const generateBtn = page.getByRole('button', { name: /Generate .* (?:route|loop)/ });
+			await expect(generateBtn).toContainText('mi');
+			await expect(generateBtn).not.toContainText(/\bkm\b/);
+		} finally {
+			// Restore to km so subsequent tests render against the default.
+			await page.goto('/settings/preferences');
+			await page.waitForLoadState('networkidle');
+			await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
+			await page.getByRole('button', { name: /Save Preferences/ }).click();
+			await expect(
+				page.getByRole('button', { name: /Saved!/ }),
+			).toBeVisible({ timeout: 5_000 });
+		}
+	});
+
 	test('Pace Format <select> save round-trip persists across reload', async ({
 		page
 	}) => {

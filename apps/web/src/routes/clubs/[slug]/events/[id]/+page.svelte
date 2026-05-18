@@ -30,6 +30,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
+	import { formatDistance } from '$lib/units.svelte';
 	import type {
 		EventWithMeta,
 		ClubWithMeta,
@@ -565,7 +566,7 @@
 					{#if event.distance_m != null}
 						<div class="metric">
 							<span class="label">Distance</span>
-							<span class="value">{(event.distance_m / 1000).toFixed(2)} km</span>
+							<span class="value">{formatDistance(event.distance_m)}</span>
 						</div>
 					{/if}
 					{#if event.pace_target_sec}
@@ -586,7 +587,7 @@
 					<a class="route-chip" href="/routes/{route.id}">
 						<span class="material-symbols" aria-hidden="true">route</span>
 						{route.name}
-						<span class="muted">— {(route.distance_m / 1000).toFixed(2)} km</span>
+						<span class="muted">— {formatDistance(route.distance_m)}</span>
 					</a>
 				{/if}
 			</div>
@@ -814,7 +815,7 @@
 							</div>
 							{#if r.finisher_status === 'finished'}
 								<span class="time">{formatDuration(r.duration_s)}</span>
-								<span class="dist muted">{(r.distance_m / 1000).toFixed(2)} km</span>
+								<span class="dist muted">{formatDistance(r.distance_m)}</span>
 							{/if}
 							{#if isRaceDirector && !r.organiser_approved}
 								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id, true)}>Approve</button>
@@ -842,7 +843,7 @@
 										disabled={submitting}
 									>
 										<span class="run-date">{formatRunDate(run.started_at)}</span>
-										<span class="run-dist">{(run.distance_m / 1000).toFixed(2)} km</span>
+										<span class="run-dist">{formatDistance(run.distance_m)}</span>
 										<span class="run-time">{formatDuration(run.duration_s)}</span>
 										<span class="run-kind muted">{run.activity_type}</span>
 									</button>

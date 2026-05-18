@@ -8,6 +8,9 @@
 	import { saveRoute } from '$lib/data';
 	import { pickSavePolyline } from '$lib/route_save_polyline';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { distanceInPreferred, getUnit } from '$lib/units.svelte';
+
+	const METRES_PER_MILE = 1609.344;
 
 	// `?club=<uuid>` makes the new route club-owned. The club home page's
 	// Routes tab links here with this param so route creation lands the
@@ -30,6 +33,16 @@
 	let routingErrorSeverity = $state<'error' | 'warning'>('error');
 	let showSaveModal = $state(false);
 	let showHelp = $state(false);
+
+	// Reactive: tracks the module-level unit signal so every km/mi
+	// label in the template re-renders the instant the user flips the
+	// preference on /settings/preferences. Without these derived
+	// values, the route builder kept showing km even after Save —
+	// formatDistance-based pages already worked because they read the
+	// signal indirectly; these inline strings were hardcoded.
+	let preferredUnit = $derived(getUnit());
+	let unitLabel = $derived(preferredUnit === 'mi' ? 'mi' : 'km');
+	let distanceDisp = $derived(distanceInPreferred(distance));
 
 	/// Same back-link contract as /plans/[id] and /guided — only pop the
 	/// history entry when we actually came from /routes (or one of its
@@ -139,14 +152,40 @@
 
 	let estimatedTime = $derived.by(() => {
 		if (distance === 0) return '';
-		const paceSecondsPerKm = paceMin * 60 + paceSec;
-		const totalSeconds = Math.round((distance / 1000) * paceSecondsPerKm);
+		// paceMin:paceSec is per the user's preferred unit (per km in
+		// metric, per mi in imperial). Convert the route distance into
+		// that same unit before multiplying so a 10km route at 5:00/mi
+		// reports the same total time it would in km mode at 8:03/km.
+		const paceSecondsPerUnit = paceMin * 60 + paceSec;
+		const distanceInUnit =
+			preferredUnit === 'mi' ? distance / METRES_PER_MILE : distance / 1000;
+		const totalSeconds = Math.round(distanceInUnit * paceSecondsPerUnit);
 		const h = Math.floor(totalSeconds / 3600);
 		const m = Math.floor((totalSeconds % 3600) / 60);
 		const s = totalSeconds % 60;
 		if (h > 0) return `~${h}h ${m}m`;
 		return `~${m}m ${s}s`;
 	});
+
+	// targetKm is always stored in kilometres (the internal currency
+	// of generateLoop's distanceMetres math). The slider + presets +
+	// label are derived in the user's preferred unit. Slider min/max
+	// adapt so a mile-mode user gets a 1-26 mi range instead of the
+	// km-mode 1-42 km range.
+	let targetDisplayValue = $derived(
+		preferredUnit === 'mi' ? targetKm * (1000 / METRES_PER_MILE) : targetKm,
+	);
+	let targetDisplayMax = $derived(preferredUnit === 'mi' ? 26.2 : 42);
+	let targetDisplayMin = $derived(preferredUnit === 'mi' ? 1 : 1);
+	function setTargetFromDisplay(displayValue: number) {
+		targetKm =
+			preferredUnit === 'mi'
+				? displayValue * (METRES_PER_MILE / 1000)
+				: displayValue;
+	}
+	function setTargetFromKm(km: number) {
+		targetKm = km;
+	}
 
 	let canSave = $derived(routed && routeName.trim().length > 0);
 
@@ -309,8 +348,8 @@
 
 			<div class="stats-row">
 				<div class="builder-stat">
-					<span class="builder-stat-value">{(distance / 1000).toFixed(2)}</span>
-					<span class="builder-stat-label">km</span>
+					<span class="builder-stat-value">{distanceDisp.value.toFixed(2)}</span>
+					<span class="builder-stat-label">{distanceDisp.unit}</span>
 				</div>
 				<div class="builder-stat">
 					<span class="builder-stat-value">{elevation}</span>
@@ -330,18 +369,19 @@
 						<input type="number" min="2" max="15" bind:value={paceMin} class="pace-num" />
 						<span>:</span>
 						<input type="number" min="0" max="59" bind:value={paceSec} class="pace-num" />
-						<span class="pace-label">/km</span>
+						<span class="pace-label">/{unitLabel}</span>
 					</div>
 				</div>
 			{/if}
 
 			{#if laps.count > 0}
+				{@const lapDisp = distanceInPreferred(laps.lapDistance)}
 				<div class="lap-info">
 					<div class="lap-badge">
 						<span class="material-symbols">loop</span>
 						{laps.count} {laps.count === 1 ? 'lap' : 'laps'}
 					</div>
-					<span class="lap-detail">{(laps.lapDistance / 1000).toFixed(2)} km per lap</span>
+					<span class="lap-detail">{lapDisp.value.toFixed(2)} {lapDisp.unit} per lap</span>
 				</div>
 			{/if}
 
@@ -427,17 +467,29 @@
 
 					<span class="section-label">Distance</span>
 					<div class="target-row">
-						<input type="range" min="1" max="42" step="0.5" bind:value={targetKm} class="target-slider" />
-						<span class="target-value">{targetKm} km</span>
+						<input
+							type="range"
+							min={targetDisplayMin}
+							max={targetDisplayMax}
+							step="0.5"
+							value={targetDisplayValue}
+							oninput={(e) => setTargetFromDisplay(parseFloat((e.target as HTMLInputElement).value))}
+							class="target-slider"
+						/>
+						<span class="target-value">{targetDisplayValue.toFixed(1)} {unitLabel}</span>
 					</div>
 					<div class="target-presets">
-						<button onclick={() => (targetKm = 5)}>5k</button>
-						<button onclick={() => (targetKm = 10)}>10k</button>
-						<button onclick={() => (targetKm = 21.1)}>Half</button>
-						<button onclick={() => (targetKm = 42.2)}>Full</button>
+						<!-- Race-distance names stay constant — "5k" / "Half" /
+						     "Full" are how runners refer to them regardless
+						     of preferred unit. The slider value displays in
+						     whichever unit the user prefers. -->
+						<button onclick={() => setTargetFromKm(5)}>5k</button>
+						<button onclick={() => setTargetFromKm(10)}>10k</button>
+						<button onclick={() => setTargetFromKm(21.1)}>Half</button>
+						<button onclick={() => setTargetFromKm(42.2)}>Full</button>
 					</div>
 					<button class="btn btn-secondary" onclick={handleGenerateLoop}>
-						Generate {targetKm} km {endPoint ? 'route' : 'loop'}
+						Generate {targetDisplayValue.toFixed(1)} {unitLabel} {endPoint ? 'route' : 'loop'}
 					</button>
 				</div>
 			{/if}
@@ -573,7 +625,7 @@
 
 		<div class="save-summary">
 			<div>
-				<span class="save-summary-value">{(distance / 1000).toFixed(2)} km</span>
+				<span class="save-summary-value">{distanceDisp.value.toFixed(2)} {distanceDisp.unit}</span>
 				<span class="save-summary-label">Distance</span>
 			</div>
 			<div>

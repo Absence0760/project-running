@@ -10,6 +10,7 @@
 	} from '$lib/data';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { fmtKm } from '$lib/units.svelte';
 
 	let items = $state<NotificationView[]>([]);
 	let loading = $state(true);
@@ -91,7 +92,7 @@
 	function verbFor(item: NotificationView): string {
 		const name = item.actor?.display_name ?? 'Someone';
 		const dist = item.run_distance_m
-			? `${(item.run_distance_m / 1000).toFixed(1)} km`
+			? fmtKm(item.run_distance_m)
 			: 'your run';
 		switch (item.row.kind) {
 			case 'kudos':

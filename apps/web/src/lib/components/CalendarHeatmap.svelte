@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Run } from '$lib/types';
+	import { fmtKm } from '$lib/units.svelte';
 
 	let { runs = [] }: { runs: Run[] } = $props();
 
@@ -66,7 +67,7 @@
 		const d = new Date(date);
 		const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 		if (distance === 0) return `${label}: No run`;
-		return `${label}: ${(distance / 1000).toFixed(1)} km`;
+		return `${label}: ${fmtKm(distance)}`;
 	}
 
 	const dayLabels = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
