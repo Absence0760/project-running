@@ -6,6 +6,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
 	import { saveRoute } from '$lib/data';
+	import { pickSavePolyline } from '$lib/route_save_polyline';
 	import { showToast } from '$lib/stores/toast.svelte';
 
 	// `?club=<uuid>` makes the new route club-owned. The club home page's
@@ -220,9 +221,15 @@
 			const routeData = builder?.getRouteData();
 			if (!routeData) return;
 
+			// Persist the OSRM-snapped polyline (not the 2-10 click
+			// points) so list-card thumbnails + the detail map have a
+			// real route to draw. See route_save_polyline.ts for the
+			// rationale + the regression test that pins it.
+			const polyline = pickSavePolyline(routeData.waypoints, routeData.coordinates);
+
 			const saved = await saveRoute({
 				name: routeName.trim(),
-				waypoints: routeData.waypoints,
+				waypoints: polyline,
 				distance_m: Math.round(distance * 100) / 100,
 				elevation_m: elevation > 0 ? elevation : null,
 				surface: mode === 'trail' ? 'trail' : 'road',
