@@ -17,7 +17,7 @@
 			coordinates: [number, number][];
 		}) => {},
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
-		onerror = (_message: string | null) => {}
+		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {}
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -29,11 +29,13 @@
 		}) => void;
 		onmapclick?: (lngLat: { lng: number; lat: number }) => boolean;
 		/**
-		 * Called with a non-null message when routing fails (upstream
-		 * unreachable, all segments returned errors, etc.), and with null
-		 * when the next successful calculation clears the error.
+		 * Called with a non-null message when routing fails or partially
+		 * fails, and with null when the next successful calculation
+		 * clears the error. `severity` distinguishes hard failures (no
+		 * usable route) from partial-success warnings (route is drawn
+		 * but some segments are missing). The parent decides styling.
 		 */
-		onerror?: (message: string | null) => void;
+		onerror?: (message: string | null, severity?: 'error' | 'warning') => void;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -197,14 +199,14 @@
 
 	// --- Routing ---
 
-	async function recalculateRoute() {
+	async function recalculateRoute(): Promise<boolean> {
 		if (waypoints.length < 2) {
 			routeCoordinates = [];
 			routeElevations = [];
 			updateRouteLine();
 			updateDistanceMarkers();
 			emitUpdate();
-			return;
+			return false;
 		}
 
 		isRouting = true;
@@ -246,7 +248,7 @@
 
 			const results: unknown[] = [];
 			for (let b = 0; b < segments.length; b += BATCH_SIZE) {
-				if (currentVersion !== routeVersion) return;
+				if (currentVersion !== routeVersion) return false;
 
 				const batch = segments.slice(b, b + BATCH_SIZE);
 				const batchResults = await Promise.all(
@@ -260,7 +262,7 @@
 				}
 			}
 
-			if (currentVersion !== routeVersion) return;
+			if (currentVersion !== routeVersion) return false;
 
 			// Stitch segments together. Count how many succeeded so we can
 			// surface an error when the upstream is completely unreachable.
@@ -277,7 +279,7 @@
 				}
 			}
 
-			if (currentVersion !== routeVersion) return;
+			if (currentVersion !== routeVersion) return false;
 
 			if (okSegments === 0) {
 				throw new Error(
@@ -287,7 +289,8 @@
 			if (okSegments < segments.length) {
 				// Partial success — show a softer warning but keep the route.
 				onerror(
-					`Routed ${okSegments} of ${segments.length} segments — some requests failed. The line is incomplete.`
+					`Routed ${okSegments} of ${segments.length} segments — some requests failed. The line is incomplete.`,
+					'warning'
 				);
 			}
 
@@ -296,7 +299,7 @@
 			const { sampled } = sampleCoordinates(routeCoordinates, 100);
 			const elevations = await fetchElevations(sampled);
 
-			if (currentVersion !== routeVersion) return;
+			if (currentVersion !== routeVersion) return false;
 
 			if (sampled.length < routeCoordinates.length) {
 				routeElevations = interpolateElevations(elevations, sampled.length, routeCoordinates.length);
@@ -311,13 +314,15 @@
 			wpSrc?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
 			updateDistanceMarkers();
 			emitUpdate();
+			return true;
 		} catch (err) {
 			if (currentVersion === routeVersion) {
 				console.error('Routing failed:', err);
 				onerror(
 					err instanceof Error
 						? err.message
-						: 'Routing failed — the routing service is unreachable.'
+						: 'Routing failed — the routing service is unreachable.',
+					'error'
 				);
 				// Clear the stale in-flight route so the UI doesn't show a
 				// partial or empty line.
@@ -326,6 +331,7 @@
 				updateRouteLine();
 				emitUpdate();
 			}
+			return false;
 		} finally {
 			if (currentVersion === routeVersion) {
 				isRouting = false;
@@ -519,11 +525,14 @@
 
 	/**
 	 * Calculate the road-snapped route through all waypoints.
-	 * Saves a snapshot of waypoints for undo.
+	 * Saves a snapshot of waypoints for undo. Returns true only when
+	 * a usable route was produced (>= 1 OSRM segment succeeded). The
+	 * parent uses this to gate the Save button — a stale `routed`
+	 * flag after a failed call let the user "save" an empty route.
 	 */
-	export async function calculateRoute() {
+	export async function calculateRoute(): Promise<boolean> {
 		preRouteWaypoints = waypoints.map((w) => ({ ...w }));
-		await recalculateRoute();
+		return await recalculateRoute();
 	}
 
 	/**
@@ -605,7 +614,7 @@
 		targetDistanceM: number,
 		startFrom?: { lat: number; lng: number },
 		endAt?: { lat: number; lng: number }
-	) {
+	): Promise<boolean> {
 		const start: TrackPoint = startFrom
 			? { lat: startFrom.lat, lng: startFrom.lng }
 			: (() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })();
@@ -685,6 +694,7 @@
 		}
 
 		updateStraightLine();
+		return routeCoordinates.length >= 2;
 	}
 
 	export function getMapStyle() { return mapStyle; }

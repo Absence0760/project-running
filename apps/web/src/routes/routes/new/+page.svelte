@@ -26,6 +26,7 @@
 	let saving = $state(false);
 	let saveError = $state('');
 	let routingError = $state<string | null>(null);
+	let routingErrorSeverity = $state<'error' | 'warning'>('error');
 	let showSaveModal = $state(false);
 	let showHelp = $state(false);
 
@@ -62,9 +63,13 @@
 		coordinates = data.coordinates;
 	}
 
-	function handleRoutingError(message: string | null) {
+	function handleRoutingError(message: string | null, severity: 'error' | 'warning' = 'error') {
 		routingError = message;
-		if (message) routed = false;
+		routingErrorSeverity = severity;
+		// Only hard errors invalidate the route. A 'warning' (partial
+		// success — some OSRM segments dropped) still produced a usable
+		// polyline, so the Save button should stay enabled.
+		if (message && severity === 'error') routed = false;
 	}
 
 	let laps = $derived.by(() => {
@@ -138,8 +143,12 @@
 	let canSave = $derived(routed && routeName.trim().length > 0);
 
 	async function handleCalculateRoute() {
-		await builder?.calculateRoute();
-		routed = true;
+		// Only flip `routed` to true when OSRM actually produced a
+		// polyline. The old code set routed unconditionally after the
+		// awaited call, even if the routing service was down — and the
+		// Save button then submitted an empty/stale route.
+		const ok = await builder?.calculateRoute();
+		routed = !!ok;
 	}
 
 	function handleUndoCalculate() {
@@ -191,8 +200,8 @@
 		})();
 		const end = endPoint ?? undefined;
 
-		await builder?.generateLoop(targetKm * 1000, start, end);
-		routed = true;
+		const ok = await builder?.generateLoop(targetKm * 1000, start, end);
+		routed = !!ok;
 	}
 
 	function openSaveModal() {
@@ -248,7 +257,7 @@
 			<p class="kicker">New route</p>
 			<h1>Route Builder</h1>
 			<p class="tagline">
-				Click the map to drop waypoints, then snap to roads or trails. Save when you're happy.
+				Click the map to drop waypoints, snap to walkable paths, then save. The Surface toggle tags the saved route — it doesn't change the routing.
 			</p>
 		</header>
 
@@ -498,13 +507,19 @@
 			<div class="canvas-empty" role="status">
 				<span class="material-symbols">add_location</span>
 				<h3>Click anywhere to start</h3>
-				<p>Drop waypoints to sketch your route. Hit <strong>Calculate route</strong> when you're ready to snap to {mode === 'road' ? 'roads' : 'trails'}.</p>
+				<p>Drop waypoints to sketch your route. Hit <strong>Calculate route</strong> when you're ready to snap to walkable paths.</p>
 			</div>
 		{/if}
 
 		{#if routingError}
-			<div class="routing-error" role="alert">
-				<span class="material-symbols">error</span>
+			<div
+				class="routing-error"
+				class:routing-warning={routingErrorSeverity === 'warning'}
+				role={routingErrorSeverity === 'warning' ? 'status' : 'alert'}
+			>
+				<span class="material-symbols">
+					{routingErrorSeverity === 'warning' ? 'warning' : 'error'}
+				</span>
 				<div class="routing-error-text">{routingError}</div>
 				<button
 					class="routing-error-dismiss"
@@ -1146,6 +1161,12 @@
 		color: white;
 		box-shadow: var(--shadow-lg);
 		font-size: 0.9rem;
+	}
+	/* Partial-success warning — route is drawn but some OSRM segments
+	   dropped. Visually distinct from a hard failure so the user
+	   doesn't think their work was lost. */
+	.routing-error.routing-warning {
+		background: var(--color-warning, #b45309);
 	}
 	.routing-error-text {
 		flex: 1;
