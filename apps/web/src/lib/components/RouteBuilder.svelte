@@ -9,6 +9,7 @@
 	import { OSRM_BASE_URL } from '$lib/routing';
 	import {
 		DEFAULT_SCALE_FACTOR,
+		NEAR_POINT_M,
 		bisectScale,
 		generateLoopWaypoints,
 		initScaleRange,
@@ -315,7 +316,21 @@
 
 	// --- Routing ---
 
-	async function recalculateRoute(): Promise<boolean> {
+	async function recalculateRoute(opts: {
+		/// generateLoop holds isRouting=true across its whole iteration
+		/// loop; when it calls into recalculateRoute it passes this so
+		/// the inner finally doesn't flip the spinner off between
+		/// attempts (which previously admitted a brief window of
+		/// user clicks and a visible flicker).
+		skipBusyToggle?: boolean;
+		/// Suppress the deviation / detour / partial-success warnings.
+		/// generateLoop's scaffolding waypoints are invisible, so
+		/// telling the user to "drag the red markers" makes no sense.
+		/// Hard failures (okSegments === 0 → throw → catch → onerror)
+		/// still bubble — the caller can replace that with a
+		/// generation-specific message.
+		suppressSoftWarnings?: boolean;
+	} = {}): Promise<boolean> {
 		if (waypoints.length < 2) {
 			routeCoordinates = [];
 			routeElevations = [];
@@ -325,7 +340,7 @@
 			return false;
 		}
 
-		isRouting = true;
+		if (!opts.skipBusyToggle) isRouting = true;
 		routeVersion++;
 		const currentVersion = routeVersion;
 		// Clear any stale error from a previous failed attempt.
@@ -481,17 +496,19 @@
 				// couldn't snap, fall back to straight lines through them,
 				// and tell the user which markers to nudge if they want a
 				// snapped route.
-				const failedWaypoints = identifyFailedWaypoints(perSegment);
-				const failedSegments = perSegment.length - okSegments;
-				const wpList = formatWaypointRanges(failedWaypoints);
-				const wpClause =
-					failedWaypoints.length > 0
-						? ` Waypoint${failedWaypoints.length === 1 ? '' : 's'} ${wpList} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m — using direct lines through those points.`
-						: ` ${failedSegments} segment${failedSegments === 1 ? '' : 's'} couldn't snap — using direct lines for those.`;
-				onerror(
-					`Routed ${okSegments} of ${perSegment.length} segments.${wpClause} Drag the red markers closer to a road for a snapped route, or accept the direct lines.`,
-					'warning',
-				);
+				if (!opts.suppressSoftWarnings) {
+					const failedWaypoints = identifyFailedWaypoints(perSegment);
+					const failedSegments = perSegment.length - okSegments;
+					const wpList = formatWaypointRanges(failedWaypoints);
+					const wpClause =
+						failedWaypoints.length > 0
+							? ` Waypoint${failedWaypoints.length === 1 ? '' : 's'} ${wpList} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m — using direct lines through those points.`
+							: ` ${failedSegments} segment${failedSegments === 1 ? '' : 's'} couldn't snap — using direct lines for those.`;
+					onerror(
+						`Routed ${okSegments} of ${perSegment.length} segments.${wpClause} Drag the red markers closer to a road for a snapped route, or accept the direct lines.`,
+						'warning',
+					);
+				}
 			} else {
 				// Every segment came back. Now check whether the route
 				// actually sticks close to the user's clicks — radiuses=
@@ -503,13 +520,15 @@
 					polyline: s.polyline,
 					distanceM: s.distanceM,
 				}));
-				const quality = validateRouteQuality(routedSegments);
-				const warn = qualityWarning(quality);
-				if (warn) {
-					onerror(
-						`${warn} (Red markers highlight the implicated waypoints.)`,
-						'warning',
-					);
+				if (!opts.suppressSoftWarnings) {
+					const quality = validateRouteQuality(routedSegments);
+					const warn = qualityWarning(quality);
+					if (warn) {
+						onerror(
+							`${warn} (Red markers highlight the implicated waypoints.)`,
+							'warning',
+						);
+					}
 				}
 			}
 
@@ -540,12 +559,18 @@
 		} catch (err) {
 			if (currentVersion === routeVersion) {
 				console.error('Routing failed:', err);
-				onerror(
-					err instanceof Error
-						? err.message
-						: 'Routing failed — the routing service is unreachable.',
-					'error'
-				);
+				// generateLoop wants to replace the generic message with
+				// a generation-specific one (the public OSRM was fine,
+				// we just couldn't snap any of the scaffolding seeds).
+				// Suppress here and let the caller emit its own.
+				if (!opts.suppressSoftWarnings) {
+					onerror(
+						err instanceof Error
+							? err.message
+							: 'Routing failed — the routing service is unreachable.',
+						'error',
+					);
+				}
 				// Clear the stale in-flight route so the UI doesn't show a
 				// partial or empty line.
 				routeCoordinates = [];
@@ -555,7 +580,7 @@
 			}
 			return false;
 		} finally {
-			if (currentVersion === routeVersion) {
+			if (!opts.skipBusyToggle && currentVersion === routeVersion) {
 				isRouting = false;
 			}
 		}
@@ -753,9 +778,24 @@
 		// Invalidate any in-flight recalculateRoute — see invalidateCalculatedRoute.
 		routeVersion++;
 		clearImplicatedMarkers();
-		waypoints.pop();
+		const popped = waypoints.pop();
 		const marker = markers.pop();
 		marker?.remove();
+		// When the popped waypoint was the closing pin of a loop (it
+		// sat on top of waypoints[0]), the remaining sequence is no
+		// longer a runnable shape — a subsequent Recalculate would
+		// route start → m1 → m2 (half loop). Pop one more so the
+		// data ends in a sensibly route-able sequence. Typical
+		// trigger: Ctrl+Z after a Generate-by-distance loop.
+		if (
+			popped &&
+			waypoints.length >= 2 &&
+			routingHaversineM(popped, waypoints[0]) < NEAR_POINT_M
+		) {
+			waypoints.pop();
+			const m = markers.pop();
+			m?.remove();
+		}
 		updateMarkerStyles();
 		clearPreviewLine();
 		updateStraightLine();
@@ -829,21 +869,53 @@
 	}
 
 	/**
-	 * Duplicate the route in reverse to create an out-and-back.
+	 * Duplicate the route in reverse to create an out-and-back, OR
+	 * reverse direction when the current sequence is already a loop.
+	 *
+	 * For a normal point-to-point sequence: append the waypoints in
+	 * reverse (minus the last, which is the turnaround) so OSRM has
+	 * to route back the way it came.
+	 *
+	 * For a loop (waypoints[0] ≈ waypoints[last], typical after the
+	 * generate-loop collapse), the classic out-and-back math
+	 * produces a nonsensical sequence — `[start, m1, m2, start, m2,
+	 * m1]` — that doubles back on the loop instead of out-and-back-
+	 * ing. In that case we reverse the interior order so a
+	 * Recalculate runs the loop in the opposite direction. This is
+	 * what "out & back" effectively means for a closed loop.
 	 */
 	export function outAndBack() {
 		if (waypoints.length < 2) return;
 		// Invalidate any in-flight recalculateRoute — see invalidateCalculatedRoute.
 		routeVersion++;
 
-		// Add waypoints in reverse (skip the last since it's the turnaround point)
-		const reversed = waypoints.slice(0, -1).reverse();
-		for (const wp of reversed) {
-			const lngLat = { lng: wp.lng, lat: wp.lat };
-			const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
-			waypoints.push(point);
+		const isLoop =
+			waypoints.length >= 3 &&
+			routingHaversineM(waypoints[0], waypoints[waypoints.length - 1]) < NEAR_POINT_M;
 
-			const marker = createWaypointMarker(lngLat, waypoints.length - 1);
+		// Clear markers first — both branches rebuild from waypoints.
+		markers.forEach((m) => m.remove());
+		markers = [];
+
+		if (isLoop) {
+			// Reverse interior order: [start, m1, m2, ..., close] →
+			// [start, ..., m2, m1, close]. start and close are
+			// pinned (close still equals start) so the loop stays
+			// closed in the new direction.
+			const interior = waypoints.slice(1, -1).reverse();
+			waypoints = [waypoints[0], ...interior, waypoints[waypoints.length - 1]];
+		} else {
+			// Classic out-and-back: append reversed waypoints minus
+			// the turnaround so OSRM routes back the way it came.
+			const reversed = waypoints.slice(0, -1).reverse();
+			waypoints = [...waypoints, ...reversed];
+		}
+
+		for (let i = 0; i < waypoints.length; i++) {
+			const marker = createWaypointMarker(
+				{ lng: waypoints[i].lng, lat: waypoints[i].lat },
+				i,
+			);
 			markers.push(marker);
 		}
 		updateMarkerStyles();
@@ -894,6 +966,19 @@
 		// degenerate scaleFactor chase. The slider in /routes/new
 		// already clamps to [1, 42] km but this is the API boundary.
 		if (!isValidTargetDistance(targetDistanceM)) return false;
+		// Refuse when the user hasn't picked a start AND the map is
+		// still showing the world view (zoom < 6 = continental scale).
+		// Without this, generation runs from map.getCenter() which is
+		// [0, 20] (mid-Atlantic) when geolocation was denied — every
+		// waypoint lands in the ocean and generation hard-fails with a
+		// confusing "Routing service unavailable" error.
+		if (!startFrom && map.getZoom() < 6) {
+			onerror(
+				'Pan to your area and pick a start point first, or use "My location".',
+				'error',
+			);
+			return false;
+		}
 
 		const start: { lat: number; lng: number } = startFrom
 			? { lat: startFrom.lat, lng: startFrom.lng }
@@ -916,6 +1001,14 @@
 		let bestElevations: number[] = [];
 		let bestDistance = Infinity;
 		let bestDelta = Infinity;
+
+		// Hold isRouting=true across the whole iteration loop. Without
+		// this, recalculateRoute's own finally would flip it back to
+		// false between attempts — admitting user clicks and flickering
+		// the spinner. The try/finally below also guarantees the flag
+		// resets even if the iteration throws.
+		isRouting = true;
+		try {
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			// Capture before the iteration's mutations so we can detect a
@@ -962,7 +1055,7 @@
 			routeCoordinates = [];
 			routeElevations = [];
 
-			await recalculateRoute();
+			await recalculateRoute({ skipBusyToggle: true, suppressSoftWarnings: true });
 
 			if (routeVersion !== beforeIter + 1) return false;
 
@@ -1044,7 +1137,19 @@
 			}
 			return true;
 		}
+		// Hard failure: every iteration's recalculateRoute either
+		// snapped no segments (radius too small for the road network)
+		// or got interrupted by a mutation. The generic "Routing
+		// service unavailable" was suppressed (suppressSoftWarnings)
+		// so we can surface a generation-specific message instead.
+		onerror(
+			`Couldn't generate a ${formatDistance(targetDistanceM)} loop here — try a larger distance, or move the start to a denser road area.`,
+			'error',
+		);
 		return false;
+		} finally {
+			isRouting = false;
+		}
 	}
 
 	function collapseGeneratedScaffolding(
