@@ -6,14 +6,12 @@ import {
 	DEFAULT_SCALE_FACTOR,
 	MAX_TARGET_DISTANCE_M,
 	NEAR_POINT_M,
-	RATIO_CLAMP,
 	SCALE_FACTOR_BOUNDS,
 	bisectScale,
 	generateLoopWaypoints,
 	initScaleRange,
 	isValidTargetDistance,
 	isWithinAcceptBand,
-	nextScaleFactor,
 	selectLoopAnchors,
 } from './route_loop';
 import { haversineM } from './routing_quality';
@@ -115,41 +113,6 @@ test('point-to-point — distinct end > NEAR_POINT_M gets a curved interior', ()
 	const b = { lat: mid.lat - START.lat, lng: mid.lng - START.lng };
 	const cross = a.lat * b.lng - a.lng * b.lat;
 	assert.notEqual(cross, 0);
-});
-
-test('nextScaleFactor — degenerate actualDistance (0) does not produce NaN or runaway', () => {
-	const next = nextScaleFactor(DEFAULT_SCALE_FACTOR, 5000, 0);
-	assert.ok(Number.isFinite(next));
-	assert.ok(next <= SCALE_FACTOR_BOUNDS.max);
-	assert.ok(next >= SCALE_FACTOR_BOUNDS.min);
-});
-
-test('nextScaleFactor — huge raw ratio is clamped to RATIO_CLAMP.max', () => {
-	// Target 5000m, actual 50m → raw ratio = 100. Without the clamp,
-	// scaleFactor would jump to 30 and the next attempt would push
-	// waypoints kilometres away.
-	const next = nextScaleFactor(DEFAULT_SCALE_FACTOR, 5000, 50);
-	// Clamped: 0.3 * 3 = 0.9 (under SCALE_FACTOR_BOUNDS.max of 2).
-	assert.equal(next, DEFAULT_SCALE_FACTOR * RATIO_CLAMP.max);
-});
-
-test('nextScaleFactor — overlong route shrinks scaleFactor', () => {
-	// actual > target → ratio < 1 → scaleFactor decreases.
-	const next = nextScaleFactor(DEFAULT_SCALE_FACTOR, 5000, 8000);
-	assert.ok(next < DEFAULT_SCALE_FACTOR);
-});
-
-test('nextScaleFactor — extreme shrink is clamped to RATIO_CLAMP.min', () => {
-	// Target 100m, actual 50000m → ratio = 0.002. Without the clamp
-	// the next attempt would barely move at all.
-	const next = nextScaleFactor(DEFAULT_SCALE_FACTOR, 100, 50000);
-	assert.equal(next, DEFAULT_SCALE_FACTOR * RATIO_CLAMP.min);
-});
-
-test('nextScaleFactor — cumulative bound respected even after several steps', () => {
-	let s = DEFAULT_SCALE_FACTOR;
-	for (let i = 0; i < 10; i++) s = nextScaleFactor(s, 5000, 50);
-	assert.ok(s <= SCALE_FACTOR_BOUNDS.max);
 });
 
 test('isWithinAcceptBand — within tolerance', () => {

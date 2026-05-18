@@ -13,18 +13,9 @@ import { haversineM } from './routing_quality';
 /// and the next iteration's scaleFactor explodes.
 export const NEAR_POINT_M = 50;
 
-/// Per-iteration ratio clamp. After each routing attempt we adjust
-/// scaleFactor by `targetDistance / actualDistance`. When the first
-/// attempt clumped waypoints (e.g. start ≈ end, network failure), the
-/// raw ratio can be in the hundreds, which then pushes the next
-/// attempt's waypoints kilometres off-map. Clamping to ~3x change per
-/// step keeps the search local.
-export const RATIO_CLAMP = { min: 0.3, max: 3 };
-
-/// Absolute scaleFactor bounds. Even with the per-step clamp, three
-/// successive 3x adjustments would compound to 27x — still enough to
-/// produce a route in the wrong country. Lock the cumulative range so
-/// the worst case is a poorly-sized loop, not a hijacked route.
+/// Absolute scaleFactor bounds the bisection search will never
+/// exceed. Caps the worst case at a poorly-sized loop, not a
+/// route in the wrong country.
 export const SCALE_FACTOR_BOUNDS = { min: 0.05, max: 2 };
 
 /// Empirical starting scale: OSRM road-distance through curved
@@ -124,32 +115,6 @@ export function generateLoopWaypoints(args: LoopWaypointArgs): TrackPoint[] {
 	return out;
 }
 
-/**
- * Adjust scaleFactor for the next iteration of the
- * generate-loop / generate-route attempt. Clamps both the
- * per-step multiplier and the absolute output so a runaway ratio
- * from a degenerate first attempt can't push the next attempt's
- * waypoints off the planet.
- *
- * Returns the new scaleFactor.
- */
-export function nextScaleFactor(
-	scaleFactor: number,
-	targetDistanceM: number,
-	actualDistanceM: number,
-): number {
-	if (actualDistanceM <= 0 || !Number.isFinite(actualDistanceM)) {
-		return Math.max(
-			SCALE_FACTOR_BOUNDS.min,
-			Math.min(SCALE_FACTOR_BOUNDS.max, scaleFactor * RATIO_CLAMP.max),
-		);
-	}
-	const rawRatio = targetDistanceM / actualDistanceM;
-	const clampedRatio = Math.max(RATIO_CLAMP.min, Math.min(RATIO_CLAMP.max, rawRatio));
-	const next = scaleFactor * clampedRatio;
-	return Math.max(SCALE_FACTOR_BOUNDS.min, Math.min(SCALE_FACTOR_BOUNDS.max, next));
-}
-
 /// Acceptance band for the iteration loop — within this ratio range
 /// of the target we stop adjusting.
 export const ACCEPT_BAND = { min: 0.85, max: 1.15 };
@@ -192,8 +157,7 @@ export function initScaleRange(): ScaleRange {
 	return { lower: SCALE_FACTOR_BOUNDS.min, upper: SCALE_FACTOR_BOUNDS.max };
 }
 
-/// Bisect the scaleFactor toward a target distance. Strictly
-/// better than nextScaleFactor's multiplicative-ratio approach when
+/// Bisect the scaleFactor toward a target distance. Robust when
 /// OSRM's actual distance is a noisy / non-monotonic function of
 /// scale — which is the typical case in twisty suburban grids,
 /// where small radius changes can flip a segment between a direct

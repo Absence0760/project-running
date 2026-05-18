@@ -33,6 +33,11 @@
 	let routingErrorSeverity = $state<'error' | 'warning'>('error');
 	let showSaveModal = $state(false);
 	let showHelp = $state(false);
+	// Mirrors the builder's internal isRouting so the Generate button
+	// can flip to a Cancel button mid-batch. The public OSRM demo's
+	// 8s per-segment timeout means a stuck batch can otherwise tie the
+	// UI up for ~30s with no way out short of clearing the whole route.
+	let builderBusy = $state(false);
 
 	// Reactive: tracks the module-level unit signal so every km/mi
 	// label in the template re-renders the instant the user flips the
@@ -471,7 +476,7 @@
 							type="range"
 							min={targetDisplayMin}
 							max={targetDisplayMax}
-							step="0.5"
+							step="0.1"
 							value={targetDisplayValue}
 							oninput={(e) => setTargetFromDisplay(parseFloat((e.target as HTMLInputElement).value))}
 							class="target-slider"
@@ -488,9 +493,15 @@
 						<button onclick={() => setTargetFromKm(21.1)}>Half</button>
 						<button onclick={() => setTargetFromKm(42.2)}>Full</button>
 					</div>
-					<button class="btn btn-secondary" onclick={handleGenerateLoop}>
-						Generate {targetDisplayValue.toFixed(1)} {unitLabel} {endPoint ? 'route' : 'loop'}
-					</button>
+					{#if builderBusy}
+						<button class="btn btn-outline" onclick={() => builder?.cancelGeneration()}>
+							Cancel generating…
+						</button>
+					{:else}
+						<button class="btn btn-secondary" onclick={handleGenerateLoop}>
+							Generate {targetDisplayValue.toFixed(1)} {unitLabel} {endPoint ? 'route' : 'loop'}
+						</button>
+					{/if}
 				</div>
 			{/if}
 
@@ -567,6 +578,7 @@
 			onupdate={handleUpdate}
 			onmapclick={handleMapPick}
 			onerror={handleRoutingError}
+			onbusy={(b) => (builderBusy = b)}
 		/>
 
 		{#if waypointCount === 0 && !pickingPoint}

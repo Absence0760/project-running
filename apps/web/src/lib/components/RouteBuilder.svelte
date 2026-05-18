@@ -17,7 +17,7 @@
 		isWithinAcceptBand,
 		selectLoopAnchors,
 	} from '$lib/route_loop';
-	import { formatDistance } from '$lib/units.svelte';
+	import { formatDistance, getUnit } from '$lib/units.svelte';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
 		closestPointDistanceM,
@@ -42,7 +42,8 @@
 			coordinates: [number, number][];
 		}) => {},
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
-		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {}
+		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
+		onbusy = (_busy: boolean) => {}
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -61,6 +62,13 @@
 		 * but some segments are missing). The parent decides styling.
 		 */
 		onerror?: (message: string | null, severity?: 'error' | 'warning') => void;
+		/**
+		 * Called whenever the routing state toggles. The parent uses
+		 * this to surface a Cancel button (`cancelGeneration()`) while
+		 * a long-running batch is in flight — generate-loop in
+		 * particular can take ~30s on slow connections.
+		 */
+		onbusy?: (busy: boolean) => void;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -78,6 +86,9 @@
 	let implicatedWaypoints = new Set<number>();
 	let distanceMarkers: maplibregl.Marker[] = [];
 	let isRouting = $state(false);
+	$effect(() => {
+		onbusy(isRouting);
+	});
 	let mapStyle = $state<'streets' | 'satellite' | 'terrain'>('streets');
 	let nearStart = false;
 	let routeVersion = 0;
@@ -98,7 +109,7 @@
 	};
 
 	const SNAP_DISTANCE_PX = 25;
-	const KM_MARKER_INTERVAL = 1000; // metres
+	const METRES_PER_MILE = 1609.344;
 
 	// --- Search ---
 
@@ -292,24 +303,29 @@
 
 		if (routeCoordinates.length < 2) return;
 
+		// Use the user's preferred unit so the numbered circles match
+		// the sidebar's "1.92 mi" stat. Previously hardcoded to km,
+		// which left mile-mode users seeing markers spaced every km
+		// but labelled like miles.
+		const intervalM = getUnit() === 'mi' ? METRES_PER_MILE : 1000;
 		let accumulated = 0;
-		let nextKm = KM_MARKER_INTERVAL;
+		let nextMark = intervalM;
 
 		for (let i = 1; i < routeCoordinates.length; i++) {
 			const segDist = haversine(routeCoordinates[i - 1], routeCoordinates[i]);
 			accumulated += segDist;
 
-			if (accumulated >= nextKm) {
+			if (accumulated >= nextMark) {
 				const el = document.createElement('div');
 				el.className = 'km-marker';
-				el.textContent = `${Math.round(nextKm / 1000)}`;
+				el.textContent = `${Math.round(nextMark / intervalM)}`;
 
 				const marker = new maplibregl.Marker({ element: el })
 					.setLngLat(routeCoordinates[i])
 					.addTo(map);
 				distanceMarkers.push(marker);
 
-				nextKm += KM_MARKER_INTERVAL;
+				nextMark += intervalM;
 			}
 		}
 	}
@@ -944,6 +960,24 @@
 				updateStraightLine();
 			}
 		});
+	}
+
+	/**
+	 * Interrupt an in-flight generate-loop (or calculate-route)
+	 * batch. Bumping routeVersion makes recalculateRoute return
+	 * false at its next checkpoint, and generateLoop's iteration
+	 * version check (`routeVersion !== beforeIter + 1`) bails on
+	 * the next loop. The try/finally in generateLoop guarantees
+	 * isRouting resets, which fires the onbusy(false) callback
+	 * the parent uses to hide the Cancel button.
+	 *
+	 * Designed for a user-visible Cancel control next to the
+	 * spinner — the public OSRM demo's per-segment timeout is 8s,
+	 * so a stuck batch can otherwise tie the UI up for ~30s.
+	 */
+	export function cancelGeneration() {
+		if (!isRouting) return;
+		routeVersion++;
 	}
 
 	/**
