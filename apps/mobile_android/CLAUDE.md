@@ -163,7 +163,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 Test files in `test/`:
 - `run_stats_test.dart` — 13 tests: moving-time helpers + `fastestWindowOf` rolling-window scanner
-- `local_run_store_test.dart` — 23 tests: store persistence, sync state, in-progress save/load, deleteMany batch, newer-wins guards, edge cases
+- `local_run_store_test.dart` — 24 tests: store persistence, sync state, in-progress save/load, deleteMany batch, newer-wins guards, edge cases
 - `period_summary_test.dart` — 23 tests: period boundary computation, stats aggregation, share text generation, formatting helpers
 - `goals_test.dart` — 20 tests: goal evaluation (distance/time/pace/run-count, weekly/monthly, multi-target)
 - `route_simplify_test.dart` — 8 tests: Ramer-Douglas-Peucker track simplification

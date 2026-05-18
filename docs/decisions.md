@@ -1257,7 +1257,7 @@ The `/clubs` and `/feed` top-level routes stay alive as thin client-side redirec
 
 **Don't re-litigate** by re-introducing `/feed` or `/clubs` as top-level tabs, or by adding back a Feed tab on the profile, unless the People surface gets demoted to a sub-tab somewhere else (the gap it closes is the load-bearing part of this refactor).
 
-Pinned by `apps/web/tests-e2e/social.spec.ts` (11 tests covering tab ARIA + URL state, both legacy redirects, People search + Follow toggle + Clear, suggested empty state, feed entry render + Cycle filter empty). Sidebar nav contract is pinned by `apps/web/tests-e2e/cross-cutting/surfaces.spec.ts`.
+Pinned by `apps/web/tests-e2e/runs/social.spec.ts` (11 tests covering tab ARIA + URL state, both legacy redirects, People search + Follow toggle + Clear, suggested empty state, feed entry render + Cycle filter empty). Sidebar nav contract is pinned by `apps/web/tests-e2e/cross-cutting/surfaces.spec.ts`.
 
 ---
 
