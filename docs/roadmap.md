@@ -687,6 +687,80 @@ The move from `runs.track` jsonb to Supabase Storage and the Strava/Health Conne
 
 ---
 
+## Anti-spam / moderation — what's shipped, what's deferred
+
+Phases 1 and 2 landed as a tightening of the search + create paths;
+phase 3 shipped the smallest-useful reporting surface. The bigger
+admin-tooling work is intentionally deferred until the first real
+spam wave forces the prioritisation.
+
+### Shipped
+
+- [x] **Search ranking by reputation** — clubs sort by member_count
+  alongside geographic distance; people sort by `public_runs_count`
+  before falling through to alphabetical. Migration
+  `20260906_001_search_ranking_member_count.sql` adds the
+  `clubs.member_count` denorm + maintenance trigger. Web wires it via
+  `apps/web/src/lib/search_ranking.ts`. (Anti-spam phase 1)
+- [x] **Soft create-rate-limits** on clubs (5/hour) and routes
+  (30/hour). BEFORE INSERT triggers call `enforce_create_rate_limit`
+  which reuses the existing `rate_limits` table + `check_rate_limit`
+  RPC. service_role + null-auth (migrations, seed) + forged inserts
+  (caught by RLS instead) all bypass. Migration
+  `20260907_001_create_rate_limits.sql`. (Anti-spam phase 2)
+- [x] **User-submitted reports** on profiles, clubs, routes. A
+  `reports` table with polymorphic `(target_kind, target_id)` ref + a
+  `submit_report` SECURITY DEFINER RPC that validates the target
+  exists, rejects self-reports, rate-limits at 10/hour, and refuses
+  duplicate pending reports via a partial-unique index. RLS hides
+  others' reports from each user. Migration
+  `20260908_001_user_reports.sql`. Web: `ReportDialog.svelte` mounted
+  on `/u/[id]`, `/clubs/[slug]`, `/routes/[id]`. **v1 review happens
+  in Supabase Studio against the `reports` table** — a real admin
+  page is deferred (see below). (Anti-spam phase 3)
+
+### Deferred
+
+- [ ] **Admin role + moderation page.** Today there is no `app_admin`
+  table or `is_app_admin()` SQL helper; "moderation" means a service-
+  role session in Supabase Studio looking at the `reports` table.
+  Build a v1 admin page (likely `/admin/reports`) gated on an explicit
+  admin allowlist, with the queue ordered by `(target_kind,
+  target_id, count(*) over (...))` so repeated reports against the
+  same target rise. Schema: an `app_admins (user_id)` table + an
+  `is_app_admin()` SQL helper following the `is_club_admin()` shape
+  from `20260417_001`. Web: a thin SvelteKit route. **Don't start
+  this until report volume justifies it** — a hand-written SQL query
+  scales further than people expect.
+- [ ] **Auto-hide after N reports** from vetted reporters. Once an
+  admin page exists, add a SECURITY DEFINER `auto_hide_target()`
+  function that flips a `clubs.shadow_hidden` / `routes.shadow_hidden`
+  / `user_profiles.shadow_hidden` boolean when ≥ N pending reports
+  from distinct reporters with ≥ M public runs each accumulate.
+  Decisions to settle when building this: N (3? 5?), M (1? 5?),
+  whether the target's owner gets a notification ("Your X is hidden
+  pending review"), and the revert path on dismissal.
+- [ ] **Report buttons on more surfaces.** The MVP covers users,
+  clubs, routes. The natural extensions are: run comments (`comments`
+  table), club posts (`club_posts`), individual runs themselves
+  (`runs`). Each is a `target_kind` enum addition + a Report button
+  next to the existing affordances. Hold until the admin queue is
+  real — more surfaces means more queue noise to sift.
+- [ ] **Reputation-weighted reports.** A bot reporting a real user
+  from 5 puppet accounts shouldn't auto-hide them. When the auto-hide
+  feature ships, gate it on reporters with ≥ M public runs (the same
+  threshold the search People tab will use once the suggested-search
+  merge in decisions.md § 54 lands) so reports from drive-by accounts
+  count for less.
+- [ ] **Friendly "slow down" toasts** for the create-rate-limit P0001
+  errors. Today the trigger raises and PostgREST surfaces a 500 with
+  the raw error message. Map the SQLSTATE in `data.ts#createClub` and
+  `saveRoute` to a "You're creating these too quickly — try again in
+  a few minutes" toast. Same pattern the `submitReport` wrapper
+  already uses in [data.ts § User reports].
+
+---
+
 ## Competitor-parity backlog (unphased)
 
 Generated from `docs/competitors.md` and confirmed scope with the user. These are the features that would close the gap to the strongest existing apps (Strava / Garmin / Nike Run Club / AllTrails / Runna / Komoot). They are **deliberately unphased** — ordering depends on three decisions the user still owes:

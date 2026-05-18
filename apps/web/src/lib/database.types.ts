@@ -1042,6 +1042,48 @@ export type Database = {
         }
         Relationships: []
       }
+      reports: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          reason: string
+          reporter_id: string
+          resolution: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          target_id: string
+          target_kind: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reason: string
+          reporter_id: string
+          resolution?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_id: string
+          target_kind: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reason?: string
+          reporter_id?: string
+          resolution?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_id?: string
+          target_kind?: string
+        }
+        Relationships: []
+      }
       route_reviews: {
         Row: {
           comment: string | null
@@ -2172,6 +2214,15 @@ export type Database = {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: undefined
       }
+      enforce_create_rate_limit: {
+        Args: {
+          p_bucket: string
+          p_max: number
+          p_user_id: string
+          p_window_seconds: number
+        }
+        Returns: undefined
+      }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
       find_stuck_jobs: {
         Args: { p_stuck_after?: string }
@@ -2475,6 +2526,15 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      submit_report: {
+        Args: {
+          p_notes?: string
+          p_reason: string
+          p_target_id: string
+          p_target_kind: string
+        }
+        Returns: string
       }
       weekly_mileage: {
         Args: { weeks_back?: number }

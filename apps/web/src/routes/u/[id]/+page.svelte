@@ -26,6 +26,7 @@
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import NotificationsList from '$lib/components/NotificationsList.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import type { Run } from '$lib/types';
 
@@ -47,6 +48,7 @@
 	// viewer's outbound edges — no per-row round-trip.
 	let viewerFollows = $state<Set<string>>(new Set());
 	let rowBusy = $state<Set<string>>(new Set());
+	let showReportDialog = $state(false);
 
 	// ── Feed state (self-only tab) ─────────────────────────────────
 	// Mirrors the shape /feed used to render: 14-day window over runs
@@ -412,6 +414,17 @@
 				>
 					<span class="material-symbols" aria-hidden="true">share</span>
 				</button>
+				{#if !isSelf && auth.loggedIn}
+					<button
+						class="btn btn-outline btn-icon-only"
+						type="button"
+						onclick={() => (showReportDialog = true)}
+						aria-label="Report profile"
+						title="Report this profile"
+					>
+						<span class="material-symbols" aria-hidden="true">flag</span>
+					</button>
+				{/if}
 				{#if isSelf}
 					<a
 						href="/settings"
@@ -827,6 +840,14 @@
 		{/key}
 	{/if}
 </Modal>
+
+<ReportDialog
+	open={showReportDialog}
+	targetKind="user"
+	targetId={userId}
+	targetLabel={profile?.display_name ?? undefined}
+	onclose={() => (showReportDialog = false)}
+/>
 
 <style>
 	.page {

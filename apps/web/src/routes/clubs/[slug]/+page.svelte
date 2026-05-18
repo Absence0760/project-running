@@ -36,6 +36,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -98,6 +99,7 @@
 	let joinBusy = $state(false);
 	let error = $state<string | null>(null);
 	let showLeaveConfirm = $state(false);
+	let showReportDialog = $state(false);
 	let showRegenConfirm = $state(false);
 	let showDeleteClubConfirm = $state(false);
 	let showDeletePostConfirm = $state<string | null>(null);
@@ -551,6 +553,17 @@
 					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 						<span class="material-symbols" aria-hidden="true">add</span>
 						New event
+					</button>
+				{/if}
+				{#if !isAdmin && auth.loggedIn}
+					<button
+						class="btn-secondary btn-icon-only"
+						type="button"
+						onclick={() => (showReportDialog = true)}
+						aria-label="Report club"
+						title="Report this club"
+					>
+						<span class="material-symbols" aria-hidden="true">flag</span>
 					</button>
 				{/if}
 			</div>
@@ -1177,6 +1190,16 @@
 	oncancel={() => (removingMemberId = null)}
 	danger
 />
+
+{#if club}
+	<ReportDialog
+		open={showReportDialog}
+		targetKind="club"
+		targetId={club.id}
+		targetLabel={club.name}
+		onclose={() => (showReportDialog = false)}
+	/>
+{/if}
 
 <Modal
 	open={showEventModal && club != null}

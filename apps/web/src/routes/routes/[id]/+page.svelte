@@ -9,6 +9,7 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -75,6 +76,7 @@
 	let tagsSaving = $state(false);
 
 	let isOwner = $derived(route !== null && auth.user?.id === route.user_id);
+	let showReportDialog = $state(false);
 
 	async function addTag() {
 		if (!route) return;
@@ -371,6 +373,16 @@
 						</button>
 					{/if}
 					<button class="btn btn-primary btn-sm" onclick={handleShare}>Share</button>
+					{#if !isOwner && auth.user}
+						<button
+							class="btn btn-outline btn-sm"
+							onclick={() => (showReportDialog = true)}
+							aria-label="Report route"
+							title="Report this route"
+						>
+							<span class="material-symbols" aria-hidden="true">flag</span>
+						</button>
+					{/if}
 				</div>
 			</header>
 
@@ -507,6 +519,16 @@
 	</SplitPane>
 	</div>
 </div>
+{/if}
+
+{#if route}
+	<ReportDialog
+		open={showReportDialog}
+		targetKind="route"
+		targetId={route.id}
+		targetLabel={route.name ?? undefined}
+		onclose={() => (showReportDialog = false)}
+	/>
 {/if}
 
 <style>

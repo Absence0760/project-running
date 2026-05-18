@@ -4045,3 +4045,47 @@ export async function deleteNotification(id: string): Promise<void> {
 	const { error } = await supabase.from('notifications').delete().eq('id', id);
 	if (error) throw error;
 }
+
+// ─────────────────────── User reports ───────────────────────
+//
+// Submit a report against a user / club / route. The server-side
+// `submit_report` SECURITY DEFINER RPC validates the target exists,
+// rejects self-reports, rate-limits at 10/hour, and raises 23505 if
+// the same reporter already has a pending report against the same
+// target. See migration 20260908_001.
+
+export type ReportTargetKind = 'user' | 'club' | 'route';
+export type ReportReason =
+	| 'spam'
+	| 'harassment'
+	| 'inappropriate'
+	| 'impersonation'
+	| 'other';
+
+export async function submitReport(input: {
+	targetKind: ReportTargetKind;
+	targetId: string;
+	reason: ReportReason;
+	notes?: string;
+}): Promise<string> {
+	const { data, error } = await supabase.rpc('submit_report', {
+		p_target_kind: input.targetKind,
+		p_target_id: input.targetId,
+		p_reason: input.reason,
+		p_notes: input.notes?.trim() || null,
+	});
+	if (error) {
+		// Normalise the three load-bearing failure modes into
+		// caller-friendly messages. The PostgREST envelope surfaces
+		// the SQLSTATE / hint exactly as raised in the migration; we
+		// don't lean on the raw text because that string can change.
+		if (error.code === '23505') {
+			throw new Error('You already have a pending report against this content.');
+		}
+		if (error.code === 'P0001' && /rate limit/i.test(error.message)) {
+			throw new Error('Too many reports — please wait a few minutes before trying again.');
+		}
+		throw error;
+	}
+	return data as string;
+}

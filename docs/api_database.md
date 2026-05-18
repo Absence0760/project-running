@@ -772,6 +772,14 @@ Generated training plans + week phasing + scheduled workouts. Owner-only RLS, de
 
 Per-instance event leaderboard. PK is `(event_id, instance_start, user_id)` so a recurring event's Tuesday-this-week and Tuesday-next-week have independent rankings. `finisher_status` ∈ `'finished' | 'dnf' | 'dns'`; `rank` is recomputed by `recompute_event_ranks` (called by trigger on insert/update/delete and by the race-mode auto-finalize path). Migration `20260424_001_event_results.sql`; rank tooling and approval grants in `20260428_001_role_permissions.sql`.
 
+### `reports`
+
+User-submitted reports against a profile, club, or route. Polymorphic via `(target_kind, target_id)` where `target_kind ∈ {'user', 'club', 'route'}`. Reason is constrained to `{'spam', 'harassment', 'inappropriate', 'impersonation', 'other'}`; status is `{'pending', 'reviewed', 'dismissed'}`. A partial-unique index `reports_no_duplicate_pending` enforces one pending report per (reporter, target) pair — once status flips to reviewed/dismissed the same reporter can re-file if the target reoffends.
+
+Inserts go through the `submit_report(p_target_kind, p_target_id, p_reason, p_notes)` SECURITY DEFINER RPC, which validates the target row exists, rejects self-reports on `target_kind='user'`, rate-limits via the shared `enforce_create_rate_limit` helper at 10/hour per reporter, and surfaces duplicate-pending as a 23505 with a "you already have a pending report" hint. RLS hides others' reports from each user — the only way to *read* `reports` cross-user is via service_role, which is intentional: reports are pending evidence, not public attribution.
+
+There is no admin UI yet — v1 moderation happens in Supabase Studio against the `reports` table. The deferred admin queue, auto-hide-after-N, and reputation-weighted reports are tracked in [roadmap.md § Anti-spam / moderation](roadmap.md#anti-spam--moderation--whats-shipped-whats-deferred). Migration `20260908_001_user_reports.sql`. Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e tests).
+
 ### `race_sessions` / `race_pings`
 
 Live race mode (Wear OS-led, decisions per roadmap §227). `race_sessions` is the per-instance state machine (`armed → running → finished | cancelled`); `race_pings` is the append-only telemetry stream (lat/lng/distance_m/elapsed_s/bpm) the watch posts during the session. Race-director / event-organiser permissions are checked by `is_race_director(uuid)` / `is_event_organiser(uuid)` SECURITY DEFINER functions. Migration `20260425_001_race_sessions.sql`. Stale pings are purged by the `cleanup-stale-live-run-pings` cron (see [§ pg_cron schedules](#pg_cron-schedules)).
