@@ -6,10 +6,12 @@
 	// routing.ts still available for individual segment calls if needed
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
+		closestPointDistanceM,
 		formatWaypointRanges,
 		haversineM as routingHaversineM,
 		identifyFailedWaypoints,
 		OSRM_SNAP_RADIUS_M,
+		QUALITY_THRESHOLDS,
 		qualityWarning,
 		validateRouteQuality,
 		type RoutedSegment,
@@ -54,6 +56,12 @@
 	let routeCoordinates: [number, number][] = [];
 	let routeElevations: number[] = [];
 	let markers: maplibregl.Marker[] = [];
+	/// 0-based indices of waypoints flagged by the post-routing quality
+	/// pass — failed snaps, deviation outliers, or detour-segment
+	/// endpoints. These markers render in red so the user can see at a
+	/// glance which clicks are causing the warning text. Cleared on any
+	/// waypoint mutation; repopulated after Calculate Route.
+	let implicatedWaypoints = new Set<number>();
 	let distanceMarkers: maplibregl.Marker[] = [];
 	let isRouting = $state(false);
 	let mapStyle = $state<'streets' | 'satellite' | 'terrain'>('streets');
@@ -111,15 +119,28 @@
 
 	// --- Waypoint markers ---
 
-	function getMarkerColor(index: number): string {
+	function getMarkerColor(index: number, implicated: boolean): string {
+		// Red wins over the green start-marker convention — the user's
+		// problem is more important to surface than "this is point 1".
+		if (implicated) return '#ef4444';
 		if (index === 0) return '#22c55e';
 		return '#3b82f6';
 	}
 
-	function createWaypointMarker(lngLat: { lng: number; lat: number }, index: number): maplibregl.Marker {
-		const marker = new maplibregl.Marker({ color: getMarkerColor(index), draggable: true })
+	function createWaypointMarker(
+		lngLat: { lng: number; lat: number },
+		index: number,
+		implicated = false,
+	): maplibregl.Marker {
+		const marker = new maplibregl.Marker({
+			color: getMarkerColor(index, implicated),
+			draggable: true,
+		})
 			.setLngLat([lngLat.lng, lngLat.lat])
 			.addTo(map);
+		// Tagged so updateMarkerStyles can detect implicated → default
+		// transitions and only rebuild the markers that actually changed.
+		(marker as unknown as { __implicated: boolean }).__implicated = implicated;
 
 		// Track drag state to distinguish click from drag
 		let wasDragged = false;
@@ -135,6 +156,11 @@
 			waypoints[currentIndex] = { lat: pos.lat, lng: pos.lng };
 			routeCoordinates = [];
 			routeElevations = [];
+			// The previous quality pass referenced the old position;
+			// drop its red markers so they don't mislead the user about
+			// the post-drag state. The next Calculate Route will repaint
+			// any that are still problematic.
+			clearImplicatedMarkers();
 			updateStraightLine();
 		});
 
@@ -170,8 +196,33 @@
 	}
 
 	function updateMarkerStyles() {
-		// Built-in markers can't change color after creation.
-		// Colors are set at creation time: green for first, blue for rest.
+		// MapLibre's built-in marker can't change color after creation,
+		// so we destroy + rebuild any markers whose implicated state
+		// has flipped. Markers whose color is already correct are left
+		// alone, preserving any in-flight drag handlers.
+		for (let i = 0; i < markers.length; i++) {
+			const existing = markers[i];
+			const lngLat = existing.getLngLat();
+			const wasImplicated =
+				(existing as unknown as { __implicated?: boolean }).__implicated === true;
+			const shouldBeImplicated = implicatedWaypoints.has(i);
+			if (wasImplicated === shouldBeImplicated) continue;
+			existing.remove();
+			markers[i] = createWaypointMarker(
+				{ lng: lngLat.lng, lat: lngLat.lat },
+				i,
+				shouldBeImplicated,
+			);
+		}
+	}
+
+	function clearImplicatedMarkers() {
+		// Any waypoint mutation invalidates the previous quality pass.
+		// Reset before the mutation; updateMarkerStyles flips reds
+		// back to default colors.
+		if (implicatedWaypoints.size === 0) return;
+		implicatedWaypoints = new Set();
+		updateMarkerStyles();
 	}
 
 
@@ -339,6 +390,36 @@
 					'Routing service unavailable — no segments could be routed. The public OSRM demo server may be unreachable, or this region has poor pedestrian-graph coverage.'
 				);
 			}
+			// Build the implicated-waypoint set from three diagnostics —
+			// failed snaps, deviation outliers, and detour-segment
+			// endpoints — then push the colour update through
+			// updateMarkerStyles() so the user sees red pins for the
+			// markers the warning text is naming.
+			const implicated = new Set<number>();
+			for (const oneBasedIdx of identifyFailedWaypoints(perSegment)) {
+				implicated.add(oneBasedIdx - 1);
+			}
+			// Deviation: per-waypoint distance to the merged polyline.
+			// Reuses the qualityWarning threshold (60m) so the marker
+			// colour and the banner text refer to the same set of
+			// outliers.
+			for (let i = 0; i < waypoints.length; i++) {
+				const d = closestPointDistanceM(waypoints[i], allCoords);
+				if (d > QUALITY_THRESHOLDS.deviationWarnM) implicated.add(i);
+			}
+			// Detour: paint both endpoints of any segment that took a
+			// > 2.5x route between its clicks. Straight-line-fallback
+			// segments have ratio exactly 1, so they don't trip this.
+			perSegment.forEach((s, i) => {
+				const straightLine = routingHaversineM(s.from, s.to);
+				if (straightLine < 1) return;
+				const ratio = s.distanceM / straightLine;
+				if (ratio > QUALITY_THRESHOLDS.detourWarnRatio) {
+					implicated.add(i);
+					implicated.add(i + 1);
+				}
+			});
+
 			if (okSegments < perSegment.length) {
 				// Partial success — identify the specific waypoints that
 				// couldn't snap, fall back to straight lines through them,
@@ -352,7 +433,7 @@
 						? ` Waypoint${failedWaypoints.length === 1 ? '' : 's'} ${wpList} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m — using direct lines through those points.`
 						: ` ${failedSegments} segment${failedSegments === 1 ? '' : 's'} couldn't snap — using direct lines for those.`;
 				onerror(
-					`Routed ${okSegments} of ${perSegment.length} segments.${wpClause} Drag those markers closer to a road for a snapped route, or accept the direct lines.`,
+					`Routed ${okSegments} of ${perSegment.length} segments.${wpClause} Drag the red markers closer to a road for a snapped route, or accept the direct lines.`,
 					'warning',
 				);
 			} else {
@@ -368,8 +449,16 @@
 				}));
 				const quality = validateRouteQuality(routedSegments);
 				const warn = qualityWarning(quality);
-				if (warn) onerror(warn, 'warning');
+				if (warn) {
+					onerror(
+						`${warn} (Red markers highlight the implicated waypoints.)`,
+						'warning',
+					);
+				}
 			}
+
+			implicatedWaypoints = implicated;
+			updateMarkerStyles();
 
 			routeCoordinates = allCoords;
 
@@ -541,6 +630,7 @@
 			lngLat = { lng: waypoints[0].lng, lat: waypoints[0].lat };
 		}
 
+		clearImplicatedMarkers();
 		const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
 		waypoints.push(point);
 
@@ -553,6 +643,7 @@
 	}
 
 	export function insertWaypoint(lngLat: { lng: number; lat: number }, atIndex: number) {
+		clearImplicatedMarkers();
 		const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
 		waypoints.splice(atIndex, 0, point);
 
@@ -567,6 +658,7 @@
 			clearWaypoints();
 			return;
 		}
+		clearImplicatedMarkers();
 		waypoints.splice(index, 1);
 		const marker = markers.splice(index, 1)[0];
 		marker?.remove();
@@ -576,6 +668,7 @@
 
 	export function undoWaypoint() {
 		if (waypoints.length === 0) return;
+		clearImplicatedMarkers();
 		waypoints.pop();
 		const marker = markers.pop();
 		marker?.remove();
@@ -588,6 +681,7 @@
 		waypoints = [];
 		routeCoordinates = [];
 		routeElevations = [];
+		implicatedWaypoints = new Set();
 		markers.forEach((m) => m.remove());
 		markers = [];
 		distanceMarkers.forEach((m) => m.remove());
