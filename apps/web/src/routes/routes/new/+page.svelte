@@ -62,6 +62,13 @@
 		elevation = data.elevation;
 		elevations = data.elevations;
 		coordinates = data.coordinates;
+		// Sync routed from the builder. The builder clears its
+		// routeCoordinates whenever a waypoint mutation invalidates
+		// the snapped polyline (add / insert / remove / drag), so a
+		// stale calculation can't stay "saveable" if the user
+		// back-tracks via clicking an existing marker and forgets
+		// to recalculate.
+		if (data.coordinates.length < 2) routed = false;
 	}
 
 	function handleRoutingError(message: string | null, severity: 'error' | 'warning' = 'error') {

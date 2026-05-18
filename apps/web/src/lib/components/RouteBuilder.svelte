@@ -162,7 +162,25 @@
 			// any that are still problematic.
 			clearImplicatedMarkers();
 			updateStraightLine();
+			// IMPORTANT: reset wasDragged here, not just in the click
+			// handler. The browser doesn't fire a `click` event after a
+			// drag (mouseup with movement skips the synthetic click),
+			// so the flag would otherwise stay `true` and silently eat
+			// the next legitimate click on this marker — the exact
+			// "click an existing marker to back-track doesn't work
+			// after dragging it" bug the audit caught. Defer one tick
+			// so any synthetic click that DID fire (some browsers do
+			// emit click after a no-movement drag) lands first.
+			setTimeout(() => {
+				wasDragged = false;
+			}, 0);
 		});
+
+		// Tell the user clicking the marker does something. Replaces
+		// the default `move` cursor that maplibre applies to draggable
+		// markers, which gave no hint that clicking back-tracks the
+		// route through this point.
+		marker.getElement().style.cursor = 'pointer';
 
 		// Click on marker without dragging
 		marker.getElement().addEventListener('click', (e: MouseEvent) => {
@@ -179,7 +197,12 @@
 				return;
 			}
 
-			// Click on any other marker = add new waypoint at same position (for overlaps)
+			// Click on any other marker = back-track through it. The
+			// new waypoint is appended at the same lat/lng so OSRM has
+			// to route from the current end back through this point on
+			// the next Calculate. Without a tiny visual offset the new
+			// pin sits exactly on top of the clicked one and looks
+			// like nothing happened.
 			const pos = marker.getLngLat();
 			addWaypoint({ lng: pos.lng, lat: pos.lat });
 		});
@@ -625,11 +648,29 @@
 
 	// --- Public API ---
 
+	// Any waypoint mutation after a Calculate Route makes the snapped
+	// polyline stale — the user added a back-track / inserted a
+	// mid-route point / deleted one, and OSRM hasn't been re-run.
+	// Mirror dragend: drop the snapped state so the map reverts to
+	// the straight-line preview that includes the new waypoint, and
+	// emitUpdate carries the empty `coordinates` array back to the
+	// parent so its `routed` flag (gated on coordinates.length >= 2)
+	// disables Save until the user recalculates.
+	function invalidateCalculatedRoute() {
+		if (routeCoordinates.length === 0 && routeElevations.length === 0) return;
+		routeCoordinates = [];
+		routeElevations = [];
+		distanceMarkers.forEach((m) => m.remove());
+		distanceMarkers = [];
+		updateRouteLine();
+	}
+
 	export function addWaypoint(lngLat: { lng: number; lat: number }) {
 		if (nearStart && waypoints.length >= 3) {
 			lngLat = { lng: waypoints[0].lng, lat: waypoints[0].lat };
 		}
 
+		invalidateCalculatedRoute();
 		clearImplicatedMarkers();
 		const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
 		waypoints.push(point);
@@ -643,6 +684,7 @@
 	}
 
 	export function insertWaypoint(lngLat: { lng: number; lat: number }, atIndex: number) {
+		invalidateCalculatedRoute();
 		clearImplicatedMarkers();
 		const point: TrackPoint = { lat: lngLat.lat, lng: lngLat.lng };
 		waypoints.splice(atIndex, 0, point);
@@ -658,6 +700,7 @@
 			clearWaypoints();
 			return;
 		}
+		invalidateCalculatedRoute();
 		clearImplicatedMarkers();
 		waypoints.splice(index, 1);
 		const marker = markers.splice(index, 1)[0];

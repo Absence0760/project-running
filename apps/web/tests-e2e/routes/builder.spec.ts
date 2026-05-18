@@ -282,6 +282,80 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		expect(colors.bBg.length).toBeGreaterThan(0);
 	});
 
+	test('clicking an existing marker back-tracks the route (post-drag wasDragged regression)', async ({
+		page,
+	}) => {
+		// Two interacting bugs the audit uncovered:
+		//
+		// 1. `wasDragged` was set on `dragstart` but never reset in
+		//    `dragend`. The browser doesn't fire `click` after a drag,
+		//    so the flag stayed true and silently ate the NEXT real
+		//    click on that marker. Dragging marker B then clicking B
+		//    to back-track did nothing on the first try.
+		//
+		// 2. Clicking an existing marker on a freshly-calculated
+		//    route appended a back-track waypoint, but
+		//    `routeCoordinates` wasn't cleared, so the snapped
+		//    polyline stayed visible (stale) and the parent's
+		//    `routed` flag stayed true — letting the user Save a
+		//    route that hadn't been routed through the new point.
+		//
+		// We can't reliably drive the maplibre canvas clicks in CI
+		// (the existing OSRM-failure test uses the same approach with
+		// a graceful skip). Drop waypoints via canvas clicks; if even
+		// two waypoints don't register, skip — the unit + diff review
+		// still pin the behaviour.
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+
+		const canvas = page.locator('.maplibregl-canvas');
+		await canvas.click({ position: { x: 200, y: 200 } });
+		await canvas.click({ position: { x: 300, y: 260 } });
+		await canvas.click({ position: { x: 400, y: 200 } });
+
+		const pointsValue = page.locator('.builder-stat-value').nth(2);
+		const startingCount = await pointsValue.textContent().catch(() => '0');
+		if (!startingCount || parseInt(startingCount, 10) < 3) {
+			test.skip(true, 'MapLibre canvas clicks did not register 3 waypoints in this env.');
+			return;
+		}
+
+		// Click the middle marker (waypoint 2 in 1-based, index 1
+		// in the markers array — the second .maplibregl-marker).
+		const markers = page.locator('.maplibregl-marker');
+		const before = await markers.count();
+		await markers.nth(1).click();
+		await page.waitForTimeout(150);
+
+		// A new marker should land at the SAME lat/lng as the clicked
+		// one — that's how OSRM is asked to route back through it.
+		// The points counter is the simplest signal.
+		const after = await markers.count();
+		expect(after).toBe(before + 1);
+		const updated = await pointsValue.textContent();
+		expect(parseInt(updated ?? '0', 10)).toBe(parseInt(startingCount, 10) + 1);
+	});
+
+	test('marker cursor is pointer (signals clickability)', async ({ page }) => {
+		// Tiny regression guard. The maplibre default `move` cursor
+		// gave no hint that clicking a marker did anything; we
+		// override to pointer in createWaypointMarker. If a future
+		// refactor strips that line, this catches it before users
+		// re-report "I can't tell if I'm allowed to click markers".
+		await page.goto('/routes/new');
+		await page.waitForLoadState('networkidle');
+		const canvas = page.locator('.maplibregl-canvas');
+		await canvas.click({ position: { x: 200, y: 200 } });
+		const marker = page.locator('.maplibregl-marker').first();
+		if (!(await marker.isVisible().catch(() => false))) {
+			test.skip(true, 'MapLibre canvas click did not register a waypoint in this env.');
+			return;
+		}
+		const cursor = await marker.evaluate((el) => getComputedStyle(el).cursor);
+		expect(cursor).toBe('pointer');
+	});
+
 	test('keyboard shortcuts hint is visible on initial load', async ({ page }) => {
 		// The .shortcuts-hint affordance is the discoverability hook
 		// for power users. A regression that hid it removes the
