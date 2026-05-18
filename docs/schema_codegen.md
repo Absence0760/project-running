@@ -10,7 +10,7 @@ This doc covers:
 - [Testing drift detection end-to-end](#testing-drift-detection-end-to-end)
 - [Troubleshooting](#troubleshooting)
 
-Phase 1 of "Cross-platform parity enforcement" in [roadmap.md](roadmap.md) is the initiative this flow comes from. Phases 2 (parity matrix) and 3 (cross-client integration test) are not built yet.
+Phase 1 of "Cross-platform parity enforcement" in [roadmap.md](roadmap.md) is the initiative this flow comes from. Phase 2 (parity matrix) shipped as the `parity-matrix` CI job that runs `scripts/check_parity_matrix.dart` on every PR. Phase 3 (cross-client integration test) is not built yet.
 
 ---
 
@@ -288,13 +288,18 @@ The generator emitted something the analyser rejects. Most likely causes:
 
 Supabase only marks a column as optional in the `Row` type when it has a database default. If you add a nullable column without a default, it'll be `string | null` but *required* in the Row — you must include it when constructing mock data. This happened to `mock-data.ts` during the initial rollout; the fix was adding `updated_at: <timestamp>` to the mock row helpers.
 
-### The "narrow union" columns (`source`, `surface`, `provider`) drifted out of sync with reality
+### The "narrow union" columns drifted out of sync with reality
 
-The generated types see them as `string` because Postgres has no CHECK constraint on those columns. `apps/web/src/lib/types.ts` re-narrows them via `Omit<...> & { source: RunSource; ... }`. If a client starts writing a new value (e.g. `'zwift'`) the narrow union won't include it. Two fixes, pick one:
-1. Add the new value to the union in `types.ts` (fast, client-side only).
-2. Add a CHECK constraint to the column in a migration, regenerate, delete the override in `types.ts` (slower, enforced at the DB).
+Six columns carry both a CHECK constraint on the SQL side and a narrow TS union on the client: `source` (`RunSource`), `surface` (`RouteSurface`), `provider` (`IntegrationProvider`), `preferred_unit` (`PreferredUnit`), `subscription_tier` (`SubscriptionTier`), and `role` (`ClubRole`). The first four landed in `20260505_001_narrow_union_check_constraints.sql`; `subscription_tier` in `20260429_001_subscription_paywall.sql`; `role` in `20260428_001_role_permissions.sql`.
 
-Same pattern applies to `IntegrationProvider`, `RouteSurface`, `PreferredUnit`, `SubscriptionTier`.
+`apps/web/scripts/check_constraint_unions.mjs` runs in the `parity-types` CI job and fails PRs that drift — extracting the values from both the migration and the TS union and comparing equality. To add a new value:
+
+1. Update the CHECK constraint in a migration.
+2. Update the TS union in `apps/web/src/lib/types.ts`.
+3. Regenerate types (`npm run gen:types --workspace=apps/backend`).
+4. If you're introducing a brand-new column+CHECK+TS-union triple, append it to the `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs` so the guard knows about it.
+
+Dart treats these columns as raw `String` (no Dart enum to update), but the DB-level CHECK rejects invalid writes anyway. CI catches drift; runtime defends against it.
 
 ---
 

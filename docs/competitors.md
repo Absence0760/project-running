@@ -47,8 +47,8 @@ These are tracked in [roadmap.md](roadmap.md) and intentionally pushed to a late
 - **Strava and parkrun sync** — placeholder buttons removed from Settings to avoid lying. Comes back in Phase 3 with real OAuth + scraping.
 - **Bluetooth heart rate strap** — needs flutter_blue_plus and per-device GATT handling.
 - **Persistent disk tile cache** — currently in-memory only; tiles re-download after app restart. Trail running with no signal still works during a single session.
-- **Premium training features** — Phase 3, requires the Go service for training-load and VDOT calculations.
-- **Live spectator tracking** — Phase 2, needs the Go service WebSocket.
+- **Premium training features** — shipped on the Go worker (`apps/job_worker/internal/premium/`): VDOT + race predictor + recovery + plan generation. Web + mobile consume via the worker's `/v1/premium/*` endpoints.
+- **Live spectator tracking** — shipped on Supabase Realtime. A Go WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy; clients pick transport via `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL`.
 - **Social features, segments, leaderboards** — explicitly not in scope for v1. These are Strava's moat; we differentiate on free planning and watch parity.
 
 ### Migration paths shipped today

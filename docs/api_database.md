@@ -890,6 +890,8 @@ Initiates the Strava OAuth flow and backfills the last 90 days of activities.
 
 ### `POST /strava-webhook`
 
+> **Status: Deprecated.** Superseded by `POST /v1/strava/webhook` on the Go worker (`apps/job_worker/internal/stravahook/`). The Edge Function is kept deployed as the rollback path — production traffic should route to the Go endpoint via `STRAVA_WEBHOOK_URL`. The spec below describes the legacy path.
+
 Receives push events from Strava when a user creates, updates, or deletes an activity. Called by Strava — not by clients.
 
 **Strava verification (GET):**
@@ -942,6 +944,8 @@ Fetches and imports a user's full parkrun history.
 
 ### `POST /refresh-tokens`
 
+> **Status: Deprecated.** Superseded by the `token_refresh` job kind on the Go worker — the cron schedule now lives in `apps/backend/supabase/migrations/20260821_001_token_refresh_cron.sql` and enqueues jobs into the `jobs` table for the worker to drain. The Edge Function is kept deployed as the rollback path.
+
 Scheduled function (cron: every 4 hours) that refreshes Strava access tokens before they expire.
 
 **Flow:**
@@ -973,6 +977,8 @@ No request body required. Irreversible.
 
 ### `POST /export-data`
 
+> **Status: Deprecated.** Superseded by `POST /v1/export` on the Go worker (`apps/job_worker/internal/dataexport/`). Clients pick transport via `PUBLIC_EXPORT_HUB_URL` (web) / `EXPORT_HUB_URL` (mobile); unset → call the EF; set → call the worker. The EF is kept deployed as the rollback path.
+
 Exports all of a user's runs as a GPX zip or CSV. GDPR data portability.
 
 **Request:**
@@ -996,6 +1002,21 @@ A signed Supabase Storage URL pointing to the generated artifact, valid for 10 m
 ### `POST /revenuecat-webhook`
 
 Receives RevenueCat subscription events (initial purchase, renewal, cancellation, billing issues, expiration, transfer) and updates the corresponding `user_profiles.subscription_tier` + `subscription_at`. Authenticated by an HMAC-SHA256 of the raw body in the `x-revenuecat-hmac` header (constant-time compared against `REVENUECAT_WEBHOOK_SECRET`) — RevenueCat configures the same value in their dashboard. Replay-protected: events are rejected if `event_timestamp_ms` is outside `[now - 5min, now + 1min]`, and `event.id` is recorded in `webhook_events (provider, event_id)` (migration `20260623_001_webhook_event_dedupe.sql`) so a duplicate delivery skips the side effect and returns 200. See [paywall.md](paywall.md) for the tier mapping. Migration ladder: `20260429_001_subscription_paywall.sql` (the column + CHECK constraint), `20260623_001_webhook_event_dedupe.sql` (replay table), then this function as the write path.
+
+---
+
+### `GET /clip-public-track`
+
+Serves the clipped track JSON for a non-owner viewer of a public run. Replaces the dropped bare-table Storage SELECT policy on the `runs` bucket (migration `20260619_001`) — anonymous and signed-in non-owners can no longer read raw track files; they must go through this function, which applies `clip_track_for_user` (decisions §33) before returning.
+
+**Request:**
+```
+GET /functions/v1/clip-public-track?run_id={uuid}
+```
+
+Anon-callable (`verify_jwt = false`) — the function authenticates via the `runs.is_public = true` row check, not the caller's JWT. If a JWT is present, it's used to apply owner-visibility rules (owner sees their own raw track; non-owner gets the clipped version).
+
+**Response:** track JSON identical in shape to `runs/{user_id}/{run_id}.json.gz`, with privacy-zone segments clipped.
 
 ---
 

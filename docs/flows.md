@@ -220,46 +220,48 @@ The track-preservation step is specifically because cloud rows have empty `track
 
 ## Spectator live tracking
 
-**Status as of now:** the web page exists and renders a **simulated** runner. The real WebSocket link to a Go service is Phase 2 work (see [roadmap.md](roadmap.md) § "Live spectator tracking" and § "Phase 2 backend work").
+**Status:** shipped on Supabase Realtime today; the WebSocket transport on the Go worker is code-complete and awaits a Fly deploy + DNS flip. The transport is selected by env at runtime — see "Switching transports" below. The pre-start share flow (mint `run_id` on share button so the link is stable across "share now → tap GO later") is live across web + mobile per [decisions.md § 25](decisions.md#25-live-spectator-runs-on-supabase-realtime-with-a-go-websocket-hub-ready-to-flip).
 
-### Runtime sequence (current — simulated)
+### Runtime sequence (default — Supabase Realtime)
 
 ```
-Runner (Android) starts a run (not shared yet — this flow is one-directional)
-  ...eventually the runner will flip a "share live" toggle that returns a URL
-  ...the URL flow doesn't exist yet
+Runner (mobile or web) taps "Share live link" (pre-start or in-run)
+  → run row created with is_live = true, run_id stable for the link
+  → during recording, every GPS fix INSERTs into live_run_pings
+    (apps/mobile_android/lib/services/live_broadcast.dart,
+     apps/web/src/lib/live_broadcast.ts)
 
 Spectator → /live/{run_id}
-  apps/web/src/routes/live/[run_id]/+page.svelte
+  apps/web/src/routes/live/[id]/+page.svelte
   → MapLibre GL JS map mounts
-  → a JS timer drives a fake runner dot along a hardcoded route
-  → UI shows simulated distance, elapsed time, pace
-  → pulsing LIVE badge
+  → supabase.channel(`live:{run_id}`).on('postgres_changes', ...)
+    subscribes to inserts on live_run_pings filtered by run_id
+  → each ping moves the runner dot, extends the trace
+  → privacy-zone segments clipped via clip_track_for_user RPC
+    before the row reaches the spectator (decisions §33)
 ```
 
-There is no real data source. The page is a visual scaffold so the design is right before the Go service lands.
-
-### Runtime sequence (Phase 2 — planned)
+### Runtime sequence (opt-in — Go WebSocket hub)
 
 ```
-Runner (mobile) toggles "share live" before or during a run
-  → client generates a share URL: https://app.runapp.com/live/{run_id}
-  → client opens WebSocket to Go service at wss://go.runapp.com/live/{run_id}
-  → every GPS fix: WebSocket send { lat, lng, ts, distance, elapsed }
+Runner client reads PUBLIC_LIVE_HUB_URL / LIVE_HUB_URL
+  unset → Supabase Realtime (above)
+  set   → wss://<hub>/run/{run_id} (apps/job_worker/internal/livehub/)
+            • SupabaseZoneFetcher fetches the runner's privacy zones once
+              on join, applies clipping per ping before broadcasting
+            • RedisHub (Upstash) fans out across hub replicas for late joiners
 
-Go service
-  → accepts WebSocket, writes position to Redis (TTL 24h) for late joiners
-  → broadcasts to any spectator WebSockets on the same run_id
-
-Spectator → /live/{run_id}
-  → MapLibre map mounts
-  → opens WebSocket to Go service
-  → receives position updates, moves the runner dot, extends the trace
-  → if no runner is connected, reads Redis to show the last known position
+Spectator client reads PUBLIC_LIVE_HUB_URL (same envs)
+  unset → Supabase Realtime
+  set   → wss://<hub>/live/{run_id}
 ```
+
+### Switching transports
+
+Both runner + spectator must agree. Flip both envs (`PUBLIC_LIVE_HUB_URL` on web, `LIVE_HUB_URL` on mobile) in the same release. See `apps/job_worker/deployment.md § Live spectator hub` for the cutover walkthrough. The Realtime path is the rollback target — kept live until the hub deploy is stable.
 
 ### Watch out
 
-- **Do not add real WebSocket code to the current page** without also adding the backing Go service. A half-done implementation is worse than the simulation because it looks real and confuses users.
-- **Live tracking battery drain** is the main risk of this feature. Every-3-second GPS → WebSocket ≈ 5 % extra battery per hour. Roadmap § "Open risks" says the feature must be opt-in per run, never on by default.
-- **The public `/live/{run_id}` page must work without auth.** No user JWT, no session cookie. The Go service will need to treat the `run_id` as a bearer token of sorts — shareability is the feature.
+- **Privacy-zone clipping must happen before the spectator sees the ping.** Realtime path: the RLS policy on `live_run_pings` invokes `clip_track_for_user`. WS path: `SupabaseZoneFetcher` clips on the hub before broadcast. Both routes are owner-blind by design (decisions §33).
+- **Live tracking battery drain** is the main risk of this feature. Every-3-second GPS → INSERT/send ≈ 5% extra battery per hour. Roadmap § "Open risks" says the feature must be opt-in per run, never on by default.
+- **The public `/live/{run_id}` page works without auth.** No user JWT, no session cookie. The hub treats `run_id` as a bearer token; the Realtime channel name is `live:{run_id}` (anyone with the run id can subscribe — shareability is the feature).

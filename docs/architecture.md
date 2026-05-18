@@ -55,11 +55,11 @@ run-app/                          # Monorepo root
 │   ├── run_recorder/             # GPS tracking, pace, distance logic
 │   ├── api_client/               # REST client + auth token management
 │   └── ui_kit/                   # Shared Flutter widgets + design tokens
-├── tooling/
-│   ├── melos.yaml                # Flutter workspace config + scripts
-│   ├── package.json              # npm workspace root (web app)
-│   ├── .github/workflows/        # CI/CD pipelines
-│   └── analysis_options.yaml    # Shared Dart lint rules
+├── infra/                        # Terraform stacks for AWS web hosting
+├── melos.yaml                    # Flutter workspace config + scripts (root)
+├── package.json                  # npm workspaces — apps/web + apps/backend (root)
+├── analysis_options.yaml         # Shared Dart lint rules (root)
+├── .github/workflows/            # CI/CD pipelines
 └── README.md
 ```
 
@@ -202,7 +202,8 @@ src/routes/
 ├── runs/
 │   ├── +page.svelte            # Run history with filters
 │   └── [id]/+page.svelte       # Run detail — map + full analysis
-├── clubs/                       # Social layer — browse + create + detail
+├── social/                      # Social hub — tabbed Clubs / People / Feed (decisions §61)
+├── clubs/                       # Thin redirect → /social?tab=clubs (back-compat)
 ├── plans/                       # Training plans list + create + detail
 ├── explore/                     # Redirect to /routes?tab=explore (kept for old links)
 ├── live/                        # Live spectator tracking
@@ -415,15 +416,16 @@ create policy "users own their runs"
 
 Thin TypeScript functions deployed to Supabase Edge Functions (Deno runtime).
 
-| Function | Trigger | Purpose |
-|---|---|---|
-| `strava-webhook` | POST (Strava push) | Receive activity created/updated event, fetch full activity, save run |
-| `strava-import` | POST (user action) | OAuth token exchange, backfill last 90 days of activities |
-| `parkrun-import` | POST (user action) | Fetch athlete results page by athlete number, parse HTML, save runs |
-| `refresh-tokens` | Scheduled (cron) | Refresh expiring Strava access tokens before they expire |
-| `export-data` | POST (user action) | Export all user runs as GPX zip or CSV (GDPR) |
-| `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation |
-| `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) |
+| Function | Trigger | Purpose | Status |
+|---|---|---|---|
+| `strava-webhook` | POST (Strava push) | Receive activity created/updated event, fetch full activity, save run | **Deprecated** — superseded by `POST /v1/strava/webhook` on the Go worker (`apps/job_worker/internal/stravahook/`); EF kept as rollback |
+| `strava-import` | POST (user action) | OAuth token exchange, backfill last 90 days of activities | Active |
+| `parkrun-import` | POST (user action) | Fetch athlete results page by athlete number, parse HTML, save runs | Active |
+| `refresh-tokens` | Scheduled (pg_cron, every 4h) | Refresh expiring Strava access tokens before they expire | **Deprecated** — superseded by `token_refresh` job kind on the Go worker; EF kept as rollback |
+| `export-data` | POST (user action) | Export all user runs as GPX zip or CSV (GDPR Art 20) | **Deprecated** — superseded by `POST /v1/export` on the Go worker (`apps/job_worker/internal/dataexport/`); EF kept as rollback |
+| `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation | Active |
+| `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) | Active |
+| `clip-public-track` | GET (anon-callable) | Serve clipped track JSON for non-owner viewers (replaces the dropped bare-table Storage SELECT policy, migration `20260619_001`) | Active |
 
 User-facing functions (`parkrun-import`, `strava-import`, `export-data`, `delete-account`) gate on a per-user fixed-window rate limit via `check_rate_limit` and the shared `_shared/rate_limit.ts` helper — denials return 429 with `Retry-After`. Skipped on `refresh-tokens` (cron, no user.id), `revenuecat-webhook` (HMAC-validated server-to-server), and `strava-webhook` (URL-secret guarded server-to-server). See [decisions.md § 42](decisions.md#42-edge-function-rate-limits-live-in-a-postgres-counter-not-deno-kv-or-in-memory) and [api_database.md § rate_limits](api_database.md).
 
@@ -550,7 +552,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | Web icons | unplugin-icons + Iconify | Material Symbols icon set |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
 
-| Monorepo tooling | Melos (Flutter) + pnpm (web) | Separate toolchains, same repo |
+| Monorepo tooling | Melos (Flutter) + npm workspaces (web + backend) | Separate toolchains, same repo. `pnpm` lockfile is committed for local convenience; CI runs `npm`. |
 | Maps (mobile) | flutter_map + MapLibre | Route display, live position |
 | GPS parsing | `gpx` + custom KML parser | Dart (mobile) |
 | Health sync | `health` pub.dev package | Abstracts HealthKit + Health Connect |
@@ -566,37 +568,23 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 
 Tests and analysis run via Melos scripts — see [testing.md](testing.md) for how to run the suite locally, what's covered today, and the patterns used to make platform-channel-heavy code unit-testable.
 
-Three trigger tiers:
+`.github/workflows/ci.yml` runs eleven jobs on every PR + push to `main`. The same eleven gate the build; there's no PR-only vs. push-only split:
 
-- **PR to main** — fast feedback: `test-packages`, `build-web` (lint + build), `parity-types` (schema drift).
-- **Push to main** (after merge) — platform compilation checks: `build-ios`, `build-android`, `build-watch-swift`.
-- **Release** (published) — `deploy-functions` deploys all Edge Functions to production.
+| Job | What it checks |
+|---|---|
+| `test-packages` | `flutter test` on `run_recorder` + `mobile_android` |
+| `parity-types` | `supabase start` → `npm run gen:types:check` (TS row-types match migrations) |
+| `parity-matrix` | `dart run scripts/check_parity_matrix.dart` (cells in [parity.md](parity.md) match code) |
+| `build-watch-wear` | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |
+| `build-mobile-android` | `flutter build appbundle` |
+| `twin-parity` | `diff -rq apps/mobile_android/{lib,test} apps/mobile_ios/{lib,test}` |
+| `schema-codegen-drift` | re-runs both row-type generators, fails if working tree dirty |
+| `api-client-integration` | `packages/api_client` integration suite against local Supabase |
+| `edge-functions` | Deno test for each function under `apps/backend/supabase/functions/` |
+| `pgtap-rls` | `supabase test db` for the pgtap RLS suite |
+| `e2e-web` | Playwright sharded 4-way across `apps/web/tests-e2e/` |
 
-```yaml
-# .github/workflows/ci.yml  (abbreviated)
-jobs:
-  test-packages:          # PR + push + release
-    steps:
-      - run: melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
-      - run: melos exec -- dart analyze
-
-  build-web:              # PR + push + release
-    steps:
-      - run: npm run lint --workspace=apps/web
-      - run: npm run build --workspace=apps/web
-
-  parity-types:           # PR + push + release
-    steps:
-      - run: supabase start
-      - run: npm run gen:types:check
-
-  build-ios:              # push to main only
-  build-android:          # push to main only
-  build-watch-swift:      # push to main only
-
-  deploy-functions:       # release only
-    needs: [test-packages, build-web]
-```
+iOS builds and Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag push — not on PR. See [releasing.md](releasing.md).
 
 Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHub OIDC to assume an IAM role and runs `aws s3 sync` + `aws lambda update-function-code` + `aws cloudfront create-invalidation` against the `prod` environment on tag `web@*`. Pushes to `main` deploy to the `preview` environment at `preview.runonward.com`. See [`apps/web/deployment.md`](../apps/web/deployment.md).
 
@@ -615,4 +603,4 @@ Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHu
 
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026*

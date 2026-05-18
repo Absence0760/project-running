@@ -10,7 +10,7 @@ A step-by-step guide to bootstrapping the monorepo from scratch, understanding t
 |---|---|---|
 | Flutter | 3.19+ | `flutter.dev/docs/get-started/install` |
 | Dart | 3.3+ | Bundled with Flutter |
-| Melos | 3.x | `dart pub global activate melos` |
+| Melos | 7.x | `dart pub global activate melos` |
 | Node.js | 20 LTS | `nodejs.org` |
 | Xcode | 15+ | Mac App Store (macOS only) |
 | Android Studio | Hedgehog+ | `developer.android.com/studio` |
@@ -43,22 +43,23 @@ cd apps/web && pnpm check
 ```
 run-app/
 ├── apps/
-│   ├── mobile_ios/          # Flutter iOS target
+│   ├── mobile_ios/          # Flutter iOS target (lib/+test/ byte-identical to mobile_android, decisions §39)
 │   ├── mobile_android/      # Flutter Android target
-│   ├── watch_ios/           # Native Swift WatchKit (Xcode project)
-│   ├── watch_wear/          # Flutter Wear OS target
-│   ├── web/                 # SvelteKit web app
-│   └── backend/             # Supabase Edge Functions
+│   ├── watch_ios/           # Native SwiftUI (Xcode project)
+│   ├── watch_wear/          # Native Kotlin + Compose-for-Wear (not Flutter)
+│   ├── web/                 # SvelteKit 2 + Svelte 5 runes
+│   ├── backend/             # Supabase project — migrations, functions, seed
+│   └── job_worker/          # Go background worker (Fly.io)
 ├── packages/
-│   ├── core_models/         # Shared Dart data types
-│   ├── gpx_parser/          # GPX/KML/GeoJSON parsing
-│   ├── run_recorder/        # Live GPS recording logic
-│   ├── api_client/          # Supabase REST client
+│   ├── core_models/         # Shared Dart data types + generated row DTOs
+│   ├── gpx_parser/          # GPX/KML/KMZ/GeoJSON parsing
+│   ├── run_recorder/        # Live GPS recording state machine
+│   ├── api_client/          # Typed Supabase client for Flutter apps
 │   └── ui_kit/              # Shared Flutter widgets
-├── tooling/
-│   ├── melos.yaml
-│   ├── package.json         # npm workspace root
-│   └── analysis_options.yaml
+├── infra/                   # Terraform stacks for AWS web hosting
+├── melos.yaml               # root, governs Flutter workspace
+├── package.json             # root, npm workspaces for apps/web + apps/backend
+├── analysis_options.yaml    # root Dart analyser config
 └── README.md
 ```
 
@@ -362,17 +363,23 @@ Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, `$props`) is used throug
 
 ## CI/CD
 
-Full pipeline defined in `.github/workflows/ci.yml`. Key jobs:
+Full pipeline defined in `.github/workflows/ci.yml`. Eleven jobs run on every PR + push to `main`:
 
-| Job | Runner | Trigger | What it does |
-|---|---|---|---|
-| `test-packages` | ubuntu-latest | PR + push to main + release | `melos bootstrap` → `melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test` → `melos exec -- dart analyze` |
-| `build-web` | ubuntu-latest | PR + push to main + release | `npm ci` → `npm run lint` → `npm run build` |
-| `parity-types` | ubuntu-latest | PR + push to main + release | `supabase start` → `npm run gen:types:check` |
-| `build-ios` | macos-latest | Push to main | `flutter build ipa --no-codesign` |
-| `build-android` | ubuntu-latest | Push to main | `flutter build appbundle` |
-| `build-watch-swift` | macos-latest | Push to main | `xcodebuild` for WatchKit scheme |
-| `deploy-functions` | ubuntu-latest | Release (published) | `supabase functions deploy` per function |
+| Job | Runner | What it does |
+|---|---|---|
+| `test-packages` | ubuntu-latest | `melos bootstrap` → scoped `flutter test` on `run_recorder` + `mobile_android` |
+| `parity-types` | ubuntu-latest | `supabase start` → `npm run gen:types:check` |
+| `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` — keeps `docs/parity.md` honest |
+| `build-watch-wear` | ubuntu-latest | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |
+| `build-mobile-android` | ubuntu-latest | `flutter build appbundle` |
+| `twin-parity` | ubuntu-latest | `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` + `test/` |
+| `schema-codegen-drift` | ubuntu-latest | re-run both generators, fail if working tree dirty |
+| `api-client-integration` | ubuntu-latest | `packages/api_client` integration suite against local Supabase |
+| `edge-functions` | ubuntu-latest | Deno test for every function in `apps/backend/supabase/functions/` |
+| `pgtap-rls` | ubuntu-latest | `supabase test db` for the pgtap RLS suite |
+| `e2e-web` | ubuntu-latest | Playwright sharded 4-way over `apps/web/tests-e2e/` |
+
+iOS builds + Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag, not on PR. See [releasing.md](releasing.md) for the release-time pipeline.
 
 ---
 
@@ -434,11 +441,19 @@ pnpm gen:types:check
 ### Deploy Edge Functions
 
 ```bash
-supabase functions deploy strava-webhook --project-ref {project-ref}
-supabase functions deploy strava-import --project-ref {project-ref}
-supabase functions deploy parkrun-import --project-ref {project-ref}
-supabase functions deploy refresh-tokens --project-ref {project-ref}
+# One per directory under apps/backend/supabase/functions/
+# (clip-public-track, delete-account, export-data, parkrun-import,
+#  refresh-tokens, revenuecat-webhook, strava-import, strava-webhook)
+for fn in apps/backend/supabase/functions/*/; do
+  name=$(basename "$fn")
+  [ "$name" = "_shared" ] && continue
+  supabase functions deploy "$name" --project-ref {project-ref}
+done
 ```
+
+Three of these (`refresh-tokens`, `strava-webhook`, `export-data`) have been
+superseded by the Go worker but are kept deployed as the rollback path — see
+[api_database.md](api_database.md) for the per-function status.
 
 ### Apply a database migration
 
