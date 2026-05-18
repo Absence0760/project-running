@@ -36,7 +36,7 @@ Seed user: `runner@test.com` / `testtest`. See [apps/backend/local_testing.md](.
 | **Live spectator** | Real, against local Go worker | Run `pnpm dev:run:worker` (the live-hub is mounted on the same binary at `POST /v1/live/...`); web `/live/[id]` connects via WebSocket |
 | **Push notifications** | Stubbed | `device_tokens` rows write OK; FCM / APNs send is a no-op unless you wire real credentials |
 | **Maps (MapTiler tiles)** | Real, free tier | Free tier covers local dev |
-| **OSRM map matching** | Optional, via local docker-compose | `pnpm dev:run:osrm` brings up the matching service; falls back to passthrough when offline |
+| **OSRM map matching** | Optional, via local docker-compose | One-time: `pnpm dev:setup:osrm` (downloads + builds the routing graph, ~5-15 min). Then `pnpm dev:run:osrm` brings up the matching service. The worker falls back to passthrough when `OSRM_URL` is unset. |
 | **Sentry** | Disabled by default | Only initialises when `dev=false` AND `PUBLIC_SENTRY_DSN` is set AND user has accepted consent |
 
 ## Stripe (web Pro purchase)

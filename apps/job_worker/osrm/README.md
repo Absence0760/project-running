@@ -11,19 +11,24 @@ under [`docs/roadmap.md`](../../../docs/roadmap.md) §515-531.
 
 ## One-time setup
 
+The routing graph is too large (multi-GB intermediates) to check into
+git, so it has to be built locally before the server can start.
+`pnpm dev:run:osrm` preflight-checks for the graph and bails out
+with a clear message if it isn't there — don't `docker compose up`
+directly until the build has run.
+
 ```bash
+# From the repo root — downloads the default region + builds the
+# graph in one step. ~50-200 MB download + ~5-15 min build.
+pnpm dev:setup:osrm
+
+# Or directly via Make if you want to override the region:
 cd apps/job_worker/osrm
-
-# 1. Fetch the OSM extract (~50-200 MB depending on region).
-make download
-# or override:
-# make download REGION_URL=https://download.geofabrik.de/europe/great-britain/england/greater-london-latest.osm.pbf
-
-# 2. Build the routing graph (~5-15 min — three Docker passes).
+make download REGION_URL=https://download.geofabrik.de/europe/great-britain/england/greater-london-latest.osm.pbf
 make build
 
-# 3. Start the server on :5000.
-docker compose up -d
+# Day-to-day, once the graph exists:
+pnpm dev:run:osrm
 ```
 
 Verify with:
