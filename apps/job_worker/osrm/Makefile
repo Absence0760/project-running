@@ -11,9 +11,15 @@
 
 REGION_URL ?= https://download.geofabrik.de/australia-oceania/australia/victoria-latest.osm.pbf
 PBF        := data/region.osm.pbf
-OSRM_BASE  := data/region.osrm
-PROFILE    := /opt/foot.lua
-IMAGE      := osrm/osrm-backend:latest
+# Host-side path (used by `clean`) and container-side path (used by
+# every docker run, which must address files via the bind mount).
+# The OSRM image's WORKDIR is /opt, so a relative `data/region.osrm`
+# resolves to /opt/data/region.osrm — not the mount. Use the absolute
+# /data/region.osrm in-container path everywhere.
+OSRM_BASE_HOST := data/region.osrm
+OSRM_BASE_CTR  := /data/region.osrm
+PROFILE        := /opt/foot.lua
+IMAGE          := osrm/osrm-backend:latest
 # Run docker as the invoking host user so build outputs land owned by
 # the user, not root. Without this, the bind-mount target ends up
 # `root:root` and subsequent `curl --output` / make runs hit
@@ -61,10 +67,10 @@ build: check-perms $(PBF)
 		osrm-extract -p $(PROFILE) /data/region.osm.pbf
 	@echo "→ Partitioning (osrm-partition)…"
 	docker run --rm $(DOCKER_USER) -v "$(PWD)/data:/data" $(IMAGE) \
-		osrm-partition $(OSRM_BASE)
+		osrm-partition $(OSRM_BASE_CTR)
 	@echo "→ Customizing (osrm-customize)…"
 	docker run --rm $(DOCKER_USER) -v "$(PWD)/data:/data" $(IMAGE) \
-		osrm-customize $(OSRM_BASE)
+		osrm-customize $(OSRM_BASE_CTR)
 	@echo "✓ Build complete. Run 'docker compose up' to serve."
 
 # Convenience targets for day-to-day dev.
@@ -83,7 +89,7 @@ ps:
 # Wipe the extracted graph (keeps the downloaded PBF). Use this after
 # `make download` of a fresher extract so `make build` rebuilds.
 clean:
-	rm -f data/region.osrm*
+	rm -f $(OSRM_BASE_HOST)*
 	@echo "✓ Cleared extracted graph; PBF preserved. Run 'make build' to regenerate."
 
 # End-to-end smoke test: queue a Melbourne run through the live stack
