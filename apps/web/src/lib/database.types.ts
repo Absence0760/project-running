@@ -132,6 +132,7 @@ export type Database = {
           join_policy: string
           location_label: string | null
           location_point: unknown
+          member_count: number
           name: string
           owner_id: string
           slug: string
@@ -147,6 +148,7 @@ export type Database = {
           join_policy?: string
           location_label?: string | null
           location_point?: unknown
+          member_count?: number
           name: string
           owner_id: string
           slug: string
@@ -162,6 +164,7 @@ export type Database = {
           join_policy?: string
           location_label?: string | null
           location_point?: unknown
+          member_count?: number
           name?: string
           owner_id?: string
           slug?: string
@@ -2395,6 +2398,7 @@ export type Database = {
           join_policy: string
           location_label: string | null
           location_point: unknown
+          member_count: number
           name: string
           owner_id: string
           slug: string

@@ -404,6 +404,11 @@ create table clubs (
                                                       -- query like "Virginia" pulls clubs in VA even when
                                                       -- their label doesn't contain the state name.
                                                       -- Migration 20260905_001 + GIST index.
+  member_count  integer not null default 0,           -- denorm of `club_members` where status='active'.
+                                                      -- Maintained by trigger `clubs_member_count_trigger`
+                                                      -- (migration 20260906_001). Used by `search_clubs`
+                                                      -- to rank higher-membership clubs above brand-new
+                                                      -- empty ones at the same geographic distance.
   is_public     boolean default true,
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()

@@ -1177,7 +1177,7 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 // falls back to `GenericStringError` and downstream type assertions
 // fail svelte-check.
 const CLUB_SELECT_COLS =
-	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, join_policy, created_at, updated_at' as const;
+	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, join_policy, member_count, created_at, updated_at' as const;
 
 // Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
 // from anon + authenticated (migrations 20260723_001 + 20260806_001 +
@@ -1249,6 +1249,7 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 		location_label: (r.location_label ?? null) as string | null,
 		is_public: r.is_public as boolean,
 		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
+		member_count: (r.member_count ?? 0) as number,
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
@@ -2821,24 +2822,41 @@ export interface PeopleSuggestion extends PublicProfile {
 
 /// Free-text people search for /social People tab. Matches user_profiles
 /// display_name with ILIKE, excludes self, hydrates viewer→target follow
-/// edges so the row's Follow toggle starts in the right state. RLS on
-/// user_profiles is public-read so this works for any signed-in viewer.
+/// edges + per-result public-runs count so the row's Follow toggle
+/// starts in the right state. Results are ranked by `public_runs_count`
+/// descending so a bot mass-creating dummy accounts can't push real
+/// runners off the top — anti-spam phase 1 of 3 in
+/// `docs/decisions.md § search ranking`. RLS on user_profiles is
+/// public-read so this works for any signed-in viewer.
+///
+/// `limit` caps the returned list. We fetch `limit * 3` candidates
+/// from the ILIKE pass (capped at 120) so the rank step has more to
+/// chew on; with > N exact-name hits, the cap still defines the visible
+/// page and the user can refine the query.
 export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggestion[]> {
 	const term = q.trim();
 	if (term.length < 1) return [];
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id ?? null;
+	const candidateLimit = Math.min(limit * 3, 120);
 	const { data: profiles, error } = await supabase
 		.from('user_profiles')
 		.select('id, display_name, avatar_url')
 		.ilike('display_name', `%${term}%`)
-		.limit(limit);
+		.limit(candidateLimit);
 	if (error || !profiles) return [];
 	const ids = profiles
 		.map((p) => p.id as string)
 		.filter((id) => id !== viewerId);
 	if (ids.length === 0) return [];
-	return hydratePeopleSuggestions(ids, viewerId);
+	const hydrated = await hydratePeopleSuggestions(ids, viewerId);
+	// Reputation-weighted sort lives in `search_ranking.ts` so the
+	// comparator can be unit-tested without booting Supabase. Accounts
+	// with 0 public runs aren't hidden (a friend you search for by
+	// exact name may not have posted any runs yet), they just rank
+	// last within the result set.
+	const { comparePeopleRank } = await import('./search_ranking');
+	return hydrated.sort(comparePeopleRank).slice(0, limit);
 }
 
 /// Suggested people for the Social People tab: members of the viewer's
