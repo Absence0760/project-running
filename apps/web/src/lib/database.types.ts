@@ -131,6 +131,7 @@ export type Database = {
           is_public: boolean | null
           join_policy: string
           location_label: string | null
+          location_point: unknown
           name: string
           owner_id: string
           slug: string
@@ -145,6 +146,7 @@ export type Database = {
           is_public?: boolean | null
           join_policy?: string
           location_label?: string | null
+          location_point?: unknown
           name: string
           owner_id: string
           slug: string
@@ -159,6 +161,7 @@ export type Database = {
           is_public?: boolean | null
           join_policy?: string
           location_label?: string | null
+          location_point?: unknown
           name?: string
           owner_id?: string
           slug?: string
@@ -2370,6 +2373,36 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "public_routes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_clubs: {
+        Args: {
+          p_center_lat?: number
+          p_center_lng?: number
+          p_limit?: number
+          p_query?: string
+          p_radius_m?: number
+        }
+        Returns: {
+          avatar_url: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          invite_token: string | null
+          is_public: boolean | null
+          join_policy: string
+          location_label: string | null
+          location_point: unknown
+          name: string
+          owner_id: string
+          slug: string
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "clubs"
           isOneToOne: false
           isSetofReturn: true
         }

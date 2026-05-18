@@ -1208,6 +1208,53 @@ export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
 	return enrichClubs(data);
 }
 
+/// Region-aware club search. Tries to geocode the query first
+/// (so "Virginia" → centroid + ~470km radius → ST_DWithin against
+/// `clubs.location_point`); falls back to the same ILIKE-on-name /
+/// label path `browseClubs` uses when geocoding doesn't resolve
+/// (short query, MapTiler offline, no key, etc.). See
+/// [migration 20260905_001] for the RPC.
+export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
+	const term = query.trim();
+	if (!term) return browseClubs();
+
+	// Geocode in the background while we kick off the RPC. The RPC's
+	// text-only path doesn't need the geocode, so we can race the two
+	// only if we accept "geographic matches appear on the second
+	// render" — for now, await geocoding first so the first render
+	// has both branches. Geocoding usually settles in <300ms.
+	const { geocodePlace } = await import('./geocoding');
+	const place = await geocodePlace(term);
+
+	const { data, error } = await supabase.rpc('search_clubs', {
+		p_query: term,
+		p_center_lng: place?.center.lng ?? undefined,
+		p_center_lat: place?.center.lat ?? undefined,
+		p_radius_m: place?.radiusM ?? undefined,
+		p_limit: 60,
+	});
+	if (error) {
+		console.warn('search_clubs RPC failed, falling back to ILIKE-only', error);
+		return browseClubs(term);
+	}
+	// The RPC returns `setof clubs` — strip the columns the client
+	// shape doesn't include (location_point, invite_token).
+	const rows = ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+		id: r.id as string,
+		owner_id: r.owner_id as string,
+		name: r.name as string,
+		slug: r.slug as string,
+		description: (r.description ?? null) as string | null,
+		avatar_url: (r.avatar_url ?? null) as string | null,
+		location_label: (r.location_label ?? null) as string | null,
+		is_public: r.is_public as boolean,
+		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
+		created_at: r.created_at as string,
+		updated_at: r.updated_at as string,
+	}));
+	return enrichClubs(rows);
+}
+
 /** Clubs the current user belongs to (owner or member). */
 export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 	const userId = auth.user?.id;
@@ -1280,6 +1327,13 @@ export async function createClub(input: {
 	name: string;
 	description?: string;
 	location_label?: string;
+	/// Optional WKT-style geography point (`SRID=4326;POINT(lng lat)`).
+	/// ClubEditor geocodes `location_label` via MapTiler and passes
+	/// this so the new row is immediately searchable by region (see
+	/// `searchClubs` + migration 20260905_001). Callers that lack a
+	/// geocoded point pass `undefined` and the column stays NULL —
+	/// the club is still findable via the ILIKE branch of search_clubs.
+	location_point_wkt?: string;
 	is_public: boolean;
 	join_policy: JoinPolicy;
 }): Promise<Club & { invite_token: string | null }> {
@@ -1305,6 +1359,7 @@ export async function createClub(input: {
 				slug: candidate,
 				description: input.description?.trim() || null,
 				location_label: input.location_label?.trim() || null,
+				location_point: input.location_point_wkt ?? null,
 				is_public: input.is_public,
 				join_policy: input.join_policy,
 				invite_token: inviteToken

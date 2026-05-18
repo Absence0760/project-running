@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { browseClubs, fetchMyClubs } from '$lib/data';
+	import { browseClubs, fetchMyClubs, searchClubs } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -21,7 +21,13 @@
 	async function loadBrowse() {
 		loading = true;
 		const gen = ++browseGen;
-		const result = await browseClubs(search);
+		// `searchClubs` geocodes the query first (so "Virginia" pulls
+		// clubs in Virginia even when their label is "Richmond, VA")
+		// and falls back to plain ILIKE when the geocode doesn't
+		// resolve. Empty / blank query → plain "most recent 60".
+		const result = search.trim()
+			? await searchClubs(search)
+			: await browseClubs();
 		if (gen !== browseGen) return;
 		browseResults = result;
 		loading = false;

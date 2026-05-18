@@ -8,7 +8,7 @@ The top-level "Social" sidebar item hosts the club browse UI as one of three tab
 
 | Route | Purpose |
 |---|---|
-| `/social?tab=clubs` | Two sub-tabs: **My clubs** (default) and **Browse** (public clubs, searchable by name/location). The legacy `/clubs` URL redirects here; `/clubs?tab=browse` deep-links into the Browse sub-tab via `clubs-sub=browse`. |
+| `/social?tab=clubs` | Two sub-tabs: **My clubs** (default) and **Browse** (public clubs, searchable by name/location). The legacy `/clubs` URL redirects here; `/clubs?tab=browse` deep-links into the Browse sub-tab via `clubs-sub=browse`. The Browse search is region-aware: typing a place name (`"Virginia"`, `"Berlin"`, `"Austin, TX"`) geocodes the query via MapTiler and `ST_DWithin`-filters against `clubs.location_point` — so a club labelled "Richmond, VA" still appears when the user searches "Virginia". Falls back to plain ILIKE on `name` / `location_label` when geocoding doesn't resolve. See migration `20260905_001_clubs_location_point.sql` for the schema. |
 | `/clubs/new` | Create a club (name, optional description + location, visibility: public/private, join policy: anyone / approval required / invite-only). |
 | `/clubs/[slug]` | Club home. Four tabs: **Feed** (admin posts + "next event" card, with threaded replies), **Events** (upcoming + past), **Routes** (club-owned routes — see below), **Members**. Join/Leave button in the hero. Admins see "New event", a post composer, a pending-requests panel, and the invite-link panel. |
 | `/clubs/[slug]/events/new` | Admin-only. Title, date/time, duration, meeting point, optional attached route, distance, target pace, capacity, recurrence (`none` / `weekly` / `biweekly` / `monthly` + weekday picker + until date). |

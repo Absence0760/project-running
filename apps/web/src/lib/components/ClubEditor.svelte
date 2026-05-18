@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createClub } from '$lib/data';
+	import { geocodePlace } from '$lib/geocoding';
 	import type { JoinPolicy } from '$lib/types';
 
 	interface Props {
@@ -33,10 +34,22 @@
 		busy = true;
 		error = null;
 		try {
+			// Geocode the location string so the new club is searchable
+			// by region (see `searchClubs` + migration 20260905_001).
+			// Null is fine — the club still appears via the ILIKE branch
+			// and the column can be filled by a later edit.
+			let locationPointWkt: string | undefined;
+			if (location.trim()) {
+				const place = await geocodePlace(location.trim());
+				if (place) {
+					locationPointWkt = `SRID=4326;POINT(${place.center.lng} ${place.center.lat})`;
+				}
+			}
 			const club = await createClub({
 				name: name.trim(),
 				description: description.trim() || undefined,
 				location_label: location.trim() || undefined,
+				location_point_wkt: locationPointWkt,
 				is_public: visibility === 'public',
 				join_policy: joinPolicy
 			});

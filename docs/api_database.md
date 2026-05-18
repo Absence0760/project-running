@@ -398,7 +398,12 @@ create table clubs (
   slug          text unique not null,                 -- URL-safe, generated from name
   description   text,
   avatar_url    text,
-  location_label text,                                -- freeform "Austin, TX" — no geo yet
+  location_label text,                                -- freeform "Austin, TX"
+  location_point geography(Point, 4326),              -- ClubEditor geocodes location_label via MapTiler;
+                                                      -- powers the `search_clubs` ST_DWithin branch so a
+                                                      -- query like "Virginia" pulls clubs in VA even when
+                                                      -- their label doesn't contain the state name.
+                                                      -- Migration 20260905_001 + GIST index.
   is_public     boolean default true,
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()

@@ -120,7 +120,17 @@ export type NotificationKind = 'kudos' | 'comment' | 'comment_reply' | 'follow' 
 // list>)` was typed as `string` (no inference); after the dependabot
 // bump that tightened supabase-js's literal inference, the
 // mismatch surfaces as a real svelte-check error.
-export type Club = Omit<ClubRow, 'join_policy' | 'invite_token'> & { join_policy: JoinPolicy };
+//
+// `location_point` (geography(Point, 4326), migration 20260905_001)
+// is omitted from the base shape because supabase-js can't usefully
+// type a PostGIS column — it's `unknown` in the generated row type,
+// and clients never read it directly (the `searchClubs` RPC consumes
+// it server-side). The column is grantable to anon/authenticated; if
+// a future client surface ever needs to render the point (a map pin
+// on a club's page), reintroduce it here + extend CLUB_SELECT_COLS.
+export type Club = Omit<ClubRow, 'join_policy' | 'invite_token' | 'location_point'> & {
+	join_policy: JoinPolicy;
+};
 export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
 	role: ClubRole;
 	status: MembershipStatus;

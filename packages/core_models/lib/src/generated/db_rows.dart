@@ -119,6 +119,7 @@ class ClubRow {
   static const String colUpdatedAt = 'updated_at';
   static const String colJoinPolicy = 'join_policy';
   static const String colInviteToken = 'invite_token';
+  static const String colLocationPoint = 'location_point';
 
   final String id;
   final String ownerId;
@@ -132,6 +133,7 @@ class ClubRow {
   final DateTime? updatedAt;
   final String joinPolicy;
   final String? inviteToken;
+  final dynamic locationPoint;
 
   const ClubRow({
     required this.id,
@@ -146,6 +148,7 @@ class ClubRow {
     this.updatedAt,
     required this.joinPolicy,
     this.inviteToken,
+    this.locationPoint,
   });
 
   factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
@@ -161,6 +164,7 @@ class ClubRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     joinPolicy: json['join_policy'] as String,
     inviteToken: json['invite_token'] as String?,
+    locationPoint: json['location_point'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -176,6 +180,7 @@ class ClubRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colJoinPolicy: joinPolicy,
     colInviteToken: inviteToken,
+    colLocationPoint: locationPoint,
   };
 }
 
