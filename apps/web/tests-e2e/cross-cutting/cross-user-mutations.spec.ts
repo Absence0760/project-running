@@ -235,11 +235,9 @@ test.describe('cross-user mutation boundaries', () => {
 		// Plant a kudos by runner on their own public run (well, it's
 		// a no-op since runner can't kudos their own run via the UI,
 		// but service-role can plant any pair).
-		const { data: planted } = await admin
+		await admin
 			.from('run_kudos')
-			.insert({ run_id: RUNNER_PUBLIC_RUN_ID, user_id: USER_A.id })
-			.select('run_id, user_id')
-			.single();
+			.insert({ run_id: RUNNER_PUBLIC_RUN_ID, user_id: USER_A.id });
 
 		try {
 			const alex = await getUserClient({

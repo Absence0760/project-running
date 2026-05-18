@@ -417,7 +417,14 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 			await next.click();
 		}
 		await expect(next).toBeDisabled();
-		await expect(page.locator('.cal-head h3')).toHaveText(/June 2026/);
+		const fmtMonth = (iso: string) => {
+			const [y, m, d] = iso.split('-').map(Number);
+			return new Date(y, m - 1, d).toLocaleDateString('en-GB', {
+				month: 'long',
+				year: 'numeric'
+			});
+		};
+		await expect(page.locator('.cal-head h3')).toHaveText(fmtMonth(PLAN_END));
 
 		// And the leading edge.
 		const prev = page.locator('.cal .nav[aria-label="Previous month"]');
@@ -427,7 +434,7 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 			await prev.click();
 		}
 		await expect(prev).toBeDisabled();
-		await expect(page.locator('.cal-head h3')).toHaveText(/March 2026/);
+		await expect(page.locator('.cal-head h3')).toHaveText(fmtMonth(PLAN_START));
 
 		// And the formatted race date renders on the hero meta strip,
 		// matching PLAN_END. The hero used to print the literal

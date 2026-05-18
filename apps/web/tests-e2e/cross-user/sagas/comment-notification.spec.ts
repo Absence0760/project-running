@@ -29,7 +29,6 @@ test.describe('saga: alex comments runner → runner inbox row + bell + click-th
 	test.describe.configure({ timeout: 90_000 });
 
 	const commentBody = `alex e2e comment ${Date.now()}`;
-	let plantedCommentId: string | null = null;
 
 	test.beforeEach(async () => {
 		await clearNotifications(USER_A.id);
@@ -45,10 +44,6 @@ test.describe('saga: alex comments runner → runner inbox row + bell + click-th
 			.eq('run_id', RUNNER_PUBLIC_RUN_ID)
 			.eq('author_id', USER_B.id)
 			.eq('body', commentBody);
-		if (plantedCommentId) {
-			await admin.from('run_comments').delete().eq('id', plantedCommentId);
-			plantedCommentId = null;
-		}
 		await clearNotifications(USER_A.id);
 	});
 

@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
-import { USER_A } from '../fixtures/users';
 
 /**
  * Cookie-consent banner on every page until accepted/rejected.

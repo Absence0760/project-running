@@ -90,7 +90,6 @@ test.describe('saga: account deletion via /settings/account', () => {
 		// so a delete-failure assertion is "I had X, now I don't" not
 		// "did X ever exist?".
 		const admin = getAdminClient();
-		const trackPath = `${user.id}/${plantedRunId}.json.gz`;
 
 		const before = await admin
 			.from('runs')

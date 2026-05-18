@@ -18,8 +18,6 @@ import { USER_A } from '../fixtures/users';
  * caught at the DB level, not just the UI.
  */
 
-const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
-
 test.describe('/clubs/[slug]/events/new — recurrence', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 

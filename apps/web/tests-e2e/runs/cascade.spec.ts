@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import {
-	deleteRun,
 	insertComment,
 	insertKudos,
 	insertRun
