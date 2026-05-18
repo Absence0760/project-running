@@ -2,17 +2,28 @@
 
 ## Current model: Pro subscription + optional donations
 
-AI Coach is the first Pro-only screen: `isLocked('ai_coach')` in
-`apps/web/src/lib/features.ts` returns `!isPro()`, so a free user
-landing on `/coach` sees a `<ProGate>` lock-card with an Upgrade CTA
-pointing at `/settings/upgrade`. The rest of the product remains free
-for every signed-in user. What the Pro tier changes is the gated
-screen plus behaviour *inside* the unlocked surface:
+Every screen in the app is reachable by free users. The Pro tier
+changes **behaviour inside the surfaces**, not access to them — there
+is no Pro-only screen. `PRO_ONLY_FEATURES` in
+`apps/web/src/lib/features.ts` is empty today, so `isLocked()` returns
+`false` for every key. The infrastructure (`<ProGate>` component,
+`isLocked()` helper, `GATED_FEATURES` registry) is kept so a future
+Pro-only screen is a one-line addition. See [decisions.md § 23]
+(decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations)
+for why the AI Coach is rate-limited rather than gated.
 
-- **AI Coach.** Free users see `<ProGate>` at `/coach`. Pro users get
-  the chat surface with no daily cap. (The 5-message free cap on the
-  server endpoint stays armed defence-in-depth for any future surface
-  that re-exposes the chat to free users.)
+What the Pro tier changes:
+
+- **Unlimited AI Coach.** Free users get
+  `TIER_LIMITS.free.dailyLimit = 5` messages per UTC day, then the
+  composer is replaced by a `<div class="limit-bar">` "you've used all
+  5 messages for today" banner until midnight. Pro users get the chat
+  surface with no daily cap. Enforcement lives in
+  `apps/web/src/lib/coach/handler.ts` (call into
+  `increment_coach_usage` RPC); the production AWS Lambda hardcodes
+  `bypassPaywallEnabled: false`, so a free user that POSTs directly to
+  `/api/coach` from devtools still gets a 429 on the sixth attempt
+  with `{ error: 'daily_limit', tier: 'free', limit: 5 }`.
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
   longer / more thorough answers, and up to 75 runs of context per
@@ -37,8 +48,8 @@ dropped); reviving transparent funding later is a one-page revert.
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Every feature except the AI Coach screen. Standard request priority. |
-| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + the AI Coach screen (unlimited daily messages) + priority processing. |
+| `free` | Default for every new account | Every screen in the app. AI Coach capped at 5 messages/day. Standard request priority. |
+| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + unlimited AI Coach + priority processing (wider context budget, longer responses). |
 | `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
@@ -64,14 +75,16 @@ flow requires an admin SQL session; from a client there is no way.
 
 | Perk | Feature key | Enforcement point |
 |---|---|---|
-| AI Coach (gated screen) | `ai_coach` | Client: `isLocked('ai_coach')` in `apps/web/src/lib/features.ts` returns `!isPro()` — CoachChat mounts a `<ProGate>` when locked. Server: `/api/coach/+server.ts` calls `is_pro()` before `increment_coach_usage` so a free user that slips past the client (curl, etc.) still hits the 5-msg daily cap and the resulting 429. |
+| Unlimited AI Coach (vs 5 msg/day) | `ai_coach` | Server: `apps/web/src/lib/coach/handler.ts` checks `is_pro()` via the auth context and resolves `TIER_LIMITS[tier].dailyLimit`. Free users hit `increment_coach_usage`; on the sixth attempt of a UTC day the handler returns 429 with `{ error: 'daily_limit', tier: 'free', limit: 5 }`. Pro users skip the daily-cap branch entirely. Client: `CoachChat.svelte` reads back the tier from the SSE `meta` event and shows the "Free badge · N of 5 remaining" or "Pro badge · Unlimited messages" footer. The composer is replaced with a `.limit-bar` block when `usedToday >= dailyLimit`. |
 | Priority processing — coach context | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 75-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 | Priority map-matching | `priority_processing` | DB: every enqueue site for `kind='map_match'` jobs (the auto-trigger `runs_enqueue_match_job` and the manual-rematch RPC `enqueue_run_rematch`) calls `job_scheduled_at_for_user(uuid)` from migration `20260730_001`. Pro / lifetime → `now()` (front of queue); free → `now() + 30 s` (defers behind Pro). The worker's `claim_next_job` orders by `(scheduled_at, id)` so Pro jobs are always claimable strictly before free jobs enqueued at the same instant. **Future job kinds follow the same pattern** — call the helper at enqueue time; don't inline `case ... subscription_tier ...`. See [decisions.md § 57](decisions.md#57-map-matching-is-free-queue-priority-is-the-pro-perk). |
 
-`ai_coach` is the only key currently in the `PRO_ONLY_FEATURES` set in
-`features.ts`. The `priority_processing` perks are **behaviour
-changes**, not gated screens, so they don't call through `isLocked()`.
-Add a new key to `PRO_ONLY_FEATURES` to gate a new screen behind Pro.
+`PRO_ONLY_FEATURES` in `features.ts` is empty today — every screen is
+reachable by free users, and the Pro tier is delivered through
+behaviour changes inside the surfaces. The `priority_processing` and
+`ai_coach` perks above are behaviour changes, not gated screens, so
+they don't call through `isLocked()`. Add a key to
+`PRO_ONLY_FEATURES` to gate a new screen behind Pro.
 
 ## Client-side `isPro()` helper
 
@@ -174,11 +187,14 @@ your own `.env.local` if you need it.
 
 ### Client — `PUBLIC_BYPASS_PAYWALL` for `isLocked()`
 
-`apps/web/src/lib/features.ts::isLocked('ai_coach')` returns `!isPro()`
-by default. To unblock local iteration on the gated screen as a free
-user, set `PUBLIC_BYPASS_PAYWALL=true` in `apps/web/.env.local`. Same
-three-condition AND as the server flag (`import.meta.env.DEV`, local
-Supabase URL, literal `'true'`), with one extra opt-out: a
+`apps/web/src/lib/features.ts::isLocked()` already returns `false` for
+every key today because `PRO_ONLY_FEATURES` is empty, so this client
+bypass is dormant infrastructure. It stays in place so that the
+moment a new key lands in `PRO_ONLY_FEATURES`, local devs can flip
+`PUBLIC_BYPASS_PAYWALL=true` in `apps/web/.env.local` to iterate as a
+free user without leaving the gate armed. Same three-condition AND as
+the server flag (`import.meta.env.DEV`, local Supabase URL, literal
+`'true'`), with one extra opt-out: a
 `localStorage.paywall_force_locked = '1'` entry re-arms the gate for
 the current page so e2e tests can exercise the lock-card path on a
 machine that otherwise has the bypass on. The override is gated on

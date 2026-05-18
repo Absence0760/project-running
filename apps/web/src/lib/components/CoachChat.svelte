@@ -2,9 +2,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { renderCoachMarkdown } from '$lib/coach/markdown';
 	import { supabase } from '$lib/supabase';
-	import { isLocked } from '$lib/features';
 	import { fmtKm } from '$lib/units.svelte';
-	import ProGate from '$lib/components/ProGate.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
 	import type { TrainingPlan } from '$lib/types';
@@ -21,7 +19,6 @@
 		onPlanChange?: (next: string) => void;
 	}
 	let { planId, plans = [], onPlanChange }: Props = $props();
-	let locked = $derived(isLocked('ai_coach'));
 	let hasPlan = $derived(planId != null);
 
 	const RUN_LIMIT_OPTIONS = [10, 20, 50, 100];
@@ -697,9 +694,6 @@
 	});
 </script>
 
-{#if locked}
-	<ProGate feature="ai_coach" />
-{:else}
 <div class="shell">
 	<aside class="sidebar" class:collapsed={!sidebarOpen} aria-hidden={!sidebarOpen}>
 		<div class="sidebar-header">
@@ -1044,7 +1038,6 @@
 		oncancel={() => (showArchiveConfirm = false)}
 	/>
 </div>
-{/if}
 
 <style>
 	.shell {

@@ -9,13 +9,17 @@ import { TIER_LIMITS } from './coach/types';
 ///
 /// - **Feature gates** (`isLocked`). Pro-only screens — a free user
 ///   navigating there sees a `<ProGate>` lock-card instead of the
-///   feature. The first concrete gate is `ai_coach`; future gates flip
-///   their key in `PRO_ONLY_FEATURES` below.
+///   feature. None are currently gated this way; the AI Coach used to
+///   be but was flipped back to a budget model (free users get
+///   `TIER_LIMITS.free.dailyLimit` messages/day, then see the
+///   limit-bar; not a hard screen lock) per [decisions.md § 23]
+///   (../../../docs/decisions.md). The set is kept around so a future
+///   Pro-only screen is a one-line addition.
 ///
 /// - **Pro perks** — benefits that aren't hidden behind a gate but
 ///   change shape based on tier (e.g. priority processing, larger
-///   context window). Not keyed for gating because they're behaviour
-///   changes, not screens.
+///   context window, unlimited coach messages). Not keyed for gating
+///   because they're behaviour changes, not screens.
 ///
 /// To add a new gated feature:
 ///   1. Add an entry to `GATED_FEATURES` with a human-readable label.
@@ -47,9 +51,11 @@ export const GATED_FEATURES: Record<
 
 /// Feature keys that are Pro-only. A free user hitting one of these
 /// surfaces sees the `<ProGate>` lock-card. Perk-tier keys (e.g.
-/// `priority_processing`) stay out of this set — they change behaviour,
-/// not access.
-const PRO_ONLY_FEATURES = new Set<string>(['ai_coach']);
+/// `priority_processing`, `ai_coach`) stay out of this set — they
+/// change behaviour, not access. Empty today because every feature is
+/// reachable by free users; the AI Coach is rate-limited rather than
+/// gated (see [decisions.md § 23]).
+const PRO_ONLY_FEATURES = new Set<string>();
 
 /// Client-side dev escape hatch for the UI gate. Mirrors the
 /// server-side guard in `/api/coach/+server.ts` but with an independent
