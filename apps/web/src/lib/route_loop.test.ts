@@ -8,7 +8,9 @@ import {
 	NEAR_POINT_M,
 	RATIO_CLAMP,
 	SCALE_FACTOR_BOUNDS,
+	bisectScale,
 	generateLoopWaypoints,
+	initScaleRange,
 	isValidTargetDistance,
 	isWithinAcceptBand,
 	nextScaleFactor,
@@ -275,6 +277,57 @@ test('selectLoopAnchors — point-to-point honours distinct end', () => {
 	assert.equal(anchors.length, 4);
 	assert.deepEqual(anchors[0], start);
 	assert.deepEqual(anchors[3], end);
+});
+
+test('bisectScale — actual > target narrows the upper bound', () => {
+	const range = initScaleRange();
+	const r = bisectScale(range, 0.3, 5000, 13000);
+	// actual was bigger, so the current scale becomes the new upper.
+	assert.equal(r.range.upper, 0.3);
+	assert.equal(r.range.lower, SCALE_FACTOR_BOUNDS.min);
+	// Next scale = midpoint of new bracket.
+	assert.equal(r.scale, (SCALE_FACTOR_BOUNDS.min + 0.3) / 2);
+});
+
+test('bisectScale — actual < target raises the lower bound', () => {
+	const range = initScaleRange();
+	const r = bisectScale(range, 0.3, 5000, 2000);
+	assert.equal(r.range.lower, 0.3);
+	assert.equal(r.range.upper, SCALE_FACTOR_BOUNDS.max);
+	assert.equal(r.scale, (0.3 + SCALE_FACTOR_BOUNDS.max) / 2);
+});
+
+test('bisectScale — successive too-big readings shrink the bracket toward zero', () => {
+	let range = initScaleRange();
+	let scale = DEFAULT_SCALE_FACTOR;
+	for (let i = 0; i < 4; i++) {
+		// Simulate "always overshoots" — the user's field bug.
+		const r = bisectScale(range, scale, 5000, 15000);
+		scale = r.scale;
+		range = r.range;
+	}
+	// Upper bound should have shrunk substantially.
+	assert.ok(range.upper <= DEFAULT_SCALE_FACTOR);
+	assert.ok(scale < DEFAULT_SCALE_FACTOR / 4);
+});
+
+test('bisectScale — never exceeds SCALE_FACTOR_BOUNDS', () => {
+	let range = initScaleRange();
+	let scale = DEFAULT_SCALE_FACTOR;
+	for (let i = 0; i < 10; i++) {
+		const r = bisectScale(range, scale, 5000, 50);
+		scale = r.scale;
+		range = r.range;
+		assert.ok(scale >= SCALE_FACTOR_BOUNDS.min);
+		assert.ok(scale <= SCALE_FACTOR_BOUNDS.max);
+	}
+});
+
+test('bisectScale — pure (does not mutate the input range)', () => {
+	const range = initScaleRange();
+	const before = { ...range };
+	bisectScale(range, 0.5, 5000, 7000);
+	assert.deepEqual(range, before);
 });
 
 test('regression — field bug coords (start ≈ end, target 5km) produce on-pin waypoints', () => {

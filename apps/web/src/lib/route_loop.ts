@@ -180,6 +180,48 @@ export function isValidTargetDistance(m: unknown): m is number {
 	);
 }
 
+/// A `[lower, upper]` scaleFactor bracket the iteration narrows on
+/// each attempt. Threaded through bisectScale so callers can keep the
+/// bracket state explicit instead of relying on closure mutation.
+export interface ScaleRange {
+	lower: number;
+	upper: number;
+}
+
+export function initScaleRange(): ScaleRange {
+	return { lower: SCALE_FACTOR_BOUNDS.min, upper: SCALE_FACTOR_BOUNDS.max };
+}
+
+/// Bisect the scaleFactor toward a target distance. Strictly
+/// better than nextScaleFactor's multiplicative-ratio approach when
+/// OSRM's actual distance is a noisy / non-monotonic function of
+/// scale — which is the typical case in twisty suburban grids,
+/// where small radius changes can flip a segment between a direct
+/// path and a multi-block detour.
+///
+/// If actual > target, the current scale is an upper bound — the
+/// answer is somewhere below it. If actual < target, it's a lower
+/// bound. Either way the next attempt picks the midpoint of the
+/// narrowed bracket. With 4 attempts we narrow the [0.05, 2]
+/// initial range to ~1/16 of its width — plenty to surround the
+/// target.
+export function bisectScale(
+	range: ScaleRange,
+	currentScale: number,
+	targetDistanceM: number,
+	actualDistanceM: number,
+): { scale: number; range: ScaleRange } {
+	let { lower, upper } = range;
+	if (actualDistanceM > targetDistanceM) {
+		upper = Math.min(upper, currentScale);
+	} else {
+		lower = Math.max(lower, currentScale);
+	}
+	let next = (lower + upper) / 2;
+	next = Math.max(SCALE_FACTOR_BOUNDS.min, Math.min(SCALE_FACTOR_BOUNDS.max, next));
+	return { scale: next, range: { lower, upper } };
+}
+
 /// Select the visible waypoints we want to keep AFTER a successful
 /// generate. The 8 scaffolding waypoints generateLoopWaypoints
 /// emitted at the start of the call are an implementation detail —

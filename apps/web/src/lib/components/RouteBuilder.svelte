@@ -9,12 +9,14 @@
 	import { OSRM_BASE_URL } from '$lib/routing';
 	import {
 		DEFAULT_SCALE_FACTOR,
+		bisectScale,
 		generateLoopWaypoints,
+		initScaleRange,
 		isValidTargetDistance,
 		isWithinAcceptBand,
-		nextScaleFactor,
 		selectLoopAnchors,
 	} from '$lib/route_loop';
+	import { formatDistance } from '$lib/units.svelte';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
 		closestPointDistanceM,
@@ -142,6 +144,7 @@
 		lngLat: { lng: number; lat: number },
 		index: number,
 		implicated = false,
+		hidden = false,
 	): maplibregl.Marker {
 		const marker = new maplibregl.Marker({
 			color: getMarkerColor(index, implicated),
@@ -151,7 +154,14 @@
 			.addTo(map);
 		// Tagged so updateMarkerStyles can detect implicated → default
 		// transitions and only rebuild the markers that actually changed.
-		(marker as unknown as { __implicated: boolean }).__implicated = implicated;
+		(marker as unknown as { __implicated: boolean; __hidden: boolean }).__implicated = implicated;
+		(marker as unknown as { __implicated: boolean; __hidden: boolean }).__hidden = hidden;
+		// generate-loop iterations create the interior radial waypoints
+		// with hidden=true so they don't flash on the map across each
+		// bisection attempt. display:none also makes the element
+		// pointer-events:none so the user can't accidentally interact
+		// with scaffolding pins.
+		if (hidden) marker.getElement().style.display = 'none';
 
 		// Track drag state to distinguish click from drag
 		let wasDragged = false;
@@ -245,13 +255,19 @@
 			const lngLat = existing.getLngLat();
 			const wasImplicated =
 				(existing as unknown as { __implicated?: boolean }).__implicated === true;
+			const wasHidden =
+				(existing as unknown as { __hidden?: boolean }).__hidden === true;
 			const shouldBeImplicated = implicatedWaypoints.has(i);
 			if (wasImplicated === shouldBeImplicated) continue;
 			existing.remove();
+			// Preserve the hidden state across rebuilds — otherwise a
+			// quality-pass flip from blue to red on a scaffolding pin
+			// would suddenly make it visible mid-iteration.
 			markers[i] = createWaypointMarker(
 				{ lng: lngLat.lng, lat: lngLat.lat },
 				i,
 				shouldBeImplicated,
+				wasHidden,
 			);
 		}
 	}
@@ -888,7 +904,18 @@
 		// from the same orientation — comparing actual vs target distance
 		// across runs with a re-randomised pattern would chase noise.
 		const radialSeedRad = Math.random() * Math.PI * 2;
-		const maxAttempts = 3;
+		const maxAttempts = 4;
+		let scaleRange = initScaleRange();
+		// Track the best (closest-to-target) attempt across iterations.
+		// OSRM's actual distance is a noisy function of scale in twisty
+		// suburban grids — the iteration can oscillate without ever
+		// landing in the ±15% acceptance band. We always want to keep
+		// whichever attempt got closest, not whichever happened to be
+		// the last one tried.
+		let bestPolyline: [number, number][] | null = null;
+		let bestElevations: number[] = [];
+		let bestDistance = Infinity;
+		let bestDelta = Infinity;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			// Capture before the iteration's mutations so we can detect a
@@ -912,8 +939,23 @@
 			markers.forEach((m) => m.remove());
 			markers = [];
 			waypoints = newWaypoints;
+			// Render visible markers only for the endpoints (start +
+			// close-for-point-to-point); the interior radial waypoints
+			// are scaffolding for OSRM, not user clicks, and flashing
+			// rings of pins across bisection attempts looks broken.
+			// They stay in the markers array (so indexOf-based handlers
+			// keep pointing at the right waypoint) but with
+			// display:none on the DOM element. The post-loop collapse
+			// rebuilds visible markers for the anchors.
+			const lastIdx = waypoints.length - 1;
 			for (let i = 0; i < waypoints.length; i++) {
-				const marker = createWaypointMarker({ lng: waypoints[i].lng, lat: waypoints[i].lat }, i);
+				const isEndpoint = i === 0 || (endAt != null && i === lastIdx);
+				const marker = createWaypointMarker(
+					{ lng: waypoints[i].lng, lat: waypoints[i].lat },
+					i,
+					false,
+					!isEndpoint,
+				);
 				markers.push(marker);
 			}
 			updateMarkerStyles();
@@ -931,14 +973,42 @@
 				actualDistance += haversine(routeCoordinates[i - 1], routeCoordinates[i]);
 			}
 
+			// Track the closest-to-target attempt so we can restore it
+			// if subsequent iterations drift away.
+			const delta = Math.abs(targetDistanceM - actualDistance);
+			if (delta < bestDelta) {
+				bestDelta = delta;
+				bestDistance = actualDistance;
+				bestPolyline = routeCoordinates.slice();
+				bestElevations = routeElevations.slice();
+			}
+
 			if (isWithinAcceptBand(targetDistanceM, actualDistance)) break;
-			// nextScaleFactor clamps the per-step adjustment and the
-			// absolute output so a degenerate first attempt (waypoints
-			// clumped near start → tiny actualDistance → huge raw ratio)
-			// can't push the next attempt's waypoints off the map. This
-			// is the bug a user reported when they set start ≈ end and
-			// the generator drew a route 2km north of both pins.
-			scaleFactor = nextScaleFactor(scaleFactor, targetDistanceM, actualDistance);
+			// Bisection beats the multiplicative-ratio approach when
+			// OSRM's response is non-monotonic (small scale change
+			// flips a segment between a direct road and a multi-block
+			// detour). Each attempt narrows [lower, upper] from one
+			// side, so 4 attempts shrink the [0.05, 2] starting range
+			// to ~1/16 of its width — more than enough to surround
+			// the target unless the road network can't get there.
+			const advised = bisectScale(scaleRange, scaleFactor, targetDistanceM, actualDistance);
+			scaleFactor = advised.scale;
+			scaleRange = advised.range;
+		}
+
+		// If the last attempt drifted away from the best one, restore.
+		if (bestPolyline && routeCoordinates.length >= 2) {
+			let currentDistance = 0;
+			for (let i = 1; i < routeCoordinates.length; i++) {
+				currentDistance += haversine(routeCoordinates[i - 1], routeCoordinates[i]);
+			}
+			const currentDelta = Math.abs(targetDistanceM - currentDistance);
+			if (bestDelta < currentDelta) {
+				routeCoordinates = bestPolyline;
+				routeElevations = bestElevations;
+				updateRouteLine();
+				updateDistanceMarkers();
+			}
 		}
 
 		updateStraightLine();
@@ -947,21 +1017,31 @@
 		// 4 anchors the user actually cares about: their start, two
 		// midpoints sampled from the snapped polyline (at ~1/3 and
 		// ~2/3 along), and the close. The 6 interior radial seeds
-		// were implementation detail — leaving them in the waypoint
-		// list dumps 6 random pins on the map, paints most of them
-		// red because they don't line up with the snapped road, and
-		// emits a "drag the red markers closer to a road" warning
-		// that makes no sense (the user didn't drop those markers).
-		//
-		// 4 anchors is the minimum that lets a manual Recalculate
-		// reproduce the loop — start → close on its own would
-		// degenerate (no route, or a straight shortcut for
-		// point-to-point); 3 collapses a loop into an out-and-back.
-		// Anchors sampled FROM the polyline have zero deviation, so
-		// the deviation/detour warnings stay quiet by construction.
+		// were implementation detail. 4 anchors is the minimum that
+		// lets a manual Recalculate reproduce the loop — start →
+		// close on its own would degenerate (no route, or a straight
+		// shortcut for point-to-point); 3 collapses a loop into an
+		// out-and-back. Anchors sampled FROM the polyline have zero
+		// deviation, so the deviation/detour warnings stay quiet by
+		// construction.
 		if (routeCoordinates.length >= 2) {
 			collapseGeneratedScaffolding(start, endAt);
-			onerror(null);
+			// Tell the user when we couldn't get close to their target
+			// instead of silently shipping an 8 mi "3 mi" loop. The
+			// road network in some areas (twisty suburbs, sparse
+			// rural) forces OSRM to take long detours regardless of
+			// the seed pattern; we surface that honestly instead of
+			// hiding it behind the success path.
+			if (bestDistance !== Infinity && !isWithinAcceptBand(targetDistanceM, bestDistance)) {
+				const direction = bestDistance > targetDistanceM ? 'longer' : 'shorter';
+				const pct = Math.round((Math.abs(bestDistance - targetDistanceM) / targetDistanceM) * 100);
+				onerror(
+					`Generated ${formatDistance(bestDistance)} — ${pct}% ${direction} than your ${formatDistance(targetDistanceM)} target. The road network here couldn't get closer; try a different start point.`,
+					'warning',
+				);
+			} else {
+				onerror(null);
+			}
 			return true;
 		}
 		return false;
