@@ -7,6 +7,12 @@
 	// PUBLIC_OSRM_URL so a self-hosted backend can replace the public
 	// demo server without code edits.
 	import { OSRM_BASE_URL } from '$lib/routing';
+	import {
+		DEFAULT_SCALE_FACTOR,
+		generateLoopWaypoints,
+		isWithinAcceptBand,
+		nextScaleFactor,
+	} from '$lib/route_loop';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
 		closestPointDistanceM,
@@ -832,58 +838,25 @@
 		startFrom?: { lat: number; lng: number },
 		endAt?: { lat: number; lng: number }
 	): Promise<boolean> {
-		const start: TrackPoint = startFrom
+		const start: { lat: number; lng: number } = startFrom
 			? { lat: startFrom.lat, lng: startFrom.lng }
 			: (() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })();
 
-		const end: TrackPoint = endAt
-			? { lat: endAt.lat, lng: endAt.lng }
-			: { ...start };
-
-		const isLoop = !endAt;
-		let scaleFactor = 0.30;
-		const numPoints = 6;
+		let scaleFactor = DEFAULT_SCALE_FACTOR;
+		// Deterministic per-call seed so the three attempts all radiate
+		// from the same orientation — comparing actual vs target distance
+		// across runs with a re-randomised pattern would chase noise.
+		const radialSeedRad = Math.random() * Math.PI * 2;
 		const maxAttempts = 3;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			let newWaypoints: TrackPoint[];
-
-			if (isLoop) {
-				const radiusM = (targetDistanceM * scaleFactor) / (2 * Math.PI);
-				const radiusDeg = radiusM / 111320;
-				const cosLat = Math.cos(start.lat * Math.PI / 180);
-				const randomOffset = Math.random() * Math.PI * 2;
-
-				newWaypoints = [start];
-				for (let i = 1; i <= numPoints; i++) {
-					const angle = randomOffset + (i / numPoints) * Math.PI * 2;
-					newWaypoints.push({
-						lat: start.lat + Math.sin(angle) * radiusDeg,
-						lng: start.lng + Math.cos(angle) * radiusDeg / cosLat,
-					});
-				}
-				newWaypoints.push({ ...start });
-			} else {
-				// Point-to-point: curve the path to hit target distance
-				const directDist = haversine([start.lng, start.lat], [end.lng, end.lat]);
-				const curveAmount = Math.max(0, (targetDistanceM * scaleFactor - directDist) / Math.max(directDist, 1));
-				const dLat = end.lat - start.lat;
-				const dLng = end.lng - start.lng;
-				// Perpendicular offset
-				const perpLat = -dLng * curveAmount * 0.4;
-				const perpLng = dLat * curveAmount * 0.4;
-
-				newWaypoints = [start];
-				for (let i = 1; i <= numPoints; i++) {
-					const t = i / (numPoints + 1);
-					const curveFactor = Math.sin(t * Math.PI);
-					newWaypoints.push({
-						lat: start.lat + dLat * t + perpLat * curveFactor,
-						lng: start.lng + dLng * t + perpLng * curveFactor,
-					});
-				}
-				newWaypoints.push(end);
-			}
+			const newWaypoints = generateLoopWaypoints({
+				start,
+				end: endAt,
+				targetDistanceM,
+				scaleFactor,
+				radialSeedRad,
+			});
 
 			markers.forEach((m) => m.remove());
 			markers = [];
@@ -905,9 +878,14 @@
 				actualDistance += haversine(routeCoordinates[i - 1], routeCoordinates[i]);
 			}
 
-			const ratio = targetDistanceM / actualDistance;
-			if (ratio > 0.85 && ratio < 1.15) break;
-			scaleFactor *= ratio;
+			if (isWithinAcceptBand(targetDistanceM, actualDistance)) break;
+			// nextScaleFactor clamps the per-step adjustment and the
+			// absolute output so a degenerate first attempt (waypoints
+			// clumped near start → tiny actualDistance → huge raw ratio)
+			// can't push the next attempt's waypoints off the map. This
+			// is the bug a user reported when they set start ≈ end and
+			// the generator drew a route 2km north of both pins.
+			scaleFactor = nextScaleFactor(scaleFactor, targetDistanceM, actualDistance);
 		}
 
 		updateStraightLine();
