@@ -4,10 +4,12 @@ import assert from 'node:assert/strict';
 import {
 	ACCEPT_BAND,
 	DEFAULT_SCALE_FACTOR,
+	MAX_TARGET_DISTANCE_M,
 	NEAR_POINT_M,
 	RATIO_CLAMP,
 	SCALE_FACTOR_BOUNDS,
 	generateLoopWaypoints,
+	isValidTargetDistance,
 	isWithinAcceptBand,
 	nextScaleFactor,
 } from './route_loop';
@@ -165,6 +167,38 @@ test('isWithinAcceptBand — band edges match the documented thresholds', () => 
 	const justInsideHigh = 5000 / (ACCEPT_BAND.min + 0.001);
 	assert.equal(isWithinAcceptBand(5000, justInsideLow), true);
 	assert.equal(isWithinAcceptBand(5000, justInsideHigh), true);
+});
+
+test('isValidTargetDistance — accepts realistic values', () => {
+	assert.equal(isValidTargetDistance(1), true);
+	assert.equal(isValidTargetDistance(5000), true);
+	assert.equal(isValidTargetDistance(42_195), true); // marathon in metres
+	assert.equal(isValidTargetDistance(MAX_TARGET_DISTANCE_M), true);
+});
+
+test('isValidTargetDistance — rejects non-positive', () => {
+	assert.equal(isValidTargetDistance(0), false);
+	assert.equal(isValidTargetDistance(-1), false);
+	assert.equal(isValidTargetDistance(-5000), false);
+});
+
+test('isValidTargetDistance — rejects non-finite', () => {
+	assert.equal(isValidTargetDistance(Number.NaN), false);
+	assert.equal(isValidTargetDistance(Number.POSITIVE_INFINITY), false);
+	assert.equal(isValidTargetDistance(Number.NEGATIVE_INFINITY), false);
+});
+
+test('isValidTargetDistance — rejects absurd large values', () => {
+	// 1,000,000 km — almost certainly a unit-conversion bug.
+	assert.equal(isValidTargetDistance(MAX_TARGET_DISTANCE_M + 1), false);
+	assert.equal(isValidTargetDistance(1e12), false);
+});
+
+test('isValidTargetDistance — rejects non-numbers', () => {
+	assert.equal(isValidTargetDistance('5000' as unknown as number), false);
+	assert.equal(isValidTargetDistance(null as unknown as number), false);
+	assert.equal(isValidTargetDistance(undefined as unknown as number), false);
+	assert.equal(isValidTargetDistance({} as unknown as number), false);
 });
 
 test('regression — field bug coords (start ≈ end, target 5km) produce on-pin waypoints', () => {

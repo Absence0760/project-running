@@ -159,3 +159,23 @@ export function isWithinAcceptBand(targetDistanceM: number, actualDistanceM: num
 	const ratio = targetDistanceM / actualDistanceM;
 	return ratio > ACCEPT_BAND.min && ratio < ACCEPT_BAND.max;
 }
+
+/// Upper bound for a sane Generate-by-distance target. 1,000 km is
+/// well past the longest documented road run; anything beyond that
+/// is almost certainly a unit-conversion bug (e.g. someone passed
+/// km instead of metres). Reject at the API boundary instead of
+/// burning a 3-attempt iteration on an unroutable input.
+export const MAX_TARGET_DISTANCE_M = 1_000_000;
+
+/// Guard for `targetDistanceM` callers pass into the generate-loop
+/// API. Rejects NaN, Infinity, non-positive, and the absurd-large
+/// case. The route builder slider already clamps the value, but the
+/// public method must not trust its caller.
+export function isValidTargetDistance(m: unknown): m is number {
+	return (
+		typeof m === 'number' &&
+		Number.isFinite(m) &&
+		m > 0 &&
+		m <= MAX_TARGET_DISTANCE_M
+	);
+}

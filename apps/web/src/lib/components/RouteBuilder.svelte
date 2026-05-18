@@ -10,6 +10,7 @@
 	import {
 		DEFAULT_SCALE_FACTOR,
 		generateLoopWaypoints,
+		isValidTargetDistance,
 		isWithinAcceptBand,
 		nextScaleFactor,
 	} from '$lib/route_loop';
@@ -161,6 +162,12 @@
 		marker.on('dragend', () => {
 			const currentIndex = markers.indexOf(marker);
 			if (currentIndex === -1) return;
+			// Any waypoint mutation has to invalidate an in-flight
+			// recalculateRoute so the stale result doesn't overwrite
+			// the post-drag state. The bump fires at the next version
+			// checkpoint inside recalculateRoute and causes it to return
+			// false instead of writing routeCoordinates.
+			routeVersion++;
 			const pos = marker.getLngLat();
 			waypoints[currentIndex] = { lat: pos.lat, lng: pos.lng };
 			routeCoordinates = [];
@@ -666,6 +673,12 @@
 	// parent so its `routed` flag (gated on coordinates.length >= 2)
 	// disables Save until the user recalculates.
 	function invalidateCalculatedRoute() {
+		// Bump BEFORE the early-return: even when the polyline is
+		// already empty, an in-flight recalculateRoute might be a few
+		// microseconds away from writing into it. Bumping the version
+		// is the only safe signal that "the world changed under you,
+		// drop your result."
+		routeVersion++;
 		if (routeCoordinates.length === 0 && routeElevations.length === 0) return;
 		routeCoordinates = [];
 		routeElevations = [];
@@ -720,6 +733,8 @@
 
 	export function undoWaypoint() {
 		if (waypoints.length === 0) return;
+		// Invalidate any in-flight recalculateRoute — see invalidateCalculatedRoute.
+		routeVersion++;
 		clearImplicatedMarkers();
 		waypoints.pop();
 		const marker = markers.pop();
@@ -730,6 +745,9 @@
 	}
 
 	export function clearWaypoints() {
+		// Invalidate any in-flight recalculateRoute — Esc during a slow
+		// OSRM batch must not let the late result repopulate the polyline.
+		routeVersion++;
 		waypoints = [];
 		routeCoordinates = [];
 		routeElevations = [];
@@ -754,6 +772,11 @@
 	 * flag after a failed call let the user "save" an empty route.
 	 */
 	export async function calculateRoute(): Promise<boolean> {
+		// Reject re-entry while a calculation is already running. The
+		// public OSRM demo is slow enough that a user impatient-clicking
+		// "Calculate Route" twice would otherwise fire two parallel
+		// batches that trample each other's state.
+		if (isRouting) return false;
 		preRouteWaypoints = waypoints.map((w) => ({ ...w }));
 		return await recalculateRoute();
 	}
@@ -763,6 +786,8 @@
 	 */
 	export function undoCalculate() {
 		if (preRouteWaypoints.length === 0) return;
+		// Invalidate any in-flight recalculateRoute — see invalidateCalculatedRoute.
+		routeVersion++;
 
 		// Clear existing
 		markers.forEach((m) => m.remove());
@@ -791,6 +816,8 @@
 	 */
 	export function outAndBack() {
 		if (waypoints.length < 2) return;
+		// Invalidate any in-flight recalculateRoute — see invalidateCalculatedRoute.
+		routeVersion++;
 
 		// Add waypoints in reverse (skip the last since it's the turnaround point)
 		const reversed = waypoints.slice(0, -1).reverse();
@@ -838,6 +865,19 @@
 		startFrom?: { lat: number; lng: number },
 		endAt?: { lat: number; lng: number }
 	): Promise<boolean> {
+		// Refuse re-entry. generateLoop overwrites waypoints + markers on
+		// every iteration; a second concurrent call would have its state
+		// trampled by the first call's next iteration mid-flight.
+		if (isRouting) return false;
+		// Refuse before-map-ready. The fallback below reads map.getCenter()
+		// directly and would crash on undefined.
+		if (!map) return false;
+		// Reject garbage targets — NaN / Infinity / non-positive — so a
+		// caller bug can't push the iteration into an infinite or
+		// degenerate scaleFactor chase. The slider in /routes/new
+		// already clamps to [1, 42] km but this is the API boundary.
+		if (!isValidTargetDistance(targetDistanceM)) return false;
+
 		const start: { lat: number; lng: number } = startFrom
 			? { lat: startFrom.lat, lng: startFrom.lng }
 			: (() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })();
@@ -850,6 +890,16 @@
 		const maxAttempts = 3;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			// Capture before the iteration's mutations so we can detect a
+			// non-gated interruption (Esc / drag / right-click / Ctrl+Z)
+			// that fired during the awaited recalculateRoute. Those paths
+			// bump routeVersion via invalidateCalculatedRoute or directly;
+			// recalculateRoute bumps it exactly once. So a healthy
+			// iteration ends with routeVersion === beforeIter + 1. Anything
+			// greater means someone else mutated mid-flight — bail
+			// instead of overwriting their state on the next iteration.
+			const beforeIter = routeVersion;
+
 			const newWaypoints = generateLoopWaypoints({
 				start,
 				end: endAt,
@@ -870,6 +920,8 @@
 			routeElevations = [];
 
 			await recalculateRoute();
+
+			if (routeVersion !== beforeIter + 1) return false;
 
 			if (routeCoordinates.length < 2) break;
 
