@@ -6,6 +6,9 @@
 	// routing.ts still available for individual segment calls if needed
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
+		formatWaypointRanges,
+		haversineM as routingHaversineM,
+		identifyFailedWaypoints,
 		OSRM_SNAP_RADIUS_M,
 		qualityWarning,
 		validateRouteQuality,
@@ -278,53 +281,91 @@
 
 			if (currentVersion !== routeVersion) return false;
 
-			// Stitch segments together. Count how many succeeded so we can
-			// surface an error when the upstream is completely unreachable.
-			// Also track per-segment polyline + distance so the post-routing
-			// quality validator can flag waypoints that snapped far away or
-			// segments that took absurd detours (see routing_quality.ts).
-			const allCoords: [number, number][] = [];
-			const routedSegments: RoutedSegment[] = [];
-			let okSegments = 0;
-			(results as {
+			// Build per-segment results, falling back to a straight line
+			// for segments OSRM couldn't snap. The old behaviour silently
+			// dropped failed segments, which produced absurd-looking routes
+			// (a few hundred metres of snapped path glued together by
+			// invisible jumps) and meant a click on an unmapped private
+			// path killed the whole save. Now every segment contributes
+			// to the merged polyline — the warning banner tells the user
+			// which bits are straight-line fallbacks.
+			const perSegment: {
+				ok: boolean;
+				from: TrackPoint;
+				to: TrackPoint;
+				polyline: [number, number][];
+				distanceM: number;
+			}[] = (results as {
 				code: string;
 				routes?: { geometry: { coordinates: [number, number][] }; distance?: number }[];
-			}[]).forEach((data, i) => {
-				if (data.code !== 'Ok' || !data.routes?.[0]) return;
-				okSegments++;
-				const segCoords = data.routes[0].geometry.coordinates;
-				const segDistance = data.routes[0].distance ?? 0;
-				routedSegments.push({
-					from: segments[i].from,
-					to: segments[i].to,
-					polyline: segCoords,
-					distanceM: segDistance,
-				});
-				if (allCoords.length > 0 && segCoords.length > 0) {
-					allCoords.push(...segCoords.slice(1));
-				} else {
-					allCoords.push(...segCoords);
+			}[]).map((data, i) => {
+				const from = segments[i].from;
+				const to = segments[i].to;
+				if (data.code === 'Ok' && data.routes?.[0]) {
+					return {
+						ok: true,
+						from,
+						to,
+						polyline: data.routes[0].geometry.coordinates,
+						distanceM: data.routes[0].distance ?? 0,
+					};
 				}
+				return {
+					ok: false,
+					from,
+					to,
+					polyline: [
+						[from.lng, from.lat],
+						[to.lng, to.lat],
+					],
+					distanceM: routingHaversineM(from, to),
+				};
 			});
 
 			if (currentVersion !== routeVersion) return false;
 
+			const okSegments = perSegment.filter((s) => s.ok).length;
+			const allCoords: [number, number][] = [];
+			for (const s of perSegment) {
+				if (allCoords.length > 0 && s.polyline.length > 0) {
+					allCoords.push(...s.polyline.slice(1));
+				} else {
+					allCoords.push(...s.polyline);
+				}
+			}
+
 			if (okSegments === 0) {
 				throw new Error(
-					'Routing service unavailable — no segments could be routed. Some waypoints may be too far from any path (try moving them closer to a road), or the public OSRM demo server is unreachable.'
+					'Routing service unavailable — no segments could be routed. The public OSRM demo server may be unreachable, or this region has poor pedestrian-graph coverage.'
 				);
 			}
-			if (okSegments < segments.length) {
-				// Partial success — show a softer warning but keep the route.
+			if (okSegments < perSegment.length) {
+				// Partial success — identify the specific waypoints that
+				// couldn't snap, fall back to straight lines through them,
+				// and tell the user which markers to nudge if they want a
+				// snapped route.
+				const failedWaypoints = identifyFailedWaypoints(perSegment);
+				const failedSegments = perSegment.length - okSegments;
+				const wpList = formatWaypointRanges(failedWaypoints);
+				const wpClause =
+					failedWaypoints.length > 0
+						? ` Waypoint${failedWaypoints.length === 1 ? '' : 's'} ${wpList} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m — using direct lines through those points.`
+						: ` ${failedSegments} segment${failedSegments === 1 ? '' : 's'} couldn't snap — using direct lines for those.`;
 				onerror(
-					`Routed ${okSegments} of ${segments.length} segments — ${segments.length - okSegments} waypoint pair${segments.length - okSegments === 1 ? '' : 's'} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m. Try dragging those markers closer to a road.`,
-					'warning'
+					`Routed ${okSegments} of ${perSegment.length} segments.${wpClause} Drag those markers closer to a road for a snapped route, or accept the direct lines.`,
+					'warning',
 				);
 			} else {
 				// Every segment came back. Now check whether the route
 				// actually sticks close to the user's clicks — radiuses=
 				// caps the snap at the endpoints but doesn't stop OSRM
 				// from routing via a wild detour BETWEEN waypoints.
+				const routedSegments: RoutedSegment[] = perSegment.map((s) => ({
+					from: s.from,
+					to: s.to,
+					polyline: s.polyline,
+					distanceM: s.distanceM,
+				}));
 				const quality = validateRouteQuality(routedSegments);
 				const warn = qualityWarning(quality);
 				if (warn) onerror(warn, 'warning');

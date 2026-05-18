@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
 	closestPointDistanceM,
+	formatWaypointRanges,
 	haversineM,
+	identifyFailedWaypoints,
 	pointToSegmentDistanceM,
 	qualityWarning,
 	QUALITY_THRESHOLDS,
@@ -156,6 +158,59 @@ test('validateRouteQuality flags a segment with a large detour ratio', () => {
 	const msg = qualityWarning(q);
 	assert.match(msg ?? '', /Segment 1/);
 	assert.match(msg ?? '', /detour/);
+});
+
+test('identifyFailedWaypoints returns [] when no segments are present', () => {
+	assert.deepEqual(identifyFailedWaypoints([]), []);
+});
+
+test('identifyFailedWaypoints returns [] when every segment routed', () => {
+	const segs = [{ ok: true }, { ok: true }, { ok: true }];
+	assert.deepEqual(identifyFailedWaypoints(segs), []);
+});
+
+test('identifyFailedWaypoints flags the lone bad waypoint between two routed neighbours', () => {
+	// W_0 → W_1 → W_2 → W_3, where the middle waypoint is unmappable
+	// so segments S_1 (W_1→W_2) and S_2 (W_2→W_3) both fail.
+	const segs = [{ ok: true }, { ok: false }, { ok: false }, { ok: true }];
+	// W_2 (1-based: 3) has both incident segments failed → implicated.
+	// W_3 (1-based: 4) has S_2 failed but S_3 routed → not implicated.
+	assert.deepEqual(identifyFailedWaypoints(segs), [3]);
+});
+
+test('identifyFailedWaypoints flags the trailing waypoints when the bad cluster runs to the end', () => {
+	// 5 segments, 6 waypoints. Last 3 segments fail.
+	const segs = [
+		{ ok: true },
+		{ ok: true },
+		{ ok: false },
+		{ ok: false },
+		{ ok: false },
+	];
+	// W_2 (1-based: 3) — incident [S_1, S_2] = [ok, fail] → not implicated.
+	// W_3 (1-based: 4) — incident [S_2, S_3] = [fail, fail] → implicated.
+	// W_4 (1-based: 5) — incident [S_3, S_4] = [fail, fail] → implicated.
+	// W_5 (1-based: 6) — incident [S_4]      = [fail]       → implicated.
+	assert.deepEqual(identifyFailedWaypoints(segs), [4, 5, 6]);
+});
+
+test('identifyFailedWaypoints flags every waypoint when every segment fails', () => {
+	// Pathological case: nothing routes. Every waypoint is implicated.
+	// The route-builder caller handles this separately with a hard
+	// error, but the helper itself stays consistent.
+	const segs = [{ ok: false }, { ok: false }, { ok: false }];
+	assert.deepEqual(identifyFailedWaypoints(segs), [1, 2, 3, 4]);
+});
+
+test('formatWaypointRanges collapses runs', () => {
+	assert.equal(formatWaypointRanges([]), '');
+	assert.equal(formatWaypointRanges([3]), '3');
+	assert.equal(formatWaypointRanges([3, 4, 5]), '3-5');
+	assert.equal(formatWaypointRanges([3, 5, 7]), '3, 5, 7');
+	assert.equal(
+		formatWaypointRanges([3, 4, 5, 8, 11, 12]),
+		'3-5, 8, 11-12',
+	);
 });
 
 test('thresholds are exported and within sensible ranges (regression guard)', () => {

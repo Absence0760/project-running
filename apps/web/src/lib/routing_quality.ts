@@ -196,10 +196,62 @@ export const QUALITY_THRESHOLDS = {
 /// Per-waypoint OSRM snap radius (metres). OSRM's `radiuses=` query
 /// caps how far it will reach to find a road when matching each
 /// coordinate. Default in OSRM is "unlimited" — that's how a click
-/// near a stream ends up snapping to a road 800m away. 100m is loose
-/// enough that a runner clicking near a known path still snaps, but
-/// rejects the absurd cases.
-export const OSRM_SNAP_RADIUS_M = 100;
+/// near a stream ends up snapping to a road 800m away. 250m is the
+/// honest compromise: tight enough to reject absurd 800m+ snaps,
+/// loose enough that rural / sparsely-mapped regions (where the
+/// MapTiler base layer shows roads OSM's foot graph doesn't tag as
+/// pedestrian-routable) still route. Failed segments fall back to
+/// straight-line drawing rather than being dropped — see the route
+/// builder's stitch loop.
+export const OSRM_SNAP_RADIUS_M = 250;
+
+/// Identifies which user-clicked waypoints failed to snap. A
+/// waypoint is "implicated" when every segment it's an endpoint of
+/// failed to route — i.e. it's almost certainly the unmappable
+/// click rather than a casualty of an adjacent bad neighbour.
+/// Returns 1-based indices for human messages.
+///
+/// `segments[i]` covers waypoints `i` and `i+1` (0-based). For N
+/// segments there are N+1 waypoints. Endpoints W_0 and W_N have
+/// only one incident segment each.
+export function identifyFailedWaypoints(
+	segments: { ok: boolean }[],
+): number[] {
+	if (segments.length === 0) return [];
+	const n = segments.length;
+	const out: number[] = [];
+	for (let w = 0; w <= n; w++) {
+		const incident: boolean[] = [];
+		if (w > 0) incident.push(segments[w - 1].ok);
+		if (w < n) incident.push(segments[w].ok);
+		// `every(ok => !ok)` ≡ "all incident segments failed".
+		if (incident.length > 0 && incident.every((ok) => !ok)) {
+			out.push(w + 1);
+		}
+	}
+	return out;
+}
+
+/// Collapse a sorted list of 1-based indices into a compact range
+/// string. `[3, 4, 5, 8, 11, 12]` → `"3-5, 8, 11-12"`. Used to
+/// summarise the implicated-waypoints list in the warning banner.
+export function formatWaypointRanges(indices: number[]): string {
+	if (indices.length === 0) return '';
+	const ranges: string[] = [];
+	let start = indices[0];
+	let prev = indices[0];
+	for (let i = 1; i < indices.length; i++) {
+		if (indices[i] === prev + 1) {
+			prev = indices[i];
+			continue;
+		}
+		ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+		start = indices[i];
+		prev = indices[i];
+	}
+	ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+	return ranges.join(', ');
+}
 
 /// Compose a human-readable warning when the quality report exceeds
 /// either threshold. Returns null when the route passes both. Tests
