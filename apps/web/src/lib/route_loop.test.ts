@@ -25,8 +25,8 @@ test('loop branch — no end provided returns radial waypoints around start', ()
 		targetDistanceM: 5000,
 		radialSeedRad: 0,
 	});
-	// numPoints (default 6) + start + closing
-	assert.equal(wps.length, 8);
+	// numPoints (default 4) + start + closing = 6.
+	assert.equal(wps.length, 6);
 	assert.equal(wps[0].lat, START.lat);
 	assert.equal(wps[0].lng, START.lng);
 	assert.equal(wps[wps.length - 1].lat, START.lat);
@@ -35,7 +35,7 @@ test('loop branch — no end provided returns radial waypoints around start', ()
 	// Interior waypoints lie roughly on a circle of expected radius.
 	const expectedRadiusM =
 		(5000 * DEFAULT_SCALE_FACTOR) / (2 * Math.PI);
-	for (let i = 1; i <= 6; i++) {
+	for (let i = 1; i < wps.length - 1; i++) {
 		const d = haversineM(START, wps[i]);
 		// 5% tolerance for the cos(lat) longitude scaling.
 		assert.ok(
@@ -76,7 +76,7 @@ test('loop branch — end within NEAR_POINT_M of start is treated as a loop', ()
 
 	// Interior points fan out at the expected radius from start.
 	const expectedRadiusM = (5000 * DEFAULT_SCALE_FACTOR) / (2 * Math.PI);
-	for (let i = 1; i <= 6; i++) {
+	for (let i = 1; i < wps.length - 1; i++) {
 		const d = haversineM(START, wps[i]);
 		assert.ok(
 			Math.abs(d - expectedRadiusM) < expectedRadiusM * 0.05,
@@ -312,13 +312,13 @@ const TARGET_DISTANCES_M = [
 ];
 
 for (const target of TARGET_DISTANCES_M) {
-	test(`field-coord loop @ ${target.name} — emits 8 waypoints`, () => {
+	test(`field-coord loop @ ${target.name} — emits start + 4 interior + close = 6 waypoints`, () => {
 		const wps = generateLoopWaypoints({
 			start: FIELD_START,
 			targetDistanceM: target.m,
 			radialSeedRad: 0,
 		});
-		assert.equal(wps.length, 8);
+		assert.equal(wps.length, 6);
 	});
 
 	test(`field-coord loop @ ${target.name} — waypoint[0] is the user-supplied start exactly`, () => {

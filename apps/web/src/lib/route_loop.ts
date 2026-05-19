@@ -18,10 +18,26 @@ export const NEAR_POINT_M = 50;
 /// route in the wrong country.
 export const SCALE_FACTOR_BOUNDS = { min: 0.05, max: 2 };
 
-/// Empirical starting scale: OSRM road-distance through curved
-/// waypoints lands ≈ 0.30 of the geometric path the math would draw
-/// if every coordinate were exactly reachable.
-export const DEFAULT_SCALE_FACTOR = 0.3;
+/// Empirical starting scale for the default 4-waypoint (square)
+/// layout. With four interior radial points the loop has 5 segments
+/// (start→W1, W1→W2, W2→W3, W3→W4, W4→close=start) and a chord
+/// total of 2R + 3R√2 ≈ 6.24R. Applying a typical road factor of
+/// ~1.5x for long-leg paths, actualDistance ≈ 9.36R, so to hit a
+/// target T we want R ≈ T/9.36, i.e. scale = R · 2π / T ≈ 0.67.
+/// Rounded down to 0.65 to bias slightly small — bisection finds a
+/// near-target fit faster when the first overshoot is mild.
+///
+/// Picking 4 waypoints over 6 (the original) intentionally moves the
+/// scaffolding outward — wider-spread seeds give OSRM room to find
+/// natural multi-leg paths instead of stitching together close
+/// radial hops that backtrack on the same road.
+export const DEFAULT_SCALE_FACTOR = 0.65;
+
+/// Number of interior radial waypoints in the scaffolding pattern.
+/// 4 (square) is the sweet spot — fewer than 3 collapses to a
+/// degenerate triangle; more than ~6 packs waypoints close enough
+/// that adjacent ones share the same street segment.
+export const DEFAULT_NUM_POINTS = 4;
 
 export interface LoopWaypointArgs {
 	start: { lat: number; lng: number };
@@ -63,7 +79,7 @@ export function generateLoopWaypoints(args: LoopWaypointArgs): TrackPoint[] {
 		end,
 		targetDistanceM,
 		scaleFactor = DEFAULT_SCALE_FACTOR,
-		numPoints = 6,
+		numPoints = DEFAULT_NUM_POINTS,
 		radialSeedRad = 0,
 	} = args;
 

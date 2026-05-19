@@ -371,6 +371,69 @@
 
 	// --- Routing ---
 
+	/**
+	 * Snap each interior waypoint to the nearest real road via OSRM's
+	 * /nearest service. Endpoints (start and the close pin for a
+	 * loop, or endAt for point-to-point) are returned untouched so
+	 * the visible pin stays where the user clicked.
+	 *
+	 * After snapping, dedupe adjacent waypoints that landed within
+	 * 30m of each other — two seeds on the same street segment
+	 * would otherwise force OSRM into a tiny back-and-forth on the
+	 * same road, which is exactly the visual artifact this is
+	 * meant to eliminate.
+	 *
+	 * `versionAtStart` is the routeVersion captured by the caller
+	 * before the snap began; if it drifts mid-snap (cancel, mutation
+	 * race) the helper short-circuits — both per-request before
+	 * issuing each fetch, and post-await after parallel results
+	 * land — so a cancel doesn't have to wait for all N /nearest
+	 * calls to drain.
+	 */
+	async function snapWaypointsToRoads(
+		waypointsToSnap: TrackPoint[],
+		versionAtStart: number,
+	): Promise<TrackPoint[]> {
+		const lastIdx = waypointsToSnap.length - 1;
+		const snapped = await Promise.all(
+			waypointsToSnap.map(async (wp, i) => {
+				// Don't snap endpoints — user's visible pin must stay put.
+				if (i === 0 || i === lastIdx) return wp;
+				if (versionAtStart !== routeVersion) return wp;
+				try {
+					const url = `${OSRM_BASE_URL}/nearest/v1/foot/${wp.lng},${wp.lat}?number=1&radiuses=${OSRM_SNAP_RADIUS_M}`;
+					const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+					if (!res.ok) return wp;
+					if (versionAtStart !== routeVersion) return wp;
+					const data = (await res.json()) as {
+						code?: string;
+						waypoints?: { location?: [number, number] }[];
+					};
+					if (data.code !== 'Ok' || !data.waypoints?.[0]?.location) return wp;
+					const [lng, lat] = data.waypoints[0].location;
+					return { lat, lng };
+				} catch {
+					return wp;
+				}
+			}),
+		);
+
+		// Dedupe adjacent snaps that landed on the same road segment.
+		// Always keep the first and last entries (endpoints) — drop
+		// only interior collisions. A 30m threshold is loose enough
+		// to swallow snap-jitter on the same edge but tight enough
+		// that genuinely distinct nearby seeds stay.
+		const deduped: TrackPoint[] = [snapped[0]];
+		for (let i = 1; i < snapped.length - 1; i++) {
+			const prev = deduped[deduped.length - 1];
+			if (routingHaversineM(prev, snapped[i]) > 30) {
+				deduped.push(snapped[i]);
+			}
+		}
+		if (snapped.length > 1) deduped.push(snapped[snapped.length - 1]);
+		return deduped;
+	}
+
 	async function recalculateRoute(opts: {
 		/// generateLoop holds isRouting=true across its whole iteration
 		/// loop; when it calls into recalculateRoute it passes this so
@@ -1120,13 +1183,25 @@
 			// instead of overwriting their state on the next iteration.
 			const beforeIter = routeVersion;
 
-			const newWaypoints = generateLoopWaypoints({
+			const seeds = generateLoopWaypoints({
 				start,
 				end: endAt,
 				targetDistanceM,
 				scaleFactor,
 				radialSeedRad,
 			});
+			// Snap each interior seed to the nearest road BEFORE
+			// routing. Without this, a radial seed often lands
+			// mid-block (a yard, a parking lot, a stretch of road
+			// with no nearby intersection) and OSRM has to route a
+			// long detour to reach it — visible as the "stops half
+			// way down a road and misses a nice loop" symptom.
+			// snapWaypointsToRoads keeps endpoints exact (the user
+			// pinned them) and dedupes adjacent snaps that landed on
+			// the same street so two seeds don't force a tiny back-
+			// and-forth on the same edge.
+			const newWaypoints = await snapWaypointsToRoads(seeds, beforeIter);
+			if (routeVersion !== beforeIter) return false;
 
 			markers.forEach((m) => m.remove());
 			markers = [];
