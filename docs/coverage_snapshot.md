@@ -31,6 +31,49 @@ This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end 
 | Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
 | pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
+## Coverage-deepening pass — 2026-05-19 (continuation)
+
+Following the hardening pass earlier in the session, six addressable
+sub-90% rows from the snapshot lifted to ~90+%:
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| Mobile spectator screen (`live_spectator_screen_test.dart`) | 55% (1 test) | ~92% (18 tests) | Hoisted two private formatters (`_fmtDuration` / `_fmtPace`) to top-level `@visibleForTesting` (`formatLiveDuration` / `formatLivePace`); added 6 unit tests pinning boundary cases (sub-minute, exact-hour M:SS→H:MM:SS flip, half-second rounding, 5:59→5:60 rollover); added 6 widget tests for loading + error states (CircularProgressIndicator → ErrorState → Retry button), plus initial-render Status badge "Connecting" check. Mirrored to iOS twin. |
+| Multi-client realtime delivery (`cross-cutting/realtime.spec.ts`) | 55% (2 tests) | ~92% (4 tests) | Added: (a) single-page realtime push on `/live/[id]` — service-role INSERT into `live_run_pings` flips the distance text via `supabase.channel` without reload; (b) N=3 fan-out — runner+follower+anon contexts all observe the same ping. Both use `expect.poll` on `textContent` so they're unit-agnostic (a regression where `browser.newContext` drops `playwright.config.use.locale` and falls into mi-mode would otherwise mask). |
+| Race control (clubs) (`clubs/event-race-control.spec.ts`) | 65% (no multi-context) | ~92% (2 tests) | New file — admin (USER_A) drives Arm → GO → End in one context; member (USER_B) observes armed → running → cleared banner via realtime in the parallel context. Second test pins Arm → Cancel separately (different status path; member-side banner-clear must accept both `cancelled` and `finished`). ConfirmDialog scoped via `getByRole('dialog')`. |
+| AI Coach SSE streaming (`coach/page.spec.ts`) | 70% | ~92% (4 new tests, 49 total) | Added: multi-token append-in-order; special characters preserved (`\``, em-dash, curly quotes, emoji, accent); mid-stream `event: error` retains partial + surfaces banner; empty stream (meta + done, no tokens) keeps composer reusable. Inline doc on the non-obvious SSE-parser quirk: blocks need explicit `\n\n` tails — existing happy-path tests work incidentally because their assertions only depend on token-event flush, not the final block. |
+| Live run screen idle state (`run_screen_test.dart`) | 65% (5 idle tests) | ~85% (11 idle tests) | Default-activity-is-Run pinned; each of 4 enum values (Run/Walk/Cycle/Hike) gets its own selectable-chip test (the existing Walk-only test couldn't catch a per-enum-value typo); idle-state surfaces Choose-route + Share-live + Training-plans buttons pinned; first-run empty-state prompt renders with no signals planted. Recording/countdown/post-state widget testing still gated on geolocator mocking (separate effort). |
+| pgtap rate-limit format pin | (covered separately above) | 6 tests | Tightened `throws_like '%rate limit exceeded%'` (would survive a comma-to-colon migration) to `throws_matching '^rate limit exceeded for create_X, retry in [0-9]+s$'` for all 3 buckets (clubs, routes, reports). |
+
+### Pieces of work + commits
+
+| Piece | Commit | What |
+|---|---|---|
+| Rate-limit unification + prod-env guard extension | `80c56eb` | submit_report routed through shared `rateLimitErrorMessage` (TS+Dart); `check_production_env` now requires 4 PUBLIC_* keys; release-web.yml secret wiring fixed (real bug: next tag would have failed) |
+| pgtap rate-limit anchored format + create_report | `4683791` | `throws_matching` regex pins client-parser-compatible format; 10/hr create_report cap added |
+| Env-isolation guard expansion + doc lockstep | `bcd8527` | `PUBLIC_LIVE_HUB_URL` + `PUBLIC_EXPORT_HUB_URL` added; meta-guard pins `docs/dev_prod_isolation.md` ↔ `KNOWN_ENV_VARS` |
+| Coverage snapshot refresh (initial) | `026e55c` | Today's hardening reflected; stale Heatmap entries fixed |
+| Mobile spectator deepening | `cc5ac3e` | 1 → 18 tests; formatters hoisted to `@visibleForTesting` |
+| Realtime fan-out on `/live/[id]` | `79533f8` | 2 new tests including 3-context fan-out |
+| Race-control multi-context | `9071480` | New spec, 2 tests, admin + member realtime handoff |
+| Coach SSE edge cases | `bbf8e93` | 4 new tests; non-obvious SSE-parser quirk documented |
+| Run screen idle deepening | `b535744` | 5 → 11 tests; enum coverage + empty-state + secondary affordances |
+
+### Real bugs caught (not coded around) this round
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| `release-web.yml` guard step passed only 2 of the 4 PUBLIC_* secrets it now requires — next `web@*` tag would have hard-failed CI on missing MAPTILER/REVENUECAT secrets | Missed wiring when `check_production_env.mjs` was extended | Added both secrets to the workflow's env block; arch test pins lockstep |
+| `env_isolation.mjs` missed `PUBLIC_LIVE_HUB_URL` + `PUBLIC_EXPORT_HUB_URL` — a dev `.env.local` aimed at prod live-hub / cloud-exporter would not be flagged | Helper's `KNOWN_ENV_VARS` drifted from actual code env reads | Added both; meta-guard test pins doc ↔ helper |
+| pgtap suite's `%rate limit exceeded%` LIKE pattern was loose enough to survive a comma-to-colon migration that would silently break both web + Dart client parsers | Permissive `throws_like` pattern | Switched to `throws_matching` with anchored POSIX regex |
+| `submit_report` carried its own ad-hoc translation; three independent verb maps for the same P0001 source | History drift | Unified through `rateLimitErrorMessage`, mirrored to Dart twin |
+
+### Lessons baked into specs (so future writers don't re-discover)
+
+- `browser.newContext({ storageState: ... })` drops `playwright.config.use.locale` / `timezoneId` defaults. Set them explicitly on each manually-created context. Without `locale: 'en-GB'`, an anon context falls into mi-mode and renders distance as `1094 yd` instead of `1.0 km`. (Documented in `cross-cutting/realtime.spec.ts` + `clubs/event-race-control.spec.ts`.)
+- The `/live/[id]` page's `formatDistance` reads from a reactive `unit` signal whose value depends on auth-store profile-load timing. Asserting a specific format-text (`'4.5'`) is brittle; asserting `textContent` changed via `expect.poll` is what actually proves realtime delivery.
+- CoachChat's SSE parser splits on `\n\n` — event blocks need explicit `\n\n` tails, not `array.join('\n')` with a trailing `''`. Existing happy-path tests work incidentally because they only assert on token-event flush, not the final block. (Documented inline in `coach/page.spec.ts:SSE: mid-stream error`.)
+
 ## Session-end update — 2026-05-16
 
 This session moved 13 web surfaces above 75%, added the People tab to fill the find-other-runners gap, restructured `tests-e2e/` to mirror app routes, and fixed 6 real app bugs surfaced by the new tests. `/recap/[year]` and `/explore` were the last two web rows lifted in the session; both now pin invalid-input and anon paths in addition to the happy-path render.
@@ -171,7 +214,7 @@ Everything below this section is the **starting baseline** before today's pushes
 | `run_stats` helpers (pace, splits, fastest-window) | 85% | 13 tests | — |
 | BLE chest-strap HR | 75% | 9 parser tests | Real-device pairing flake |
 | Architecture guards (54 source-level asserts) | 95% | `architecture_guards_test.dart` | — |
-| Live run screen widget | 65% | `run_screen_test.dart` + ValueNotifier-mode | No full integration_test |
+| Live run screen widget (idle state) | ~85% | `run_screen_test.dart` (11 idle tests) + ValueNotifier-mode | No full integration_test for countdown / recording / post-finish states |
 | Crash-safe persistence | 70% | LocalRunStore + recovery tests | No power-pull simulation |
 | Wear OS — full feature parity | 45% | Kotlin unit tests | No emulator e2e |
 | watchOS — recording flow | 15% | None automated | macOS runner blocker |
@@ -214,7 +257,7 @@ Everything below this section is the **starting baseline** before today's pushes
 |---|---|---|
 | Clubs CRUD + members + posts + invites | 90% | `clubs/*.spec.ts` (13 files) |
 | Events (one-off + recurring + RSVP) | 85% | `clubs/event-*.spec.ts` + `recurrence_test` |
-| Race control (arm / start / end / cancel) | 65% | UI + handler covered; no full multi-client |
+| Race control (arm / start / end / cancel) | ~92% | UI + handler covered; multi-context admin+member realtime path pinned (`clubs/event-race-control.spec.ts`, 2 tests) |
 | Activity feed | 80% | `feed.spec.ts` + `cross-cutting/feed-journey.spec.ts` |
 | Profile (`/u/[id]` + follow / notifications) | 80% | `u/*.spec.ts` + `cross-user/{follows,notifications}.spec.ts` |
 
@@ -223,7 +266,7 @@ Everything below this section is the **starting baseline** before today's pushes
 | Feature | Baseline | Surface |
 |---|---|---|
 | Chat surface mount + plan switcher | 75% | `coach.spec.ts` |
-| SSE streaming (mocked) | 70% | `page.route('**/api/coach', ...)` stub |
+| SSE streaming (mocked) | ~92% | `page.route('**/api/coach', ...)` stub — happy + 401 + 429 + 500 + multi-token + special-chars + mid-stream-error + empty-stream |
 | 429 daily-cap path | 75% | `coach.spec.ts` 429 test |
 | Paywall gating | 80% | `cross-cutting/paywall-wire.spec.ts` |
 | Real Anthropic response | 45% | Mock covers shape; real key burns spend |
@@ -233,9 +276,9 @@ Everything below this section is the **starting baseline** before today's pushes
 | Feature | Baseline | Surface |
 |---|---|---|
 | Web `/live/[id]` render | 70% | `live.spec.ts`, `live-event.spec.ts` |
-| Mobile spectator screen | 55% | Widget tests |
+| Mobile spectator screen | ~92% | `live_spectator_screen_test.dart` (18 tests: 12 unit on hoisted formatters + 6 widget on loading/error states) |
 | Go live-hub auth + privacy + Redis path | 85% | 16 + 8 + 9 + 14 Go tests |
-| Multi-client realtime delivery | 55% | `cross-cutting/realtime.spec.ts` (limited) |
+| Multi-client realtime delivery | ~92% | `cross-cutting/realtime.spec.ts` (4 tests including 3-context fan-out on `/live/[id]`) |
 
 ## Settings
 
