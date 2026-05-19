@@ -13,6 +13,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart' show ClubView, SocialService;
 import '../widgets/live_run_map.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
 import '../widgets/top_banner.dart';
@@ -376,6 +377,17 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               ),
               tooltip: (_bookmarked ?? false) ? 'Remove bookmark' : 'Bookmark route',
               onPressed: _bookmarkBusy ? null : _toggleBookmark,
+            ),
+          if (!widget.isOwner && widget.apiClient != null)
+            IconButton(
+              tooltip: 'Report route',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => showReportSheet(
+                context,
+                api: widget.apiClient!,
+                targetKind: 'route',
+                targetId: route.id,
+              ),
             ),
           if (_isOwner)
             IconButton(

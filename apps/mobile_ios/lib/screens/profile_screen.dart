@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/error_state.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'event_detail_screen.dart';
 
@@ -303,6 +304,19 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(_summary?.displayName ?? 'Profile'),
+        actions: [
+          if (!_isSelf)
+            IconButton(
+              tooltip: 'Report user',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => showReportSheet(
+                context,
+                api: widget.api,
+                targetKind: 'user',
+                targetId: widget.userId,
+              ),
+            ),
+        ],
         bottom: TabBar(controller: _tabs, isScrollable: true, tabs: tabs),
       ),
       body: _loading

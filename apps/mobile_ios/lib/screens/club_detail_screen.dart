@@ -13,6 +13,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/event_form_sheet.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/route_track_preview.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
@@ -282,6 +283,18 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(c.row.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Report club',
+            icon: const Icon(Icons.flag_outlined),
+            onPressed: () => showReportSheet(
+              context,
+              api: ApiClient(),
+              targetKind: 'club',
+              targetId: c.row.id,
+            ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,

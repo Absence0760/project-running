@@ -85,6 +85,40 @@ class ApiClient {
     await _client.auth.resetPasswordForEmail(email.trim());
   }
 
+  /// Submit a user-content report. [targetKind] is one of 'user' /
+  /// 'club' / 'route'; [reason] is one of 'spam' / 'harassment' /
+  /// 'inappropriate' / 'impersonation' / 'other'. Notes is an
+  /// optional free-text field — trimmed to null if blank.
+  ///
+  /// Returns the new report's id on success. PostgrestException
+  /// 23505 indicates the user already has a pending report against
+  /// this content (the migration's unique(reporter_id, target_kind,
+  /// target_id) constraint); callers should surface a "you already
+  /// reported this" message. P0001 is the rate-limit signature —
+  /// callers route through `rateLimitErrorMessage` for the friendly
+  /// wording.
+  ///
+  /// Mirrors `apps/web/src/lib/data.ts:submitReport`.
+  Future<String> submitReport({
+    required String targetKind,
+    required String targetId,
+    required String reason,
+    String? notes,
+  }) async {
+    final trimmed = notes?.trim();
+    final result = await _client.rpc(
+      'submit_report',
+      params: {
+        'p_target_kind': targetKind,
+        'p_target_id': targetId,
+        'p_reason': reason,
+        'p_notes':
+            (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+      },
+    );
+    return result as String;
+  }
+
   /// Fetch heatmap-friendly point set within a bbox. Backed by the
   /// `heatmap_points_in_bbox` PostGIS RPC (migration 20260828_001),
   /// capped at [maxPoints] (default 5000) regardless of bbox size —
