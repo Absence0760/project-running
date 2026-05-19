@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import '../segments.dart';
 
 /// Per-run segment-effort chips on `run_detail_screen`. Mirrors the
@@ -160,7 +161,18 @@ class _EffortRow extends StatelessWidget {
   }
 
   static String _fmtKm(double m) {
-    if (m >= 1000) return '${(m / 1000).toStringAsFixed(2)} km';
+    // The function name is legacy ("_fmtKm" predates the unit-aware
+    // sweep); the implementation now honours the user's active unit
+    // pref. Sub-1 unit values render in metres / yards so a 500 m
+    // segment doesn't display as "0.50 km" / "0.31 mi" — the
+    // shorter unit reads more naturally for segments.
+    final unit = activeDistanceUnit;
+    if (unit == DistanceUnit.mi) {
+      const metresPerMile = 1609.344;
+      if (m >= metresPerMile) return UnitFormat.distance(m, unit);
+      return '${(m * 1.09361).round()} yd';
+    }
+    if (m >= 1000) return UnitFormat.distance(m, unit);
     return '${m.round()} m';
   }
 

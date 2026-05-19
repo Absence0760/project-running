@@ -411,7 +411,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             title: Text(_formatDate(r.startedAt)),
             subtitle: Text(
-              '${_formatKm(r.distanceM)} · ${_formatDuration(Duration(seconds: r.durationS))} · ${_formatPace(r.distanceM, r.durationS)}',
+              '${formatDistanceForPref(r.distanceM)} · ${_formatDuration(Duration(seconds: r.durationS))} · ${_formatPace(r.distanceM, r.durationS)}',
             ),
             // Tap-into-detail deferred until run-detail learns to take a
             // `RunRow` for non-owner runs (today it expects local Run).
@@ -603,10 +603,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
-  static String _formatKm(double metres) {
-    return '${(metres / 1000).toStringAsFixed(2)} km';
   }
 
   static String _formatDuration(Duration d) {

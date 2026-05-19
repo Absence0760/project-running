@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
 
+import '../preferences.dart';
 import '../training.dart' show fmtPace;
 
 /// Top-of-map overlay that surfaces the current [WorkoutRunner] step
@@ -235,6 +236,16 @@ class _Band extends StatelessWidget {
   }
 
   static String _fmtDistance(double metres) {
+    // Mid-workout pill — honour the user's active distance pref so
+    // a mi-mode runner sees miles + yards instead of km + metres.
+    final unit = activeDistanceUnit;
+    if (unit == DistanceUnit.mi) {
+      const metresPerMile = 1609.344;
+      if (metres >= metresPerMile) {
+        return '${(metres / metresPerMile).toStringAsFixed(1)} mi';
+      }
+      return '${(metres * 1.09361).round()} yd';
+    }
     if (metres >= 1000) {
       return '${(metres / 1000).toStringAsFixed(1)} km';
     }
@@ -264,6 +275,12 @@ class _Band extends StatelessWidget {
   String _fmtRemaining(WorkoutStep step) {
     if (step.isDurationBased) {
       return '${_fmtDuration(state.remainingDuration)} to go';
+    }
+    // Sub-1-unit fragments are the typical case mid-rep, so always
+    // render in the small unit (m / yd).
+    if (activeDistanceUnit == DistanceUnit.mi) {
+      final yards = (state.remainingMetres * 1.09361).round();
+      return '$yards yd to go';
     }
     return '${state.remainingMetres.round()} m to go';
   }

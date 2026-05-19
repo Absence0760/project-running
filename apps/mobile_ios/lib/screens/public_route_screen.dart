@@ -143,8 +143,8 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
               _Stat(
                 label: 'Distance',
                 value: UnitFormat.distanceValue(
-                    route.distanceMetres, DistanceUnit.km),
-                unit: 'km',
+                    route.distanceMetres, activeDistanceUnit),
+                unit: UnitFormat.distanceLabel(activeDistanceUnit),
               ),
               _Stat(
                 label: 'Elevation',

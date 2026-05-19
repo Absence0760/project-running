@@ -131,7 +131,7 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
   }
 
   Widget _buildBody(ThemeData theme, RunRow row) {
-    final distanceKm = row.distanceM / 1000;
+    final unit = activeDistanceUnit;
     final pace = (row.distanceM > 0 && row.durationS > 0)
         ? row.durationS / (row.distanceM / 1000)
         : 0.0;
@@ -171,8 +171,8 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
             children: [
               _StatBlock(
                 label: 'Distance',
-                value: distanceKm.toStringAsFixed(2),
-                unit: 'km',
+                value: UnitFormat.distanceValue(row.distanceM, unit),
+                unit: UnitFormat.distanceLabel(unit),
               ),
               _StatBlock(
                 label: 'Time',
@@ -180,8 +180,8 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
               ),
               _StatBlock(
                 label: 'Pace',
-                value: pace > 0 ? UnitFormat.pace(pace, DistanceUnit.km) : '—',
-                unit: pace > 0 ? '/km' : null,
+                value: pace > 0 ? UnitFormat.pace(pace, unit) : '—',
+                unit: pace > 0 ? UnitFormat.paceLabel(unit) : null,
               ),
             ],
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import '../training.dart' show fmtPace;
 
 /// Post-run review surface for a structured workout. Reads the
@@ -136,14 +137,14 @@ class WorkoutReviewSection extends StatelessWidget {
           cell(
             s.isDurationBased
                 ? formatStepDuration(s.targetDurationSec!)
-                : '${(s.targetDistanceM / 1000).toStringAsFixed(2)} km',
+                : UnitFormat.distance(s.targetDistanceM, activeDistanceUnit),
             flex: 2,
             align: TextAlign.right,
           ),
           cell(
             s.isDurationBased
                 ? formatStepDuration(s.durationSeconds)
-                : '${(s.actualDistanceM / 1000).toStringAsFixed(2)} km',
+                : UnitFormat.distance(s.actualDistanceM, activeDistanceUnit),
             flex: 2,
             align: TextAlign.right,
           ),

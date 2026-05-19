@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/preferences.dart';
 import '../lib/widgets/workout_execution_band.dart';
 import 'package:run_recorder/run_recorder.dart';
 
@@ -278,6 +280,96 @@ void main() {
         ),
       );
       expect(find.text('—'), findsOneWidget);
+    });
+  });
+
+  group('WorkoutExecutionBand — distance pref propagation', () {
+    // The band's `_fmtDistance` was hardcoded km. Mi-mode users now
+    // see miles / yards. Each test plants a Preferences in the
+    // desired mode then asserts the rendered text reflects it.
+    tearDown(resetActivePreferencesForTest);
+
+    Future<void> setUnit(bool useMiles) async {
+      SharedPreferences.setMockInitialValues({'use_miles': useMiles});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+    }
+
+    testWidgets('mi mode: 400 m target renders in yards + /mi pace',
+        (tester) async {
+      // 400 × 1.09361 ≈ 437 yards (sub-1 mile → yards branch).
+      // Both the header's distance pill AND the "to go" footer
+      // render in yards; pace flips to /mi.
+      await setUnit(true);
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _step(),
+          totalSteps: 6,
+          currentIndex: 0,
+          progress: 0,
+          remainingMetres: 400,
+          actualPaceSecPerKm: null,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+      );
+      expect(find.textContaining('437 yd'), findsAtLeastNWidgets(1));
+      // Header pace also flips to /mi (was "4:00/km").
+      expect(find.textContaining('/mi'), findsOneWidget);
+      // Negative shape — the original "400 m" / "/km" must NOT
+      // leak through.
+      expect(find.textContaining('400 m'), findsNothing);
+      expect(find.textContaining('/km'), findsNothing);
+    });
+
+    testWidgets('mi mode: 2000 m target renders as "1.2 mi"',
+        (tester) async {
+      // 2000 / 1609.344 = 1.243 → "1.2 mi" at 1 decimal.
+      await setUnit(true);
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _step(distance: 2000),
+          totalSteps: 6,
+          currentIndex: 0,
+          progress: 0,
+          remainingMetres: 2000,
+          actualPaceSecPerKm: null,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+      );
+      expect(find.textContaining('1.2 mi'), findsOneWidget);
+    });
+
+    testWidgets('km mode (default): 400 m renders in metres + /km pace',
+        (tester) async {
+      // Negative-shape pin so a regression that inverted the branch
+      // would fail loud. 400 m appears in both the header pill and
+      // the "to go" footer → findsAtLeastNWidgets(2).
+      await setUnit(false);
+      await _pumpBand(
+        tester,
+        state: WorkoutBandState(
+          step: _step(),
+          totalSteps: 6,
+          currentIndex: 0,
+          progress: 0,
+          remainingMetres: 400,
+          actualPaceSecPerKm: null,
+          adherence: PaceAdherence.onPace,
+          complete: false,
+          abandoned: false,
+        ),
+      );
+      expect(find.textContaining('400 m'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('/km'), findsOneWidget);
+      expect(find.textContaining('yd'), findsNothing);
+      expect(find.textContaining('/mi'), findsNothing);
     });
   });
 }

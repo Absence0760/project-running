@@ -6,6 +6,8 @@
 
 import 'dart:math';
 
+import 'preferences.dart' show DistanceUnit, activeDistanceUnit;
+
 enum GoalEvent { distance5k, distance10k, distanceHalf, distanceFull, custom }
 
 enum WorkoutKind {
@@ -575,6 +577,17 @@ extension on GeneratedWorkout {
 
 String fmtPace(int? secPerKm) {
   if (secPerKm == null || secPerKm <= 0) return '—';
+  // Honour the user's active unit pref. The stored value is always
+  // sec/km (DB shape is unit-agnostic); convert to sec/mi at render
+  // time when the user is in imperial mode.
+  final unit = activeDistanceUnit;
+  if (unit == DistanceUnit.mi) {
+    const metresPerMile = 1609.344;
+    final secPerMi = (secPerKm * (metresPerMile / 1000)).round();
+    final m = secPerMi ~/ 60;
+    final s = (secPerMi % 60).toString().padLeft(2, '0');
+    return '$m:$s/mi';
+  }
   final m = secPerKm ~/ 60;
   final s = (secPerKm % 60).toString().padLeft(2, '0');
   return '$m:$s/km';
@@ -582,6 +595,15 @@ String fmtPace(int? secPerKm) {
 
 String fmtKm(num? metres, [int digits = 1]) {
   if (metres == null) return '—';
+  // Honour the user's active unit pref. Function name kept as
+  // `fmtKm` (legacy from before the unit-aware sweep) — the
+  // implementation now reads activeDistanceUnit so a mi-mode user
+  // sees "5.0 mi" instead of "5.0 km".
+  final unit = activeDistanceUnit;
+  if (unit == DistanceUnit.mi) {
+    const metresPerMile = 1609.344;
+    return '${(metres / metresPerMile).toStringAsFixed(digits)} mi';
+  }
   return '${(metres / 1000).toStringAsFixed(digits)} km';
 }
 

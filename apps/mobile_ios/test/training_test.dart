@@ -3,6 +3,8 @@
 // assignments as the TS engine for the same inputs.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/preferences.dart';
 import '../lib/training.dart';
 
 void main() {
@@ -192,6 +194,85 @@ void main() {
           }
         }
       }
+    });
+  });
+
+  group('fmtKm — unit-pref aware', () {
+    // training.dart's `fmtKm` is the single distance-format helper used
+    // across the entire training-plan UI: workout_detail_screen,
+    // plan_calendar, plan_detail_screen, plan_new_screen,
+    // event_detail_screen. A regression that lost unit-awareness here
+    // would silently mis-label every plan-related surface — pin both
+    // modes + the null + digits contracts.
+
+    tearDown(resetActivePreferencesForTest);
+
+    test('null input returns the em-dash placeholder', () {
+      // The plan UI passes `targetDistanceM` (nullable) directly —
+      // null must NOT crash, must NOT render "null km" / "0.0 km".
+      expect(fmtKm(null), '—');
+    });
+
+    test('km mode (default): "5.0 km" at default 1 decimal', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      expect(fmtKm(5000), '5.0 km');
+    });
+
+    test('km mode: digits parameter controls precision', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      expect(fmtKm(5234, 2), '5.23 km');
+      expect(fmtKm(5234, 0), '5 km');
+    });
+
+    test('mi mode: "3.1 mi" at default 1 decimal', () async {
+      // Headline regression net — mi-mode users used to see "5.0 km"
+      // on the workout-detail / plan-calendar surfaces. Flipping the
+      // pref must surface miles.
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      // 5000 m / 1609.344 = 3.107 → "3.1 mi"
+      expect(fmtKm(5000), '3.1 mi');
+    });
+
+    test('mi mode: 0 km still renders 0.0 mi (not a crash)', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      expect(fmtKm(0), '0.0 mi');
+    });
+
+    test('mi mode honours digits parameter too', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      // Marathon: 42195m / 1609.344 = 26.219 mi → "26.22 mi" at 2 digits.
+      expect(fmtKm(42195, 2), '26.22 mi');
+    });
+
+    test('switching pref mid-test re-evaluates (no caching)', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final kmPrefs = Preferences();
+      await kmPrefs.init();
+      registerActivePreferences(kmPrefs);
+      expect(fmtKm(5000), '5.0 km');
+
+      // Flip and re-register. No memoisation in fmtKm → next call
+      // reads the new pref.
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final miPrefs = Preferences();
+      await miPrefs.init();
+      registerActivePreferences(miPrefs);
+      expect(fmtKm(5000), '3.1 mi');
     });
   });
 }

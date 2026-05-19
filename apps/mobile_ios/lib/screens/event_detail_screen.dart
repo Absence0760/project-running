@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../preferences.dart';
 import '../recurrence.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
@@ -371,7 +372,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               children: [
                 if (e.row.distanceM != null) ...[
                   _metric(theme, 'Distance',
-                      '${fmtKm(e.row.distanceM!)} km'),
+                      formatDistanceForPref(e.row.distanceM!)),
                   const SizedBox(width: 24),
                 ],
                 if (e.row.paceTargetSec != null)
@@ -963,7 +964,7 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
                     return ListTile(
                       dense: true,
                       title: Text(
-                        '${_dateLabel(r.startedAt)} · ${(r.distanceM / 1000).toStringAsFixed(2)} km',
+                        '${_dateLabel(r.startedAt)} · ${formatDistanceForPref(r.distanceM)}',
                       ),
                       subtitle: Text(
                         '${_ResultRow._formatDuration(r.durationS)} · ${r.activityType}',

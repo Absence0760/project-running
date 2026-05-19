@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import 'top_banner.dart';
 
 /// Route-detail segments panel: lists every segment on the parent
@@ -464,7 +465,13 @@ class _SegmentTile extends StatelessWidget {
   }
 
   static String _fmt(double m) {
-    if (m >= 1000) return '${(m / 1000).toStringAsFixed(2)} km';
+    final unit = activeDistanceUnit;
+    if (unit == DistanceUnit.mi) {
+      const metresPerMile = 1609.344;
+      if (m >= metresPerMile) return UnitFormat.distance(m, unit);
+      return '${(m * 1.09361).round()} yd';
+    }
+    if (m >= 1000) return UnitFormat.distance(m, unit);
     return '${m.round()} m';
   }
 }
