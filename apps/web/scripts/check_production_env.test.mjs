@@ -3,8 +3,35 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { checkProductionEnv } from './check_production_env.mjs';
+
+const SCRIPT_PATH = fileURLToPath(new URL('./check_production_env.mjs', import.meta.url));
+
+/**
+ * Run the script as its own CLI process. The script's `import.meta.url ===
+ * file:${argv[1]}` entry-point guard only fires when invoked as a binary,
+ * so the in-process import above wouldn't exercise the process.exit /
+ * stderr-write paths; this wrapper covers them.
+ *
+ * @param {Record<string, string>} extraEnv
+ * @returns {{ status: number, stdout: string, stderr: string }}
+ */
+function runScript(extraEnv) {
+	const r = spawnSync(process.execPath, [SCRIPT_PATH], {
+		env: {
+			// Wipe PUBLIC_* / process inherits so the test starts with a
+			// known-empty environment (CI may export these for the build
+			// step). Only the keys passed in extraEnv are visible.
+			PATH: process.env.PATH,
+			...extraEnv,
+		},
+		encoding: 'utf8',
+	});
+	return { status: r.status ?? -1, stdout: r.stdout, stderr: r.stderr };
+}
 
 test('passes for a real Supabase URL + non-empty anon key', () => {
 	const r = checkProductionEnv({
@@ -85,4 +112,52 @@ test('trims whitespace before checking', () => {
 		PUBLIC_SUPABASE_ANON_KEY: '   sb_publishable_real_key_12345\n',
 	});
 	assert.equal(r.ok, true);
+});
+
+// ──────────────────── CLI integration ────────────────────
+//
+// The pure helper has 7 unit cases. The CLI entry block (process.exit,
+// stderr write) only fires when the script is invoked as a binary,
+// which an in-process import doesn't exercise. These tests spawn the
+// script as a subprocess to lock down exit codes + stderr shape so a
+// future refactor that swaps `process.exit(1)` for a returned value
+// (which CI would silently treat as a passing step) fails loud.
+
+test('CLI exits 0 + prints a proceed banner when env is valid', () => {
+	const r = runScript({
+		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+	});
+	assert.equal(r.status, 0, `expected exit 0, got ${r.status}. stderr: ${r.stderr}`);
+	assert.match(r.stdout, /look real — proceeding/);
+	assert.equal(r.stderr, '');
+});
+
+test('CLI exits 1 + writes the violation report to stderr when URL is empty', () => {
+	const r = runScript({
+		PUBLIC_SUPABASE_URL: '',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+	});
+	assert.equal(r.status, 1, `expected exit 1, got ${r.status}`);
+	assert.match(r.stderr, /release-web build refuses to start/);
+	assert.match(r.stderr, /PUBLIC_SUPABASE_URL/);
+	// Stdout stays quiet on failure — the banner shouldn't pollute the
+	// build-log success channel.
+	assert.equal(r.stdout, '');
+});
+
+test('CLI exits 1 + names both vars when both are missing', () => {
+	const r = runScript({});
+	assert.equal(r.status, 1);
+	assert.match(r.stderr, /PUBLIC_SUPABASE_URL/);
+	assert.match(r.stderr, /PUBLIC_SUPABASE_ANON_KEY/);
+});
+
+test('CLI exits 1 on the CI placeholder URL', () => {
+	const r = runScript({
+		PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+	});
+	assert.equal(r.status, 1);
+	assert.match(r.stderr, /placeholder/i);
 });

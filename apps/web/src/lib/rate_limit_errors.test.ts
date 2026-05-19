@@ -131,3 +131,65 @@ test('returns null when message has the right shape but no SQLSTATE', () => {
 		null,
 	);
 });
+
+test('3540s → "59 minutes" (just-under-one-hour boundary)', () => {
+	// The create_club / create_route bucket window is 3600s, so the
+	// trigger's `retry in` value can land anywhere in [0, 3600). Pin
+	// the upper-edge wording so a future tweak to the rounding logic
+	// can't silently make us say "59.something" or "1 hour" without
+	// a passing test.
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'rate limit exceeded for create_club, retry in 3540s',
+	});
+	assert.equal(msg, "You're creating clubs too quickly — please wait 59 minutes and try again.");
+});
+
+test('3600s → "60 minutes" (hour-exact boundary)', () => {
+	// Practically unreachable from the trigger (window resets at this
+	// boundary), but pinning the deterministic output keeps the helper
+	// from accidentally regressing if a future migration widens the
+	// window past 3600 (e.g., 6-hour anti-abuse cap).
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'rate limit exceeded for create_club, retry in 3600s',
+	});
+	assert.equal(msg, "You're creating clubs too quickly — please wait 60 minutes and try again.");
+});
+
+test('decimal seconds in message → null (only integer matches \\d+)', () => {
+	// Defensive: the trigger always emits an integer (postgres `%s` of
+	// a numeric interval), but if a future change inserts a decimal,
+	// we'd rather fall through to the raw error than pretend to parse.
+	assert.equal(
+		rateLimitErrorMessage({
+			code: 'P0001',
+			message: 'rate limit exceeded for create_club, retry in 1.5s',
+		}),
+		null,
+	);
+});
+
+test('extra trailing message text doesn\'t break the parse', () => {
+	// The regex doesn't anchor at end-of-string. A future migration
+	// could append a `using` clause hint after the main message; the
+	// bucket + seconds should still parse cleanly out of the prefix.
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'rate limit exceeded for create_route, retry in 30s, please wait',
+	});
+	assert.equal(msg, "You're creating routes too quickly — please wait 30 seconds and try again.");
+});
+
+test('numeric chars inside the bucket name parse to the seconds, not the bucket', () => {
+	// `\w+` is greedy and would happily eat digits — but the regex
+	// requires a comma right after the bucket, so a bucket name with
+	// an embedded number (`create_club_v2`) still parses the bucket
+	// correctly and pulls the seconds out of the `retry in` clause.
+	// The unknown-bucket fallback then maps it to "doing that".
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'rate limit exceeded for create_club_v2, retry in 30s',
+	});
+	assert.equal(msg, "You're doing that too quickly — please wait 30 seconds and try again.");
+});

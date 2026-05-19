@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { getAdminClient } from '../fixtures/local-supabase';
+import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -98,5 +98,63 @@ test.describe('/routes/new — save round-trip', () => {
 		expect(row!.description).toBe(description);
 		expect(row!.is_public).toBe(true);
 		expect(row!.user_id).toBe(USER_A.id);
+	});
+
+	test('hitting the 30/hour create_route cap surfaces the friendly "slow down" message', async ({
+		page,
+	}) => {
+		// Mirror of the clubs/new rate-limit pin (clubs/new.spec.ts) on
+		// the routes side. Pre-plant the rate_limits counter to 30 (the
+		// cap from migration 20260907_001) so the next saveRoute insert
+		// fires the BEFORE INSERT trigger. data.ts → rateLimitErrorMessage
+		// rewraps the P0001 as a friendly "creating routes too quickly"
+		// Error, the save modal renders e.message, and the user gets a
+		// readable banner instead of either the raw exception or the
+		// generic "Failed to save route" fallback.
+		const admin = getAdminClient();
+		const nowS = Math.floor(Date.now() / 1000);
+		const windowStartS = Math.floor(nowS / 3600) * 3600;
+		const windowStart = new Date(windowStartS * 1000).toISOString();
+		await admin.from('rate_limits').upsert({
+			user_id: USER_A.id,
+			bucket: 'create_route',
+			window_start: windowStart,
+			count: 30,
+		});
+
+		try {
+			await page.goto('/routes/new');
+			await page.waitForLoadState('networkidle');
+			await expect(page.getByRole('heading', { level: 1, name: 'Route Builder' }))
+				.toBeVisible({ timeout: 10_000 });
+			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+
+			// Same force-enable trick as the happy-path test — OSRM isn't
+			// reachable here, so we open the modal without a real route.
+			const saveBtn = page.getByRole('button', { name: /Save Route/ });
+			await saveBtn.evaluate((el: HTMLButtonElement) => (el.disabled = false));
+			await saveBtn.click();
+
+			const modal = page.locator('.modal', { hasText: 'Save route' });
+			await expect(modal).toBeVisible({ timeout: 5_000 });
+			await modal.getByPlaceholder('My Route').fill(`rate-limited ${Date.now()}`);
+
+			const submit = modal.getByRole('button', { name: /Save route/ });
+			await submit.evaluate((el: HTMLButtonElement) => (el.disabled = false));
+			await submit.click();
+
+			// Friendly wording lands in the modal's .save-error banner.
+			await expect(
+				modal.locator('.save-error').filter({ hasText: /creating routes too quickly/i }),
+			).toBeVisible({ timeout: 10_000 });
+			// Negative pin: the generic "Failed to save route" fallback
+			// (and the raw "rate limit exceeded for create_route" leak)
+			// must NOT appear.
+			await expect(modal.getByText('Failed to save route')).toHaveCount(0);
+			await expect(modal.getByText(/rate limit exceeded for create_route/i))
+				.toHaveCount(0);
+		} finally {
+			await resetRateLimit(USER_A.id, 'create_route');
+		}
 	});
 });

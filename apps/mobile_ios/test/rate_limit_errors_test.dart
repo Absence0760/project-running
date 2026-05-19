@@ -157,5 +157,71 @@ void main() {
         isNull,
       );
     });
+
+    test('3540s → "59 minutes" (just-under-one-hour boundary)', () {
+      // The create_club / create_route bucket window is 3600s, so
+      // the trigger's `retry in` value can land anywhere in [0, 3600).
+      // Pin the upper-edge wording so a rounding-logic tweak can't
+      // silently regress to "59.something" or "1 hour".
+      final msg = rateLimitErrorMessage(
+        code: 'P0001',
+        message: 'rate limit exceeded for create_club, retry in 3540s',
+      );
+      expect(
+        msg,
+        "You're creating clubs too quickly — please wait 59 minutes and try again.",
+      );
+    });
+
+    test('3600s → "60 minutes" (hour-exact boundary)', () {
+      // Practically unreachable (window resets at this boundary), but
+      // pinning the deterministic output keeps the helper future-proof
+      // if a migration widens the window past 3600.
+      final msg = rateLimitErrorMessage(
+        code: 'P0001',
+        message: 'rate limit exceeded for create_club, retry in 3600s',
+      );
+      expect(
+        msg,
+        "You're creating clubs too quickly — please wait 60 minutes and try again.",
+      );
+    });
+
+    test('decimal seconds in message → null (only integer matches \\d+)', () {
+      // Defensive: the trigger always emits an integer; if a future
+      // change inserts a decimal, fall through to the raw error.
+      expect(
+        rateLimitErrorMessage(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club, retry in 1.5s',
+        ),
+        isNull,
+      );
+    });
+
+    test('extra trailing message text does not break the parse', () {
+      final msg = rateLimitErrorMessage(
+        code: 'P0001',
+        message: 'rate limit exceeded for create_route, retry in 30s, please wait',
+      );
+      expect(
+        msg,
+        "You're creating routes too quickly — please wait 30 seconds and try again.",
+      );
+    });
+
+    test('numeric chars inside the bucket name parse cleanly', () {
+      // `\w+` is greedy but the trailing comma anchors the bucket
+      // capture. `create_club_v2` lands as a full bucket and falls
+      // through to the unknown-bucket "doing that" wording.
+      final msg = rateLimitErrorMessage(
+        code: 'P0001',
+        message: 'rate limit exceeded for create_club_v2, retry in 30s',
+      );
+      expect(
+        msg,
+        "You're doing that too quickly — please wait 30 seconds and try again.",
+      );
+    });
   });
 }

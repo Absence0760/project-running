@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../lib/local_route_store.dart';
 import '../lib/route_overlap.dart';
@@ -166,6 +167,65 @@ void main() {
     expect(find.text('Trail'), findsOneWidget);
     expect(find.text('Road'), findsOneWidget);
     expect(find.text('Straight'), findsOneWidget);
+  });
+
+  group('formatSaveRouteError', () {
+    // Pure-function unit coverage for the catch path in `_save`. The
+    // widget tree itself is hard to drive (real map interactions),
+    // so the catch logic was hoisted into this helper specifically
+    // for testability. Pairs with the rate-limit arch guard in
+    // architecture_guards_test.dart.
+    test('rate-limit P0001 → friendly "creating routes too quickly"', () {
+      final msg = formatSaveRouteError(PostgrestException(
+        message: 'rate limit exceeded for create_route, retry in 1234s',
+        code: 'P0001',
+      ));
+      expect(
+        msg,
+        "You're creating routes too quickly — please wait 21 minutes and try again.",
+      );
+    });
+
+    test('rate-limit P0001 on the clubs bucket still works (bucket-aware verb)', () {
+      // Defensive: if a future migration adds another bucket like
+      // create_event, the helper's unknown-bucket fallback kicks in.
+      // We sanity-check that the bucket parameter flows through.
+      final msg = formatSaveRouteError(PostgrestException(
+        message: 'rate limit exceeded for create_club, retry in 42s',
+        code: 'P0001',
+      ));
+      expect(msg, contains('creating clubs too quickly'));
+    });
+
+    test('RLS denial (42501) surfaces verbatim — debugging info preserved',
+        () {
+      final msg = formatSaveRouteError(PostgrestException(
+        message: 'permission denied for table routes',
+        code: '42501',
+      ));
+      expect(msg, 'Save failed: PostgrestException(message: '
+          'permission denied for table routes, code: 42501, '
+          'details: null, hint: null)');
+      expect(msg, isNot(contains('too quickly')));
+    });
+
+    test('non-PostgrestException (network etc.) surfaces verbatim', () {
+      final msg = formatSaveRouteError(Exception('connection refused'));
+      expect(msg, 'Save failed: Exception: connection refused');
+    });
+
+    test('a non-rate-limit P0001 still surfaces verbatim', () {
+      // The helper is strict about both the SQLSTATE AND the message
+      // format. A P0001 raised by some other trigger with a different
+      // shape must NOT pretend to be the rate-limit one.
+      final msg = formatSaveRouteError(PostgrestException(
+        message: 'some other trigger said no',
+        code: 'P0001',
+      ));
+      expect(msg, contains('Save failed:'));
+      expect(msg, contains('some other trigger said no'));
+      expect(msg, isNot(contains('too quickly')));
+    });
   });
 
   test('straightLineDistance sums haversine legs', () {

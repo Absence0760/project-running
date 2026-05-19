@@ -291,17 +291,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      // Surface the create_route rate-limit P0001 (migration
-      // 20260907_001 — 30 routes / hour per user) as a friendly
-      // "wait N minutes" message instead of the raw exception.
-      // Mirror of the web fix in apps/web/src/lib/data.ts. Unknown
-      // errors still surface verbatim so debugging info isn't lost.
-      String message = 'Save failed: $e';
-      if (e is PostgrestException) {
-        final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
-        if (friendly != null) message = friendly;
-      }
-      showTopBanner(context, message);
+      showTopBanner(context, formatSaveRouteError(e));
     }
   }
 
@@ -582,6 +572,26 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 /// Available routing profiles surfaced to the user. Maps to
 /// [OsrmProfile] for road/trail and bypasses OSRM for straight.
 enum RouteBuilderMode { trail, road, straight }
+
+/// Format the user-visible message for a saveRoute failure. Pure
+/// function — extracted so the catch branch in `_save` stays a
+/// one-liner and the rate-limit / generic split is unit-testable
+/// without driving the full widget tree.
+///
+/// Behaviour:
+///   - PostgrestException with the rate-limit signature (P0001 +
+///     migration 20260907_001 message) becomes the friendly "wait
+///     N minutes" wording from `rate_limit_errors.dart`.
+///   - Anything else falls through to `Save failed: <toString>` so
+///     debugging information (RLS denials, FK violations, network
+///     errors) isn't hidden by an over-eager translation.
+String formatSaveRouteError(Object e) {
+  if (e is PostgrestException) {
+    final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
+    if (friendly != null) return friendly;
+  }
+  return 'Save failed: $e';
+}
 
 String _surfaceFor(RouteBuilderMode mode) {
   return switch (mode) {
