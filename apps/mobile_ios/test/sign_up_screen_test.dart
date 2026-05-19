@@ -20,8 +20,14 @@ class _FakeApiClient extends ApiClient {
   }
 }
 
-Future<void> _pump(WidgetTester tester, _FakeApiClient client) {
-  return tester.pumpWidget(
+Future<void> _pump(WidgetTester tester, _FakeApiClient client) async {
+  // The sign-up form has email + password + two GDPR checkboxes +
+  // a Create Account button + OAuth divider + 2 OAuth rows. At the
+  // default test viewport (800x600) the Create Account button
+  // sits below the fold; widen the surface so tap-by-finder works
+  // without scrolling each test.
+  await tester.binding.setSurfaceSize(const Size(400, 1200));
+  await tester.pumpWidget(
     MaterialApp(
       home: SignUpScreen(apiClient: client),
     ),
@@ -55,6 +61,10 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'new@b.com');
       await tester.enterText(
           find.widgetWithText(TextField, 'Password'), 'pass123');
+      // Both GDPR gates must be ticked before the API call fires.
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
       await tester.tap(find.byType(FilledButton));
       await tester.pump();
       expect(client.capturedEmail, 'new@b.com');
@@ -68,9 +78,84 @@ void main() {
           find.widgetWithText(TextField, 'Email'), 'taken@b.com');
       await tester.enterText(
           find.widgetWithText(TextField, 'Password'), 'abc');
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
       expect(find.textContaining('Email taken'), findsOneWidget);
+    });
+
+    // ─────────── GDPR Art 8 gates ───────────
+
+    testWidgets('renders both gate checkboxes with the canonical copy',
+        (tester) async {
+      await _pump(tester, _FakeApiClient());
+      expect(find.text('I am 16 years of age or older'), findsOneWidget);
+      expect(
+        find.text('I accept the Terms of Service and Privacy Policy'),
+        findsOneWidget,
+      );
+      expect(find.byType(Checkbox), findsNWidgets(2));
+    });
+
+    testWidgets('signUp blocked when age gate is unchecked', (tester) async {
+      // GDPR Art 8 — users under 16 require parental consent in the
+      // EU. A regression that let the API call fire without the
+      // self-affirmation would be a real compliance gap.
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'secret');
+      // Tick ToS but NOT the age gate.
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      // No API call.
+      expect(client.capturedEmail, isNull);
+      // Error copy explains the missing gate.
+      expect(
+        find.textContaining('16 or older'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('signUp blocked when terms gate is unchecked', (tester) async {
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'secret');
+      // Tick age but NOT terms.
+      await tester.tap(find.byType(Checkbox).at(0));
+      await tester.pump();
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(client.capturedEmail, isNull);
+      // The label also contains "Terms of Service"; assert the
+      // distinctive "Please accept" prefix that only appears on the
+      // error path.
+      expect(
+        find.textContaining('Please accept the Terms'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('signUp blocked when BOTH gates are unchecked', (tester) async {
+      // Negative-shape pin — neither gate ticked must surface the
+      // age-gate hint first (consistent error ordering), not skip
+      // to the API call.
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Password'), 'secret');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pump();
+      expect(client.capturedEmail, isNull);
+      expect(find.textContaining('16 or older'), findsOneWidget);
     });
 
     testWidgets('"Sign in" back link pops the screen', (tester) async {

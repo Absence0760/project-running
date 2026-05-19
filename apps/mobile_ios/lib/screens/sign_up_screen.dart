@@ -25,6 +25,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _loading = false;
   String? _error;
 
+  /// GDPR Article 8 — users under 16 require parental consent for
+  /// data processing in the EU. We block sign-up at the client until
+  /// the user self-affirms 16+. Mirrors web's `confirmAdult` gate
+  /// on `/login` (apps/web/src/routes/login/+page.svelte).
+  bool _confirmAdult = false;
+  /// Terms of Service + Privacy Policy acceptance. Mirrors web's
+  /// `acceptTerms` gate. Both gates apply to email/password and to
+  /// OAuth sign-in — anyone creating an account through this app
+  /// must clear both.
+  bool _acceptTerms = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -33,6 +44,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _signUp() async {
+    if (!_confirmAdult) {
+      setState(() => _error = 'Please confirm you are 16 or older to continue.');
+      return;
+    }
+    if (!_acceptTerms) {
+      setState(() => _error =
+          'Please accept the Terms of Service and Privacy Policy to continue.');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -51,7 +71,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  /// Shared pre-flight for OAuth sign-up paths — the age + ToS
+  /// gates apply to Google / Apple sign-up the same way they apply
+  /// to email/password. Web's /login flow uses the same gates on
+  /// the sign-up tab regardless of provider. Returns true when
+  /// the gates clear; sets [_error] and returns false otherwise.
+  bool _checkGates() {
+    if (!_confirmAdult) {
+      setState(() =>
+          _error = 'Please confirm you are 16 or older to continue.');
+      return false;
+    }
+    if (!_acceptTerms) {
+      setState(() => _error =
+          'Please accept the Terms of Service and Privacy Policy to continue.');
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _signInWithGoogle() async {
+    if (!_checkGates()) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -96,6 +136,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _signInWithApple() async {
+    if (!_checkGates()) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -179,7 +220,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              // GDPR Art 8 gate — users under 16 require parental
+              // consent for data processing in the EU. Self-affirm
+              // at signup so we have a record of the user's claim.
+              CheckboxListTile(
+                value: _confirmAdult,
+                onChanged: _loading
+                    ? null
+                    : (v) => setState(() => _confirmAdult = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('I am 16 years of age or older'),
+              ),
+              // Terms + Privacy acceptance — mirrors web `acceptTerms`.
+              CheckboxListTile(
+                value: _acceptTerms,
+                onChanged: _loading
+                    ? null
+                    : (v) => setState(() => _acceptTerms = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'I accept the Terms of Service and Privacy Policy',
+                ),
+              ),
+              const SizedBox(height: 16),
               FilledButton(
                 onPressed: _loading ? null : _signUp,
                 style: FilledButton.styleFrom(
