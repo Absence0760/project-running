@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../widgets/top_banner.dart';
 import 'sign_up_screen.dart';
 
 /// Email/password sign-in screen with Google + Apple OAuth alongside.
@@ -76,14 +77,14 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await widget.apiClient.sendPasswordResetEmail(email: email);
       if (!mounted) return;
-      // Show the privacy-preserving copy as a SnackBar so the user
-      // sees confirmation without thinking sign-in succeeded.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "If that email is registered, we've sent a reset link.",
-          ),
-        ),
+      // Show the privacy-preserving copy via the canonical top-banner
+      // primitive (see docs/conventions.md § "Mobile in-app
+      // notifications"). The architecture-guards test pins this to
+      // catch a regression that reaches for ScaffoldMessenger.
+      showTopBanner(
+        context,
+        "If that email is registered, we've sent a reset link.",
+        duration: const Duration(seconds: 5),
       );
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());

@@ -120,8 +120,14 @@ void main() {
       await tester.enterText(
           find.widgetWithText(TextField, 'Email'), '  me@example.com  ');
       await tester.tap(find.text('Forgot password?'));
-      await tester.pumpAndSettle();
+      // Plain pump — pumpAndSettle would block on the top-banner's
+      // ~5s auto-dismiss timer.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
       expect(client.capturedResetEmail, 'me@example.com');
+      // Tear down the banner timer before the test ends so the
+      // fake-async loop doesn't flag a pending timer.
+      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Forgot password shows the privacy-preserving confirmation',
@@ -135,11 +141,16 @@ void main() {
       await tester.enterText(
           find.widgetWithText(TextField, 'Email'), 'me@example.com');
       await tester.tap(find.text('Forgot password?'));
-      await tester.pumpAndSettle();
+      // Single pump — pumpAndSettle would block on the top-banner's
+      // ~3s timer.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
       expect(
         find.textContaining('If that email is registered'),
         findsOneWidget,
       );
+      // Drain the banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Forgot password rejects a non-email shape', (tester) async {

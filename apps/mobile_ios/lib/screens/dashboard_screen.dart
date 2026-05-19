@@ -12,6 +12,7 @@ import '../streaks.dart';
 import '../training_load.dart';
 import '../training_service.dart';
 import '../widgets/fitness_card.dart';
+import '../widgets/notification_bell.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/training_load_chart.dart';
@@ -208,6 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
           ),
         ),
+        if (viewerId != null) NotificationBell(api: api),
         if (viewerId != null)
           IconButton(
             tooltip: 'My profile',
