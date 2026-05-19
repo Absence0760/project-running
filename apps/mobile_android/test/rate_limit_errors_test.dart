@@ -86,6 +86,22 @@ void main() {
       );
     });
 
+    test('parses create_report bucket with "filing reports" verb', () {
+      // The submit_report RPC (migration 20260908_001) delegates to
+      // enforce_create_rate_limit with bucket='create_report'. Web
+      // data.ts#submitReport routes through the shared helper; pin
+      // the verb so a future refactor can't slip back to the old
+      // "Too many reports" generic wording.
+      final msg = rateLimitErrorMessage(
+        code: 'P0001',
+        message: 'rate limit exceeded for create_report, retry in 600s',
+      );
+      expect(
+        msg,
+        "You're filing reports too quickly — please wait 10 minutes and try again.",
+      );
+    });
+
     test('zero seconds defaults to "a few seconds"', () {
       final msg = rateLimitErrorMessage(
         code: 'P0001',

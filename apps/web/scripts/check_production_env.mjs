@@ -16,6 +16,18 @@
  *     handleUnseenRoutes: 'warn' config quietly accepts the empty
  *     set rather than failing loud.
  *   - PUBLIC_SUPABASE_ANON_KEY must be non-empty.
+ *   - PUBLIC_MAPTILER_KEY must be non-empty. Used by the og:image
+ *     PNG renderer at prerender time and by the maplibre tile
+ *     source at runtime; an empty key bakes broken map / share-
+ *     image URLs into every public route + run page.
+ *   - PUBLIC_REVENUECAT_WEB_API_KEY must be non-empty. Used by
+ *     `/settings/upgrade` to initialise the RevenueCat web SDK; an
+ *     empty key disables the Pro purchase flow silently.
+ *
+ * NOT enforced (intentional):
+ *   - PUBLIC_SENTRY_DSN — error reporting is optional. An empty DSN
+ *     disables Sentry rather than breaking anything; small projects
+ *     ship without it deliberately.
  *
  * The check is invoked by `npm run check:prod-env` (CLI entry below)
  * and by the release-web.yml workflow as a pre-build step. The
@@ -68,6 +80,24 @@ export function checkProductionEnv(env) {
 		});
 	}
 
+	const mapTilerKey = String(env.PUBLIC_MAPTILER_KEY ?? '').trim();
+	if (!mapTilerKey) {
+		findings.push({
+			envVar: 'PUBLIC_MAPTILER_KEY',
+			value: '<empty>',
+			reason: 'Missing / empty. The og:image prerender + every maplibre tile request would ship as broken URLs in the static bundle.',
+		});
+	}
+
+	const revenueCatKey = String(env.PUBLIC_REVENUECAT_WEB_API_KEY ?? '').trim();
+	if (!revenueCatKey) {
+		findings.push({
+			envVar: 'PUBLIC_REVENUECAT_WEB_API_KEY',
+			value: '<empty>',
+			reason: 'Missing / empty. The Pro purchase flow on /settings/upgrade silently disables itself when the SDK initialises without a key.',
+		});
+	}
+
 	return { ok: findings.length === 0, findings };
 }
 
@@ -97,6 +127,8 @@ export function formatGuardError(result) {
 	lines.push('Check that the release workflow has the required repo secrets set:');
 	lines.push('  - PUBLIC_SUPABASE_URL');
 	lines.push('  - PUBLIC_SUPABASE_ANON_KEY');
+	lines.push('  - PUBLIC_MAPTILER_KEY');
+	lines.push('  - PUBLIC_REVENUECAT_WEB_API_KEY');
 	lines.push('');
 	lines.push(banner);
 	lines.push('');

@@ -4093,16 +4093,21 @@ export async function submitReport(input: {
 		p_notes: input.notes?.trim() || null,
 	});
 	if (error) {
-		// Normalise the three load-bearing failure modes into
-		// caller-friendly messages. The PostgREST envelope surfaces
-		// the SQLSTATE / hint exactly as raised in the migration; we
+		// Normalise the load-bearing failure modes into caller-
+		// friendly messages. The PostgREST envelope surfaces the
+		// SQLSTATE / hint exactly as raised in the migration; we
 		// don't lean on the raw text because that string can change.
 		if (error.code === '23505') {
 			throw new Error('You already have a pending report against this content.');
 		}
-		if (error.code === 'P0001' && /rate limit/i.test(error.message)) {
-			throw new Error('Too many reports — please wait a few minutes before trying again.');
-		}
+		// The `create_report` bucket goes through the same
+		// enforce_create_rate_limit trigger as create_club + create_route,
+		// so the shared helper recognises the message + emits a
+		// consistent "filing reports too quickly — please wait N minutes"
+		// rather than this function carrying its own copy of the
+		// translation rule.
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
 		throw error;
 	}
 	return data as string;

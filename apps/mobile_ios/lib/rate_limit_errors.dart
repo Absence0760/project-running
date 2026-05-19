@@ -39,6 +39,8 @@ String? rateLimitErrorMessage({String? code, String? message}) {
       ? 'creating clubs'
       : bucket == 'create_route'
           ? 'creating routes'
-          : 'doing that';
+          : bucket == 'create_report'
+              ? 'filing reports'
+              : 'doing that';
   return "You're $verb too quickly — please wait $wait and try again.";
 }

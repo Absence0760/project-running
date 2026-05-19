@@ -70,6 +70,21 @@ test('unknown bucket falls back to generic verb', () => {
 	assert.equal(msg, "You're doing that too quickly — please wait 30 seconds and try again.");
 });
 
+test('parses create_report bucket with "filing reports" verb', () => {
+	// The submit_report RPC delegates to the same
+	// enforce_create_rate_limit helper (migration 20260908_001 uses
+	// bucket = 'create_report'). data.ts#submitReport routes through
+	// this shared helper instead of carrying its own translation —
+	// pin the verb so a refactor can't silently slip the wording
+	// back to the old generic "Too many reports — please wait a few
+	// minutes" form.
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'rate limit exceeded for create_report, retry in 600s',
+	});
+	assert.equal(msg, "You're filing reports too quickly — please wait 10 minutes and try again.");
+});
+
 test('zero / negative seconds defaults to "a few seconds"', () => {
 	const msg = rateLimitErrorMessage({
 		code: 'P0001',

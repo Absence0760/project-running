@@ -31,6 +31,7 @@ export function rateLimitErrorMessage(err: { code?: string; message?: string } |
 	const verb =
 		bucket === 'create_club' ? 'creating clubs' :
 		bucket === 'create_route' ? 'creating routes' :
+		bucket === 'create_report' ? 'filing reports' :
 		'doing that';
 	return `You're ${verb} too quickly — please wait ${wait} and try again.`;
 }

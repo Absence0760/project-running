@@ -804,6 +804,111 @@ test('export-data validates track_url against the canonical Storage path', () =>
 	);
 });
 
+test('release-web.yml runs the production-env guard before npm run build', () => {
+	// Reason: the guard exists to fail loud on a missing PUBLIC_* secret
+	// rather than ship a static artifact whose share / og pages all
+	// resolve to empty. The workflow MUST invoke
+	// `apps/web/scripts/check_production_env.mjs` ahead of the build
+	// step, and it MUST thread every secret the helper enforces
+	// (SUPABASE_URL, SUPABASE_ANON_KEY, MAPTILER_KEY,
+	// REVENUECAT_WEB_API_KEY) into the step's env block — otherwise the
+	// helper sees empty strings and fails the release on every tag.
+	const wf = read('../../.github/workflows/release-web.yml');
+	const guardIdx = wf.indexOf('check_production_env.mjs');
+	const buildIdx = wf.indexOf('npm run build --workspace=apps/web');
+	assert.ok(guardIdx >= 0, 'release-web.yml must invoke check_production_env.mjs.');
+	assert.ok(buildIdx >= 0, 'release-web.yml must run `npm run build --workspace=apps/web`.');
+	assert.ok(
+		guardIdx < buildIdx,
+		'release-web.yml must invoke check_production_env.mjs BEFORE `npm run build` — failing after build defeats the guard.',
+	);
+	// Locate the guard step's env block. Match from the `node` line
+	// backward to the nearest `env:` keyword.
+	const guardStep = wf.match(
+		/env:\s*\n([\s\S]*?)\n\s*run:\s*node apps\/web\/scripts\/check_production_env\.mjs/,
+	);
+	assert.ok(
+		guardStep,
+		'Could not locate the env: block immediately preceding `node apps/web/scripts/check_production_env.mjs` in release-web.yml.',
+	);
+	const env = guardStep![1];
+	for (const key of [
+		'PUBLIC_SUPABASE_URL',
+		'PUBLIC_SUPABASE_ANON_KEY',
+		'PUBLIC_MAPTILER_KEY',
+		'PUBLIC_REVENUECAT_WEB_API_KEY',
+	]) {
+		assert.match(
+			env,
+			new RegExp(`${key}:\\s*\\$\\{\\{\\s*secrets\\.${key}\\s*\\}\\}`),
+			`release-web.yml guard step must pass ${key} from the repo secret. Adding a new required key to check_production_env.mjs without wiring the secret here fails the release on every tag.`,
+		);
+	}
+});
+
+test('createClub + saveRoute + submitReport all translate P0001 via the shared helper', () => {
+	// Reason: every P0001 rate-limit bucket on the web client must route
+	// through `rateLimitErrorMessage` so users see a "wait N minutes" line
+	// instead of the raw `rate limit exceeded for <bucket>, retry in Ns`
+	// postgres exception. Previously each call-site carried its own ad-hoc
+	// translation (e.g. submitReport's old "Too many reports — please wait
+	// a few minutes"); centralising the rule means a future bucket lands
+	// in one place + behaves identically across clubs / routes / reports.
+	// Twin path on Dart is enforced by mobile_android's architecture-guard
+	// suite.
+	const source = read('src/lib/data.ts');
+	assert.match(
+		source,
+		/import\s+\{\s*rateLimitErrorMessage\s*\}\s+from\s+['"]\.\/rate_limit_errors['"]/,
+		'data.ts must import rateLimitErrorMessage from ./rate_limit_errors.',
+	);
+	// Slice each function body and assert the helper appears with the
+	// "throw new Error(friendly)" follow-up. Using the same bodyAfter
+	// landmark approach as the public-runs test above so a nested type
+	// literal can't trip a naive `^}` regex.
+	function bodyAfter(needle: string, until: string): string {
+		const start = source.indexOf(needle);
+		assert.ok(start >= 0, `Could not locate '${needle}' — rename?`);
+		const end = source.indexOf(until, start + needle.length);
+		assert.ok(
+			end > start,
+			`Could not locate landmark '${until}' after '${needle}'`,
+		);
+		return source.slice(start, end);
+	}
+	const saveRouteBody = bodyAfter(
+		'export async function saveRoute(',
+		'export async function deleteRoute(',
+	);
+	const createClubBody = bodyAfter(
+		'export async function createClub(',
+		'function genToken(',
+	);
+	const submitReportBody = bodyAfter(
+		'export async function submitReport(',
+		// submitReport returns `data as string` and ends — the next
+		// landmark after the function is the closing semicolon's newline.
+		// Anchor on the helper's RETURN statement so the slice is bounded.
+		'return data as string;',
+	);
+	for (const [name, body] of [
+		['saveRoute', saveRouteBody],
+		['createClub', createClubBody],
+		['submitReport', submitReportBody],
+	] as const) {
+		assert.match(
+			body,
+			/rateLimitErrorMessage\(/,
+			`${name} must call rateLimitErrorMessage — every P0001 bucket goes through the shared helper.`,
+		);
+		assert.match(
+			body,
+			/if\s*\(friendly\)\s*throw\s+new\s+Error\(friendly\)/,
+			`${name} must throw the friendly string when the helper recognises the bucket. Skipping the throw drops back to the raw postgres exception.`,
+		);
+	}
+});
+
 test('backup restore strips server-managed profile fields', () => {
 	// Reason: 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
 	// trigger reject any write that touches subscription_tier /

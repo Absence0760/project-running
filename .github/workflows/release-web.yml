@@ -122,6 +122,8 @@ jobs:
         env:
           PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
           PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+          PUBLIC_MAPTILER_KEY: ${{ secrets.PUBLIC_MAPTILER_KEY }}
+          PUBLIC_REVENUECAT_WEB_API_KEY: ${{ secrets.PUBLIC_REVENUECAT_WEB_API_KEY }}
         run: node apps/web/scripts/check_production_env.mjs
 
       - run: npm run build --workspace=apps/web

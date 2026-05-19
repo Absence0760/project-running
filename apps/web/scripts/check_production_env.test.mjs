@@ -37,6 +37,8 @@ test('passes for a real Supabase URL + non-empty anon key', () => {
 	const r = checkProductionEnv({
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(r.ok, true);
 	assert.deepEqual(r.findings, []);
@@ -46,12 +48,16 @@ test('rejects an empty / undefined PUBLIC_SUPABASE_URL', () => {
 	const empty = checkProductionEnv({
 		PUBLIC_SUPABASE_URL: '',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(empty.ok, false);
 	assert.equal(empty.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
 
 	const undef = checkProductionEnv({
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(undef.ok, false);
 	assert.equal(undef.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -61,6 +67,8 @@ test('rejects the CI bundle-budget placeholder URL', () => {
 	const r = checkProductionEnv({
 		PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(r.ok, false);
 	assert.equal(r.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -77,6 +85,8 @@ test('rejects a loopback URL', () => {
 		const r = checkProductionEnv({
 			PUBLIC_SUPABASE_URL: url,
 			PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 		});
 		assert.equal(r.ok, false, `expected reject for ${url}`);
 		assert.equal(r.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -93,23 +103,77 @@ test('rejects an empty PUBLIC_SUPABASE_ANON_KEY independently', () => {
 	assert.equal(r.findings[0].envVar, 'PUBLIC_SUPABASE_ANON_KEY');
 });
 
-test('reports both findings together when both are bad', () => {
+test('reports every missing required var together', () => {
+	// An empty CI environment is the realistic failure mode — the helper
+	// should surface ALL four required keys at once rather than fail
+	// after the first one, so the operator gets a single readable list
+	// instead of N edit-rerun cycles.
+	const r = checkProductionEnv({});
+	assert.equal(r.ok, false);
+	assert.equal(r.findings.length, 4);
+	const vars = r.findings.map((f) => f.envVar).sort();
+	assert.deepEqual(vars, [
+		'PUBLIC_MAPTILER_KEY',
+		'PUBLIC_REVENUECAT_WEB_API_KEY',
+		'PUBLIC_SUPABASE_ANON_KEY',
+		'PUBLIC_SUPABASE_URL',
+	]);
+});
+
+test('rejects an empty PUBLIC_MAPTILER_KEY', () => {
+	// The og:image PNG renderer + the maplibre tile source both inline
+	// this key. An empty value bakes broken URLs into every share
+	// page and every map render — silently, since the maplibre source
+	// just 401s on tile fetch rather than throwing at build time.
 	const r = checkProductionEnv({
-		PUBLIC_SUPABASE_URL: '',
-		PUBLIC_SUPABASE_ANON_KEY: '',
+		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: '',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(r.ok, false);
-	assert.equal(r.findings.length, 2);
-	const vars = r.findings.map((f) => f.envVar).sort();
-	assert.deepEqual(vars, ['PUBLIC_SUPABASE_ANON_KEY', 'PUBLIC_SUPABASE_URL']);
+	assert.equal(r.findings[0].envVar, 'PUBLIC_MAPTILER_KEY');
+});
+
+test('rejects an empty PUBLIC_REVENUECAT_WEB_API_KEY', () => {
+	// `/settings/upgrade` initialises the RevenueCat web SDK with this
+	// key; an empty value disables the Pro purchase flow silently
+	// (no thrown error, just a no-op subscribe button). Fail the build.
+	const r = checkProductionEnv({
+		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: '',
+	});
+	assert.equal(r.ok, false);
+	assert.equal(r.findings[0].envVar, 'PUBLIC_REVENUECAT_WEB_API_KEY');
+});
+
+test('does NOT enforce PUBLIC_SENTRY_DSN (error reporting is optional)', () => {
+	// Sentry is best-effort observability — an empty DSN disables
+	// reporting rather than breaking anything functional. Pin this
+	// so a future refactor that adds DSN to the required list has
+	// to make a deliberate call, not silently break dev / preview
+	// builds that intentionally omit Sentry.
+	const r = checkProductionEnv({
+		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		// PUBLIC_SENTRY_DSN deliberately omitted
+	});
+	assert.equal(r.ok, true);
 });
 
 test('trims whitespace before checking', () => {
 	// `   https://prod-project.supabase.co\n` should still validate
-	// (CI's `cat <<EOF` sometimes leaves a trailing newline).
+	// (CI's `cat <<EOF` sometimes leaves a trailing newline). Same
+	// trim treatment applies to every required key.
 	const r = checkProductionEnv({
 		PUBLIC_SUPABASE_URL: '   https://prod-project.supabase.co\n',
 		PUBLIC_SUPABASE_ANON_KEY: '   sb_publishable_real_key_12345\n',
+		PUBLIC_MAPTILER_KEY: '   real-maptiler-key\n',
+		PUBLIC_REVENUECAT_WEB_API_KEY: '   rcb_real_revenuecat_key\n',
 	});
 	assert.equal(r.ok, true);
 });
@@ -127,6 +191,8 @@ test('CLI exits 0 + prints a proceed banner when env is valid', () => {
 	const r = runScript({
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(r.status, 0, `expected exit 0, got ${r.status}. stderr: ${r.stderr}`);
 	assert.match(r.stdout, /look real — proceeding/);
@@ -137,6 +203,8 @@ test('CLI exits 1 + writes the violation report to stderr when URL is empty', ()
 	const r = runScript({
 		PUBLIC_SUPABASE_URL: '',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(r.status, 1, `expected exit 1, got ${r.status}`);
 	assert.match(r.stderr, /release-web build refuses to start/);
@@ -157,6 +225,8 @@ test('CLI exits 1 on the CI placeholder URL', () => {
 	const r = runScript({
 		PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
 	});
 	assert.equal(r.status, 1);
 	assert.match(r.stderr, /placeholder/i);
