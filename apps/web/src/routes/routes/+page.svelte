@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { formatDistance } from '$lib/mock-data';
+	import { getUnit } from '$lib/units.svelte';
 	import { fetchRoutesWithError, setRouteStar } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -103,21 +104,32 @@
 		if (routes.length === 0 && loading) load();
 	});
 
+	// Bucket boundaries are evaluated in the user's preferred unit so
+	// "< 5" means "< 5 km" for metric users and "< 5 mi" for imperial
+	// users. The bucket KEYS (lt5, 5to10, ...) are unit-agnostic
+	// logical labels — switching the user's pref re-buckets every
+	// route through the new threshold ladder. Without this an
+	// mi-mode user would still see the metric thresholds even though
+	// the labels read in miles.
+	const METRES_PER_MILE = 1609.344;
 	function inDistanceBucket(meters: number, b: DistanceBucket): boolean {
-		const km = meters / 1000;
+		const unitMetres = getUnit() === 'mi' ? METRES_PER_MILE : 1000;
+		const v = meters / unitMetres;
 		switch (b) {
 			case 'any':
 				return true;
 			case 'lt5':
-				return km < 5;
+				return v < 5;
 			case '5to10':
-				return km >= 5 && km < 10;
+				return v >= 5 && v < 10;
 			case '10to20':
-				return km >= 10 && km < 20;
+				return v >= 10 && v < 20;
 			case 'gt20':
-				return km >= 20;
+				return v >= 20;
 		}
 	}
+
+	let distanceUnitLabel = $derived(getUnit() === 'mi' ? 'mi' : 'km');
 
 	let filteredRoutes = $derived.by(() => {
 		const q = search.trim().toLowerCase();
@@ -366,10 +378,10 @@
 					</select>
 					<select bind:value={distanceFilter} class="toolbar-select" aria-label="Distance">
 						<option value="any">Any distance</option>
-						<option value="lt5">&lt; 5 km</option>
-						<option value="5to10">5–10 km</option>
-						<option value="10to20">10–20 km</option>
-						<option value="gt20">20+ km</option>
+						<option value="lt5">&lt; 5 {distanceUnitLabel}</option>
+						<option value="5to10">5–10 {distanceUnitLabel}</option>
+						<option value="10to20">10–20 {distanceUnitLabel}</option>
+						<option value="gt20">20+ {distanceUnitLabel}</option>
 					</select>
 					<select bind:value={sortKey} class="toolbar-select" aria-label="Sort">
 						<option value="newest">Newest first</option>

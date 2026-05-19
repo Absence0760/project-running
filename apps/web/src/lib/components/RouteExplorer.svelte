@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/mock-data';
+	import { getUnit } from '$lib/units.svelte';
 	import {
 		searchPublicRoutes,
 		nearbyPublicRoutes,
@@ -29,13 +30,32 @@
 
 	const PAGE_SIZE = 30;
 
-	const distanceOptions: Record<string, { min?: number; max?: number; label: string }> = {
-		any: { label: 'Any distance' },
-		short: { max: 5000, label: 'Under 5 km' },
-		medium: { min: 5000, max: 10000, label: '5-10 km' },
-		long: { min: 10000, max: 21000, label: '10-21 km' },
-		ultra: { min: 21000, label: '21 km+' },
-	};
+	// Bucket bounds are stored in metres (so the search RPC is
+	// unit-agnostic), but the labels surface in the user's preferred
+	// unit. Derived so a pref flip re-renders the dropdown options.
+	// Thresholds map cleanly: 5/10/21 km ↔ 3/6/13 mi (the canonical
+	// race ladder in each system).
+	const distanceOptions = $derived.by(
+		(): Record<string, { min?: number; max?: number; label: string }> => {
+			if (getUnit() === 'mi') {
+				const m = 1609.344;
+				return {
+					any: { label: 'Any distance' },
+					short: { max: 3 * m, label: 'Under 3 mi' },
+					medium: { min: 3 * m, max: 6 * m, label: '3-6 mi' },
+					long: { min: 6 * m, max: 13 * m, label: '6-13 mi' },
+					ultra: { min: 13 * m, label: '13 mi+' },
+				};
+			}
+			return {
+				any: { label: 'Any distance' },
+				short: { max: 5000, label: 'Under 5 km' },
+				medium: { min: 5000, max: 10000, label: '5-10 km' },
+				long: { min: 10000, max: 21000, label: '10-21 km' },
+				ultra: { min: 21000, label: '21 km+' },
+			};
+		},
+	);
 
 	const surfaceOptions: Record<string, string> = {
 		any: 'Any surface',
