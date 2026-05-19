@@ -376,13 +376,36 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             } catch (_: Throwable) { /* no paired phone, fine */ }
         }
         viewModelScope.launch {
-            sessionBridge.sessions.collect { payload ->
-                val stored = StoredSession.fromPayload(payload)
-                sessionStore.save(stored)
-                applySession(stored)
-                drainQueue()
+            sessionBridge.events.collect { event ->
+                when (event) {
+                    is SessionEvent.Updated -> {
+                        val stored = StoredSession.fromPayload(event.payload)
+                        sessionStore.save(stored)
+                        applySession(stored)
+                        drainQueue()
+                    }
+                    SessionEvent.Cleared -> tearDownSession()
+                }
             }
         }
+    }
+
+    /// Shared teardown for both the user-initiated `signOut` and the
+    /// phone-side sign-out signal that arrives on the SessionBridge as
+    /// `SessionEvent.Cleared`. Mirrors `signOut`'s state mutation so the
+    /// two paths can't drift.
+    private suspend fun tearDownSession() {
+        supabase.clearCredentials()
+        sessionStore.clear()
+        routeStore.clear()
+        authReady.value = false
+        _state.value = _state.value.copy(
+            authed = false,
+            authError = null,
+            stage = Stage.PreRun,
+            routes = emptyList(),
+            selectedRoute = null,
+        )
     }
 
     private fun checkBatteryOptimisation() {
@@ -879,19 +902,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     // ----- Sign in / out -----
 
     fun signOut() {
-        viewModelScope.launch {
-            supabase.clearCredentials()
-            sessionStore.clear()
-            routeStore.clear()
-            authReady.value = false
-            _state.value = _state.value.copy(
-                authed = false,
-                authError = null,
-                stage = Stage.PreRun,
-                routes = emptyList(),
-                selectedRoute = null,
-            )
-        }
+        viewModelScope.launch { tearDownSession() }
     }
 
     fun openSignIn() {

@@ -39,20 +39,39 @@ data class SessionPayload(
     }
 }
 
-/// Bridge to the Wearable Data Layer. Exposes a `Flow<SessionPayload>` of
-/// session pushes from the paired phone plus a `current()` one-shot read
-/// for cold-start recovery (the phone may have pushed a session long
-/// before the watch app launched).
+/// Discriminates between "phone pushed an updated session" and "phone
+/// cleared the session (user signed out)". The latter case fires when
+/// `WearAuthBridge.kt` on the phone side calls `deleteDataItems` —
+/// without this distinction the watch would silently keep a stale
+/// session and continue authing API calls as the signed-out user.
+sealed class SessionEvent {
+    data class Updated(val payload: SessionPayload) : SessionEvent()
+    object Cleared : SessionEvent()
+}
+
+/// Bridge to the Wearable Data Layer. Exposes a `Flow<SessionEvent>` of
+/// session pushes + clears from the paired phone plus a `current()`
+/// one-shot read for cold-start recovery (the phone may have pushed a
+/// session long before the watch app launched).
 class SessionBridge(context: Context) {
     private val dataClient: DataClient = Wearable.getDataClient(context)
 
-    val sessions: Flow<SessionPayload> = callbackFlow {
+    val events: Flow<SessionEvent> = callbackFlow {
         val listener = DataClient.OnDataChangedListener { events ->
             for (event in events) {
-                if (event.type != DataEvent.TYPE_CHANGED) continue
                 if (event.dataItem.uri.path != SessionPayload.PATH) continue
-                val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
-                trySend(SessionPayload.fromDataMap(dm))
+                when (event.type) {
+                    DataEvent.TYPE_CHANGED -> {
+                        val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
+                        trySend(SessionEvent.Updated(SessionPayload.fromDataMap(dm)))
+                    }
+                    DataEvent.TYPE_DELETED -> {
+                        // Phone-side `WearAuthBridge.clear` deleted the
+                        // /supabase_session DataItem — user signed out
+                        // on the phone, propagate to the watch.
+                        trySend(SessionEvent.Cleared)
+                    }
+                }
             }
         }
         dataClient.addListener(listener)
