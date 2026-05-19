@@ -84,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
         showTopBanner(
           context,
           'Recovered unfinished run — '
-          '${(recovered.distanceMetres / 1000).toStringAsFixed(2)} km, '
+          '${UnitFormat.distance(recovered.distanceMetres, widget.preferences.unit)}, '
           '${recovered.duration.inMinutes} min',
           duration: const Duration(seconds: 6),
         );

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
 
@@ -179,7 +180,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                         children: [
                           _Metric(
                             label: 'Distance',
-                            value: '${(_distanceM / 1000).toStringAsFixed(2)} km',
+                            value: formatDistanceForPref(_distanceM),
                           ),
                           _Metric(
                             label: 'Time',

@@ -10,6 +10,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/preferences.dart';
 
@@ -244,6 +245,102 @@ void main() {
       // forces a deliberate review of every formatter.
       expect(DistanceUnit.values.length, 2);
       expect(DistanceUnit.values, containsAll([DistanceUnit.km, DistanceUnit.mi]));
+    });
+  });
+
+  group('formatDistanceForPref + activeDistanceUnit (global accessor)', () {
+    // Several read-only surfaces (feed cards, profile notification
+    // verbs, live spectator stats, club-detail route subtitles, the
+    // home-screen recovered-run banner) used to hardcode
+    // `'${(metres / 1000).toStringAsFixed(2)} km'` because they
+    // didn't take a Preferences constructor dep. `formatDistanceForPref`
+    // is the drop-in replacement that reads the active unit from the
+    // top-level `_activePreferences` registered by main.dart. These
+    // tests pin the accessor's contract; the screen-level widget
+    // tests pin that the right surfaces use it.
+    tearDown(resetActivePreferencesForTest);
+
+    test('defaults to km when no Preferences has been registered', () {
+      // Host-test runner / very-early-cold-start path. Without this
+      // default, the helper would throw on a null deref and crash a
+      // screen build before main.dart's register call completes.
+      resetActivePreferencesForTest();
+      expect(activeDistanceUnit, DistanceUnit.km);
+      expect(formatDistanceForPref(5000), '5.00 km');
+    });
+
+    test('formats in mi when registered Preferences is mi-mode', () async {
+      // The headline regression net: a user with mi-mode pref must
+      // see "3.11 mi" not "5.00 km" on every surface routed through
+      // this helper. The bug shape is "screen hardcoded km even
+      // though Preferences was loaded in mi-mode".
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      expect(activeDistanceUnit, DistanceUnit.mi);
+      expect(formatDistanceForPref(5000), '3.11 mi');
+    });
+
+    test('formats in km when registered Preferences is km-mode', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      expect(activeDistanceUnit, DistanceUnit.km);
+      expect(formatDistanceForPref(5000), '5.00 km');
+    });
+
+    test('re-registering with a new Preferences flips the active unit', () async {
+      // Test isolation contract: a test that registers one Preferences
+      // instance must not bleed into the next. `resetActivePreferencesForTest`
+      // is the documented way to clear; pin that re-registering also
+      // works (so a screen-level test can flip the unit mid-test).
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final kmPrefs = Preferences();
+      await kmPrefs.init();
+      registerActivePreferences(kmPrefs);
+      expect(formatDistanceForPref(5000), '5.00 km');
+
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final miPrefs = Preferences();
+      await miPrefs.init();
+      registerActivePreferences(miPrefs);
+      expect(formatDistanceForPref(5000), '3.11 mi');
+    });
+
+    test('resetActivePreferencesForTest clears the registered instance', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      expect(activeDistanceUnit, DistanceUnit.mi);
+
+      resetActivePreferencesForTest();
+      expect(activeDistanceUnit, DistanceUnit.km); // back to default
+    });
+
+    test('round-trips through UnitFormat.distance contract', () async {
+      // formatDistanceForPref is documented as a drop-in for
+      // `UnitFormat.distance(metres, activeUnit)`. Pin that the
+      // results match byte-for-byte across both unit modes — a
+      // regression that diverged the two would break the screens
+      // that mix calling styles (e.g. a screen that uses
+      // UnitFormat.distance for one row and formatDistanceForPref
+      // for another).
+      for (final useMiles in [false, true]) {
+        SharedPreferences.setMockInitialValues({'use_miles': useMiles});
+        final prefs = Preferences();
+        await prefs.init();
+        registerActivePreferences(prefs);
+        for (final m in [0.0, 50.0, 500.0, 1500.0, 5000.0, 42_195.0]) {
+          expect(
+            formatDistanceForPref(m),
+            UnitFormat.distance(m, activeDistanceUnit),
+            reason: 'metres=$m useMiles=$useMiles drift',
+          );
+        }
+      }
     });
   });
 }

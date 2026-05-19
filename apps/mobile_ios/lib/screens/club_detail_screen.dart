@@ -8,6 +8,7 @@ import 'package:core_models/core_models.dart' hide Route;
 
 import 'package:api_client/api_client.dart';
 
+import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -1084,7 +1085,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     ),
               title: Text(r.name),
               subtitle: Text(
-                '${(r.distanceMetres / 1000).toStringAsFixed(2)} km'
+                '${formatDistanceForPref(r.distanceMetres)}'
                 '  •  ${r.elevationGainMetres.round()}m gain',
               ),
               trailing: const Icon(Icons.chevron_right),

@@ -455,3 +455,46 @@ class UnitFormat {
   static String speedLabel(DistanceUnit unit) =>
       unit == DistanceUnit.mi ? 'mph' : 'km/h';
 }
+
+// ───────────── Global active-preferences accessor ─────────────
+//
+// Screens that take `Preferences` as a constructor dep can reach the
+// user's unit via `widget.preferences.unit`. But several read-only
+// surfaces (notification verbs in the activity feed, the recovered-run
+// banner on home, club-detail route subtitles, live-spectator stat
+// tiles, the TTS announcer) don't take Preferences today and aren't
+// worth threading through every callsite.
+//
+// `registerActivePreferences()` is called once from `main.dart` after
+// Preferences is constructed; thereafter `activeDistanceUnit` reads
+// the current pref, and the top-level `formatDistanceForPref()` helper
+// is a drop-in replacement for the ad-hoc `(metres / 1000) km` strings
+// these surfaces carry today. Non-reactive: a pref flip won't rebuild
+// a mounted screen, but every list refresh / ping tick re-renders the
+// label, which is the cadence these read-only surfaces churn at
+// anyway.
+Preferences? _activePreferences;
+
+/// Register the global Preferences instance. Call once from main.dart
+/// after Preferences.load() completes. Idempotent — re-registering
+/// (e.g. in a test) replaces the previous instance.
+void registerActivePreferences(Preferences p) {
+  _activePreferences = p;
+}
+
+/// Current user unit pref. Returns km when no Preferences has been
+/// registered (host-test runner, very early app start). Use this
+/// rather than constructing Preferences again.
+DistanceUnit get activeDistanceUnit =>
+    _activePreferences?.unit ?? DistanceUnit.km;
+
+/// Format a distance using the active user unit pref. Drop-in for
+/// `'${(metres / 1000).toStringAsFixed(2)} km'` in surfaces that
+/// don't carry a Preferences dep.
+String formatDistanceForPref(double metres) =>
+    UnitFormat.distance(metres, activeDistanceUnit);
+
+@visibleForTesting
+void resetActivePreferencesForTest() {
+  _activePreferences = null;
+}

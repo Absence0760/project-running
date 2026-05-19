@@ -142,6 +142,14 @@ void main() async {
       }),
   ]);
 
+  // Expose the loaded Preferences via the top-level accessor in
+  // `preferences.dart` so screens that don't take a Preferences
+  // constructor dep (feed, profile notifications, club-detail route
+  // list, live spectator, the recovered-run banner, TTS announcer)
+  // can read the user's unit pref via `activeDistanceUnit` /
+  // `formatDistanceForPref()`. Idempotent.
+  registerActivePreferences(prefs);
+
   // Hydrate the theme-mode notifier from the persisted preference.
   // Must run before runApp so the first frame paints in the user's
   // chosen mode instead of flashing the default and then snapping over.

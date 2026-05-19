@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
 import 'people_screen.dart';
@@ -441,7 +442,7 @@ class _EntryCard extends StatelessWidget {
                 children: [
                   _Stat(
                     label: 'Distance',
-                    value: _fmtKm(entry.run.distanceM),
+                    value: formatDistanceForPref(entry.run.distanceM),
                   ),
                   _Stat(
                     label: 'Time',
@@ -470,9 +471,6 @@ class _EntryCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _fmtKm(double metres) =>
-      '${(metres / 1000).toStringAsFixed(2)} km';
 
   static String _fmtDuration(Duration d) {
     final h = d.inHours;

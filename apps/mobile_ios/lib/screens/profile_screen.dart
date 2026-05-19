@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
+import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
@@ -627,7 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _verbFor(NotificationView item) {
     final name = item.actor?.displayName ?? 'Someone';
     final dist = item.runDistanceM != null
-        ? '${(item.runDistanceM! / 1000).toStringAsFixed(1)} km'
+        ? formatDistanceForPref(item.runDistanceM!)
         : 'your run';
     switch (item.row.kind) {
       case 'kudos':
