@@ -15,7 +15,9 @@ import 'package:uuid/uuid.dart';
 import '../elevation.dart';
 import '../geocoding.dart';
 import '../local_route_store.dart';
+import '../preferences.dart';
 import '../rate_limit_errors.dart';
+import '../route_loop.dart';
 import '../route_overlap.dart';
 import '../routing.dart';
 import '../run_stats.dart' show haversineMetres;
@@ -250,6 +252,98 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     await _rerouteThrough(next);
   }
 
+  /// Generate a loop by target distance. Mirrors web `/routes/new`
+  /// "Generate loop" CTA — opens a sheet asking for a target km/mi
+  /// value, then uses `generateLoopWaypoints` to produce radial
+  /// scaffolding around the current map centre and hands it off to
+  /// the existing OSRM rerouting pipe via `_rerouteThrough`.
+  ///
+  /// Single-shot for v1 (no bisect-and-retry loop yet — that's a
+  /// follow-up). The result is usually within ±15% of the target
+  /// thanks to `kDefaultScaleFactor`'s empirical tuning; users can
+  /// nudge the radius via undo + retry if they want it tighter.
+  Future<void> _generateLoop() async {
+    if (_routing || _saving) return;
+    final centre = _map.camera.center;
+    final unit = activeDistanceUnit;
+    final picked = await _pickLoopDistance(unit);
+    if (picked == null || !mounted) return;
+    if (!isValidTargetDistance(picked)) {
+      showTopBanner(context, 'Enter a target distance up to 1000 km.');
+      return;
+    }
+    final waypoints = generateLoopWaypoints(
+      start: centre,
+      targetDistanceMetres: picked,
+      // Random seed so consecutive Generate taps emit different
+      // candidate loops — gives the user a free re-roll.
+      radialSeedRad: DateTime.now().millisecondsSinceEpoch / 1000 % 6.28,
+    );
+    final next = waypoints
+        .map((p) => cm.Waypoint(lat: p.latitude, lng: p.longitude))
+        .toList();
+    await _rerouteThrough(next);
+  }
+
+  /// Prompt the user for a target distance. Returns metres, or null
+  /// if cancelled. The unit picker renders in the user's preferred
+  /// unit (km / mi) and converts to metres on confirm.
+  Future<double?> _pickLoopDistance(DistanceUnit unit) async {
+    final ctl = TextEditingController(
+      text: unit == DistanceUnit.mi ? '3' : '5',
+    );
+    final label = unit == DistanceUnit.mi ? 'mi' : 'km';
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Generate loop'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Target distance — we\'ll build a radial loop around '
+                'the current map centre.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctl,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(suffixText: label),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final v = double.tryParse(ctl.text.trim());
+                if (v == null || v <= 0) {
+                  Navigator.pop(ctx);
+                  return;
+                }
+                // Convert unit value → metres.
+                final metres = unit == DistanceUnit.mi
+                    ? v * 1609.344
+                    : v * 1000;
+                Navigator.pop(ctx, metres);
+              },
+              child: const Text('Generate'),
+            ),
+          ],
+        );
+      },
+    );
+    ctl.dispose();
+    return result;
+  }
+
   void _clear() {
     if (_routing || _saving) return;
     setState(() {
@@ -394,6 +488,11 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
           style: theme.textTheme.bodyLarge,
         ),
         actions: [
+          IconButton(
+            tooltip: 'Generate loop',
+            onPressed: _routing || _saving ? null : _generateLoop,
+            icon: const Icon(Icons.refresh_outlined),
+          ),
           IconButton(
             tooltip: 'Undo',
             onPressed: _waypoints.isEmpty || _routing || _saving
