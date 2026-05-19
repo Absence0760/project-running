@@ -1,7 +1,9 @@
 {
   "version": "5",
   "redirects": {
-    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.105.1"
+    "https://esm.sh/@supabase/phoenix@^0.4.1?target=denonext": "https://esm.sh/@supabase/phoenix@0.4.2?target=denonext",
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.105.1",
+    "https://esm.sh/iceberg-js@^0.8.1?target=denonext": "https://esm.sh/iceberg-js@0.8.1?target=denonext"
   },
   "remote": {
     "https://deno.land/std@0.177.0/async/abortable.ts": "73acfb3ed7261ce0d930dbe89e43db8d34e017b063cf0eaa7d215477bf53442e",
@@ -49,7 +51,18 @@
     "https://deno.land/std@0.224.0/internal/format.ts": "0a98ee226fd3d43450245b1844b47003419d34d210fa989900861c79820d21c2",
     "https://deno.land/std@0.224.0/internal/mod.ts": "534125398c8e7426183e12dc255bb635d94e06d0f93c60a297723abe69d3b22e",
     "https://deno.land/x/sentry@8.40.0/index.mjs": "5edf82d4bfa5ac73ad02477ea0caa3c63e5d0f1ff2690b9b3f5e7ae5772c30d4",
-    "https://esm.sh/@supabase/supabase-js@2.105.1": "d96e63cd3c7d0a07d5821a3573b4923d0e556e064633265c584656d95b22fa38"
+    "https://esm.sh/@supabase/auth-js@2.105.1/denonext/auth-js.mjs": "c5f027326557fd5e129e3a966932105bd5c76bc410d1c262d8d6fa4758707753",
+    "https://esm.sh/@supabase/functions-js@2.105.1/denonext/functions-js.mjs": "b36dc195bb7742f7f0424c6202d5a5c48fa9b579310942de375c6ba24e40a87b",
+    "https://esm.sh/@supabase/phoenix@0.4.2/denonext/phoenix.mjs": "8099a9b1277ec1776f0d0ae15e35be72b87b541a3f787b5477a11b546c8d62a9",
+    "https://esm.sh/@supabase/phoenix@0.4.2?target=denonext": "0790ada96f524af71c1af9a3f01b5517bd6e90e9e7e22e4c5436b92bc1534e8d",
+    "https://esm.sh/@supabase/postgrest-js@2.105.1/denonext/postgrest-js.mjs": "4f878a3ac38bcba2c0ec1b229c41cf0cbda4019a1d2b39d4d97e9af647e6e03c",
+    "https://esm.sh/@supabase/realtime-js@2.105.1/denonext/realtime-js.mjs": "07760754498c39c43fffd6c7c38ddd816a88885e01e78bc9c9f9c9239259c847",
+    "https://esm.sh/@supabase/storage-js@2.105.1/denonext/storage-js.mjs": "259fb2cec58f55b4f605f03b56d94d6d806bc5d70461d563435438be7a4301e8",
+    "https://esm.sh/@supabase/supabase-js@2.105.1": "d96e63cd3c7d0a07d5821a3573b4923d0e556e064633265c584656d95b22fa38",
+    "https://esm.sh/@supabase/supabase-js@2.105.1/denonext/supabase-js.mjs": "be653d3819a9ae95dbc46efe935d7abc3cadc9cc0a3254050a7ef7d773f61449",
+    "https://esm.sh/iceberg-js@0.8.1/denonext/iceberg-js.mjs": "d839d81a2e3966500ca2cdd0c1cb458e9608bacfc91f7bb67a69b2e878dcdb4f",
+    "https://esm.sh/iceberg-js@0.8.1?target=denonext": "58c849d7fe2bf4eca4a84eb501e83c161a7d8c34ca1bec15a962b3bec3062633",
+    "https://esm.sh/tslib@2.8.1/denonext/tslib.mjs": "c38da5dd6da6281964435002ce204cd586634fe3bdfb24a0ee116f48cf3292e9"
   },
   "workspace": {
     "packageJson": {
@@ -57,41 +70,46 @@
         "npm:html-to-image@^1.11.13"
       ],
       "overrides": {
-        "cookie": "^1.0.2"
+        "cookie": "^1.0.2",
+        "devalue": "^5.8.1",
+        "@sveltejs/kit": {
+          "cookie": "^1.0.2",
+          "devalue": "^5.8.1"
+        }
       }
     },
     "members": {
       "apps/web": {
         "packageJson": {
           "dependencies": [
-            "npm:@anthropic-ai/sdk@~0.95.1",
-            "npm:@iconify-json/material-symbols@1.2.71",
-            "npm:@playwright/test@^1.59.1",
+            "npm:@anthropic-ai/sdk@0.97",
+            "npm:@iconify-json/material-symbols@1.2.73",
+            "npm:@playwright/test@^1.60.0",
             "npm:@resvg/resvg-js@^2.6.2",
-            "npm:@revenuecat/purchases-js@^1.39.1",
-            "npm:@sentry/sveltekit@^10.52.0",
+            "npm:@revenuecat/purchases-js@^1.41.0",
+            "npm:@sentry/sveltekit@^10.53.1",
             "npm:@supabase/ssr@~0.10.3",
-            "npm:@supabase/supabase-js@^2.105.0",
+            "npm:@supabase/supabase-js@^2.106.0",
             "npm:@sveltejs/adapter-static@3.0.10",
             "npm:@sveltejs/adapter-vercel@6.3.3",
-            "npm:@sveltejs/kit@2.59.1",
+            "npm:@sveltejs/kit@2.60.1",
             "npm:@sveltejs/vite-plugin-svelte@7.1.2",
             "npm:@types/aws-lambda@8.10.161",
-            "npm:@types/node@^25.6.2",
+            "npm:@types/node@^25.9.0",
             "npm:esbuild@0.28.0",
             "npm:fit-file-parser@3",
             "npm:html-to-image@^1.11.13",
-            "npm:isomorphic-dompurify@^3.12.0",
+            "npm:isomorphic-dompurify@^3.14.0",
             "npm:jszip@^3.10.1",
             "npm:maplibre-gl@^5.24.0",
-            "npm:marked@^18.0.3",
+            "npm:marked@^18.0.4",
             "npm:mdsvex@~0.12.7",
             "npm:normalize.css@8.0.1",
             "npm:svelte-check@4.4.8",
-            "npm:svelte@5.55.5",
+            "npm:svelte@5.55.8",
             "npm:typescript@6.0.3",
             "npm:unplugin-icons@23.0.1",
-            "npm:vite@8.0.12"
+            "npm:vite@8.0.13"
           ]
         }
       }
