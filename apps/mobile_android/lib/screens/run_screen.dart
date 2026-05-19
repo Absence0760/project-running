@@ -370,8 +370,10 @@ class _RunScreenState extends State<RunScreen> {
     if (e is StepTransitionEvent) {
       _publishWorkoutBand();
       if (widget.preferences.audioCues) {
-        _ttsCue('announceWorkoutStepTransition',
-            () => widget.audioCues.announceWorkoutStepTransition(e.step));
+        _ttsCue(
+            'announceWorkoutStepTransition',
+            () => widget.audioCues
+                .announceWorkoutStepTransition(e.step, widget.preferences.unit));
       }
     } else if (e is StepProgressEvent) {
       if (widget.preferences.audioCues) {

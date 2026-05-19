@@ -38,9 +38,28 @@ String formatPaceUtterance(double? secondsPerKm, DistanceUnit unit) {
   return 'Pace, $m minutes $s seconds $unitWord';
 }
 
-/// Spoken distance: km when ≥ 1000 m, metres otherwise. Round km values
-/// drop the decimal ("5 kilometres" not "5.0 kilometres").
-String formatSpokenDistance(double metres) {
+/// Spoken distance: km/metres for metric, miles/yards for imperial.
+/// Round km/mile values drop the decimal ("5 kilometres" not "5.0
+/// kilometres", "1 mile" not "1.0 miles"). Imperial sub-mile values
+/// render in yards (matches how runners read race distances on
+/// imperial signage). Mirror of the visual `UnitFormat.distance` —
+/// the spoken form replaces "km" / "mi" / "m" / "yd" with the
+/// word-form a TTS engine can pronounce naturally.
+String formatSpokenDistance(double metres, DistanceUnit unit) {
+  if (unit == DistanceUnit.mi) {
+    const metresPerMile = 1609.344;
+    final miles = metres / metresPerMile;
+    if (miles >= 1) {
+      if (miles == miles.roundToDouble()) {
+        final n = miles.round();
+        return '$n ${n == 1 ? 'mile' : 'miles'}';
+      }
+      return '${miles.toStringAsFixed(1)} miles';
+    }
+    // Sub-mile → yards. 1 metre = 1.09361 yards.
+    final yards = (metres * 1.09361).round();
+    return '$yards yards';
+  }
   if (metres >= 1000) {
     final km = metres / 1000;
     if (km == km.roundToDouble()) return '${km.round()} kilometres';
@@ -51,14 +70,21 @@ String formatSpokenDistance(double metres) {
 
 /// Compose the workout-step intro line ("Warmup", "Rep 3 of 5", etc.)
 /// followed by spoken distance + pace. Pure — used by the live audio
-/// cues during a structured workout.
-String formatWorkoutStepUtterance(WorkoutStep step) {
-  final paceM = step.targetPaceSecPerKm ~/ 60;
-  final paceS = step.targetPaceSecPerKm % 60;
+/// cues during a structured workout. The pace and distance honour
+/// the user's unit pref so a mi-mode runner hears "Warmup. 1 mile
+/// at 8 minutes per mile" instead of the km form.
+String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit) {
+  const metresPerMile = 1609.344;
+  final paceSecPerUnit = unit == DistanceUnit.mi
+      ? (step.targetPaceSecPerKm * (metresPerMile / 1000)).round()
+      : step.targetPaceSecPerKm;
+  final paceM = paceSecPerUnit ~/ 60;
+  final paceS = paceSecPerUnit % 60;
+  final unitTail = unit == DistanceUnit.mi ? 'per mile' : 'per kilometre';
   final paceTail = paceS == 0
-      ? '$paceM minutes per kilometre'
-      : '$paceM minutes $paceS seconds per kilometre';
-  final dist = formatSpokenDistance(step.targetDistanceMetres);
+      ? '$paceM minutes $unitTail'
+      : '$paceM minutes $paceS seconds $unitTail';
+  final dist = formatSpokenDistance(step.targetDistanceMetres, unit);
   final intro = switch (step.kind) {
     WorkoutStepKind.warmup => 'Warmup',
     WorkoutStepKind.rep => step.repIndex != null && step.repTotal != null
@@ -151,10 +177,16 @@ class AudioCues {
 
   /// Announce a structured-workout step transition. Reuses the same
   /// TTS engine the splits cues use; failures are swallowed by the
-  /// caller's try/catch (layered-resilience contract).
-  Future<void> announceWorkoutStepTransition(WorkoutStep step) async {
+  /// caller's try/catch (layered-resilience contract). [unit] is the
+  /// user's distance preference so the spoken distance + pace match
+  /// what they see on screen ("Warmup. 1 mile at 8 minutes per mile"
+  /// vs "Warmup. 1.6 kilometres at 5 minutes per kilometre").
+  Future<void> announceWorkoutStepTransition(
+    WorkoutStep step,
+    DistanceUnit unit,
+  ) async {
     await _init();
-    await _tts.speak(_workoutStepUtterance(step));
+    await _tts.speak(_workoutStepUtterance(step, unit));
   }
 
   /// In-step progress cue ("halfway" / "fifty metres to go").
@@ -192,8 +224,8 @@ class AudioCues {
     await _tts.speak(text);
   }
 
-  String _workoutStepUtterance(WorkoutStep step) =>
-      formatWorkoutStepUtterance(step);
+  String _workoutStepUtterance(WorkoutStep step, DistanceUnit unit) =>
+      formatWorkoutStepUtterance(step, unit);
 
   Future<void> stop() async {
     await _tts.stop();

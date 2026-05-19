@@ -8,8 +8,8 @@
 //   - `formatSpeedUtterance(secsPerKm, unit)` — km/h or mph string
 //   - `formatPaceUtterance(secsPerKm, unit)` — "Pace, M minutes S
 //     seconds per X" string
-//   - `formatSpokenDistance(metres)` — "N kilometres" / "N metres"
-//   - `formatWorkoutStepUtterance(step)` — composite intro for
+//   - `formatSpokenDistance(metres, unit)` — "N kilometres"/"N metres" or "N miles"/"N yards"
+//   - `formatWorkoutStepUtterance(step, unit)` — composite intro for
 //     structured-workout step transitions
 //
 // These strings ARE the audio cue the runner hears at every split,
@@ -104,11 +104,11 @@ void main() {
     });
   });
 
-  group('formatSpokenDistance', () {
+  group('formatSpokenDistance (km mode)', () {
     test('sub-1km renders as metres (no decimal)', () {
-      expect(formatSpokenDistance(500), '500 metres');
-      expect(formatSpokenDistance(999), '999 metres');
-      expect(formatSpokenDistance(50), '50 metres');
+      expect(formatSpokenDistance(500, DistanceUnit.km), '500 metres');
+      expect(formatSpokenDistance(999, DistanceUnit.km), '999 metres');
+      expect(formatSpokenDistance(50, DistanceUnit.km), '50 metres');
     });
 
     test('exactly 1km drops decimal — "1 kilometres" not "1.0 kilometres"', () {
@@ -116,35 +116,51 @@ void main() {
       // and renders them without the decimal. A regression that
       // always emitted .1f would speak "1.0 kilometres" — accurate
       // but unnatural.
-      expect(formatSpokenDistance(1000), '1 kilometres');
-      expect(formatSpokenDistance(5000), '5 kilometres');
+      expect(formatSpokenDistance(1000, DistanceUnit.km), '1 kilometres');
+      expect(formatSpokenDistance(5000, DistanceUnit.km), '5 kilometres');
     });
 
     test('non-integer km renders with one decimal', () {
       // 5500 m → 5.5 km
-      expect(formatSpokenDistance(5500), '5.5 kilometres');
+      expect(formatSpokenDistance(5500, DistanceUnit.km), '5.5 kilometres');
       // 1234 m → 1.234 km → "1.2" (toStringAsFixed rounds)
-      expect(formatSpokenDistance(1234), '1.2 kilometres');
+      expect(formatSpokenDistance(1234, DistanceUnit.km), '1.2 kilometres');
     });
 
     test('999.5 metres rounds to 1000 m (renders as metres, not km)', () {
       // metres.round() floors-half-to-even-by-default in Dart's
-      // num.round(); 999.5 → 1000 actually. Then the check is
-      // `metres >= 1000`. So 999.5 → 1000 m → renders as
-      // "1000 metres" via the round, OR enters the km branch and
-      // renders as "1 kilometres". Let's pin the actual behaviour.
-      //
-      // Looking at the source: line 44 checks `metres >= 1000`, then
-      // line 49 does `metres.round()`. 999.5 < 1000 → metres branch.
-      // 999.5.round() = 1000 → "1000 metres".
-      //
-      // So the >= 1000 check uses the RAW metres, not the rounded.
-      // This is the kind of edge case that could surprise a refactor.
-      expect(formatSpokenDistance(999.5), '1000 metres');
+      // num.round(); 999.5 → 1000 actually. The km/metres branch
+      // checks `metres >= 1000` BEFORE rounding, so 999.5 enters the
+      // metres branch and `999.5.round()` yields "1000 metres".
+      // Edge case worth pinning.
+      expect(formatSpokenDistance(999.5, DistanceUnit.km), '1000 metres');
     });
 
     test('exactly 1000 m boundary enters the km branch', () {
-      expect(formatSpokenDistance(1000.0), '1 kilometres');
+      expect(formatSpokenDistance(1000.0, DistanceUnit.km), '1 kilometres');
+    });
+  });
+
+  group('formatSpokenDistance (mi mode)', () {
+    // Regression net for the unit-aware TTS path. A user with mi-pref
+    // who heard "5 kilometres" while their on-screen distance read
+    // "3.11 mi" is the headline bug this guards against.
+    test('integer miles uses singular/plural correctly', () {
+      // 1 mile = 1609.344 m → "1 mile" (NOT "1 miles")
+      expect(formatSpokenDistance(1609.344, DistanceUnit.mi), '1 mile');
+      // 5 miles → "5 miles"
+      expect(formatSpokenDistance(5 * 1609.344, DistanceUnit.mi), '5 miles');
+    });
+
+    test('non-integer miles uses one decimal — "3.1 miles"', () {
+      // 5000 m / 1609.344 ≈ 3.107 → "3.1 miles"
+      expect(formatSpokenDistance(5000, DistanceUnit.mi), '3.1 miles');
+    });
+
+    test('sub-1-mile renders in yards', () {
+      // 800 m × 1.09361 ≈ 875 yards
+      expect(formatSpokenDistance(800, DistanceUnit.mi), '875 yards');
+      expect(formatSpokenDistance(0, DistanceUnit.mi), '0 yards');
     });
   });
 
@@ -167,13 +183,15 @@ void main() {
         );
 
     test('warmup intro reads "Warmup."', () {
-      final r = formatWorkoutStepUtterance(step(kind: WorkoutStepKind.warmup));
+      final r = formatWorkoutStepUtterance(
+          step(kind: WorkoutStepKind.warmup), DistanceUnit.km);
       expect(r, startsWith('Warmup.'));
     });
 
     test('rep with repIndex+repTotal reads "Rep N of M"', () {
       final r = formatWorkoutStepUtterance(
         step(kind: WorkoutStepKind.rep, repIndex: 3, repTotal: 5),
+        DistanceUnit.km,
       );
       expect(r, startsWith('Rep 3 of 5.'));
     });
@@ -181,7 +199,8 @@ void main() {
     test('rep WITHOUT repIndex/repTotal degrades to bare "Rep"', () {
       // Defensive: a non-rep refactor that wired generic intervals
       // through with null indices must not speak "Rep null of null".
-      final r = formatWorkoutStepUtterance(step(kind: WorkoutStepKind.rep));
+      final r = formatWorkoutStepUtterance(
+          step(kind: WorkoutStepKind.rep), DistanceUnit.km);
       expect(r, startsWith('Rep.'));
       expect(r, isNot(contains('null')));
     });
@@ -190,15 +209,18 @@ void main() {
       // Each enum value gets its own intro. A per-value regression
       // (e.g. recovery → "Recovery rep") wouldn't fail other tests.
       expect(
-        formatWorkoutStepUtterance(step(kind: WorkoutStepKind.recovery)),
+        formatWorkoutStepUtterance(
+            step(kind: WorkoutStepKind.recovery), DistanceUnit.km),
         startsWith('Recovery.'),
       );
       expect(
-        formatWorkoutStepUtterance(step(kind: WorkoutStepKind.steady)),
+        formatWorkoutStepUtterance(
+            step(kind: WorkoutStepKind.steady), DistanceUnit.km),
         startsWith('Steady.'),
       );
       expect(
-        formatWorkoutStepUtterance(step(kind: WorkoutStepKind.cooldown)),
+        formatWorkoutStepUtterance(
+            step(kind: WorkoutStepKind.cooldown), DistanceUnit.km),
         startsWith('Cooldown.'),
       );
     });
@@ -211,6 +233,7 @@ void main() {
       // formatPaceUtterance (which DOES include "0 seconds").
       final r = formatWorkoutStepUtterance(
         step(kind: WorkoutStepKind.warmup, targetPaceSecPerKm: 300),
+        DistanceUnit.km,
       );
       expect(r, contains('5 minutes per kilometre'));
       expect(r, isNot(contains('5 minutes 0 seconds')));
@@ -221,6 +244,7 @@ void main() {
         step(kind: WorkoutStepKind.rep,
             repIndex: 1, repTotal: 3,
             targetPaceSecPerKm: 330),
+        DistanceUnit.km,
       );
       expect(r, contains('5 minutes 30 seconds per kilometre'));
     });
@@ -231,12 +255,35 @@ void main() {
         step(kind: WorkoutStepKind.rep,
             repIndex: 1, repTotal: 1,
             targetDistanceMetres: 1000),
+        DistanceUnit.km,
       );
       expect(long, contains('1 kilometres'));
       final short = formatWorkoutStepUtterance(
         step(kind: WorkoutStepKind.recovery, targetDistanceMetres: 200),
+        DistanceUnit.km,
       );
       expect(short, contains('200 metres'));
+    });
+
+    test('mi-mode: distance + pace both render imperial', () {
+      // Regression net for the unit-aware workout-step utterance.
+      // A bug that left only distance unit-aware would speak
+      // "1 mile at 5 minutes per kilometre" — confusing for an
+      // imperial runner.
+      final r = formatWorkoutStepUtterance(
+        step(
+          kind: WorkoutStepKind.rep,
+          repIndex: 1,
+          repTotal: 3,
+          targetDistanceMetres: 1609.344,
+          targetPaceSecPerKm: 300,
+        ),
+        DistanceUnit.mi,
+      );
+      expect(r, contains('1 mile'));
+      expect(r, contains('per mile'));
+      expect(r, isNot(contains('per kilometre')));
+      expect(r, isNot(contains('kilometres')));
     });
   });
 }
