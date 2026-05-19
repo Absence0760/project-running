@@ -93,7 +93,7 @@ void main() {
       // Scope each label search to descendants of the NavigationBar so
       // duplicate text elsewhere in the page body doesn't cause false failures.
       final navBar = find.byType(NavigationBar);
-      for (final label in ['Home', 'Run', 'History', 'Routes', 'Clubs', 'Settings']) {
+      for (final label in ['Home', 'Run', 'History', 'Routes', 'Social', 'Settings']) {
         expect(
           find.descendant(of: navBar, matching: find.text(label)),
           findsOneWidget,

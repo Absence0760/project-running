@@ -14,17 +14,23 @@ import 'people_screen.dart';
 class ClubsScreen extends StatefulWidget {
   final SocialService social;
   final TrainingService training;
+  /// When true, render only the body (segmented strip + list) without
+  /// the Scaffold/AppBar/FAB wrapping. The parent (e.g. SocialScreen)
+  /// owns those chrome surfaces. Default false preserves the
+  /// standalone-route shape for any legacy callers.
+  final bool embedded;
   const ClubsScreen({
     super.key,
     required this.social,
     required this.training,
+    this.embedded = false,
   });
 
   @override
-  State<ClubsScreen> createState() => _ClubsScreenState();
+  State<ClubsScreen> createState() => ClubsScreenState();
 }
 
-class _ClubsScreenState extends State<ClubsScreen> {
+class ClubsScreenState extends State<ClubsScreen> {
   // Default to "My clubs" — returning users want to see the clubs they're
   // already in first. Fresh users with no memberships get an empty state
   // that points them at Browse.
@@ -88,93 +94,78 @@ class _ClubsScreenState extends State<ClubsScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  /// FAB body — exposed for embedding parents (SocialScreen) that
+  /// want to hoist the FAB to their own Scaffold.
+  Widget buildCreateClubFab(BuildContext context) {
+    return FloatingActionButton.extended(
+      heroTag: 'clubs_create_fab',
+      onPressed: () async {
+        final slug = await showClubFormSheet(context, social: widget.social);
+        if (slug == null || !mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ClubDetailScreen(
+              social: widget.social,
+              training: widget.training,
+              slug: slug,
+            ),
+          ),
+        );
+        _load();
+      },
+      icon: const Icon(Icons.add),
+      label: const Text('New club'),
+    );
+  }
+
+  /// Embedded mode: the segment-strip + search bar live INSIDE the
+  /// body so the parent (SocialScreen) can host its own outer
+  /// TabBar without nesting two Material chrome surfaces.
+  Widget _buildBody(BuildContext context, {required bool inlineSegments}) {
     final theme = Theme.of(context);
     final list = _tab == 0 ? _browse : _mine;
-
-    // Height budget: segmented button (~48) + 8px below. Plus the search
-    // field (~48) when we're on the Browse tab. Sizing this conditionally
-    // avoids both an empty band on "My clubs" and a 12px overflow stripe
-    // on "Browse" that otherwise show up as a visible glitch when tabbing.
-    final bottomHeight = _tab == 0 ? 108.0 : 56.0;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Clubs'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_search),
-            tooltip: 'Find people',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => PeopleScreen(api: ApiClient()),
-                ),
-              );
-            },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (inlineSegments) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('Browse')),
+                ButtonSegment(value: 1, label: Text('My clubs')),
+              ],
+              selected: {_tab},
+              onSelectionChanged: (s) => setState(() => _tab = s.first),
+            ),
           ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(bottomHeight),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('Browse')),
-                    ButtonSegment(value: 1, label: Text('My clubs')),
-                  ],
-                  selected: {_tab},
-                  onSelectionChanged: (s) => setState(() => _tab = s.first),
-                ),
-              ),
-              if (_tab == 0)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onSubmitted: (_) => _load(),
-                    decoration: InputDecoration(
-                      hintText: 'Search by name or location',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      isDense: true,
-                      filled: true,
-                      fillColor: theme.colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+          if (_tab == 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                onSubmitted: (_) => _load(),
+                decoration: InputDecoration(
+                  hintText: 'Search by name or location',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-            ],
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'clubs_create_fab',
-        onPressed: () async {
-          final slug = await showClubFormSheet(context, social: widget.social);
-          if (slug == null || !mounted) return;
-          // Drop into the new club so the owner sees the immediate
-          // shape of what they just created.
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => ClubDetailScreen(
-                social: widget.social,
-                training: widget.training,
-                slug: slug,
               ),
             ),
-          );
-          _load();
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('New club'),
-      ),
-      body: _loading
+        ],
+        Expanded(child: _buildList(list)),
+      ],
+    );
+  }
+
+  Widget _buildList(List<ClubView> list) {
+    return _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? ErrorState(message: _error!, onRetry: _load)
@@ -202,7 +193,37 @@ class _ClubsScreenState extends State<ClubsScreen> {
                       },
                     ),
                   ),
+                );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Embedded mode: just the body — chrome (AppBar, FAB) is the
+    // SocialScreen parent's responsibility. Segments + search bar
+    // are inlined into the body so the parent's outer TabBar can
+    // remain visually clean.
+    if (widget.embedded) {
+      return _buildBody(context, inlineSegments: true);
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Clubs'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_search),
+            tooltip: 'Find people',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PeopleScreen(api: ApiClient()),
                 ),
+              );
+            },
+          ),
+        ],
+      ),
+      floatingActionButton: buildCreateClubFab(context),
+      body: _buildBody(context, inlineSegments: true),
     );
   }
 }

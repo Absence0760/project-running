@@ -14,7 +14,11 @@ import '../widgets/top_banner.dart';
 /// last 14 days. Mirrors the web `/feed` route (decisions §31).
 class FeedScreen extends StatefulWidget {
   final ApiClient api;
-  const FeedScreen({super.key, required this.api});
+  /// Embedded mode skips the Scaffold/AppBar wrapping. Used by the
+  /// SocialScreen Material TabBar host so a single Scaffold owns the
+  /// tab chrome instead of nesting one per inner screen.
+  final bool embedded;
+  const FeedScreen({super.key, required this.api, this.embedded = false});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -150,6 +154,9 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (widget.embedded) {
+      return _buildBody(theme);
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Feed'),
@@ -167,7 +174,12 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         ],
       ),
-      body: _loading
+      body: _buildBody(theme),
+    );
+  }
+
+  Widget _buildBody(ThemeData theme) {
+    return _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
               ? ErrorState(
@@ -244,8 +256,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             ),
                     ),
                   ],
-                ),
-    );
+                );
   }
 
   Widget _buildToolbar(ThemeData theme) {

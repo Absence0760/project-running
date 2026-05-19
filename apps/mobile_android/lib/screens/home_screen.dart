@@ -14,12 +14,12 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../widgets/billing_issue_banner.dart';
 import '../widgets/top_banner.dart';
-import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
 import 'runs_screen.dart';
 import 'routes_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
+import 'social_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -159,8 +159,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _LazyKeepAliveTab(
-        builder: () => ClubsScreen(
-          key: const PageStorageKey('clubs'),
+        builder: () => SocialScreen(
+          key: const PageStorageKey('social'),
+          api: widget.apiClient ?? ApiClient(),
           social: widget.social,
           training: widget.training,
         ),
@@ -248,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
             NavigationDestination(icon: Icon(Icons.play_arrow), label: 'Run'),
             NavigationDestination(icon: Icon(Icons.history), label: 'History'),
             NavigationDestination(icon: Icon(Icons.route), label: 'Routes'),
-            NavigationDestination(icon: Icon(Icons.groups), label: 'Clubs'),
+            NavigationDestination(icon: Icon(Icons.public), label: 'Social'),
             NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),

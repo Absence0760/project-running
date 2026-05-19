@@ -14,8 +14,12 @@ import 'profile_screen.dart';
 /// bottom-nav Clubs entry hosts the social discovery entry point).
 class PeopleScreen extends StatefulWidget {
   final ApiClient api;
+  /// Embedded mode skips the Scaffold/AppBar wrapping — the search
+  /// field that's normally hosted in the AppBar moves inline at the
+  /// top of the body. Used by SocialScreen for the People tab.
+  final bool embedded;
 
-  const PeopleScreen({super.key, required this.api});
+  const PeopleScreen({super.key, required this.api, this.embedded = false});
 
   @override
   State<PeopleScreen> createState() => _PeopleScreenState();
@@ -145,19 +149,118 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final theme = Theme.of(context);
     final hasQuery = _query.isNotEmpty;
     final visible = hasQuery ? _results : _suggestions;
+    final searchField = TextField(
+      controller: _searchCtl,
+      autofocus: !widget.embedded,
+      textInputAction: TextInputAction.search,
+      style: theme.textTheme.titleMedium,
+      decoration: InputDecoration(
+        hintText: 'Search runners by name',
+        prefixIcon: widget.embedded
+            ? const Icon(Icons.search, size: 20)
+            : null,
+        border: widget.embedded
+            ? OutlineInputBorder(borderRadius: BorderRadius.circular(12))
+            : InputBorder.none,
+        isDense: widget.embedded,
+        suffixIcon: hasQuery
+            ? IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear search',
+                onPressed: _clearSearch,
+              )
+            : null,
+      ),
+      onChanged: _onSearchChanged,
+    );
+    final body = SafeArea(
+      top: false,
+      child: CustomScrollView(
+        slivers: [
+          if (widget.embedded)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: searchField,
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text(
+                hasQuery ? 'Search results' : 'Suggested for you',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ),
+          if (hasQuery && _searching)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (hasQuery && _results.isEmpty)
+            SliverToBoxAdapter(
+              child: _Empty(
+                icon: Icons.search_off,
+                title: 'No runners match "$_query"',
+                body: 'Try a shorter or different name. Display names are '
+                    'public; people who haven\'t set one yet won\'t show up here.',
+              ),
+            )
+          else if (!hasQuery && _loadingSuggestions)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (!hasQuery && _suggestions.isEmpty)
+            SliverToBoxAdapter(
+              child: _Empty(
+                icon: Icons.groups_outlined,
+                title: 'No suggestions yet',
+                body: 'Suggestions come from people in clubs you\'ve joined. '
+                    'Join a club to start seeing them here.',
+              ),
+            )
+          else
+            SliverList.separated(
+              itemBuilder: (_, i) => _PersonRow(
+                person: visible[i],
+                busy: _rowBusy.contains(visible[i].id),
+                onToggleFollow: () => _toggleFollow(visible[i]),
+                onOpenProfile: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ProfileScreen(
+                        api: widget.api,
+                        userId: visible[i].id,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemCount: visible.length,
+            ),
+        ],
+      ),
+    );
+    if (widget.embedded) {
+      return body;
+    }
     return Scaffold(
       appBar: AppBar(
-        title: TextField(
-          controller: _searchCtl,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          style: theme.textTheme.titleMedium,
-          decoration: const InputDecoration(
-            hintText: 'Search runners by name',
-            border: InputBorder.none,
-          ),
-          onChanged: _onSearchChanged,
-        ),
+        title: searchField,
         actions: [
           if (hasQuery)
             IconButton(
@@ -167,81 +270,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
             ),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                child: Text(
-                  hasQuery ? 'Search results' : 'Suggested for you',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-            ),
-            if (hasQuery && _searching)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            else if (hasQuery && _results.isEmpty)
-              SliverToBoxAdapter(
-                child: _Empty(
-                  icon: Icons.search_off,
-                  title: 'No runners match "$_query"',
-                  body: 'Try a shorter or different name. Display names are '
-                      'public; people who haven\'t set one yet won\'t show up here.',
-                ),
-              )
-            else if (!hasQuery && _loadingSuggestions)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            else if (!hasQuery && _suggestions.isEmpty)
-              SliverToBoxAdapter(
-                child: _Empty(
-                  icon: Icons.groups_outlined,
-                  title: 'No suggestions yet',
-                  body: 'Suggestions come from people in clubs you\'ve joined. '
-                      'Join a club to start seeing them here.',
-                ),
-              )
-            else
-              SliverList.separated(
-                itemBuilder: (_, i) => _PersonRow(
-                  person: visible[i],
-                  busy: _rowBusy.contains(visible[i].id),
-                  onToggleFollow: () => _toggleFollow(visible[i]),
-                  onOpenProfile: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => ProfileScreen(
-                          api: widget.api,
-                          userId: visible[i].id,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemCount: visible.length,
-              ),
-          ],
-        ),
-      ),
+      body: body,
     );
   }
 }
