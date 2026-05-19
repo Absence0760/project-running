@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:core_models/core_models.dart' show Waypoint;
@@ -78,6 +79,30 @@ void main() {
         fetcher: stub.call,
       );
       expect(stub.lastUrl!.path, contains('/car/'));
+    });
+
+    test('falls back to the input point when the fetcher exceeds '
+        'kOsrmSnapTimeout', () async {
+      // Stub that never resolves — without the inner .timeout() this
+      // would hang the route-builder iteration forever. With it, the
+      // catch-all in snapToRoad swallows TimeoutException and returns
+      // the original point so the caller can fall through.
+      Future<String> hangingFetcher(Uri _) async {
+        await Future<void>.delayed(const Duration(seconds: 30));
+        return '{}';
+      }
+
+      const input = Waypoint(lat: 47.37, lng: 8.54);
+      final out = await snapToRoad(
+        input,
+        fetcher: hangingFetcher,
+      ).timeout(
+        // Outer guard so a regression doesn't have to wait the full
+        // 30s before flutter_test kills the run.
+        const Duration(seconds: 9),
+        onTimeout: () => fail('snapToRoad did not honour kOsrmSnapTimeout'),
+      );
+      expect(out, input);
     });
   });
 
@@ -184,6 +209,32 @@ void main() {
           fetcher: stub.call,
         ),
         throwsA(isA<StateError>()),
+      );
+    });
+
+    test('throws TimeoutException when the fetcher exceeds '
+        'kOsrmRouteTimeout', () async {
+      // No catch in fetchRouteThrough — the caller (route_builder_screen)
+      // catches and shows a banner. The point of the timeout is that
+      // the throw happens at ~8s, not after the network's eventual
+      // 30s+ stall.
+      Future<String> hangingFetcher(Uri _) async {
+        await Future<void>.delayed(const Duration(seconds: 30));
+        return '{}';
+      }
+      await expectLater(
+        fetchRouteThrough(
+          const [
+            Waypoint(lat: 47.37, lng: 8.54),
+            Waypoint(lat: 47.38, lng: 8.55),
+          ],
+          fetcher: hangingFetcher,
+        ).timeout(
+          const Duration(seconds: 12),
+          onTimeout: () =>
+              fail('fetchRouteThrough did not honour kOsrmRouteTimeout'),
+        ),
+        throwsA(isA<TimeoutException>()),
       );
     });
   });

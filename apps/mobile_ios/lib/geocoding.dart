@@ -12,6 +12,12 @@ import 'dart:io';
 
 const _kMapTilerBase = 'https://api.maptiler.com/geocoding';
 
+/// Ceiling on each MapTiler lookup. Without it a flaky network can
+/// pin the AppBar place-search overlay indefinitely; the empty-list
+/// fallback below already returns nothing on the timeout so the
+/// search dropdown clears rather than spinning forever.
+const Duration kGeocodingTimeout = Duration(seconds: 5);
+
 class PlaceResult {
   final String name;
   final double lat;
@@ -62,7 +68,7 @@ Future<List<PlaceResult>> searchPlaces(
     '$_kMapTilerBase/$encoded.json?key=$apiKey&limit=$limit',
   );
   try {
-    final body = await (fetcher ?? _defaultFetcher)(url);
+    final body = await (fetcher ?? _defaultFetcher)(url).timeout(kGeocodingTimeout);
     final data = jsonDecode(body) as Map<String, dynamic>;
     final features = data['features'] as List?;
     if (features == null) return const [];

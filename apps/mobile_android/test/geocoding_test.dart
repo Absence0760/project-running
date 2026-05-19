@@ -127,5 +127,24 @@ void main() {
       );
       expect(out.first.name, 'Just text');
     });
+
+    test('empty list when the fetcher exceeds kGeocodingTimeout', () async {
+      // Stub fetcher that never resolves — without the inner timeout
+      // the AppBar search overlay would spin forever on a flaky
+      // network. With it the catch-all returns an empty list.
+      Future<String> hangingFetcher(Uri _) async {
+        await Future<void>.delayed(const Duration(seconds: 30));
+        return '{}';
+      }
+      final out = await searchPlaces(
+        'London',
+        apiKey: 'k',
+        fetcher: hangingFetcher,
+      ).timeout(
+        const Duration(seconds: 9),
+        onTimeout: () => fail('searchPlaces did not honour kGeocodingTimeout'),
+      );
+      expect(out, isEmpty);
+    });
   });
 }

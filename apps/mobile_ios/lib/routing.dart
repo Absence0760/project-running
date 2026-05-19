@@ -15,6 +15,17 @@ import 'package:core_models/core_models.dart' show Waypoint;
 
 const _kOsrmBase = 'https://router.project-osrm.org';
 
+/// Per-call ceilings mirroring the web side
+/// (`apps/web/src/lib/components/RouteBuilder.svelte`): 5s on the
+/// /nearest snap helper, 8s on the /route polyline build. Without
+/// these the public OSRM demo's occasional 30s+ stalls pin the
+/// route-builder's "Calculating route…" spinner indefinitely.
+/// TimeoutException falls into [snapToRoad]'s catch-all (returning
+/// the input unchanged) or propagates out of [fetchRouteThrough] for
+/// the caller's existing banner path.
+const Duration kOsrmSnapTimeout = Duration(seconds: 5);
+const Duration kOsrmRouteTimeout = Duration(seconds: 8);
+
 /// HTTP profile passed to OSRM. `foot` mirrors the web's trail mode;
 /// `car` mirrors the road mode. We don't expose a bicycle profile.
 enum OsrmProfile { foot, car }
@@ -58,7 +69,7 @@ Future<Waypoint> snapToRoad(
     '$_kOsrmBase/nearest/v1/${profile.path}/${point.lng},${point.lat}',
   );
   try {
-    final body = await (fetcher ?? _defaultFetcher)(url);
+    final body = await (fetcher ?? _defaultFetcher)(url).timeout(kOsrmSnapTimeout);
     final data = jsonDecode(body) as Map<String, dynamic>;
     if (data['code'] != 'Ok') return point;
     final waypoints = data['waypoints'] as List?;
@@ -101,7 +112,7 @@ Future<OsrmRouteResult> fetchRouteThrough(
     '$_kOsrmBase/route/v1/${profile.path}/$coords'
     '?overview=full&geometries=geojson',
   );
-  final body = await (fetcher ?? _defaultFetcher)(url);
+  final body = await (fetcher ?? _defaultFetcher)(url).timeout(kOsrmRouteTimeout);
   final data = jsonDecode(body) as Map<String, dynamic>;
   if (data['code'] != 'Ok') {
     throw StateError('OSRM code=${data['code']}');

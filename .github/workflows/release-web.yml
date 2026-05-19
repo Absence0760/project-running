@@ -111,6 +111,19 @@ jobs:
 
       - run: npm run check --workspace=apps/web
 
+      - name: Guard production env (no placeholder / empty secrets)
+        # Without this, a missing repo secret in the release workflow
+        # writes an empty PUBLIC_SUPABASE_URL into apps/web/.env, the
+        # build's `entries()` calls all return [], svelte.config.js's
+        # `handleUnseenRoutes: 'warn'` quietly accepts the empty set,
+        # and we ship a static artifact whose share + og pages are
+        # all missing. The guard fails loud instead. See
+        # apps/web/scripts/check_production_env.mjs for the rules.
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+        run: node apps/web/scripts/check_production_env.mjs
+
       - run: npm run build --workspace=apps/web
 
       - name: Strip .env after build
