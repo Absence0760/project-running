@@ -117,7 +117,20 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          # Cache the Flutter SDK install — saves ~60-90s per run on
+          # the ~700MB download + setup. The action keys on channel +
+          # version, so a Flutter bump invalidates cleanly.
+          cache: true
       - run: dart pub global activate melos
+      # Cache the per-package pub downloads so `melos bootstrap`'s
+      # ~30 nested `pub get` calls hit warm. Key on every pubspec.lock
+      # in the workspace — any dep bump invalidates, otherwise hits.
+      - name: Cache pub-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.pub-cache
+          key: pub-cache-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-cache-
       - run: melos bootstrap
       - name: Cache Gradle
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -132,8 +145,18 @@ jobs:
       # without needing a signing keystore — debug-style signing is
       # implicit. We don't upload the artifact; this is a
       # toolchain-only smoke test.
+      #
+      # `--target-platform android-arm64` cuts AOT compile from 3
+      # ABIs (armeabi-v7a + arm64-v8a + x86_64) to one. The smoke
+      # test's purpose is "does the toolchain assemble" — arm64
+      # alone proves that, modern devices are 100% arm64, and Play
+      # Store deprecated 32-bit in 2019. The shipped release
+      # artifact (`release-android.yml` on `mobile_android@*` tags)
+      # builds an AAB which is universal — the Play Store handles
+      # the per-device split — so the smoke test's narrower scope
+      # doesn't compromise the release path.
       - working-directory: apps/mobile_android
-        run: flutter build apk --release --no-tree-shake-icons
+        run: flutter build apk --release --no-tree-shake-icons --target-platform android-arm64
 
   twin-parity:
     name: mobile_android ↔ mobile_ios twin parity
