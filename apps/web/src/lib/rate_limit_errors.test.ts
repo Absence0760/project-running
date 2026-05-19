@@ -84,3 +84,50 @@ test('mismatched format returns null (fail safe — don\'t pretend to parse)', (
 		null,
 	);
 });
+
+test('tolerates extra whitespace between "retry in" and the seconds', () => {
+	// The postgres `raise exception '..., retry in %s'` literal uses a
+	// single space, but a future migration tweak could land tab / two-
+	// space variants. The regex's `\s*` keeps the parse tolerant.
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'rate limit exceeded for create_club,  retry in  42s',
+	});
+	assert.equal(msg, "You're creating clubs too quickly — please wait 42 seconds and try again.");
+});
+
+test('parse is case-insensitive (mixed case still matches)', () => {
+	// Postgres' raise is case-sensitive at write-time, but case-insensitive
+	// at parse-time guards against a future copy-edit that capitalises
+	// "Rate Limit Exceeded" — the helper still recognises and translates.
+	const msg = rateLimitErrorMessage({
+		code: 'P0001',
+		message: 'Rate Limit Exceeded for create_club, retry in 10s',
+	});
+	assert.equal(msg, "You're creating clubs too quickly — please wait 10 seconds and try again.");
+});
+
+test('rejects a wrong SQLSTATE even with matching message text', () => {
+	// Defensive: a CHECK-constraint violation (23514) or RLS deny (42501)
+	// must never get the friendly-rate-limit treatment, even on the
+	// hypothetical case that something else surfaces a near-identical
+	// "rate limit" string. Only P0001 + matching format is a match.
+	assert.equal(
+		rateLimitErrorMessage({
+			code: '23514',
+			message: 'rate limit exceeded for create_club, retry in 42s',
+		}),
+		null,
+	);
+});
+
+test('returns null when message has the right shape but no SQLSTATE', () => {
+	// A bare-string error (e.g. from a non-PostgrestError throw path)
+	// must not be confused with the trigger's exception.
+	assert.equal(
+		rateLimitErrorMessage({
+			message: 'rate limit exceeded for create_club, retry in 42s',
+		}),
+		null,
+	);
+});

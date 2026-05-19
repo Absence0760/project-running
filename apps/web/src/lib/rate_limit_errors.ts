@@ -17,7 +17,7 @@
 export function rateLimitErrorMessage(err: { code?: string; message?: string } | null | undefined):
 	string | null {
 	if (!err || err.code !== 'P0001' || !err.message) return null;
-	const match = err.message.match(/rate limit exceeded for (\w+),\s*retry in (\d+)s/i);
+	const match = err.message.match(/rate limit exceeded for (\w+),\s*retry in\s+(\d+)s/i);
 	if (!match) return null;
 	const [, bucket, secsStr] = match;
 	const secs = Number(secsStr);

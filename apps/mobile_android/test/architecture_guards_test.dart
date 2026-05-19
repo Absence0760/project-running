@@ -1515,4 +1515,93 @@ void main() {
       }
     });
   });
+
+  group('rate-limit error wiring', () {
+    // Reason for each guard: rate_limit_errors.dart converts the
+    // P0001 raised by migration 20260907_001 into a friendly "wait N
+    // minutes" message. Each catch site that handles a create-club
+    // or save-route failure must run the helper before falling back
+    // to the raw exception toString. A future refactor that swaps
+    // the catch block for a generic one would silently lose the
+    // friendlier UX — that's exactly the gap the migration commit
+    // 37f9ff6 flagged as "Wiring a friendlier 'slow down' toast in
+    // data.ts is a small follow-up" and that commit eee128c / 3c71481
+    // closed. These guards keep it closed.
+
+    test('club_form_sheet imports + calls rateLimitErrorMessage', () {
+      final source =
+          File('lib/widgets/club_form_sheet.dart').readAsStringSync();
+      expect(
+        source.contains("import '../rate_limit_errors.dart'"),
+        isTrue,
+        reason: 'club_form_sheet must import rate_limit_errors.dart so the '
+            'create-club catch path runs through the helper.',
+      );
+      expect(
+        source.contains('rateLimitErrorMessage('),
+        isTrue,
+        reason:
+            'club_form_sheet catch block must call rateLimitErrorMessage.',
+      );
+    });
+
+    test('route_builder_screen imports + calls rateLimitErrorMessage', () {
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        source.contains("import '../rate_limit_errors.dart'"),
+        isTrue,
+        reason: 'route_builder_screen must import rate_limit_errors.dart '
+            'so the saveRoute catch path runs through the helper.',
+      );
+      expect(
+        source.contains('rateLimitErrorMessage('),
+        isTrue,
+        reason: 'route_builder_screen save catch block must call '
+            'rateLimitErrorMessage.',
+      );
+    });
+  });
+
+  group('client-side timeouts on remote helpers', () {
+    // Reason: the route-builder iteration awaits four kinds of remote
+    // call (OSRM nearest, OSRM route, Open-Meteo elevation, MapTiler
+    // geocoding). Without a per-call ceiling, a single slow upstream
+    // pins the "Calculating route…" spinner indefinitely — that's
+    // the bug that hung shard 3 generate-loop on the Open-Meteo path
+    // (fixed in 65fafcd) and the parallel hang risk on routing +
+    // geocoding (closed in fc59f59). The constants and the
+    // `.timeout(...)` call sites must stay.
+
+    test('routing.dart pins kOsrmSnapTimeout + kOsrmRouteTimeout', () {
+      final source = File('lib/routing.dart').readAsStringSync();
+      expect(source.contains('const Duration kOsrmSnapTimeout'), isTrue,
+          reason: 'kOsrmSnapTimeout constant removed — restore.');
+      expect(source.contains('const Duration kOsrmRouteTimeout'), isTrue,
+          reason: 'kOsrmRouteTimeout constant removed — restore.');
+      expect(source.contains('.timeout(kOsrmSnapTimeout)'), isTrue,
+          reason:
+              'snapToRoad must apply .timeout(kOsrmSnapTimeout) to the fetcher call.');
+      expect(source.contains('.timeout(kOsrmRouteTimeout)'), isTrue,
+          reason:
+              'fetchRouteThrough must apply .timeout(kOsrmRouteTimeout).');
+    });
+
+    test('elevation.dart pins kElevationFetchTimeout', () {
+      final source = File('lib/elevation.dart').readAsStringSync();
+      expect(source.contains('const Duration kElevationFetchTimeout'), isTrue,
+          reason: 'kElevationFetchTimeout constant removed — restore.');
+      expect(source.contains('.timeout(kElevationFetchTimeout)'), isTrue,
+          reason:
+              'fetchElevations batch loop must apply .timeout(kElevationFetchTimeout).');
+    });
+
+    test('geocoding.dart pins kGeocodingTimeout', () {
+      final source = File('lib/geocoding.dart').readAsStringSync();
+      expect(source.contains('const Duration kGeocodingTimeout'), isTrue,
+          reason: 'kGeocodingTimeout constant removed — restore.');
+      expect(source.contains('.timeout(kGeocodingTimeout)'), isTrue,
+          reason: 'searchPlaces must apply .timeout(kGeocodingTimeout).');
+    });
+  });
 }

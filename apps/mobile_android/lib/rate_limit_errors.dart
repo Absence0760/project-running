@@ -20,7 +20,7 @@
 String? rateLimitErrorMessage({String? code, String? message}) {
   if (code != 'P0001' || message == null || message.isEmpty) return null;
   final match = RegExp(
-    r'rate limit exceeded for (\w+),\s*retry in (\d+)s',
+    r'rate limit exceeded for (\w+),\s*retry in\s+(\d+)s',
     caseSensitive: false,
   ).firstMatch(message);
   if (match == null) return null;
