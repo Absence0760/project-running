@@ -31,6 +31,36 @@ This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end 
 | Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
 | pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
+## Backend EF guards pass — 2026-05-19 (post-survey continuation)
+
+All 5 JWT-gated Edge Functions now have dedicated pre-side-effect
+guard specs in the strava-import-guards mould. Before this pass
+only `strava-import` had one (10 tests); now all 5 do:
+
+| EF | Tests added | What's pinned |
+|---|---|---|
+| `clip-public-track` | 7 (NEW spec) | GET/PUT/POST method gates; 401 platform gate; missing/non-string/empty run_id; unknown-uuid 404 |
+| `delete-account` | 4 (NEW spec) | GET/PUT method gates; 401 platform gate; 256-byte body cap (closes chunked-transfer-encoding bypass on the most destructive EF) |
+| `export-data` | 6 (NEW spec) | GET/PUT method gates; 401 platform gate; 1KB body cap; 'fit'/non-string format → 400 with csv/gpx hint copy |
+| `parkrun-import` | 7 (NEW spec) | 401 platform gate; 1KB body cap; the `/^A\d{1,12}$/` athleteNumber regex's THREE load-bearing pieces (anchor, length cap, case sensitivity) — the regex IS the outbound-fetch attack-surface guard |
+| `strava-import` | (already 10) | Already covered by `strava-import-guards.spec.ts` |
+
+### Pieces of work + commits
+
+| Piece | Commit | Tests |
+|---|---|---|
+| clip-public-track guards | `18ee7d9` | 7 |
+| delete-account guards | `d546138` | 4 |
+| export-data guards | `2f7be35` | 6 |
+| parkrun-import guards | `ff1b189` | 7 |
+
+### Lessons baked into the new specs (so the next writer doesn't re-derive)
+
+- **Platform `verify_jwt = true` 401s requests without `Authorization` BEFORE the handler runs.** Tests for handler-local 405 / 4xx branches must include a valid Authorization to clear the platform gate. The handler's own missing-auth branch is unreachable on the wire — pin status only, not body.
+- **Rate-limit checks fire BEFORE body-shape validation on `export-data` + `parkrun-import`.** Each 400-branch test consumes one of the seed user's free-tier slots. The specs install a `beforeEach` that service-role-deletes the user's rate-limit row to keep tests deterministic across reruns.
+- **Body-size caps (`readJsonWithLimit`) fire BEFORE `auth.getUser`.** This means 413 tests don't consume rate-limit slots — exercise the cap freely without needing a reset.
+- **`delete-account` is destructive on the seed user.** Stop at the gates that fire BEFORE `auth.getUser` (method, body cap, platform 401). The destructive paths (rate-limit, Storage walk, admin delete) need either a throwaway user or a refactor to inject the admin client; deferred.
+
 ## Marginal-lift pass — 2026-05-19 (final continuation)
 
 Three 75–80% surfaces lifted to ~90+%:
@@ -336,7 +366,8 @@ Everything below this section is the **starting baseline** before today's pushes
 | Feature | Baseline | Surface |
 |---|---|---|
 | Edge Functions (pure helpers) | 80% | 45 Deno tests across 3 files |
-| Edge Function handler envelopes (auth/HMAC) | 65% | 9 tests on the 3 webhook handlers |
+| Edge Function handler envelopes (auth/HMAC) | 65% | 9 tests on the 3 webhook handlers (`_shared/handler_envelope.test.ts`) |
+| Edge Function pre-side-effect guards (5 JWT-gated EFs) | ~92% | `strava-import-guards.spec.ts` (10) + `clip-public-track-guards.spec.ts` (7) + `delete-account-guards.spec.ts` (4) + `export-data-guards.spec.ts` (6) + `parkrun-import-guards.spec.ts` (7) — 34 tests pinning method gates, body caps, platform verify_jwt assumptions, and per-EF body-shape validation |
 | pgtap RLS suite | 80% | `apps/backend/supabase/tests/*.sql` |
 | Go job worker (map-match, token-refresh, strava-event) | 85% | 50+ tests across handlers + livehub + dataexport + premium |
 | Schema codegen drift detector | 90% | `parity-types` CI + schema-codegen-drift CI |
