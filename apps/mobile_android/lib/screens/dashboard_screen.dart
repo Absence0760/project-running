@@ -20,6 +20,7 @@ import 'coach_screen.dart';
 import 'feed_screen.dart';
 import 'period_summary_screen.dart';
 import 'profile_screen.dart';
+import 'recap_screen.dart';
 
 const _kCardPadding = EdgeInsets.all(20);
 const _kSectionGap = SizedBox(height: 24);
@@ -207,6 +208,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Year in running',
+          icon: const Icon(Icons.calendar_today_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RecapScreen(
+                runStore: widget.runStore,
+                preferences: widget.preferences,
+              ),
+            ),
           ),
         ),
         if (viewerId != null) NotificationBell(api: api),
