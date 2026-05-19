@@ -67,20 +67,20 @@ void main() {
   });
 
   group('DashboardScreen', () {
-    testWidgets('AppBar carries no "Dashboard" title (bottom-nav labels suffice)',
+    testWidgets('Dashboard renders no AppBar (actions hoist into the body)',
         (tester) async {
-      // The bottom-nav already labels this tab "Home" / "Dashboard".
-      // A duplicate title at the top of the page is redundant chrome,
-      // so the AppBar's title was removed (actions remain). Pin the
-      // absence so a regression that re-added it fails loud.
+      // The bottom-nav labels this tab "Home"; a duplicate title
+      // there would be redundant chrome. The AppBar was removed
+      // entirely (not just its title) because the empty left half
+      // left a visible blank band where the title used to sit. The
+      // Coach / Feed / Profile action buttons now live as an inline
+      // toolbar Row at the top of the body. SafeArea keeps the
+      // first content row clear of the system status bar.
       final s = await _makeStores();
       await _pump(tester,
           runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
-      // AppBar still mounts (it carries Coach / Feed / Profile action
-      // buttons), but with no title.
-      expect(find.byType(AppBar), findsOneWidget);
-      final appBar = tester.widget<AppBar>(find.byType(AppBar));
-      expect(appBar.title, isNull);
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.byType(SafeArea), findsAtLeastNWidgets(1));
     });
 
     testWidgets('shows welcome empty state when runs and goals are both empty',

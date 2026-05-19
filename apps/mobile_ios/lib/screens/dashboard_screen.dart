@@ -181,53 +181,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final api = widget.apiClient;
     final viewerId = api?.userId;
 
-    return Scaffold(
-      appBar: AppBar(
-        // No title — the bottom-nav already labels this tab "Home".
-        // Action buttons (Coach / Feed / Profile) remain on the right.
-        actions: [
-          if (api != null) ...[
-            if (widget.training != null)
-              IconButton(
-                tooltip: 'Coach',
-                icon: const Icon(Icons.psychology_outlined),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CoachScreen(
-                      api: api,
-                      training: widget.training!,
-                    ),
-                  ),
+    // Inline action toolbar — replaces the previous AppBar so the
+    // dashboard's content can sit flush with the top inset. Empty
+    // when there's no signed-in api (the welcome state takes over).
+    final actions = <Widget>[
+      if (api != null) ...[
+        if (widget.training != null)
+          IconButton(
+            tooltip: 'Coach',
+            icon: const Icon(Icons.psychology_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CoachScreen(
+                  api: api,
+                  training: widget.training!,
                 ),
-              ),
-            IconButton(
-              tooltip: 'Activity feed',
-              icon: const Icon(Icons.dynamic_feed_outlined),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
               ),
             ),
-            if (viewerId != null)
-              IconButton(
-                tooltip: 'My profile',
-                icon: const Icon(Icons.person_outline),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProfileScreen(api: api, userId: viewerId),
-                  ),
-                ),
+          ),
+        IconButton(
+          tooltip: 'Activity feed',
+          icon: const Icon(Icons.dynamic_feed_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
+          ),
+        ),
+        if (viewerId != null)
+          IconButton(
+            tooltip: 'My profile',
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProfileScreen(api: api, userId: viewerId),
               ),
-          ],
-        ],
-      ),
-      body: runs.isEmpty && goals.isEmpty
-          ? _WelcomeEmpty(theme: theme, onAddGoal: _newGoal)
-          : ListView(
-              padding: const EdgeInsets.all(16),
+            ),
+          ),
+      ],
+    ];
+    final actionToolbar = actions.isEmpty
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: actions,
+            ),
+          );
+
+    return Scaffold(
+      // No AppBar — the bottom-nav already labels this tab "Home" and
+      // the action buttons (Coach / Feed / Profile) hoist inline at
+      // the top of the body. SafeArea keeps the first content row
+      // clear of the system status bar (the AppBar was providing
+      // that inset implicitly before).
+      body: SafeArea(
+        bottom: false,
+        child: runs.isEmpty && goals.isEmpty
+          ? Column(
               children: [
+                if (actionToolbar != null) actionToolbar,
+                Expanded(child: _WelcomeEmpty(theme: theme, onAddGoal: _newGoal)),
+              ],
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                if (actionToolbar != null) actionToolbar,
                 _goalsSection(theme, unit, runs, goals, now),
                 _kSectionGap,
                 const _SectionHeader('This Week'),
@@ -355,6 +377,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _buildTrainingLoadChart(runs, now),
               ],
             ),
+      ),
     );
   }
 
