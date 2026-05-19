@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -182,12 +183,12 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                           ),
                           _Metric(
                             label: 'Time',
-                            value: _fmtDuration(Duration(seconds: _elapsedS)),
+                            value: formatLiveDuration(Duration(seconds: _elapsedS)),
                           ),
                           _Metric(
                             label: 'Pace',
                             value: _distanceM > 0 && _elapsedS > 0
-                                ? _fmtPace(_elapsedS / (_distanceM / 1000))
+                                ? formatLivePace(_elapsedS / (_distanceM / 1000))
                                 : '—',
                           ),
                         ],
@@ -198,21 +199,33 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     );
   }
 
-  static String _fmtDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    if (h > 0) {
-      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
-    return '$m:${s.toString().padLeft(2, '0')}';
-  }
+}
 
-  static String _fmtPace(double secPerKm) {
-    final m = secPerKm ~/ 60;
-    final s = (secPerKm % 60).round();
-    return '$m:${s.toString().padLeft(2, '0')} /km';
+/// Live-spectator duration formatter — H:MM:SS past an hour, M:SS under.
+/// Hoisted out of `_LiveSpectatorScreenState` so the widget test can
+/// pin the boundary cases (the per-second realtime ingest path renders
+/// this every tick; a regression to e.g. always-H:MM:SS would surface
+/// `0:01:23` for a 1-minute live run).
+@visibleForTesting
+String formatLiveDuration(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  final s = d.inSeconds % 60;
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
+/// Live-spectator pace formatter — minutes:seconds per km. Same
+/// rationale as `formatLiveDuration`: this lights up on every ping
+/// payload, so the rounding shape ((seconds-fraction) → nearest int)
+/// is worth pinning.
+@visibleForTesting
+String formatLivePace(double secPerKm) {
+  final m = secPerKm ~/ 60;
+  final s = (secPerKm % 60).round();
+  return '$m:${s.toString().padLeft(2, '0')} /km';
 }
 
 class _StatusBadge extends StatelessWidget {
