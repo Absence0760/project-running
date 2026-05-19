@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { resetRateLimit } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -20,6 +21,15 @@ const uniqueName = (prefix: string) =>
 
 test.describe('/clubs/[slug]', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	test.beforeEach(async () => {
+		// 5 clubs/hour cap (migration 20260907_001) is shared across
+		// every test file that creates clubs as USER_A in this shard.
+		// new.spec.ts can push the counter to 5 before this file runs;
+		// defensively reset so this file's lone Create-club test isn't
+		// at the mercy of shard-distribution ordering.
+		await resetRateLimit(USER_A.id, 'create_club');
+	});
 
 	test('Members tab on Sydney Run Club lists runner as the owner', async ({
 		page

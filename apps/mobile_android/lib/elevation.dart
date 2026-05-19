@@ -18,6 +18,14 @@ const _kOpenMeteoBase = 'https://api.open-meteo.com/v1/elevation';
 /// batch (Open-Meteo's documented limit).
 const int kElevationBatchSize = 100;
 
+/// Per-batch ceiling on the elevation fetch. The route-builder
+/// iteration calls `fetchElevations` once per successful generation;
+/// without a client-side timeout an Open-Meteo outage pins the whole
+/// iteration's Future and the "Calculating route…" spinner never
+/// resolves. Mirrors the 8s `AbortSignal.timeout` on the web port
+/// (`apps/web/src/lib/elevation.ts`).
+const Duration kElevationFetchTimeout = Duration(seconds: 8);
+
 typedef ElevationFetcher = Future<String> Function(Uri url);
 
 Future<String> _defaultFetcher(Uri url) async {
@@ -57,7 +65,12 @@ Future<List<double>> fetchElevations(
     final lngs = batch.map((w) => w.lng).join(',');
     final url = Uri.parse('$_kOpenMeteoBase?latitude=$lats&longitude=$lngs');
     try {
-      final body = await (fetcher ?? _defaultFetcher)(url);
+      // .timeout() throws TimeoutException on expiry; the catch below
+      // swallows that the same way it does HTTP / parse failures, so
+      // the route still saves with a zero-elevation profile rather
+      // than hanging the UI on a slow / unreachable Open-Meteo.
+      final body = await (fetcher ?? _defaultFetcher)(url)
+          .timeout(kElevationFetchTimeout);
       final data = jsonDecode(body) as Map<String, dynamic>;
       final elevations = data['elevation'] as List?;
       if (elevations == null || elevations.length != batch.length) {

@@ -109,6 +109,30 @@ void main() {
       expect(stub.lastUrl!.queryParameters['latitude'], '47.0,47.5');
       expect(stub.lastUrl!.queryParameters['longitude'], '8.0,8.5');
     });
+
+    test('falls back to zeros when the fetcher exceeds kElevationFetchTimeout',
+        () async {
+      // Stub fetcher that never resolves — without the per-batch
+      // .timeout() this would hang the test (and IRL the
+      // "Calculating route…" spinner) forever. With the timeout the
+      // catch returns a zeros batch of the right length.
+      Future<String> hangingFetcher(Uri url) async {
+        await Future<void>.delayed(const Duration(seconds: 60));
+        return '{"elevation":[]}';
+      }
+
+      final out = await fetchElevations(
+        const [Waypoint(lat: 0, lng: 0), Waypoint(lat: 1, lng: 1)],
+        fetcher: hangingFetcher,
+      ).timeout(
+        // Outer guard: if the inner timeout regressed and the helper
+        // really did hang, the test fails fast instead of being killed
+        // by flutter_test's default 30s harness.
+        const Duration(seconds: 12),
+        onTimeout: () => fail('fetchElevations did not honour the inner timeout'),
+      );
+      expect(out, equals(const [0.0, 0.0]));
+    });
   });
 
   group('calculateElevationGain', () {
