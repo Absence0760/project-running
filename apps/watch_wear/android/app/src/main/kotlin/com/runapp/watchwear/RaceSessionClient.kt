@@ -9,6 +9,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.net.URLEncoder
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -43,10 +44,10 @@ class RaceSessionClient(
         val past = isoUtc(now - 12 * 3600_000L)
         val future = isoUtc(now + 12 * 3600_000L)
         val rsvps = get(
-            "$baseUrl/rest/v1/event_attendees?user_id=eq.$userId" +
+            "$baseUrl/rest/v1/event_attendees?user_id=eq.${enc(userId)}" +
                 "&status=eq.going" +
-                "&instance_start=gte.$past" +
-                "&instance_start=lte.$future" +
+                "&instance_start=gte.${enc(past)}" +
+                "&instance_start=lte.${enc(future)}" +
                 "&select=event_id,instance_start",
             accessToken,
         )
@@ -57,8 +58,8 @@ class RaceSessionClient(
             val instance = obj["instance_start"]?.jsonPrimitive?.content ?: continue
             val raceRes = get(
                 "$baseUrl/rest/v1/race_sessions" +
-                    "?event_id=eq.$eventId" +
-                    "&instance_start=eq.$instance" +
+                    "?event_id=eq.${enc(eventId)}" +
+                    "&instance_start=eq.${enc(instance)}" +
                     "&status=in.(armed,running)" +
                     "&select=status,started_at",
                 accessToken,
@@ -69,7 +70,7 @@ class RaceSessionClient(
             val status = r["status"]?.jsonPrimitive?.content ?: continue
             val startedAt = r["started_at"]?.jsonPrimitive?.content
             val titleRes = get(
-                "$baseUrl/rest/v1/events?id=eq.$eventId&select=title",
+                "$baseUrl/rest/v1/events?id=eq.${enc(eventId)}&select=title",
                 accessToken,
             )
             val title = (json.parseToJsonElement(titleRes) as? JsonArray)
@@ -168,8 +169,32 @@ class RaceSessionClient(
     }
 
     private fun isoUtc(ms: Long): String {
-        // Postgrest query params need URL-encoded ISO-8601; simplest is
-        // java.time.Instant.toString which is already URL-safe.
+        // `Instant.toString()` always emits the `Z` suffix form which
+        // happens to be URL-safe, but we still feed it through `enc`
+        // below so the URL-building call sites can't accidentally
+        // forget to encode some future caller's value.
         return java.time.Instant.ofEpochMilli(ms).toString()
+    }
+
+    private fun enc(s: String): String = encodeQueryValue(s)
+
+    companion object {
+        /// URL-encode a value for interpolation into a PostgREST query
+        /// string. Critically defensive for `instance_start` values
+        /// that come BACK from PostgREST as timestamptz — Postgres
+        /// serializes timestamptz as `2026-05-22T18:00:00+00:00`, and
+        /// a raw `+` in a PostgREST query value gets decoded as a
+        /// SPACE (PostgREST treats the query as
+        /// application/x-www-form-urlencoded). Without this encoding
+        /// the second-hop query `instance_start=eq.<value>` would fail
+        /// to match the row it just read, and `fetchActive` would
+        /// return null whenever a user has an actual armed race
+        /// waiting on the day-of.
+        ///
+        /// `internal` so unit tests can exercise it without spinning
+        /// up a real OkHttp stack — see `RaceSessionClientTest`.
+        @JvmStatic
+        internal fun encodeQueryValue(s: String): String =
+            URLEncoder.encode(s, Charsets.UTF_8.name())
     }
 }
