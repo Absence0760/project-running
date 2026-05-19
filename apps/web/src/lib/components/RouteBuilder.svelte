@@ -97,6 +97,16 @@
 	$effect(() => {
 		onbusy(isRouting);
 	});
+	// Re-stamp the km/mi distance markers when the user flips the
+	// preference on /settings while a route is drawn. Reading
+	// getUnit() inside the effect makes Svelte subscribe to the
+	// module-level signal; updateDistanceMarkers picks up the new
+	// unit on its next call. The `map &&` guard avoids running
+	// before onMount (the route layer doesn't exist yet).
+	$effect(() => {
+		getUnit();
+		if (map && routeCoordinates.length >= 2) updateDistanceMarkers();
+	});
 	let mapStyle = $state<'streets' | 'satellite' | 'terrain'>('streets');
 	let nearStart = false;
 	let routeVersion = 0;
@@ -193,6 +203,20 @@
 		marker.on('dragend', () => {
 			const currentIndex = markers.indexOf(marker);
 			if (currentIndex === -1) return;
+			// During generation, the start marker is the only visible
+			// pin (interior scaffolding is display:none). A drag would
+			// bump routeVersion → bail the iteration → restore from
+			// snapshot — but the marker would visibly sit in the wrong
+			// place until the restore lands. Snap it back to the data
+			// position to keep the visual consistent, and let the user
+			// try again after generation finishes or they Cancel.
+			if (isRouting) {
+				marker.setLngLat([waypoints[currentIndex].lng, waypoints[currentIndex].lat]);
+				setTimeout(() => {
+					wasDragged = false;
+				}, 0);
+				return;
+			}
 			// Any waypoint mutation has to invalidate an in-flight
 			// recalculateRoute so the stale result doesn't overwrite
 			// the post-drag state. The bump fires at the next version
@@ -236,6 +260,9 @@
 				return;
 			}
 			e.stopPropagation();
+			// Ignore back-track clicks during isRouting — same reasoning
+			// as the contextmenu handler below.
+			if (isRouting) return;
 			const currentIndex = markers.indexOf(marker);
 
 			// Click on start marker with 3+ waypoints = close the loop
@@ -254,10 +281,14 @@
 			addWaypoint({ lng: pos.lng, lat: pos.lat });
 		});
 
-		// Right-click to delete
+		// Right-click to delete. Ignored during isRouting so a stray
+		// right-click during a slow generateLoop doesn't mutate
+		// waypoints (which would bump routeVersion and bail the
+		// iteration, then leave the user with a half-removed pin).
 		marker.getElement().addEventListener('contextmenu', (e: MouseEvent) => {
 			e.preventDefault();
 			e.stopPropagation();
+			if (isRouting) return;
 			const currentIndex = markers.indexOf(marker);
 			if (currentIndex !== -1) removeWaypoint(currentIndex);
 		});
@@ -1056,12 +1087,26 @@
 		let bestDistance = Infinity;
 		let bestDelta = Infinity;
 
+		// Snapshot the pre-generate state for restore-on-failure (and
+		// for the "Undo calculation" button, which calls undoCalculate
+		// to put preRouteWaypoints back). Without this, a Cancel or
+		// hard-failure exit would leave the iteration's scaffolding
+		// (8 waypoints, only `start` visible) on the map — the user
+		// is stranded with an inconsistent state they can't recover
+		// from short of pressing Esc.
+		preRouteWaypoints = waypoints.map((w) => ({ ...w }));
+
 		// Hold isRouting=true across the whole iteration loop. Without
 		// this, recalculateRoute's own finally would flip it back to
 		// false between attempts — admitting user clicks and flickering
 		// the spinner. The try/finally below also guarantees the flag
 		// resets even if the iteration throws.
 		isRouting = true;
+		// Tracks whether the post-loop processing finished with a
+		// successful collapse. The finally below uses it to restore
+		// the pre-generate snapshot when the iteration bailed (cancel,
+		// mutation race, every attempt failed to route).
+		let success = false;
 		try {
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1189,6 +1234,7 @@
 			} else {
 				onerror(null);
 			}
+			success = true;
 			return true;
 		}
 		// Hard failure: every iteration's recalculateRoute either
@@ -1202,8 +1248,42 @@
 		);
 		return false;
 		} finally {
+			if (!success) {
+				// Restore the pre-generate state — clears scaffolding
+				// markers, repopulates whatever waypoints the user had
+				// before (often none), and refreshes the preview line.
+				// Idempotent against early returns from the version
+				// check inside the for-loop, the break on
+				// routeCoordinates.length<2, and the hard-failure path.
+				restoreFromPreRouteSnapshot();
+			}
 			isRouting = false;
 		}
+	}
+
+	/// Mirror of the start of collapseGeneratedScaffolding but using
+	/// preRouteWaypoints as the source. Called from generateLoop's
+	/// finally when success is false so the user isn't left with
+	/// a half-baked scaffolding state on cancel or hard failure.
+	function restoreFromPreRouteSnapshot() {
+		markers.forEach((m) => m.remove());
+		markers = [];
+		waypoints = preRouteWaypoints.map((w) => ({ ...w }));
+		routeCoordinates = [];
+		routeElevations = [];
+		implicatedWaypoints = new Set();
+		distanceMarkers.forEach((m) => m.remove());
+		distanceMarkers = [];
+		for (let i = 0; i < waypoints.length; i++) {
+			const marker = createWaypointMarker(
+				{ lng: waypoints[i].lng, lat: waypoints[i].lat },
+				i,
+			);
+			markers.push(marker);
+		}
+		updateMarkerStyles();
+		updateRouteLine();
+		updateStraightLine();
 	}
 
 	function collapseGeneratedScaffolding(
@@ -1324,6 +1404,11 @@
 
 			if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
 				e.preventDefault();
+				// Ctrl+Z during isRouting would mutate waypoints and
+				// bail the iteration. Esc below stays enabled — it
+				// doubles as cancel-and-clear, which is the user's
+				// intentional "stop everything" escape hatch.
+				if (isRouting) return;
 				undoWaypoint();
 			}
 			if (e.key === 'Escape') {

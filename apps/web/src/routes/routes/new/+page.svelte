@@ -422,11 +422,11 @@
 			</div>
 
 			<div class="toolbar-group" role="toolbar" aria-label="Waypoint actions">
-				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0} onclick={handleUndo} title="Undo last waypoint (Ctrl+Z)">
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0 || builderBusy} onclick={handleUndo} title="Undo last waypoint (Ctrl+Z)">
 					<span class="material-symbols">undo</span>
 					Undo
 				</button>
-				<button class="btn btn-ghost btn-sm" disabled={waypointCount < 2} onclick={handleOutAndBack} title="Mirror the route back to start">
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount < 2 || builderBusy} onclick={handleOutAndBack} title="Mirror the route back to start">
 					<span class="material-symbols">swap_horiz</span>
 					Out &amp; back
 				</button>
@@ -533,13 +533,18 @@
 			<div class="primary-actions">
 				<button
 					class="btn btn-secondary"
-					disabled={waypointCount < 2}
+					disabled={waypointCount < 2 || builderBusy}
 					onclick={handleCalculateRoute}
 				>
 					{routed ? 'Recalculate' : 'Calculate Route'}
 				</button>
 				{#if routed}
-					<button class="btn btn-outline btn-sm" onclick={handleUndoCalculate} aria-label="Undo calculation">
+					<button
+						class="btn btn-outline btn-sm"
+						disabled={builderBusy}
+						onclick={handleUndoCalculate}
+						aria-label="Undo calculation"
+					>
 						<span class="material-symbols">undo</span>
 					</button>
 				{/if}
@@ -548,7 +553,7 @@
 			<div class="primary-actions">
 				<button
 					class="btn btn-primary"
-					disabled={!routed}
+					disabled={!routed || builderBusy}
 					onclick={openSaveModal}
 				>
 					<span class="material-symbols" aria-hidden="true">save</span>
@@ -556,7 +561,7 @@
 				</button>
 				<button
 					class="btn btn-outline btn-sm"
-					disabled={!routed}
+					disabled={!routed || builderBusy}
 					onclick={handleExportGpx}
 					title="Export as GPX"
 				>
@@ -564,7 +569,7 @@
 				</button>
 				<button
 					class="btn btn-outline btn-sm"
-					disabled={!routed}
+					disabled={!routed || builderBusy}
 					onclick={handleExportKml}
 					title="Export as KML"
 				>

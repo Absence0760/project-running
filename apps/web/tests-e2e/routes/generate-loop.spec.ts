@@ -403,6 +403,137 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		expect(ok).toBe(false);
 	});
 
+	test('Cancel restores pre-generate waypoints (no scaffolding left behind)', async ({
+		page,
+	}) => {
+		// Pre-state for this test: drop two manual waypoints first via
+		// the test hook (calling addWaypoint), then generate. Cancel
+		// mid-iteration. The restore in generateLoop's finally should
+		// repopulate the two manual waypoints, NOT leave the 8
+		// scaffolding pins (mostly invisible due to display:none).
+		await page.unroute('https://router.project-osrm.org/**');
+		await page.route('https://router.project-osrm.org/**', async (route) => {
+			await new Promise((r) => setTimeout(r, 3000));
+			await route.fulfill({ status: 503, body: '{}' });
+		});
+
+		// Drop two manual waypoints via the hook.
+		await page.evaluate(({ a, b }) => {
+			const hook = (
+				window as unknown as {
+					__routeBuilder: {
+						addWaypoint: (p: { lat: number; lng: number }) => void;
+					};
+				}
+			).__routeBuilder;
+			hook.addWaypoint(a);
+			hook.addWaypoint(b);
+		}, {
+			a: { lat: FIELD_START.lat, lng: FIELD_START.lng },
+			b: { lat: FIELD_START.lat + 0.01, lng: FIELD_START.lng + 0.01 },
+		});
+
+		const before = await page.evaluate(() => {
+			return (
+				window as unknown as {
+					__routeBuilder: { getRouteData: () => { waypoints: unknown[] } };
+				}
+			).__routeBuilder.getRouteData().waypoints.length;
+		});
+		expect(before).toBe(2);
+
+		// Kick off generate (don't await — cancel mid-flight).
+		const generatePromise = page.evaluate(({ s }) => {
+			return (
+				window as unknown as {
+					__routeBuilder: {
+						generateLoop: (
+							t: number,
+							s?: { lat: number; lng: number },
+						) => Promise<boolean>;
+					};
+				}
+			).__routeBuilder.generateLoop(5000, s);
+		}, { s: FIELD_START });
+
+		await page.waitForTimeout(500);
+
+		// Cancel mid-batch.
+		await page.evaluate(() => {
+			(
+				window as unknown as {
+					__routeBuilder: { cancelGeneration: () => void };
+				}
+			).__routeBuilder.cancelGeneration();
+		});
+
+		const ok = await generatePromise;
+		expect(ok).toBe(false);
+
+		// Pre-state restored: still the two manual waypoints, not the
+		// 8 scaffolding entries the iteration set.
+		const after = await page.evaluate(() => {
+			return (
+				window as unknown as {
+					__routeBuilder: { getRouteData: () => { waypoints: unknown[] } };
+				}
+			).__routeBuilder.getRouteData().waypoints.length;
+		});
+		expect(after).toBe(2);
+	});
+
+	test('Action buttons stay disabled mid-generation (Save / GPX / KML / Recalc)', async ({
+		page,
+	}) => {
+		// Audit follow-up: emitUpdate fires routed=true after iter 1
+		// completes — before the bisection's restore-best step. The
+		// parent must keep Save / GPX / KML disabled while builderBusy
+		// so the user can't save a pre-converged polyline.
+		await page.unroute('https://router.project-osrm.org/**');
+		await page.route('https://router.project-osrm.org/**', async (route) => {
+			await new Promise((r) => setTimeout(r, 2000));
+			await route.fulfill({ status: 503, body: '{}' });
+		});
+
+		// Start generate, don't await.
+		const generatePromise = page.evaluate(({ s }) => {
+			return (
+				window as unknown as {
+					__routeBuilder: {
+						generateLoop: (
+							t: number,
+							s?: { lat: number; lng: number },
+						) => Promise<boolean>;
+					};
+				}
+			).__routeBuilder.generateLoop(5000, s);
+		}, { s: FIELD_START });
+
+		// Wait for the busy state to land — the spinner is the most
+		// reliable signal (Cancel button only lives inside the
+		// distance-target panel which our hook-driven call never
+		// opened).
+		await expect(page.locator('.routing-indicator')).toBeVisible({ timeout: 5_000 });
+
+		// All action buttons should be disabled while builderBusy=true.
+		await expect(page.getByRole('button', { name: /Save Route/ })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'GPX', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'KML', exact: true })).toBeDisabled();
+		const calcOrRecalc = page.getByRole('button', { name: /Calculate Route|Recalculate/ });
+		await expect(calcOrRecalc).toBeDisabled();
+
+		// Cancel via the hook (the button is hidden because the panel
+		// isn't open in this flow).
+		await page.evaluate(() => {
+			(
+				window as unknown as {
+					__routeBuilder: { cancelGeneration: () => void };
+				}
+			).__routeBuilder.cancelGeneration();
+		});
+		await generatePromise;
+	});
+
 	test('hard failure: OSRM 503 → "Couldn\'t generate" error, no route, save disabled', async ({
 		page,
 	}) => {
