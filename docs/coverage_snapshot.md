@@ -31,6 +31,36 @@ This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end 
 | Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
 | pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
+## Mobile + watch unit-test gaps pass — 2026-05-19 (post-EF continuation)
+
+After the backend EF guards pass, three mobile lib/ files + one
+watch_wear source file had no unit tests despite carrying load-
+bearing logic. All four now have dedicated pure-logic test files:
+
+| Surface | Tests | What's pinned |
+|---|---|---|
+| `preferences.dart` ActivityType enum | 17 (NEW `preferences_test.dart`) | per-activity getters that drive the entire recording stack: `label`, `icon`, `usesSpeed` (pace vs speed), `kcalPerKgPerKm` (range + relative ordering), `splitIntervalMetres`, `gpsDistanceFilter`, `minMovementMetres` (jitter floor), `strideMetres` (cycle=0 + relative ordering), `maxSpeedMps` (cycle > run sanity ranking), `fromName` (round-trip + null + unknown fallback), `DistanceUnit` set |
+| `watch_ingest_queue.dart` pure decoders | 16 (NEW `watch_ingest_queue_test.dart`) | `runFromWatchPayload` (the watch-run JSON wire format from Wear OS + watchOS senders): minimum-valid shape, missing/empty fields, mixed-detail waypoints, decimal-bpm flooring, malformed-input safety on track + laps, num coercion (int distance_m + double duration_s both tolerated); `parseRunSource` (every enum round-trip + watch fallback) |
+| `strava_importer.dart` parseStravaDate | 16 (NEW `strava_importer_test.dart`) | ISO 8601 path (UTC, ms precision, TZ offset); US-locale path (PM-shift, noon edge `hour < 12` guard, midnight AM edge, 24-hour no-marker, full month name "April", all 12 month abbreviations, single + upper-half-double-digit day); failure paths (garbage, unknown month, partial match → null fallback) |
+| `SavedRoute.kt` (watch_wear) | 9 (NEW `SavedRouteTest.kt`) | `toLatLngs` (preserve order — RouteMath walks sequentially; empty + duplicate handling); `waypointsAsJson` (the ACTION_START Intent wire format — array shape, "[]" on empty, doubles-not-strings, insertion order); data-class equality on SavedRoute + Waypoint (LocalRouteStore dedupes by equality) |
+
+### Pieces of work + commits
+
+| Piece | Commit | Tests |
+|---|---|---|
+| preferences ActivityType enum | `4973f36` | 17 |
+| watch_ingest_queue pure decoders | `5b26f35` | 16 |
+| strava_importer parseStravaDate | `923bd15` | 16 |
+| SavedRoute (watch_wear) | `01deabc` | 9 |
+
+Total this pass: **58 new tests** across 3 mobile lib/ files (mirrored to iOS twin) + 1 watch_wear source file. All run in <1s combined.
+
+### Lessons baked into the new specs
+
+- **Mobile twin discipline.** Every test file mirrored to `apps/mobile_ios/test/` byte-identically; `diff -rq apps/mobile_android/test apps/mobile_ios/test` returns empty. The pure-logic helpers don't have `Platform.isIOS` dispatch so they're true byte-identical files.
+- **JUnit + kotlinx-serialization gotchas on Wear OS.** Test names can't contain raw `[` / `]` (Kotlin identifier rule). The `jsonPrimitive.double` extension needs explicit `import kotlinx.serialization.json.double` — JsonPrimitive's `.double` doesn't come in automatically.
+- **The Gradle task path.** Wear OS unit tests run via `./gradlew :app:testDebugUnitTest --tests 'com.runapp.watchwear.Foo'` from `apps/watch_wear/android`. The top-level `:app:test` aggregator doesn't accept `--tests`; per-variant `testDebugUnitTest` does.
+
 ## Backend EF guards pass — 2026-05-19 (post-survey continuation)
 
 All 5 JWT-gated Edge Functions now have dedicated pre-side-effect
