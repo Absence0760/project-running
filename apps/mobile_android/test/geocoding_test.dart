@@ -147,4 +147,149 @@ void main() {
       expect(out, isEmpty);
     });
   });
+
+  group('haversineM', () {
+    test('zero distance for identical points', () {
+      expect(haversineM(0, 0, 0, 0), closeTo(0, 1e-9));
+    });
+    test('matches a known city pair to within 1 km', () {
+      // London (-0.1278, 51.5074) ↔ Paris (2.3522, 48.8566) ~344 km.
+      final d = haversineM(-0.1278, 51.5074, 2.3522, 48.8566);
+      expect(d, closeTo(344000, 1000));
+    });
+  });
+
+  group('bboxRadius', () {
+    test('returns half-diagonal for a square bbox around the centroid', () {
+      // 1-degree square at the equator → each corner is 0.5° from the
+      // centroid in both directions. 0.5° lat ≈ 55.5 km, 0.5° lng at
+      // the equator ≈ 55.5 km → half-diagonal ≈ 78.5 km.
+      final r = bboxRadius([-0.5, -0.5, 0.5, 0.5], 0, 0);
+      expect(r, closeTo(78500, 1500));
+    });
+  });
+
+  group('geocodePlace', () {
+    test('returns null when query is too short', () async {
+      final out = await geocodePlace(
+        'a',
+        apiKey: 'k',
+        fetcher: (_) async => fail('fetcher must not be called'),
+      );
+      expect(out, isNull);
+    });
+
+    test('returns null when apiKey is empty', () async {
+      final out = await geocodePlace(
+        'Virginia',
+        apiKey: '',
+        fetcher: (_) async => fail('fetcher must not be called'),
+      );
+      expect(out, isNull);
+    });
+
+    test('returns null on no features', () async {
+      final stub = _StubFetcher(jsonEncode({'features': []}));
+      final out = await geocodePlace(
+        'Virginia',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNull);
+    });
+
+    test('parses the top feature into GeocodedPlace with bbox-derived radius',
+        () async {
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'place_name': 'Virginia, United States',
+            'center': [-78.6569, 37.4316],
+            'bbox': [-83.6754, 36.5407, -75.2422, 39.4660],
+            'place_type': ['region'],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'Virginia',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNotNull);
+      expect(out!.name, 'Virginia, United States');
+      expect(out.lng, closeTo(-78.6569, 1e-6));
+      expect(out.lat, closeTo(37.4316, 1e-6));
+      // Virginia's bbox is wide — radius should sit in the 400-600 km
+      // range. This is the bbox-radius behaviour web depends on for
+      // the "Virginia" search expanding past a single-city ILIKE.
+      expect(out.radiusM, greaterThan(400000));
+      expect(out.radiusM, lessThan(600000));
+      expect(out.placeType, 'region');
+    });
+
+    test('defaults radius to 5000 m when bbox is absent', () async {
+      // POI / address-level features sometimes omit bbox. The fallback
+      // keeps the centroid usable without sweeping the surrounding
+      // continent.
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'place_name': 'A precise address',
+            'center': [-78.0, 37.0],
+            'place_type': ['address'],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'A precise address',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNotNull);
+      expect(out!.radiusM, closeTo(5000, 1e-9));
+      expect(out.placeType, 'address');
+    });
+
+    test('returns null when feature lacks center', () async {
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {'place_name': 'No center'},
+        ],
+      }));
+      final out = await geocodePlace(
+        'No center',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNull);
+    });
+
+    test('returns null on fetcher error', () async {
+      Future<String> bomb(Uri _) async => throw StateError('boom');
+      final out = await geocodePlace(
+        'London',
+        apiKey: 'k',
+        fetcher: bomb,
+      );
+      expect(out, isNull);
+    });
+
+    test('falls back to "text" when "place_name" is absent', () async {
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'text': 'Falls back',
+            'center': [0.0, 0.0],
+            'bbox': [-0.1, -0.1, 0.1, 0.1],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'Falls back',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out!.name, 'Falls back');
+    });
+  });
 }

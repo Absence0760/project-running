@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'geocoding.dart';
 import 'recurrence.dart';
 
 // Column-level grant lockdown: `clubs.invite_token` is revoked from
@@ -193,6 +194,50 @@ class SocialService extends ChangeNotifier {
     }
     final rows = await q.order('created_at', ascending: false).limit(60);
     return _enrichClubs(rows);
+  }
+
+  /// Region-aware club search. Mirrors web's `searchClubs` in
+  /// `apps/web/src/lib/data.ts`. Tries to geocode the query first
+  /// (so "Virginia" → centroid + ~470 km radius → ST_DWithin against
+  /// `clubs.location_point`) and forwards the bbox params to the
+  /// `search_clubs` RPC. Falls back to [browseClubs] when the
+  /// geocode-less RPC errors. Honours an empty query by short-
+  /// circuiting through [browseClubs].
+  ///
+  /// [mapTilerKey] threads the key in from the screen so the service
+  /// stays free of `flutter_dotenv` (mirrors the way `route_builder_screen`
+  /// passes the key to `searchPlaces`). [geocoder] is a test seam — pass
+  /// a stub to replay canned responses without hitting MapTiler.
+  Future<List<ClubView>> searchClubs(
+    String query, {
+    required String mapTilerKey,
+    Future<GeocodedPlace?> Function(String)? geocoder,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return browseClubs();
+    final place = await (geocoder ?? (q) => geocodePlace(q, apiKey: mapTilerKey))(term);
+    try {
+      final params = <String, dynamic>{
+        'p_query': term,
+        'p_limit': 60,
+      };
+      if (place != null) {
+        params['p_center_lng'] = place.lng;
+        params['p_center_lat'] = place.lat;
+        params['p_radius_m'] = place.radiusM;
+      }
+      final raw = await _c.rpc('search_clubs', params: params);
+      final rows = ((raw ?? <dynamic>[]) as List)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      return _enrichClubs(rows);
+    } catch (e, s) {
+      // Per the web fallback: if the RPC fails (e.g. it's not deployed
+      // in a dev env, or the planner threw on a malformed bbox) we
+      // degrade to plain ILIKE rather than surfacing a red error toast.
+      debugPrint('SocialService.searchClubs RPC failed, falling back: $e\n$s');
+      return browseClubs(query: term);
+    }
   }
 
   /// Clubs the current user is a member of (any status).

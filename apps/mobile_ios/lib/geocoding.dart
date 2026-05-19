@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 /// MapTiler geocoding helper — mirrors the web's `handleSearch` in
 /// `apps/web/src/lib/components/RouteBuilder.svelte`. Returns up to
@@ -85,5 +86,116 @@ Future<List<PlaceResult>> searchPlaces(
     ];
   } catch (_) {
     return const [];
+  }
+}
+
+/// A geocoded place — the centroid the query resolved to, plus a
+/// radius in metres derived from the bounding box. Mirrors web's
+/// `GeocodedPlace` in `apps/web/src/lib/geocoding.ts`. Used by the
+/// region-aware club search so "Virginia" expands to a centroid +
+/// ~470 km radius rather than just an ILIKE on the location label.
+class GeocodedPlace {
+  final String name;
+  final double lng;
+  final double lat;
+  final double radiusM;
+  final String? placeType;
+  const GeocodedPlace({
+    required this.name,
+    required this.lng,
+    required this.lat,
+    required this.radiusM,
+    required this.placeType,
+  });
+}
+
+double haversineM(double lng1, double lat1, double lng2, double lat2) {
+  const r = 6371000.0;
+  double toRad(double d) => d * 3.141592653589793 / 180;
+  final dLat = toRad(lat2 - lat1);
+  final dLng = toRad(lng2 - lng1);
+  final sinLat = sin(dLat / 2);
+  final sinLng = sin(dLng / 2);
+  final h = sinLat * sinLat +
+      cos(toRad(lat1)) * cos(toRad(lat2)) * sinLng * sinLng;
+  return r * 2 * atan2(sqrt(h), sqrt(1 - h));
+}
+
+/// Max distance from the bbox centroid to one of its four corners.
+/// Mirrors web `bboxRadius`. For a country bbox this is hundreds of
+/// km; for a street address it collapses to a few hundred metres.
+double bboxRadius(List<double> bbox, double centerLng, double centerLat) {
+  final w = bbox[0];
+  final s = bbox[1];
+  final e = bbox[2];
+  final n = bbox[3];
+  final corners = <List<double>>[
+    [w, s],
+    [w, n],
+    [e, s],
+    [e, n],
+  ];
+  var maxD = 0.0;
+  for (final c in corners) {
+    final d = haversineM(centerLng, centerLat, c[0], c[1]);
+    if (d > maxD) maxD = d;
+  }
+  return maxD;
+}
+
+/// Geocode a free-text place query via MapTiler. Returns null when
+/// the query is too short, MapTiler returns no features, or the key
+/// isn't configured. Callers treat null as "fall back to the
+/// text-only path", never as an error. Mirrors web's `geocodePlace`.
+Future<GeocodedPlace?> geocodePlace(
+  String query, {
+  required String apiKey,
+  GeocodingFetcher? fetcher,
+}) async {
+  final trimmed = query.trim();
+  if (trimmed.length < 2) return null;
+  if (apiKey.isEmpty) return null;
+  final encoded = Uri.encodeComponent(trimmed);
+  final url = Uri.parse('$_kMapTilerBase/$encoded.json?key=$apiKey&limit=1');
+  try {
+    final body = await (fetcher ?? _defaultFetcher)(url).timeout(kGeocodingTimeout);
+    final data = jsonDecode(body) as Map<String, dynamic>;
+    final features = data['features'] as List?;
+    if (features == null || features.isEmpty) return null;
+    final top = features.first;
+    if (top is! Map) return null;
+    final centerRaw = top['center'];
+    if (centerRaw is! List || centerRaw.length < 2) return null;
+    final lng = (centerRaw[0] as num).toDouble();
+    final lat = (centerRaw[1] as num).toDouble();
+    final bboxRaw = top['bbox'];
+    final radiusM = (bboxRaw is List && bboxRaw.length == 4)
+        ? bboxRadius(
+            [
+              (bboxRaw[0] as num).toDouble(),
+              (bboxRaw[1] as num).toDouble(),
+              (bboxRaw[2] as num).toDouble(),
+              (bboxRaw[3] as num).toDouble(),
+            ],
+            lng,
+            lat,
+          )
+        // MapTiler occasionally returns features without a bbox (rare
+        // — usually address-level POIs). Default to a small radius so
+        // the centroid is still useful but doesn't sweep a continent.
+        : 5000.0;
+    final placeTypeRaw = top['place_type'];
+    final placeType = (placeTypeRaw is List && placeTypeRaw.isNotEmpty)
+        ? placeTypeRaw.first.toString()
+        : null;
+    return GeocodedPlace(
+      name: (top['place_name'] ?? top['text'] ?? trimmed).toString(),
+      lng: lng,
+      lat: lat,
+      radiusM: radiusM,
+      placeType: placeType,
+    );
+  } catch (_) {
+    return null;
   }
 }

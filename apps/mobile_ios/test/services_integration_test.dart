@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../lib/geocoding.dart';
 import '../lib/social_service.dart';
 import '../lib/training.dart';
 import '../lib/training_service.dart';
@@ -105,6 +106,60 @@ void main() {
       expect(clubs, isEmpty,
           reason: 'a query that matches nothing must return zero rows '
               '(not silently fall back to the unfiltered set)');
+    });
+
+    test('searchClubs with an empty query short-circuits to browseClubs',
+        () async {
+      // Empty / whitespace must skip the RPC and go through the
+      // browseClubs unfiltered path. The contract matters because
+      // the Browse screen wires `searchClubs(text)` straight to the
+      // search field — typing then deleting must collapse to the
+      // unfiltered list, not a blank result.
+      final out = await social.searchClubs(
+        '',
+        mapTilerKey: '',
+        geocoder: (_) async => fail('geocoder must not be called'),
+      );
+      expect(out, isNotEmpty,
+          reason: 'searchClubs("") must route to browseClubs which '
+              'surfaces the seeded clubs');
+    });
+
+    test('searchClubs with a non-matching query returns empty', () async {
+      // The geocoder stub returns null → RPC runs with text-only.
+      // The text matches nothing in the seed → the RPC must return
+      // an empty list (NOT silently fall back to the full set).
+      final out = await social.searchClubs(
+        'no-such-club-xyz-zzz',
+        mapTilerKey: '',
+        geocoder: (_) async => null,
+      );
+      expect(out, isEmpty,
+          reason: 'text-only branch of search_clubs RPC must respect '
+              'the ILIKE filter — no fall-through to the full set');
+    });
+
+    test('searchClubs with a region geocode + matching text returns a hit',
+        () async {
+      // The seeded `sydney-run-club` has location_label `Sydney, NSW`
+      // and a location_point in Sydney. Geocode-stub it as a wide
+      // Australia bbox so the ST_DWithin half of the RPC includes it
+      // even if the text doesn't perfectly match.
+      final out = await social.searchClubs(
+        'sydney',
+        mapTilerKey: '',
+        geocoder: (_) async => const GeocodedPlace(
+          name: 'Sydney, NSW, Australia',
+          lng: 151.2093,
+          lat: -33.8688,
+          radiusM: 50000,
+          placeType: 'municipality',
+        ),
+      );
+      expect(out.any((c) => c.row.slug == _seededClubSlug), isTrue,
+          reason: 'searchClubs with a Sydney geocode + text="sydney" '
+              'must surface the seeded sydney-run-club via either the '
+              'ILIKE or the ST_DWithin branch of search_clubs');
     });
 
     test('fetchMyClubs surfaces clubs the seed user belongs to', () async {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../social_service.dart';
 import '../training_service.dart';
@@ -59,8 +60,18 @@ class ClubsScreenState extends State<ClubsScreen> {
       _error = null;
     });
     try {
+      // Region-aware Browse: when the user typed a query, route through
+      // `searchClubs` so "Virginia" → ~470 km radius around the bbox
+      // centroid expands beyond a raw ILIKE on the location label.
+      // Empty queries fall through `searchClubs` → `browseClubs()` for
+      // the default ranking.
+      final mapTilerKey = dotenv.env['MAPTILER_KEY'] ?? '';
+      final term = _searchCtrl.text.trim();
+      final browseFut = term.isEmpty
+          ? widget.social.browseClubs()
+          : widget.social.searchClubs(term, mapTilerKey: mapTilerKey);
       final results = await Future.wait([
-        widget.social.browseClubs(query: _searchCtrl.text),
+        browseFut,
         widget.social.fetchMyClubs(),
       ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
