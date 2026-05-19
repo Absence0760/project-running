@@ -18,7 +18,7 @@ import '../lib/social_service.dart';
 /// so testing those branches needs a DI seam refactor first. Tracked
 /// by the iceberg note in `docs/testing.md § What's not covered`.
 
-ClubRow _row(String id) => ClubRow(
+ClubRow _row(String id, {int memberCount = 1}) => ClubRow(
       id: id,
       slug: 'club-$id',
       name: 'Club $id',
@@ -28,6 +28,7 @@ ClubRow _row(String id) => ClubRow(
       joinPolicy: 'open',
       ownerId: 'owner-1',
       createdAt: DateTime(2026, 1, 1),
+      memberCount: memberCount,
     );
 
 ClubView _view({

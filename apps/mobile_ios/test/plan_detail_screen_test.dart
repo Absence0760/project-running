@@ -24,6 +24,7 @@ ClubView _club({
         slug: slug ?? id,
         locationLabel: location,
         joinPolicy: joinPolicy,
+        memberCount: memberCount,
       ),
       memberCount: memberCount,
       viewerRole: viewerRole,

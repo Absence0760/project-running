@@ -40,6 +40,7 @@ ClubView _club({
         slug: id,
         locationLabel: location,
         joinPolicy: 'open',
+        memberCount: memberCount,
       ),
       memberCount: memberCount,
       viewerRole: viewerRole,

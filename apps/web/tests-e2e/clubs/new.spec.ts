@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { getAdminClient } from '../fixtures/local-supabase';
+import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -57,6 +57,14 @@ async function captureCreatedSlugAndId(page: Page): Promise<{
 
 test.describe('/clubs/new', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	test.beforeEach(async () => {
+		// 5 clubs/hour cap (migration 20260907_001) accumulates across
+		// the 7 club-creating tests in this file even though afterEach
+		// deletes the rows. Reset USER_A's bucket so each test starts
+		// with a fresh window. See resetRateLimit() docstring.
+		await resetRateLimit(USER_A.id, 'create_club');
+	});
 
 	test.afterEach(async () => {
 		await cleanupPlantedClubs();

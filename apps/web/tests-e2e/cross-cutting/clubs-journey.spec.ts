@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { resetRateLimit } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -24,6 +25,13 @@ const uniqueName = (prefix: string) =>
 
 test.describe('clubs journey', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	test.beforeEach(async () => {
+		// 5 clubs/hour cap (migration 20260907_001) is shared across
+		// every test file that creates clubs as USER_A in this shard.
+		// Reset the bucket so this test always lands at count=1.
+		await resetRateLimit(USER_A.id, 'create_club');
+	});
 
 	test('create → post → /clubs lists it → delete → /clubs reverts', async ({
 		page

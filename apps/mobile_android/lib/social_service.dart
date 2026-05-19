@@ -13,7 +13,7 @@ import 'recurrence.dart';
 // lockstep.
 const String _clubSelectCols =
     'id, owner_id, name, slug, description, avatar_url, location_label, '
-    'is_public, join_policy, created_at, updated_at';
+    'is_public, join_policy, member_count, created_at, updated_at';
 
 // Column-level grant lockdown: `events.meet_lat` / `meet_lng` are
 // revoked from anon + authenticated (migrations 20260723_001 +

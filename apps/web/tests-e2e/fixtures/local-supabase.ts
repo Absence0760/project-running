@@ -66,6 +66,31 @@ export function getAdminClient(): SupabaseClient {
 }
 
 /**
+ * Reset the `rate_limits` counter for a (user_id, bucket) pair.
+ *
+ * Migrations `20260907_001_create_rate_limits.sql` add BEFORE INSERT
+ * triggers that cap `create_club` at 5/hour and `create_route` at
+ * 30/hour per user. Tests that exercise the create flow as a shared
+ * seeded user (USER_A) blow through the cap inside a single shard —
+ * row cleanup in `afterEach` removes the planted rows but does not
+ * decrement the rate_limits counter, so the 6th club create in the
+ * same hour returns P0001 and the test fails with a generic "Failed
+ * to create club" page state. Call this from `beforeEach` to give
+ * each test a fresh window.
+ *
+ * Service-role admin client bypasses the trigger when deleting, so
+ * this is a clean wipe; the next legitimate INSERT will repopulate
+ * the row at count=1.
+ */
+export async function resetRateLimit(
+	userId: string,
+	bucket: 'create_club' | 'create_route',
+): Promise<void> {
+	const admin = getAdminClient();
+	await admin.from('rate_limits').delete().eq('user_id', userId).eq('bucket', bucket);
+}
+
+/**
  * A supabase-js client authenticated as the supplied user via
  * email/password. Use this for tests that need to verify RLS or
  * trigger behaviour against a REAL user JWT — the admin client
