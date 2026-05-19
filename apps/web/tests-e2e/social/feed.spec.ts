@@ -72,4 +72,111 @@ test.describe('/social?tab=feed — feed surface', () => {
 			page.getByRole('heading', { name: 'No matches' })
 		).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('Run activity filter retains the planted run (counterpart to the Cycle empty state)', async ({
+		page
+	}) => {
+		// The existing Cycle test pins the empty-state branch; pin the
+		// happy-path side so a regression that inverted the filter
+		// (e.g. matched the wrong activity_type) would surface as the
+		// planted Run vanishing under the Run filter.
+		await page.goto('/social?tab=feed');
+		await expect(page.locator('article').first()).toBeVisible({ timeout: 10_000 });
+		await page.getByRole('button', { name: 'Run' }).click();
+		// At least one article still renders + it shows the runner.
+		await expect(page.locator('article').first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText(/Jared/).first()).toBeVisible();
+	});
+
+	test('window hint advertises "Last 14 days"', async ({ page }) => {
+		// FEED_WINDOW_DAYS (data.ts:3020) drives the 14-day cutoff
+		// AND the visible window-hint label. They must stay in lockstep
+		// — if a future change bumps the constant to 30 the hint should
+		// follow. Pin the literal "14 days" so a one-sided edit fails
+		// loud. (The cutoff is exercised by the
+		// "15-day-old run not in feed" test below.)
+		await page.goto('/social?tab=feed');
+		await expect(page.locator('.window-hint')).toContainText('Last 14 days', {
+			timeout: 10_000
+		});
+	});
+
+	test('run older than the 14-day window does not appear in the feed', async ({
+		page
+	}) => {
+		// FEED_WINDOW_DAYS is 14. A regression that widened the cutoff
+		// (or dropped the filter altogether) would let stale activity
+		// leak into the feed long after the runner expected it to fall
+		// off. Plant a 15-days-ago run with an identifiable distance,
+		// then assert the feed does NOT show that signature.
+		const admin = getAdminClient();
+		const STALE_DISTANCE = 12345; // unmistakable signature
+		const { data: row, error } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+				duration_s: 3600,
+				distance_m: STALE_DISTANCE,
+				source: 'app',
+				is_public: true,
+				metadata: { activity_type: 'run' }
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		const staleId = (row as { id: string }).id;
+		try {
+			await page.goto('/social?tab=feed');
+			await expect(page.locator('article').first()).toBeVisible({
+				timeout: 10_000
+			});
+			// The fresh (1h ago) run from beforeEach must be visible,
+			// the 15-day-old one with the signature distance must not.
+			// `12.35 km` is what the 1-decimal formatter emits for 12345m.
+			await expect(page.getByText(/12\.35\s*km/i)).toHaveCount(0, {
+				timeout: 5_000
+			});
+		} finally {
+			await admin.from('runs').delete().eq('id', staleId);
+		}
+	});
+
+	test('private run from a followed user does not appear', async ({ page }) => {
+		// `fetchFollowingFeed` filters `is_public = true`. A regression
+		// that loosened the visibility predicate (or routed through the
+		// owner-side path by mistake) would expose private activity to
+		// every follower — a privacy regression with real teeth. Plant
+		// a private run with a unique distance + assert it doesn't
+		// surface.
+		const admin = getAdminClient();
+		const PRIVATE_DISTANCE = 23456;
+		const { data: row, error } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+				duration_s: 1500,
+				distance_m: PRIVATE_DISTANCE,
+				source: 'app',
+				is_public: false, // ← the gate
+				metadata: { activity_type: 'run' }
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		const privateId = (row as { id: string }).id;
+		try {
+			await page.goto('/social?tab=feed');
+			await expect(page.locator('article').first()).toBeVisible({
+				timeout: 10_000
+			});
+			// `23.46 km` is the formatter signature.
+			await expect(page.getByText(/23\.46\s*km/i)).toHaveCount(0, {
+				timeout: 5_000
+			});
+		} finally {
+			await admin.from('runs').delete().eq('id', privateId);
+		}
+	});
 });
