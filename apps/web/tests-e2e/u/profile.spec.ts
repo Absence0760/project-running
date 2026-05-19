@@ -116,4 +116,116 @@ test.describe('/u/[id] — viewing self', () => {
 			page.locator('.tabs button.tab', { hasText: 'Notifications' })
 		).toBeVisible();
 	});
+
+	test('default tab is Runs when no ?tab= query param is present', async ({
+		page
+	}) => {
+		// `let tab = $state<...>('runs')` is the default; a refactor
+		// that flipped the default (e.g. dropped the explicit init in
+		// a runes migration) would surprise every deep-link to the
+		// profile. Pin the .active class on the Runs tab.
+		await page.goto(`/u/${USER_A.id}`);
+		await expect(
+			page.getByRole('heading', { name: 'Jared Howard', level: 1 })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.locator('.tabs button.tab.active', { hasText: 'Runs' })
+		).toBeVisible();
+	});
+});
+
+test.describe('/u/[id] — non-self notifications gate', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('?tab=notifications on someone else profile renders Runs, not Notifications', async ({
+		page
+	}) => {
+		// Line 130 of the page guards `t === 'notifications' && isSelf`.
+		// A non-self viewer landing on `/u/<other>?tab=notifications`
+		// (e.g. someone pasted their own deep-link to a friend) must
+		// fall through to the default 'runs' tab — exposing another
+		// user's notifications inbox URL would be a real privacy
+		// regression even if the API rejected it (the tab UI would
+		// flash empty data first).
+		await page.goto(`/u/${USER_B.id}?tab=notifications`);
+		await expect(
+			page.getByRole('heading', { name: 'Alex Chen', level: 1 })
+		).toBeVisible({ timeout: 10_000 });
+		// The Notifications tab button must NOT render for non-self
+		// viewers at all (the `{#if isSelf}` gate on the tab strip).
+		// The bell icon in the sidebar uses the same accessible name;
+		// scope to the page's .tabs container.
+		await expect(
+			page.locator('.tabs button.tab', { hasText: 'Notifications' })
+		).toHaveCount(0);
+		// Active tab falls back to Runs.
+		await expect(
+			page.locator('.tabs button.tab.active', { hasText: 'Runs' })
+		).toBeVisible();
+	});
+
+	test('clicking a count button activates the matching tab strip button', async ({
+		page
+	}) => {
+		// setTab() updates the in-memory `tab` state — note: it does
+		// NOT write to the URL today (an asymmetry with the deep-link
+		// `?tab=` reader on mount). Pin the visible state flip on the
+		// .tabs strip; if a future refactor adds URL persistence, this
+		// test stays correct and a separate one pinning `?tab=` after
+		// click can be added then.
+		await page.goto(`/u/${USER_B.id}`);
+		await expect(
+			page.getByRole('heading', { name: 'Alex Chen', level: 1 })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.locator('button.count', { hasText: 'Followers' }).click();
+		await expect(
+			page.locator('.tabs button.tab.active', { hasText: 'Followers' })
+		).toBeVisible({ timeout: 10_000 });
+
+		await page.locator('button.count', { hasText: 'Following' }).click();
+		await expect(
+			page.locator('.tabs button.tab.active', { hasText: 'Following' })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('invalid uuid renders the Profile-not-found empty card', async ({
+		page
+	}) => {
+		// `/u/<bogus-uuid>` must surface the dedicated "Profile not
+		// found" empty card with a Back-to-dashboard CTA, not a
+		// silent 404 or an infinite spinner. A regression that left
+		// the page in the loading state would burn user attention on
+		// a stale link the receiver didn't know was broken.
+		const bogusId = '00000000-0000-0000-0000-000000000bad';
+		await page.goto(`/u/${bogusId}`);
+		await expect(
+			page.getByRole('heading', { name: 'Profile not found', level: 3 })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.getByRole('link', { name: /Back to dashboard/i })
+		).toBeVisible();
+	});
+});
+
+test.describe('/u/[id] — anon visitor', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon visitor is auth-walled to /login with ?return_to preserved', async ({
+		page
+	}) => {
+		// `/u/[id]` is NOT in anonExtraExact (apps/web/src/routes/
+		// +layout.svelte line 86) — profile pages require auth. An
+		// anon visitor hitting a shared profile link must bounce
+		// through /login with the original destination preserved.
+		// A regression that loosened the guard would surface a
+		// signed-out profile shell with no avatar render + no follow
+		// affordance — confusing for everyone.
+		await page.goto(`/u/${USER_B.id}`);
+		await page.waitForURL(/\/login(\?|$)/, { timeout: 10_000 });
+		const url = new URL(page.url());
+		// return_to query param holds the original path so the user
+		// lands back on the profile after signing in.
+		expect(url.searchParams.get('return_to')).toBe(`/u/${USER_B.id}`);
+	});
 });
