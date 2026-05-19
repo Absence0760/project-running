@@ -180,8 +180,25 @@ class RaceController extends ChangeNotifier {
     return title;
   }
 
+  /// Visible-for-testing — RaceControllerTest exercises the change-
+  /// detection directly without a live Supabase. Keeps the test
+  /// honest about which fields are part of an ActiveRace's
+  /// observed-by-listeners identity.
+  @visibleForTesting
+  void setActiveForTest(ActiveRace? next) => _setActive(next);
+
   void _setActive(ActiveRace? next) {
+    // instanceStart is part of an ActiveRace's identity — Instance 1
+    // of recurring event E is a DIFFERENT race from Instance 2 of E
+    // (different start time, different RSVP row, different
+    // race_sessions PK). Omitting it from change-detection let a
+    // back-to-back armed transition (Instance 1 finishes → Instance
+    // 2 armed; same eventId, same 'armed' status, both null
+    // startedAt) silently update `_active` without firing
+    // notifyListeners, leaving the banner rendering Instance 1's
+    // time until something else triggered a rebuild.
     final changed = next?.eventId != _active?.eventId ||
+        next?.instanceStart != _active?.instanceStart ||
         next?.status != _active?.status ||
         next?.startedAt != _active?.startedAt;
     _active = next;
