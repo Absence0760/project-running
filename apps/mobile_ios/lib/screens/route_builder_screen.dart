@@ -9,11 +9,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:uuid/uuid.dart';
 
 import '../elevation.dart';
 import '../geocoding.dart';
 import '../local_route_store.dart';
+import '../rate_limit_errors.dart';
 import '../route_overlap.dart';
 import '../routing.dart';
 import '../run_stats.dart' show haversineMetres;
@@ -289,7 +291,17 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopBanner(context, 'Save failed: $e');
+      // Surface the create_route rate-limit P0001 (migration
+      // 20260907_001 — 30 routes / hour per user) as a friendly
+      // "wait N minutes" message instead of the raw exception.
+      // Mirror of the web fix in apps/web/src/lib/data.ts. Unknown
+      // errors still surface verbatim so debugging info isn't lost.
+      String message = 'Save failed: $e';
+      if (e is PostgrestException) {
+        final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
+        if (friendly != null) message = friendly;
+      }
+      showTopBanner(context, message);
     }
   }
 

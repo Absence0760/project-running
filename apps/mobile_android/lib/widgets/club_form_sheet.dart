@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../rate_limit_errors.dart';
 import '../social_service.dart';
 
 /// Modal bottom sheet for creating a new club. Mirrors the web
@@ -76,9 +78,20 @@ class _ClubFormState extends State<_ClubForm> {
       Navigator.of(context).pop<String?>(club.slug);
     } catch (e) {
       if (!mounted) return;
+      // Recognise the create_club rate-limit P0001 (migration
+      // 20260907_001) and surface the friendly "wait N minutes"
+      // message instead of the raw PostgrestException toString.
+      // Mirror of the web fix in apps/web/src/lib/data.ts +
+      // ClubEditor.svelte. Unknown errors fall through to the raw
+      // toString so debugging information isn't hidden.
+      String message = e.toString();
+      if (e is PostgrestException) {
+        final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
+        if (friendly != null) message = friendly;
+      }
       setState(() {
         _busy = false;
-        _error = e.toString();
+        _error = message;
       });
     }
   }
