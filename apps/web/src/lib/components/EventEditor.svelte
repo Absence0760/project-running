@@ -2,8 +2,14 @@
 	import { onMount } from 'svelte';
 	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/data';
 	import { WEEKDAY_CHOICES } from '$lib/recurrence';
-	import { formatDistance } from '$lib/units.svelte';
+	import { formatDistance, getUnit } from '$lib/units.svelte';
 	import type { Route, RecurrenceFreq, Weekday } from '$lib/types';
+
+	// Conversion factor for the unit label / pace target. The form
+	// keeps its working value in the user's preferred unit (km or mi)
+	// and converts to metres / sec-per-km at save time so the DB
+	// shape is unit-agnostic.
+	const METRES_PER_MILE = 1609.344;
 
 	interface Props {
 		clubId: string;
@@ -25,9 +31,15 @@
 	let durationMin = $state<number | null>(null);
 	let meetLabel = $state('');
 	let routeId = $state<string>('');
-	let distanceKm = $state<number | null>(null);
+	// `distanceInUnit` holds the value in the user's preferred unit
+	// (km or mi). Conversion to metres happens at save time.
+	let distanceInUnit = $state<number | null>(null);
+	// pace per the user's preferred unit (sec / km or sec / mi).
 	let paceMin = $state<number | null>(null);
 	let paceSec = $state<number | null>(null);
+	let distanceUnitLabel = $derived(getUnit() === 'mi' ? 'mi' : 'km');
+	let paceUnitLabel = $derived(getUnit() === 'mi' ? 'per mi' : 'per km');
+	let metresPerUnit = $derived(getUnit() === 'mi' ? METRES_PER_MILE : 1000);
 	let capacity = $state<number | null>(null);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -61,7 +73,7 @@
 		if (routeId) {
 			const r =
 				myRoutes.find((x) => x.id === routeId) ?? clubRoutes.find((x) => x.id === routeId);
-			if (r) distanceKm = +(r.distance_m / 1000).toFixed(2);
+			if (r) distanceInUnit = +(r.distance_m / metresPerUnit).toFixed(2);
 		}
 	});
 
@@ -72,7 +84,16 @@
 		error = null;
 		try {
 			const startsAt = new Date(`${date}T${time}`).toISOString();
-			const paceSecTotal = paceMin != null ? paceMin * 60 + (paceSec ?? 0) : null;
+			// Pace input is per the user's unit; the DB stores
+			// `pace_target_sec` as seconds per kilometre (the schema
+			// is unit-agnostic — pace_target_sec is always per-km).
+			// Convert mi-mode input back to per-km before saving.
+			const paceSecPerUnit =
+				paceMin != null ? paceMin * 60 + (paceSec ?? 0) : null;
+			const paceSecPerKm =
+				paceSecPerUnit != null
+					? Math.round(paceSecPerUnit * (1000 / metresPerUnit))
+					: null;
 			const recurrenceFreq = recurrence === 'none' ? null : recurrence;
 			const event = await createEvent({
 				club_id: clubId,
@@ -82,8 +103,9 @@
 				duration_min: durationMin ?? undefined,
 				meet_label: meetLabel.trim() || undefined,
 				route_id: routeId || null,
-				distance_m: distanceKm != null ? distanceKm * 1000 : undefined,
-				pace_target_sec: paceSecTotal ?? undefined,
+				distance_m:
+					distanceInUnit != null ? distanceInUnit * metresPerUnit : undefined,
+				pace_target_sec: paceSecPerKm ?? undefined,
 				capacity: capacity ?? undefined,
 				recurrence_freq: recurrenceFreq,
 				recurrence_byday:
@@ -205,11 +227,17 @@
 
 	<div class="row">
 		<label>
-			<span>Distance <span class="optional">km</span></span>
-			<input type="number" step="0.1" min="0" bind:value={distanceKm} placeholder="e.g. 10" />
+			<span>Distance <span class="optional">{distanceUnitLabel}</span></span>
+			<input
+				type="number"
+				step="0.1"
+				min="0"
+				bind:value={distanceInUnit}
+				placeholder="e.g. 10"
+			/>
 		</label>
 		<label>
-			<span>Target pace <span class="optional">per km</span></span>
+			<span>Target pace <span class="optional">{paceUnitLabel}</span></span>
 			<div class="pace">
 				<input type="number" min="0" max="59" bind:value={paceMin} placeholder="min" />
 				<span class="pace-sep">:</span>

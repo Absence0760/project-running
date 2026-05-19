@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import {
 	daysUntilRace,
 	evenSplitPacing,
+	MILE_METRES,
 	negativeSplitPacing,
 	raceChecklist,
 	fmtSplitTime,
@@ -60,6 +61,85 @@ test('evenSplitPacing: marathon at 3:30:00 → 4:58/km', () => {
 test('evenSplitPacing: zero / negative input → empty', () => {
 	assert.deepEqual(evenSplitPacing(0, 1500).splitsSec, []);
 	assert.deepEqual(evenSplitPacing(5000, 0).splitsSec, []);
+});
+
+// ─────────── evenSplitPacing — unitMetres (mi mode) ───────────
+
+test('evenSplitPacing: 5k at 25:00 with unitMetres=MILE_METRES → 4 splits, ~8:03/mi', () => {
+	// 5k ≈ 3.107 miles → ceil(3.107) = 4 splits, last one partial.
+	// avgPerMile = 1500 / 3.107 ≈ 483 sec/mi.
+	const s = evenSplitPacing(5000, 1500, MILE_METRES);
+	assert.equal(s.splitsSec.length, 4);
+	// First 3 are full-mile splits (~483 s).
+	for (let i = 0; i < 3; i++) {
+		assert.ok(
+			Math.abs(s.splitsSec[i] - 483) <= 1,
+			`split ${i} should be ~483s, got ${s.splitsSec[i]}`,
+		);
+	}
+	// avgSecPerKm field stays in per-km units regardless of split unit,
+	// so callers that want a single average pace string can still use
+	// the existing formatPace(secPerKm) without branching.
+	assert.equal(Math.round(s.avgSecPerKm), 300);
+});
+
+test('evenSplitPacing: mile-mode avgSecPerKm stays in per-km units', () => {
+	// avgSecPerKm is documented as "always in per-km" so callers can
+	// feed it to the existing formatPace helper without branching on
+	// the unit. Pin that switching the split unit doesn't accidentally
+	// flip the avgSecPerKm scale (which would emit "5 min per km"
+	// while the splits are mile splits — silently misleading).
+	const total = 3 * 3600 + 30 * 60; // 3:30:00 marathon
+	const km = evenSplitPacing(42195, total);
+	const mi = evenSplitPacing(42195, total, MILE_METRES);
+	assert.ok(
+		Math.abs(km.avgSecPerKm - mi.avgSecPerKm) < 0.01,
+		`avgSecPerKm should be unit-agnostic; km=${km.avgSecPerKm} mi=${mi.avgSecPerKm}`,
+	);
+});
+
+test('evenSplitPacing: split count derives from unitMetres', () => {
+	// Same distance, two unit modes, different split counts. Pin the
+	// shape so a regression that ignored unitMetres (and always used
+	// 1000) would visibly fail.
+	const km = evenSplitPacing(10_000, 3000);
+	const mi = evenSplitPacing(10_000, 3000, MILE_METRES);
+	assert.equal(km.splitsSec.length, 10);
+	// 10_000 m / 1609.344 = 6.214 → ceil = 7 splits.
+	assert.equal(mi.splitsSec.length, 7);
+});
+
+// ─────────── negativeSplitPacing — unitMetres (mi mode) ───────────
+
+test('negativeSplitPacing: mile-mode preserves first-slow / second-fast', () => {
+	const s = negativeSplitPacing(10_000, 3000, 2, MILE_METRES);
+	assert.equal(s.splitsSec.length, 7); // ceil(10000 / 1609.344) = 7
+	// Halves are by distance, not split count — mid-mile splits
+	// straddle the halfway mark. First 3 fully in the first half,
+	// last 3 fully in the second half; the middle split is at the
+	// boundary and can land either side. Pin only the unambiguous
+	// extremes.
+	const avgMi = 3000 / (10_000 / MILE_METRES);
+	assert.ok(
+		s.splitsSec[0] > avgMi,
+		`first split should be slower than mile avg ${avgMi}`,
+	);
+	assert.ok(
+		s.splitsSec[s.splitsSec.length - 1] < avgMi,
+		`last split should be faster than mile avg ${avgMi}`,
+	);
+});
+
+test('negativeSplitPacing: mile-mode 0% delta yields even splits', () => {
+	const s = negativeSplitPacing(10_000, 3000, 0, MILE_METRES);
+	// All 7 splits should be ~the avg per mile (last is partial).
+	const avgMi = 3000 / (10_000 / MILE_METRES); // ~482.8
+	for (let i = 0; i < s.splitsSec.length - 1; i++) {
+		assert.ok(
+			Math.abs(s.splitsSec[i] - avgMi) <= 1,
+			`split ${i}: ${s.splitsSec[i]} should be ~${avgMi}`,
+		);
+	}
 });
 
 // ─────────── negativeSplitPacing ───────────

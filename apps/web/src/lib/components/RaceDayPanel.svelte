@@ -2,12 +2,13 @@
 	import {
 		daysUntilRace,
 		evenSplitPacing,
+		MILE_METRES,
 		negativeSplitPacing,
 		raceChecklist,
 		fmtSplitTime,
 	} from '$lib/race_day';
 	import { riegelPredict } from '$lib/training';
-	import { fmtKm } from '$lib/units.svelte';
+	import { fmtKm, getUnit } from '$lib/units.svelte';
 	import type { Run } from '$lib/types';
 
 	interface Props {
@@ -40,11 +41,16 @@
 	});
 
 	let strategy = $state<'even' | 'negative'>('even');
+	// Pacing splits honour the user's distance pref — mi-mode users
+	// see per-mile splits + "mi N" labels, km-mode users see per-km.
+	// Reading getUnit() inside $derived re-runs when the pref flips.
+	let splitUnitMetres = $derived(getUnit() === 'mi' ? MILE_METRES : 1000);
+	let splitUnitLabel = $derived(getUnit() === 'mi' ? 'mi' : 'km');
 	let pacing = $derived.by(() => {
 		if (predictedSec == null) return null;
 		return strategy === 'even'
-			? evenSplitPacing(distanceM, predictedSec)
-			: negativeSplitPacing(distanceM, predictedSec, 2);
+			? evenSplitPacing(distanceM, predictedSec, splitUnitMetres)
+			: negativeSplitPacing(distanceM, predictedSec, 2, splitUnitMetres);
 	});
 
 	let checklist = $derived(raceChecklist(distanceM));
@@ -90,7 +96,7 @@
 				<ol class="splits">
 					{#each pacing.splitsSec as sp, i (i)}
 						<li>
-							<span class="split-km">km {i + 1}</span>
+							<span class="split-km">{splitUnitLabel} {i + 1}</span>
 							<span class="split-time">{fmtSplitTime(sp)}</span>
 						</li>
 					{/each}

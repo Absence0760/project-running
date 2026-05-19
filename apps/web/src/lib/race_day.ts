@@ -13,11 +13,20 @@
 export interface PacingStrategy {
 	/** Average pace target across the whole race, in seconds per km. */
 	avgSecPerKm: number;
-	/** Per-km splits as seconds. Length === ceil(distance_m / 1000). */
+	/**
+	 * Per-split seconds, one per `unitMetres` of distance. Default
+	 * `unitMetres` (1000) yields per-km splits; passing 1609.344
+	 * yields per-mile splits for imperial users. Length is
+	 * `ceil(distanceM / unitMetres)`.
+	 */
 	splitsSec: number[];
 	/** Human-readable strategy name. */
 	label: 'even' | 'negative-split' | 'positive-split';
 }
+
+/// 1 mile in metres. Pass `MILE_METRES` as the `unitMetres` arg on
+/// pacing helpers to switch from per-km to per-mile splits.
+export const MILE_METRES = 1609.344;
 
 /**
  * Days from `today` to `raceDate`, both treated as local dates.
@@ -38,57 +47,69 @@ function parseLocalDate(iso: string): Date {
 }
 
 /**
- * Even-split pacing — every km at the same pace. Total seconds is
- * preserved; rounding shaves only on the last split.
+ * Even-split pacing — every unit at the same pace. Total seconds is
+ * preserved; rounding shaves only on the last split. Pass
+ * `unitMetres=1000` for per-km splits (default) or `MILE_METRES` for
+ * per-mile splits when the user prefers imperial.
  */
-export function evenSplitPacing(distanceM: number, totalSec: number): PacingStrategy {
+export function evenSplitPacing(
+	distanceM: number,
+	totalSec: number,
+	unitMetres = 1000,
+): PacingStrategy {
 	if (distanceM <= 0 || totalSec <= 0) {
 		return { avgSecPerKm: 0, splitsSec: [], label: 'even' };
 	}
-	const km = Math.ceil(distanceM / 1000);
-	const avg = totalSec / (distanceM / 1000);
+	const units = Math.ceil(distanceM / unitMetres);
+	const avgSecPerKm = totalSec / (distanceM / 1000);
+	const avgPerUnit = totalSec / (distanceM / unitMetres);
 	const splits: number[] = [];
-	for (let i = 0; i < km - 1; i++) {
-		splits.push(Math.round(avg));
+	for (let i = 0; i < units - 1; i++) {
+		splits.push(Math.round(avgPerUnit));
 	}
-	// Last split takes any rounding remainder (and is a partial km if the
-	// race distance isn't a whole-km multiple).
-	const remainderKm = distanceM / 1000 - (km - 1);
-	splits.push(Math.round(avg * remainderKm));
-	return { avgSecPerKm: avg, splitsSec: splits, label: 'even' };
+	// Last split takes any rounding remainder (and is a partial unit if
+	// the race distance isn't a whole-unit multiple).
+	const remainderUnits = distanceM / unitMetres - (units - 1);
+	splits.push(Math.round(avgPerUnit * remainderUnits));
+	return { avgSecPerKm, splitsSec: splits, label: 'even' };
 }
 
 /**
  * Negative-split pacing — second half faster than the first by
  * `deltaPercent`. A 2% negative split for a 4:30/km marathon means
  * first half ~4:33, second half ~4:27. Halves are by *distance*, not
- * km count, so the math works on 5k as well as on full marathons.
+ * unit count, so the math works on 5k as well as on full marathons.
+ * Pass `unitMetres=1000` for per-km splits (default) or `MILE_METRES`
+ * for per-mile splits.
  */
 export function negativeSplitPacing(
 	distanceM: number,
 	totalSec: number,
 	deltaPercent = 2,
+	unitMetres = 1000,
 ): PacingStrategy {
 	if (distanceM <= 0 || totalSec <= 0) {
 		return { avgSecPerKm: 0, splitsSec: [], label: 'negative-split' };
 	}
-	const avg = totalSec / (distanceM / 1000);
-	const delta = (avg * deltaPercent) / 100;
-	const firstHalfPace = avg + delta;
-	const secondHalfPace = avg - delta;
-	const km = Math.ceil(distanceM / 1000);
-	const halfKm = (distanceM / 1000) / 2;
+	const avgSecPerKm = totalSec / (distanceM / 1000);
+	const avgPerUnit = totalSec / (distanceM / unitMetres);
+	const delta = (avgPerUnit * deltaPercent) / 100;
+	const firstHalfPace = avgPerUnit + delta;
+	const secondHalfPace = avgPerUnit - delta;
+	const units = Math.ceil(distanceM / unitMetres);
+	const totalUnits = distanceM / unitMetres;
+	const halfUnits = totalUnits / 2;
 	const splits: number[] = [];
-	for (let i = 0; i < km; i++) {
-		const startKm = i;
-		const endKm = Math.min(i + 1, distanceM / 1000);
-		const segKm = endKm - startKm;
-		// Pace for the split is the pace at its midpoint km.
-		const midKm = startKm + segKm / 2;
-		const pace = midKm < halfKm ? firstHalfPace : secondHalfPace;
-		splits.push(Math.round(pace * segKm));
+	for (let i = 0; i < units; i++) {
+		const startU = i;
+		const endU = Math.min(i + 1, totalUnits);
+		const segU = endU - startU;
+		// Pace for the split is the pace at its midpoint unit.
+		const midU = startU + segU / 2;
+		const pace = midU < halfUnits ? firstHalfPace : secondHalfPace;
+		splits.push(Math.round(pace * segU));
 	}
-	return { avgSecPerKm: avg, splitsSec: splits, label: 'negative-split' };
+	return { avgSecPerKm, splitsSec: splits, label: 'negative-split' };
 }
 
 export interface ChecklistItem {
