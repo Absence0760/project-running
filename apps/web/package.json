@@ -19,18 +19,18 @@
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-static": "3.0.10",
 		"@sveltejs/adapter-vercel": "6.3.3",
-		"@sveltejs/kit": "2.59.1",
+		"@sveltejs/kit": "2.60.1",
 		"@sveltejs/vite-plugin-svelte": "7.1.2",
 		"@types/aws-lambda": "8.10.161",
 		"@types/node": "^25.7.0",
 		"esbuild": "0.28.0",
 		"mdsvex": "^0.12.7",
 		"normalize.css": "8.0.1",
-		"svelte": "5.55.7",
+		"svelte": "5.55.8",
 		"svelte-check": "4.4.8",
 		"typescript": "6.0.3",
 		"unplugin-icons": "23.0.1",
-		"vite": "8.0.12"
+		"vite": "8.0.13"
 	},
 	"type": "module",
 	"dependencies": {
