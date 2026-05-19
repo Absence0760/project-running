@@ -413,6 +413,23 @@ class SocialService extends ChangeNotifier {
     return status;
   }
 
+  /// Redeem a club invite token. Returns the slug of the club the
+  /// user just joined so the caller can navigate to its detail
+  /// screen. Mirrors web `joinClubByToken` (apps/web/src/lib/data.ts).
+  /// Surfaces the RPC's own error messages on failure ("expired",
+  /// "already a member", "invalid token") so the caller can render
+  /// them as-is.
+  Future<String> joinClubByToken(String token) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+    final result = await _c.rpc(
+      'join_club_by_token',
+      params: {'p_token': token.trim()},
+    );
+    notifyListeners();
+    return result as String;
+  }
+
   Future<void> leaveClub(String clubId) async {
     final uid = _uid;
     if (uid == null) return;

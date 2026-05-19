@@ -9,6 +9,7 @@ import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/error_state.dart';
 import 'club_detail_screen.dart';
+import 'club_invite_screen.dart';
 import 'people_screen.dart';
 
 class ClubsScreen extends StatefulWidget {
@@ -137,6 +138,28 @@ class ClubsScreenState extends State<ClubsScreen> {
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
+            ),
+          ),
+          // "Have an invite code?" tile — mobile mirror of web
+          // /clubs/join/[token]. Always visible so a user who tapped
+          // a phone-side invite link (and got bounced through the
+          // browser to web's redemption flow) can also redeem
+          // directly in-app by pasting the code.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.qr_code, size: 18),
+              label: const Text('Join with invite code'),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ClubInviteScreen(
+                      social: widget.social,
+                      training: widget.training,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           if (_tab == 0)
