@@ -26,6 +26,7 @@
     "emu:android:launch": "flutter emulators --launch",
     "build:web": "pnpm -C apps/web build",
     "build:android": "cd apps/mobile_android && flutter build apk",
+    "install:android": "cd apps/mobile_android && adb install build/app/outputs/flutter-apk/app-release.apk",
     "build:ios": "cd apps/mobile_ios && flutter build ios --no-codesign",
     "build:worker": "cd apps/job_worker && go build .",
     "check:web": "pnpm -C apps/web check",
