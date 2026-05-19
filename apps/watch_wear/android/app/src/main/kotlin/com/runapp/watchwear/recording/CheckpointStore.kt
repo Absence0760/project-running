@@ -21,10 +21,17 @@ data class Checkpoint(
     /// DataStore rewrites its full backing file on every commit.
     val trackFilePath: String,
     val trackPointCount: Int,
-    val bpmSum: Long,
-    val bpmCount: Long,
-    val activityType: String,
-    val laps: List<CheckpointLap>,
+    // Forward-compat defaults: these fields were added after v1. A v1
+    // checkpoint written by an older build must decode cleanly so that
+    // a user who upgrades the watch app mid-recording (background
+    // install, or install just after a crash but before recovery) can
+    // still recover the run. Without defaults `runCatching { ... }
+    // .getOrNull()` in `CheckpointStore.current` would silently drop
+    // the snapshot and the runner would lose the in-flight run.
+    val bpmSum: Long = 0L,
+    val bpmCount: Long = 0L,
+    val activityType: String = "run",
+    val laps: List<CheckpointLap> = emptyList(),
 )
 
 @Serializable
