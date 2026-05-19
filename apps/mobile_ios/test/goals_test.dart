@@ -1,6 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/goals.dart';
+import '../lib/preferences.dart';
 
 void main() {
   // Wednesday noon mid-week — gives both elapsed and remaining period
@@ -97,23 +99,34 @@ void main() {
       expect(p.complete, isTrue);
     });
 
-    test('ahead of pace → ahead feedback', () {
+    test('ahead of schedule → ahead-feedback string', () {
+      // The feedback wording was "ahead of pace" — clarified to
+      // "ahead of schedule" because "pace" in a running context is
+      // the per-km/mi rate, which this delta is NOT. The number is
+      // a cumulative distance gap vs the straight-line target.
       final p = evaluateGoal(goal, [
         makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 15000),
       ], now);
-      expect(
-        targetOf(p, GoalTargetKind.distance).feedback,
-        contains('ahead of pace'),
-      );
+      final feedback = targetOf(p, GoalTargetKind.distance).feedback;
+      expect(feedback, contains('ahead of schedule'));
+      // Negative-shape: the old "ahead of pace" wording must not
+      // reappear (regression net).
+      expect(feedback, isNot(contains('ahead of pace')));
     });
 
-    test('behind pace → "X km to go" feedback', () {
+    test('behind schedule → "X km to go" feedback (km default mode)', () {
+      // No registerActivePreferences call → activeDistanceUnit
+      // defaults to km, so the format string uses "km".
       final p = evaluateGoal(goal, [
         makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 2000),
       ], now);
       expect(
         targetOf(p, GoalTargetKind.distance).feedback,
         contains('to go'),
+      );
+      expect(
+        targetOf(p, GoalTargetKind.distance).feedback,
+        contains('km'),
       );
     });
   });
@@ -340,6 +353,131 @@ void main() {
       expect(g.distanceMetres, isNull);
       expect(g.timeSeconds, isNull);
       expect(g.runCount, isNull);
+    });
+  });
+
+  // ─────────── Unit-pref propagation: goal feedback in mi mode ───────────
+  //
+  // The dashboard's goals card surfaced "5.1 km ahead of schedule"
+  // regardless of the user's preferred_unit. This group pins that
+  // a Preferences instance registered with `_useMiles=true` flows
+  // through to the format string the feedback embeds. Each test
+  // sets up a registered Preferences and asserts the feedback
+  // string carries "mi" / "km" appropriately.
+  group('goal feedback honours active distance unit', () {
+    final goal = RunGoal(
+      id: 'g',
+      period: GoalPeriod.week,
+      distanceMetres: 20000,
+    );
+
+    Run makeRun({required DateTime startedAt, required double distance}) =>
+        Run(
+          id: 'r-${startedAt.millisecondsSinceEpoch}',
+          startedAt: startedAt,
+          duration: const Duration(minutes: 30),
+          distanceMetres: distance,
+          source: RunSource.app,
+        );
+
+    final now = DateTime(2026, 4, 15, 12);
+
+    setUp(() {
+      // Each test re-registers a fresh Preferences in the desired
+      // mode, so the global accessor reads what the test expects.
+      resetActivePreferencesForTest();
+    });
+
+    tearDownAll(() {
+      // Leave the global clean for any spec that runs after this file.
+      resetActivePreferencesForTest();
+    });
+
+    test('mi mode: "ahead of schedule" string carries "mi" not "km"',
+        () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+
+      // 15000m at mid-week of a 20k goal — comfortably ahead.
+      final p = evaluateGoal(goal, [
+        makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 15000),
+      ], now);
+      final feedback = targetOf(p, GoalTargetKind.distance).feedback;
+      expect(feedback, contains('ahead of schedule'));
+      expect(feedback, contains('mi'));
+      // Headline regression net — the literal "km" must not appear.
+      expect(feedback, isNot(contains('km')));
+    });
+
+    test('mi mode: "X to go" feedback carries "mi" not "km"', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+
+      // 2000m vs a 20k goal — clearly behind.
+      final p = evaluateGoal(goal, [
+        makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 2000),
+      ], now);
+      final feedback = targetOf(p, GoalTargetKind.distance).feedback;
+      expect(feedback, contains('to go'));
+      expect(feedback, contains('mi'));
+      expect(feedback, isNot(contains('km')));
+    });
+
+    test('km mode: feedback strings carry "km" not "mi"', () async {
+      // Negative-shape pin — the default pref must NOT flip to
+      // imperial when the user is on metric. Catches a regression
+      // that inverted the unit branch.
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+
+      final p = evaluateGoal(goal, [
+        makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 15000),
+      ], now);
+      final feedback = targetOf(p, GoalTargetKind.distance).feedback;
+      expect(feedback, contains('km'));
+      expect(feedback, isNot(contains(RegExp(r'\bmi\b'))));
+    });
+
+    test('km mode: numeric value matches the active km formatter', () async {
+      // The delta at this point in the week is exactly 8.5 km
+      // ahead of the straight-line target. With km mode + the
+      // formatter's 2-decimal output, the feedback string must
+      // contain "8.50 km" — pin the exact byte sequence so a
+      // refactor that drifted to 1-decimal would fail.
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+
+      // Wed noon = 60h into a 168h period → expected ~ 7142.857 m.
+      // Plant 15000 m → delta ≈ 7857 m → "7.86 km" via 2-decimal.
+      final p = evaluateGoal(goal, [
+        makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 15000),
+      ], now);
+      final feedback = targetOf(p, GoalTargetKind.distance).feedback;
+      // Match the formatter shape (N.NN km) without pinning the
+      // exact metres-to-elapsed math (which is sensitive to the
+      // periodStart calc).
+      expect(feedback, matches(RegExp(r'\d+\.\d{2} km')));
+    });
+
+    test('mi mode: numeric value matches the active mi formatter', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+
+      final p = evaluateGoal(goal, [
+        makeRun(startedAt: DateTime(2026, 4, 13, 8), distance: 15000),
+      ], now);
+      final feedback = targetOf(p, GoalTargetKind.distance).feedback;
+      expect(feedback, matches(RegExp(r'\d+\.\d{2} mi')));
     });
   });
 }

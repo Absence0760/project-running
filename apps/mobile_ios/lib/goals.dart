@@ -1,5 +1,7 @@
 import 'package:core_models/core_models.dart';
 
+import 'preferences.dart' show UnitFormat, activeDistanceUnit;
+
 /// How wide a net the goal covers.
 enum GoalPeriod { week, month }
 
@@ -184,7 +186,11 @@ GoalProgress evaluateGoal(RunGoal goal, List<Run> runs, DateTime now) {
       now: now,
       periodStart: periodStart,
       periodEnd: periodEnd,
-      format: (m) => '${(m / 1000).toStringAsFixed(1)} km',
+      // Format in the user's preferred unit so an mi-mode user sees
+      // "3.1 mi ahead of schedule" instead of "5.1 km ahead of
+      // schedule". `activeDistanceUnit` reads the top-level
+      // Preferences accessor registered by `main.dart`.
+      format: (m) => UnitFormat.distance(m, activeDistanceUnit),
     ));
   }
 
@@ -261,8 +267,12 @@ TargetProgress _evalCumulative({
         now.difference(periodStart).inSeconds.clamp(0, totalSec.toInt());
     final expected = totalSec > 0 ? target * (elapsedSec / totalSec) : 0.0;
     final delta = current - expected;
+    // "ahead of schedule" reads more clearly than "ahead of pace" —
+    // "pace" in a running context is the per-km/mi rate, which this
+    // value is NOT. It's the cumulative-progress delta vs the
+    // straight-line target for the time elapsed in the period.
     feedback = delta > 0
-        ? '${format(delta)} ahead of pace'
+        ? '${format(delta)} ahead of schedule'
         : '${format(target - current)} to go';
   }
 
