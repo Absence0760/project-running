@@ -7,6 +7,10 @@ interface TrackPoint {
 	lng: number;
 	ele?: number | null;
 	t?: string | null;
+	/// Per-point heart rate in BPM (matches `src/lib/types.ts`
+	/// TrackPoint.bpm). Lets HR-zone e2e tests plant a track that
+	/// the run-detail page reads to compute the zone breakdown.
+	bpm?: number;
 }
 
 /**
