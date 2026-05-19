@@ -85,6 +85,46 @@ class ApiClient {
     await _client.auth.resetPasswordForEmail(email.trim());
   }
 
+  /// Fetch heatmap-friendly point set within a bbox. Backed by the
+  /// `heatmap_points_in_bbox` PostGIS RPC (migration 20260828_001),
+  /// capped at [maxPoints] (default 5000) regardless of bbox size —
+  /// a continent-wide pan returns the same point count as a city
+  /// pan, just spread thinner. Returns an empty list on RPC error
+  /// so the caller's map layer renders blank rather than throwing.
+  ///
+  /// Mirrors `apps/web/src/lib/data.ts:fetchHeatmapPoints`.
+  Future<List<HeatmapPoint>> fetchHeatmapPoints({
+    required double minLng,
+    required double minLat,
+    required double maxLng,
+    required double maxLat,
+    int maxPoints = 5000,
+  }) async {
+    try {
+      final data = await _client.rpc(
+        'heatmap_points_in_bbox',
+        params: {
+          'p_min_lng': minLng,
+          'p_min_lat': minLat,
+          'p_max_lng': maxLng,
+          'p_max_lat': maxLat,
+          'p_max_points': maxPoints,
+        },
+      );
+      if (data is! List) return const [];
+      return data.map<HeatmapPoint>((row) {
+        final r = row as Map<String, dynamic>;
+        return HeatmapPoint(
+          lat: (r['lat'] as num).toDouble(),
+          lng: (r['lng'] as num).toDouble(),
+        );
+      }).toList();
+    } catch (_) {
+      // Caller's map layer stays blank on RPC failure.
+      return const [];
+    }
+  }
+
   /// Register a new account with email/password. Returns the user ID.
   ///
   /// Throws if the address is already registered or the password is too weak.

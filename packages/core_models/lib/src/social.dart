@@ -168,3 +168,14 @@ class SegmentEffortWithSegment {
     required this.rank,
   });
 }
+
+/// A single (lat, lng) sample returned by `heatmap_points_in_bbox`.
+/// Mobile mirror of the web `HeatmapPoint` interface; renders as a
+/// low-opacity circle on the heatmap layer so stacking creates the
+/// heat-density visual.
+class HeatmapPoint {
+  final double lat;
+  final double lng;
+
+  const HeatmapPoint({required this.lat, required this.lng});
+}

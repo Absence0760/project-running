@@ -13,6 +13,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../widgets/route_track_preview.dart';
 import 'explore_routes_screen.dart';
+import 'routes_heatmap_screen.dart';
 import 'route_builder_screen.dart';
 import 'route_detail_screen.dart';
 import '../widgets/top_banner.dart';
@@ -466,6 +467,19 @@ class _RoutesScreenState extends State<RoutesScreen> {
               );
             },
           ),
+          if (widget.apiClient != null)
+            IconButton(
+              icon: const Icon(Icons.local_fire_department_outlined),
+              tooltip: 'Routes heatmap',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RoutesHeatmapScreen(
+                    api: widget.apiClient!,
+                  ),
+                ),
+              ),
+            ),
           if (_syncing)
             const Padding(
               padding: EdgeInsets.all(12),
