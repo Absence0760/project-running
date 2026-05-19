@@ -122,14 +122,48 @@ struct ContentView: View {
 
 // MARK: - Pre-Run View
 
-private let pacePresets: [(label: String, secondsPerKm: Double)] = [
-    ("5:00/km", 300),
-    ("5:30/km", 330),
-    ("6:00/km", 360),
-    ("6:30/km", 390),
-    ("7:00/km", 420),
-    ("7:30/km", 450),
-]
+/// Round-number pace presets surfaced in the pre-run picker.
+///
+/// The DB / `WorkoutManager` store the target pace in seconds-per-km
+/// (the schema is unit-agnostic). The watch presets surface in the
+/// user's preferred unit so an mi-mode runner picks from 8:00/mi /
+/// 8:30/mi etc. instead of doing the conversion in their head.
+///
+/// Reads `UserDefaults.standard.string(forKey: "preferred_unit")`,
+/// defaulting to km. The companion `WatchConnectivityManager`
+/// receive-message handler writes that key when the phone pushes a
+/// `preferred_unit` change (see `didReceiveMessage`). Phone-side
+/// push isn't yet wired — this watch-side scaffolding lets the
+/// signal flow the moment that lands. Until then mi-mode users
+/// who paired their watch fresh see km presets; they can manually
+/// poke the UserDefaults via `defaults write` in a debugger.
+private func pacePresets() -> [(label: String, secondsPerKm: Double)] {
+    let isMiles = UserDefaults.standard.string(forKey: "preferred_unit") == "mi"
+    if isMiles {
+        // 7:30 to 12:30 per mile in 30-second steps — covers easy
+        // through 5k-fast for typical recreational runners. Stored
+        // value remains sec/km via the metresPerMile conversion so
+        // the recording stack's pace-alert math stays unit-agnostic.
+        let metresPerMile = 1609.344
+        let secsPerMile: [Int] = [450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750]
+        return secsPerMile.map { secMi in
+            let m = secMi / 60
+            let s = secMi % 60
+            let label = String(format: "%d:%02d/mi", m, s)
+            // Convert sec/mi to sec/km: time per km = time per mi × (km / mi)
+            let secPerKm = Double(secMi) * (1000.0 / metresPerMile)
+            return (label: label, secondsPerKm: secPerKm)
+        }
+    }
+    return [
+        ("5:00/km", 300),
+        ("5:30/km", 330),
+        ("6:00/km", 360),
+        ("6:30/km", 390),
+        ("7:00/km", 420),
+        ("7:30/km", 450),
+    ]
+}
 
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
@@ -153,14 +187,18 @@ struct PreRunView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
-                    ForEach(pacePresets.indices, id: \.self) { i in
-                        Button(pacePresets[i].label) {
+                    // Recompute presets each render so a unit-pref flip
+                    // mid-session (rare — phone push is the only writer)
+                    // is honoured without a separate observation step.
+                    let presets = pacePresets()
+                    ForEach(presets.indices, id: \.self) { i in
+                        Button(presets[i].label) {
                             if selectedPaceIndex == i {
                                 selectedPaceIndex = nil
                                 workoutManager.targetPaceSecondsPerKm = nil
                             } else {
                                 selectedPaceIndex = i
-                                workoutManager.targetPaceSecondsPerKm = pacePresets[i].secondsPerKm
+                                workoutManager.targetPaceSecondsPerKm = presets[i].secondsPerKm
                             }
                         }
                         .font(.caption)

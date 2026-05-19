@@ -61,6 +61,32 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        // `preferred_unit` — the user's distance preference on the
+        // phone (`'km'` or `'mi'`). Stored in UserDefaults so the
+        // pre-run pace presets (see `pacePresets()` in
+        // ContentView.swift) and any other unit-sensitive surface can
+        // read it synchronously without a `@Published` observation.
+        // Phone-side push isn't wired yet — when it lands, this
+        // handler is what makes the watch's UI flip to imperial
+        // labels in mi-mode users.
+        if let unit = message["preferred_unit"] as? String,
+           unit == "km" || unit == "mi" {
+            UserDefaults.standard.set(unit, forKey: "preferred_unit")
+        }
         // Future: handle route pushes from phone.
+    }
+
+    // Also handle the alternative `userInfo` transport (queued, durable
+    // across watch reboots). The phone may push the unit via either
+    // sendMessage (when the watch is reachable) or transferUserInfo
+    // (queues until the watch wakes), so honour both.
+    func session(
+        _ session: WCSession,
+        didReceiveUserInfo userInfo: [String: Any] = [:]
+    ) {
+        if let unit = userInfo["preferred_unit"] as? String,
+           unit == "km" || unit == "mi" {
+            UserDefaults.standard.set(unit, forKey: "preferred_unit")
+        }
     }
 }
