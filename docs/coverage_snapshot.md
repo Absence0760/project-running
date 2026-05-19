@@ -31,6 +31,35 @@ This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end 
 | Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
 | pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
+## Wear OS unit-test pass — 2026-05-19 (post-mobile continuation)
+
+After the mobile pure-logic additions, three more Wear OS source
+files got dedicated unit-test files. One small refactor (extracting
+HeartRateMonitor's BPM validity gate to a testable companion-level
+function) + two existing-as-pure-logic surfaces.
+
+| Surface | Tests | What's pinned |
+|---|---|---|
+| `HeartRateMonitor` BPM validity gate | 9 (NEW `HeartRateMonitorTest.kt`) | Hoisted `isValidBpm(bpm: Double): Boolean` + named constants `MIN_VALID_BPM=30` / `MAX_VALID_BPM=230`. Pinned: inclusive bounds (30 and 230 pass), typical resting+active rates (45-200) pass, just-below + just-above bounds reject, zero/negative/NaN/Infinity all reject — explicit doc on why `bpm >= 30 && bpm <= 230` drops NaN while the logically-equivalent `!(bpm < 30 \|\| bpm > 230)` would NOT. |
+| `TrackWriter` file format + lifecycle | 9 (NEW `TrackWriterTest.kt`) | The streamer that backs the recording loop's track file. Format: empty close → "[]", single point → 1-element array, multiple → comma-separated NO trailing comma, null elevation → JSON null literal (NOT quoted "null"), ISO 8601 UTC timestamps. Lifecycle: pointCount tracks each append, re-open clears the file, close is idempotent, path is absolute (CheckpointStore's trackFilePath resolves across process restarts). |
+| `RecordingRepository` state + isActive | 10 (NEW `RecordingRepositoryTest.kt`) | The process-wide singleton that decouples recording state from UI lifecycle. isActive contract — all 4 Stage values pinned separately (Recording + Paused → true so the UI stays mounted on pause; Idle + Finished → false). Default-state assertions on every field of `Metrics`. update() composes through (not reset on each write). reset() clears regardless of prior state. Stage enum value set pinned (forces deliberate isActive review on additions). |
+
+### Pieces of work + commits
+
+| Piece | Commit | Tests |
+|---|---|---|
+| HeartRateMonitor BPM validity gate (extract + tests) | `38d0ce3` | 9 |
+| TrackWriter file format + lifecycle | `e095711` | 9 |
+| RecordingRepository state + isActive | `a8ad4d0` | 10 |
+
+Total this pass: **28 new Wear OS tests**.
+
+### Lessons baked into the new specs
+
+- **JUnit 4 `assertEquals(message, expected, actual)`** — message is the FIRST arg, not last. Kotlin lets you pass strings in any order so the wrong order compiles fine but produces a confusing "expected:<[test-run]> but was:<[your-message]>" failure. RecordingRepository test initially failed for this exact reason; comment in the spec walks through it.
+- **The `bpm >= 30 && bpm <= 230` vs `!(bpm < 30 || bpm > 230)` distinction matters for NaN.** The former drops NaN (both comparisons false → false). The latter accepts it (`!(false || false)` → true). HeartRateMonitor test pins the right form so a future refactor to the inverted shape would fail loud.
+- **Wear OS test naming Windows-safety.** Kotlin backtick names containing `"` (double quotes) emit a Windows compile-warning. Pure cosmetic but trivial to avoid by paraphrasing.
+
 ## Mobile + watch unit-test gaps pass — 2026-05-19 (post-EF continuation)
 
 After the backend EF guards pass, three mobile lib/ files + one
