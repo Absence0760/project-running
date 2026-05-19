@@ -174,5 +174,99 @@ void main() {
       expect(mapMounts, isEmpty,
           reason: 'LiveRunMap should not mount until recording begins');
     });
+
+    testWidgets('default activity is Run (initial chip selection)',
+        (tester) async {
+      // Reason: the recorder reads `_activityType` at begin(). A
+      // refactor that flipped the default to Walk / Cycle would
+      // silently mis-classify every first-recording per the new
+      // user (until they manually flipped chips). Pin the default.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      final selectedChips = tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .where((c) => c.selected)
+          .toList();
+      expect(selectedChips.length, 1, reason: 'exactly one default chip');
+      // The selected chip wraps a Text('Run').
+      final selectedFinder = find.byWidgetPredicate(
+        (w) => w is ChoiceChip && w.selected,
+      );
+      expect(
+        find.descendant(of: selectedFinder, matching: find.text('Run')),
+        findsOneWidget,
+        reason: 'default activity must be Run',
+      );
+    });
+
+    // The existing "selecting Walk swaps the active ChoiceChip" test
+    // covers one of the four values. The chip-selection switch is one
+    // line, but a per-enum-value typo (e.g. mapping `hike → walk`
+    // accidentally) would only fail on that specific value. Pin the
+    // other three so the whole enum is covered.
+    for (final spec in const [
+      ('Cycle', 'cycle'),
+      ('Hike', 'hike'),
+      ('Run', 'run'),
+    ]) {
+      final (label, slug) = spec;
+      testWidgets('selecting $label sets it as the active chip', (tester) async {
+        final s = await _makeStores();
+        await _pump(tester, s);
+
+        await tester.tap(find.text(label));
+        await tester.pump();
+
+        final selectedChips = tester
+            .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+            .where((c) => c.selected)
+            .toList();
+        expect(selectedChips.length, 1,
+            reason: 'tapping $label must leave exactly one chip selected ($slug)');
+        final selectedFinder = find.byWidgetPredicate(
+          (w) => w is ChoiceChip && w.selected,
+        );
+        expect(
+          find.descendant(of: selectedFinder, matching: find.text(label)),
+          findsOneWidget,
+        );
+      });
+    }
+
+    testWidgets('idle state surfaces Choose route / Share live / Training plans',
+        (tester) async {
+      // The three secondary affordances on the idle screen each open
+      // a different sub-flow (route picker, live broadcast share
+      // sheet, plans navigation). A refactor that hid any one of
+      // them would silently strip a feature the user can't recover
+      // from elsewhere on this tab.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      expect(find.text('Choose route'), findsOneWidget);
+      expect(find.text('Share live link'), findsOneWidget);
+      // "Training plans" is the label when there's no active plan
+      // overview — fall-through path. With a plan, the label is the
+      // plan name (covered separately in plan_detail tests).
+      expect(find.text('Training plans'), findsOneWidget);
+    });
+
+    testWidgets(
+      'first-run prompt renders when no recent run + no event + no plan',
+      (tester) async {
+        // Empty-state path: no LocalRunStore rows, no upcoming RSVP,
+        // no plan workout today. The `_FirstRunPrompt` surfaces the
+        // canonical encouragement copy. A regression that broke the
+        // boolean trio (e.g. the `else if` on line 1922 dropped one
+        // of the null-checks) would leave the screen empty between
+        // the chips row and the START button.
+        final s = await _makeStores();
+        await _pump(tester, s);
+        expect(
+          find.text('Your first run is one tap away.'),
+          findsOneWidget,
+          reason: 'empty-state prompt must render with no signals planted',
+        );
+      },
+    );
   });
 }
