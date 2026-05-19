@@ -564,7 +564,7 @@
 						class="btn-secondary btn-icon-only"
 						type="button"
 						onclick={() => (showReportDialog = true)}
-						aria-label="Report club"
+						aria-label="Report this club"
 						title="Report this club"
 					>
 						<span class="material-symbols" aria-hidden="true">flag</span>

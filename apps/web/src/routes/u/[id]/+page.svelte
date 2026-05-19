@@ -419,7 +419,7 @@
 						class="btn btn-outline btn-icon-only"
 						type="button"
 						onclick={() => (showReportDialog = true)}
-						aria-label="Report profile"
+						aria-label="Report this profile"
 						title="Report this profile"
 					>
 						<span class="material-symbols" aria-hidden="true">flag</span>

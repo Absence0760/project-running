@@ -377,7 +377,7 @@
 						<button
 							class="btn btn-outline btn-sm"
 							onclick={() => (showReportDialog = true)}
-							aria-label="Report route"
+							aria-label="Report this route"
 							title="Report this route"
 						>
 							<span class="material-symbols" aria-hidden="true">flag</span>

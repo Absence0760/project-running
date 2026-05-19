@@ -71,6 +71,32 @@ async function mockOsrmStraightLines(page: Page) {
 	});
 }
 
+/**
+ * Mock the Open-Meteo elevation API that `recalculateRoute` hits
+ * once per successful generation. The runtime call has no client-
+ * side timeout, so in a network-isolated CI runner the fetch can
+ * hang and pin generateLoop's promise — that's how the route-builder
+ * audit landed this in the page-stuck-on-"Calculating route…" state.
+ * Returns the right number of zero elevations for the requested
+ * coords so the post-call interpolation step doesn't crash on a
+ * length mismatch.
+ */
+async function mockOpenMeteoElevation(page: Page) {
+	await page.route('https://api.open-meteo.com/v1/elevation**', async (route: Route) => {
+		const url = new URL(route.request().url());
+		// `latitude` is a comma-joined list; count by comma + 1, with
+		// a sane minimum so an unexpectedly-empty param doesn't return
+		// `elevation: []` and crash the interpolation.
+		const lat = url.searchParams.get('latitude') ?? '';
+		const n = Math.max(1, lat.split(',').filter(Boolean).length);
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ elevation: new Array(n).fill(0) }),
+		});
+	});
+}
+
 function haversineM(
 	a: { lng: number; lat: number },
 	b: { lng: number; lat: number },
@@ -164,6 +190,7 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 
 	test.beforeEach(async ({ page }) => {
 		await mockOsrmStraightLines(page);
+		await mockOpenMeteoElevation(page);
 		await page.goto('/routes/new');
 		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });

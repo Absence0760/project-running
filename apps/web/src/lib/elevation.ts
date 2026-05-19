@@ -18,7 +18,19 @@ export async function fetchElevations(
 		const lngs = batch.map(([lng]) => lng).join(',');
 
 		const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`;
-		const res = await fetch(url);
+		// 8s per-batch ceiling. RouteBuilder calls this inside its
+		// generate-loop iteration — without a client-side timeout an
+		// Open-Meteo outage pins the whole iteration's promise and the
+		// "Calculating route…" spinner can't recover. Zeros-on-failure
+		// is preferable to a hung UI; the route still saves, the user
+		// just doesn't get an elevation profile.
+		let res: Response;
+		try {
+			res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+		} catch {
+			results.push(...batch.map(() => 0));
+			continue;
+		}
 
 		if (!res.ok) {
 			// Fall back to zeros if elevation service is unavailable
