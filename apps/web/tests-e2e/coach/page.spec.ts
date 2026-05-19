@@ -280,6 +280,217 @@ test.describe('/coach', () => {
 		).toBeVisible();
 	});
 
+	test('SSE: multi-token stream appends in order into the assistant bubble', async ({
+		page
+	}) => {
+		// The existing happy-path test fires a single token event.
+		// Real LLM responses arrive as N small chunks — the bubble must
+		// accumulate them in arrival order. A regression that replaced
+		// (not appended) the bubble content on each token would still
+		// pass the single-token test but ship "Run easy today, target"
+		// instead of the full reply. Pin three chunks that together
+		// form a recognisable sentence so the assertion proves order.
+		const CHUNKS = ['Run easy today', ', target 5:30/km', ' for 6 km.'];
+		const EXPECTED = CHUNKS.join('');
+		await page.route('**/api/coach', async (route) => {
+			const blocks = [
+				`event: meta\ndata: ${JSON.stringify({
+					user_message_id: 'multi-user',
+					tier: 'free',
+					limits: { daily_limit: 20 }
+				})}\n`,
+				...CHUNKS.map(
+					(t) => `event: token\ndata: ${JSON.stringify({ text: t })}\n`
+				),
+				`event: done\ndata: ${JSON.stringify({
+					assistant_message_id: 'multi-assistant'
+				})}\n`
+			];
+			await route.fulfill({
+				status: 200,
+				headers: {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache'
+				},
+				body: blocks.join('\n')
+			});
+		});
+
+		await page.goto('/coach');
+		await expect(page.getByPlaceholder(/Ask about today/)).toBeVisible({
+			timeout: 10_000
+		});
+		await page.getByPlaceholder(/Ask about today/).fill('e2e multi-token');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		await expect(
+			page.locator('.bubble', { hasText: EXPECTED })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('SSE: special characters in streamed tokens render verbatim', async ({
+		page
+	}) => {
+		// Markdown backticks, em-dashes, curly quotes, an emoji, and an
+		// accented character all live in real LLM responses. A
+		// JSON-stringify/parse round-trip on every token chunk must
+		// preserve them — a regression in either the server's
+		// `event: token\ndata: ...` escaping or the client's parse
+		// would corrupt at least one. Pin the full set so a
+		// "works for ASCII, drops on multibyte" regression fails loud.
+		const STR = 'Pace: `5:30/km` — try “easy effort” 😅 (café tempo)';
+		await page.route('**/api/coach', async (route) => {
+			const body = [
+				'event: meta',
+				`data: ${JSON.stringify({
+					user_message_id: 'sc-user',
+					tier: 'free',
+					limits: { daily_limit: 20 }
+				})}`,
+				'',
+				'event: token',
+				`data: ${JSON.stringify({ text: STR })}`,
+				'',
+				'event: done',
+				`data: ${JSON.stringify({ assistant_message_id: 'sc-assistant' })}`,
+				''
+			].join('\n');
+			await route.fulfill({
+				status: 200,
+				headers: {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache'
+				},
+				body
+			});
+		});
+
+		await page.goto('/coach');
+		await expect(page.getByPlaceholder(/Ask about today/)).toBeVisible({
+			timeout: 10_000
+		});
+		await page.getByPlaceholder(/Ask about today/).fill('e2e special chars');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// The bubble renders the markdown through CoachChat's sanitiser,
+		// which wraps backticked spans in <code>. Assert on a sentinel
+		// substring (the emoji + accent) that survives any wrapper.
+		await expect(
+			page.locator('.bubble', { hasText: /😅.*café/ })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('SSE: mid-stream error event surfaces banner + retains partial text', async ({
+		page
+	}) => {
+		// Real failure mode — provider streams a few tokens then their
+		// upstream rate-limit / context-window-overflow / safety-filter
+		// fires and the server emits `event: error`. The user must see
+		// (a) the partial text that DID stream + (b) a banner naming
+		// the failure, not a stuck "Thinking…" spinner. A regression
+		// that dropped the partial text on error would silently lose
+		// what the runner already saw scroll past.
+		const PARTIAL = 'Run easy today,';
+		const ERR_MSG = 'Provider returned 429';
+		await page.route('**/api/coach', async (route) => {
+			// SSE event blocks must end with `\n\n` for CoachChat's
+			// parser (readSse looks for `\n\n` to flush each block).
+			// Joining `['...','']` only produces `...\n`, which leaves
+			// the last block unflushed and silently drops the error
+			// event. Construct each event with an explicit double-
+			// newline tail so the parser sees every event.
+			const events = [
+				{
+					event: 'meta',
+					data: {
+						user_message_id: 'mid-user',
+						tier: 'free',
+						limits: { daily_limit: 20 }
+					}
+				},
+				{ event: 'token', data: { text: PARTIAL } },
+				{ event: 'error', data: { message: ERR_MSG } }
+			];
+			const body = events
+				.map((e) => `event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`)
+				.join('');
+			await route.fulfill({
+				status: 200,
+				headers: {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache'
+				},
+				body
+			});
+		});
+
+		await page.goto('/coach');
+		await expect(page.getByPlaceholder(/Ask about today/)).toBeVisible({
+			timeout: 10_000
+		});
+		await page.getByPlaceholder(/Ask about today/).fill('e2e mid-stream err');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// Both: partial bubble + error banner.
+		await expect(
+			page.locator('.bubble', { hasText: PARTIAL })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText(ERR_MSG)).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('SSE: empty stream (meta + done, no tokens) does not stall the bubble', async ({
+		page
+	}) => {
+		// Real LLM responses are non-empty in happy-path cases, but
+		// content-filter + safety-block + provider-soft-fail can all
+		// emit a meta/done pair with no token events. CoachChat must
+		// finalise the (empty) bubble + leave the composer reusable
+		// rather than parking in "Thinking…" forever. Pin the
+		// composer-renabled signal — a regression that locked the
+		// composer would block the user's recovery message.
+		await page.route('**/api/coach', async (route) => {
+			const body = [
+				'event: meta',
+				`data: ${JSON.stringify({
+					user_message_id: 'empty-user',
+					tier: 'free',
+					limits: { daily_limit: 20 }
+				})}`,
+				'',
+				'event: done',
+				`data: ${JSON.stringify({ assistant_message_id: 'empty-assistant' })}`,
+				''
+			].join('\n');
+			await route.fulfill({
+				status: 200,
+				headers: {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache'
+				},
+				body
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+		await composer.fill('e2e empty stream');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// Composer becomes reusable: typing into it must succeed
+		// (a stuck "Thinking…" state would disable the textarea).
+		// Poll because the un-block signal arrives after `done`.
+		await expect
+			.poll(
+				async () => {
+					await composer.fill('follow-up after empty stream');
+					return await composer.inputValue();
+				},
+				{ timeout: 10_000 }
+			)
+			.toBe('follow-up after empty stream');
+	});
+
 	test('runs-limit chip flips its trigger label after picking Last 50', async ({
 		page
 	}) => {
