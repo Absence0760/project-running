@@ -278,6 +278,48 @@ test.describe('/clubs/new', () => {
 		expect(after.count).toBe(before.count);
 	});
 
+	test('hitting the 5/hour create_club cap surfaces a "slow down" message, not the raw 500', async ({
+		page,
+	}) => {
+		// Pre-populate the rate_limits counter to 5 (the cap) under
+		// USER_A's `create_club` bucket — the next Create-club submit
+		// will trigger the BEFORE INSERT cap check (migration
+		// 20260907_001) and raise P0001 before the row lands. The
+		// data.ts catch path converts that into a friendly "you're
+		// creating clubs too quickly" message; pin that wording here
+		// so a future refactor can't silently revert to the generic
+		// "Failed to create club" fallback.
+		const admin = getAdminClient();
+		// floor(epoch / 3600) * 3600 matches the trigger's bucketing.
+		const nowS = Math.floor(Date.now() / 1000);
+		const windowStartS = Math.floor(nowS / 3600) * 3600;
+		const windowStart = new Date(windowStartS * 1000).toISOString();
+		await admin.from('rate_limits').upsert({
+			user_id: USER_A.id,
+			bucket: 'create_club',
+			window_start: windowStart,
+			count: 5,
+		});
+
+		try {
+			await page.goto('/clubs/new');
+			await page.locator('input[type="text"]').first().fill(uniqueName('e2e-cap'));
+			await page.getByRole('button', { name: 'Create club' }).click();
+
+			await expect(
+				page.getByText(/creating clubs too quickly/i),
+			).toBeVisible({ timeout: 10_000 });
+			// Negative pin: the old fallback wording must not appear.
+			await expect(page.getByText('Failed to create club')).toHaveCount(0);
+		} finally {
+			await admin
+				.from('rate_limits')
+				.delete()
+				.eq('user_id', USER_A.id)
+				.eq('bucket', 'create_club');
+		}
+	});
+
 	test('Cancel button returns to /social?tab=clubs without planting a row', async ({
 		page
 	}) => {

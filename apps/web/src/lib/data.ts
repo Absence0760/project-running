@@ -32,6 +32,7 @@ import { parseRunSource } from './types';
 import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
+import { rateLimitErrorMessage } from './rate_limit_errors';
 import {
 	assignCompetitionRanks,
 	type SegmentAgeBand,
@@ -1050,7 +1051,15 @@ export async function saveRoute(route: {
 		.select()
 		.single();
 
-	if (error) throw error;
+	if (error) {
+		// Surface the create_route rate-limit P0001 (migration
+		// 20260907_001 — 30 routes / hour per user, generous enough for
+		// bulk Strava / Garmin imports) as a friendlier "wait N minutes"
+		// message instead of the raw postgres exception.
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return data;
 }
 
@@ -1374,7 +1383,16 @@ export async function createClub(input: {
 				join_policy: (data.join_policy ?? 'open') as JoinPolicy
 			};
 		}
-		if (error && error.code !== '23505') throw error;
+		// 23505 is the slug-uniqueness conflict — retry with a suffix.
+		// Anything else (including the create_club rate-limit P0001 from
+		// migration 20260907_001) bubbles. The rate-limit branch is
+		// converted to a friendlier 'wait N minutes' message rather than
+		// the raw `rate limit exceeded for create_club, retry in Ns`.
+		if (error && error.code !== '23505') {
+			const friendly = rateLimitErrorMessage(error);
+			if (friendly) throw new Error(friendly);
+			throw error;
+		}
 	}
 	throw new Error(`Could not allocate a slug for "${input.name}" after 4 attempts`);
 }
