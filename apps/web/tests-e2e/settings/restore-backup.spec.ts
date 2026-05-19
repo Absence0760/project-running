@@ -206,6 +206,135 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 				.toBeVisible({ timeout: 10_000 });
 		});
 
+	test('cancel on the ConfirmDialog dismisses without restoring or surfacing an error',
+		async ({ page }) => {
+			// The ConfirmDialog is the user's last off-ramp before the
+			// import writes rows. Pin that Cancel:
+			//   1. Closes the dialog.
+			//   2. Does NOT write any rows (the row count for the
+			//      deterministic test id stays zero).
+			//   3. Does NOT leave the restore-error banner visible (a
+			//      regression that confused cancel with "throw" would
+			//      surface here as the banner appearing on dismiss).
+			const buf = await buildBackupZip([
+				runRow({
+					id: RESTORE_ID_1,
+					started_at: '2026-04-05T08:00:00.000Z',
+					duration_s: 1500,
+					distance_m: 5000,
+					title: `e2e-restore-cancel ${Date.now()}`
+				})
+			]);
+
+			await page.goto('/settings/account');
+			await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
+				name: 'e2e-restore-cancel.zip',
+				mimeType: 'application/zip',
+				buffer: buf
+			});
+			const dialog = page.locator('.modal', { hasText: /Restore from backup/i });
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+			// Hit the Cancel button (NOT Restore).
+			await dialog.getByRole('button', { name: 'Cancel' }).click();
+			await expect(dialog).not.toBeVisible();
+
+			// Error banner must NOT be present — cancel is a no-op,
+			// not a failure.
+			await expect(page.locator('.error-text')).toHaveCount(0);
+			// "Restored N runs" line never rendered.
+			await expect(page.getByText(/Restored \d+ runs/)).toHaveCount(0);
+
+			// DB-level proof: the deterministic id has no row.
+			const admin = getAdminClient();
+			const { data, error } = await admin
+				.from('runs')
+				.select('id')
+				.eq('id', RESTORE_ID_1);
+			expect(error).toBeNull();
+			expect(data).toHaveLength(0);
+		});
+
+	test('a ZIP missing manifest.json surfaces the documented error string', async ({
+		page
+	}) => {
+		// `restoreBackup` throws `Not a valid backup — missing manifest.json`
+		// (apps/web/src/lib/backup.ts:154). The account page catches this
+		// and renders it in the .error-text banner. Pin the exact copy
+		// so an end-user troubleshooting a malformed export gets a
+		// consistent error to search for.
+		const JSZip = (await import('jszip')).default;
+		const zip = new JSZip();
+		// runs.json exists but manifest.json is deliberately absent.
+		zip.file('runs.json', '[]');
+		const arr = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+		const buf = Buffer.from(arr);
+
+		await page.goto('/settings/account');
+		await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
+			name: 'no-manifest.zip',
+			mimeType: 'application/zip',
+			buffer: buf
+		});
+		const dialog = page.locator('.modal', { hasText: /Restore from backup/i });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		await dialog.getByRole('button', { name: /^Restore$/ }).click();
+
+		await expect(page.locator('.error-text')).toContainText(
+			/missing manifest\.json/i,
+			{ timeout: 10_000 }
+		);
+		// Nothing was imported.
+		await expect(page.getByText(/Restored \d+ runs/)).toHaveCount(0);
+	});
+
+	test('a ZIP with the wrong manifest.format surfaces the "Unexpected format" error', async ({
+		page
+	}) => {
+		// Guards against importing some-other-app's backup ZIP by
+		// accident. `restoreBackup` throws `Unexpected format: <value>`
+		// (apps/web/src/lib/backup.ts:157). The check is
+		// `manifest.format !== 'run-app-backup'`, so any other string
+		// (a sibling product's slug, an empty string, a typo) hits the
+		// same branch — pin one representative case.
+		const JSZip = (await import('jszip')).default;
+		const zip = new JSZip();
+		zip.file(
+			'manifest.json',
+			JSON.stringify({
+				format: 'some-other-backup-format',
+				version: 1,
+				exported_at: new Date().toISOString(),
+				exported_from: 'e2e-wrong-format',
+				counts: { runs: 0, routes: 0, goals: 0, tracks: 0 }
+			})
+		);
+		zip.file('runs.json', '[]');
+		const arr = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+		const buf = Buffer.from(arr);
+
+		await page.goto('/settings/account');
+		await page.locator('input[type="file"][accept=".zip"]').setInputFiles({
+			name: 'wrong-format.zip',
+			mimeType: 'application/zip',
+			buffer: buf
+		});
+		const dialog = page.locator('.modal', { hasText: /Restore from backup/i });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		await dialog.getByRole('button', { name: /^Restore$/ }).click();
+
+		await expect(page.locator('.error-text')).toContainText(
+			/Unexpected format/i,
+			{ timeout: 10_000 }
+		);
+		// Surface the rejected format string in the error message so a
+		// user filing a support ticket can quote it back.
+		await expect(page.locator('.error-text')).toContainText(
+			/some-other-backup-format/,
+		);
+		await expect(page.getByText(/Restored \d+ runs/)).toHaveCount(0);
+	});
+
 	test('re-importing the same backup is idempotent (no duplicate rows)',
 		async ({ page }) => {
 			// `restoreBackup` upserts by id. Importing the same ZIP
