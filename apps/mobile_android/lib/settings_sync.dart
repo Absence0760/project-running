@@ -138,6 +138,13 @@ class SettingsSyncService extends ChangeNotifier {
     if (bw is num) {
       preferences.setBodyWeightKg(bw > 0 ? bw.toDouble() : null);
     }
+    // Default visibility for newly-saved runs. Public ⇒ is_public=true
+    // on save, followers/private/unknown ⇒ false (no followers-only
+    // column on `runs` today, conservative default).
+    final pd = prefs[SettingsKeys.privacyDefault];
+    if (pd is String) {
+      preferences.setPrivacyDefault(pd);
+    }
     // Seed a weekly distance RunGoal from the universal bag value when
     // the local list doesn't already have one. We never *replace* an
     // existing local goal — the dashboard's editor is the richer

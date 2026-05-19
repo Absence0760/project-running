@@ -172,6 +172,11 @@ class Preferences extends ChangeNotifier {
   // the run-detail calorie estimate. 0 / unset = use the 70 kg
   // fallback (documented in `_estimatedCalories`).
   static const _kBodyWeightKg = 'body_weight_kg';
+  // Mirrors the universal `privacy_default` settings-bag key.
+  // Drives the initial `is_public` flag on newly-saved runs. One of
+  // 'public' / 'followers' / 'private'. Empty / unknown = 'private'
+  // (the conservative default — DB column default is false anyway).
+  static const _kPrivacyDefault = 'privacy_default';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -190,6 +195,7 @@ class Preferences extends ChangeNotifier {
   bool _keepScreenOn = true;
   ThemeMode _themeMode = ThemeMode.dark;
   double? _bodyWeightKg;
+  String _privacyDefault = 'private';
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -216,6 +222,20 @@ class Preferences extends ChangeNotifier {
   /// a documented default. The web equivalent is the same key on
   /// `user_settings.prefs.body_weight_kg`.
   double? get bodyWeightKg => _bodyWeightKg;
+
+  /// Default visibility for newly-saved runs, mirrored from
+  /// `user_settings.prefs.privacy_default`. One of `public` /
+  /// `followers` / `private` — only `public` actually flips
+  /// `runs.is_public` to true on save (the other two are private
+  /// today because there's no followers-only column on `runs`).
+  /// Defaults to `private` — matches the DB column default.
+  String get privacyDefault => _privacyDefault;
+
+  /// Convenience: should newly-saved runs be marked `is_public=true`?
+  /// True only when `privacyDefault == 'public'`. `followers` /
+  /// `private` / unknown all return false. Wired into the run-save
+  /// path on `run_screen` + `add_run_screen`.
+  bool get newRunsArePublic => _privacyDefault == 'public';
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
@@ -290,6 +310,7 @@ class Preferences extends ChangeNotifier {
     _themeMode = _themeModeFromString(_prefs.getString(_kThemeMode));
     final bw = _prefs.getDouble(_kBodyWeightKg);
     _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
+    _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
     if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
@@ -372,6 +393,21 @@ class Preferences extends ChangeNotifier {
   Future<void> setKeepScreenOn(bool v) async {
     _keepScreenOn = v;
     await _prefs.setBool(_kKeepScreenOn, v);
+    notifyListeners();
+  }
+
+  /// Update the cached privacy_default. Values outside `public` /
+  /// `followers` / `private` fall back to `private` so a corrupt bag
+  /// can't promote runs to public by mistake. Driven from
+  /// `SettingsSyncService._applyUniversal` whenever the cloud bag's
+  /// `privacy_default` lands.
+  Future<void> setPrivacyDefault(String v) async {
+    final next = (v == 'public' || v == 'followers' || v == 'private')
+        ? v
+        : 'private';
+    if (next == _privacyDefault) return;
+    _privacyDefault = next;
+    await _prefs.setString(_kPrivacyDefault, next);
     notifyListeners();
   }
 

@@ -499,6 +499,32 @@ void main() {
     });
   });
 
+  group('privacy_default → run-save wiring', () {
+    test('run_screen._stop reads newRunsArePublic when calling saveRun', () {
+      // Reason: the user-flagged gap — the `privacy_default` setting
+      // was previously stranded (set in the UI but never read at
+      // save time). Catches a regression that drops the
+      // `isPublic:` arg or hardcodes a literal value.
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('widget.preferences.newRunsArePublic'),
+        reason:
+            'run_screen must read `widget.preferences.newRunsArePublic` '
+            'to honour the user\'s privacy_default setting on save. '
+            'See decisions / docs/settings.md.',
+      );
+      expect(
+        source.contains('api.saveRun(\n          run,\n          isPublic:') ||
+            source.contains('api.saveRun(run, isPublic:'),
+        isTrue,
+        reason:
+            'The api.saveRun call in _stop must pass isPublic so the '
+            'privacy_default setting reaches RunRow.isPublic at upsert.',
+      );
+    });
+  });
+
   group('sync paths use saveRunsBatch', () {
     test('SyncService._trySync uses the batch API', () {
       // Reason: was N round-trips + N markSynced file rewrites per sync.

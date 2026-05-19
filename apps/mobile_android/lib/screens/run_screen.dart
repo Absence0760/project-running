@@ -1367,7 +1367,17 @@ class _RunScreenState extends State<RunScreen> {
 
     if (api != null && api.userId != null) {
       try {
-        await api.saveRun(run);
+        // Honour the user's privacy_default setting. `public` →
+        // is_public=true at insert time so the user doesn't have to
+        // tap "share" on every run. `followers` / `private` /
+        // unknown → leave is_public null (the legacy default; reads
+        // as "not public" everywhere). The live-broadcast path below
+        // still re-asserts is_public=true via makeRunPublic so an
+        // explicit broadcast wins over a private default.
+        await api.saveRun(
+          run,
+          isPublic: widget.preferences.newRunsArePublic ? true : null,
+        );
         await widget.runStore.markSynced(run.id);
         if (mounted) setState(() => _synced = true);
       } catch (e) {

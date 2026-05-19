@@ -324,6 +324,90 @@ void main() {
     });
   });
 
+  group('Preferences.privacyDefault + newRunsArePublic', () {
+    // privacy_default drives the initial is_public flag at run-save
+    // time. The setting was previously stranded — set in the UI but
+    // never read at save time. Pinning the contract here keeps the
+    // setter conservative (corrupt values fall back to private so
+    // a bad bag can't accidentally publish every new run).
+
+    test('defaults to "private" when no value persisted', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.privacyDefault, 'private');
+      expect(prefs.newRunsArePublic, isFalse);
+    });
+
+    test('reads a persisted "public" value + flips newRunsArePublic', () async {
+      SharedPreferences.setMockInitialValues({'privacy_default': 'public'});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.privacyDefault, 'public');
+      expect(prefs.newRunsArePublic, isTrue);
+    });
+
+    test('"followers" is treated as private (no DB shape today)',
+        () async {
+      // No followers-only column on `runs` — `is_public` is a bool.
+      // The setter accepts 'followers' as a valid value (mirrors the
+      // web settings UI) but `newRunsArePublic` returns false so the
+      // run lands private. When the schema gains a third visibility
+      // state, this is the test that flips.
+      SharedPreferences.setMockInitialValues({'privacy_default': 'followers'});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.privacyDefault, 'followers');
+      expect(prefs.newRunsArePublic, isFalse);
+    });
+
+    test('setter accepts public / followers / private + persists', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+
+      for (final value in ['public', 'followers', 'private']) {
+        await prefs.setPrivacyDefault(value);
+        expect(prefs.privacyDefault, value);
+
+        // Persistence: a fresh Preferences also reads the value.
+        final p2 = Preferences();
+        await p2.init();
+        expect(p2.privacyDefault, value);
+      }
+    });
+
+    test('setter rejects unknown strings → falls back to private',
+        () async {
+      // Defensive: a corrupt bag write (e.g. an old web build that
+      // emitted "everyone" or "world") must not promote runs to
+      // public. Conservative default — fall back to private.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await prefs.setPrivacyDefault('public');
+      expect(prefs.privacyDefault, 'public');
+
+      await prefs.setPrivacyDefault('everyone');
+      expect(prefs.privacyDefault, 'private');
+      expect(prefs.newRunsArePublic, isFalse);
+    });
+
+    test('setter is idempotent — same value does NOT notify', () async {
+      SharedPreferences.setMockInitialValues({'privacy_default': 'public'});
+      final prefs = Preferences();
+      await prefs.init();
+      var notifyCount = 0;
+      prefs.addListener(() => notifyCount++);
+
+      await prefs.setPrivacyDefault('public');
+      expect(notifyCount, 0);
+
+      await prefs.setPrivacyDefault('private');
+      expect(notifyCount, 1);
+    });
+  });
+
   group('formatDistanceForPref + activeDistanceUnit (global accessor)', () {
     // Several read-only surfaces (feed cards, profile notification
     // verbs, live spectator stats, club-detail route subtitles, the

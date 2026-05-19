@@ -129,7 +129,7 @@ class ApiClient {
   /// The upsert body is built from a generated [RunRow], so renaming a column
   /// in a migration forces `scripts/gen_dart_models.dart` to regenerate the
   /// row class — any stale field reference fails to compile here.
-  Future<void> saveRun(Run run) async {
+  Future<void> saveRun(Run run, {bool? isPublic}) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
 
@@ -156,6 +156,7 @@ class ApiClient {
       externalId: run.externalId,
       metadata: run.metadata,
       trackUrl: trackUrl,
+      isPublic: isPublic,
     );
     final json = row.toJson();
     if (run.externalId != null && run.externalId!.isNotEmpty) {

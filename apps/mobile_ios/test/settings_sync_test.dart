@@ -154,6 +154,60 @@ void main() {
       expect(prefs.bodyWeightKg, 75);
     });
 
+    test('privacy_default "public" overlays + flips newRunsArePublic',
+        () async {
+      // The user-flagged gap: setting was set in the UI but never
+      // read at save time. The settings-sync overlay is the path
+      // that carries the cloud value into local Preferences, and
+      // `Preferences.newRunsArePublic` is what `run_screen` reads
+      // to decide the saved-run visibility. Pin the chain.
+      final prefs = await freshPrefs();
+      expect(prefs.newRunsArePublic, isFalse);
+
+      final svc = SettingsSyncService(preferences: prefs);
+      svc.debugApplyUniversal({SettingsKeys.privacyDefault: 'public'});
+
+      expect(prefs.privacyDefault, 'public');
+      expect(prefs.newRunsArePublic, isTrue);
+    });
+
+    test('privacy_default "private" overlays + keeps newRunsArePublic false',
+        () async {
+      final prefs = await freshPrefs();
+      await prefs.setPrivacyDefault('public');
+      expect(prefs.newRunsArePublic, isTrue);
+
+      final svc = SettingsSyncService(preferences: prefs);
+      svc.debugApplyUniversal({SettingsKeys.privacyDefault: 'private'});
+
+      expect(prefs.privacyDefault, 'private');
+      expect(prefs.newRunsArePublic, isFalse);
+    });
+
+    test('privacy_default "followers" overlays but stays non-public', () async {
+      // No DB column for followers-only yet (see Preferences test
+      // group) — the overlay records the setter's value but
+      // `newRunsArePublic` stays false until the schema grows.
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+      svc.debugApplyUniversal({SettingsKeys.privacyDefault: 'followers'});
+
+      expect(prefs.privacyDefault, 'followers');
+      expect(prefs.newRunsArePublic, isFalse);
+    });
+
+    test('privacy_default of non-string is silently ignored', () async {
+      final prefs = await freshPrefs();
+      await prefs.setPrivacyDefault('public');
+
+      final svc = SettingsSyncService(preferences: prefs);
+      svc.debugApplyUniversal({SettingsKeys.privacyDefault: 42});
+
+      // Local value preserved.
+      expect(prefs.privacyDefault, 'public');
+      expect(prefs.newRunsArePublic, isTrue);
+    });
+
     test('empty bag is a no-op', () async {
       final prefs = await freshPrefs();
       final svc = SettingsSyncService(preferences: prefs);
