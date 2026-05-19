@@ -44,11 +44,16 @@ Future<void> _pump(WidgetTester tester, {required Preferences prefs}) {
 
 void main() {
   group('RoutesScreen — initial render', () {
-    testWidgets('renders the Routes app-bar title', (tester) async {
+    testWidgets('AppBar carries no "Routes" title (bottom-nav labels suffice)',
+        (tester) async {
+      // Bottom-nav already labels this tab "Routes". Pin the absence
+      // of a duplicate AppBar title.
       final prefs = await _makePrefs();
       await _pump(tester, prefs: prefs);
       await tester.pump();
-      expect(find.text('Routes'), findsOneWidget);
+      expect(find.byType(AppBar), findsOneWidget);
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.title, isNull);
     });
 
     testWidgets('renders the Explore action in the app bar',

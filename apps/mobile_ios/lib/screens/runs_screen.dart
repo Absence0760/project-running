@@ -702,7 +702,7 @@ class _RunsScreenState extends State<RunsScreen> {
   AppBar _normalAppBar() {
     final unsyncedCount = widget.runStore.unsyncedCount;
     return AppBar(
-      title: const Text('History'),
+      // No title — the bottom-nav already labels this tab "History".
       actions: [
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),

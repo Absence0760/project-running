@@ -1224,8 +1224,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final signedIn = widget.apiClient?.userId != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
+      // No AppBar — the bottom-nav labels this tab "Settings", and
+      // there are no actions to surface. SafeArea keeps the first
+      // section clear of the status bar (the previous AppBar was
+      // providing that inset implicitly).
+      body: SafeArea(
+        child: ListView(
         children: [
           // Account
           Padding(
@@ -1705,6 +1709,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => showLicensePage(context: context),
           ),
         ],
+        ),
       ),
     );
   }

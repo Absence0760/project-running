@@ -447,7 +447,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Routes'),
+        // No title — the bottom-nav already labels this tab "Routes".
         actions: [
           IconButton(
             icon: const Icon(Icons.explore),

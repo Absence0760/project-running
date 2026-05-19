@@ -118,13 +118,18 @@ void main() {
       expect(bar.selectedIndex, 0);
     });
 
-    testWidgets('tapping Home tab shows Dashboard app-bar title', (tester) async {
+    testWidgets('tapping Home tab mounts the Dashboard surface', (tester) async {
+      // Updated to no longer pin "Dashboard" as a title text since
+      // task #43 removed redundant AppBar titles. Instead pin a
+      // dashboard-specific text that proves the screen mounted —
+      // mock stores are empty so the welcome empty-state ("Welcome!")
+      // renders.
       final s = await _makeStores();
       await _pump(tester, s);
       await tester.tap(find.text('Home'));
       await tester.pump();
       await tester.pump();
-      expect(find.text('Dashboard'), findsOneWidget);
+      expect(find.text('Welcome!'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('body is a PageView', (tester) async {

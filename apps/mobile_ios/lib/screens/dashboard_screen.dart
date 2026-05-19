@@ -183,7 +183,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        // No title — the bottom-nav already labels this tab "Home".
+        // Action buttons (Coach / Feed / Profile) remain on the right.
         actions: [
           if (api != null) ...[
             if (widget.training != null)

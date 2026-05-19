@@ -46,10 +46,16 @@ void main() {
   });
 
   group('SettingsScreen', () {
-    testWidgets('renders the Settings app bar title', (tester) async {
+    testWidgets('Settings page renders no AppBar (bottom-nav labels suffice)',
+        (tester) async {
+      // The Settings tab has no AppBar at all — there are no actions
+      // to surface, and the bottom-nav already labels the tab
+      // "Settings". The body uses SafeArea to keep content clear of
+      // the system status bar. Pin both contracts.
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
-      expect(find.text('Settings'), findsOneWidget);
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.byType(SafeArea), findsAtLeastNWidgets(1));
     });
 
     testWidgets('renders the Account section', (tester) async {

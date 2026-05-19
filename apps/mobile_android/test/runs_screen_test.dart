@@ -79,10 +79,15 @@ void main() {
   });
 
   group('RunsScreen', () {
-    testWidgets('renders History app-bar title', (tester) async {
+    testWidgets('AppBar carries no "History" title (bottom-nav labels suffice)',
+        (tester) async {
+      // Bottom-nav already labels this tab "History". Pin the absence
+      // of a duplicate AppBar title.
       final s = await _makeStores();
       await _pump(tester, runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
-      expect(find.text('History'), findsOneWidget);
+      expect(find.byType(AppBar), findsOneWidget);
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.title, isNull);
     });
 
     testWidgets('shows empty state when store has no runs', (tester) async {

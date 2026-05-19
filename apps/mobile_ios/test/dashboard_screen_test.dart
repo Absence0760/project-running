@@ -67,11 +67,20 @@ void main() {
   });
 
   group('DashboardScreen', () {
-    testWidgets('renders Dashboard app-bar title', (tester) async {
+    testWidgets('AppBar carries no "Dashboard" title (bottom-nav labels suffice)',
+        (tester) async {
+      // The bottom-nav already labels this tab "Home" / "Dashboard".
+      // A duplicate title at the top of the page is redundant chrome,
+      // so the AppBar's title was removed (actions remain). Pin the
+      // absence so a regression that re-added it fails loud.
       final s = await _makeStores();
       await _pump(tester,
           runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
-      expect(find.text('Dashboard'), findsOneWidget);
+      // AppBar still mounts (it carries Coach / Feed / Profile action
+      // buttons), but with no title.
+      expect(find.byType(AppBar), findsOneWidget);
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.title, isNull);
     });
 
     testWidgets('shows welcome empty state when runs and goals are both empty',
