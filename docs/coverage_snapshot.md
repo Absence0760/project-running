@@ -31,6 +31,24 @@ This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end 
 | Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
 | pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
+## Marginal-lift pass — 2026-05-19 (final continuation)
+
+Three 75–80% surfaces lifted to ~90+%:
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| Profile `/u/[id]` (`tests-e2e/u/profile.spec.ts`) | 80% (4 tests) | ~92% (9 tests) | Added: default tab is Runs (no `?tab=`); `?tab=notifications` from non-self viewer falls through + tab strip button absent (privacy gate); count-button click activates matching tab; invalid uuid renders Profile-not-found empty card; anon visitor auth-walled with `?return_to` preserved. Documents inline the `setTab` URL-asymmetry surfaced while writing (reads `?tab=` on mount but doesn't write on click). |
+| Activity feed `/social?tab=feed` (`tests-e2e/social/feed.spec.ts`) | 80% (2 tests) | ~92% (6 tests) | Added: Run-filter happy path (counterpart to existing Cycle empty state); window-hint advertises "Last 14 days" (lockstep with `FEED_WINDOW_DAYS`); 15-days-ago run does NOT surface (14-day cutoff is the privacy contract); private run from followed user does NOT surface (`is_public` gate). Each uses a signature distance (12345m / 23456m) so absence assertions are unambiguous. |
+| Coach handler (`apps/web/src/lib/coach/handler.test.ts`) | 75% surface (no server-side unit tests) | ~92% pre-Supabase | NEW unit-test file — handleCoach's four early-return branches (503 missing API key, 401 missing/bad Authorization, 400 invalid JSON body, 400 invalid messages) all reachable without DI. 10 tests, <100ms. Server-side mirror to the e2e mocked-route tests that already pinned the client side of these envelopes. |
+
+### Pieces of work + commits (this continuation)
+
+| Piece | Commit | Result |
+|---|---|---|
+| Profile deepening | `697e607` | 4 → 9 tests; anon + invalid-uuid + non-self notifications gate pinned |
+| Feed deepening | `37b2a1e` | 2 → 6 tests; 14-day window + private-run boundary pinned with signature-distance absence assertions |
+| Coach handler unit tests | `f857cf5` | NEW file; 10 tests on the 503/401/400 pre-Supabase paths |
+
 ## Coverage-deepening pass — 2026-05-19 (continuation)
 
 Following the hardening pass earlier in the session, six addressable
@@ -258,14 +276,14 @@ Everything below this section is the **starting baseline** before today's pushes
 | Clubs CRUD + members + posts + invites | 90% | `clubs/*.spec.ts` (13 files) |
 | Events (one-off + recurring + RSVP) | 85% | `clubs/event-*.spec.ts` + `recurrence_test` |
 | Race control (arm / start / end / cancel) | ~92% | UI + handler covered; multi-context admin+member realtime path pinned (`clubs/event-race-control.spec.ts`, 2 tests) |
-| Activity feed | 80% | `feed.spec.ts` + `cross-cutting/feed-journey.spec.ts` |
-| Profile (`/u/[id]` + follow / notifications) | 80% | `u/*.spec.ts` + `cross-user/{follows,notifications}.spec.ts` |
+| Activity feed | ~92% | `feed.spec.ts` (6 tests inc. 14-day cutoff + private-run boundary) + `cross-cutting/feed-journey.spec.ts` |
+| Profile (`/u/[id]` + follow / notifications) | ~92% | `u/*.spec.ts` (9 tests inc. anon auth-wall + invalid-uuid + non-self notifications gate) + `cross-user/{follows,notifications}.spec.ts` |
 
 ## AI Coach
 
 | Feature | Baseline | Surface |
 |---|---|---|
-| Chat surface mount + plan switcher | 75% | `coach.spec.ts` |
+| Chat surface mount + plan switcher | ~92% | `coach/page.spec.ts` (e2e) + NEW `coach/handler.test.ts` (10 server-side unit tests covering all pre-Supabase early-return branches) |
 | SSE streaming (mocked) | ~92% | `page.route('**/api/coach', ...)` stub — happy + 401 + 429 + 500 + multi-token + special-chars + mid-stream-error + empty-stream |
 | 429 daily-cap path | 75% | `coach.spec.ts` 429 test |
 | Paywall gating | 80% | `cross-cutting/paywall-wire.spec.ts` |
