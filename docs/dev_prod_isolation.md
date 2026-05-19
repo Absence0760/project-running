@@ -23,7 +23,7 @@ The guard ships with two enforcement points and a shared check.
 
 `apps/web/vite.config.ts` wires the `envIsolationGuard()` plugin. On every `vite dev` start the plugin reads `process.env` + `.env.local` and aborts the boot if anything looks non-local. This is the primary control:
 
-- `PUBLIC_SUPABASE_URL` / `SUPABASE_URL` / `OPENAI_BASE_URL` / `LIVE_HUB_URL` / `PUBLIC_OSRM_URL` / `OSRM_URL` / `PUBLIC_SITE_URL` — must be loopback when set.
+- `PUBLIC_SUPABASE_URL` / `SUPABASE_URL` / `OPENAI_BASE_URL` / `LIVE_HUB_URL` / `PUBLIC_LIVE_HUB_URL` / `PUBLIC_EXPORT_HUB_URL` / `PUBLIC_OSRM_URL` / `OSRM_URL` / `PUBLIC_SITE_URL` — must be loopback when set. The PUBLIC_-prefixed pair (`LIVE_HUB_URL` / `EXPORT_HUB_URL`) is what the web client reads at build time; the un-prefixed `LIVE_HUB_URL` is the Dart twin's dotenv form. Both forms are guarded so a stray inherited-shell env doesn't slip past either path.
 - `STRIPE_SECRET_KEY` / `PUBLIC_STRIPE_KEY` — refuses `sk_live_…` / `pk_live_…`; expects `sk_test_…` / `pk_test_…`.
 
 ### 2. Playwright globalSetup (e2e)

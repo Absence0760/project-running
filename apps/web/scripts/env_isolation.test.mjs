@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { checkEnvIsolation, formatGuardError } from './env_isolation.mjs';
 
@@ -106,6 +108,77 @@ test('formatGuardError includes the env var name + fix hint', () => {
 	assert.match(msg, /PUBLIC_SUPABASE_URL/);
 	assert.match(msg, /loopback URL/);
 	assert.match(msg, /ALLOW_PROD_URL_IN_DEV/);
+});
+
+test('fails when PUBLIC_LIVE_HUB_URL points at a remote host', () => {
+	// The web client reads PUBLIC_LIVE_HUB_URL (bundled at build
+	// time). A dev .env with the production live-hub URL would push
+	// test pings at the live broadcast service. The Dart twin uses
+	// LIVE_HUB_URL via dotenv; both forms must be guarded.
+	const r = checkEnvIsolation({
+		PUBLIC_LIVE_HUB_URL: 'https://live.runonward.com',
+	});
+	assert.equal(r.ok, false);
+	assert.equal(r.findings[0].envVar, 'PUBLIC_LIVE_HUB_URL');
+	assert.equal(r.findings[0].rule, 'remote-host-in-dev');
+});
+
+test('accepts a loopback PUBLIC_LIVE_HUB_URL', () => {
+	const r = checkEnvIsolation({
+		PUBLIC_LIVE_HUB_URL: 'http://127.0.0.1:9090',
+	});
+	assert.equal(r.ok, true);
+});
+
+test('fails when PUBLIC_EXPORT_HUB_URL points at a remote host', () => {
+	// The "Cloud export (GPX zip)" button POSTs to
+	// `${PUBLIC_EXPORT_HUB_URL}/v1/export` (the Go worker). A dev
+	// .env aimed at the prod exporter would write test export jobs
+	// into live infra's queue + Storage.
+	const r = checkEnvIsolation({
+		PUBLIC_EXPORT_HUB_URL: 'https://api.runonward.com',
+	});
+	assert.equal(r.ok, false);
+	assert.equal(r.findings[0].envVar, 'PUBLIC_EXPORT_HUB_URL');
+});
+
+test('accepts a loopback PUBLIC_EXPORT_HUB_URL', () => {
+	const r = checkEnvIsolation({
+		PUBLIC_EXPORT_HUB_URL: 'http://127.0.0.1:8080',
+	});
+	assert.equal(r.ok, true);
+});
+
+test('docs/dev_prod_isolation.md lists every var the helper guards', () => {
+	// Reason: the doc and the KNOWN_ENV_VARS list in env_isolation.mjs
+	// drifted once (the doc was correct, the helper missed
+	// PUBLIC_LIVE_HUB_URL + PUBLIC_EXPORT_HUB_URL — both were real
+	// dev → prod misconfiguration risks for the live-hub + cloud-
+	// exporter that the guard silently waved through). Pin the lockstep
+	// so a future writer who adds a new URL-shaped env var has to
+	// update the doc in the same change.
+	const helperSrc = readFileSync(
+		resolve(import.meta.dirname, 'env_isolation.mjs'),
+		'utf-8',
+	);
+	const helperListBlock = helperSrc.match(/KNOWN_ENV_VARS\s*=\s*\[([\s\S]*?)\];/);
+	assert.ok(helperListBlock, 'Could not locate KNOWN_ENV_VARS in env_isolation.mjs.');
+	const helperVars = [
+		...helperListBlock[1].matchAll(/'([A-Z][A-Z0-9_]*)'/g),
+	].map((m) => m[1]);
+	assert.ok(helperVars.length >= 7, 'KNOWN_ENV_VARS unexpectedly small.');
+
+	const doc = readFileSync(
+		resolve(import.meta.dirname, '../../../docs/dev_prod_isolation.md'),
+		'utf-8',
+	);
+	for (const v of helperVars) {
+		assert.match(
+			doc,
+			new RegExp(`\\b${v}\\b`),
+			`docs/dev_prod_isolation.md must mention ${v}. The helper guards it but the doc would silently underdescribe what dev → prod misconfig is caught.`,
+		);
+	}
 });
 
 test('detects multiple findings independently', () => {

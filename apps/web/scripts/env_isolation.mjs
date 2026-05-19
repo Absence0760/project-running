@@ -19,7 +19,20 @@ const KNOWN_ENV_VARS = [
 	'PUBLIC_SUPABASE_URL',
 	'SUPABASE_URL',
 	'OPENAI_BASE_URL',
+	// Web reads PUBLIC_LIVE_HUB_URL (bundled into the client); the
+	// Android twin reads LIVE_HUB_URL via dotenv. Both forms must be
+	// loopback in dev — without the PUBLIC_ form here, a stray
+	// `PUBLIC_LIVE_HUB_URL=https://live.runonward.com` in .env.local
+	// would let dev sessions push test pings at the production
+	// live-broadcast service.
 	'LIVE_HUB_URL',
+	'PUBLIC_LIVE_HUB_URL',
+	// Web's "Cloud export (GPX zip)" button POSTs to
+	// `${PUBLIC_EXPORT_HUB_URL}/v1/export` (the Go worker). Same
+	// risk shape as the live hub: a dev .env aimed at the prod
+	// export endpoint would write test export jobs to the live
+	// service's queue + Storage bucket.
+	'PUBLIC_EXPORT_HUB_URL',
 	// Bundled into the client at build time and read by routing.ts /
 	// RouteBuilder.svelte. The legacy `OSRM_URL` is kept in the
 	// allow-list below for any external tooling that still uses it.
