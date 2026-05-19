@@ -73,6 +73,18 @@ class ApiClient {
     return response.user!.id;
   }
 
+  /// Send a password-reset email to [email]. The link in the email
+  /// lands the user in the web app's `/auth/reset` page where they
+  /// can pick a new password (mobile doesn't host the reset form —
+  /// see decisions / docs/flows.md). Idempotent + privacy-preserving:
+  /// the underlying Supabase call returns success whether or not
+  /// the email is registered, so the caller's UI should say something
+  /// like "If that email is registered, we've sent a reset link."
+  /// rather than leaking account existence.
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    await _client.auth.resetPasswordForEmail(email.trim());
+  }
+
   /// Register a new account with email/password. Returns the user ID.
   ///
   /// Throws if the address is already registered or the password is too weak.

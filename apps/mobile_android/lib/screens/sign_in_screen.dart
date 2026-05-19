@@ -55,6 +55,43 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  /// Send a password-reset email to the address currently in the
+  /// email field. Mirrors the web `/login?reset=1` surface. The
+  /// reset-link in the email points at web's `/auth/reset` page —
+  /// mobile doesn't host the password-edit form. Privacy-preserving
+  /// confirmation toast says "If that email is registered…" rather
+  /// than leaking account existence.
+  Future<void> _sendPasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() {
+        _error = 'Enter your email above first, then tap Forgot password.';
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await widget.apiClient.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      // Show the privacy-preserving copy as a SnackBar so the user
+      // sees confirmation without thinking sign-in succeeded.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "If that email is registered, we've sent a reset link.",
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   /// Google Sign-In via the native flow. On Android, requires
   /// `GOOGLE_WEB_CLIENT_ID` in `.env.local` and an Android OAuth 2.0
   /// client configured with the app's SHA-1 fingerprint. See
@@ -221,7 +258,16 @@ class _SignInScreenState extends State<SignInScreen> {
                       )
                     : const Text('Sign In'),
               ),
-              const SizedBox(height: 12),
+              // Forgot-password link — sends a reset email to the
+              // address in the field above. Mirrors web /login?reset=1.
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _loading ? null : _sendPasswordReset,
+                  child: const Text('Forgot password?'),
+                ),
+              ),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   const Expanded(child: Divider()),
