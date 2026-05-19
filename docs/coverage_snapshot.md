@@ -1,6 +1,35 @@
-# Coverage snapshot — 2026-05-16
+# Coverage snapshot — 2026-05-19
 
 **Snapshot, not source of truth.** This is the baseline from which the "push every area to 90%" work starts. Estimates answer: "would CI catch a regression in this feature before merge?" — not measured line coverage. Roll-up at the bottom.
+
+## Session-end update — 2026-05-19
+
+This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end and added cross-cutting arch guards that would have caught the bugs the session opened with. Three real misconfiguration vectors closed in code (each previously silent in CI):
+
+| Surface | Was | Now | What changed |
+|---|---|---|---|
+| Rate-limit error parsing (TS↔Dart parity) | — | ~95% | NEW helper pair — `apps/web/src/lib/rate_limit_errors.{ts,test.ts}` (19) + `apps/mobile_android/lib/rate_limit_errors.dart` + `test/rate_limit_errors_test.dart` (19). Translates P0001 from `rate limit exceeded for <bucket>, retry in Ns` into friendly per-bucket strings ("creating clubs", "creating routes", "filing reports"). 3 call-sites wired (`saveRoute` + `createClub` + `submitReport`); previously each carried its own ad-hoc translation. |
+| pgtap rate-limit suite (`create_rate_limits_test.sql`) | 4 tests, `%rate limit exceeded%` LIKE | 6 tests, `^rate limit exceeded for create_X, retry in [0-9]+s$` anchored regex via `throws_matching` | Tightened the format-pin so a future migration that swaps the comma, drops "retry in", or removes the integer-seconds suffix fails at the SQL layer instead of silently breaking the client parser. Added `create_report` (10/hr) coverage targeting 10 of the 30 already-planted routes — duplicate-pending check is per (reporter, kind, id), so distinct targets give 10 slots; 11th raises. 315 → 317 pgtap tests. |
+| Production env guard (`check_production_env.mjs`) | 7 tests, SUPABASE_URL + ANON_KEY only | 14 tests, all 4 required PUBLIC_* | Added `PUBLIC_MAPTILER_KEY` + `PUBLIC_REVENUECAT_WEB_API_KEY` to the required set (previously a missing release secret silently baked broken maplibre tile URLs + a no-op Pro purchase flow into the static artifact). Explicit "SENTRY is deliberately not enforced" test pins error-reporting as optional. Workflow-step `env:` block in `release-web.yml` updated in lockstep — without it, the next `web@*` tag would have failed the guard. |
+| Dev/prod isolation guard (`env_isolation.mjs`) | 13 tests, 7 URLs guarded | 19 tests, 9 URLs guarded | Added `PUBLIC_LIVE_HUB_URL` (web client's live-broadcast URL, distinct from Dart twin's un-prefixed `LIVE_HUB_URL`) + `PUBLIC_EXPORT_HUB_URL` (Cloud-export Go endpoint). A dev `.env.local` aimed at either prod URL was previously not flagged — test pings would have hit prod live-broadcast; test exports would have queued real export jobs. Plus a meta-guard test that pins `docs/dev_prod_isolation.md` in lockstep with `KNOWN_ENV_VARS` so a future URL-shaped env var can't slip past either side. |
+| Web architecture guards (`security_guards.test.ts`) | 28 tests | 32 tests | Two new source-text guards: (1) `release-web.yml` invokes `check_production_env.mjs` before `npm run build` AND threads every required secret into the guard step's `env:` block. (2) `saveRoute` + `createClub` + `submitReport` in `data.ts` all route P0001 through `rateLimitErrorMessage` (centralises the "friendly wait-N-minutes" line so a refactor can't slip a callsite back to the raw exception). |
+| Dart architecture guards (`architecture_guards_test.dart`) | 79 tests | 84 tests | 5 new source-text guards: `club_form_sheet` + `route_builder_screen` import + call `rateLimitErrorMessage`, plus three timeout pins on the routing/elevation/geocoding helpers' `kOsrmSnapTimeout` / `kOsrmRouteTimeout` / `kElevationFetchTimeout` / `kGeocodingTimeout` constants. |
+
+### Bugs caught (not coded around) this session
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| Helper was extended to require 4 PUBLIC_* keys but the release workflow only threaded 2 into the guard step — next `web@*` tag would have hard-failed CI | Missed wiring during the `check_production_env.mjs` extension | Added `PUBLIC_MAPTILER_KEY` + `PUBLIC_REVENUECAT_WEB_API_KEY` to `release-web.yml` guard-step env, pinned by an arch test |
+| Web client reads `PUBLIC_LIVE_HUB_URL` + `PUBLIC_EXPORT_HUB_URL` but env-isolation guard only listed the un-prefixed Dart-side form — silent dev → prod misconfig vector | Helper's `KNOWN_ENV_VARS` drifted from the actual code's env reads | Added both to `KNOWN_ENV_VARS`, plus a doc-lockstep meta-guard so it can't happen again |
+| pgtap rate-limit suite's `%rate limit exceeded%` LIKE pattern was loose enough to survive a comma-to-colon migration — client parsers (web + Dart) depend on the exact comma + "retry in" + integer-seconds shape | `throws_like` with too-permissive pattern | `throws_matching` with anchored POSIX regex pinning the exact format |
+| `submit_report` carried its own ad-hoc "Too many reports — please wait a few minutes" translation while `create_club` + `create_route` went through the shared `rateLimitErrorMessage` helper | Three independent translations for the same P0001 source | Refactored `submitReport` (web) to route through the shared helper; added `create_report → 'filing reports'` to the helper's verb map (TS + Dart twin) |
+
+### Stale entries from prior sessions — corrected this pass
+
+| Entry | Was listed as | Actual state | Updated where |
+|---|---|---|---|
+| Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
+| pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
 ## Session-end update — 2026-05-16
 
@@ -114,8 +143,9 @@ Each entry above is the bug pattern, not the test that masks it.
 | Wear OS | ~50% | Compose integration tests; same effort as Android |
 | watchOS | ~25% | macOS runner + Swift test wiring |
 | Compliance docs | ~20% | Counsel review + filling TODOs in `docs/compliance/` |
-| Heatmap | 40% | Wire e2e test to call `heatmap_points_in_bbox` RPC + assert polygon rendering |
 | Race control (clubs) | 65% | Multi-context test with admin + runner roles |
+| Mobile spectator screen | 55% | Deepen `live_spectator_screen_test.dart` (currently 1 widget test) — formatters, loading/error states, status-badge transitions |
+| Multi-client realtime delivery | 55% | Web `cross-cutting/realtime.spec.ts` is light; add fanout-to-N-spectators scenarios with planted pings |
 
 Everything below this section is the **starting baseline** before today's pushes. Cross-reference the rows above when consulting the per-area tables.
 
@@ -166,7 +196,7 @@ Everything below this section is the **starting baseline** before today's pushes
 | Route builder (OSRM + elevation + geocoding) | 65% | 9+12+7+7+5 helper tests, web e2e thin |
 | Public/private toggle + share | 75% | `share/route.spec.ts` |
 | Segments + leaderboards | 92% | `segments_test.dart` (8) + UI widget tests + web `routes/segments.spec.ts` (14) + web `runs/segment-efforts.spec.ts` (7) — silent-empty-leaderboard regression pin for the SECURITY DEFINER fix (decisions §60), tier-filter narrowing on planted demographics, crown banner gating, viewer-row highlight, create + delete round-trip, ConfirmDialog cancel/confirm, athlete-row navigation to /u/[id], rank-pill colour-codes (.gold / .silver), section gating by route_id on /runs/[id], 100m-minimum validation toast |
-| Heatmap | 40% | UI exists, migration shipped; no e2e |
+| Heatmap | 92% | `routes/heatmap.spec.ts` (6) + `routes/heatmap-interaction.spec.ts` — Round C (2026-05-15) |
 
 ## Training plans
 
