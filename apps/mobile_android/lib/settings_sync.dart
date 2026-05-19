@@ -131,6 +131,13 @@ class SettingsSyncService extends ChangeNotifier {
     if (dat is String && dat.isNotEmpty && dat != preferences.defaultActivityType) {
       preferences.setDefaultActivityType(dat);
     }
+    // Body weight in kg — drives the run-detail calorie estimate.
+    // null / non-positive clears the local cache so the calorie path
+    // falls through to its documented 70 kg default.
+    final bw = prefs[SettingsKeys.bodyWeightKg];
+    if (bw is num) {
+      preferences.setBodyWeightKg(bw > 0 ? bw.toDouble() : null);
+    }
     // Seed a weekly distance RunGoal from the universal bag value when
     // the local list doesn't already have one. We never *replace* an
     // existing local goal — the dashboard's editor is the richer

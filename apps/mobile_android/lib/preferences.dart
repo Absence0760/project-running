@@ -168,6 +168,10 @@ class Preferences extends ChangeNotifier {
   // Defaults to 'dark' to preserve the original launch experience for
   // users who haven't explicitly chosen.
   static const _kThemeMode = 'theme_mode';
+  // Mirrors the universal `body_weight_kg` settings-bag key. Drives
+  // the run-detail calorie estimate. 0 / unset = use the 70 kg
+  // fallback (documented in `_estimatedCalories`).
+  static const _kBodyWeightKg = 'body_weight_kg';
 
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
@@ -185,6 +189,7 @@ class Preferences extends ChangeNotifier {
   String _defaultActivityType = 'run';
   bool _keepScreenOn = true;
   ThemeMode _themeMode = ThemeMode.dark;
+  double? _bodyWeightKg;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -204,6 +209,13 @@ class Preferences extends ChangeNotifier {
   /// Whether the run screen should hold a wakelock while recording.
   /// Mirrors the device-scoped `keep_screen_on` settings-bag key.
   bool get keepScreenOn => _keepScreenOn;
+
+  /// User's body weight in kg, mirrored from the universal
+  /// `body_weight_kg` settings-bag key. Null when the user hasn't set
+  /// it — callers (e.g. run-detail calorie estimate) fall through to
+  /// a documented default. The web equivalent is the same key on
+  /// `user_settings.prefs.body_weight_kg`.
+  double? get bodyWeightKg => _bodyWeightKg;
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
@@ -276,6 +288,8 @@ class Preferences extends ChangeNotifier {
         _prefs.getString(_kDefaultActivityType) ?? 'run';
     _keepScreenOn = _prefs.getBool(_kKeepScreenOn) ?? true;
     _themeMode = _themeModeFromString(_prefs.getString(_kThemeMode));
+    final bw = _prefs.getDouble(_kBodyWeightKg);
+    _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
     if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
@@ -358,6 +372,23 @@ class Preferences extends ChangeNotifier {
   Future<void> setKeepScreenOn(bool v) async {
     _keepScreenOn = v;
     await _prefs.setBool(_kKeepScreenOn, v);
+    notifyListeners();
+  }
+
+  /// Update the cached body-weight value. Passing null (or a
+  /// non-positive value) clears it, so the calorie-estimate path
+  /// falls back to its documented 70 kg default. Driven from
+  /// `SettingsSyncService._applyUniversal` whenever the cloud
+  /// universal bag's `body_weight_kg` lands.
+  Future<void> setBodyWeightKg(double? v) async {
+    final next = (v != null && v > 0) ? v : null;
+    if (next == _bodyWeightKg) return;
+    _bodyWeightKg = next;
+    if (next == null) {
+      await _prefs.remove(_kBodyWeightKg);
+    } else {
+      await _prefs.setDouble(_kBodyWeightKg, next);
+    }
     notifyListeners();
   }
 

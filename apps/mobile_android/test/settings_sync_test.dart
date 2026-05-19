@@ -115,6 +115,45 @@ void main() {
       expect(prefs.goals, isEmpty);
     });
 
+    test('body_weight_kg overlays a positive value into local prefs',
+        () async {
+      // The run-detail calorie estimate reads `preferences.bodyWeightKg`
+      // and falls through to 70 kg when unset. A user who set their
+      // weight on /settings/account on web must see that value
+      // reflected on mobile's calorie pill on next sign-in.
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal({SettingsKeys.bodyWeightKg: 82.5});
+
+      expect(prefs.bodyWeightKg, 82.5);
+    });
+
+    test('body_weight_kg of 0 / negative clears the local value (defensive)',
+        () async {
+      // A corrupted bag row must not poison the calorie path with a
+      // zero weight (kcal = 0 × ... = 0). Clearing falls through to
+      // the documented 70 kg default.
+      final prefs = await freshPrefs();
+      await prefs.setBodyWeightKg(80);
+      expect(prefs.bodyWeightKg, 80);
+
+      final svc = SettingsSyncService(preferences: prefs);
+      svc.debugApplyUniversal({SettingsKeys.bodyWeightKg: 0});
+      expect(prefs.bodyWeightKg, isNull);
+    });
+
+    test('body_weight_kg of non-numeric is silently ignored', () async {
+      final prefs = await freshPrefs();
+      await prefs.setBodyWeightKg(75);
+
+      final svc = SettingsSyncService(preferences: prefs);
+      svc.debugApplyUniversal({SettingsKeys.bodyWeightKg: 'eighty'});
+
+      // Local value preserved — the bad bag value didn't clear it.
+      expect(prefs.bodyWeightKg, 75);
+    });
+
     test('empty bag is a no-op', () async {
       final prefs = await freshPrefs();
       final svc = SettingsSyncService(preferences: prefs);

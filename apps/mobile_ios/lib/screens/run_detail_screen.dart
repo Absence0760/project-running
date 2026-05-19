@@ -1003,8 +1003,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return loss;
   }
 
+  /// Default body weight in kg when the user hasn't set
+  /// `user_settings.prefs.body_weight_kg`. Mirrors the web fallback
+  /// for parity. ~70 kg is the rough median for an adult runner —
+  /// imperfect but produces a believable number for the calorie
+  /// estimate pill on every recorded run.
+  static const _defaultBodyWeightKg = 70.0;
+
   int get _estimatedCalories {
-    return (70 * _activityType.kcalPerKgPerKm * run.distanceMetres / 1000)
+    final weightKg =
+        widget.preferences.bodyWeightKg ?? _defaultBodyWeightKg;
+    return (weightKg *
+            _activityType.kcalPerKgPerKm *
+            run.distanceMetres /
+            1000)
         .round();
   }
 

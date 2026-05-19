@@ -248,6 +248,82 @@ void main() {
     });
   });
 
+  group('Preferences.bodyWeightKg', () {
+    // The calorie estimate on the run-detail page previously hardcoded
+    // 70 kg. Wiring `bodyWeightKg` through Preferences lets users with
+    // a body_weight_kg setting see a personalised estimate; the 70 kg
+    // fallback is documented at the call site.
+
+    test('defaults to null when unset', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.bodyWeightKg, isNull);
+    });
+
+    test('reads a persisted positive value', () async {
+      SharedPreferences.setMockInitialValues({'body_weight_kg': 75.5});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.bodyWeightKg, 75.5);
+    });
+
+    test('treats persisted zero / negative as unset (defensive)', () async {
+      // Should never happen via the setter (it filters), but a manual
+      // SharedPreferences edit or a corrupted value must not propagate
+      // a zero weight into the calorie math — kcal = 0 × ... = 0
+      // would render as "0 kcal" on every run, more misleading than
+      // the 70 kg fallback.
+      SharedPreferences.setMockInitialValues({'body_weight_kg': 0.0});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.bodyWeightKg, isNull);
+    });
+
+    test('setter persists positive values + notifies', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      var notifyCount = 0;
+      prefs.addListener(() => notifyCount++);
+
+      await prefs.setBodyWeightKg(80.0);
+      expect(prefs.bodyWeightKg, 80.0);
+      expect(notifyCount, 1);
+
+      // Idempotent — same value again does NOT notify.
+      await prefs.setBodyWeightKg(80.0);
+      expect(notifyCount, 1);
+    });
+
+    test('setter clears on null / non-positive + removes the prefs key', () async {
+      SharedPreferences.setMockInitialValues({'body_weight_kg': 80.0});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.bodyWeightKg, 80.0);
+
+      await prefs.setBodyWeightKg(null);
+      expect(prefs.bodyWeightKg, isNull);
+
+      // Persisted absence: a fresh Preferences instance also reads null.
+      final prefs2 = Preferences();
+      await prefs2.init();
+      expect(prefs2.bodyWeightKg, isNull);
+    });
+
+    test('setter rejects non-positive values', () async {
+      SharedPreferences.setMockInitialValues({'body_weight_kg': 80.0});
+      final prefs = Preferences();
+      await prefs.init();
+
+      await prefs.setBodyWeightKg(0.0);
+      expect(prefs.bodyWeightKg, isNull);
+
+      await prefs.setBodyWeightKg(-10.0);
+      expect(prefs.bodyWeightKg, isNull);
+    });
+  });
+
   group('formatDistanceForPref + activeDistanceUnit (global accessor)', () {
     // Several read-only surfaces (feed cards, profile notification
     // verbs, live spectator stats, club-detail route subtitles, the

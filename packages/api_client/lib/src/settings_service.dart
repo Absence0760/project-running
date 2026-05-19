@@ -16,6 +16,7 @@ class SettingsKeys {
   static const hrZones = 'hr_zones';
   static const restingHrBpm = 'resting_hr_bpm';
   static const maxHrBpm = 'max_hr_bpm';
+  static const bodyWeightKg = 'body_weight_kg';
   static const dateOfBirth = 'date_of_birth';
   static const privacyDefault = 'privacy_default';
   static const stravaAutoShare = 'strava_auto_share';
