@@ -31,6 +31,42 @@ This session hardened the **anti-spam + dev/prod-isolation surface** end-to-end 
 | Routes Heatmap tab + RPC plumbing | 40% (in two tables) | 92% — Round C (2026-05-15) shipped `routes/heatmap.spec.ts` (6 tests) + `routes/heatmap-interaction.spec.ts` | Fixed in the Routes per-area table + "What's still below 90%" list |
 | pgtap rate-limit count in backend table | "80%" (collective) | Same %, but test count is now 317 not 315 | Reflected in Backend section |
 
+## Bug-hunt-while-testing pass — 2026-05-19 (post-Wear continuation)
+
+This pass adopted an explicit bug-finding stance: rather than just
+pinning correct behaviour, actively scan each file for subtle issues
+while writing tests. **One real bug surfaced + fixed**; the other
+files were clean.
+
+| Surface | Bug? | Tests | What's pinned |
+|---|---|---|---|
+| `race_controller.dart` | **YES** — fixed in same commit | 13 (NEW `race_controller_test.dart`) | `_setActive` change-detection missed `instanceStart` in its comparison predicate. Back-to-back armed transitions between two instances of the same recurring event (Instance 1 finishes → Instance 2 immediately armed, same eventId + 'armed' status + both null `startedAt`) silently updated `_active` without firing notifyListeners. Banner UI would render Instance 1's time until something else triggered a rebuild. One-line fix; regression pin added. Also covers ActiveRace.isArmed/isRunning per-status, attach/detach state isolation, and the other 5 change-detection axes. |
+| `QueuedRun` serialization | clean | 10 (NEW `QueuedRunSerializationTest.kt`) | LocalRunStore's failed-run retry queue. Forward-compat decode contract: v1 payloads (missing `isPublic` / `steps` / `activityType` / `laps` / `avgBpm`) decode with the right defaults (NULL not zero, "run" not empty, empty list not null). Backward-compat via `ignoreUnknownKeys=true`. List serializer round-trip on empty + populated queues. |
+| `audio_cues.dart` formatters | clean | 21 (NEW `audio_cues_test.dart`) | The four pure top-level formatters that produce the audio strings runners hear: `formatSpeedUtterance`, `formatPaceUtterance`, `formatSpokenDistance`, `formatWorkoutStepUtterance`. Per-unit (km/mi) conversion correctness, suppression-on-null contract, exact-minute rendering ("0 seconds" included for pace; OMITTED for workout-step intra-step formatter — asymmetric on purpose), boundary cases (999.5m → "1000 metres" via the metres-branch). |
+
+### Pieces of work + commits
+
+| Piece | Commit | Tests | Bug? |
+|---|---|---|---|
+| RaceController instanceStart fix + tests | `3c7eae7` | 13 | **YES — fixed** |
+| QueuedRun wire-format forward-compat | `3d2fc27` | 10 | — |
+| audio_cues pure formatters | `4c3171e` | 21 | — |
+
+### The bug, summarised
+
+**File**: `apps/mobile_android/lib/race_controller.dart` (mirrored to iOS twin).
+**Location**: `_setActive(ActiveRace? next)`, lines 184-186 (before fix).
+**Symptom**: For a runner RSVP'd to two consecutive instances of a recurring event (e.g. weekly Thursday Threshold), if the organiser armed Instance 1, finished it, then immediately armed Instance 2 BEFORE the controller's polling cleared the active race, the controller's internal `_active.instanceStart` would update silently. The banner UI showing the race state wouldn't re-render — it would keep showing Instance 1's time/details until any other field changed or the user navigated away and back.
+**Root cause**: The change-detection predicate compared `eventId`, `status`, and `startedAt` — but not `instanceStart`. Same-event-same-status-same-startedAt transitions across different instances therefore failed the dirty check.
+**Fix**: One-line addition to the predicate: `next?.instanceStart != _active?.instanceStart`. The regression pin test ("instanceStart change with same event + status fires notifyListeners") would have caught this before merge if it had existed.
+**Severity**: Narrow but real — affects only recurring events with back-to-back armed instances, which is unusual but legitimate (weekly track sessions where the organiser arms a different instance for "next week's" event while last week's race-session is still in 'finished' state in the DB).
+
+### Honest accounting on bug-finding
+
+Across the **15 commits in the backend + mobile + wear unit-test phase** of this session, this is the **ONE** production bug surfaced + fixed by writing tests. The other 14 commits pinned correct behaviour — which has long-term value (regression protection) but didn't catch latent defects.
+
+The bug-finding-density was lower than the earlier hardening rounds (rate-limit + env-isolation hardening surfaced 4 bugs). That's the expected pattern: hardening rounds touch CI/release machinery where bugs accumulate from misconfiguration; pure-logic unit-test rounds touch already-exercised code where bugs are rarer.
+
 ## Wear OS unit-test pass — 2026-05-19 (post-mobile continuation)
 
 After the mobile pure-logic additions, three more Wear OS source
