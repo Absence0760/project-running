@@ -5,11 +5,11 @@
 # (optionally) seeds an empty `secrets.enc.yaml` for any env that
 # doesn't have one yet.
 #
-# Unlike meryl-green-designs' equivalent script, this one does NOT
-# create KMS keys — that's done by `infra/modules/web-stack` on
-# `terraform apply`. The script's only job is to bridge the gap
-# between "terraform created the keys" and "sops can use them" —
-# i.e., copy the ARNs from terraform outputs into `.sops.yaml`.
+# This script does NOT create KMS keys — that's done by
+# `infra/modules/web-stack` on `terraform apply`. The script's only
+# job is to bridge the gap between "terraform created the keys" and
+# "sops can use them" — i.e., copy the ARNs from terraform outputs
+# into `.sops.yaml`.
 #
 # Idempotent: re-running detects already-resolved placeholders and
 # already-seeded files, prints a "nothing to do" status, and exits 0.

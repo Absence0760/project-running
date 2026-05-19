@@ -1,34 +1,43 @@
 # .claude/ — Claude Code tooling
 
-These agents and commands were derived from real working projects (primarily `meryl-green-designs`, a SvelteKit + Hono + DynamoDB e-commerce site) and **lightly generalized** with placeholder names: `<payment-processor>`, `<CMS>`, `<email-service>`, `<aws-region>`, `<EMAIL_SERVICE>_API_KEY`, etc.
+Project-specific agents and slash commands wired into Claude Code sessions for this monorepo (Flutter mobile + native watch + SvelteKit web + Supabase + Go worker). Each agent and command targets concrete files, conventions, and invariants of *this* codebase — `apps/mobile_{android,ios}/`'s byte-identical twin, `runs.metadata` jsonb registry, the L0–L4 layered-resilience contract, the CHECK ↔ TS-union pairs, etc.
 
-**They will not be 100% accurate for your project out of the box.** Each new project should re-read these and replace placeholder examples with the actual services / routes / file paths in use. Treat them as templates of *structure and rigor*, not as fully-portable boilerplate.
+Browse [`agents/`](agents/) and [`commands/`](commands/) for the full list; the index below is a quick map.
 
-## What's here
+## Agents (`agents/`)
 
-### Agents (`agents/`)
+Multi-step, read-only or edit-capable specialists. Most are invoked by a slash command in `commands/`, but a few are used directly (e.g. `mobile-twin-mirror`, `shared-library-syncer`).
 
-- **`code-reviewer.md`** — invoked at PR / pre-commit time to review the diff against the project's documented rules.
-- **`doc-hygiene-checker.md`** — checks that code changes update docs and tests in the same change.
-- **`test-gap-checker.md`** — finds modules / routes without test coverage.
-- **`ui-polisher.md`** — applies typography / layout polish to frontend surfaces. Heavily SvelteKit-flavoured; adapt for other frontend frameworks.
-- **`repo-security-auditor.md`** — read-only security auditor. The "trust boundaries" section needs rewriting per project — the example boundaries (frontend ↔ user, backend ↔ caller, backend ↔ <CMS>, backend ↔ <payment-processor>) are meryl-shape, not universal.
+| Agent | What it does |
+|---|---|
+| [`code-reviewer`](agents/code-reviewer.md) | Reviews the working diff against `decisions.md` ADRs, the layering contract, twin invariant, paywall gates, fail-closed defaults, comment/abstraction discipline. Invoked by `/safe-edit` and `/check`. |
+| [`doc-hygiene-checker`](agents/doc-hygiene-checker.md) | Surveys the doc set listed in `CLAUDE.md § Docs hygiene` against the diff and reports which need updating. |
+| [`test-gap-checker`](agents/test-gap-checker.md) | Reads the working diff and reports missing unit / e2e coverage per `docs/conventions.md § Test hygiene`. |
+| [`migration-coordinator`](agents/migration-coordinator.md) | Applies a new Supabase migration locally, runs both type generators, runs the CHECK ↔ TS-union guard. Invoked by `/safe-migration`. |
+| [`mobile-twin-mirror`](agents/mobile-twin-mirror.md) | Mirrors `apps/mobile_android/lib/`+`test/` edits into `apps/mobile_ios/` and verifies the byte-identical invariant (decisions §39). Run after every Dart edit. |
+| [`shared-library-syncer`](agents/shared-library-syncer.md) | Detects divergence on the documented TS↔Dart parity pairs (training, segments, privacy, recurrence, pace_segments, training_load, fitness, track_projection). |
+| [`metadata-key-keeper`](agents/metadata-key-keeper.md) | Verifies every `runs.metadata.<key>` access in a diff is documented in `docs/metadata.md`. |
+| [`repo-security-auditor`](agents/repo-security-auditor.md) | Read-only security sweep. Knows the project's RLS / SECURITY DEFINER / Edge Function / Storage / XSS / paywall conventions. Backend for most `/audit/*` security commands. |
+| [`compliance-auditor`](agents/compliance-auditor.md) | Read-only auditor for GDPR / CCPA / DSAR / cookie-consent / regional-availability / accessibility posture. Backend for the compliance `/audit/*` commands. |
+| [`i18n-readiness-auditor`](agents/i18n-readiness-auditor.md) | Finds hard-coded English strings, en-US formatting, missing RTL, missing Accept-Language across web + mobile + watch. |
+| [`app-store-privacy-auditor`](agents/app-store-privacy-auditor.md) | Verifies iOS Privacy Nutrition Labels + Play Data Safety + Wear OS + watchOS privacy disclosures match what the binaries actually do. |
+| [`intl-legal-doc-reviewer`](agents/intl-legal-doc-reviewer.md) | Pre-counsel pass on legal pages (ToS, Privacy, Cookie Notice, Refund) against GDPR / UK GDPR / LGPD / PIPEDA / Quebec Law 25 / Australian Privacy Act / PIPA / DPDPA + EU/UK/AU consumer law. **Not a substitute for a licensed attorney.** |
+| [`ui-polisher`](agents/ui-polisher.md) | Redesigns a page / screen / component across web (SvelteKit), mobile (Flutter twin), Wear OS, watchOS. Invoked by `/polish-ui`. |
 
-### Commands (`commands/`)
+## Commands (`commands/`)
 
-- **`check.md`** — run typecheck + tests + format + lint and report.
-- **`safe-edit.md`** — workflow for edits to security-sensitive or load-bearing files.
-- **`polish-ui.md`** — orchestrates the `ui-polisher` agent against a target surface.
-- **`release-readiness.md`** — go/no-go checklist before tagging a release.
-- **`audit/`** — directory of focused security audits. Each command delegates to the `repo-security-auditor` agent with a specific area:
-  - `secrets.md`, `infra.md`, `deps.md`, `xss.md`, `cost-controls.md`
-  - `all.md` runs them all in sequence
-  - `README.md` is the index
+User-invocable slash commands. Most chain one or more agents.
 
-## Adapting these for a new project
+| Command | What it does |
+|---|---|
+| [`/check`](commands/check.md) | Pre-commit gate: runs `code-reviewer` + `test-gap-checker` + `doc-hygiene-checker` in parallel against the working diff. Advisory output. |
+| [`/safe-edit`](commands/safe-edit.md) | Coder ↔ reviewer loop for non-trivial changes: implement → review → fix → review → ready-to-commit. Hard cap of two review cycles. |
+| [`/safe-migration`](commands/safe-migration.md) | Schema work with `migration-coordinator` in the loop — apply locally, regen both type files, run the CHECK ↔ TS-union guard, propose doc updates. |
+| [`/polish-ui`](commands/polish-ui.md) | Polish a page / screen / component to the running app's quality bar via the `ui-polisher` agent. |
+| [`/release-readiness`](commands/release-readiness.md) | Pre-tag gate for the chosen app (web / android / ios / watch / worker). Checks CI green on main, twin parity, schema drift, untracked files, last-tag delta. Read-only. |
+| [`/dep-bump-twin`](commands/dep-bump-twin.md) | Mirrors a Dependabot mobile-deps PR's pubspec changes from `apps/mobile_android` to `apps/mobile_ios` so the byte-identical twin survives the merge. |
+| [`/audit/*`](commands/audit/README.md) | Focused security / privacy / invariant / compliance audits. `/audit/all` runs the full sweep in parallel. See [`commands/audit/README.md`](commands/audit/README.md) for the full index. |
 
-1. Rewrite the trust-boundary map in `agents/repo-security-auditor.md` to match your stack's actual third-party integrations.
-2. Update route tables in `audit/cost-controls.md` and `audit/infra.md` to match your `backend/src/routes/*` and `infra/*.tf`.
-3. Replace the `<placeholder>` tokens (`<payment-processor>`, `<CMS>`, `<email-service>`, `<aws-region>`) with real service names so the agents stop emitting them in reports.
-4. Add stack-specific audits not covered here (Postgres RLS? Edge functions? Mobile-twin parity? — see `project-running`'s `.claude/commands/audit/` for ideas).
-5. Remove audits that don't apply (e.g. `cost-controls.md` doesn't apply to a static-only site with no Lambda / no third-party APIs).
+## Modifying these
+
+When you add a new convention, ADR, or invariant, look here too — most agents read a specific section of `CLAUDE.md`, `docs/decisions.md`, or `docs/conventions.md`. If you add a new rule there, the relevant agent's prompt usually needs a corresponding update. Same goes for the agent list in the project's root `CLAUDE.md` and the agent description shown to the user.

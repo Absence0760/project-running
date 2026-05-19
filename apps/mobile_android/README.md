@@ -1,17 +1,24 @@
-# mobile_android
+# apps/mobile_android
 
-A new Flutter project.
+Flutter Android app — the most mature Flutter target in the monorepo. Mirrors the web app's feature surface and adds device-only capabilities (live GPS recording + foreground service, auto-pause, BLE chest-strap HR, pedometer, haptic / TTS pace alerts, OS share sheets + share-target intents, Health Connect import, disk-backed tile cache, WorkManager background sync).
 
-## Getting Started
+**Byte-identical twin invariant.** `apps/mobile_android/lib/` and `apps/mobile_ios/lib/` (plus `test/`) are kept byte-for-byte identical — every change here must be mirrored to the iOS twin in the same commit. Platform-specific runtime behaviour dispatches via `Platform.isAndroid` / `Platform.isIOS` inside the unified files. See [decisions.md § 39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase). The `mobile-twin-mirror` agent under `.claude/agents/` runs this check after any Dart edit.
 
-This project is a starting point for a Flutter application.
+## Run locally
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+cd apps/mobile_android
+cp .env.example .env.local                 # if you haven't already
+flutter pub get
+flutter run                                # picks a running emulator / connected device
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+The local Supabase stack must be up first (`cd apps/backend && supabase start`). Seed user is `runner@test.com` / `testtest`.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## See also
+
+- [CLAUDE.md](CLAUDE.md) — full session notes: scope rule, state-management contract, file inventory, test list, analyzer policy
+- [local_testing.md](local_testing.md) — every feature, how to verify on a device / emulator
+- [deployment.md](deployment.md) — Play Console signing, release workflow, observability, rollback
+- [`../../docs/run_recording.md`](../../docs/run_recording.md) — the L0–L4 layered-resilience contract on the recording stack
+- [`../../docs/parity.md`](../../docs/parity.md) — feature × platform matrix; rows with `✗` or `Partial` for this app are the backlog

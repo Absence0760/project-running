@@ -4,9 +4,8 @@
 # project's sops-encrypted secrets, by adding kms:Decrypt + kms:Encrypt
 # to the per-env KMS key policy.
 #
-# Per the audit findings (sops vs meryl-green-designs comparison):
 # project-running uses per-env KMS keys (one per `infra/envs/<env>`)
-# rather than a single shared key. So onboarding is a per-env action.
+# rather than a single shared key, so onboarding is a per-env action.
 #
 # What this does:
 #   1. Reads the current key policy via `aws kms get-key-policy`

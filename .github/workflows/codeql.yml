@@ -57,9 +57,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # javascript-typescript covers backend (Hono), frontend (SvelteKit),
-        # studio (<CMS> / React). The extractor picks up .ts, .js, .svelte,
-        # and .tsx automatically.
+        # javascript-typescript covers the SvelteKit web app (apps/web),
+        # the Deno Edge Functions (apps/backend/supabase/functions), and
+        # the Node Lambda coach handler (apps/web/lambda/coach). The
+        # extractor picks up .ts, .js, .svelte, and .tsx automatically.
+        # Go (apps/job_worker) and Kotlin (apps/watch_wear, mobile_android
+        # /android/) are scanned by .github/workflows/security.yml's
+        # parallel codeql-go + codeql-kotlin jobs.
         #
         # actions covers every workflow under .github/workflows/. The query
         # set flags untrusted-input → shell-script injection (e.g. PR title
