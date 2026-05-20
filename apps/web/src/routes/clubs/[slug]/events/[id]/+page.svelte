@@ -157,11 +157,31 @@
 		raceSession = res[4];
 	}
 
+	/**
+	 * Fan a race-state change out to every other subscriber on this
+	 * channel as a broadcast. Supabase's postgres_changes filter has a
+	 * server-side setup latency that trails the SUBSCRIBED ack — an
+	 * INSERT/UPDATE that lands inside that window is dropped on the
+	 * subscriber side. Broadcasts don't share that fragility (broadcast
+	 * delivery is gated on the JOIN ack alone), so we emit one alongside
+	 * every race_sessions write. Members listen for both: the broadcast
+	 * is the fast path, the postgres_changes subscription remains as a
+	 * fallback / late-joiner signal.
+	 */
+	function broadcastRaceStateChanged() {
+		channel?.send({
+			type: 'broadcast',
+			event: 'race-state-changed',
+			payload: {}
+		});
+	}
+
 	async function handleArm() {
 		if (!event || !activeInstance || raceBusy) return;
 		raceBusy = true;
 		try {
 			raceSession = await armRace(event.id, activeInstance, autoApproveOnArm);
+			broadcastRaceStateChanged();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Arm failed';
 		} finally {
@@ -174,6 +194,7 @@
 		raceBusy = true;
 		try {
 			raceSession = await startRace(event.id, activeInstance);
+			broadcastRaceStateChanged();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Start failed';
 		} finally {
@@ -193,6 +214,7 @@
 		raceBusy = true;
 		try {
 			raceSession = await endRace(event.id, activeInstance, status);
+			broadcastRaceStateChanged();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'End failed';
 		} finally {
@@ -367,6 +389,12 @@
 				realtimeReady = true;
 				console.log(`[realtime] event-${event?.id} ready=true`);
 			})
+			// Fast path for race-state transitions. Admin's handleArm /
+			// handleStart / confirmEndRace each emit one of these right
+			// after the race_sessions write. Receivers reload the event
+			// detail — same handler as postgres_changes, so duplicate
+			// delivery is harmless (debounced by scheduleReload).
+			.on('broadcast', { event: 'race-state-changed' }, scheduleReload)
 			.on(
 				'postgres_changes',
 				{
