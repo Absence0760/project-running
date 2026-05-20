@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:api_client/api_client.dart';
-import 'package:core_models/core_models.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -11,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../geocoding.dart';
 import '../widgets/top_banner.dart';
+import 'public_route_screen.dart';
 
 /// Geographic heatmap of public route geometry. Mirrors the web
 /// `/routes?tab=heatmap` surface (RouteHeatmap.svelte). Backed by the
@@ -38,12 +40,18 @@ class RoutesHeatmapScreen extends StatefulWidget {
   /// Test seam — stubs the platform-channel `Geolocator` call so the
   /// Locate FAB can be exercised in unit tests.
   final Future<Position> Function()? locateFn;
+  /// Test seam — lets widget tests boot the screen above the routes-
+  /// overlay zoom threshold (default 12) without needing to drive the
+  /// MapController manually. Production callers leave null and get
+  /// the city-scale default of 11.
+  final double? initialZoom;
 
   const RoutesHeatmapScreen({
     super.key,
     required this.api,
     this.geocodingFetcher,
     this.locateFn,
+    this.initialZoom,
   });
 
   @override
@@ -53,11 +61,27 @@ class RoutesHeatmapScreen extends StatefulWidget {
 class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   final _mapController = MapController();
   final _searchCtl = TextEditingController();
-  List<HeatmapPoint> _points = const [];
+  List<cm.HeatmapPoint> _points = const [];
+  /// Public routes that intersect (or are near) the current viewport.
+  /// Rendered as tappable polylines once the user zooms in past the
+  /// density-only stage. Mirrors the web RouteHeatmap's clickable
+  /// routes layer — tap a line → /routes/[id]. Empty when zoom is
+  /// below threshold so the heatmap stays the dominant signal.
+  List<cm.Route> _nearbyRoutes = const [];
   bool _loading = false;
   Timer? _debounce;
   Timer? _searchDebounce;
   bool _mapReady = false;
+
+  /// Minimum zoom to overlay individual public routes. Below this the
+  /// heatmap density is the honest signal — too many lines at city /
+  /// region scale is noise. Mirrors ROUTES_OVERLAY_MIN_ZOOM on web.
+  static const double _routesOverlayMinZoom = 12.0;
+
+  /// Pixel-radius for tap-on-polyline hit testing. A finger covers
+  /// roughly 24-32 px; 28 keeps clicks responsive on small screens
+  /// while still requiring the user to land near a line.
+  static const double _tapHitRadiusPx = 28.0;
 
   List<PlaceResult> _searchResults = const [];
   bool _searchOpen = false;
@@ -94,6 +118,114 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+    // Refresh the tappable routes overlay in parallel — separate try
+    // block so a heatmap-points failure doesn't blank the polylines
+    // and vice versa.
+    await _refreshRoutes();
+  }
+
+  /// Fetch + render tappable public-route polylines for the current
+  /// viewport centre. Mirrors `refreshRoutes()` on RouteHeatmap.svelte:
+  /// hidden below `_routesOverlayMinZoom`; uses the existing
+  /// `nearby_routes` RPC (no new migration); cap radius at 25 km so a
+  /// fully zoomed-out view doesn't fetch everything.
+  Future<void> _refreshRoutes() async {
+    if (!_mapReady || !mounted) return;
+    if (_mapController.camera.zoom < _routesOverlayMinZoom) {
+      if (_nearbyRoutes.isNotEmpty) {
+        setState(() => _nearbyRoutes = const []);
+      }
+      return;
+    }
+    final centre = _mapController.camera.center;
+    final bounds = _mapController.camera.visibleBounds;
+    final halfDiag = _haversineM(
+      bounds.north,
+      bounds.west,
+      centre.latitude,
+      centre.longitude,
+    );
+    final radiusM = halfDiag.clamp(1000.0, 25000.0);
+    try {
+      final routes = await widget.api.nearbyPublicRoutes(
+        lat: centre.latitude,
+        lng: centre.longitude,
+        radiusM: radiusM,
+        limit: 50,
+      );
+      if (!mounted) return;
+      setState(() => _nearbyRoutes =
+          routes.where((r) => r.waypoints.length >= 2).toList());
+    } catch (e) {
+      debugPrint('heatmap routes refresh failed: $e');
+    }
+  }
+
+  /// Map-tap handler. When zoomed in enough to show route lines, this
+  /// hit-tests the tap against every nearby route's polyline and
+  /// navigates to the closest one within `_tapHitRadiusPx`. Outside
+  /// the threshold the tap is a no-op (the heatmap underneath has no
+  /// click semantics — density isn't clickable).
+  void _onMapTap(TapPosition tapPos, LatLng latlng) {
+    if (_nearbyRoutes.isEmpty) return;
+    final camera = _mapController.camera;
+    // Convert tap to screen-space and compare to each waypoint in
+    // screen-space — this gives a uniform hit radius regardless of
+    // latitude, which haversine alone doesn't (1 m of lat ≠ 1 m of
+    // lng at high latitudes).
+    final tapPx = camera.latLngToScreenOffset(latlng);
+    String? bestId;
+    double bestDistPx = _tapHitRadiusPx;
+    for (final r in _nearbyRoutes) {
+      for (final w in r.waypoints) {
+        final px = camera.latLngToScreenOffset(LatLng(w.lat, w.lng));
+        final dx = px.dx - tapPx.dx;
+        final dy = px.dy - tapPx.dy;
+        final dist = (dx * dx + dy * dy).abs();
+        // Compare squared distances to skip sqrt in the hot loop.
+        final threshold = bestDistPx * bestDistPx;
+        if (dist < threshold) {
+          bestDistPx = dist <= 0 ? 0 : (dist == 0 ? 0 : dist).clamp(0, double.infinity).toDouble();
+          // Track the actual pixel distance for the next comparison.
+          bestDistPx = _sqrtSafe(dist);
+          bestId = r.id;
+        }
+      }
+    }
+    if (bestId != null) {
+      final id = bestId;
+      // Defer the push so the GestureDetector finishes processing
+      // before the screen changes — avoids "setState after dispose"
+      // and keeps the tap ripple animation clean.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PublicRouteScreen(api: widget.api, routeId: id),
+          ),
+        );
+      });
+    }
+  }
+
+  static double _sqrtSafe(double v) => v <= 0 ? 0 : math.sqrt(v);
+
+  static double _haversineM(
+    double lat1,
+    double lng1,
+    double lat2,
+    double lng2,
+  ) {
+    const r = 6371000.0;
+    double toRad(double d) => d * math.pi / 180.0;
+    final dLat = toRad(lat2 - lat1);
+    final dLng = toRad(lng2 - lng1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(toRad(lat1)) *
+            math.cos(toRad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return 2 * r * math.asin(math.sqrt(a));
   }
 
   void _scheduleRefresh() {
@@ -219,7 +351,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     // London default — same as web; user can search
                     // or hit Locate-me to recentre.
                     initialCenter: const LatLng(51.5074, -0.1276),
-                    initialZoom: 11,
+                    initialZoom: widget.initialZoom ?? 11,
                     onMapReady: () {
                       _mapReady = true;
                       _refresh();
@@ -227,6 +359,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     onPositionChanged: (pos, hasGesture) {
                       if (hasGesture) _scheduleRefresh();
                     },
+                    onTap: _onMapTap,
                   ),
                   children: [
                     TileLayer(
@@ -249,6 +382,36 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                           ),
                       ],
                     ),
+                    // Tappable public-route polylines. Visible only
+                    // above the overlay zoom threshold; tap → open
+                    // the route detail. Two-layer rendering (dark
+                    // casing + cyan body) matches the web
+                    // RouteHeatmap.svelte styling so the visual
+                    // language stays consistent across surfaces.
+                    if (_nearbyRoutes.isNotEmpty)
+                      PolylineLayer(
+                        key: const ValueKey('heatmap-routes'),
+                        polylines: [
+                          for (final r in _nearbyRoutes)
+                            Polyline(
+                              points: [
+                                for (final w in r.waypoints)
+                                  LatLng(w.lat, w.lng),
+                              ],
+                              strokeWidth: 6,
+                              color: const Color(0x661e293b),
+                            ),
+                          for (final r in _nearbyRoutes)
+                            Polyline(
+                              points: [
+                                for (final w in r.waypoints)
+                                  LatLng(w.lat, w.lng),
+                              ],
+                              strokeWidth: 3,
+                              color: const Color(0xFF22d3ee),
+                            ),
+                        ],
+                      ),
                   ],
                 ),
                 // Search-results dropdown — stacked over the map so

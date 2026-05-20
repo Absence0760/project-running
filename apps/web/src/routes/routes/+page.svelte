@@ -252,7 +252,7 @@
 	<ImportRoute onclose={() => (showImport = false)} onimport={load} />
 {/if}
 
-<div class="page">
+<div class="page" class:page-heatmap={tab === 'heatmap'}>
 	<header class="page-header">
 		<div class="tabs" role="tablist" aria-label="Routes section">
 			<button
@@ -499,6 +499,24 @@
 <style>
 	.page {
 		padding: var(--page-padding-y) var(--page-padding-x);
+	}
+
+	/* Heatmap tab takes the rest of the viewport. The container fills
+	 * the layout column (which the app shell already constrains to
+	 * full height under the top chrome), and the RouteHeatmap inside
+	 * absolutely positions its map + legend. Padding around the
+	 * heatmap shrinks to a slim gutter so the map gets all the real
+	 * estate it needs — fixes the "wasted real estate" feedback. */
+	.page-heatmap {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+		padding: var(--page-padding-y) var(--page-padding-x)
+			calc(var(--page-padding-y) / 3);
+	}
+	.page-heatmap > :global(:last-child) {
+		flex: 1 1 0;
+		min-height: 0;
 	}
 
 	.page-header {

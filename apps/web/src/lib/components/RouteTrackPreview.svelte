@@ -20,6 +20,8 @@
 	import TrackPreview from './TrackPreview.svelte';
 	import { fetchClippedRouteForViewer } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { buildStaticMapUrl } from '$lib/static_map';
 
 	let {
 		routeId,
@@ -97,7 +99,31 @@
 
 <div bind:this={el} class="wrap">
 	{#if points && points.length > 1}
-		<TrackPreview {points} />
+		{@const mapUrl = buildStaticMapUrl(points, {
+			w: 220,
+			h: 140,
+			style: 'streets-v2',
+			key: PUBLIC_MAPTILER_KEY,
+		})}
+		{#if mapUrl}
+			<!-- Static map background: shows the route polyline overlaid
+			     on real tiles (roads, parks, water) so users can scan a
+			     card and recognise where the route is. Falls back to the
+			     bare SVG when PUBLIC_MAPTILER_KEY isn't set or the route
+			     has <2 points. The img is lazy-loaded so a long list
+			     doesn't fire 50 static-map requests on page load — only
+			     the cards inside the viewport hit MapTiler. -->
+			<img
+				src={mapUrl}
+				class="map-img"
+				loading="lazy"
+				decoding="async"
+				alt=""
+				data-testid="route-preview-map"
+			/>
+		{:else}
+			<TrackPreview {points} />
+		{/if}
 	{:else}
 		<span class="material-symbols placeholder">map</span>
 	{/if}
@@ -110,6 +136,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		overflow: hidden;
+	}
+	.map-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
 	}
 	.placeholder {
 		font-family: 'Material Symbols Outlined';

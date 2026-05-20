@@ -10,11 +10,13 @@ import 'dart:convert';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../lib/screens/routes_heatmap_screen.dart';
 
@@ -26,6 +28,13 @@ class _FakeApiClient extends ApiClient {
   double? lastMaxLat;
   List<HeatmapPoint> nextPoints = const [];
   Object? errorToThrow;
+
+  // Routes-overlay support.
+  int nearbyCalls = 0;
+  double? lastNearbyLat;
+  double? lastNearbyLng;
+  double? lastNearbyRadius;
+  List<cm.Route> nextRoutes = const [];
 
   @override
   Future<List<HeatmapPoint>> fetchHeatmapPoints({
@@ -42,6 +51,20 @@ class _FakeApiClient extends ApiClient {
     lastMaxLat = maxLat;
     if (errorToThrow != null) throw errorToThrow!;
     return nextPoints;
+  }
+
+  @override
+  Future<List<cm.Route>> nearbyPublicRoutes({
+    required double lat,
+    required double lng,
+    double radiusM = 50000,
+    int limit = 50,
+  }) async {
+    nearbyCalls++;
+    lastNearbyLat = lat;
+    lastNearbyLng = lng;
+    lastNearbyRadius = radiusM;
+    return nextRoutes;
   }
 }
 
@@ -264,6 +287,118 @@ void main() {
       expect(r.length, 2);
       expect(r[0].lat, 1);
       expect(r[0].lng, 2);
+    });
+  });
+
+  group('routes overlay (zoom >= threshold)', () {
+    // Below the threshold the heatmap's density is the honest signal —
+    // overlaying every nearby route at city scale is noise. Above it
+    // we fetch + render polylines tappable to /routes/[id]. These
+    // tests pin the contract: the RPC fires with the camera centre +
+    // a clamped radius; the screen tracks the returned list as
+    // _nearbyRoutes; tapping a polyline pushes the detail screen.
+
+    testWidgets(
+        'nearby-routes fetch skipped at default zoom (below overlay threshold)',
+        (tester) async {
+      // Reason: the heatmap is the dominant signal at city / region
+      // scale. Drawing every public route over a London-wide view is
+      // visual noise + costs an RPC per pan. The screen guards
+      // _refreshRoutes on zoom >= 12; default zoom is 11 so the fetch
+      // must not fire on mount.
+      final api = _FakeApiClient()
+        ..nextRoutes = [
+          cm.Route(
+            id: 'r-1',
+            userId: 'u',
+            name: 'Hyde park loop',
+            waypoints: const [
+              Waypoint(lat: 51.5074, lng: -0.1276),
+              Waypoint(lat: 51.508, lng: -0.128),
+            ],
+            distanceMetres: 4200,
+          ),
+        ];
+      await _pump(tester, api);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(api.nearbyCalls, 0,
+          reason: 'nearbyPublicRoutes must NOT fire below the overlay '
+              'zoom threshold; otherwise the heatmap pays for an extra '
+              "RPC per pan that doesn't even render a polyline.");
+      // Layer absent regardless because _nearbyRoutes stays empty.
+      expect(find.byKey(const ValueKey('heatmap-routes')), findsNothing);
+    });
+
+    testWidgets('PolylineLayer absent when routes list is empty',
+        (tester) async {
+      final api = _FakeApiClient();
+      await _pump(tester, api);
+      await tester.pump(const Duration(milliseconds: 600));
+      // No routes returned → the keyed PolylineLayer should be absent.
+      expect(find.byKey(const ValueKey('heatmap-routes')), findsNothing);
+    });
+
+    testWidgets(
+        'PolylineLayer mounts when at-or-above zoom threshold + routes present',
+        (tester) async {
+      final api = _FakeApiClient()
+        ..nextRoutes = [
+          cm.Route(
+            id: 'r-1',
+            userId: 'u',
+            name: 'Hyde park loop',
+            waypoints: const [
+              Waypoint(lat: 51.5074, lng: -0.1276),
+              Waypoint(lat: 51.5076, lng: -0.1278),
+            ],
+            distanceMetres: 4200,
+          ),
+        ];
+      // initialZoom test seam boots the screen above the overlay
+      // threshold (12) so the mount-time _refresh → _refreshRoutes
+      // path fires the RPC immediately. Avoids reaching for private
+      // state and stays close to how a real user lands here after a
+      // pan/zoom.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RoutesHeatmapScreen(api: api, initialZoom: 14),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(api.nearbyCalls, greaterThanOrEqualTo(1),
+          reason: 'Above the overlay zoom threshold, nearbyPublicRoutes '
+              'must fire so the screen can paint clickable polylines.');
+      // Radius is clamped between 1 km and 25 km.
+      expect(api.lastNearbyRadius, isNotNull);
+      expect(api.lastNearbyRadius!, greaterThanOrEqualTo(1000));
+      expect(api.lastNearbyRadius!, lessThanOrEqualTo(25000));
+      expect(find.byKey(const ValueKey('heatmap-routes')), findsOneWidget);
+    });
+
+    testWidgets('routes with <2 waypoints are filtered out', (tester) async {
+      final api = _FakeApiClient()
+        ..nextRoutes = [
+          cm.Route(
+            id: 'r-empty',
+            userId: 'u',
+            name: 'Degenerate',
+            waypoints: const [Waypoint(lat: 51.5, lng: -0.1)],
+            distanceMetres: 0,
+          ),
+        ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RoutesHeatmapScreen(api: api, initialZoom: 14),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(api.nearbyCalls, greaterThanOrEqualTo(1));
+      // Single-waypoint route can't render a line — layer absent.
+      expect(find.byKey(const ValueKey('heatmap-routes')), findsNothing);
     });
   });
 }

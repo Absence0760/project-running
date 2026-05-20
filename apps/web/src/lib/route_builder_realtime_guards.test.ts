@@ -317,6 +317,90 @@ test('/routes/new wires picked start/end into RouteBuilder markers', () => {
 	);
 });
 
+// ──────────────────────────────────────────────────────────────────
+// Heatmap improvements: clickable routes overlay, legend hides on
+// hover, fills the viewport.
+
+test('RouteHeatmap exposes route polylines clickable to /routes/[id]', () => {
+	const src = read('src/lib/components/RouteHeatmap.svelte');
+	assert.match(
+		src,
+		/ROUTES_OVERLAY_MIN_ZOOM/,
+		'RouteHeatmap should gate the polyline overlay on a min-zoom ' +
+			"threshold so the heatmap stays the dominant signal at city scale.",
+	);
+	assert.match(
+		src,
+		/nearbyPublicRoutes/,
+		'RouteHeatmap should use the existing nearbyPublicRoutes RPC ' +
+			'to populate the clickable polyline overlay.',
+	);
+	assert.match(
+		src,
+		/goto\(`\/routes\/\$\{[^}]+\}`\)/,
+		'Clicking a polyline must navigate to /routes/[id] so the user ' +
+			'can open the route they spotted on the heatmap.',
+	);
+});
+
+test('RouteHeatmap legend fades when the cursor enters the map', () => {
+	const src = read('src/lib/components/RouteHeatmap.svelte');
+	assert.match(
+		src,
+		/onpointerenter=\{\(\)\s*=>\s*\(pointerOnMap = true\)\}/,
+		'RouteHeatmap must set pointerOnMap=true on pointerenter so the ' +
+			'legend dims out of the way while the user inspects the map.',
+	);
+	assert.match(
+		src,
+		/class:dimmed=\{pointerOnMap\}/,
+		"The legend must carry the class:dimmed binding so the CSS " +
+			'opacity transition fires when the cursor enters the map.',
+	);
+});
+
+test('/routes page hands the heatmap tab the full viewport', () => {
+	const src = read('src/routes/routes/+page.svelte');
+	assert.match(
+		src,
+		/class:page-heatmap=\{tab === 'heatmap'\}/,
+		"/routes must apply a `.page-heatmap` modifier on the heatmap " +
+			"tab so the wrapper switches to a full-height flex layout. " +
+			'Without it the map shares 30 % of the viewport with empty ' +
+			'page padding — the original "wasted real estate" complaint.',
+	);
+	assert.match(
+		src,
+		/\.page-heatmap\s*\{[\s\S]*?height:\s*100vh/,
+		'The .page-heatmap rule must set height: 100vh so the heatmap ' +
+			'gets the rest of the viewport below the page chrome.',
+	);
+});
+
+test('RouteTrackPreview renders a static map image when a key is available', () => {
+	const src = read('src/lib/components/RouteTrackPreview.svelte');
+	assert.match(
+		src,
+		/buildStaticMapUrl\(/,
+		'RouteTrackPreview must call buildStaticMapUrl to construct a ' +
+			'MapTiler Static Maps URL with the polyline drawn on top — ' +
+			'fixes the "I only see the line, not the map" complaint on ' +
+			'the /routes grid.',
+	);
+	assert.match(
+		src,
+		/loading="lazy"/,
+		'Static-map images must be lazy-loaded — a long list of route ' +
+			'cards otherwise fires N MapTiler requests on page load.',
+	);
+	assert.match(
+		src,
+		/data-testid="route-preview-map"/,
+		'The static-map img must be tagged with ' +
+			'data-testid="route-preview-map" so the e2e can pin it.',
+	);
+});
+
 test('events page also broadcasts race-state-changed alongside DB writes', () => {
 	// Reason: race_sessions writes (Arm / GO / End) on a freshly
 	// subscribed channel can land inside the postgres_changes
