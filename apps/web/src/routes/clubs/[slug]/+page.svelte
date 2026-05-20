@@ -185,6 +185,10 @@
 	}
 
 	let channel: RealtimeChannel | null = null;
+	// Same shape as /clubs/[slug]/events/[id] — expose Realtime
+	// SUBSCRIBED status so e2e can wait deterministically before
+	// firing a service-role INSERT against the channel's filters.
+	let realtimeReady = $state(false);
 
 	onMount(async () => {
 		const initial = $page.url.searchParams.get('tab');
@@ -211,6 +215,7 @@
 			supabase.removeChannel(channel);
 			channel = null;
 		}
+		realtimeReady = false;
 	});
 
 	/**
@@ -243,7 +248,22 @@
 				{ event: '*', schema: 'public', table: 'club_members', filter: `club_id=eq.${club.id}` },
 				scheduleReload
 			)
-			.subscribe();
+			.subscribe((status) => {
+				// Log status transitions so CI artifacts surface when the
+				// Realtime cluster is unhealthy (the timing pattern is
+				// invisible without server logs).
+				console.log(`[realtime] club-${club?.id} status=${status}`);
+				if (status !== 'SUBSCRIBED') {
+					realtimeReady = false;
+					return;
+				}
+				// 500 ms cushion mirrors the event page — SUBSCRIBED
+				// trails the server-side postgres_changes filter wiring
+				// on the WAL listener.
+				setTimeout(() => {
+					realtimeReady = true;
+				}, 500);
+			});
 	}
 
 	async function join() {
@@ -472,7 +492,7 @@
 		<a href="/clubs" class="btn-secondary">Back to clubs</a>
 	</div>
 {:else}
-	<div class="page">
+	<div class="page" data-realtime-ready={realtimeReady ? 'true' : 'false'}>
 		<a class="back" href="/clubs" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			All clubs

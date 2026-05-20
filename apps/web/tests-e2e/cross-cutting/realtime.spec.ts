@@ -255,10 +255,14 @@ test.describe('realtime fan-out', () => {
 		try {
 			await page.goto('/clubs/sydney-run-club');
 			// Wait for the initial fetch + the realtime subscription to
-			// settle. The composer textarea is the proxy for "page
-			// finished loading + realtime channel subscribed".
+			// settle. data-realtime-ready="true" is set by the page's
+			// .subscribe() callback (with a 250 ms cushion) — it's the
+			// authoritative signal that the Realtime channel is wired,
+			// not a render-time proxy.
 			await expect(page.locator('.post-form textarea').first())
 				.toBeVisible({ timeout: 10_000 });
+			await expect(page.locator('[data-realtime-ready="true"]'))
+				.toBeVisible({ timeout: 20_000 });
 
 			// Snapshot the post-card count before the push so we can
 			// assert a delta rather than an absolute number (the seed +

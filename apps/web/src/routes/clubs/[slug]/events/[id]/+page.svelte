@@ -398,18 +398,22 @@
 				scheduleReload
 			)
 			.subscribe((status) => {
+				// Log status transitions so CI artifacts surface when
+				// the Realtime cluster is unhealthy (timing is otherwise
+				// invisible without server logs).
+				console.log(`[realtime] event-${event?.id} status=${status}`);
 				if (status !== 'SUBSCRIBED') {
 					realtimeReady = false;
 					return;
 				}
 				// Supabase reports SUBSCRIBED as soon as the channel joins,
-				// but the server-side postgres_changes filter wiring trails
-				// the join by a tick. A 250 ms cushion before flipping the
-				// data-attribute closes the flake window for the multi-
-				// context race-control e2e test.
+				// but the server-side postgres_changes filter wiring on
+				// the WAL listener trails the join by a tick. 500 ms is
+				// the cushion observed sufficient in local 20×-stress
+				// runs; 250 ms was just under the floor.
 				setTimeout(() => {
 					realtimeReady = true;
-				}, 250);
+				}, 500);
 			});
 	}
 

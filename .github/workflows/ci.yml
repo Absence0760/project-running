@@ -376,19 +376,22 @@ jobs:
         run: supabase test db --local
 
   e2e-web:
-    # Shard the Playwright suite across 4 parallel jobs. Each shard
+    # Shard the Playwright suite across 8 parallel jobs. Each shard
     # boots its own Supabase + dev server so there's zero shared-DB
     # state risk between shards. With workers=1 inside a shard (per
     # the playwright config), each shard still runs its slice
     # sequentially — sharding gives the parallelism, not workers.
-    # Cuts a ~23min single-job run to ~6-8min per shard wall-clock.
-    name: Web e2e (Playwright) — shard ${{ matrix.shard }}/4
+    # 8 shards cut a ~23 min single-job run to ~3-4 min wall-clock
+    # per shard (was 6-8 min at 4 shards). Each shard's Supabase
+    # boot is the dominant per-shard cost; more shards trade ~2 min
+    # of duplicated boot per shard for parallelism gains.
+    name: Web e2e (Playwright) — shard ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -462,9 +465,9 @@ jobs:
             # unset so paywall-wire.spec.ts still exercises the 429.
             echo "PUBLIC_BYPASS_PAYWALL=true"
           } > ../web/.env
-      - name: Run Playwright suite (shard ${{ matrix.shard }}/4)
+      - name: Run Playwright suite (shard ${{ matrix.shard }}/8)
         working-directory: apps/web
-        run: pnpm exec playwright test --config=tests-e2e/playwright.config.ts --shard=${{ matrix.shard }}/4
+        run: pnpm exec playwright test --config=tests-e2e/playwright.config.ts --shard=${{ matrix.shard }}/8
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
