@@ -133,7 +133,7 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 				id: planId,
 				user_id: USER_A.id,
 				name: 'e2e race-day mi-mode',
-				goal: 'race-pace',
+				goal_event: 'distance_10k',
 				goal_distance_m: 10_000,
 				goal_time_seconds: 3000, // 50:00 → ~8:03/mi
 				start_date: startIso,
@@ -186,7 +186,7 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 				id: planId,
 				user_id: USER_A.id,
 				name: 'e2e race-day km-mode',
-				goal: 'race-pace',
+				goal_event: 'distance_10k',
 				goal_distance_m: 10_000,
 				goal_time_seconds: 3000,
 				start_date: startIso,
