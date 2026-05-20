@@ -136,7 +136,6 @@ test.describe('/plans/new — create wizard', () => {
 		// the existing plan untouched, Confirm proceeds with the
 		// (now intentional) replace.
 		await page.goto('/plans');
-		await page.waitForLoadState('networkidle');
 
 		// Seed has an active plan ("Sydney Half 2026"); confirm it's
 		// active before we start.

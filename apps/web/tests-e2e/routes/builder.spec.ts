@@ -24,7 +24,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('page mounts with the canonical h1 + sidebar controls', async ({ page }) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByRole('heading', { name: 'Route Builder', level: 1 }))
 			.toBeVisible({ timeout: 10_000 });
@@ -82,7 +81,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		page
 	}) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 
 		// `disabled={waypointCount < 2}` on Calculate. With zero
 		// waypoints (the freshly-mounted state) Calculate is disabled.
@@ -219,7 +217,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		);
 
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 
 		// Drive the builder by dispatching two clicks on the canvas at
@@ -324,7 +321,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// two waypoints don't register, skip — the unit + diff review
 		// still pin the behaviour.
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 
 		const canvas = page.locator('.maplibregl-canvas');
@@ -379,7 +375,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// for power users. A regression that hid it removes the
 		// keyboard-power-user signal.
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.shortcuts-hint')).toBeVisible({ timeout: 10_000 });
 	});
 
@@ -424,7 +419,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 			route.fulfill({ status: 503, body: '{}' }),
 		);
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 
 		// Pick a start so the zoom guard doesn't intercept.
@@ -462,7 +456,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 			await route.fulfill({ status: 503, body: '{}' });
 		});
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 
 		await page.getByRole('button', { name: /Generate a route by distance/ }).click();

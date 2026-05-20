@@ -96,7 +96,6 @@ test.describe('realtime fan-out', () => {
 			});
 
 			await page.goto(`/live/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			// Snapshot the hydrated state — first stat must be non-empty
 			// (some unit-formatted distance from the 1 km ping). The
@@ -204,7 +203,6 @@ test.describe('realtime fan-out', () => {
 			const initialTexts = await Promise.all(
 				pages.map(async (p) => {
 					await p.goto(`/live/${runId}`);
-					await p.waitForLoadState('networkidle');
 					await expect(p.locator('.live-badge')).toContainText('LIVE', {
 						timeout: 15_000
 					});

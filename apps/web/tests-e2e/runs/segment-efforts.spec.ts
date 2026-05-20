@@ -136,7 +136,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 		// set. Pin the section header so a regression that removed the
 		// guard or the import would surface here.
 		await page.goto(`/runs/${myRunId}`);
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.locator('section h2', { hasText: /^Segments$/ })
 		).toBeVisible({ timeout: 10_000 });
@@ -211,7 +210,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 		const emptyRunId = (emptyRun as { id: string }).id;
 		try {
 			await page.goto(`/runs/${emptyRunId}`);
-			await page.waitForLoadState('networkidle');
 			// Section header still mounts; the body shows the empty copy.
 			await expect(
 				page.locator('section h2', { hasText: /^Segments$/ })
@@ -254,7 +252,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 		const soloId = (solo as { id: string }).id;
 		try {
 			await page.goto(`/runs/${soloId}`);
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.locator('section h2', { hasText: /^Segments$/ })
 			).toHaveCount(0);

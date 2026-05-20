@@ -42,7 +42,6 @@ test.describe('/settings/account', () => {
 		});
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByLabel('Display Name')).toHaveValue(newName);
 
 		// Restore so the spec is idempotent.
@@ -52,7 +51,6 @@ test.describe('/settings/account', () => {
 			timeout: 5_000
 		});
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByLabel('Display Name')).toHaveValue(originalName);
 	});
 
@@ -78,7 +76,6 @@ test.describe('/settings/account', () => {
 		});
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByLabel(/parkrun Athlete Number/)).toHaveValue(next);
 
 		// Restore.
@@ -108,7 +105,6 @@ test.describe('/settings/account', () => {
 		});
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByLabel(/Resting HR/)).toHaveValue(next);
 
 		await page.getByLabel(/Resting HR/).fill(before);

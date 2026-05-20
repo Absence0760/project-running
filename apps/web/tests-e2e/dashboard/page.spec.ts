@@ -174,7 +174,6 @@ test.describe('/dashboard', () => {
 		// Training intensity card showing HR-zone time breakdown
 		// (Z1–Z5). Pin the new title + the absence of the old.
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { level: 2, name: /Training intensity/ })
 		).toBeVisible({ timeout: 10_000 });
@@ -226,7 +225,6 @@ test.describe('/dashboard', () => {
 
 		try {
 			await page.reload();
-			await page.waitForLoadState('networkidle');
 
 			// Total Runs incremented.
 			await expect(totalRunsCard.locator('.stat-value')).toHaveText(
@@ -270,7 +268,6 @@ test.describe('/dashboard', () => {
 		});
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(totalRunsCard.locator('.stat-value')).toHaveText(
 			String(baselineTotal + 1),
 			{ timeout: 10_000 }
@@ -278,7 +275,6 @@ test.describe('/dashboard', () => {
 
 		await deleteRun(planted);
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(totalRunsCard.locator('.stat-value')).toHaveText(
 			String(baselineTotal),
 			{ timeout: 10_000 }
@@ -341,7 +337,6 @@ test.describe('/dashboard', () => {
 		// right side of the same row as the .filter-chips group.
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.stat-grid .stat-card').first()).toBeVisible({
 			timeout: 10_000
 		});

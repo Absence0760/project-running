@@ -616,7 +616,6 @@ test.describe('Workout-runner surfaces (web)', () => {
 			// the stale-link landing state.
 			const bogus = '00000000-0000-0000-0000-000000000bad';
 			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}/workouts/${bogus}`);
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.getByRole('heading', { name: /Workout not found/i, level: 2 })
 			).toBeVisible({ timeout: 10_000 });

@@ -108,7 +108,6 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 		// service-role delete + reload → row disappears.
 		await deleteAuthorReviews();
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.locator('.review-card', { hasText: comment })
 		).toHaveCount(0);

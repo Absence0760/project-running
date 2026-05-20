@@ -43,7 +43,6 @@ test.describe('/plans', () => {
 		// /plans/<id> via an outer <a>, so we can also navigate
 		// through it to confirm /plans/[id] mounts.
 		await page.goto('/plans');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: 'No plans yet.' })
@@ -55,7 +54,6 @@ test.describe('/plans', () => {
 		// Drill into the plan detail to prove /plans/[id] also mounts.
 		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
 		await expect(page).toHaveURL(/\/plans\/[0-9a-f-]+$/);
-		await page.waitForLoadState('networkidle');
 		// /plans/[id] renders the plan name as a heading too.
 		await expect(
 			page.getByRole('heading', { name: /Sydney Half 2026/ })

@@ -27,7 +27,6 @@ test.describe('/settings/integrations', () => {
 		// hardcoded array, but the connection state comes from a
 		// query, so a regression there could break the page render.
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: 'Strava', exact: true })

@@ -54,7 +54,6 @@ test.describe('/routes/[id]', () => {
 
 		// Reload — server-side state must agree.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(toggleBtn()).toHaveAttribute('title', /^Private/, {
 			timeout: 10_000
 		});
@@ -91,7 +90,6 @@ test.describe('/routes/[id]', () => {
 
 		// Reload — server-side state must agree.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('button.star-btn')).toHaveClass(/starred/, {
 			timeout: 10_000
 		});
@@ -251,7 +249,6 @@ test.describe('/routes/[id]', () => {
 		// stats-panel, which looks broken.
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/routes/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { level: 1, name: 'Route not found' })

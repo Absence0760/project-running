@@ -42,7 +42,6 @@ test.describe('sidebar collapse', () => {
 
 		// Reload — collapsed state must hold.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('nav.sidebar')).toHaveClass(/collapsed/);
 
 		// Restore so subsequent tests don't render against a collapsed

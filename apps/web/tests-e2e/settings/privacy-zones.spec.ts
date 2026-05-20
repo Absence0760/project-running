@@ -92,7 +92,6 @@ test.describe('/settings/preferences — privacy zones', () => {
 
 			// Reload — zone stays gone in the UI.
 			await page.reload();
-			await page.waitForLoadState('networkidle');
 			await expect(page.locator('.zone-list .zone-row')).toHaveCount(0);
 
 			// Backend agrees: prefs.privacy_zones is empty (or absent).
@@ -115,7 +114,6 @@ test.describe('/settings/preferences — privacy zones', () => {
 
 		try {
 			await page.goto('/settings/preferences');
-			await page.waitForLoadState('networkidle');
 
 			await expect(
 				page.getByText('No privacy zones yet.')

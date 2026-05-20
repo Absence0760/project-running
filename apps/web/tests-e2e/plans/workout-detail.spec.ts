@@ -79,7 +79,6 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 		// /routes/[id] + /plans/[id] not-found tests.
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/plans/${SEED_PLAN_ID}/workouts/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { name: /Workout not found/i })
 		).toBeVisible({ timeout: 10_000 });

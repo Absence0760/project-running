@@ -59,7 +59,6 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 		// Navigate to a club USER_A admins. sydney-run-club is seeded
 		// with USER_A as admin.
 		await page.goto('/clubs/sydney-run-club');
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
 		).toBeVisible({ timeout: 10_000 });

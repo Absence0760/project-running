@@ -28,8 +28,6 @@ test.describe('/runs/[id]', () => {
 		// Use the pinned runner public run so this test is deterministic.
 		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
 		// Run-detail fetches the row + (lazily) the track via Storage.
-		// networkidle guarantees those settle before we assert.
-		await page.waitForLoadState('networkidle');
 
 		// Title is the metadata.title we seeded. If the run loaded, the
 		// h1 reflects it. We don't assert the map mounts — the seeded
@@ -66,7 +64,6 @@ test.describe('/runs/[id]', () => {
 
 		// Reload to confirm persistence — not a stale local state.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { name: newTitle, level: 1 })
 		).toBeVisible();
@@ -77,7 +74,6 @@ test.describe('/runs/[id]', () => {
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
 		await expect(page.locator('input.edit-input')).toHaveCount(0);
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { name: originalTitle, level: 1 })
 		).toBeVisible();
@@ -106,7 +102,6 @@ test.describe('/runs/[id]', () => {
 
 		// Reload — notes must persist via the metadata jsonb.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('p.run-notes')).toHaveText(newNotes, {
 			timeout: 10_000
 		});
@@ -117,7 +112,6 @@ test.describe('/runs/[id]', () => {
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
 		await expect(page.locator('input.edit-input')).toHaveCount(0);
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('p.run-notes')).toHaveCount(0);
 	});
 
@@ -131,7 +125,6 @@ test.describe('/runs/[id]', () => {
 		const draft = uniqueText('e2e-cancel-draft');
 
 		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Confirm starting state.
 		await expect(
@@ -151,7 +144,6 @@ test.describe('/runs/[id]', () => {
 
 		// Reload to confirm nothing landed on the row server-side.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { name: originalTitle, level: 1 })
 		).toBeVisible();
@@ -174,7 +166,6 @@ test.describe('/runs/[id]', () => {
 		});
 
 		await page.goto(`/runs/${planted}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByRole('heading', { level: 1 }))
 			.toBeVisible({ timeout: 10_000 });
 
@@ -259,7 +250,6 @@ test.describe('/runs/[id]', () => {
 					})
 				);
 				await anonPage.goto(`/share/run/${planted}`);
-				await anonPage.waitForLoadState('networkidle');
 				// Share-page mounts RunShareView with .run-meta — same
 				// signal share/run.spec.ts uses to confirm the page
 				// rendered for anon (vs. the 404 path).
@@ -295,7 +285,6 @@ test.describe('/runs/[id]', () => {
 		});
 		try {
 			await page.goto(`/runs/${planted}`);
-			await page.waitForLoadState('networkidle');
 
 			// The empty-state copy is visible.
 			await expect(
@@ -505,7 +494,6 @@ test.describe('/runs/[id]', () => {
 		// which feels broken and is a leave-the-app moment.
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/runs/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { level: 1, name: 'Run not found' })

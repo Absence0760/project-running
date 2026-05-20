@@ -130,7 +130,6 @@ test.describe('/routes', () => {
 		// Thames Path 5K / Battersea / Sunday Long Run / Commute Run"
 		// give us > 1 row to start with.
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.route-card').first()).toBeVisible();
 
 		const before = await page.locator('.route-card').count();

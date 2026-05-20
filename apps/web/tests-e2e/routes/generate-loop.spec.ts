@@ -192,7 +192,6 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await mockOsrmStraightLines(page);
 		await mockOpenMeteoElevation(page);
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 		await waitForBuilderHook(page);
 	});

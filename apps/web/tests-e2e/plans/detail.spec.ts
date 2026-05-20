@@ -196,7 +196,6 @@ test.describe('/plans/[id]', () => {
 		// page rendering an empty shell would surface here.
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/plans/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 
 		// PlanDetail's not-found branch renders the canonical empty
 		// state (icon + h3 + explainer + CTA).

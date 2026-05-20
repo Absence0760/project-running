@@ -38,7 +38,6 @@ test.describe('cross-user run isolation', () => {
 		// query returns null → run-detail page renders the empty
 		// fallthrough state).
 		await page.goto(`/runs/${ALEX_PRIVATE_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Negative assertion: alex's private run title must NEVER
 		// appear in the rendered page. If it does, RLS leaked.
@@ -114,7 +113,6 @@ test.describe('cross-user club isolation', () => {
 		// the club's name, description, or member list — even
 		// though the slug is enumerable.
 		await page.goto('/clubs/friends-of-jared');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: 'Club not found' })
@@ -149,7 +147,6 @@ test.describe('anonymous walls', () => {
 		);
 
 		await page.goto(`/share/run/${ALEX_PRIVATE_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// RunShareView's empty-row branch renders "Run not found." —
 		// assert the UI surfaces that, NOT the run's metadata.

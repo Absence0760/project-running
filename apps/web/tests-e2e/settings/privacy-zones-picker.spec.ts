@@ -48,7 +48,6 @@ test.describe('/settings/preferences — PrivacyZonePicker (MapLibre modal)', ()
 		page
 	}) => {
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByText('No privacy zones yet.')).toBeVisible({ timeout: 10_000 });
 
@@ -139,7 +138,6 @@ test.describe('/settings/preferences — PrivacyZonePicker (MapLibre modal)', ()
 		expect(planted[0]?.radius_m).toBeGreaterThan(0);
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.zone-list .zone-row').first()).toBeVisible({ timeout: 10_000 });
 
 		await page.locator('.zone-list .zone-row').first().getByRole('button', { name: 'Remove' }).click();

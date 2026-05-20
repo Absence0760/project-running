@@ -20,7 +20,6 @@ test.describe('cross-user follows', () => {
 		page
 	}) => {
 		await page.goto(`/u/${USER_A.id}`);
-		await page.waitForLoadState('networkidle');
 
 		// Header h1 confirms we landed on runner's page (display_name
 		// from seed).

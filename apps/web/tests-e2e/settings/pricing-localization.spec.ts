@@ -27,7 +27,6 @@ test.describe('Pro price — currency localisation', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/settings/upgrade');
-			await page.waitForLoadState('networkidle');
 			await expect(page.locator('.tier-pro .price-amount')).toContainText('$9.99');
 		} finally {
 			await ctx.close();
@@ -42,7 +41,6 @@ test.describe('Pro price — currency localisation', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/settings/upgrade');
-			await page.waitForLoadState('networkidle');
 			await expect(page.locator('.tier-pro .price-amount')).toContainText('£9.99');
 		} finally {
 			await ctx.close();
@@ -82,7 +80,6 @@ test.describe('Pro price — currency localisation', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/settings/upgrade');
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.getByRole('button', { name: /Get Pro — £9\.99\/mo/ })
 			).toBeVisible();

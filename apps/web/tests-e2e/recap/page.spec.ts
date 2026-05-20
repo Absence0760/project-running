@@ -18,27 +18,23 @@ test.describe('/recap/[year] — anon visitor', () => {
 
 	test('valid year still loads (no auth-wall redirect)', async ({ page }) => {
 		await page.goto(`/recap/${CURRENT_YEAR}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page).toHaveURL(new RegExp(`/recap/${CURRENT_YEAR}`));
 		await expect(page.getByText(/Sign in to see your year/)).toBeVisible();
 	});
 
 	test('out-of-range year (1999) renders the picker hint', async ({ page }) => {
 		await page.goto('/recap/1999');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/Pick a year between 2010 and 2100/)).toBeVisible();
 		await expect(page).toHaveURL(/\/recap\/1999/);
 	});
 
 	test('out-of-range year (2200) renders the same hint', async ({ page }) => {
 		await page.goto('/recap/2200');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/Pick a year between 2010 and 2100/)).toBeVisible();
 	});
 
 	test('non-numeric year is gracefully ignored', async ({ page }) => {
 		await page.goto('/recap/abc');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/Pick a year between 2010 and 2100/)).toBeVisible();
 		await expect(page).toHaveURL(/\/recap\/abc/);
 	});
@@ -47,7 +43,6 @@ test.describe('/recap/[year] — anon visitor', () => {
 		page
 	}) => {
 		await page.goto('/recap/2099');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/Sign in to see your year/)).toBeVisible();
 		await expect(page.getByText(/Pick a year between/)).toHaveCount(0);
 	});
@@ -69,7 +64,6 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 
 	test('current-year recap renders hero + cards + monthly chart', async ({ page }) => {
 		await page.goto(`/recap/${CURRENT_YEAR}`);
-		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
 			timeout: 10_000
@@ -93,7 +87,6 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 
 	test('empty-year recap renders the encouragement empty state', async ({ page }) => {
 		await page.goto('/recap/2010');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/No runs in 2010 yet/)).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByText('Longest run')).toHaveCount(0);
 	});
@@ -101,7 +94,6 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 	test('future year (2099) — no data, renders the empty hero, not a 500', async ({ page }) => {
 		const response = await page.goto('/recap/2099');
 		expect(response?.status() ?? 0).toBeLessThan(500);
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/No runs in 2099 yet/)).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByText('Longest run')).toHaveCount(0);
 	});
@@ -110,14 +102,12 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		page
 	}) => {
 		await page.goto('/recap/2011');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(/No runs in 2011 yet/)).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByText('Longest run')).toHaveCount(0);
 	});
 
 	test('Share recap button is visible on the populated path', async ({ page }) => {
 		await page.goto(`/recap/${CURRENT_YEAR}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
 			timeout: 10_000
 		});
@@ -143,7 +133,6 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		});
 
 		await page.goto(`/recap/${CURRENT_YEAR}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
 			timeout: 10_000
 		});
@@ -176,7 +165,6 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		});
 
 		await page.goto(`/recap/${CURRENT_YEAR}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
 			timeout: 10_000
 		});

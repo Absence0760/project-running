@@ -76,7 +76,6 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 			.eq('id', USER_C_PRO.id);
 
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByTestId('billing-issue-banner')).toHaveCount(0);
 	});
@@ -91,7 +90,6 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 			.eq('id', USER_C_PRO.id);
 
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByTestId('billing-issue-banner')).toContainText(
 			/today/i,

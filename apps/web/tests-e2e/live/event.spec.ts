@@ -45,7 +45,6 @@ test.describe('/live/event/[id]/[instance]', () => {
 
 		try {
 			await page.goto(`/live/event/${eventId}/${instance}`);
-			await page.waitForLoadState('networkidle');
 
 			await expect(
 				page.getByText(/Organiser hasn’t armed the race timer/)
@@ -119,7 +118,6 @@ test.describe('/live/event/[id]/[instance]', () => {
 			await page.goto(
 				`/live/event/${eventId}/${encodeURIComponent(startsAt)}`
 			);
-			await page.waitForLoadState('networkidle');
 
 			await expect(page.locator('.status-label')).toContainText(/Running/, {
 				timeout: 10_000

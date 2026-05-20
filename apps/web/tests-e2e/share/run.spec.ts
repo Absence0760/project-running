@@ -37,7 +37,6 @@ test.describe('/share/run/[id] — anon', () => {
 		);
 
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Run meta visible (anon read path works).
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
@@ -69,7 +68,6 @@ test.describe('/share/run/[id] — anon', () => {
 			})
 		);
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Per-run reactive title — pulls runner name from
 		// public_profiles (migration 20260824_001) so the unfurl
@@ -189,7 +187,6 @@ test.describe('/share/run/[id] — anon', () => {
 				})
 			);
 			await page.goto(`/share/run/${plantedId}`);
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.getByText('Run not found.')
 			).toBeVisible({ timeout: 10_000 });
@@ -214,7 +211,6 @@ test.describe('/share/run/[id] — anon', () => {
 		);
 
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// share-page chrome + the run-meta block. The seeded run has no
 		// track in Storage so we don't assert on the map. The chrome
@@ -247,7 +243,6 @@ test.describe('/share/run/[id] — authed non-owner', () => {
 		);
 
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Run-meta strip + kudos button + comment composer all visible.
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });

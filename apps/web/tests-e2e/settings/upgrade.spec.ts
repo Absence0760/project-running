@@ -32,7 +32,6 @@ test.describe('/settings/upgrade — free user', () => {
 		// state would flip incorrectly (lock_subscription_columns
 		// trigger + RPC drift).
 		await page.goto('/settings/upgrade');
-		await page.waitForLoadState('networkidle');
 
 		// `exact: true` because case-insensitive substring matching
 		// otherwise pulls in "Support the project" (contains "pro").

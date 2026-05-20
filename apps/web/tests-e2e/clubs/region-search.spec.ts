@@ -87,7 +87,6 @@ test.describe('clubs Browse — geocoded region search', () => {
 		);
 
 		await page.goto('/social?tab=clubs&clubs-sub=browse');
-		await page.waitForLoadState('networkidle');
 
 		// Wait for the initial Browse load to settle.
 		await expect(
@@ -150,7 +149,6 @@ test.describe('clubs Browse — geocoded region search', () => {
 		);
 
 		await page.goto('/social?tab=clubs&clubs-sub=browse');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: 'Sydney Run Club' }),

@@ -68,7 +68,6 @@ test.describe('reports — Report dialog wires up to submit_report', () => {
 
 		try {
 			await page.goto(`/clubs/${slug}`);
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.getByRole('heading', { name: clubName, level: 1 }),
 			).toBeVisible({ timeout: 10_000 });

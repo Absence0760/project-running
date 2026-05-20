@@ -123,7 +123,6 @@ test.describe('/runs', () => {
 
 		// Reload — both selections must hold.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 
 		// The Walk activity-button stays `aria-pressed=true` after
 		// hydration if persistence works.

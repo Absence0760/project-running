@@ -18,7 +18,6 @@ test.describe('/live/[id] — anon spectator', () => {
 		page
 	}) => {
 		await page.goto(`/live/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.live-logo')).toContainText('Run Onward');
 		await expect(page.locator('.live-badge')).toBeVisible();
@@ -29,7 +28,6 @@ test.describe('/live/[id] — anon spectator', () => {
 		page
 	}) => {
 		await page.goto(`/live/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page).toHaveTitle(/Live|Run Onward/i);
 	});
 
@@ -59,7 +57,6 @@ test.describe('/live/[id] — anon spectator', () => {
 			});
 
 			await page.goto(`/live/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			await expect(page.locator('.live-badge')).toHaveClass(/active/, {
 				timeout: 10_000
@@ -89,7 +86,6 @@ test.describe('/live/[id] — anon spectator', () => {
 		});
 		try {
 			await page.goto(`/live/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			await expect(page.locator('.live-badge')).toHaveClass(/finished/, {
 				timeout: 10_000
@@ -123,7 +119,6 @@ test.describe('/live/[id] — anon spectator', () => {
 			});
 
 			await page.goto(`/live/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
 				timeout: 10_000
@@ -138,7 +133,6 @@ test.describe('/live/[id] — anon spectator', () => {
 	test('unknown run id renders the not-broadcasting empty state', async ({ page }) => {
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/live/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.live-logo')).toContainText('Run Onward');
 		await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
 			timeout: 10_000
@@ -158,7 +152,6 @@ test.describe('/live/[id] — anon spectator', () => {
 		// surface a raw Postgres error string. Pin that the page still
 		// renders the shell + the not-found empty state.
 		await page.goto('/live/not-a-uuid');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.live-logo')).toContainText('Run Onward');
 		await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
 			timeout: 10_000
@@ -251,7 +244,6 @@ test.describe('/live/[id] — anon spectator', () => {
 			});
 
 			await page.goto(`/live/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			// LIVE badge — pings exist so the runner is broadcasting.
 			await expect(page.locator('.live-badge')).toHaveClass(/active/, {

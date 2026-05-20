@@ -231,7 +231,6 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		// page. A regression that mounted RunPhotos on a non-detail
 		// route (e.g. the run list) would surface here.
 		await page.goto('/runs');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByRole('button', { name: /Add photo/ })).toHaveCount(0);
 	});
 });
@@ -264,7 +263,6 @@ test.describe('/share/run/[id] — RunPhotos read-only for non-owner', () => {
 			});
 
 			await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-			await page.waitForLoadState('networkidle');
 
 			// The gallery section renders…
 			await expect(page.locator('.tile').first()).toBeVisible({ timeout: 10_000 });

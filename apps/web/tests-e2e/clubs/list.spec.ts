@@ -79,7 +79,6 @@ test.describe('/clubs', () => {
 		// fetchMyClubs broke or the auth-race patched in /clubs/+page
 		// regressed (see docs/testing.md production-bugs § /clubs).
 		await page.goto('/clubs');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: 'Sydney Run Club' })
@@ -98,7 +97,6 @@ test.describe('/clubs', () => {
 		// owner sees their own private clubs. Pinning this catches a
 		// regression that filtered private clubs out of My clubs too.
 		await page.goto('/clubs');
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('heading', { name: 'Friends of Jared' })
 		).toBeVisible({ timeout: 10_000 });

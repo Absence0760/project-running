@@ -53,7 +53,6 @@ test.describe('cross-user comments', () => {
 		// Reload to confirm the write actually hit Supabase, not just
 		// optimistic local state.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.comment p').first()).toHaveText(body, {
 			timeout: 10_000
 		});

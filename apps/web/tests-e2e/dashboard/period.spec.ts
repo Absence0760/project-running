@@ -21,7 +21,6 @@ test.describe('/dashboard/period/[type]/[date]', () => {
 		// against real data, not an empty state. Seeded runs are dated
 		// in March-April 2026.
 		await page.goto('/dashboard/period/week/2026-04-01');
-		await page.waitForLoadState('networkidle');
 
 		// PeriodSummary mounts its own week/month toggle inside the
 		// page body; that's the most stable signal that the body
@@ -38,7 +37,6 @@ test.describe('/dashboard/period/[type]/[date]', () => {
 		// silently fell through to week for any non-week input would
 		// surface here as the Month button missing.
 		await page.goto('/dashboard/period/month/2026-04-01');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('button', { name: 'Month' })
@@ -53,7 +51,6 @@ test.describe('/dashboard/period/[type]/[date]', () => {
 		// doesn't crash the page. The Week/Month toggle being visible
 		// is the signal that PeriodSummary mounted past the parse.
 		await page.goto('/dashboard/period/week/not-a-date');
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('button', { name: 'Week' })
 		).toBeVisible({ timeout: 10_000 });

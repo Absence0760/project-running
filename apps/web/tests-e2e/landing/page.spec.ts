@@ -19,7 +19,6 @@ test.describe('/ (landing)', () => {
 		// concatenated text "Plan routes. Track runs. Analyse
 		// everything." Match by the leading phrase.
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: /Plan routes/, level: 1 })
@@ -43,7 +42,6 @@ test.describe('/ (landing)', () => {
 		// fragment scrolls. Pin the targets exist so a refactor that
 		// renames a section id surfaces here.
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('section#apps')).toBeVisible();
 		await expect(page.locator('section#features')).toBeVisible();
 		// Nav links carry the matching href.
@@ -59,7 +57,6 @@ test.describe('/ (landing)', () => {
 
 	test('Sign In nav link in the header routes to /login', async ({ page }) => {
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
 		// The header has a 'Sign In' link with class .nav-signin —
 		// disambiguate from the footer copy which uses the same text.
 		await expect(page.locator('.nav-signin')).toHaveAttribute('href', '/login');

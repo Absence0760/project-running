@@ -50,7 +50,6 @@ test.describe('/routes — Heatmap tab', () => {
 		// in setTab or the onMount tab-resolve would land on My routes
 		// even though the URL asked for Heatmap — surfaces here.
 		await page.goto('/routes?tab=heatmap');
-		await page.waitForLoadState('networkidle');
 		await expect(
 			page.getByRole('tab', { name: 'Heatmap', exact: true })
 		).toHaveClass(/active/, { timeout: 10_000 });

@@ -44,7 +44,6 @@ test.describe('/routes/new — save round-trip', () => {
 		const description = 'e2e route description';
 
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByRole('heading', { level: 1, name: 'Route Builder' }))
 			.toBeVisible({ timeout: 10_000 });
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
@@ -124,7 +123,6 @@ test.describe('/routes/new — save round-trip', () => {
 
 		try {
 			await page.goto('/routes/new');
-			await page.waitForLoadState('networkidle');
 			await expect(page.getByRole('heading', { level: 1, name: 'Route Builder' }))
 				.toBeVisible({ timeout: 10_000 });
 			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });

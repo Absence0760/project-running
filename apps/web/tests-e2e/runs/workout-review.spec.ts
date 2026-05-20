@@ -74,7 +74,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			is_public: false
 		});
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		// The section header is `<h2>Workout</h2>` inside .workout-review.
 		await expect(page.locator('section.workout-review')).toHaveCount(0);
 	});
@@ -153,7 +152,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			})
 			.eq('id', runId);
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.workout-adherence-amber')).toBeVisible({ timeout: 10_000 });
 		// Negative — the 'on' modifier must NOT render simultaneously.
 		await expect(page.locator('.workout-adherence-on')).toHaveCount(0);
@@ -186,7 +184,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			})
 			.eq('id', runId);
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.workout-adherence-off')).toBeVisible({ timeout: 10_000 });
 	});
 
@@ -297,7 +294,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			})
 			.eq('id', runId);
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('section.workout-review')).toHaveCount(0);
 	});
 });

@@ -20,7 +20,6 @@ test.describe('/share/route/[id] — anon', () => {
 		// 10000 m + surface road; the page should render those into
 		// h1 + .route-meta.
 		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		await expect(
 			page.getByRole('heading', { name: 'E2E demo public route', level: 1 })
@@ -133,7 +132,6 @@ test.describe('/share/route/[id] — anon', () => {
 		// (anon viewer hitting a deleted route URL).
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/share/route/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 		// /share/route renders the not-found copy as a status paragraph
 		// rather than a heading. Match the literal copy.
 		await expect(
@@ -161,7 +159,6 @@ test.describe('/share/route/[id] — anon', () => {
 				waypoints: []
 			});
 			await page.goto(`/share/route/${routeId}`);
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.getByText('Route not found or is private.')
 			).toBeVisible({ timeout: 10_000 });
@@ -175,7 +172,6 @@ test.describe('/share/route/[id] — anon', () => {
 		// click-out to the marketing site. The header brand link is
 		// the canonical affordance.
 		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 		await expect(page.getByRole('link', { name: 'Run Onward' }).first()).toHaveAttribute(
 			'href',
 			'/'

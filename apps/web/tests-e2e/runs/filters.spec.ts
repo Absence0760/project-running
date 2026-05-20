@@ -694,7 +694,6 @@ test.describe('/runs — filters', () => {
 			// Back to /runs.
 			await page.goBack();
 			await page.waitForURL(/\/runs$/);
-			await page.waitForLoadState('networkidle');
 			// Give the snapshot.restore + scroll-restore a beat to settle.
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000
@@ -765,7 +764,6 @@ test.describe('/runs — filters', () => {
 			// text is "All runs" with an arrow_back icon.
 			await page.getByRole('link', { name: /All runs/ }).click();
 			await page.waitForURL(/\/runs$/);
-			await page.waitForLoadState('networkidle');
 
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000

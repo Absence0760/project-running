@@ -50,7 +50,6 @@ test.describe('cross-user kudos', () => {
 		// Reload to confirm the write actually hit Supabase, not just
 		// optimistic local state.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('.kudos-btn')).toBeVisible({ timeout: 10_000 });
 		await expect(page.locator('.kudos-btn')).toHaveClass(/given/);
 		await expect(page.locator('.kudos-count')).toHaveText('1');
@@ -77,7 +76,6 @@ test.describe('cross-user kudos', () => {
 			})
 		);
 		await page.goto(`/share/run/${bogusId}`);
-		await page.waitForLoadState('networkidle');
 
 		// RunShareView renders "Run not found." as a status paragraph
 		// (no heading) when the run can't be loaded. No kudos button

@@ -142,7 +142,6 @@ test.describe('/settings/preferences', () => {
 
 		try {
 			await page.goto('/routes/new');
-			await page.waitForLoadState('networkidle');
 			await expect(
 				page.getByRole('heading', { level: 1, name: 'Route Builder' }),
 			).toBeVisible({ timeout: 10_000 });
@@ -206,7 +205,6 @@ test.describe('/settings/preferences', () => {
 		});
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(sel).toHaveValue('min_per_mi');
 
 		// Restore.
@@ -242,7 +240,6 @@ test.describe('/settings/preferences', () => {
 		).toBeVisible({ timeout: 5_000 });
 
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(sel).toHaveValue('satellite');
 
 		// Restore.
@@ -271,7 +268,6 @@ test.describe('/settings/preferences', () => {
 
 		// Reload to confirm initTheme on a fresh load resurrects it.
 		await page.reload();
-		await page.waitForLoadState('networkidle');
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
 		// Restore to Auto so subsequent tests don't render against a
