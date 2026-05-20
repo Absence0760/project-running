@@ -22,13 +22,15 @@
 			icon: 'phone_iphone',
 			name: 'iOS',
 			tagline: 'Flutter · Cupertino',
-			body: 'HealthKit-friendly companion app with the same plans, routes, and history.'
+			body: 'A HealthKit-friendly companion with the same plans, routes, and history. In development.',
+			comingSoon: true
 		},
 		{
 			icon: 'watch',
 			name: 'Apple Watch',
 			tagline: 'Native SwiftUI',
-			body: 'Standalone workouts. Leave your phone at home — splits, pace, and HR on the wrist.'
+			body: 'Standalone workouts on the wrist — splits, pace, and HR. Planned alongside the iOS release.',
+			comingSoon: true
 		},
 		{
 			icon: 'watch',
@@ -74,7 +76,7 @@
 	<h1>Plan routes.<br />Track runs.<br />Analyse everything.</h1>
 	<p class="hero-sub">
 		Record on your phone or watch. Review on a big screen.
-		One account across Android, iOS, Apple Watch, Wear OS, and the web. Free forever.
+		Shipping on Android, Wear OS, and the web today; iOS and Apple Watch coming next. Free forever.
 	</p>
 	<div class="hero-actions">
 		<a href="/login" class="btn btn-primary btn-lg">Get Started</a>
@@ -91,7 +93,7 @@
 	<div class="feature">
 		<span class="feature-icon material-symbols">watch</span>
 		<h3>Watch Parity</h3>
-		<p>Apple Watch and Wear OS are first-class. Standalone GPS, no phone needed.</p>
+		<p>Wear OS is first-class — standalone GPS, no phone needed. Apple Watch is on the roadmap.</p>
 	</div>
 	<div class="feature">
 		<span class="feature-icon material-symbols">sync</span>
@@ -112,9 +114,16 @@
 	</div>
 	<div class="apps-grid">
 		{#each apps as app}
-			<article class="app-card">
+			<article class="app-card" class:coming-soon={app.comingSoon}>
 				<span class="app-icon material-symbols">{app.icon}</span>
-				<h3>{app.name}</h3>
+				<h3>
+					{app.name}
+					{#if app.comingSoon}
+						<span class="coming-soon-pill" aria-label="Coming soon">
+							Coming soon
+						</span>
+					{/if}
+				</h3>
 				<span class="app-tagline">{app.tagline}</span>
 				<p>{app.body}</p>
 			</article>
@@ -451,6 +460,33 @@
 	.app-card h3 {
 		font-size: 1.05rem;
 		font-weight: 700;
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+
+	.coming-soon-pill {
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		padding: 0.15rem 0.5rem;
+		border-radius: 999px;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+		border: 1px solid var(--color-border);
+		white-space: nowrap;
+	}
+
+	/* Tone down the card to read "planned, not shipping" — same layout,
+	   muted icon + slightly lower contrast on body copy. */
+	.app-card.coming-soon .app-icon {
+		background: var(--color-bg-secondary);
+		color: var(--color-text-tertiary);
+	}
+	.app-card.coming-soon p {
+		color: var(--color-text-tertiary);
 	}
 
 	.app-tagline {
