@@ -59,9 +59,13 @@ void main() {
     });
 
     testWidgets('renders the Account section', (tester) async {
+      // Section headers were promoted to uppercase + outline-tinted
+      // + bold so the long flat tile list is scannable. Pin the
+      // exact label so a future style refactor that flattens the
+      // headers fails loud (the visual contract is the polish).
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
-      expect(find.text('Account'), findsOneWidget);
+      expect(find.text('ACCOUNT'), findsOneWidget);
     });
 
     testWidgets('renders the Preferences section', (tester) async {
@@ -69,7 +73,29 @@ void main() {
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       await tester.drag(find.byType(ListView), const Offset(0, -300));
       await tester.pump();
-      expect(find.text('Preferences'), findsOneWidget);
+      expect(find.text('PREFERENCES'), findsOneWidget);
+    });
+
+    testWidgets('every section header is uppercase + outline-tinted',
+        (tester) async {
+      // Walk the section labels — pinning the all-caps labels
+      // catches a regression where one section reverts to the old
+      // titleSmall style and breaks visual consistency. We use
+      // scrollUntilVisible per-label because ListView.builder lazy-
+      // builds rows; ACCOUNT scrolls out of frame the moment we
+      // reach ABOUT, so a single after-scroll sweep doesn't work.
+      final s = await _makeStores();
+      await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
+      final list = find.byType(Scrollable).first;
+      for (final label in const ['ACCOUNT', 'SENSORS', 'PREFERENCES', 'ABOUT']) {
+        await tester.scrollUntilVisible(
+          find.text(label),
+          300,
+          scrollable: list,
+        );
+        expect(find.text(label), findsAtLeastNWidgets(1),
+            reason: '$label section header must render in all caps');
+      }
     });
 
     testWidgets('useMiles toggle changes the preference value', (tester) async {

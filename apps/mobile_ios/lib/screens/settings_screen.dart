@@ -1232,10 +1232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
         children: [
           // Account
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Account', style: theme.textTheme.titleSmall),
-          ),
+          const _SettingsSection('Account'),
           ListTile(
             leading: CircleAvatar(
               backgroundColor: signedIn
@@ -1398,19 +1395,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // Sensors
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Sensors', style: theme.textTheme.titleSmall),
-          ),
+          const _SettingsSection('Sensors'),
           _HeartRateTile(heartRate: widget.heartRate),
           const Divider(),
 
           // Integrations
           if (signedIn) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Integrations', style: theme.textTheme.titleSmall),
-            ),
+            const _SettingsSection('Integrations'),
             _buildStravaTile(),
             ListTile(
               leading: const Icon(Icons.directions_run),
@@ -1423,10 +1414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
 
           // Preferences
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Preferences', style: theme.textTheme.titleSmall),
-          ),
+          const _SettingsSection('Preferences'),
           SwitchListTile(
             title: const Text('Use miles'),
             subtitle: Text(_unitSubtitle()),
@@ -1545,10 +1533,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // Profile & training (universal bag)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Profile & training', style: theme.textTheme.titleSmall),
-          ),
+          const _SettingsSection('Profile & training'),
           if (!_bagReady)
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -1642,10 +1627,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Data
           if (widget.runStore != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Data', style: theme.textTheme.titleSmall),
-            ),
+            const _SettingsSection('Data'),
             ListTile(
               leading: const Icon(Icons.move_to_inbox),
               title: const Text('Import from another app'),
@@ -1694,10 +1676,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
 
           // About
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('About', style: theme.textTheme.titleSmall),
-          ),
+          const _SettingsSection('About'),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('Version'),
@@ -1882,6 +1861,34 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Consistent section header for the Settings screen. Bumps the
+/// existing `titleSmall` look to uppercase + outline-tinted + bold
+/// so the six sections (Account / Sensors / Integrations /
+/// Preferences / Data / About) are scannable in a long flat tile
+/// list. Same visual language as the dashboard intensity / mileage
+/// cards so a runner gets a consistent affordance for "this is a
+/// section break".
+class _SettingsSection extends StatelessWidget {
+  final String title;
+  const _SettingsSection(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        title.toUpperCase(),
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.08,
+          color: theme.colorScheme.outline,
         ),
       ),
     );
