@@ -62,6 +62,10 @@ test.describe('/settings/account', () => {
 		// would surface here. Use a placeholder-style value (no real
 		// athletes hit by leaking it) and restore.
 		await page.goto('/settings/account');
+		// Needed: inputValue() snapshots — no auto-retry — so the read
+		// would capture the pre-fetch default rather than the user's
+		// persisted value.
+		await page.waitForLoadState('networkidle');
 
 		const input = page.getByLabel(/parkrun Athlete Number/);
 		const before = await input.inputValue();
@@ -90,6 +94,10 @@ test.describe('/settings/account', () => {
 		// that dropped the prefs branch would let HR slip while
 		// display_name persisted.
 		await page.goto('/settings/account');
+		// Needed: inputValue() snapshots — no auto-retry — so the read
+		// would capture the pre-fetch default rather than the user's
+		// persisted setting.
+		await page.waitForLoadState('networkidle');
 
 		const hr = page.getByLabel(/Resting HR/);
 		const before = await hr.inputValue();

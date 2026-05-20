@@ -186,6 +186,10 @@ test.describe('/settings/preferences', () => {
 		// preferred_unit (not pace_format) — see units.svelte.ts.
 		// Pinning the persistence is the load-bearing assertion.
 		await page.goto('/settings/preferences');
+		// Needed: inputValue() below snapshots — no auto-retry — so a
+		// pre-fetch read would capture the default rather than the
+		// user's saved selection.
+		await page.waitForLoadState('networkidle');
 
 		const sel = page
 			.locator('label', { has: page.getByText('Pace Format', { exact: true }) })

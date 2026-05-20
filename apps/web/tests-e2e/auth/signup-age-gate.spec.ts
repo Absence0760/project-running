@@ -88,6 +88,9 @@ test.describe('Signup age gate + ToS acceptance', () => {
 		await page.goto('/login');
 		// Wait for hydration — the toggle button's onclick handler is
 		// wired in onMount; clicking before then leaves $state untouched.
+		// (Playwright's actionability check on .click() doesn't cover
+		// Svelte hydration — only DOM presence + visibility.)
+		await page.waitForLoadState('networkidle');
 		// Boxes hidden initially (sign-in mode).
 		await expect(
 			page.getByLabel(/I confirm I am 16 years of age or older/)

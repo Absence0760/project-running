@@ -94,6 +94,10 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('Undo + Clear + Out-and-back disabled at zero waypoints', async ({ page }) => {
 		await page.goto('/routes/new');
+		// Needed: next read is .count() (snapshot — no auto-retry).
+		// Without the wait, a 0 here loops zero times and the test
+		// passes vacuously without actually asserting disabled state.
+		await page.waitForLoadState('networkidle');
 		// All three editor toolbar buttons gate on waypointCount.
 		const toolbar = page.locator('.btn.btn-ghost');
 		// At least three .btn-ghost buttons exist; iterate and assert
@@ -354,6 +358,11 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// refactor strips that line, this catches it before users
 		// re-report "I can't tell if I'm allowed to click markers".
 		await page.goto('/routes/new');
+		// Needed: canvas.click() races against MapLibre's init. Without
+		// the wait the click can fire before the map's gl context is up,
+		// no waypoint is created, marker.isVisible() returns false, and
+		// the test silently skips ("MapLibre canvas click did not register").
+		await page.waitForLoadState('networkidle');
 		const canvas = page.locator('.maplibregl-canvas');
 		await canvas.click({ position: { x: 200, y: 200 } });
 		const marker = page.locator('.maplibregl-marker').first();

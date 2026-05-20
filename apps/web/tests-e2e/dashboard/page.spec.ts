@@ -201,6 +201,9 @@ test.describe('/dashboard', () => {
 		// reflect it. A regression that broke fetchRuns wiring or the
 		// derived stat would show up here.
 		await page.goto('/dashboard');
+		// Needed: snapshots .innerText() below — no auto-retry, so a
+		// pre-fetch render of "--" would leak in.
+		await page.waitForLoadState('networkidle');
 
 		const totalRunsCard = page
 			.locator('.stat-card')
@@ -249,6 +252,9 @@ test.describe('/dashboard', () => {
 		// fetchRuns aggressively caches and a deletion isn't reflected
 		// until the next session.
 		await page.goto('/dashboard');
+		// Needed: snapshots .innerText() below — no auto-retry, so a
+		// pre-fetch render of "--" would leak in.
+		await page.waitForLoadState('networkidle');
 
 		const totalRunsCard = page
 			.locator('.stat-card')

@@ -57,6 +57,10 @@ test.describe('cross-user notifications', () => {
 		try {
 			// ── Snapshot runner's starting unread count ──
 			await runner.goto('/dashboard');
+			// Needed: next read is .count() (snapshot — no auto-retry).
+			// Without the wait, a 0 here can mean "no notifications" OR
+			// "fetch hasn't landed yet" — false equivalence.
+			await runner.waitForLoadState('networkidle');
 			// The badge only renders when unreadCount > 0; if zero,
 			// .badge is absent. Safe-read via count() then text.
 			const badgeBefore = runner.locator('.bell-wrap .badge');
