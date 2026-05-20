@@ -15,6 +15,7 @@ import '../widgets/fitness_card.dart';
 import '../widgets/notification_bell.dart';
 import '../run_intensity.dart';
 import '../widgets/intensity_card.dart';
+import '../widgets/mileage_trend_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/training_load_chart.dart';
@@ -353,6 +354,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: _StreakRow(runs: runs),
                   ),
                 ),
+                _kSectionGap,
+                MileageTrendCard(runs: runs, unit: unit, now: now),
                 _kSectionGap,
                 const _SectionHeader('Last 20 Weeks'),
                 Card(
