@@ -119,9 +119,7 @@
 				<h3>
 					{app.name}
 					{#if app.comingSoon}
-						<span class="coming-soon-pill" aria-label="Coming soon">
-							Coming soon
-						</span>
+						<span class="coming-soon-pill">Coming soon</span>
 					{/if}
 				</h3>
 				<span class="app-tagline">{app.tagline}</span>
@@ -480,13 +478,19 @@
 	}
 
 	/* Tone down the card to read "planned, not shipping" — same layout,
-	   muted icon + slightly lower contrast on body copy. */
+	   muted icon + slightly lower contrast on body copy. Suppress the
+	   hover lift too: nothing to click into, so the affordance would
+	   over-promise. */
 	.app-card.coming-soon .app-icon {
 		background: var(--color-bg-secondary);
 		color: var(--color-text-tertiary);
 	}
 	.app-card.coming-soon p {
 		color: var(--color-text-tertiary);
+	}
+	.app-card.coming-soon:hover {
+		transform: none;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.app-tagline {

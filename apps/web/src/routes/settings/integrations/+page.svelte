@@ -29,7 +29,7 @@
 		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically from your Strava account', icon: 'directions_run' },
 		{ provider: 'parkrun', name: 'parkrun', description: 'Import your complete parkrun history', icon: 'emoji_events' },
 		{ provider: 'garmin', name: 'Garmin Connect', description: 'Bulk-import .fit files (single activity or full Account Data export). Live OAuth needs Garmin developer-program approval.', icon: 'watch' },
-		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Synced on-device via the iOS app', icon: 'favorite' },
+		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Will sync on-device once the iOS app ships (coming soon).', icon: 'favorite' },
 	];
 
 	let integrations = $state<IntegrationUI[]>(
