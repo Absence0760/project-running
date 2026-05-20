@@ -55,7 +55,6 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   final _searchCtl = TextEditingController();
   List<HeatmapPoint> _points = const [];
   bool _loading = false;
-  DateTime? _lastUpdated;
   Timer? _debounce;
   Timer? _searchDebounce;
   bool _mapReady = false;
@@ -85,10 +84,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
         maxLat: bounds.north,
       );
       if (!mounted) return;
-      setState(() {
-        _points = pts;
-        _lastUpdated = DateTime.now();
-      });
+      setState(() => _points = pts);
     } catch (e) {
       // L4 — the heatmap is a discover surface, not load-bearing.
       // A 5xx / network glitch must not crash the screen. The real
@@ -212,10 +208,10 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
         onPressed: _locate,
         child: const Icon(Icons.my_location),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
+      // No footer chrome — the search field + Locate FAB make the
+      // affordances obvious, and the "Updated 12:34" timestamp was
+      // redundant against the inline AppBar spinner.
+      body: Stack(
               children: [
                 FlutterMap(
                   mapController: _mapController,
@@ -284,37 +280,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
-          Container(
-            color: theme.colorScheme.surfaceContainerLow,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.local_fire_department_outlined,
-                  color: theme.colorScheme.error,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Where people run — pan, search, or tap Locate. ${_lastUpdated == null ? '' : 'Updated ${_fmtTime(_lastUpdated!)}.'}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
-  }
-
-  static String _fmtTime(DateTime t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m';
   }
 }

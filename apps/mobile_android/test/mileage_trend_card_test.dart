@@ -104,19 +104,24 @@ void main() {
       expect(find.text('2026'), findsOneWidget);
     });
 
-    testWidgets('numeric labels honour the user unit (km vs mi)',
+    testWidgets('spotlight headline honours the user unit (km vs mi)',
         (tester) async {
-      // A clean ~10 km bucket. km view should render "10.0"; mi view
-      // should render approximately "6.2".
+      // The per-bar numeric labels were dropped (they overflowed the
+      // narrow weekly view + looked cramped on yearly). The most-
+      // recent bucket's value now anchors the card as a spotlight
+      // headline. Pin both unit branches of UnitFormat.distance:
+      // "10.00 km" vs "6.21 mi".
       final tenKm = [_run(startedAt: DateTime(2026, 5, 11, 7), distanceM: 10000)];
 
       await _pump(tester, runs: tenKm, unit: DistanceUnit.km, now: now);
-      // UnitFormat.distanceValue uses toStringAsFixed(2) — "10.00".
-      expect(find.text('10.00'), findsOneWidget);
+      expect(find.text('10.00 km'), findsOneWidget);
+      // Spotlight context suffix — pin the "this week" copy so a
+      // future tweak to monthly / yearly fallthrough fails loud.
+      expect(find.text('this week'), findsOneWidget);
 
       await _pump(tester, runs: tenKm, unit: DistanceUnit.mi, now: now);
-      // 10 km ≈ 6.21 mi → toStringAsFixed(2) → "6.21".
-      expect(find.text('6.21'), findsOneWidget);
+      // 10 km ≈ 6.21 mi.
+      expect(find.text('6.21 mi'), findsOneWidget);
     });
   });
 }

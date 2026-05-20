@@ -43,6 +43,8 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
     final maxDistance = periods
         .map((p) => p.distanceM)
         .fold<int>(0, (a, b) => a > b ? a : b);
+    final latest = periods.last;
+    final latestLabel = _latestLabel(_view);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -68,7 +70,37 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            // Spotlight headline — the most-recent bucket's value
+            // surfaced once at the top so the bars can drop their
+            // per-bar numeric labels (those overflow into next-line
+            // wraps on the narrow weekly view + look cramped on the
+            // wider yearly view).
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  UnitFormat.distance(latest.distanceM.toDouble(), widget.unit),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    latestLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _BarChart(
               periods: periods,
               maxDistanceM: maxDistance,
@@ -79,6 +111,14 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
       ),
     );
   }
+
+  /// "this week" / "this month" / "this year" — the suffix on the
+  /// spotlight headline so the user reads the value in context.
+  static String _latestLabel(MileageView v) => switch (v) {
+        MileageView.weekly => 'this week',
+        MileageView.monthly => 'this month',
+        MileageView.yearly => 'this year',
+      };
 }
 
 class _ViewToggle extends StatelessWidget {
@@ -118,11 +158,10 @@ class _BarChart extends StatelessWidget {
   });
 
   static const double _barAreaHeight = 110;
-  // Headroom above + below the bar for the value + axis labels and
-  // their inter-label gaps. Tuned for Material 3 labelSmall at the
-  // default density — the column overflowed by ~6 px at 36 px so
-  // we leave a generous cushion.
-  static const double _labelsExtra = 56;
+  // Headroom under the bar for the axis label only — the per-bar
+  // numeric labels are gone (the spotlight headline carries the
+  // current value) so the column needs less vertical slack.
+  static const double _labelsExtra = 24;
 
   @override
   Widget build(BuildContext context) {
@@ -182,15 +221,6 @@ class _BarColumn extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // Value above the bar — distance honours the user's unit.
-          Text(
-            UnitFormat.distanceValue(period.distanceM.toDouble(), unit),
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 2),
           Container(
             height: barHeight,
             decoration: BoxDecoration(

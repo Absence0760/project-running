@@ -93,18 +93,16 @@ void main() {
   });
 
   group('RoutesHeatmapScreen', () {
-    testWidgets('AppBar hosts a place-search field + fire icon legend renders',
+    testWidgets('AppBar hosts a place-search field; no footer chrome',
         (tester) async {
       // The AppBar title is a TextField (place search) — same shape
-      // as the route builder. Pin the search hint + the legend copy.
+      // as the route builder. The bottom "Where people run" footer
+      // was dropped because the search field + Locate FAB make the
+      // affordances obvious. Pin both halves of the contract.
       final api = _FakeApiClient();
       await _pump(tester, api);
       expect(find.text('Search places…'), findsOneWidget);
-      expect(
-        find.byIcon(Icons.local_fire_department_outlined),
-        findsAtLeastNWidgets(1),
-      );
-      expect(find.textContaining('Where people run'), findsOneWidget);
+      expect(find.textContaining('Where people run'), findsNothing);
     });
 
     testWidgets('shows the Locate-me FAB with my_location icon',
