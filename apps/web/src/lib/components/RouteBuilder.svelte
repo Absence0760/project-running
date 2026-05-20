@@ -1104,6 +1104,67 @@
 	}
 
 	/**
+	 * Show or hide the pre-generate Start / End picker markers.
+	 *
+	 * Generate-by-distance lets the user click "Pick start on map" /
+	 * "Pick end on map" + click the map to set the loop's anchor
+	 * point(s). Pre-fix, those picks updated page-level state but did
+	 * NOT paint a marker on the map — the user saw only a text label
+	 * in the sidebar and had to click Generate to confirm where their
+	 * pick actually landed. Field report:
+	 *   "i click the add start location on the map the marker only
+	 *    shows after i click Generate X km loop"
+	 *
+	 * The page now calls these in a $effect so the marker tracks the
+	 * picked coords in real time. Both markers are independent of the
+	 * `waypoints[]` array — they're transient UI affordances that
+	 * `generateLoop` clears as it plants the real seed waypoints.
+	 *
+	 * Pass `null` to remove a marker (e.g. user cleared the start
+	 * pick, or generation has started and is taking over).
+	 */
+	let generationStartMarker: maplibregl.Marker | undefined;
+	let generationEndMarker: maplibregl.Marker | undefined;
+
+	export function setGenerationStart(lngLat: { lng: number; lat: number } | null) {
+		generationStartMarker = setGenerationEndpointMarker(
+			generationStartMarker,
+			lngLat,
+			'start',
+		);
+	}
+
+	export function setGenerationEnd(lngLat: { lng: number; lat: number } | null) {
+		generationEndMarker = setGenerationEndpointMarker(
+			generationEndMarker,
+			lngLat,
+			'end',
+		);
+	}
+
+	function setGenerationEndpointMarker(
+		existing: maplibregl.Marker | undefined,
+		lngLat: { lng: number; lat: number } | null,
+		role: 'start' | 'end',
+	): maplibregl.Marker | undefined {
+		if (!map) return existing;
+		if (!lngLat) {
+			existing?.remove();
+			return undefined;
+		}
+		const at: [number, number] = [lngLat.lng, lngLat.lat];
+		if (existing) {
+			existing.setLngLat(at);
+			return existing;
+		}
+		const el = document.createElement('div');
+		el.className = `generation-endpoint generation-endpoint-${role}`;
+		el.setAttribute('data-testid', `generation-endpoint-${role}`);
+		el.title = role === 'start' ? 'Generate start' : 'Generate end';
+		return new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map);
+	}
+
+	/**
 	 * Generate a loop route of approximately the target distance from the start point.
 	 */
 	export async function generateLoop(
@@ -1890,5 +1951,28 @@
 		border: 2.5px solid white;
 		box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.3);
 		pointer-events: none;
+	}
+
+	/* Generate-by-distance pre-Generate picker markers. The user
+	   needs visual confirmation of WHERE their picked start/end
+	   landed before clicking Generate — pre-fix, the only signal
+	   was a lat,lng text label in the sidebar, which forced a
+	   click-Generate-and-see-what-happens dance. Green = start
+	   (matches the watch's "go" semantics + Strava's start chevron),
+	   red = end. */
+	:global(.generation-endpoint) {
+		width: 22px;
+		height: 22px;
+		border-radius: 50% 50% 50% 0;
+		transform: rotate(-45deg);
+		border: 2.5px solid white;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+		pointer-events: none;
+	}
+	:global(.generation-endpoint-start) {
+		background: #16a34a;
+	}
+	:global(.generation-endpoint-end) {
+		background: #dc2626;
 	}
 </style>

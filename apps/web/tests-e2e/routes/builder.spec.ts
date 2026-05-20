@@ -488,6 +488,80 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(banner).toContainText(/Couldn't generate/i);
 	});
 
+	// Reason: a field report surfaced that the Generate-by-distance
+	// start picker had no visual confirmation — the user clicked
+	// "Pick start on map", clicked the map, and saw only a sidebar
+	// text label change. The marker on the map only appeared AFTER
+	// they clicked "Generate". The fix paints a green flag marker
+	// the moment the start point is set (and a red flag for the
+	// optional end point) via two new builder exports
+	// setGenerationStart / setGenerationEnd. None of the prior
+	// builder e2e tests asserted what was on the map between pick
+	// and Generate — they only checked the post-Generate state
+	// (error banner / Cancel button) — which is why the gap stayed
+	// invisible.
+	test('Pick start on map paints a green flag marker BEFORE Generate runs', async ({
+		page,
+	}) => {
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		// Open the distance-target panel. Pre-pick, no endpoint markers.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await expect(
+			page.locator('[data-testid="generation-endpoint-start"]'),
+		).toHaveCount(0);
+
+		// Plant a start. The page's $effect feeds it into the builder via
+		// the dev hook; the builder's renderEndpointMarker mounts the
+		// green flag.
+		await setStartPoint(page, { lng: 144.97, lat: -37.816 });
+
+		const startMarker = page.locator(
+			'[data-testid="generation-endpoint-start"]',
+		);
+		await expect(startMarker).toBeVisible({ timeout: 5_000 });
+		// Marker must be inside the map container, not a stray DOM node.
+		const inMap = await startMarker.evaluate((el) =>
+			Boolean(el.closest('.maplibregl-map')),
+		);
+		expect(inMap).toBe(true);
+		// And the sidebar text label is still there — visual + textual
+		// confirmation together, not one OR the other.
+		await expect(page.locator('.point-set').first()).toBeVisible();
+	});
+
+	test('Clearing the picked start removes its marker', async ({ page }) => {
+		// Page-level state has a clear path (the X button next to the
+		// picked-coords pill). Pre-fix the marker stayed because no
+		// marker existed; now that one exists, the clear MUST drop it
+		// so the user can re-pick from scratch.
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await setStartPoint(page, { lng: 144.97, lat: -37.816 });
+
+		const startMarker = page.locator(
+			'[data-testid="generation-endpoint-start"]',
+		);
+		await expect(startMarker).toBeVisible({ timeout: 5_000 });
+
+		// Use the page hook to null the start — same shape the Clear
+		// button uses (`startPoint = null`).
+		await page.evaluate(() => {
+			const pg = (window as unknown as {
+				__routeBuilderPage: {
+					setStartPoint: (p: { lat: number; lng: number } | null) => void;
+				};
+			}).__routeBuilderPage;
+			pg.setStartPoint(null);
+		});
+
+		await expect(startMarker).toHaveCount(0, { timeout: 5_000 });
+	});
+
 	test('Cancel button appears while generate is in flight', async ({ page }) => {
 		// Audit #8: long-running batches were unstoppable short of Esc
 		// (which dumped the whole route). The Cancel button replaces

@@ -265,6 +265,58 @@ test('/routes/[id] wires the linked cursor and aligns elevations with displayWay
 	assert.match(src, /onhover=\{\(idx\)\s*=>\s*\(chartHoverIdx = idx\)\}/);
 });
 
+// ──────────────────────────────────────────────────────────────────
+// Generate-by-distance picker markers.
+//
+// Field report: picking a start on the map only confirmed the
+// selection in the sidebar (a lat,lng text label); the visual
+// marker on the map appeared only after clicking Generate, leaving
+// the user to verify the pick by side effect. The fix exposes
+// setGenerationStart / setGenerationEnd on RouteBuilder and the page
+// wires them via $effect so the marker tracks the picked coords in
+// real time. Pin the API + the wiring so a refactor that drops
+// either side fails here loudly.
+
+test('RouteBuilder.svelte: exposes setGenerationStart + setGenerationEnd', () => {
+	const src = read('src/lib/components/RouteBuilder.svelte');
+	assert.match(
+		src,
+		/export function setGenerationStart\(/,
+		'setGenerationStart export must exist — the page calls it from a ' +
+			'$effect to paint the picked start point on the map.',
+	);
+	assert.match(
+		src,
+		/export function setGenerationEnd\(/,
+		'setGenerationEnd export must exist for parity with the optional ' +
+			'end-point picker.',
+	);
+	// data-testid lets the e2e suite assert presence without coupling
+	// to a CSS-class-only marker.
+	assert.match(
+		src,
+		/data-testid['"]?[^'"]*generation-endpoint-/,
+		'Endpoint markers must be tagged with data-testid="generation-' +
+			'endpoint-start" / "-end" so the e2e suite can assert on them.',
+	);
+});
+
+test('/routes/new wires picked start/end into RouteBuilder markers', () => {
+	const src = read('src/routes/routes/new/+page.svelte');
+	assert.match(
+		src,
+		/builder\?\.setGenerationStart\(startPoint\)/,
+		'Page must feed startPoint into builder.setGenerationStart() ' +
+			'(inside a $effect) so the green flag tracks every change.',
+	);
+	assert.match(
+		src,
+		/builder\?\.setGenerationEnd\(endPoint\)/,
+		'Page must feed endPoint into builder.setGenerationEnd() so the ' +
+			'red flag tracks every change.',
+	);
+});
+
 test('events page also broadcasts race-state-changed alongside DB writes', () => {
 	// Reason: race_sessions writes (Arm / GO / End) on a freshly
 	// subscribed channel can land inside the postgres_changes

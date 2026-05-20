@@ -293,6 +293,19 @@
 		routed = !!ok;
 	}
 
+	// Mirror the picked start / end into the map as a transient marker
+	// so the user gets visual confirmation BEFORE clicking Generate.
+	// Pre-fix, picking a start only updated the sidebar text label —
+	// the user couldn't tell where their click actually landed without
+	// running generation. Driven by a $effect so cleared picks
+	// (startPoint = null) also clear the marker.
+	$effect(() => {
+		builder?.setGenerationStart(startPoint);
+	});
+	$effect(() => {
+		builder?.setGenerationEnd(endPoint);
+	});
+
 	function openSaveModal() {
 		saveError = '';
 		showSaveModal = true;
