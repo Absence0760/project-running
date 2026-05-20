@@ -90,4 +90,31 @@ void main() {
               'EventDetailScreen the club-event tab uses.');
     });
   });
+
+  group('runs tab — visual upgrade', () {
+    // Source-level guards on the Runs tab polish (see the History
+    // tab's _RunTile pattern). Driving the full widget tree requires
+    // a populated _runs list which means a fake Supabase fetch —
+    // expensive for a polish guard. Pin the structural pieces by
+    // grep so a future refactor that reverts to the bare ListTile
+    // fails loud.
+    final source =
+        File('lib/screens/profile_screen.dart').readAsStringSync();
+
+    test('Runs tab uses RunTrackPreview as the leading thumbnail', () {
+      expect(source.contains('RunTrackPreview(trackUrl:'), isTrue,
+          reason:
+              'Runs tab must render a track preview thumbnail when the '
+              'run has a track_url — same affordance as the History '
+              'tab so the tile reads consistently across the app.');
+    });
+
+    test('Runs tab tile tap routes into PublicRunScreen', () {
+      expect(source.contains('PublicRunScreen(api:'), isTrue,
+          reason:
+              'Tapping a run on a public profile must open the read-only '
+              'PublicRunScreen which takes a runId — the old TODO comment '
+              'about run-detail expecting a local Run is now obsolete.');
+    });
+  });
 }

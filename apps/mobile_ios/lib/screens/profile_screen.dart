@@ -7,8 +7,10 @@ import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
+import '../widgets/run_track_preview.dart';
 import '../widgets/top_banner.dart';
 import 'event_detail_screen.dart';
+import 'public_run_screen.dart';
 
 /// Page size for the followers / following tabs. Same value as the
 /// runs + routes screens — the convention is one consistent page size
@@ -417,18 +419,50 @@ class _ProfileScreenState extends State<ProfileScreen>
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final r = _runs[i];
+          // Mirrors the History tab's `_RunTile`: leading is a track
+          // preview when the run carries a `trackUrl`, falling back to
+          // the activity-type icon otherwise. Tap-into-detail routes
+          // through `PublicRunScreen` (which takes a `runId`) so this
+          // works for non-owner viewers too.
+          final activityName =
+              (r.metadata is Map ? (r.metadata as Map)['activity_type'] : null)
+                  as String?;
+          final activity = ActivityType.fromName(activityName);
+          final dist = formatDistanceForPref(r.distanceM);
+          final paceLine =
+              '${_formatDuration(Duration(seconds: r.durationS))} · ${_formatPace(r.distanceM, r.durationS)}';
+          final trackUrl = r.trackUrl;
+          final leading = SizedBox(
+            width: 56,
+            height: 40,
+            child: Center(
+              child: trackUrl != null
+                  ? RunTrackPreview(trackUrl: trackUrl, api: widget.api)
+                  : CircleAvatar(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      child: Icon(activity.icon,
+                          color: theme.colorScheme.primary),
+                    ),
+            ),
+          );
           return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: Icon(Icons.directions_run,
-                  color: theme.colorScheme.primary),
+            leading: leading,
+            title: Row(
+              children: [
+                Icon(activity.icon,
+                    size: 16, color: theme.colorScheme.outline),
+                const SizedBox(width: 6),
+                Text(dist),
+              ],
             ),
-            title: Text(_formatDate(r.startedAt)),
-            subtitle: Text(
-              '${formatDistanceForPref(r.distanceM)} · ${_formatDuration(Duration(seconds: r.durationS))} · ${_formatPace(r.distanceM, r.durationS)}',
+            subtitle: Text('${_formatDate(r.startedAt)}  ·  $paceLine'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    PublicRunScreen(api: widget.api, runId: r.id),
+              ),
             ),
-            // Tap-into-detail deferred until run-detail learns to take a
-            // `RunRow` for non-owner runs (today it expects local Run).
           );
         },
       ),
