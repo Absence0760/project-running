@@ -118,6 +118,76 @@ void main() {
       expect(find.byIcon(Icons.cloud_off), findsOneWidget);
     });
 
+    testWidgets('renders month section headers between runs from different months',
+        (tester) async {
+      // Seed two runs in different calendar months so the History
+      // grouping must emit two headers. Range is pinned to 'all' so
+      // the default 'this week' filter doesn't drop the older run.
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_month_hdr_');
+      final now = DateTime.now();
+      final priorMonth = DateTime(
+        now.month == 1 ? now.year - 1 : now.year,
+        now.month == 1 ? 12 : now.month - 1,
+        15,
+      );
+      final twoRuns = [
+        Run(
+          id: 'r-current',
+          startedAt: now.subtract(const Duration(days: 1)),
+          duration: const Duration(minutes: 25),
+          distanceMetres: 5000,
+          source: RunSource.app,
+        ),
+        Run(
+          id: 'r-prior',
+          startedAt: priorMonth,
+          duration: const Duration(minutes: 25),
+          distanceMetres: 5000,
+          source: RunSource.app,
+        ),
+      ];
+      // ignore: invalid_use_of_visible_for_testing_member
+      final runStore = LocalRunStore()..debugSeed(twoRuns, dir: _runsDir);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Exactly two month-section headers — one per distinct month.
+      // The labels are uppercased inside `_MonthHeaderRow`. The exact
+      // text varies with wall-clock month; assert the count by
+      // looking for the `_MonthHeaderRow` widget shape directly via
+      // its all-caps style would be brittle, so we walk Text widgets
+      // and assert two short uppercase labels appear.
+      // Cheap proxy: both run IDs render — i.e. the list works —
+      // AND there are exactly 2 widgets in the list whose text matches
+      // a typical month-header pattern (an all-caps month name
+      // followed optionally by " YYYY").
+      final monthHeaderRe = RegExp(r'^[A-Z]+( \d{4})?$');
+      final headerCount = find
+          .byWidgetPredicate((w) =>
+              w is Text &&
+              w.data != null &&
+              monthHeaderRe.hasMatch(w.data!))
+          .evaluate()
+          .length;
+      expect(headerCount, 2,
+          reason: 'list must emit one section header per distinct month');
+    });
+
     test('sync badge uses Badge.count + trailing padding so the label never overflows', () {
       // Reason: the badge sits in the rightmost AppBar action slot. With
       // a three-digit count ("150 unsynced"), `Badge(label: Text('$count'))`

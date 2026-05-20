@@ -10,6 +10,7 @@ import '../goals.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../runs_history_items.dart';
 import '../settings_sync.dart';
 import '../widgets/run_track_preview.dart';
 import '../widgets/track_preview.dart';
@@ -866,12 +867,18 @@ class _RunsScreenState extends State<RunsScreen> {
           oldestLocalStartedAt: oldestLocal,
         );
     final loadMoreSlot = showLoadMore ? 1 : 0;
+    // Group visible runs into month-section headers + run tiles.
+    // Pure helper in `lib/runs_history_items.dart` so the grouping
+    // shape can be unit-tested without a widget pump.
+    final items = emptyAfterFilter
+        ? const <HistoryItem>[]
+        : buildHistoryItems(_visible, now: DateTime.now());
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount:
-          _visible.length + 1 + (emptyAfterFilter ? 1 : 0) + loadMoreSlot,
+          items.length + 1 + (emptyAfterFilter ? 1 : 0) + loadMoreSlot,
       itemBuilder: (context, index) {
-        if (showLoadMore && index == _visible.length + 1) {
+        if (showLoadMore && index == items.length + 1) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Center(
@@ -945,11 +952,15 @@ class _RunsScreenState extends State<RunsScreen> {
             ),
           );
         }
-        final runIndex = index - 1;
-        if (runIndex < 0 || runIndex >= _visible.length) {
+        final itemIndex = index - 1;
+        if (itemIndex < 0 || itemIndex >= items.length) {
           return const SizedBox.shrink();
         }
-        final run = _visible[runIndex];
+        final item = items[itemIndex];
+        if (item is HistoryMonthHeader) {
+          return _MonthHeaderRow(label: item.label);
+        }
+        final run = (item as HistoryRun).run;
         return _RunTile(
           key: ValueKey(run.id),
           api: widget.apiClient,
@@ -984,6 +995,31 @@ class _RunsScreenState extends State<RunsScreen> {
           },
         );
       },
+    );
+  }
+}
+
+/// Month section header rendered between runs in the History list.
+/// Compact, non-tappable label — purely a visual anchor while
+/// scrolling. Same vertical rhythm as the filter pills above so the
+/// list reads as a clean month-by-month timeline.
+class _MonthHeaderRow extends StatelessWidget {
+  final String label;
+  const _MonthHeaderRow({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.08,
+          color: theme.colorScheme.outline,
+        ),
+      ),
     );
   }
 }
