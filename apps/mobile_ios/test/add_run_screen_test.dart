@@ -86,5 +86,30 @@ void main() {
       // Form validation blocks save — store remains empty.
       expect(s.runs.runs, isEmpty);
     });
+
+    // Reason: the route-picker section was previously gated on
+    // `routes.isNotEmpty`, so a user with zero saved routes saw no
+    // indication that route-attachment exists. Field report: "I
+    // don't see the attach route, for adding a new run." The fix
+    // always renders the section header + an empty-state hint when
+    // there are no routes yet. Pinning both halves of the contract.
+    testWidgets('Route (optional) section renders even when routeStore is empty',
+        (tester) async {
+      final s = await _makeStores();
+      // s.routes is a freshly-constructed LocalRouteStore — routes is empty.
+      expect(s.routes.routes, isEmpty);
+      await _pump(tester, s.runs, s.routes, s.prefs);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Route (optional)'), findsOneWidget,
+          reason: 'Route section header must show so the affordance is '
+              'discoverable before the user has built or imported any routes.');
+      expect(
+        find.text('No saved routes yet — build or import one to attach it here'),
+        findsOneWidget,
+        reason: 'Empty-state hint must render in place of the picker so '
+            'users learn the feature exists.',
+      );
+    });
   });
 }

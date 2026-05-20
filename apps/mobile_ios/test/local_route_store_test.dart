@@ -3,8 +3,17 @@ import 'dart:io';
 
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../lib/local_route_store.dart';
+
+class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin {
+  final Directory _root;
+  _FakePathProvider(this._root);
+  @override
+  Future<String?> getApplicationDocumentsPath() async => _root.path;
+}
 
 void main() {
   late Directory tempDir;
@@ -246,6 +255,72 @@ void main() {
 
       expect(() => store.routes.add(makeRoute(id: 'sneak')),
           throwsUnsupportedError);
+    });
+  });
+
+  group('lazy init resilience — _ensureDir', () {
+    // Reason: an earlier version held `_dir` as a `late Directory`; a
+    // save that raced ahead of `init()` (or hit an environment where
+    // `init()` had failed silently) threw a confusing
+    // `LateInitializationError` and the route stayed unsaved until
+    // app relaunch. Field report at the time:
+    //   "saved failed error when trying to save my route
+    //    'LateInitializationError'"
+    // The fix nullable-d `_dir` + added a private `_ensureDir()` that
+    // lazily resolves the platform path. These tests pin that
+    // contract end-to-end.
+
+    test('save() called BEFORE init() does not throw LateInitializationError',
+        () async {
+      PathProviderPlatform.instance = _FakePathProvider(tempDir);
+      final store = LocalRouteStore();
+      // No init() call! save() must auto-init via _ensureDir().
+      await store.save(makeRoute(id: 'r-no-init'));
+
+      final routesDir = Directory('${tempDir.path}/routes');
+      expect(routesDir.existsSync(), isTrue,
+          reason: '_ensureDir should have created the routes subdirectory');
+      expect(File('${routesDir.path}/r-no-init.json').existsSync(), isTrue);
+      expect(store.routes, hasLength(1));
+      expect(store.routes.single.id, 'r-no-init');
+    });
+
+    test('saveBatch() called BEFORE init() also auto-initializes', () async {
+      PathProviderPlatform.instance = _FakePathProvider(tempDir);
+      final store = LocalRouteStore();
+      await store.saveBatch([
+        makeRoute(id: 'r-1'),
+        makeRoute(id: 'r-2'),
+      ]);
+
+      final routesDir = Directory('${tempDir.path}/routes');
+      expect(routesDir.existsSync(), isTrue);
+      expect(File('${routesDir.path}/r-1.json').existsSync(), isTrue);
+      expect(File('${routesDir.path}/r-2.json').existsSync(), isTrue);
+      expect(store.routes, hasLength(2));
+    });
+
+    test('delete() called BEFORE init() does not throw — no-op when file absent',
+        () async {
+      PathProviderPlatform.instance = _FakePathProvider(tempDir);
+      final store = LocalRouteStore();
+      await store.delete('nonexistent-id'); // must not throw.
+      expect(store.routes, isEmpty);
+    });
+
+    test('init() after a lazy save still picks up the on-disk file', () async {
+      PathProviderPlatform.instance = _FakePathProvider(tempDir);
+      final store = LocalRouteStore();
+      await store.save(makeRoute(id: 'r-lazy', name: 'Pre-init save'));
+
+      // Fresh store re-init from the same temp root — proves the lazy
+      // save landed in the same directory init() resolves to.
+      final routesDir = Directory('${tempDir.path}/routes');
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: routesDir);
+      expect(s2.routes, hasLength(1));
+      expect(s2.routes.single.id, 'r-lazy');
+      expect(s2.routes.single.name, 'Pre-init save');
     });
   });
 }

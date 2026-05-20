@@ -1630,4 +1630,46 @@ void main() {
           reason: 'searchPlaces must apply .timeout(kGeocodingTimeout).');
     });
   });
+
+  group('route_builder_screen._SaveRouteDialog scrollable content', () {
+    // Reason: AlertDialog clips content that exceeds its content area
+    // under the actions strip. The 'Save route' dialog has a Name
+    // input + a multi-line description + a Make-public toggle — on a
+    // short viewport (small phone, IME open) the toggle disappeared
+    // behind the Save / Cancel buttons. Field report:
+    //   "the save route -> save button is hiding the make public toggle"
+    // The fix wraps the content Column in a SingleChildScrollView so
+    // excess height scrolls inside the dialog. Pin the wrapping so a
+    // future refactor that 'simplifies' the dialog can't drop it.
+
+    test('_SaveRouteDialog wraps its Column in SingleChildScrollView', () {
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      // Find the dialog's build() body and assert it goes
+      //   content: SingleChildScrollView( child: Column(...
+      // not
+      //   content: Column(...
+      final dialogIdx = source.indexOf('class _SaveRouteDialogState');
+      expect(dialogIdx, greaterThanOrEqualTo(0),
+          reason: '_SaveRouteDialogState class moved or renamed.');
+      final tail = source.substring(dialogIdx);
+      expect(
+        tail.contains('content: SingleChildScrollView('),
+        isTrue,
+        reason:
+            "_SaveRouteDialog's AlertDialog content must be wrapped in "
+            'SingleChildScrollView so the Make-public toggle is not '
+            'clipped behind the actions strip on short screens.',
+      );
+      // And the toggle still needs to be inside that scrollable content
+      // so users can reach it via scroll.
+      expect(
+        tail.contains("title: const Text('Make public')"),
+        isTrue,
+        reason:
+            'The Make-public SwitchListTile is the field most prone to '
+            'clipping — keep it inside the dialog content.',
+      );
+    });
+  });
 }
