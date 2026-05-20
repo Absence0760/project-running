@@ -81,10 +81,10 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 				// markedly slower than local hardware (locally <2 s, in
 				// CI we've seen >10 s under load). The 250 ms post-
 				// SUBSCRIBED cushion in the page is additive on top.
-				expect(adminPage.locator('[data-realtime-ready="true"]')).toBeVisible({
+				expect(adminPage.locator('.realtime-ready')).toBeVisible({
 					timeout: 20_000
 				}),
-				expect(memberPage.locator('[data-realtime-ready="true"]')).toBeVisible({
+				expect(memberPage.locator('.realtime-ready')).toBeVisible({
 					timeout: 20_000
 				})
 			]);
@@ -216,10 +216,10 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 				// markedly slower than local hardware (locally <2 s, in
 				// CI we've seen >10 s under load). The 250 ms post-
 				// SUBSCRIBED cushion in the page is additive on top.
-				expect(adminPage.locator('[data-realtime-ready="true"]')).toBeVisible({
+				expect(adminPage.locator('.realtime-ready')).toBeVisible({
 					timeout: 20_000
 				}),
-				expect(memberPage.locator('[data-realtime-ready="true"]')).toBeVisible({
+				expect(memberPage.locator('.realtime-ready')).toBeVisible({
 					timeout: 20_000
 				})
 			]);

@@ -590,7 +590,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="page" data-realtime-ready={realtimeReady ? 'true' : 'false'}>
+	<div class="page" class:realtime-ready={realtimeReady}>
 		<a class="back" href="/clubs/{slug}" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to {club.name}

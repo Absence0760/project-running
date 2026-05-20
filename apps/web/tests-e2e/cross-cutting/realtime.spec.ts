@@ -261,7 +261,7 @@ test.describe('realtime fan-out', () => {
 			// not a render-time proxy.
 			await expect(page.locator('.post-form textarea').first())
 				.toBeVisible({ timeout: 10_000 });
-			await expect(page.locator('[data-realtime-ready="true"]'))
+			await expect(page.locator('.realtime-ready'))
 				.toBeVisible({ timeout: 20_000 });
 
 			// Snapshot the post-card count before the push so we can
