@@ -118,6 +118,50 @@ void main() {
       expect(find.byIcon(Icons.cloud_off), findsOneWidget);
     });
 
+    testWidgets('header shows aggregate "X km · Y h Z m" for the filtered set',
+        (tester) async {
+      // Seed three runs that all sit comfortably inside the
+      // default-week range. Aggregate: 3 × 5000 m = 15 km, 3 × 25 m =
+      // 75 m total time → "75m". The chip text must include both
+      // distance + total time.
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_summary_');
+      final now = DateTime.now();
+      final threeRuns = [
+        for (int i = 0; i < 3; i++)
+          Run(
+            id: 'r-$i',
+            startedAt: now.subtract(Duration(days: i)),
+            duration: const Duration(minutes: 25),
+            distanceMetres: 5000,
+            source: RunSource.app,
+          ),
+      ];
+      // ignore: invalid_use_of_visible_for_testing_member
+      final runStore = LocalRunStore()..debugSeed(threeRuns, dir: _runsDir);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // 3 runs × 5 km = 15 km; 3 × 25m = 75m. Pin the formatted output.
+      // UnitFormat.distance(15000, km) → "15.00 km" (toStringAsFixed(2)).
+      expect(find.textContaining('15.00 km'), findsOneWidget);
+      expect(find.textContaining('1h 15m'), findsOneWidget);
+    });
+
     testWidgets('renders month section headers between runs from different months',
         (tester) async {
       // Seed two runs in different calendar months so the History

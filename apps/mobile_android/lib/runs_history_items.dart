@@ -62,6 +62,42 @@ List<HistoryItem> buildHistoryItems(
   return out;
 }
 
+/// Aggregate stats over a filtered run list — used by the History
+/// tab's summary chip above the filter row. Numbers stay in raw
+/// units so the renderer can honour the user's km/mi preference.
+class HistoryFilterSummary {
+  final int runCount;
+  final double totalDistanceM;
+  final Duration totalDuration;
+
+  const HistoryFilterSummary({
+    required this.runCount,
+    required this.totalDistanceM,
+    required this.totalDuration,
+  });
+
+  static const HistoryFilterSummary empty = HistoryFilterSummary(
+    runCount: 0,
+    totalDistanceM: 0,
+    totalDuration: Duration.zero,
+  );
+}
+
+HistoryFilterSummary summariseRuns(List<Run> runs) {
+  if (runs.isEmpty) return HistoryFilterSummary.empty;
+  var distance = 0.0;
+  var totalS = 0;
+  for (final r in runs) {
+    distance += r.distanceMetres;
+    totalS += r.duration.inSeconds;
+  }
+  return HistoryFilterSummary(
+    runCount: runs.length,
+    totalDistanceM: distance,
+    totalDuration: Duration(seconds: totalS),
+  );
+}
+
 const _monthNames = <String>[
   '', // 1-indexed
   'January', 'February', 'March', 'April', 'May', 'June',

@@ -900,6 +900,8 @@ class _RunsScreenState extends State<RunsScreen> {
           return _RunsFilterHeader(
             rangeLabel: _activeRangeLabel(),
             visibleCount: _visible.length,
+            summary: summariseRuns(_filtered),
+            unit: unit,
             activityFilter: _activityFilter,
             sourceFilter: _sourceFilter,
             onActivityChanged: (v) {
@@ -1182,6 +1184,13 @@ class _EmptyRuns extends StatelessWidget {
 class _RunsFilterHeader extends StatelessWidget {
   final String rangeLabel;
   final int visibleCount;
+  /// Aggregate over the *full filtered set* (not the paginated slice).
+  /// Drives the small stats chip under the range label so a user can
+  /// see "47 km · 5h" without scrolling — and the chip updates live
+  /// as filter chips toggle.
+  final HistoryFilterSummary summary;
+  /// User's distance-unit preference for formatting the chip.
+  final DistanceUnit unit;
   final ActivityType? activityFilter;
   final RunSource? sourceFilter;
   final ValueChanged<ActivityType?> onActivityChanged;
@@ -1190,6 +1199,8 @@ class _RunsFilterHeader extends StatelessWidget {
   const _RunsFilterHeader({
     required this.rangeLabel,
     required this.visibleCount,
+    required this.summary,
+    required this.unit,
     required this.activityFilter,
     required this.sourceFilter,
     required this.onActivityChanged,
@@ -1204,6 +1215,17 @@ class _RunsFilterHeader extends StatelessWidget {
     (RunSource.healthkit, 'HealthKit'),
     (RunSource.healthconnect, 'Health Connect'),
   ];
+
+  /// Format the summary chip — e.g. "47.0 km · 5h 25m". The run
+  /// count already prints to the right of the range label, so the
+  /// chip skips it and shows volume + time only.
+  static String _summaryLine(HistoryFilterSummary s, DistanceUnit unit) {
+    final dist = UnitFormat.distance(s.totalDistanceM, unit);
+    final h = s.totalDuration.inHours;
+    final m = s.totalDuration.inMinutes % 60;
+    final time = h > 0 ? '${h}h ${m}m' : '${m}m';
+    return '$dist  ·  $time';
+  }
 
   static String _sourceLabel(RunSource? src) {
     if (src == null) return 'All sources';
@@ -1242,6 +1264,15 @@ class _RunsFilterHeader extends StatelessWidget {
             ),
           ],
         ),
+        if (summary.runCount > 0) ...[
+          const SizedBox(height: 4),
+          Text(
+            _summaryLine(summary, unit),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         ChipTheme(
           data: theme.chipTheme.copyWith(

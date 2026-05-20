@@ -77,6 +77,42 @@ void main() {
               'May 2024 and May 2026 collapse visually');
     });
 
+    test('summariseRuns returns zeros for empty input', () {
+      expect(summariseRuns(const []).runCount, 0);
+      expect(summariseRuns(const []).totalDistanceM, 0);
+      expect(summariseRuns(const []).totalDuration, Duration.zero);
+    });
+
+    test('summariseRuns sums distance + duration + count', () {
+      final runs = [
+        Run(
+          id: 'a',
+          startedAt: DateTime(2026, 5, 1),
+          duration: const Duration(minutes: 25),
+          distanceMetres: 5000,
+          source: RunSource.app,
+        ),
+        Run(
+          id: 'b',
+          startedAt: DateTime(2026, 5, 8),
+          duration: const Duration(minutes: 50),
+          distanceMetres: 10000,
+          source: RunSource.app,
+        ),
+        Run(
+          id: 'c',
+          startedAt: DateTime(2026, 5, 15),
+          duration: const Duration(hours: 1, minutes: 30),
+          distanceMetres: 20000,
+          source: RunSource.app,
+        ),
+      ];
+      final s = summariseRuns(runs);
+      expect(s.runCount, 3);
+      expect(s.totalDistanceM, 35000);
+      expect(s.totalDuration, const Duration(hours: 2, minutes: 45));
+    });
+
     test('preserves run order within each section', () {
       // Caller hands in newest-first; the helper must not reorder.
       final r1 = _r(DateTime(2026, 5, 18, 7));
