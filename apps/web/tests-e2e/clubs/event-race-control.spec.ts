@@ -77,11 +77,15 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 				expect(memberPage.getByRole('heading', { name: title })).toBeVisible({
 					timeout: 10_000
 				}),
+				// 20 s: CI's WS handshake + Realtime subscription is
+				// markedly slower than local hardware (locally <2 s, in
+				// CI we've seen >10 s under load). The 250 ms post-
+				// SUBSCRIBED cushion in the page is additive on top.
 				expect(adminPage.locator('[data-realtime-ready="true"]')).toBeVisible({
-					timeout: 10_000
+					timeout: 20_000
 				}),
 				expect(memberPage.locator('[data-realtime-ready="true"]')).toBeVisible({
-					timeout: 10_000
+					timeout: 20_000
 				})
 			]);
 
@@ -208,11 +212,15 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 				expect(memberPage.getByRole('heading', { name: title })).toBeVisible({
 					timeout: 10_000
 				}),
+				// 20 s: CI's WS handshake + Realtime subscription is
+				// markedly slower than local hardware (locally <2 s, in
+				// CI we've seen >10 s under load). The 250 ms post-
+				// SUBSCRIBED cushion in the page is additive on top.
 				expect(adminPage.locator('[data-realtime-ready="true"]')).toBeVisible({
-					timeout: 10_000
+					timeout: 20_000
 				}),
 				expect(memberPage.locator('[data-realtime-ready="true"]')).toBeVisible({
-					timeout: 10_000
+					timeout: 20_000
 				})
 			]);
 
