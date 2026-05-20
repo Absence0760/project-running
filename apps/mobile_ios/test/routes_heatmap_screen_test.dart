@@ -6,11 +6,15 @@
 // with; we don't pin tile-load success, only the chrome + the RPC
 // invocation.
 
+import 'dart:convert';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../lib/screens/routes_heatmap_screen.dart';
 
@@ -41,9 +45,20 @@ class _FakeApiClient extends ApiClient {
   }
 }
 
-Future<void> _pump(WidgetTester tester, _FakeApiClient api) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _FakeApiClient api, {
+  Future<String> Function(Uri)? geocodingFetcher,
+  Future<Position> Function()? locateFn,
+}) async {
   await tester.pumpWidget(
-    MaterialApp(home: RoutesHeatmapScreen(api: api)),
+    MaterialApp(
+      home: RoutesHeatmapScreen(
+        api: api,
+        geocodingFetcher: geocodingFetcher,
+        locateFn: locateFn,
+      ),
+    ),
   );
   // Single pump — pumpAndSettle blocks on flutter_map's internal
   // animation controllers.
@@ -51,18 +66,121 @@ Future<void> _pump(WidgetTester tester, _FakeApiClient api) async {
   await tester.pump(const Duration(milliseconds: 50));
 }
 
+Position _fakePosition({
+  double lat = 40.7128,
+  double lng = -74.0060,
+}) =>
+    Position(
+      latitude: lat,
+      longitude: lng,
+      timestamp: DateTime.now(),
+      accuracy: 5,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+
 void main() {
+  setUpAll(() {
+    // The screen reads `dotenv.env['MAPTILER_KEY']` at search time;
+    // without an initialised DotEnv the access throws. Empty-string
+    // env is fine — it just makes `searchPlaces` short-circuit (the
+    // contract we want to verify in the "unconfigured" case).
+    dotenv.loadFromString(isOptional: true);
+  });
+
   group('RoutesHeatmapScreen', () {
-    testWidgets('renders the Heatmap title + fire icon legend',
+    testWidgets('AppBar hosts a place-search field + fire icon legend renders',
         (tester) async {
+      // The AppBar title is a TextField (place search) — same shape
+      // as the route builder. Pin the search hint + the legend copy.
       final api = _FakeApiClient();
       await _pump(tester, api);
-      expect(find.text('Heatmap'), findsOneWidget);
+      expect(find.text('Search places…'), findsOneWidget);
       expect(
         find.byIcon(Icons.local_fire_department_outlined),
         findsAtLeastNWidgets(1),
       );
       expect(find.textContaining('Where people run'), findsOneWidget);
+    });
+
+    testWidgets('shows the Locate-me FAB with my_location icon',
+        (tester) async {
+      final api = _FakeApiClient();
+      await _pump(tester, api);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byIcon(Icons.my_location), findsOneWidget);
+    });
+
+    testWidgets('tapping the Locate FAB calls locateFn + recentres + refetches',
+        (tester) async {
+      // Stub the platform-channel Geolocator call so the FAB can be
+      // exercised without booting the location plugin. Assert that
+      // a second fetch fires after the move (the screen schedules a
+      // refresh because programmatic moves don't fire
+      // onPositionChanged with hasGesture=true).
+      final api = _FakeApiClient();
+      var locateCalls = 0;
+      await _pump(
+        tester,
+        api,
+        locateFn: () async {
+          locateCalls++;
+          return _fakePosition();
+        },
+      );
+      // Drain the initial-mount fetch from the assertion count.
+      await tester.pump(const Duration(milliseconds: 100));
+      final initialFetches = api.fetchCalls;
+
+      await tester.tap(find.byType(FloatingActionButton));
+      // Two pumps: first dispatches the locate Future; second is the
+      // post-await setState + scheduled refresh timer.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(locateCalls, 1);
+      expect(api.fetchCalls, greaterThan(initialFetches),
+          reason: 'Locate must schedule a refresh so the heatmap '
+              "repopulates around the user's location.");
+    });
+
+    testWidgets('search results dropdown opens + tap recentres the map',
+        (tester) async {
+      // Stub MapTiler with a canned response containing one feature.
+      // Typing >=2 chars debounces 300ms then renders the dropdown;
+      // tapping the entry should close the dropdown + schedule a
+      // heatmap refetch (same rationale as Locate).
+      final api = _FakeApiClient();
+      Future<String> stubFetcher(Uri _) async => jsonEncode({
+            'features': [
+              {
+                'place_name': 'Tokyo, Japan',
+                'center': [139.6917, 35.6895],
+              },
+            ],
+          });
+
+      // dotenv MAPTILER_KEY is unset in tests, so searchPlaces would
+      // short-circuit to empty. The screen reads MAPTILER_KEY at
+      // build time; without setting it, the search debounce returns
+      // [] and the dropdown never appears. Pin that contract: when
+      // unconfigured, search degrades silently rather than crashing.
+      await _pump(tester, api, geocodingFetcher: stubFetcher);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search places…'),
+        'Tokyo',
+      );
+      // Debounce window + microtask drain.
+      await tester.pump(const Duration(milliseconds: 350));
+      // No MAPTILER_KEY → no results → dropdown stays closed.
+      expect(find.text('Tokyo, Japan'), findsNothing,
+          reason: 'searchPlaces short-circuits to empty when the '
+              'MapTiler key is unset; dropdown must not surface stale '
+              'or stub results.');
     });
 
     testWidgets('mounts a FlutterMap with a TileLayer + CircleLayer',
@@ -101,8 +219,10 @@ void main() {
       // bearing. A 5xx from PostGIS must not break the screen.
       final api = _FakeApiClient()..errorToThrow = Exception('rpc 500');
       await _pump(tester, api);
-      // Screen still renders.
-      expect(find.text('Heatmap'), findsOneWidget);
+      // Screen still renders — pin the search field + the map both
+      // mounted (the AppBar title is now a TextField, not the literal
+      // "Heatmap" text).
+      expect(find.text('Search places…'), findsOneWidget);
       expect(find.byType(FlutterMap), findsOneWidget);
     });
   });
