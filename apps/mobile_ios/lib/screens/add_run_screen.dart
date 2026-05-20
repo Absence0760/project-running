@@ -261,9 +261,9 @@ class _AddRunScreenState extends State<AddRunScreen> {
               }).toList(),
             ),
             const SizedBox(height: 20),
+            Text('Route (optional)', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
             if (routes.isNotEmpty) ...[
-              Text('Route (optional)', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 8),
               InkWell(
                 onTap: () => _pickRoute(routes, unit),
                 borderRadius: BorderRadius.circular(4),
@@ -292,8 +292,25 @@ class _AddRunScreenState extends State<AddRunScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+            ] else ...[
+              // Empty-state hint — keeps the affordance discoverable
+              // before the user has built or synced any routes. Without
+              // this the whole section disappears and the feature looks
+              // missing.
+              InputDecorator(
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  suffixIcon: Icon(Icons.route_outlined),
+                ),
+                child: Text(
+                  'No saved routes yet — build or import one to attach it here',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ),
             ],
+            const SizedBox(height: 20),
             Text('Distance', style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             TextFormField(

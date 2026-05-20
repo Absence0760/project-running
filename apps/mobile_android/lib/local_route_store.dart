@@ -7,7 +7,11 @@ import 'package:path_provider/path_provider.dart';
 
 /// Persists routes as JSON files on disk.
 class LocalRouteStore extends ChangeNotifier {
-  late Directory _dir;
+  /// Nullable so a save / saveBatch / delete that races ahead of
+  /// `init()` can throw a meaningful StateError instead of
+  /// LateInitializationError, and so a missed-init can be recovered
+  /// from via `_ensureDir()` rather than blowing up downstream UI.
+  Directory? _dir;
   List<Route> _routes = [];
 
   List<Route> get routes => List.unmodifiable(_routes);
@@ -24,20 +28,38 @@ class LocalRouteStore extends ChangeNotifier {
   }
 
   Future<void> init({Directory? overrideDirectory}) async {
+    final Directory dir;
     if (overrideDirectory != null) {
-      _dir = overrideDirectory;
+      dir = overrideDirectory;
     } else {
       final appDir = await getApplicationDocumentsDirectory();
-      _dir = Directory('${appDir.path}/routes');
+      dir = Directory('${appDir.path}/routes');
     }
-    if (!_dir.existsSync()) {
-      _dir.createSync(recursive: true);
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
     }
+    _dir = dir;
     await _loadAll();
   }
 
+  /// Recover from a missed / failed init() by lazily creating the
+  /// directory. Without this, a routeStore that booted before
+  /// `getApplicationDocumentsDirectory()` was ready (rare, but
+  /// observed in field reports) would throw LateInitializationError
+  /// on the first save and stay broken until app relaunch.
+  Future<Directory> _ensureDir() async {
+    final existing = _dir;
+    if (existing != null) return existing;
+    final appDir = await getApplicationDocumentsDirectory();
+    final dir = Directory('${appDir.path}/routes');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    _dir = dir;
+    return dir;
+  }
+
   Future<void> save(Route route) async {
-    final file = File('${_dir.path}/${route.id}.json');
+    final dir = await _ensureDir();
+    final file = File('${dir.path}/${route.id}.json');
     await file.writeAsString(jsonEncode(route.toJson()));
     _routes.removeWhere((r) => r.id == route.id);
     _routes.insert(0, route);
@@ -51,8 +73,9 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> saveBatch(Iterable<Route> routes) async {
     if (routes.isEmpty) return;
     final list = routes.toList();
+    final dir = await _ensureDir();
     await Future.wait(list.map((route) {
-      final file = File('${_dir.path}/${route.id}.json');
+      final file = File('${dir.path}/${route.id}.json');
       return file.writeAsString(jsonEncode(route.toJson()));
     }));
     for (final route in list) {
@@ -63,7 +86,8 @@ class LocalRouteStore extends ChangeNotifier {
   }
 
   Future<void> delete(String routeId) async {
-    final file = File('${_dir.path}/$routeId.json');
+    final dir = await _ensureDir();
+    final file = File('${dir.path}/$routeId.json');
     if (file.existsSync()) await file.delete();
     _routes.removeWhere((r) => r.id == routeId);
     notifyListeners();
@@ -71,9 +95,11 @@ class LocalRouteStore extends ChangeNotifier {
 
   Future<void> _loadAll() async {
     _routes = [];
+    final dir = _dir;
+    if (dir == null) return; // init() not yet completed — nothing to load.
     // listSync is intentional — see LocalRunStore._loadAll for the
     // explanation (async _dir.list() deadlocks under `testWidgets`).
-    final files = _dir
+    final files = dir
         .listSync()
         .whereType<File>()
         .where((f) => f.path.endsWith('.json'))

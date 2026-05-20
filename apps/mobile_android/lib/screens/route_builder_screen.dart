@@ -1005,35 +1005,41 @@ class _SaveRouteDialogState extends State<_SaveRouteDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Save route'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _name,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              hintText: 'e.g. River loop',
+      // SingleChildScrollView so the Make public toggle isn't clipped
+      // behind the Save / Cancel actions on short screens (or when
+      // the keyboard opens). Without it, AlertDialog overflows its
+      // content area under the actions strip.
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                hintText: 'e.g. River loop',
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _description,
-            decoration: const InputDecoration(
-              labelText: 'Description (optional)',
-              hintText: 'Surface, hills, parking, anything worth noting',
+            const SizedBox(height: 8),
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                hintText: 'Surface, hills, parking, anything worth noting',
+              ),
+              maxLines: 3,
             ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Make public'),
-            subtitle: const Text('Others can find it on Explore'),
-            value: _isPublic,
-            onChanged: (v) => setState(() => _isPublic = v),
-          ),
-        ],
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Make public'),
+              subtitle: const Text('Others can find it on Explore'),
+              value: _isPublic,
+              onChanged: (v) => setState(() => _isPublic = v),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
