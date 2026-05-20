@@ -2,7 +2,6 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/mileage_trend.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/mileage_trend_card.dart';
 
