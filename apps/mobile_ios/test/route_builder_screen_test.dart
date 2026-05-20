@@ -348,4 +348,161 @@ void main() {
       );
     });
   });
+
+  // ─── SaveRouteDialog ────────────────────────────────────────────────
+  //
+  // The Save modal hosts the name input, description input, and the
+  // Make-public switch — and the actions row at the bottom (Cancel +
+  // Save). The bug fixed in 903c5c0 was that AlertDialog clipped the
+  // switch behind the actions strip on short screens (the field
+  // report read "the save route -> save button is hiding the make
+  // public toggle"). The fix wraps the content Column in a
+  // SingleChildScrollView. These tests pin the contract end-to-end
+  // beyond the source-level guard in architecture_guards_test.dart.
+
+  group('SaveRouteDialog', () {
+    // Pump a tiny harness whose only job is to host a Builder context
+    // for `showDialog`. Returns the in-flight result Future so callers
+    // can await it AFTER driving the dialog. The Builder + button
+    // pattern is required because showDialog needs a BuildContext with
+    // a Navigator above it — pumping the SaveRouteDialog directly
+    // can't pop a Navigator that doesn't exist.
+    Future<Future<SaveDialogResult?>> openDialog(
+      WidgetTester tester, {
+      Size viewport = const Size(360, 700),
+    }) async {
+      late Future<SaveDialogResult?> resultFuture;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: viewport),
+            child: Builder(
+              builder: (ctx) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      resultFuture = showDialog<SaveDialogResult>(
+                        context: ctx,
+                        builder: (_) => const SaveRouteDialog(),
+                      );
+                    },
+                    child: const Text('Open dialog'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open dialog'));
+      await tester.pumpAndSettle();
+      return resultFuture;
+    }
+
+    testWidgets('renders Name, Description, and Make public controls',
+        (tester) async {
+      await openDialog(tester);
+
+      expect(find.text('Save route'), findsOneWidget); // title
+      expect(find.widgetWithText(TextField, ''), findsAtLeastNWidgets(2));
+      expect(find.text('Name'), findsOneWidget); // label
+      expect(find.text('Description (optional)'), findsOneWidget);
+      expect(find.text('Make public'), findsOneWidget);
+      expect(
+        find.text('Others can find it on Explore'),
+        findsOneWidget,
+        reason: 'Subtitle copy must accompany the public toggle.',
+      );
+      // Make-public switch defaults to off.
+      final switchTile =
+          tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(switchTile.value, isFalse);
+    });
+
+    testWidgets('Make public toggle is reachable on a short viewport',
+        (tester) async {
+      // The original bug: on a short viewport (or with the IME open),
+      // the SwitchListTile was clipped behind the actions strip. Pump
+      // the dialog into a deliberately tight viewport and assert the
+      // switch is still findable. With the SingleChildScrollView wrap,
+      // the user can scroll within the content area to reach it.
+      await openDialog(tester, viewport: const Size(320, 480));
+
+      final switchFinder = find.byType(SwitchListTile);
+      expect(switchFinder, findsOneWidget,
+          reason: 'Switch must be in the widget tree even when clipped — '
+              'SingleChildScrollView guarantees this.');
+      // Toggle reachable via ensureVisible (proves it lives inside a
+      // scrollable, not behind opaque actions chrome).
+      await tester.ensureVisible(switchFinder);
+      await tester.pumpAndSettle();
+      // Tappable now that it's scrolled into view.
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+      final after = tester.widget<SwitchListTile>(switchFinder);
+      expect(after.value, isTrue,
+          reason: 'Switch must respond to a tap after being scrolled into '
+              'view — proves the actions strip is not absorbing the tap.');
+    });
+
+    testWidgets('Save with name + toggle ON pops the right SaveDialogResult',
+        (tester) async {
+      final resultFuture = await openDialog(tester);
+      await tester.enterText(find.byType(TextField).first, 'River loop');
+      await tester.enterText(
+          find.byType(TextField).at(1), 'Out-and-back along the canal');
+
+      final sw = find.byType(SwitchListTile);
+      await tester.ensureVisible(sw);
+      await tester.pumpAndSettle();
+      await tester.tap(sw);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.name, 'River loop');
+      expect(result.isPublic, isTrue);
+      expect(result.description, 'Out-and-back along the canal');
+    });
+
+    testWidgets('Save with empty name is a no-op — dialog stays open',
+        (tester) async {
+      await openDialog(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      // Dialog still visible, no result popped.
+      expect(find.text('Save route'), findsOneWidget);
+    });
+
+    testWidgets('Save trims whitespace; description=empty pops as null',
+        (tester) async {
+      final resultFuture = await openDialog(tester);
+      await tester.enterText(find.byType(TextField).first, '  Loop  ');
+      // Leave description empty.
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.name, 'Loop');
+      expect(result.description, isNull,
+          reason: 'Empty / whitespace-only description should pop as null so '
+              'the DB column stays NULL, not "" (keeps the "had description" '
+              'filter accurate later).');
+    });
+
+    testWidgets('Cancel pops null', (tester) async {
+      final resultFuture = await openDialog(tester);
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNull);
+    });
+  });
 }

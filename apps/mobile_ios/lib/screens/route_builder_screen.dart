@@ -361,9 +361,9 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       showTopBanner(context, 'Place at least two waypoints first.');
       return;
     }
-    final result = await showDialog<_SaveDialogResult>(
+    final result = await showDialog<SaveDialogResult>(
       context: context,
-      builder: (_) => const _SaveRouteDialog(),
+      builder: (_) => const SaveRouteDialog(),
     );
     if (result == null || !mounted) return;
     setState(() => _saving = true);
@@ -972,24 +972,31 @@ class _WaypointPinState extends State<_WaypointPin>
   }
 }
 
-class _SaveDialogResult {
+/// Result popped by [SaveRouteDialog]. Promoted alongside the dialog so
+/// widget tests can pattern-match on the returned shape.
+@visibleForTesting
+class SaveDialogResult {
   final String name;
   final bool isPublic;
   final String? description;
-  const _SaveDialogResult({
+  const SaveDialogResult({
     required this.name,
     required this.isPublic,
     this.description,
   });
 }
 
-class _SaveRouteDialog extends StatefulWidget {
-  const _SaveRouteDialog();
+/// Save-route modal. Promoted from file-private so the widget test
+/// can pump it in isolation rather than mounting the whole builder
+/// (which would need a working MapLibre/OSRM/elevation stack).
+@visibleForTesting
+class SaveRouteDialog extends StatefulWidget {
+  const SaveRouteDialog();
   @override
-  State<_SaveRouteDialog> createState() => _SaveRouteDialogState();
+  State<SaveRouteDialog> createState() => _SaveRouteDialogState();
 }
 
-class _SaveRouteDialogState extends State<_SaveRouteDialog> {
+class _SaveRouteDialogState extends State<SaveRouteDialog> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   bool _isPublic = false;
@@ -1051,7 +1058,7 @@ class _SaveRouteDialogState extends State<_SaveRouteDialog> {
             final trimmed = _name.text.trim();
             if (trimmed.isEmpty) return;
             final desc = _description.text.trim();
-            Navigator.of(context).pop(_SaveDialogResult(
+            Navigator.of(context).pop(SaveDialogResult(
               name: trimmed,
               isPublic: _isPublic,
               description: desc.isEmpty ? null : desc,
