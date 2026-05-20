@@ -145,14 +145,27 @@ void main() {
       await _pump(tester,
           runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
       expect(find.text('Welcome!'), findsOneWidget);
-      expect(find.text('Start your first run from the Run tab'), findsOneWidget);
+      // Body copy is one combined line covering the three onboarding
+      // paths (Run tab / goal / import). Pin the start of the
+      // sentence so a future tweak that loses an action doesn't
+      // silently shrink the copy.
+      expect(
+        find.textContaining('Start your first run from the Run tab'),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('empty state has a Set a goal button', (tester) async {
+    testWidgets('empty state offers both Set a goal AND Import runs actions',
+        (tester) async {
+      // The welcome empty state ships with two side-by-side actions
+      // (primary Set-a-goal + the discoverability handle for Strava /
+      // Garmin / Health Connect bulk import) so a returning runner
+      // with a history has a one-tap path to populate the app.
       final s = await _makeStores();
       await _pump(tester,
           runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
       expect(find.text('Set a goal'), findsOneWidget);
+      expect(find.text('Import runs'), findsOneWidget);
     });
 
     testWidgets('shows section headers when store has runs', (tester) async {

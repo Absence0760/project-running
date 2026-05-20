@@ -22,6 +22,7 @@ import '../widgets/todays_workout_card.dart';
 import '../widgets/training_load_chart.dart';
 import 'coach_screen.dart';
 import 'feed_screen.dart';
+import 'import_screen.dart';
 import 'period_summary_screen.dart';
 import 'plan_detail_screen.dart';
 import 'profile_screen.dart';
@@ -107,6 +108,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // dashboard keeps working.
       debugPrint('dashboard plan-overview fetch failed: $e');
     }
+  }
+
+  void _openImport() {
+    // From the welcome empty state. Routes into the existing
+    // ImportScreen which handles Strava ZIP / Health Connect /
+    // GPX-folder paths. The user might not be signed in (apiClient
+    // null) — ImportScreen handles that internally by greying out
+    // the cloud-push tile and still allowing local import.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ImportScreen(
+          apiClient: widget.apiClient,
+          runStore: widget.runStore,
+        ),
+      ),
+    );
   }
 
   void _openTodayWorkout() {
@@ -304,7 +321,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? Column(
               children: [
                 if (actionToolbar != null) actionToolbar,
-                Expanded(child: _WelcomeEmpty(theme: theme, onAddGoal: _newGoal)),
+                Expanded(
+                  child: _WelcomeEmpty(
+                    theme: theme,
+                    onAddGoal: _newGoal,
+                    onImport: _openImport,
+                  ),
+                ),
               ],
             )
           : ListView(
@@ -505,31 +528,57 @@ class _SectionHeader extends StatelessWidget {
 class _WelcomeEmpty extends StatelessWidget {
   final ThemeData theme;
   final VoidCallback onAddGoal;
-  const _WelcomeEmpty({required this.theme, required this.onAddGoal});
+  final VoidCallback onImport;
+  const _WelcomeEmpty({
+    required this.theme,
+    required this.onAddGoal,
+    required this.onImport,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
-          const SizedBox(height: 16),
-          Text('Welcome!', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            'Start your first run from the Run tab',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.directions_run,
+                size: 64, color: theme.colorScheme.outline),
+            const SizedBox(height: 16),
+            Text('Welcome!', style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              'Start your first run from the Run tab, '
+              'set a goal, or import your history.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: onAddGoal,
-            icon: const Icon(Icons.flag_outlined),
-            label: const Text('Set a goal'),
-          ),
-        ],
+            const SizedBox(height: 24),
+            // Two side-by-side actions — primary "Set a goal" + the
+            // discoverability handle to bulk-import a Strava / Garmin /
+            // Health Connect history (the empty-state used to leave
+            // import buried under Settings).
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: onAddGoal,
+                  icon: const Icon(Icons.flag_outlined),
+                  label: const Text('Set a goal'),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: onImport,
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: const Text('Import runs'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
