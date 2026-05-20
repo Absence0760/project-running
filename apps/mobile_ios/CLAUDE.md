@@ -1,5 +1,7 @@
 # mobile_ios — AI session notes
 
+> **Deferred.** The public landing page lists the iOS app as "Coming soon" and the team is not actively pushing it forward right now. The code stays in lockstep with `mobile_android` via the byte-identical-twin convention so this doesn't bit-rot, but **don't start net-new iOS-led work** (HealthKit, Apple Sign-In hardening, App Store submission prep, etc.) until the deferral is lifted. Twin-parity edits made on Android still need to be mirrored here in the same commit — that's mechanical and stays cheap. See [../../docs/parity.md](../../docs/parity.md) for the current per-feature state.
+
 Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/mobile_android/`.** Every screen, widget, library, and test is the same file. Platform-specific behaviour (Apple Sign-In vs Google, dotenv vs `--dart-define-from-file`, Apple Watch ingest vs Wear OS bridge, etc.) is dispatched at runtime via `Platform.isIOS` / `Platform.isAndroid` inside the unified files. The pubspec deltas are the package `name` / `description` and nothing else.
 
 ## Scope — read before writing code

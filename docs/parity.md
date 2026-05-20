@@ -5,7 +5,9 @@ description: Single table listing every user-visible feature with a per-platform
 
 # Cross-platform feature parity matrix
 
-The app ships on five surfaces — **Android**, **iOS**, **Web**, **Wear OS**, **Apple Watch** — and features drift between them. This doc is the single place where that drift is visible. Every user-facing feature has a row, every platform has a column, and every cell is either `✓`, `✗`, `Partial`, or `N/A`.
+> **iOS + Apple Watch are deferred.** The landing page lists both as "Coming soon" and the team is not actively pushing them forward right now. The cells below still reflect the *code-equivalent* state on the iOS twin (byte-for-byte Dart matches `mobile_android/`) and the scaffolded state of the Swift watch project — they are not regressions to ignore, but a `Partial` / `✓` on iOS or Apple Watch should be read as "wired but unverified on Mac hardware, behind the active roadmap" rather than "shipping today". The Apple columns will be re-energised when the deferral is lifted; until then, prioritise Android / Wear OS / Web work first.
+
+The app ships on five surfaces — **Android**, **iOS** *(deferred)*, **Web**, **Wear OS**, **Apple Watch** *(deferred)* — and features drift between them. This doc is the single place where that drift is visible. Every user-facing feature has a row, every platform has a column, and every cell is either `✓`, `✗`, `Partial`, or `N/A`.
 
 See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-platform-parity-enforcement) for why this exists, and [decisions.md § 24](decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) for the web-canonical rule that shapes how gaps get closed.
 

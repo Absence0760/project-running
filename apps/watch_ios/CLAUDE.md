@@ -1,5 +1,7 @@
 # watch_ios — AI session notes
 
+> **Deferred.** The public landing page lists Apple Watch as "Coming soon" and the team is not actively pushing it forward right now. Keep the project building and don't break the existing Swift code, but **don't start net-new watch work** (HealthKit workout sessions, complications, App Store submission prep, etc.) until the deferral is lifted. See [../../docs/parity.md](../../docs/parity.md) for the current per-feature state and [decisions.md § 1](../../docs/decisions.md) for why this is a native target.
+
 **Native Swift / SwiftUI watchOS app.** Separate Xcode project (`WatchApp.xcodeproj`) — **not** a Flutter target. None of Melos, `flutter analyze`, or `dart pub` apply here. You edit `.swift` files and build through Xcode or `xcodebuild`.
 
 ## Why native Swift instead of Flutter
