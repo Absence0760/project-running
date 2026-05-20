@@ -39,18 +39,36 @@
 	// UI up for ~30s with no way out short of clearing the whole route.
 	let builderBusy = $state(false);
 
-	// Dev-only test hook: Playwright drives the page against `vite dev`
-	// (where import.meta.env.DEV is true). Exposing the builder lets
-	// e2e specs invoke `generateLoop` with exact lat/lng — converting
-	// a target coord to a canvas pixel position is unreliable across
-	// viewports + zoom levels and would couple every spec to MapTiler's
-	// projection. Production builds (`adapter-static` with DEV=false)
-	// never reach this branch, so no leak.
+	// Dev-only test hooks: Playwright drives the page against `vite dev`
+	// (where import.meta.env.DEV is true). Two surfaces are exposed —
+	//   - `__routeBuilder`: the RouteBuilder component instance, which
+	//     already exports addWaypoint / clearWaypoints / generateLoop /
+	//     etc. Specs use these instead of synthetic canvas clicks
+	//     because the MapLibre WebGL pointer-event pipeline doesn't
+	//     deliver clicks reliably in headless chromium, and converting
+	//     a target lat/lng to a canvas pixel position would couple
+	//     every spec to MapTiler's projection.
+	//   - `__routeBuilderPage`: the page-level pickingPoint /
+	//     startPoint / endPoint state, so a spec can set a start
+	//     without dispatching the pick-on-map flow.
+	// Production builds (`adapter-static` with DEV=false) never reach
+	// this branch, so no leak.
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		if (!import.meta.env.DEV) return;
 		if (!builder) return;
-		(window as unknown as Record<string, unknown>).__routeBuilder = builder;
+		const w = window as unknown as Record<string, unknown>;
+		w.__routeBuilder = builder;
+		w.__routeBuilderPage = {
+			setStartPoint(p: { lat: number; lng: number } | null) {
+				startPoint = p;
+				startLabel = p ? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` : '';
+			},
+			setEndPoint(p: { lat: number; lng: number } | null) {
+				endPoint = p;
+				endLabel = p ? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` : '';
+			}
+		};
 	});
 
 	// Reactive: tracks the module-level unit signal so every km/mi

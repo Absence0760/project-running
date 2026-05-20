@@ -1,6 +1,69 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { USER_A } from '../fixtures/users';
+
+/**
+ * Dev-only test hooks (see /routes/new/+page.svelte). The page exposes
+ * the RouteBuilder component instance + a small page-level state
+ * setter on `window` when import.meta.env.DEV is true (i.e. under
+ * `vite dev`, which is what playwright.config.ts boots). Specs use
+ * these instead of synthetic canvas clicks — MapLibre's WebGL pointer
+ * pipeline doesn't deliver clicks reliably in headless chromium.
+ */
+type TestPoint = { lat: number; lng: number };
+
+async function waitForRouteBuilder(page: Page): Promise<void> {
+	await page.waitForFunction(
+		() =>
+			typeof (window as unknown as { __routeBuilder?: unknown }).__routeBuilder !==
+			'undefined',
+		undefined,
+		{ timeout: 10_000 }
+	);
+}
+
+async function addWaypoints(page: Page, points: TestPoint[]): Promise<void> {
+	await page.evaluate((pts) => {
+		const b = (window as unknown as {
+			__routeBuilder: { addWaypoint: (p: { lat: number; lng: number }) => void };
+		}).__routeBuilder;
+		for (const p of pts) b.addWaypoint(p);
+	}, points);
+}
+
+/**
+ * Drop N waypoints arranged in a small triangle around the map's
+ * current center. The marker DOM elements need to be on-screen for
+ * positional `.click()` to work; pinning absolute lat/lng to a fixed
+ * location (e.g. Melbourne) can land the markers outside the default
+ * map viewport.
+ */
+async function addWaypointsNearMapCenter(
+	page: Page,
+	offsets: Array<{ dLat: number; dLng: number }>
+): Promise<void> {
+	const center = await page.evaluate(() => {
+		const b = (window as unknown as {
+			__routeBuilder: { getMapCenter: () => { lat: number; lng: number } | null };
+		}).__routeBuilder;
+		return b.getMapCenter();
+	});
+	if (!center) throw new Error('Map center not available');
+	const points = offsets.map((o) => ({
+		lat: center.lat + o.dLat,
+		lng: center.lng + o.dLng
+	}));
+	await addWaypoints(page, points);
+}
+
+async function setStartPoint(page: Page, point: TestPoint): Promise<void> {
+	await page.evaluate((p) => {
+		const pg = (window as unknown as {
+			__routeBuilderPage: { setStartPoint: (p: { lat: number; lng: number } | null) => void };
+		}).__routeBuilderPage;
+		pg.setStartPoint(p);
+	}, point);
+}
 
 /**
  * /routes/new — the route builder page.
@@ -205,33 +268,24 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// failed OSRM run still left Save enabled with a stale or
 		// empty polyline. The fix made calculateRoute() return a
 		// success boolean. Intercept every OSRM segment with a 503 so
-		// the call fails, drop two waypoints via the builder's exported
-		// API on `window` (RouteBuilder doesn't expose itself, but the
-		// parent page binds the instance; we trigger waypoints via
-		// dispatching a synthetic map event below), and assert the
-		// gate stays armed.
+		// the call fails, drop two waypoints via the builder's dev-
+		// exposed addWaypoint API (synthetic canvas clicks don't land
+		// reliably on MapLibre's WebGL pointer pipeline in headless
+		// chromium), and assert the gate stays armed.
 		await page.route('https://router.project-osrm.org/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' })
 		);
 
 		await page.goto('/routes/new');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
-
-		// Drive the builder by dispatching two clicks on the canvas at
-		// slightly different positions. MapLibre converts canvas clicks
-		// into map clicks → the parent's handleMapPick + addWaypoint
-		// fire → waypointCount becomes 2 → Calculate Route enables.
-		const canvas = page.locator('.maplibregl-canvas');
-		await canvas.click({ position: { x: 200, y: 200 } });
-		await canvas.click({ position: { x: 300, y: 260 } });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 }
+		]);
 
 		const calc = page.getByRole('button', { name: /Calculate Route/ });
-		// If waypoints didn't register (test env / map-not-ready edge),
-		// skip the rest — the gate-on-failure behavior is still proven
-		// by the type-level boolean return and the parent's
-		// `routed = !!ok` change visible in the diff.
-		const enabled = await calc.isEnabled().catch(() => false);
-		test.skip(!enabled, 'MapLibre canvas clicks did not register two waypoints in this env.');
+		await expect(calc).toBeEnabled({ timeout: 5_000 });
 
 		await calc.click();
 		// Wait for the routing attempt to settle (3 segments × 2 retries × 8s timeout cap).
@@ -315,31 +369,35 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		//    `routed` flag stayed true — letting the user Save a
 		//    route that hadn't been routed through the new point.
 		//
-		// We can't reliably drive the maplibre canvas clicks in CI
-		// (the existing OSRM-failure test uses the same approach with
-		// a graceful skip). Drop waypoints via canvas clicks; if even
-		// two waypoints don't register, skip — the unit + diff review
-		// still pin the behaviour.
+		// Use the dev-exposed addWaypoint API to plant three waypoints
+		// deterministically — synthetic canvas clicks on the MapLibre
+		// WebGL surface aren't reliable in headless chromium. Plant
+		// them near the map's current center so the marker DOM lands
+		// inside the viewport (needed for the marker.click() below).
 		await page.goto('/routes/new');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
-
-		const canvas = page.locator('.maplibregl-canvas');
-		await canvas.click({ position: { x: 200, y: 200 } });
-		await canvas.click({ position: { x: 300, y: 260 } });
-		await canvas.click({ position: { x: 400, y: 200 } });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: -0.05, dLng: 0.05 },
+			{ dLat: 0, dLng: 0.1 }
+		]);
 
 		const pointsValue = page.locator('.builder-stat-value').nth(2);
-		const startingCount = await pointsValue.textContent().catch(() => '0');
-		if (!startingCount || parseInt(startingCount, 10) < 3) {
-			test.skip(true, 'MapLibre canvas clicks did not register 3 waypoints in this env.');
-			return;
-		}
+		await expect(pointsValue).toHaveText('3', { timeout: 5_000 });
+		const startingCount = '3';
 
 		// Click the middle marker (waypoint 2 in 1-based, index 1
 		// in the markers array — the second .maplibregl-marker).
+		// force: true bypasses Playwright's "subtree intercepts pointer
+		// events" check — the SVG path inside the marker is part of
+		// the marker's own DOM, not an unrelated overlay; the
+		// component's click handler listens at the marker root and
+		// fires regardless of which descendant the synthetic click
+		// originates on.
 		const markers = page.locator('.maplibregl-marker');
 		const before = await markers.count();
-		await markers.nth(1).click();
+		await markers.nth(1).click({ force: true });
 		await page.waitForTimeout(150);
 
 		// A new marker should land at the SAME lat/lng as the clicked
@@ -358,18 +416,11 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// refactor strips that line, this catches it before users
 		// re-report "I can't tell if I'm allowed to click markers".
 		await page.goto('/routes/new');
-		// Needed: canvas.click() races against MapLibre's init. Without
-		// the wait the click can fire before the map's gl context is up,
-		// no waypoint is created, marker.isVisible() returns false, and
-		// the test silently skips ("MapLibre canvas click did not register").
-		await page.waitForLoadState('networkidle');
-		const canvas = page.locator('.maplibregl-canvas');
-		await canvas.click({ position: { x: 200, y: 200 } });
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [{ lng: 144.97, lat: -37.816 }]);
 		const marker = page.locator('.maplibregl-marker').first();
-		if (!(await marker.isVisible().catch(() => false))) {
-			test.skip(true, 'MapLibre canvas click did not register a waypoint in this env.');
-			return;
-		}
+		await expect(marker).toBeVisible({ timeout: 5_000 });
 		const cursor = await marker.evaluate((el) => getComputedStyle(el).cursor);
 		expect(cursor).toBe('pointer');
 	});
@@ -422,21 +473,14 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		);
 		await page.goto('/routes/new');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
 
-		// Pick a start so the zoom guard doesn't intercept.
+		// Open the distance-target panel + plant the start point
+		// programmatically (the page hook bypasses the WebGL pick-on-map
+		// click). Generate then runs the same OSRM path the user would.
 		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
-		await page.getByRole('button', { name: 'Pick start on map' }).click();
-		await page.locator('.maplibregl-canvas').click({ position: { x: 200, y: 200 } });
-
-		// If the picker didn't capture the click (test env), skip — the
-		// behaviour is still covered by the unit tests on the pure
-		// helpers and the type-level boolean return.
-		const startSet = await page
-			.locator('.point-set')
-			.first()
-			.isVisible()
-			.catch(() => false);
-		test.skip(!startSet, 'MapLibre canvas pick did not register a start point.');
+		await setStartPoint(page, { lng: 144.97, lat: -37.816 });
+		await expect(page.locator('.point-set').first()).toBeVisible({ timeout: 5_000 });
 
 		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();
 		const banner = page.locator('.routing-error').first();
@@ -459,17 +503,11 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		});
 		await page.goto('/routes/new');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
 
 		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
-		await page.getByRole('button', { name: 'Pick start on map' }).click();
-		await page.locator('.maplibregl-canvas').click({ position: { x: 200, y: 200 } });
-
-		const startSet = await page
-			.locator('.point-set')
-			.first()
-			.isVisible()
-			.catch(() => false);
-		test.skip(!startSet, 'MapLibre canvas pick did not register a start point.');
+		await setStartPoint(page, { lng: 144.97, lat: -37.816 });
+		await expect(page.locator('.point-set').first()).toBeVisible({ timeout: 5_000 });
 
 		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();
 
