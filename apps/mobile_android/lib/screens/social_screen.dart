@@ -1,38 +1,45 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../local_route_store.dart';
+import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import 'clubs_screen.dart';
 import 'feed_screen.dart';
 import 'people_screen.dart';
+import 'routes_screen.dart';
 
-/// The Social tab — mirrors the web `/social` hub (decisions §54).
-/// Three sub-tabs:
+/// The Social tab — mirrors the web `/social` hub (decisions §54)
+/// plus the Routes surface (folded onto mobile since the bottom nav
+/// can't carry six tabs without crowding). Four sub-tabs:
 ///   - Feed: 14-day activity feed of public runs from people you follow.
 ///   - People: name search + suggested-from-clubs discovery.
 ///   - Clubs: browse public clubs + the user's own memberships.
+///   - Routes: saved + bookmarked routes (mobile only — on web this is
+///     a top-level sidebar item; on mobile it lives here so the
+///     bottom-nav stays at five tabs).
 ///
-/// Each sub-tab embeds the existing screen widget in `embedded: true`
-/// mode so the screen returns just its body without its own
-/// Scaffold/AppBar/FAB. SocialScreen hosts the chrome — a single
-/// AppBar with a TabBar at the bottom, and a single FAB that only
-/// surfaces on the Clubs tab (matching the web Hub's behaviour where
-/// the "New club" CTA only renders inside the Clubs view).
-///
-/// Reachable as the 5th bottom-nav tab (renamed from "Clubs"). The
-/// standalone routes to FeedScreen / PeopleScreen / ClubsScreen
-/// (each used from various AppBar action buttons) still work via
-/// the legacy `embedded: false` path; SocialScreen is the canonical
-/// surface.
+/// Each sub-tab embeds its screen widget in `embedded: true` mode so
+/// the screen returns just its body without its own Scaffold/AppBar/FAB.
+/// SocialScreen hosts the chrome — a single AppBar with a TabBar at
+/// the bottom, and a single FAB slot that takes whichever child FAB
+/// is appropriate for the active tab (Clubs hoists "Create club",
+/// Routes hoists the dual "Build" + "Import" column).
 class SocialScreen extends StatefulWidget {
   final ApiClient api;
   final SocialService social;
   final TrainingService training;
-  /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs.
-  /// Matches the web `?tab=feed|people|clubs` deep-link contract.
-  /// Defaults to Clubs (2) — returning users mostly land here from
-  /// the bottom nav to check on a club they've joined.
+  final LocalRouteStore routeStore;
+  final Preferences preferences;
+  /// Optional preselect-this-route handoff used by the Run tab when a
+  /// user picks "Start with this route" on a detail screen. Plumbed
+  /// through to the embedded `RoutesScreen`.
+  final void Function(cm.Route route)? onStartRun;
+  /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs,
+  /// 3 = Routes. Defaults to Clubs (2) — returning users mostly land
+  /// here from the bottom nav to check on a club they've joined.
   final int initialTab;
 
   const SocialScreen({
@@ -40,6 +47,9 @@ class SocialScreen extends StatefulWidget {
     required this.api,
     required this.social,
     required this.training,
+    required this.routeStore,
+    required this.preferences,
+    this.onStartRun,
     this.initialTab = 2,
   });
 
@@ -51,14 +61,15 @@ class _SocialScreenState extends State<SocialScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _controller;
   final _clubsKey = GlobalKey<ClubsScreenState>();
+  final _routesKey = GlobalKey<RoutesScreenState>();
 
   @override
   void initState() {
     super.initState();
     _controller = TabController(
-      length: 3,
+      length: 4,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 2),
+      initialIndex: widget.initialTab.clamp(0, 3),
     );
     _controller.addListener(() {
       // Repaint so the FAB visibility tracks the active tab.
@@ -87,6 +98,7 @@ class _SocialScreenState extends State<SocialScreen>
             Tab(text: 'Feed', icon: Icon(Icons.dynamic_feed)),
             Tab(text: 'People', icon: Icon(Icons.person_search)),
             Tab(text: 'Clubs', icon: Icon(Icons.groups)),
+            Tab(text: 'Routes', icon: Icon(Icons.route)),
           ],
         ),
       ),
@@ -101,16 +113,38 @@ class _SocialScreenState extends State<SocialScreen>
             training: widget.training,
             embedded: true,
           ),
+          RoutesScreen(
+            key: _routesKey,
+            apiClient: widget.api,
+            routeStore: widget.routeStore,
+            preferences: widget.preferences,
+            onStartRun: widget.onStartRun,
+            embedded: true,
+          ),
         ],
       ),
-      floatingActionButton: _controller.index == 2
-          ? Builder(
-              builder: (ctx) {
-                final state = _clubsKey.currentState;
-                return state?.buildCreateClubFab(ctx) ?? const SizedBox.shrink();
-              },
-            )
-          : null,
+      floatingActionButton: _activeFab(),
     );
+  }
+
+  /// FAB hoisting: each embedded sub-tab exposes its own FAB widget(s)
+  /// via a `buildXFab(...)` method on its public State. We render
+  /// whichever matches the active tab — and nothing for tabs that
+  /// don't have a FAB.
+  Widget? _activeFab() {
+    switch (_controller.index) {
+      case 2:
+        return Builder(builder: (ctx) {
+          final state = _clubsKey.currentState;
+          return state?.buildCreateClubFab(ctx) ?? const SizedBox.shrink();
+        });
+      case 3:
+        return Builder(builder: (ctx) {
+          final state = _routesKey.currentState;
+          return state?.buildRouteFabs(ctx) ?? const SizedBox.shrink();
+        });
+      default:
+        return null;
+    }
   }
 }

@@ -1,14 +1,18 @@
-// Widget tests for SocialScreen — the new top-level "Social" hub
-// that replaces the old Clubs tab on the bottom nav. Mirrors the web
-// `/social` route's three-tab shape (Feed / People / Clubs).
+// Widget tests for SocialScreen — the top-level "Social" hub that
+// replaced the old Clubs tab on the bottom nav. Mirrors the web
+// `/social` route's three-tab shape (Feed / People / Clubs), plus a
+// 4th Routes sub-tab unique to mobile (web keeps Routes as a
+// sidebar peer — mobile folds it to keep the bottom nav at 5 items).
 //
 // The full content of each sub-tab is exercised by the per-screen
-// widget tests (feed_screen_test, people_screen_test, clubs_screen
-// has its own coverage). This file pins the SocialScreen-specific
-// contract: the AppBar TabBar mounts with the right 3 tabs, the
-// initialTab routing works, and the FAB visibility tracks the
-// active tab (only the Clubs tab gets the "New club" FAB — Feed
-// and People have no create surface).
+// widget tests (feed_screen_test, people_screen_test, clubs_screen,
+// routes_screen). This file pins the SocialScreen-specific contract:
+// the AppBar TabBar mounts with the right 4 tabs, the initialTab
+// routing works, and the FAB visibility tracks the active tab
+// (Clubs gets "New club", Routes gets dual "Build" + "Import";
+// Feed and People have no create surface).
+
+import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +20,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../lib/local_route_store.dart';
+import '../lib/preferences.dart';
 import '../lib/screens/social_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
@@ -34,14 +40,33 @@ Future<void> _ensureSupabase() async {
   _supabaseReady = true;
 }
 
+late Directory _tmpDir;
+
+Future<LocalRouteStore> _makeRouteStore() async {
+  _tmpDir = Directory.systemTemp.createTempSync('social_screen_test_');
+  final store = LocalRouteStore();
+  // LocalRouteStore.init reads SharedPreferences for the on-disk path
+  // override; the mock prefs above keep it pointed at a temp dir.
+  await store.init(overrideDirectory: _tmpDir);
+  return store;
+}
+
+Future<Preferences> _makePreferences() async {
+  final p = Preferences();
+  await p.init();
+  return p;
+}
+
 Widget _wrap(SocialScreen child) =>
     MaterialApp(home: child);
 
-SocialScreen _socialScreen({int initialTab = 2}) {
+Future<SocialScreen> _socialScreen({int initialTab = 2}) async {
   return SocialScreen(
     api: ApiClient(),
     social: SocialService(),
     training: TrainingService(),
+    routeStore: await _makeRouteStore(),
+    preferences: await _makePreferences(),
     initialTab: initialTab,
   );
 }
@@ -50,21 +75,29 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(_ensureSupabase);
 
-  testWidgets('SocialScreen mounts 3 tabs with Feed / People / Clubs labels',
+  tearDown(() {
+    if (_tmpDir.existsSync()) _tmpDir.deleteSync(recursive: true);
+  });
+
+  testWidgets(
+      'SocialScreen mounts 4 tabs with Feed / People / Clubs / Routes labels',
       (tester) async {
-    await tester.pumpWidget(_wrap(_socialScreen()));
+    await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
 
     expect(find.byType(TabBar), findsOneWidget);
-    // Tab labels visible in the AppBar tab strip.
+    // Tab labels visible in the AppBar tab strip. The Routes tab is
+    // mobile-only — it's the one parity bend we make from web (which
+    // keeps Routes as a sidebar peer).
     expect(find.text('Feed'), findsOneWidget);
     expect(find.text('People'), findsOneWidget);
     expect(find.text('Clubs'), findsOneWidget);
+    expect(find.text('Routes'), findsOneWidget);
   });
 
   testWidgets('initialTab=2 (default) selects the Clubs tab',
       (tester) async {
-    await tester.pumpWidget(_wrap(_socialScreen()));
+    await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, 2);
@@ -73,7 +106,7 @@ void main() {
   testWidgets('initialTab=0 selects the Feed tab on first frame',
       (tester) async {
     // Mirrors the web `/social?tab=feed` deep link.
-    await tester.pumpWidget(_wrap(_socialScreen(initialTab: 0)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 0)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, 0);
@@ -81,21 +114,29 @@ void main() {
 
   testWidgets('initialTab=1 selects the People tab on first frame',
       (tester) async {
-    await tester.pumpWidget(_wrap(_socialScreen(initialTab: 1)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 1)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, 1);
   });
 
+  testWidgets('initialTab=3 selects the Routes tab on first frame',
+      (tester) async {
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 3)));
+    await tester.pump();
+    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.controller!.index, 3);
+  });
+
   testWidgets('initialTab out-of-range clamps to a valid index',
       (tester) async {
     // Defensive: a future deep link that points at an unknown tab
-    // (e.g. ?tab=5 after a new tab is added then removed) must NOT
-    // crash. Pin the clamp behaviour.
-    await tester.pumpWidget(_wrap(_socialScreen(initialTab: 99)));
+    // (e.g. ?tab=99 after a tab is added then removed) must NOT
+    // crash. Pin the clamp behaviour. Upper bound is now 3 (Routes).
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 99)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.controller!.index, lessThanOrEqualTo(2));
+    expect(tabBar.controller!.index, lessThanOrEqualTo(3));
     expect(tabBar.controller!.index, greaterThanOrEqualTo(0));
   });
 
@@ -105,7 +146,7 @@ void main() {
     // "Social" title in the AppBar would just duplicate it. Pin
     // that toolbarHeight=0 hides the title row, leaving only the
     // TabBar visible at the top.
-    await tester.pumpWidget(_wrap(_socialScreen()));
+    await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
     final appBar = tester.widget<AppBar>(find.byType(AppBar));
     expect(appBar.toolbarHeight, 0);

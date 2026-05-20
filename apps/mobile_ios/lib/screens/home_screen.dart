@@ -16,7 +16,6 @@ import '../widgets/billing_issue_banner.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
 import 'runs_screen.dart';
-import 'routes_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
 import 'social_screen.dart';
@@ -150,20 +149,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _LazyKeepAliveTab(
-        builder: () => RoutesScreen(
-          key: const PageStorageKey('routes'),
-          apiClient: widget.apiClient,
-          routeStore: widget.routeStore,
-          preferences: widget.preferences,
-          onStartRun: _startRunWithRoute,
-        ),
-      ),
-      _LazyKeepAliveTab(
         builder: () => SocialScreen(
           key: const PageStorageKey('social'),
           api: widget.apiClient ?? ApiClient(),
           social: widget.social,
           training: widget.training,
+          routeStore: widget.routeStore,
+          preferences: widget.preferences,
+          onStartRun: _startRunWithRoute,
         ),
       ),
       _LazyKeepAliveTab(
@@ -245,10 +238,12 @@ class _HomeScreenState extends State<HomeScreen> {
           selectedIndex: index,
           onDestinationSelected: _onNavTapped,
           destinations: const [
+            // Routes lives as a sub-tab of Social on mobile — bottom nav
+            // can't carry six items without crowding the labels. The web
+            // side keeps Routes as a sidebar peer; mobile compresses.
             NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
             NavigationDestination(icon: Icon(Icons.play_arrow), label: 'Run'),
             NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-            NavigationDestination(icon: Icon(Icons.route), label: 'Routes'),
             NavigationDestination(icon: Icon(Icons.public), label: 'Social'),
             NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
           ],

@@ -80,26 +80,47 @@ void main() {
   });
 
   group('HomeScreen', () {
-    testWidgets('renders a NavigationBar with six destinations', (tester) async {
+    testWidgets('renders a NavigationBar with five destinations', (tester) async {
+      // Routes was folded into Social as a sub-tab so the bottom nav
+      // stays at five items — see `social_screen.dart`. The mobile_*
+      // CLAUDE.md "Scope — read before writing code" rule that web is
+      // canonical applies: keeping the top-level nav lean on mobile
+      // saves the bottom row for the surfaces that get the most
+      // mid-run / one-thumb taps (Home / Run / History / Social /
+      // Settings).
       final s = await _makeStores();
       await _pump(tester, s);
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(find.byType(NavigationDestination), findsNWidgets(6));
+      expect(find.byType(NavigationDestination), findsNWidgets(5));
     });
 
-    testWidgets('shows all six nav labels', (tester) async {
+    testWidgets('shows all five nav labels', (tester) async {
       final s = await _makeStores();
       await _pump(tester, s);
       // Scope each label search to descendants of the NavigationBar so
       // duplicate text elsewhere in the page body doesn't cause false failures.
       final navBar = find.byType(NavigationBar);
-      for (final label in ['Home', 'Run', 'History', 'Routes', 'Social', 'Settings']) {
+      for (final label in ['Home', 'Run', 'History', 'Social', 'Settings']) {
         expect(
           find.descendant(of: navBar, matching: find.text(label)),
           findsOneWidget,
           reason: 'expected "$label" nav label inside NavigationBar',
         );
       }
+    });
+
+    testWidgets('Routes label no longer in the bottom NavigationBar',
+        (tester) async {
+      // Routes is now a sub-tab of Social, not a top-level destination.
+      // Catches a regression that adds Routes back to the bottom nav.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      final navBar = find.byType(NavigationBar);
+      expect(
+        find.descendant(of: navBar, matching: find.text('Routes')),
+        findsNothing,
+        reason: 'Routes must live inside SocialScreen, not on the bottom nav',
+      );
     });
 
     testWidgets('initial selected tab is Run (index 1)', (tester) async {

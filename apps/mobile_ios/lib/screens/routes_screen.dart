@@ -57,6 +57,12 @@ class RoutesScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final void Function(cm.Route route)? onStartRun;
+  /// When true, the screen renders only its body — the parent (e.g.
+  /// `SocialScreen`) owns the Scaffold/AppBar/FAB chrome. The dual
+  /// "Build" / "Import" FAB column is exposed via [RoutesScreenState.buildRouteFabs]
+  /// so the parent can hoist it on demand. Same pattern as
+  /// `ClubsScreen.embedded`.
+  final bool embedded;
 
   const RoutesScreen({
     super.key,
@@ -64,13 +70,14 @@ class RoutesScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     this.onStartRun,
+    this.embedded = false,
   });
 
   @override
-  State<RoutesScreen> createState() => _RoutesScreenState();
+  State<RoutesScreen> createState() => RoutesScreenState();
 }
 
-class _RoutesScreenState extends State<RoutesScreen> {
+class RoutesScreenState extends State<RoutesScreen> {
   bool _syncing = false;
   List<cm.Route> _bookmarks = const [];
 
@@ -446,78 +453,7 @@ class _RoutesScreenState extends State<RoutesScreen> {
     final emptyAfterFilter =
         mergedRoutes.isNotEmpty && filtered.isEmpty;
 
-    return Scaffold(
-      appBar: AppBar(
-        // No title — the bottom-nav already labels this tab "Routes".
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.explore),
-            tooltip: 'Explore public routes',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ExploreRoutesScreen(
-                    apiClient: widget.apiClient,
-                    routeStore: widget.routeStore,
-                    preferences: widget.preferences,
-                    onStartRun: widget.onStartRun,
-                  ),
-                ),
-              );
-            },
-          ),
-          if (widget.apiClient != null)
-            IconButton(
-              icon: const Icon(Icons.local_fire_department_outlined),
-              tooltip: 'Routes heatmap',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => RoutesHeatmapScreen(
-                    api: widget.apiClient!,
-                  ),
-                ),
-              ),
-            ),
-          if (_syncing)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (widget.apiClient?.userId != null)
-            IconButton(
-              icon: const Icon(Icons.cloud_download),
-              tooltip: 'Sync from cloud',
-              onPressed: _fetchRemoteRoutes,
-            ),
-        ],
-      ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (widget.apiClient != null)
-            FloatingActionButton.extended(
-              heroTag: 'routes_build_fab',
-              onPressed: _openBuilder,
-              icon: const Icon(Icons.add_location_alt),
-              label: const Text('Build'),
-            ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'routes_import_fab',
-            onPressed: _importFile,
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Import'),
-          ),
-        ],
-      ),
-      body: mergedRoutes.isEmpty
+    final body = mergedRoutes.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -710,7 +646,111 @@ class _RoutesScreenState extends State<RoutesScreen> {
                   ),
                 );
               },
+            );
+
+    if (widget.embedded) {
+      // Embedded mode: SocialScreen owns the Scaffold + the FAB. The
+      // action buttons (Explore / Heatmap / Sync) move into an inline
+      // toolbar row above the list — same pattern as `dashboard_screen`.
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: _buildActions(context),
             ),
+          ),
+          Expanded(child: body),
+        ],
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        actions: _buildActions(context),
+      ),
+      floatingActionButton: buildRouteFabs(context),
+      body: body,
+    );
+  }
+
+  /// Inline action buttons: Explore (browse public routes), Heatmap,
+  /// and a Sync indicator. Used by both the standalone AppBar (when
+  /// `embedded: false`) and the inline toolbar row (when embedded).
+  List<Widget> _buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.explore),
+        tooltip: 'Explore public routes',
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ExploreRoutesScreen(
+                apiClient: widget.apiClient,
+                routeStore: widget.routeStore,
+                preferences: widget.preferences,
+                onStartRun: widget.onStartRun,
+              ),
+            ),
+          );
+        },
+      ),
+      if (widget.apiClient != null)
+        IconButton(
+          icon: const Icon(Icons.local_fire_department_outlined),
+          tooltip: 'Routes heatmap',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RoutesHeatmapScreen(
+                api: widget.apiClient!,
+              ),
+            ),
+          ),
+        ),
+      if (_syncing)
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        )
+      else if (widget.apiClient?.userId != null)
+        IconButton(
+          icon: const Icon(Icons.cloud_download),
+          tooltip: 'Sync from cloud',
+          onPressed: _fetchRemoteRoutes,
+        ),
+    ];
+  }
+
+  /// Dual-FAB column ("Build" + "Import"). Public so the embedded host
+  /// (`SocialScreen`) can hoist it into its own Scaffold's
+  /// `floatingActionButton` slot when the Routes sub-tab is active.
+  Widget buildRouteFabs(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (widget.apiClient != null)
+          FloatingActionButton.extended(
+            heroTag: 'routes_build_fab',
+            onPressed: _openBuilder,
+            icon: const Icon(Icons.add_location_alt),
+            label: const Text('Build'),
+          ),
+        const SizedBox(height: 12),
+        FloatingActionButton.extended(
+          heroTag: 'routes_import_fab',
+          onPressed: _importFile,
+          icon: const Icon(Icons.upload_file),
+          label: const Text('Import'),
+        ),
+      ],
     );
   }
 }
