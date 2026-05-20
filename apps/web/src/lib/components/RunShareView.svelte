@@ -67,6 +67,11 @@
 
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
 
+	// Linked-cursor index — same shape as /runs/[id]. ElevationProfile
+	// onhover sets it; RunMap reads it. Idx-space is shared because
+	// elevations derives 1:1 from the same track.
+	let chartHoverIdx = $state<number | null>(null);
+
 	let paceHeatmapActivity = $derived.by<'run' | 'walk' | 'cycle' | 'hike' | undefined>(() => {
 		const key = run?.metadata?.['activity_type'];
 		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
@@ -94,14 +99,18 @@
 
 	{#if track.length > 0}
 		<div class="map-container" class:compact>
-			<RunMap {track} activity={paceHeatmapActivity} />
+			<RunMap {track} activity={paceHeatmapActivity} hoverIdx={chartHoverIdx} />
 		</div>
 	{/if}
 
 	{#if elevations.some((e) => e > 0)}
 		<section class="card">
 			<h2>Elevation Profile</h2>
-			<ElevationProfile {elevations} totalDistance={run.distance_m} />
+			<ElevationProfile
+				{elevations}
+				totalDistance={run.distance_m}
+				onhover={(idx) => (chartHoverIdx = idx)}
+			/>
 		</section>
 	{/if}
 

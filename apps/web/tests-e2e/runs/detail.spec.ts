@@ -4,6 +4,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import type { TrackPoint } from '../../src/lib/types';
 
 /**
  * /runs/[id] — owner-only run detail page.
@@ -476,6 +477,97 @@ test.describe('/runs/[id]', () => {
 		} finally {
 			await admin.from('run_gear').delete().eq('run_id', runId);
 			await deleteRun(runId);
+		}
+	});
+
+	// Linked-cursor: hovering the elevation profile paints a marker
+	// on the route map at the corresponding point. Pinned end-to-end
+	// because the wiring spans three components (ElevationProfile,
+	// /runs/[id] page-level state, RunMap) and any one going silent
+	// breaks the affordance for real users without any test failure
+	// in the unit-level guards. Plants a run WITH a track + elevation
+	// samples (RUNNER_PUBLIC_RUN_ID is metadata-only — no Storage
+	// track upload — so the Elevation Profile section is gated off
+	// for it).
+	test('hovering the elevation profile paints a marker on the route map', async ({
+		page,
+	}) => {
+		// Build a small synthetic track with a real elevation curve so
+		// the chart has something to draw + an idx-space wide enough
+		// for the hover-at-60% lookup to land on a non-edge point.
+		const track: TrackPoint[] = [];
+		for (let i = 0; i < 30; i++) {
+			track.push({
+				lat: 51.5 + i * 0.0005,
+				lng: -0.1 + i * 0.0007,
+				// Sine-shaped elevation — non-flat so the chart renders a
+				// real curve and the hover idx lookup is meaningful.
+				ele: 50 + 20 * Math.sin((i / 30) * Math.PI),
+			});
+		}
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+			duration_s: 1800,
+			distance_m: 5000,
+			source: 'app',
+			is_public: true,
+			metadata: { activity_type: 'run', title: 'e2e linked-cursor track' },
+			track,
+		});
+		try {
+			await page.goto(`/runs/${planted}`);
+			// Wait for both the elevation profile and the map to be live.
+			await expect(
+				page.getByRole('heading', { name: 'Elevation Profile' }),
+			).toBeVisible({ timeout: 15_000 });
+			await expect(page.locator('.maplibregl-map')).toBeVisible({
+				timeout: 10_000,
+			});
+
+			// No hover yet — the marker should be absent.
+			await expect(
+				page.locator('[data-testid="chart-hover-marker"]'),
+			).toHaveCount(0);
+
+			// Find the SVG and pointer-move over the middle of it. The chart's
+			// pointer handlers attach via `onpointermove`, so dispatching a
+			// real pointer event is what wakes them up.
+			const svg = page.locator('.elevation-svg').first();
+			await expect(svg).toBeVisible();
+			// Scroll into view first — Elevation Profile lives well down
+			// the page and Playwright's positional .hover needs the SVG
+			// inside the viewport.
+			await svg.scrollIntoViewIfNeeded();
+			const box = await svg.boundingBox();
+			if (!box) throw new Error('elevation svg has no bounding box');
+
+			// Hover ~60 % across — pick a non-edge point so the index is well
+			// into the track, not at start/end (which could surface a wrong-
+			// position-by-rounding ambiguity).
+			await svg.hover({ position: { x: box.width * 0.6, y: box.height / 2 } });
+
+			// The marker should now exist + be positioned by MapLibre (i.e.
+			// transformed via the maplibregl-marker class). The pulse
+			// animation keeps it visually distinct from the segment pin.
+			const marker = page.locator('[data-testid="chart-hover-marker"]');
+			await expect(marker).toBeVisible({ timeout: 5_000 });
+			// And it must be a child of the map, not a stray DOM node — pin
+			// the parent relationship so a refactor that moves it outside
+			// the map container fails here.
+			const inMap = await marker.evaluate((el) =>
+				Boolean(el.closest('.maplibregl-map')),
+			);
+			expect(inMap).toBe(true);
+
+			// Move the pointer off the chart — the marker should clear.
+			// Hover-leave is the contract that makes the cursor feel light;
+			// without it the dot stays painted on the map after the user
+			// looks away.
+			await page.mouse.move(10, 10);
+			await expect(marker).toHaveCount(0, { timeout: 5_000 });
+		} finally {
+			await deleteRun(planted);
 		}
 	});
 

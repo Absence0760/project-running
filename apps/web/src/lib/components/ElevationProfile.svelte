@@ -1,8 +1,20 @@
 <script lang="ts">
 	import { formatDistance } from '$lib/units.svelte';
 
-	let { elevations = [], totalDistance = 0 }: { elevations: number[]; totalDistance: number } =
-		$props();
+	/// `onhover` is fired with the elevations-index the user is
+	/// currently inspecting (null when the pointer leaves the chart).
+	/// The parent maps that index back to a lat/lng on the track and
+	/// paints a hover marker on the map — the chart-to-map linked
+	/// cursor / brushing pattern Nike Run Club + Strava both ship.
+	let {
+		elevations = [],
+		totalDistance = 0,
+		onhover,
+	}: {
+		elevations: number[];
+		totalDistance: number;
+		onhover?: (idx: number | null) => void;
+	} = $props();
 
 	// Render at the container's measured width. `bind:clientWidth` uses a
 	// ResizeObserver under the hood so the chart re-flows on window
@@ -80,6 +92,18 @@
 		const y = yFor(ele);
 		const distAtPoint = totalDistance * f;
 		return { idx, ele, x, y, distAtPoint };
+	});
+
+	// Fan the crosshair's idx out to the parent (debounce to dedupe
+	// pointermove storms that land on the same index). `untrack`-free
+	// because Svelte's $effect already only re-runs when crosshair
+	// actually changes.
+	let lastEmittedIdx: number | null = null;
+	$effect(() => {
+		const next = crosshair?.idx ?? null;
+		if (next === lastEmittedIdx) return;
+		lastEmittedIdx = next;
+		onhover?.(next);
 	});
 
 	function handlePointerMove(e: PointerEvent) {

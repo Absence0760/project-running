@@ -680,6 +680,13 @@
 	let hasMapTrack = $derived(baseTrack.length >= 2);
 	let elevations = $derived(baseTrack.map((p) => p.ele ?? 0));
 
+	/// Linked-cursor index — fed by ElevationProfile's onhover, consumed
+	/// by RunMap's hoverIdx. Null when the pointer is off the chart.
+	/// The chart's idx-space is the elevations array's index space,
+	/// which is identical to baseTrack's because elevations is derived
+	/// 1:1 from baseTrack above.
+	let chartHoverIdx = $state<number | null>(null);
+
 	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
 </script>
 
@@ -729,6 +736,7 @@
 				animatable
 				activity={paceHeatmapActivity}
 				onSegmentSelect={(seg) => (selectedSegment = seg)}
+				hoverIdx={chartHoverIdx}
 			/>
 		{:else}
 			<div class="map-empty">
@@ -1025,7 +1033,11 @@
 		{#if hasMapTrack}
 			<section class="section">
 				<h2>Elevation Profile</h2>
-				<ElevationProfile {elevations} totalDistance={run.distance_m} />
+				<ElevationProfile
+				{elevations}
+				totalDistance={run.distance_m}
+				onhover={(idx) => (chartHoverIdx = idx)}
+			/>
 			</section>
 		{/if}
 

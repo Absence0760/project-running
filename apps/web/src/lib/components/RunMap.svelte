@@ -50,9 +50,20 @@
 		/// imports without `ts` fall through to the legacy single-line
 		/// render.
 		activity?: ActivityKind;
+		/// Linked-cursor index (Nike/Strava-style). When non-null AND in
+		/// range of `track`, paint a small pulsing marker at that point
+		/// on the polyline. Driven by the elevation/pace chart's
+		/// pointer hover via the parent. Null = no marker.
+		hoverIdx?: number | null;
 	}
-	let { track = [], animatable = false, onSegmentSelect, totalDistanceM, activity }: Props =
-		$props();
+	let {
+		track = [],
+		animatable = false,
+		onSegmentSelect,
+		totalDistanceM,
+		activity,
+		hoverIdx = null,
+	}: Props = $props();
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -185,6 +196,39 @@
 	let startMarker: maplibregl.Marker | undefined;
 	let endMarker: maplibregl.Marker | undefined;
 	let segmentMarker: maplibregl.Marker | undefined;
+	/// Marker rendered at track[hoverIdx] when hoverIdx is in range —
+	/// the chart-driven half of the linked-cursor pattern. Held as an
+	/// instance handle so we mutate position rather than rebuild on
+	/// every pointermove tick.
+	let hoverMarker: maplibregl.Marker | undefined;
+
+	/// Render or update the hover-marker. Called from a $effect so any
+	/// change to `hoverIdx` or `track` re-paints it. `track[i]` is the
+	/// authoritative position; the chart's idx-space is identical to
+	/// the track's because /runs/[id] derives elevations 1:1 from the
+	/// same baseTrack.
+	function renderHoverMarker(idx: number | null): void {
+		if (!map) return;
+		if (idx == null || idx < 0 || idx >= track.length) {
+			hoverMarker?.remove();
+			hoverMarker = undefined;
+			return;
+		}
+		const p = track[idx];
+		const at: [number, number] = [p.lng, p.lat];
+		if (!hoverMarker) {
+			const el = document.createElement('div');
+			el.className = 'hover-marker';
+			el.setAttribute('data-testid', 'chart-hover-marker');
+			hoverMarker = new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map);
+		} else {
+			hoverMarker.setLngLat(at);
+		}
+	}
+
+	$effect(() => {
+		renderHoverMarker(hoverIdx);
+	});
 
 	/// Cumulative distance from start to each track index, in metres.
 	/// Computed once when the track is mounted; lookups are O(log n) by
@@ -616,5 +660,24 @@
 		background: #f59e0b;
 		border: 3px solid white;
 		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 2px 6px rgba(0, 0, 0, 0.35);
+	}
+
+	/* Linked-cursor marker (chart hover → map). Same accent as the
+	   segment pin so the visual language stays consistent, but slightly
+	   smaller + pulsing so the user can tell it's the chart's pointer,
+	   not a manually-selected segment. */
+	:global(.hover-marker) {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--color-primary, #3b82f6);
+		border: 2px solid white;
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3), 0 1px 4px rgba(0, 0, 0, 0.3);
+		pointer-events: none;
+		animation: hover-marker-pulse 1.6s ease-in-out infinite;
+	}
+	@keyframes hover-marker-pulse {
+		0%, 100% { transform: scale(1); }
+		50% { transform: scale(1.25); }
 	}
 </style>

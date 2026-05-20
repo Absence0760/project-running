@@ -183,5 +183,89 @@ void main() {
       await tester.pump(Duration.zero);
       expect(tester.takeException(), isNull);
     });
+
+    // ─── Linked-cursor hover marker ────────────────────────────────
+    //
+    // Mirrors the web RunMap.svelte `hover-marker` (chart-driven
+    // brushing). When the host page passes a non-null hoverIdx in
+    // range, LiveRunMap should mount a MarkerLayer keyed
+    // 'chart-hover-marker'; out-of-range or null values must clear it.
+
+    testWidgets('mounts the hover-marker MarkerLayer when hoverIdx is in range',
+        (tester) async {
+      final track = [_w(51.5, -0.1), _w(51.51, -0.099), _w(51.52, -0.098)];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LiveRunMap(
+                track: track,
+                followRunner: false,
+                hoverIdx: 1,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(
+        find.byKey(const ValueKey('chart-hover-marker')),
+        findsOneWidget,
+        reason: 'A non-null hoverIdx in range must mount the hover-marker '
+            'layer so the chart-driven cursor is visible on the map.',
+      );
+    });
+
+    testWidgets('hover-marker absent when hoverIdx is null', (tester) async {
+      final track = [_w(51.5, -0.1), _w(51.51, -0.099)];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LiveRunMap(
+                track: track,
+                followRunner: false,
+                hoverIdx: null,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(find.byKey(const ValueKey('chart-hover-marker')), findsNothing,
+          reason: 'Null hoverIdx clears the marker — releasing the chart '
+              'pointer should hide it.');
+    });
+
+    testWidgets('hover-marker absent when hoverIdx is out of range',
+        (tester) async {
+      final track = [_w(51.5, -0.1), _w(51.51, -0.099)];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LiveRunMap(
+                track: track,
+                followRunner: false,
+                hoverIdx: 99, // past end of 2-element track
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      expect(find.byKey(const ValueKey('chart-hover-marker')), findsNothing,
+          reason: 'Out-of-range hoverIdx must guard against null deref + '
+              'must not paint a bogus marker at index 0.');
+    });
   });
 }

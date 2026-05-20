@@ -198,13 +198,22 @@
 		setTimeout(() => (shareCopied = false), 2000);
 	}
 
-	let elevations = $derived(route?.waypoints?.map((w) => w.ele ?? 0) ?? []);
+	// Derive elevations from displayWaypoints (not route.waypoints
+	// directly) so the chart's idx-space lines up with what the map
+	// is actually drawing. Non-owners get a clipped polyline; their
+	// chart idx → map marker must hit the same point on the clipped
+	// trace, not the original.
+	let elevations = $derived(displayWaypoints.map((w) => w.ele ?? 0));
 	// Hide the elevation profile when waypoints have no real elevation
 	// data (community routes imported without per-waypoint ele still
 	// have a stored total gain in route.elevation_m). Without this guard
 	// the chart renders as a flat line at zero, which looks broken next
 	// to the non-zero "X m elevation gain" label.
 	let hasElevationData = $derived(elevations.length > 1 && Math.max(...elevations) > Math.min(...elevations));
+
+	/// Linked-cursor index — same shape as /runs/[id]. ElevationProfile
+	/// onhover sets it; RunMap reads it.
+	let chartHoverIdx = $state<number | null>(null);
 
 	/// Per-waypoint elevation rollup. Walks once: total gain (sum of
 	/// positive deltas), total loss (sum of negative deltas), and the
@@ -281,7 +290,7 @@
 			{#if route}
 			<main class="map-panel">
 				{#if displayWaypoints.length > 0}
-					<RunMap track={displayWaypoints} totalDistanceM={route.distance_m} />
+					<RunMap track={displayWaypoints} totalDistanceM={route.distance_m} hoverIdx={chartHoverIdx} />
 				{:else}
 					<div class="map-placeholder">
 						<span class="material-symbols">map</span>
@@ -438,7 +447,11 @@
 					</div>
 					{#if hasElevationData}
 						<div class="elev-chart">
-							<ElevationProfile {elevations} totalDistance={route.distance_m} />
+							<ElevationProfile
+								{elevations}
+								totalDistance={route.distance_m}
+								onhover={(idx) => (chartHoverIdx = idx)}
+							/>
 						</div>
 					{/if}
 				</section>

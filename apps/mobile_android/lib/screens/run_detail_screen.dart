@@ -72,6 +72,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   RouteMatchCandidate? _suggestedRoute;
   bool _linkingRoute = false;
 
+  /// Linked-cursor index — fed by `_ElevationChart.onHoverIdx`,
+  /// consumed by `LiveRunMap.hoverIdx`. Null when the chart pointer
+  /// is released. Mirrors the web `chartHoverIdx` on /runs/[id].
+  int? _chartHoverIdx;
+
   /// Animation state for the "replay" feature. `null` index = not
   /// replaying. Non-null = the current step into `run.track`. Held in a
   /// ValueNotifier so the 60 Hz controller tick only rebuilds the map
@@ -571,6 +576,16 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         onSegmentSelect: mapTrack.isNotEmpty
                             ? (seg) => setState(() => _selectedSegment = seg)
                             : null,
+                        // Linked cursor: paints a pulsing marker at
+                        // the elevation chart's current pointer index
+                        // on the live track. Gated on track === mapTrack
+                        // alignment — the chart reads run.track, but
+                        // the map sometimes shows the matched track,
+                        // which has a different index space. Only feed
+                        // the marker when the two are the same.
+                        hoverIdx: identical(mapTrack, run.track)
+                            ? _chartHoverIdx
+                            : null,
                       );
                     },
                   ),
@@ -823,6 +838,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 track: run.track,
                 theme: theme,
                 unit: unit,
+                onHoverIdx: (idx) =>
+                    setState(() => _chartHoverIdx = idx),
               ),
             ),
             const SizedBox(height: 16),
@@ -1738,10 +1755,15 @@ class _ElevationChart extends StatefulWidget {
   final List<Waypoint> track;
   final ThemeData theme;
   final DistanceUnit unit;
+  /// Linked-cursor: fires with the track-index currently under the
+  /// pointer (null on touch release). Lets `run_detail_screen` paint
+  /// the matching marker on `LiveRunMap` — Nike/Strava-style brushing.
+  final ValueChanged<int?>? onHoverIdx;
   const _ElevationChart({
     required this.track,
     required this.theme,
     required this.unit,
+    this.onHoverIdx,
   });
 
   @override
@@ -1750,6 +1772,23 @@ class _ElevationChart extends StatefulWidget {
 
 class _ElevationChartState extends State<_ElevationChart> {
   double? _touchFraction;
+  int? _lastEmittedIdx;
+
+  void _emitHover() {
+    if (widget.onHoverIdx == null) return;
+    final int? idx;
+    if (_touchFraction == null || widget.track.length < 2) {
+      idx = null;
+    } else {
+      idx = (_touchFraction! * (widget.track.length - 1))
+          .round()
+          .clamp(0, widget.track.length - 1);
+    }
+    if (idx != _lastEmittedIdx) {
+      _lastEmittedIdx = idx;
+      widget.onHoverIdx!(idx);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1762,9 +1801,10 @@ class _ElevationChartState extends State<_ElevationChart> {
           child: GestureDetector(
             onPanStart: (d) => _onTouch(d.localPosition),
             onPanUpdate: (d) => _onTouch(d.localPosition),
-            onPanEnd: (_) => setState(() => _touchFraction = null),
+            onPanEnd: (_) => _clearTouch(),
             onTapDown: (d) => _onTouch(d.localPosition),
-            onTapUp: (_) => setState(() => _touchFraction = null),
+            onTapUp: (_) => _clearTouch(),
+            onTapCancel: _clearTouch,
             child: LayoutBuilder(
               builder: (ctx, constraints) {
                 return CustomPaint(
@@ -1783,6 +1823,11 @@ class _ElevationChartState extends State<_ElevationChart> {
     );
   }
 
+  void _clearTouch() {
+    setState(() => _touchFraction = null);
+    _emitHover();
+  }
+
   void _onTouch(Offset local) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -1791,6 +1836,7 @@ class _ElevationChartState extends State<_ElevationChart> {
     setState(() {
       _touchFraction = (local.dx / chartWidth).clamp(0.0, 1.0);
     });
+    _emitHover();
   }
 
   Widget _buildCrosshairLabel() {

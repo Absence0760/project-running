@@ -154,6 +154,117 @@ test('/clubs/[slug]/events/[id] page exposes the realtime-ready broadcast roundt
 	assertRealtimeReadyBroadcastRoundtrip(src, '/clubs/[slug]/events/[id]');
 });
 
+// ──────────────────────────────────────────────────────────────────
+// Linked cursor: ElevationProfile hover → RunMap hover-marker.
+// The chart raises `onhover(idx | null)`; the parent state propagates
+// idx to RunMap, which paints a pulsing dot at track[idx]. Source-
+// level guards on each piece so a refactor can't silently disconnect
+// the chain.
+
+test('ElevationProfile.svelte: exposes onhover prop driven by crosshair', () => {
+	const src = read('src/lib/components/ElevationProfile.svelte');
+	assert.match(
+		src,
+		/onhover\?:\s*\(idx:\s*number\s*\|\s*null\)\s*=>\s*void/,
+		'ElevationProfile must declare an onhover prop of shape (idx | null) ' +
+			'so the parent can drive a chart-to-map linked cursor.',
+	);
+	// And the prop must actually fire — search for the effect that
+	// dispatches the current crosshair idx.
+	assert.match(
+		src,
+		/onhover\?\.\(/,
+		'ElevationProfile must invoke onhover (e.g. via an effect on the ' +
+			"crosshair index) — declaring the prop alone doesn't help if it's never fired.",
+	);
+	assert.match(
+		src,
+		/lastEmittedIdx/,
+		'ElevationProfile should dedupe identical idx emits across rapid ' +
+			'pointermove ticks (lastEmittedIdx guard); otherwise the parent ' +
+			'gets a callback storm.',
+	);
+});
+
+test('RunMap.svelte: accepts hoverIdx + renders the hover-marker', () => {
+	const src = read('src/lib/components/RunMap.svelte');
+	assert.match(
+		src,
+		/hoverIdx\?:\s*number\s*\|\s*null/,
+		'RunMap must declare a hoverIdx prop of shape (number | null).',
+	);
+	assert.match(
+		src,
+		/renderHoverMarker/,
+		'RunMap must define a renderHoverMarker helper that paints a ' +
+			'marker at track[hoverIdx].',
+	);
+	// The marker is reused across ticks (mutated, not rebuilt) — keep
+	// that contract so dragging the chart cursor doesn't churn DOM.
+	assert.match(
+		src,
+		/hoverMarker\.setLngLat/,
+		'RunMap should reuse the same hover-marker handle and only ' +
+			'mutate its position (not rebuild on every tick).',
+	);
+	// data-testid is the affordance the e2e suite waits on.
+	assert.match(
+		src,
+		/data-testid['"][^>]*chart-hover-marker/,
+		'RunMap should tag the hover-marker DOM with ' +
+			'data-testid="chart-hover-marker" so the e2e test can pin it.',
+	);
+});
+
+test('/runs/[id] wires ElevationProfile.onhover into RunMap.hoverIdx', () => {
+	const src = read('src/routes/runs/[id]/+page.svelte');
+	assert.match(
+		src,
+		/let chartHoverIdx\s*=\s*\$state<number \| null>/,
+		'/runs/[id] must hold chartHoverIdx state so the chart can feed ' +
+			'the map.',
+	);
+	assert.match(
+		src,
+		/hoverIdx=\{chartHoverIdx\}/,
+		'RunMap must receive hoverIdx={chartHoverIdx}.',
+	);
+	assert.match(
+		src,
+		/onhover=\{\(idx\)\s*=>\s*\(chartHoverIdx = idx\)\}/,
+		'ElevationProfile must feed chartHoverIdx via its onhover prop.',
+	);
+});
+
+test('/share/run/[id] (RunShareView) wires the same linked cursor', () => {
+	const src = read('src/lib/components/RunShareView.svelte');
+	assert.match(
+		src,
+		/let chartHoverIdx/,
+		'RunShareView must hold chartHoverIdx state.',
+	);
+	assert.match(src, /hoverIdx=\{chartHoverIdx\}/);
+	assert.match(src, /onhover=\{\(idx\)\s*=>\s*\(chartHoverIdx = idx\)\}/);
+});
+
+test('/routes/[id] wires the linked cursor and aligns elevations with displayWaypoints', () => {
+	const src = read('src/routes/routes/[id]/+page.svelte');
+	// Elevations must be derived from displayWaypoints (not the raw
+	// route.waypoints) so the chart idx-space matches the clipped
+	// polyline non-owners see. Without this, the chart's idx → map
+	// marker lookup lands at a point the user can't see.
+	assert.match(
+		src,
+		/let elevations\s*=\s*\$derived\(displayWaypoints\.map/,
+		'/routes/[id] elevations must derive from displayWaypoints, not ' +
+			'route.waypoints — keeps the chart idx-space aligned with the ' +
+			'polyline (matters for non-owners with a clipped trace).',
+	);
+	assert.match(src, /let chartHoverIdx/);
+	assert.match(src, /hoverIdx=\{chartHoverIdx\}/);
+	assert.match(src, /onhover=\{\(idx\)\s*=>\s*\(chartHoverIdx = idx\)\}/);
+});
+
 test('events page also broadcasts race-state-changed alongside DB writes', () => {
 	// Reason: race_sessions writes (Arm / GO / End) on a freshly
 	// subscribed channel can land inside the postgres_changes

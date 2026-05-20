@@ -99,6 +99,12 @@ class LiveRunMap extends StatefulWidget {
   /// § Ghost pacer.
   final Waypoint? ghostPosition;
 
+  /// Linked-cursor index — when non-null AND within bounds of [track],
+  /// paints a pulsing marker at `track[hoverIdx]`. Driven by the
+  /// run-detail elevation chart's pointer crosshair (Nike/Strava-style
+  /// brushing pattern). `null` clears the marker.
+  final int? hoverIdx;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -112,6 +118,7 @@ class LiveRunMap extends StatefulWidget {
     this.totalDistanceM,
     this.onSegmentSelect,
     this.ghostPosition,
+    this.hoverIdx,
   });
 
   @override
@@ -612,6 +619,28 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                 ],
               ),
 
+            // Linked-cursor marker — pinned to the elevation chart's
+            // current pointer position. Mirrors the web RunMap.svelte
+            // `hover-marker` div + pulse animation. Hidden when
+            // hoverIdx is null or out of range.
+            if (widget.hoverIdx != null &&
+                widget.hoverIdx! >= 0 &&
+                widget.hoverIdx! < widget.track.length)
+              MarkerLayer(
+                key: const ValueKey('chart-hover-marker'),
+                markers: [
+                  Marker(
+                    point: LatLng(
+                      widget.track[widget.hoverIdx!].lat,
+                      widget.track[widget.hoverIdx!].lng,
+                    ),
+                    width: 28,
+                    height: 28,
+                    child: _HoverMarkerDot(animation: _pulseAnimation),
+                  ),
+                ],
+              ),
+
             // Current position marker — drawn from the interpolated tween
             // position so the dot glides smoothly between GPS fixes, with
             // the raw latest fix as a fallback on the very first frame.
@@ -745,6 +774,61 @@ class _PulsingDot extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0xFF818CF8).withValues(alpha: animation.value),
+                ),
+              ),
+              if (child != null) child,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Linked-cursor marker dot — pinned at `track[hoverIdx]` when the
+/// user is hovering the elevation chart. Visually distinct from the
+/// blue PulsingDot (current GPS position) — uses the primary accent
+/// so it reads as a "viewer pointer" rather than a recorded position.
+/// Mirrors `.hover-marker` + `@keyframes hover-marker-pulse` on the
+/// web RunMap.svelte.
+class _HoverMarkerDot extends StatelessWidget {
+  final Animation<double> animation;
+  const _HoverMarkerDot({required this.animation});
+
+  static final _innerDot = Container(
+    width: 12,
+    height: 12,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: const Color(0xFFF59E0B),
+      border: Border.all(color: Colors.white, width: 2),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x66F59E0B),
+          blurRadius: 6,
+          spreadRadius: 1,
+        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      child: _innerDot,
+      builder: (context, child) {
+        return Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 28 * (0.6 + animation.value * 0.4),
+                height: 28 * (0.6 + animation.value * 0.4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFF59E0B)
+                      .withValues(alpha: animation.value * 0.5),
                 ),
               ),
               if (child != null) child,
