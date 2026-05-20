@@ -237,7 +237,15 @@
 	function subscribeRealtime() {
 		if (!club) return;
 		channel = supabase
-			.channel(`club-${club.id}`)
+			.channel(`club-${club.id}`, {
+				config: { broadcast: { self: true } }
+			})
+			// Self-broadcast roundtrip readiness signal — see the
+			// .subscribe() callback below.
+			.on('broadcast', { event: 'ready-ping' }, () => {
+				realtimeReady = true;
+				console.log(`[realtime] club-${club?.id} ready=true`);
+			})
 			.on(
 				'postgres_changes',
 				{ event: '*', schema: 'public', table: 'club_posts', filter: `club_id=eq.${club.id}` },
@@ -249,20 +257,19 @@
 				scheduleReload
 			)
 			.subscribe((status) => {
-				// Log status transitions so CI artifacts surface when the
-				// Realtime cluster is unhealthy (the timing pattern is
-				// invisible without server logs).
 				console.log(`[realtime] club-${club?.id} status=${status}`);
 				if (status !== 'SUBSCRIBED') {
 					realtimeReady = false;
 					return;
 				}
-				// 500 ms cushion mirrors the event page — SUBSCRIBED
-				// trails the server-side postgres_changes filter wiring
-				// on the WAL listener.
-				setTimeout(() => {
-					realtimeReady = true;
-				}, 500);
+				// Self-broadcast a ping; the echo (handled above) flips
+				// readiness. The roundtrip proves the channel is fully
+				// wired before we let any test rely on it.
+				channel?.send({
+					type: 'broadcast',
+					event: 'ready-ping',
+					payload: {}
+				});
 			});
 	}
 

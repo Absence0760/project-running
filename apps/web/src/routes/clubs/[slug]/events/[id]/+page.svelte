@@ -356,7 +356,17 @@
 	function subscribeRealtime() {
 		if (!event || !club) return;
 		channel = supabase
-			.channel(`event-${event.id}`)
+			.channel(`event-${event.id}`, {
+				// Opt-in to receive our own broadcasts — the readiness
+				// roundtrip below relies on the echo.
+				config: { broadcast: { self: true } }
+			})
+			// Self-broadcast roundtrip — see the .subscribe() callback
+			// below. Listen FIRST so the echo can't beat the listener.
+			.on('broadcast', { event: 'ready-ping' }, () => {
+				realtimeReady = true;
+				console.log(`[realtime] event-${event?.id} ready=true`);
+			})
 			.on(
 				'postgres_changes',
 				{
@@ -398,22 +408,24 @@
 				scheduleReload
 			)
 			.subscribe((status) => {
-				// Log status transitions so CI artifacts surface when
-				// the Realtime cluster is unhealthy (timing is otherwise
-				// invisible without server logs).
 				console.log(`[realtime] event-${event?.id} status=${status}`);
 				if (status !== 'SUBSCRIBED') {
 					realtimeReady = false;
 					return;
 				}
-				// Supabase reports SUBSCRIBED as soon as the channel joins,
-				// but the server-side postgres_changes filter wiring on
-				// the WAL listener trails the join by a tick. 500 ms is
-				// the cushion observed sufficient in local 20×-stress
-				// runs; 250 ms was just under the floor.
-				setTimeout(() => {
-					realtimeReady = true;
-				}, 500);
+				// Don't flip readiness on SUBSCRIBED alone — the server's
+				// postgres_changes filter wiring trails the join ack by
+				// a tick (race-banner regression observed in multi-
+				// context CI). Send a self-broadcast on the same channel
+				// and let the echo flip the flag — the echo's roundtrip
+				// proves the channel is fully wired bidirectionally. Uses
+				// the realtime WS, not setTimeout, so chromium's timer
+				// throttling on backgrounded tabs doesn't affect it.
+				channel?.send({
+					type: 'broadcast',
+					event: 'ready-ping',
+					payload: {}
+				});
 			});
 	}
 
