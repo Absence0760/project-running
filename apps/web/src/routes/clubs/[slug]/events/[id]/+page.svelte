@@ -310,6 +310,13 @@
 	}
 
 	let channel: RealtimeChannel | null = null;
+	// Mirrors the channel's SUBSCRIBED state so the page can advertise
+	// "realtime is live" via a data attribute. The race-control e2e
+	// suite races against this — the admin clicks Arm before the
+	// member's WS handshake completes, the INSERT event is missed,
+	// and the banner never appears. Waiting on data-realtime-ready
+	// closes that window deterministically.
+	let realtimeReady = $state(false);
 
 	onMount(async () => {
 		// Wait for auth.user before loading. The event page derives
@@ -330,6 +337,7 @@
 			supabase.removeChannel(channel);
 			channel = null;
 		}
+		realtimeReady = false;
 	});
 
 	/**
@@ -389,7 +397,9 @@
 				},
 				scheduleReload
 			)
-			.subscribe();
+			.subscribe((status) => {
+				realtimeReady = status === 'SUBSCRIBED';
+			});
 	}
 
 	async function rsvp(status: RsvpStatus) {
@@ -525,7 +535,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="page">
+	<div class="page" data-realtime-ready={realtimeReady ? 'true' : 'false'}>
 		<a class="back" href="/clubs/{slug}" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to {club.name}

@@ -64,13 +64,23 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 				memberPage.goto(`/clubs/sydney-run-club/events/${eventId}`)
 			]);
 
-			// Wait for both to finish their initial load — heading
-			// renders after the event row resolves.
+			// Wait for both to finish their initial load AND for the
+			// realtime channel to reach SUBSCRIBED — the page sets
+			// data-realtime-ready="true" from the .subscribe() callback.
+			// Without this, the admin's Arm click can land before the
+			// member's WS handshake completes, the postgres_changes
+			// event is dropped, and the banner never appears.
 			await Promise.all([
 				expect(adminPage.getByRole('heading', { name: title })).toBeVisible({
 					timeout: 10_000
 				}),
 				expect(memberPage.getByRole('heading', { name: title })).toBeVisible({
+					timeout: 10_000
+				}),
+				expect(adminPage.locator('[data-realtime-ready="true"]')).toBeVisible({
+					timeout: 10_000
+				}),
+				expect(memberPage.locator('[data-realtime-ready="true"]')).toBeVisible({
 					timeout: 10_000
 				})
 			]);
@@ -187,11 +197,21 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 				adminPage.goto(`/clubs/sydney-run-club/events/${eventId}`),
 				memberPage.goto(`/clubs/sydney-run-club/events/${eventId}`)
 			]);
+			// Same data-realtime-ready guard as the Arm → GO → End test
+			// above. The member's WS handshake must reach SUBSCRIBED
+			// before the admin's Arm click or the postgres_changes event
+			// is dropped.
 			await Promise.all([
 				expect(adminPage.getByRole('heading', { name: title })).toBeVisible({
 					timeout: 10_000
 				}),
 				expect(memberPage.getByRole('heading', { name: title })).toBeVisible({
+					timeout: 10_000
+				}),
+				expect(adminPage.locator('[data-realtime-ready="true"]')).toBeVisible({
+					timeout: 10_000
+				}),
+				expect(memberPage.locator('[data-realtime-ready="true"]')).toBeVisible({
 					timeout: 10_000
 				})
 			]);
