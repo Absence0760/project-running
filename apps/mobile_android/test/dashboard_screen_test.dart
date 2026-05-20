@@ -143,10 +143,64 @@ void main() {
           await tester.pump();
           await tester.pump();
 
-          // 'Goals' and 'This Week' are near the top of the list and should
-          // be visible in the test viewport without scrolling.
+          // 'Goals' is near the top of the list and visible in the test
+          // viewport without scrolling. The activity stat strip
+          // (WEEK / MONTH / ALL TIME) replaced the previous stacked
+          // section cards — pin its all-caps labels to prove the strip
+          // mounted.
           expect(find.text('Goals'), findsOneWidget);
-          expect(find.text('This Week'), findsOneWidget);
+          expect(find.text('WEEK'), findsOneWidget);
+          expect(find.text('MONTH'), findsOneWidget);
+          expect(find.text('ALL TIME'), findsOneWidget);
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
+    testWidgets('activity stat strip shows distance + run count per period',
+        (tester) async {
+      // Verifies the consolidated 3-column strip (Week / Month / All time)
+      // surfaces both the rounded distance value AND the per-card run
+      // count copy. Catches a regression where the strip would drop
+      // the run-count subtitle.
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final dir = Directory.systemTemp.createTempSync('dashboard_stat_strip_');
+        try {
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          // A single 5 km run this week → All time / Week / Month
+          // each report "1 run".
+          await seedStore.save(
+            _run(id: 'r1', distanceMetres: 5000, duration: const Duration(minutes: 25)),
+          );
+
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              home: DashboardScreen(
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                preferences: prefs,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          // The seeded run dates to 15 Apr 2026 — outside this week +
+          // this month relative to wall-clock now. All Time picks it
+          // up ("1 run"); Week + Month report zero runs. The summed
+          // copy across the three cards is therefore 1×"1 run" +
+          // 2×"0 runs", regardless of when the suite runs.
+          expect(find.text('1 run'), findsOneWidget);
+          expect(find.text('0 runs'), findsNWidgets(2));
         } finally {
           dir.deleteSync(recursive: true);
         }

@@ -142,7 +142,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Replaces four separate `.where().fold()` chains. Matters at 10k+ runs.
     var weekRunCount = 0;
     var weekDistance = 0.0;
-    var weekDurationSec = 0;
     var monthRunCount = 0;
     var monthDistance = 0.0;
     var allDistance = 0.0;
@@ -159,7 +158,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!r.startedAt.isBefore(weekStart)) {
         weekRunCount++;
         weekDistance += r.distanceMetres;
-        weekDurationSec += r.duration.inSeconds;
       }
       if (!r.startedAt.isBefore(monthStart)) {
         monthRunCount++;
@@ -181,7 +179,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
     final hasAnyPb = longest != null || bestEfforts.isNotEmpty;
-    final weekDurationMin = Duration(seconds: weekDurationSec).inMinutes;
 
     final api = widget.apiClient;
     final viewerId = api?.userId;
@@ -271,80 +268,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (actionToolbar != null) actionToolbar,
                 _goalsSection(theme, unit, runs, goals, now),
                 _kSectionGap,
-                const _SectionHeader('This Week'),
-                Card(
-                  child: InkWell(
-                    onTap: () => _openPeriodSummary(PeriodType.week),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: _kCardPadding,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _SummaryStat(
-                            label: 'Distance',
-                            value: UnitFormat.distanceValue(weekDistance, unit),
-                            unit: UnitFormat.distanceLabel(unit),
-                          ),
-                          _SummaryStat(
-                            label: 'Runs',
-                            value: '$weekRunCount',
-                          ),
-                          _SummaryStat(
-                            label: 'Time',
-                            value: '$weekDurationMin',
-                            unit: 'min',
-                          ),
-                        ],
+                // Compact 3-column stat strip — replaced the previous
+                // stacked "This Week" / "This Month" / "All Time"
+                // cards (~480 px each + section headers). Same data,
+                // same tap-through into PeriodSummary for week / month;
+                // all-time has no period summary so it isn't tappable.
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PeriodStatCard(
+                        label: 'Week',
+                        distanceMetres: weekDistance,
+                        runCount: weekRunCount,
+                        unit: unit,
+                        onTap: () => _openPeriodSummary(PeriodType.week),
                       ),
                     ),
-                  ),
-                ),
-                _kSectionGap,
-                const _SectionHeader('This Month'),
-                Card(
-                  child: InkWell(
-                    onTap: () => _openPeriodSummary(PeriodType.month),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: _kCardPadding,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _SummaryStat(
-                            label: 'Distance',
-                            value: UnitFormat.distanceValue(monthDistance, unit),
-                            unit: UnitFormat.distanceLabel(unit),
-                          ),
-                          _SummaryStat(
-                            label: 'Runs',
-                            value: '$monthRunCount',
-                          ),
-                        ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _PeriodStatCard(
+                        label: 'Month',
+                        distanceMetres: monthDistance,
+                        runCount: monthRunCount,
+                        unit: unit,
+                        onTap: () => _openPeriodSummary(PeriodType.month),
                       ),
                     ),
-                  ),
-                ),
-                _kSectionGap,
-                const _SectionHeader('All Time'),
-                Card(
-                  child: Padding(
-                    padding: _kCardPadding,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _SummaryStat(
-                          label: 'Distance',
-                          value: UnitFormat.distanceValue(allDistance, unit),
-                          unit: UnitFormat.distanceLabel(unit),
-                        ),
-                        _SummaryStat(
-                          label: 'Runs',
-                          value: '${runs.length}',
-                        ),
-                      ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _PeriodStatCard(
+                        label: 'All time',
+                        distanceMetres: allDistance,
+                        runCount: runs.length,
+                        unit: unit,
+                        onTap: null,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
                 _kSectionGap,
                 const _SectionHeader('Streak'),
@@ -830,41 +790,85 @@ class _PbRow extends StatelessWidget {
   }
 }
 
-class _SummaryStat extends StatelessWidget {
+/// Compact 3-column stat card used in the dashboard's activity
+/// summary strip. Replaces the stacked "This Week" / "This Month" /
+/// "All Time" surfaces — same data, tighter footprint. Tappable
+/// when [onTap] is set (week + month tap into PeriodSummary; all
+/// time has no period detail surface, so the card stays inert).
+class _PeriodStatCard extends StatelessWidget {
   final String label;
-  final String value;
-  final String? unit;
-  const _SummaryStat({required this.label, required this.value, this.unit});
+  final double distanceMetres;
+  final int runCount;
+  final DistanceUnit unit;
+  final VoidCallback? onTap;
+
+  const _PeriodStatCard({
+    required this.label,
+    required this.distanceMetres,
+    required this.runCount,
+    required this.unit,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                )),
-            if (unit != null) ...[
-              const SizedBox(width: 4),
-              Text(unit!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  )),
+    final value = UnitFormat.distanceValue(distanceMetres, unit);
+    final unitLabel = UnitFormat.distanceLabel(unit);
+    final inner = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.06,
+              color: theme.colorScheme.outline,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Text(
+                unitLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
             ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(label,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$runCount ${runCount == 1 ? "run" : "runs"}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
-            )),
-      ],
+            ),
+          ),
+        ],
+      ),
+    );
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null
+          ? inner
+          : InkWell(onTap: onTap, child: inner),
     );
   }
 }
