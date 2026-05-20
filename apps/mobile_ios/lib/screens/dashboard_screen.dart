@@ -18,10 +18,12 @@ import '../widgets/intensity_card.dart';
 import '../widgets/mileage_trend_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
+import '../widgets/todays_workout_card.dart';
 import '../widgets/training_load_chart.dart';
 import 'coach_screen.dart';
 import 'feed_screen.dart';
 import 'period_summary_screen.dart';
+import 'plan_detail_screen.dart';
 import 'profile_screen.dart';
 import 'recap_screen.dart';
 
@@ -59,17 +61,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Invalidated wholesale when the run store changes.
   final Map<String, Map<double, Duration?>> _bestEffortCache = {};
 
+  /// Active training plan + today's workout, used to render the
+  /// `TodaysWorkoutCard` at the top of the dashboard. Null when
+  /// there's no active plan, no scheduled workout today, or the
+  /// service hasn't returned yet. Lazy fetch on mount; refetched
+  /// when the TrainingService notifies (e.g. user marks a workout
+  /// done, switches plans).
+  ActivePlanOverview? _planOverview;
+
   @override
   void initState() {
     super.initState();
     widget.runStore.addListener(_onRunStoreChanged);
     widget.preferences.addListener(_onChange);
+    widget.training?.addListener(_refreshPlanOverview);
+    _refreshPlanOverview();
   }
 
   @override
   void dispose() {
     widget.runStore.removeListener(_onRunStoreChanged);
     widget.preferences.removeListener(_onChange);
+    widget.training?.removeListener(_refreshPlanOverview);
     super.dispose();
   }
 
@@ -80,6 +93,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _onChange() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _refreshPlanOverview() async {
+    final svc = widget.training;
+    if (svc == null) return;
+    try {
+      final overview = await svc.fetchActiveOverview();
+      if (mounted) setState(() => _planOverview = overview);
+    } catch (e) {
+      // Non-critical — same logging stance as run_screen's overview
+      // fetch. The card simply doesn't render; the rest of the
+      // dashboard keeps working.
+      debugPrint('dashboard plan-overview fetch failed: $e');
+    }
+  }
+
+  void _openTodayWorkout() {
+    final svc = widget.training;
+    final p = _planOverview;
+    if (svc == null || p == null) return;
+    // Dashboard's role is overview, not start-a-run. Tap routes into
+    // plan_detail so the runner can see the full week + drill into
+    // the workout. The Run tab already has the "start now" dialog
+    // for runners who tap from there.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlanDetailScreen(
+          training: svc,
+          planId: p.plan.id,
+        ),
+      ),
+    );
   }
 
   Future<void> _newGoal() => showGoalEditorSheet(
@@ -266,6 +311,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
                 if (actionToolbar != null) actionToolbar,
+                // Active-plan hero: surface the day's structured
+                // workout above goals so a plan-runner sees what's
+                // next before scrolling. Hidden when no active plan
+                // or no workout today.
+                if (_planOverview?.todayWorkout != null) ...[
+                  TodaysWorkoutCard(
+                    overview: _planOverview!,
+                    onTap: _openTodayWorkout,
+                  ),
+                  _kSectionGap,
+                ],
                 _goalsSection(theme, unit, runs, goals, now),
                 _kSectionGap,
                 // Compact 3-column stat strip — replaced the previous

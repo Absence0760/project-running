@@ -8,6 +8,62 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/dashboard_screen.dart';
+import '../lib/training_service.dart';
+
+/// Test seam: a TrainingService that returns a canned overview from
+/// `fetchActiveOverview` without touching Supabase. Subclassing the
+/// real type keeps it a drop-in for the dashboard's
+/// `widget.training` field (it extends ChangeNotifier the same way).
+class _FakeTraining extends TrainingService {
+  final ActivePlanOverview? overview;
+  _FakeTraining(this.overview);
+  @override
+  Future<ActivePlanOverview?> fetchActiveOverview() async => overview;
+}
+
+ActivePlanOverview _overviewWithTodayWorkout({String kind = 'long'}) {
+  // Build a minimal but complete overview shape — the
+  // TodaysWorkoutCard reads `todayWorkout.kind` + the target distance
+  // and pace; the rest of the fields aren't surfaced.
+  final today = DateTime.now();
+  final plan = TrainingPlanRow(
+    id: 'plan-1',
+    userId: 'u1',
+    name: 'Sub-3 Marathon',
+    goalEvent: 'marathon',
+    goalDistanceM: 42195,
+    startDate: today.subtract(const Duration(days: 28)),
+    endDate: today.add(const Duration(days: 56)),
+    daysPerWeek: 5,
+    status: 'active',
+    source: 'app',
+    isTemplate: false,
+  );
+  final week = PlanWeekRow(
+    id: 'wk-1',
+    planId: 'plan-1',
+    weekIndex: 4,
+    phase: 'build',
+    targetVolumeM: 60000,
+  );
+  final workout = PlanWorkoutRow(
+    id: 'wo-1',
+    weekId: 'wk-1',
+    scheduledDate: today,
+    kind: kind,
+    targetDistanceM: 20000,
+    targetPaceSecPerKm: 270,
+    manuallyCompleted: false,
+  );
+  return ActivePlanOverview(
+    plan: plan,
+    weeks: [week],
+    workouts: [workout],
+    todayWorkout: workout,
+    completionPct: 40,
+    currentWeekIndex: 4,
+  );
+}
 
 Directory? _runsDir;
 
@@ -201,6 +257,92 @@ void main() {
           // 2×"0 runs", regardless of when the suite runs.
           expect(find.text('1 run'), findsOneWidget);
           expect(find.text('0 runs'), findsNWidgets(2));
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
+    testWidgets("shows TODAY'S WORKOUT card when an active plan has a workout today",
+        (tester) async {
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final dir =
+            Directory.systemTemp.createTempSync('dashboard_today_workout_');
+        try {
+          // The dashboard's welcome empty-state takes over when runs +
+          // goals are both empty; seed a single run so the full
+          // ListView (with the today-workout card) renders.
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              home: DashboardScreen(
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                preferences: prefs,
+                training: _FakeTraining(_overviewWithTodayWorkout()),
+              ),
+            ),
+          );
+          // First pump builds, second drains the post-frame
+          // `_refreshPlanOverview()` future + its setState.
+          await tester.pump();
+          await tester.pump();
+          await tester.pump();
+
+          // The card surfaces an all-caps "TODAY'S WORKOUT" label
+          // (or "DONE TODAY" when completed). With manuallyCompleted=
+          // false + no completedRunId, "TODAY'S WORKOUT" is expected.
+          expect(find.text("TODAY'S WORKOUT"), findsOneWidget);
+          // Workout kind label — "long" → "Long run" per
+          // workoutKindLabel.
+          expect(find.text('Long run'), findsOneWidget);
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+
+    testWidgets(
+        "does not show TODAY'S WORKOUT card when training service returns null",
+        (tester) async {
+      // No active plan → fetchActiveOverview returns null → card
+      // stays hidden. Pin the negative path so a future regression
+      // that defaulted to showing some placeholder fails loud.
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final dir =
+            Directory.systemTemp.createTempSync('dashboard_no_today_workout_');
+        try {
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              home: DashboardScreen(
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                preferences: prefs,
+                training: _FakeTraining(null),
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          expect(find.text("TODAY'S WORKOUT"), findsNothing);
         } finally {
           dir.deleteSync(recursive: true);
         }
