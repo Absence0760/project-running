@@ -171,6 +171,24 @@ How to spot the "coded around" pattern in review:
 
 The `code-reviewer` agent (via `/safe-edit`) actively flags this pattern; the [coverage_snapshot.md](coverage_snapshot.md) gets bumped only when the underlying behaviour is correct, not when the test was rewritten to tolerate it.
 
+### Never adjust the test to hide an app bug
+
+A specific tightening of the rule above: when a test fails, the only acceptable resolution paths are
+
+1. **The test itself is broken** — wrong fixture (a column name, a missing required field, a unique-constraint collision with seed data), a typo, or a race in the test setup. Fix the test.
+2. **The app has a real bug or missing primitive.** Fix the app code. If the app needs a new affordance for the test to be able to wait deterministically (e.g. a `data-realtime-ready` attribute backed by a real readiness signal), add it in the app code — that affordance is a real API, not test scaffolding.
+
+There is no third option. These count as "papering over with the test" and are forbidden:
+
+- Bumping a Playwright `expect`/`toBeVisible` timeout to absorb a flake (`5_000` → `15_000` → `30_000`). The right fix is whatever's making the page take that long.
+- Adding `await page.waitForTimeout(N)` between two actions. The right fix is to wait on a real readiness signal (DOM node, state attribute, network response).
+- Bumping `--retries` (or relying on Playwright's `retries: 1` to mask a real flake) instead of finding the race.
+- `test.skip(…)` / `test.fixme(…)` / `test.fail(…)` against a real bug without an open follow-up that names what's broken and when it'll be fixed.
+- Loosening a strict assertion (`toHaveText('Race armed')` → `toContainText(/arm|connect|ready/i)`) to "absorb variance" — the variance IS the bug.
+- Replacing a network-level wait with a sleep "because the real signal is unreliable" — the real signal needs fixing.
+
+When you spot a candidate fix that fits one of those patterns, stop and surface the underlying issue. If you cannot fix the app issue in the same session, raise it explicitly — don't half-mask it via the test.
+
 ## If you see something wrong, fix it
 
 A sibling rule to the one above. When you're working in a file and notice something **that doesn't look right, doesn't act correctly, or isn't optimal**, fix it in the same session. Don't walk past it on the grounds of "out of scope" — by the time anyone else looks, the broken thing will still be broken AND your touch in the file's git blame will look like a tacit endorsement.
