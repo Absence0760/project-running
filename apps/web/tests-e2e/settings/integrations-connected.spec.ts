@@ -58,7 +58,6 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		});
 
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
 		await expect(stravaCard).toBeVisible({ timeout: 10_000 });
@@ -77,7 +76,6 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		});
 
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
 		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
@@ -110,7 +108,6 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		});
 
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
 		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
@@ -140,7 +137,6 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		});
 
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const bulkCard = page
 			.locator('section.bulk-import')
@@ -159,7 +155,6 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		});
 
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const garminCard = page.locator('.integration-card', { hasText: 'Garmin Connect' });
 		await expect(garminCard).toBeVisible({ timeout: 10_000 });
@@ -177,7 +172,6 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		});
 
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const parkrunCard = page.locator('.integration-card', { hasText: 'parkrun' });
 		await expect(parkrunCard).toBeVisible({ timeout: 10_000 });

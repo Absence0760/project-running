@@ -45,7 +45,6 @@ test.describe('/runs/[id]', () => {
 		const originalTitle = 'E2E demo public run';
 
 		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Open the inline editor. The Edit button is an .icon-btn with
 		// title="Edit"; selecting by accessible name is more brittle
@@ -89,7 +88,6 @@ test.describe('/runs/[id]', () => {
 		const newNotes = uniqueText('e2e-notes');
 
 		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// The pinned public run has no seeded notes — the .run-notes
 		// paragraph is absent. Open the editor.
@@ -218,7 +216,6 @@ test.describe('/runs/[id]', () => {
 			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
 			await page.goto(`/runs/${planted}`);
-			await page.waitForLoadState('networkidle');
 			await page.locator('button[title="Share link"]').click();
 
 			// Toast confirms success — the makeRunPublic call resolved.
@@ -352,7 +349,6 @@ test.describe('/runs/[id]', () => {
 
 		try {
 			await page.goto(`/runs/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			// Before tagging: only the "Edit" / "+ Tag gear" affordance
 			// is visible. (Label is "+ Tag gear" because we cleared the
@@ -460,7 +456,6 @@ test.describe('/runs/[id]', () => {
 		});
 		try {
 			await page.goto(`/runs/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			// Chip is visible with the default shoe's name. NO manual
 			// picker interaction was performed.

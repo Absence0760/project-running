@@ -22,7 +22,6 @@ test.describe('/clubs', () => {
 		// ilike on name + location. Typing "Tempo" should leave only
 		// "Tempo Tuesday" visible from the seeded public clubs.
 		await page.goto('/clubs');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('tab', { name: 'Browse', exact: true }).click();
 
 		// Wait for browse to settle with multiple cards.
@@ -55,7 +54,6 @@ test.describe('/clubs', () => {
 		// for the owner. (My clubs tab IS the place owners see their
 		// private clubs.)
 		await page.goto('/clubs');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('tab', { name: 'Browse', exact: true }).click();
 		// Wait for the browse fetch to settle.
@@ -87,7 +85,6 @@ test.describe('/clubs', () => {
 		// Drill into the slug-routed detail page.
 		await page.getByRole('link', { name: /Sydney Run Club/ }).click();
 		await expect(page).toHaveURL(/\/clubs\/sydney-run-club/);
-		await page.waitForLoadState('networkidle');
 	});
 
 	test('My-clubs tab lists Friends of Jared (owner sees their private clubs here)', async ({

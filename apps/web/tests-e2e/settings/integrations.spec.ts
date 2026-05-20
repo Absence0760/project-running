@@ -49,7 +49,6 @@ test.describe('/settings/integrations', () => {
 		// Tests the data-layer upsert + delete path that the canonical
 		// click handler funnels into.
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 
 		const parkrunCard = page.locator('.integration-card', { hasText: 'parkrun' });
 		await expect(parkrunCard).toBeVisible({ timeout: 10_000 });
@@ -90,7 +89,6 @@ test.describe('/settings/integrations', () => {
 				.eq('provider', 'strava');
 
 			await page.goto('/settings/integrations');
-			await page.waitForLoadState('networkidle');
 			const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
 			await expect(stravaCard).toBeVisible({ timeout: 10_000 });
 			await expect(stravaCard.getByRole('button', { name: 'Connect' }))
@@ -133,7 +131,6 @@ test.describe('/settings/integrations', () => {
 		// timestamp format depends on the formatter but the label
 		// is stable.
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
 		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
 		await expect(stravaCard.getByText(/Last sync/i)).toBeVisible();
@@ -144,7 +141,6 @@ test.describe('/settings/integrations', () => {
 		// connected Strava integration. A regression that hides it
 		// would leave users without a manual refresh path.
 		await page.goto('/settings/integrations');
-		await page.waitForLoadState('networkidle');
 		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
 		await expect(stravaCard.getByRole('button', { name: /Sync/i }))
 			.toBeVisible({ timeout: 10_000 });

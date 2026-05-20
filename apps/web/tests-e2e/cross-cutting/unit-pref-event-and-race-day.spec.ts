@@ -95,7 +95,6 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 			.eq('id', USER_A.id);
 
 		await page.goto('/clubs/sydney-run-club');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: /New event/ }).click();
 		const modal = page.locator('.modal', { hasText: 'New event' });
 		await expect(modal).toBeVisible({ timeout: 5_000 });
@@ -142,7 +141,6 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 			});
 
 			await page.goto(`/plans/${planId}`);
-			await page.waitForLoadState('networkidle');
 
 			// The RaceDayPanel mounts. Pacing splits show inside .splits
 			// > li > .split-km. The first split's label must read "mi 1"
@@ -195,7 +193,6 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 			});
 
 			await page.goto(`/plans/${planId}`);
-			await page.waitForLoadState('networkidle');
 
 			const splits = page.locator('.splits .split-km');
 			await expect(splits.first()).toBeVisible({ timeout: 10_000 });

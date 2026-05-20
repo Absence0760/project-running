@@ -35,7 +35,6 @@ test.describe('/routes/[id]', () => {
 		// or the optimistic rollback (button text reverts on error).
 		// Pinned route starts public; cleanup leaves it public.
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// The button text content is "public Public" (icon ligature +
 		// label) so a plain text regex pulls in the icon span. Target
@@ -79,7 +78,6 @@ test.describe('/routes/[id]', () => {
 		//
 		// Cleanup unstars at the end so the seed state is preserved.
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		const starBtn = page.locator('button.star-btn');
 		await expect(starBtn).toBeVisible({ timeout: 10_000 });
@@ -97,7 +95,6 @@ test.describe('/routes/[id]', () => {
 		// Visit /routes; flip the starred-only filter; the pinned
 		// route should appear in the narrowed list.
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: /Show starred routes only/ }).click();
 		await expect(
 			page.locator(`.route-card[href$="${RUNNER_PUBLIC_ROUTE_ID}"]`)
@@ -110,7 +107,6 @@ test.describe('/routes/[id]', () => {
 		// click above the aria-label flipped to "Show all routes".
 		await page.getByRole('button', { name: /Show all routes/ }).click();
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 		await page.locator('button.star-btn').click();
 		await expect(page.locator('button.star-btn')).not.toHaveClass(/starred/);
 	});
@@ -200,7 +196,6 @@ test.describe('/routes/[id]', () => {
 
 		try {
 			await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
-			await page.waitForLoadState('networkidle');
 
 			// Open the review form via the Rate button.
 			await page.getByRole('button', { name: 'Rate', exact: true }).click();

@@ -146,7 +146,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 		// renders `.rank-pill.gold` for rank 1. Pin the pill class +
 		// the rank text.
 		await page.goto(`/runs/${myRunId}`);
-		await page.waitForLoadState('networkidle');
 		const goldPill = page.locator('.efforts li .rank-pill.gold').first();
 		await expect(goldPill).toBeVisible({ timeout: 10_000 });
 		await expect(goldPill).toHaveText('#1');
@@ -159,7 +158,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 		// (1.00 km in the runner@test.com preferred-unit pref), time
 		// 240s → 4:00.
 		await page.goto(`/runs/${myRunId}`);
-		await page.waitForLoadState('networkidle');
 		const row = page.locator('.efforts li .effort-row').first();
 		await expect(row).toBeVisible({ timeout: 10_000 });
 		await expect(row.locator('.effort-meta strong'))
@@ -179,7 +177,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 		// Pin the href fragment so a regression in the anchor would
 		// silently break "tap-through" to the leaderboard.
 		await page.goto(`/runs/${myRunId}`);
-		await page.waitForLoadState('networkidle');
 		const expectedHref =
 			`/routes/${BATTERSEA_ROUTE_ID}#segment-${segmentId}`;
 		await expect(
@@ -286,7 +283,6 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 				.update({ time_seconds: 270 })
 				.eq('id', effortId);
 			await page.goto(`/runs/${myRunId}`);
-			await page.waitForLoadState('networkidle');
 			const silver = page.locator('.efforts li .rank-pill.silver').first();
 			await expect(silver).toBeVisible({ timeout: 10_000 });
 			await expect(silver).toHaveText('#2');

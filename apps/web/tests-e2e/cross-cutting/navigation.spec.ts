@@ -29,7 +29,6 @@ test.describe('sidebar collapse', () => {
 		// first render OR the localStorage key drifts between writer
 		// and reader (e.g. someone renames it on one side only).
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		const sidebar = page.locator('nav.sidebar');
 		await expect(sidebar).not.toHaveClass(/collapsed/);
@@ -59,7 +58,6 @@ test.describe('sidebar collapse', () => {
 		// active wiring (e.g. a refactor that swapped the matcher) is
 		// caught.
 		await page.goto('/runs');
-		await page.waitForLoadState('networkidle');
 
 		const navHistory = page.locator('nav.sidebar a', { hasText: 'History' });
 		await expect(navHistory).toBeVisible();

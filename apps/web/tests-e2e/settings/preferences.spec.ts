@@ -28,7 +28,6 @@ test.describe('/settings/preferences', () => {
 		// of " km". Catches regressions in the auth store's setUnit
 		// fan-out OR the Save handler dropping preferredUnit.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		// Switch to Miles.
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
@@ -46,7 +45,6 @@ test.describe('/settings/preferences', () => {
 
 		// Restore to km so subsequent tests render against the default.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
 		await page.getByRole('button', { name: /Save Preferences/ }).click();
 		await expect(
@@ -66,7 +64,6 @@ test.describe('/settings/preferences', () => {
 		// from `auth.setUnit(...)` not running on a fresh page mount.
 		// Touching multiple surfaces in one test catches both classes.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
 		await page.getByRole('button', { name: /Save Preferences/ }).click();
@@ -115,7 +112,6 @@ test.describe('/settings/preferences', () => {
 
 		// Restore to km so subsequent tests render against the default.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
 		await page.getByRole('button', { name: /Save Preferences/ }).click();
 		await expect(
@@ -133,7 +129,6 @@ test.describe('/settings/preferences', () => {
 		// caught it; this test pins the new unit-aware bindings so it
 		// can't silently regress.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
 		await page.getByRole('button', { name: /Save Preferences/ }).click();
 		await expect(
@@ -171,7 +166,6 @@ test.describe('/settings/preferences', () => {
 		} finally {
 			// Restore to km so subsequent tests render against the default.
 			await page.goto('/settings/preferences');
-			await page.waitForLoadState('networkidle');
 			await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
 			await page.getByRole('button', { name: /Save Preferences/ }).click();
 			await expect(
@@ -192,7 +186,6 @@ test.describe('/settings/preferences', () => {
 		// preferred_unit (not pace_format) — see units.svelte.ts.
 		// Pinning the persistence is the load-bearing assertion.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		const sel = page
 			.locator('label', { has: page.getByText('Pace Format', { exact: true }) })
@@ -225,7 +218,6 @@ test.describe('/settings/preferences', () => {
 		// (it shares a single Save handler with theme + unit) would
 		// surface here.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		// Pick Satellite via the labelled <select>.
 		const sel = page
@@ -261,7 +253,6 @@ test.describe('/settings/preferences', () => {
 		// a subtle UX bug you'd never catch without an integration
 		// test.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: 'Dark', exact: true }).click();
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -287,7 +278,6 @@ test.describe('/settings/preferences', () => {
 		// ToastContainer mount, or throwing inside the upsert) would leave
 		// users with no feedback that the save took.
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: /Save Preferences/ }).click();
 

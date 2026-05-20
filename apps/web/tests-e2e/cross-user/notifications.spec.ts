@@ -57,7 +57,6 @@ test.describe('cross-user notifications', () => {
 		try {
 			// ── Snapshot runner's starting unread count ──
 			await runner.goto('/dashboard');
-			await runner.waitForLoadState('networkidle');
 			// The badge only renders when unreadCount > 0; if zero,
 			// .badge is absent. Safe-read via count() then text.
 			const badgeBefore = runner.locator('.bell-wrap .badge');
@@ -75,7 +74,6 @@ test.describe('cross-user notifications', () => {
 				})
 			);
 			await alex.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-			await alex.waitForLoadState('networkidle');
 			const kudosBtn = alex.locator('.kudos-btn');
 			await expect(kudosBtn).toBeVisible({ timeout: 10_000 });
 			// If the run already had alex's kudos given (left over from
@@ -89,7 +87,6 @@ test.describe('cross-user notifications', () => {
 
 			// ── Runner reloads /dashboard — bell should reflect +1 ──
 			await runner.reload();
-			await runner.waitForLoadState('networkidle');
 			const badgeAfter = runner.locator('.bell-wrap .badge');
 			await expect(badgeAfter).toBeVisible({ timeout: 10_000 });
 			await expect(badgeAfter).toHaveText(String(before + 1), {
@@ -153,7 +150,6 @@ test.describe('cross-user notifications', () => {
 			commentId = data.id as string;
 
 			await runner.goto('/dashboard');
-			await runner.waitForLoadState('networkidle');
 			const badge = runner.locator('.bell-wrap .badge');
 			await expect(badge).toBeVisible({ timeout: 10_000 });
 
@@ -201,7 +197,6 @@ test.describe('cross-user notifications', () => {
 			if (error) throw error;
 
 			await runner.goto('/dashboard');
-			await runner.waitForLoadState('networkidle');
 			const badge = runner.locator('.bell-wrap .badge');
 			await expect(badge).toBeVisible({ timeout: 10_000 });
 

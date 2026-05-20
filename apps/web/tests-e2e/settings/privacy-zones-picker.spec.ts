@@ -77,7 +77,6 @@ test.describe('/settings/preferences — PrivacyZonePicker (MapLibre modal)', ()
 		page
 	}) => {
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: /Add a zone/ }).click();
 
@@ -151,7 +150,6 @@ test.describe('/settings/preferences — PrivacyZonePicker (MapLibre modal)', ()
 		page
 	}) => {
 		await page.goto('/settings/preferences');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: /Add a zone/ }).click();
 		const modal = page.locator('.modal', { hasText: 'Add a privacy zone' });

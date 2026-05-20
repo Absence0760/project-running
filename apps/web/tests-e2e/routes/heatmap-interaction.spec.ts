@@ -41,7 +41,6 @@ test.describe('/routes?tab=heatmap — interaction', () => {
 		page
 	}) => {
 		await page.goto('/routes?tab=heatmap');
-		await page.waitForLoadState('networkidle');
 
 		const legend = page.locator('.heatmap-wrap .legend');
 		await expect(legend).toBeVisible({ timeout: 10_000 });
@@ -69,7 +68,6 @@ test.describe('/routes?tab=heatmap — interaction', () => {
 		page
 	}) => {
 		await page.goto('/routes?tab=heatmap');
-		await page.waitForLoadState('networkidle');
 
 		const legend = page.locator('.heatmap-wrap .legend');
 		await expect(legend.getByText(/^Updated /)).toBeVisible({

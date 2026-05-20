@@ -53,7 +53,6 @@ test.describe('/settings/upgrade — free user', () => {
 		// Coach for Free; Unlimited Coach, Priority map-matching,
 		// Priority exports, Everything in Free for Pro).
 		await page.goto('/settings/upgrade');
-		await page.waitForLoadState('networkidle');
 
 		const freeCard = page.locator('.tier-free');
 		await expect(freeCard).toBeVisible({ timeout: 10_000 });
@@ -87,7 +86,6 @@ test.describe('/settings/upgrade — free user', () => {
 		// src/routes/settings/upgrade/+page.svelte — assert the click
 		// opens that URL in a new tab.
 		await page.goto('/settings/upgrade');
-		await page.waitForLoadState('networkidle');
 
 		const donateCard = page.locator('.donate-card');
 		await expect(donateCard).toBeVisible({ timeout: 10_000 });
@@ -130,6 +128,8 @@ test.describe('/settings/upgrade — free user', () => {
 		// must sit BELOW tier-free, not beside it.
 		await page.setViewportSize({ width: 480, height: 1000 });
 		await page.goto('/settings/upgrade');
+		// Needed: boundingBox() returns null immediately if the element
+		// isn't laid out yet — no auto-retry like expect() has.
 		await page.waitForLoadState('networkidle');
 
 		const freeBox = await page.locator('.tier-free').boundingBox();
@@ -163,7 +163,6 @@ test.describe('/settings/upgrade — Pro user', () => {
 		// the "Get Pro" button with "Manage subscription" and adds
 		// the "Active" badge.
 		await page.goto('/settings/upgrade');
-		await page.waitForLoadState('networkidle');
 
 		const proCard = page.locator('.tier-pro');
 		await expect(proCard).toBeVisible({ timeout: 10_000 });

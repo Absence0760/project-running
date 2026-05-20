@@ -205,7 +205,6 @@ test.describe('/routes', () => {
 		// fails here. Drive the empty state by combining a narrow
 		// distance filter with a surface that has no rows.
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 		// Drive empty via a search string that won't match anything in
 		// the seed — simpler than coercing surface+distance to a void
 		// combo and survives seed evolution.

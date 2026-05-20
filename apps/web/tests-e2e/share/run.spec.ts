@@ -152,7 +152,6 @@ test.describe('/share/run/[id] — anon', () => {
 			})
 		);
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		await page.locator('a[href="/login?signup=1"]', { hasText: 'Sign up' }).click();
 		await page.waitForURL(/\/login\?signup=1/, { timeout: 10_000 });

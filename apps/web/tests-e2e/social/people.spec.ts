@@ -188,7 +188,6 @@ test.describe('full saga — freshly-planted users', () => {
 			//    not just optimistically painted. The post-reload state
 			//    proves the user_follows write landed.
 			await page.reload();
-			await page.waitForLoadState('networkidle');
 			await search.fill(bravo.displayName);
 			const bravoRowAfterReload = page
 				.locator('.person-row', { hasText: bravo.displayName });

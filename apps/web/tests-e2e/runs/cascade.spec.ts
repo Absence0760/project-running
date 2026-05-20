@@ -70,7 +70,6 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 
 		// ── UI delete ──
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		await page.locator('button[title="Delete"]').click();
 		const dialog = page.locator('.modal');
 		await expect(dialog).toBeVisible({ timeout: 5_000 });

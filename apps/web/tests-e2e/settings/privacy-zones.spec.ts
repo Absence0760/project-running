@@ -74,7 +74,6 @@ test.describe('/settings/preferences — privacy zones', () => {
 
 		try {
 			await page.goto('/settings/preferences');
-			await page.waitForLoadState('networkidle');
 
 			// Zone row renders with the seeded coords + radius.
 			const zoneRow = page.locator('.zone-list .zone-row').first();

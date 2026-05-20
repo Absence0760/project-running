@@ -111,7 +111,6 @@ test.describe('saga: account deletion via /settings/account', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/settings/account');
-			await page.waitForLoadState('networkidle');
 
 			// "Delete Account" sits at the bottom of the Danger Zone card.
 			// Wait for the danger zone to be reachable — saga users hit the

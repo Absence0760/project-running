@@ -46,7 +46,6 @@ test.describe('/routes — distance-filter labels honour user unit pref', () => 
 			.eq('id', USER_A.id);
 
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 
 		const select = page.getByLabel('Distance');
 		await expect(select).toBeVisible({ timeout: 10_000 });
@@ -83,7 +82,6 @@ test.describe('/routes — distance-filter labels honour user unit pref', () => 
 			.eq('id', USER_A.id);
 
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 
 		const select = page.getByLabel('Distance');
 		await expect(select).toBeVisible({ timeout: 10_000 });
@@ -117,7 +115,6 @@ test.describe('/routes — distance-filter labels honour user unit pref', () => 
 			.eq('id', USER_A.id);
 
 		await page.goto('/routes?tab=explore');
-		await page.waitForLoadState('networkidle');
 
 		// The Explore tab has its own Distance dropdown — find it by
 		// the surrounding label rather than aria-label since the

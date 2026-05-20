@@ -80,7 +80,6 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		// the calendar would silently shift the visual layout by one
 		// column without breaking the data.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		await page.waitForLoadState('networkidle');
 		const dow = page.locator('.cal .dow-row span');
 		await expect(dow).toHaveText(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
 	});

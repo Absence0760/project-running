@@ -150,7 +150,6 @@ test.describe('reports — Report dialog wires up to submit_report', () => {
 
 		try {
 			await page.goto(`/clubs/${slug}`);
-			await page.waitForLoadState('networkidle');
 			await page.getByRole('button', { name: /Report this club/i }).click();
 			const dialog = page.locator('.modal', { hasText: /Report this club/ });
 			await expect(dialog).toBeVisible();

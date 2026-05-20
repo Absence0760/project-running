@@ -115,7 +115,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			.eq('id', runId);
 
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		const section = page.locator('section.workout-review');
 		await expect(section).toBeVisible({ timeout: 10_000 });
 		await expect(section.getByRole('heading', { name: 'Workout' })).toBeVisible();
@@ -225,7 +224,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			.eq('id', runId);
 
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		const section = page.locator('section.workout-review');
 		await expect(section).toBeVisible({ timeout: 10_000 });
 		// Both rows present, one with .skipped class.
@@ -266,7 +264,6 @@ test.describe('/runs/[id] — Workout review section', () => {
 			})
 			.eq('id', runId);
 		await page.goto(`/runs/${runId}`);
-		await page.waitForLoadState('networkidle');
 		const headers = page.locator('table.workout-table thead th');
 		await expect(headers).toHaveText(['Step', 'Plan', 'Actual', 'Pace', 'Δ']);
 	});

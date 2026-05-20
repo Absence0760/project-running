@@ -43,7 +43,6 @@ test.describe('/share/route/[id] — anon', () => {
 		//   - Open Graph: og:title / og:description / og:type / og:site_name / og:image
 		//   - Twitter: twitter:card=summary_large_image + title / description / image
 		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Reactive head tags are populated after the fetchRouteById
 		// onMount call. Wait until the title flips from the

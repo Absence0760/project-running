@@ -28,14 +28,12 @@ test.describe('/routes — Heatmap tab', () => {
 
 	test('Heatmap tab button is reachable from /routes', async ({ page }) => {
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 		const heatmapTab = page.getByRole('tab', { name: 'Heatmap', exact: true });
 		await expect(heatmapTab).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('clicking Heatmap activates the tab (My routes deactivates)', async ({ page }) => {
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 		const heatmapTab = page.getByRole('tab', { name: 'Heatmap', exact: true });
 		const mineTab = page.getByRole('tab', { name: 'My routes', exact: true });
 		// Default: My routes is active.
@@ -64,7 +62,6 @@ test.describe('/routes — Heatmap tab', () => {
 		// case (no MapTiler key in CI) by accepting either the canvas
 		// or the .maplibregl-map container div.
 		await page.goto('/routes?tab=heatmap');
-		await page.waitForLoadState('networkidle');
 		const mapContainer = page.locator('.maplibregl-map');
 		await expect(mapContainer).toBeVisible({ timeout: 15_000 });
 	});
@@ -112,7 +109,6 @@ test.describe('/routes — Heatmap tab', () => {
 		// in setTab that left two active simultaneously would visually
 		// confuse the page but not error — pin the count.
 		await page.goto('/routes');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('tab', { name: 'Heatmap', exact: true }).click();
 		await expect(page.locator('button.tab.active')).toHaveCount(1);
 		await page.getByRole('tab', { name: 'Explore', exact: true }).click();

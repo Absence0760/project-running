@@ -689,7 +689,6 @@ test.describe('/runs — filters', () => {
 			// Open the 10th card.
 			await page.locator('.run-card').nth(10).click();
 			await page.waitForURL(/\/runs\/[a-f0-9-]+$/);
-			await page.waitForLoadState('networkidle');
 
 			// Back to /runs.
 			await page.goBack();
@@ -758,7 +757,6 @@ test.describe('/runs — filters', () => {
 			// Open the 70th card.
 			await page.locator('.run-card').nth(70).click();
 			await page.waitForURL(/\/runs\/[a-f0-9-]+$/);
-			await page.waitForLoadState('networkidle');
 
 			// Click the in-page back arrow (NOT browser back). The link
 			// text is "All runs" with an arrow_back icon.

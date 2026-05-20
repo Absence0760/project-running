@@ -16,7 +16,6 @@ test.describe('/settings — side-nav structure', () => {
 		page
 	}) => {
 		await page.goto('/settings/account');
-		await page.waitForLoadState('networkidle');
 
 		const nav = page.locator('.settings-nav');
 		await expect(nav).toBeVisible({ timeout: 10_000 });

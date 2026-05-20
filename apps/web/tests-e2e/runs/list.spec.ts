@@ -440,7 +440,6 @@ test.describe('/runs', () => {
 
 		// ── Delete ──
 		await page.goto(`/runs/${newRunId}`);
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: 'Delete' }).first().click();
 		// ConfirmDialog opens; the modal's confirm button reads "Delete".
 		await page

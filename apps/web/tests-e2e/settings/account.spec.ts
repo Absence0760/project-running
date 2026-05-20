@@ -27,7 +27,6 @@ test.describe('/settings/account', () => {
 		const originalName = 'Jared Howard';
 
 		await page.goto('/settings/account');
-		await page.waitForLoadState('networkidle');
 
 		const nameInput = page.getByLabel('Display Name');
 		await expect(nameInput).toHaveValue(originalName);
@@ -63,7 +62,6 @@ test.describe('/settings/account', () => {
 		// would surface here. Use a placeholder-style value (no real
 		// athletes hit by leaking it) and restore.
 		await page.goto('/settings/account');
-		await page.waitForLoadState('networkidle');
 
 		const input = page.getByLabel(/parkrun Athlete Number/);
 		const before = await input.inputValue();
@@ -92,7 +90,6 @@ test.describe('/settings/account', () => {
 		// that dropped the prefs branch would let HR slip while
 		// display_name persisted.
 		await page.goto('/settings/account');
-		await page.waitForLoadState('networkidle');
 
 		const hr = page.getByLabel(/Resting HR/);
 		const before = await hr.inputValue();

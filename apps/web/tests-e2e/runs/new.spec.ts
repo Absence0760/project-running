@@ -382,6 +382,9 @@ test.describe('/runs/new', () => {
 		await page.getByRole('button', { name: /Save/ }).click();
 		const newId = await captureCreatedRunId(page);
 
+		// Race guard: next read is a service-role SELECT (no Playwright
+		// auto-wait). Without the network-idle pause it can fire before
+		// the client-side INSERT lands.
 		await page.waitForLoadState('networkidle');
 
 		const { data: row } = await admin

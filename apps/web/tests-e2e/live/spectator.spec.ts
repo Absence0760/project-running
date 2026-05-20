@@ -182,7 +182,6 @@ test.describe('/live/[id] — anon spectator', () => {
 		});
 		try {
 			await page.goto(`/live/${runId}`);
-			await page.waitForLoadState('networkidle');
 
 			const badge = page.locator('.live-badge');
 			await expect(badge).toBeVisible();

@@ -32,7 +32,6 @@ test.describe('/ (landing)', () => {
 		// Click-through pin. A regression that wired the CTA to a
 		// nonexistent route would surface as a hard 404 here.
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('link', { name: 'Get Started' }).click();
 		await page.waitForURL(/\/login/, { timeout: 10_000 });
 	});
@@ -98,7 +97,6 @@ test.describe('/ (landing)', () => {
 
 	test('closing CTA section points anon users at /login', async ({ page }) => {
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
 		// The "Ready to log your next run?" closing CTA has its own
 		// "Sign in to continue" link. Anchor on the section's link.
 		const cta = page.locator('section.closing-cta');

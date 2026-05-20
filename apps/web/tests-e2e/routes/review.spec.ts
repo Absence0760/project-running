@@ -54,7 +54,6 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 		const comment = `e2e route review ${Date.now()}`;
 
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: 'Rate', exact: true }).click();
 

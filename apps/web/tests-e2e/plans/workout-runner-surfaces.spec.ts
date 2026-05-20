@@ -179,7 +179,6 @@ test.describe('Workout-runner surfaces (web)', () => {
 
 			try {
 				await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-				await page.waitForLoadState('networkidle');
 				const today_section = page.locator('section.today');
 				await expect(today_section).toBeVisible({ timeout: 10_000 });
 				await expect(today_section.locator('.today-label'))

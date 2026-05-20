@@ -19,7 +19,6 @@ test.describe('/plans', () => {
 		// assert the modal opens — catches regressions in the
 		// `showPlanModal` wiring + the editor's mount.
 		await page.goto('/plans');
-		await page.waitForLoadState('networkidle');
 
 		await page.getByRole('button', { name: /New plan/ }).first().click();
 
@@ -96,7 +95,6 @@ test.describe('/plans', () => {
 		// Pin those behaviours so a regression in the filter wiring
 		// shows up here.
 		await page.goto('/plans');
-		await page.waitForLoadState('networkidle');
 
 		const filterRow = page.getByRole('group', {
 			name: /Filter plans by status/
@@ -147,7 +145,6 @@ test.describe('/plans', () => {
 		// 2026-05-16 falls inside that window, so the progressbar should
 		// have a non-zero, non-100 aria-valuenow.
 		await page.goto('/plans');
-		await page.waitForLoadState('networkidle');
 
 		const card = page.locator('.card', { hasText: 'Sydney Half 2026' });
 		await expect(card).toBeVisible({ timeout: 10_000 });

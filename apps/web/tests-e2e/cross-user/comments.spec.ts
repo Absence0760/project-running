@@ -33,7 +33,6 @@ test.describe('cross-user comments', () => {
 		);
 
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Wait for the auth-gated RunSocial to mount.
 		const composer = page.locator('form.composer textarea');
@@ -84,7 +83,6 @@ test.describe('cross-user comments', () => {
 		);
 
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Post the parent comment.
 		const composer = page.locator('form.composer textarea');

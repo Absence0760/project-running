@@ -40,7 +40,6 @@ test.describe('/dashboard', () => {
 		// We assert the active class flips, not the chart contents
 		// (which depend on seed dates that can drift).
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		const weekBtn = page.getByRole('button', { name: 'Week', exact: true });
 		const monthBtn = page.getByRole('button', { name: 'Month', exact: true });
@@ -74,6 +73,8 @@ test.describe('/dashboard', () => {
 		// a card appear; clicking the card re-opens the editor;
 		// Delete inside the editor removes it.
 		await page.goto('/dashboard');
+		// Needed: .count() below is a snapshot — no auto-retry, so the
+		// initial count would race against the dashboard's data fetch.
 		await page.waitForLoadState('networkidle');
 
 		// runner's seed has `weekly_mileage_goal_m=50000` which the
@@ -130,7 +131,6 @@ test.describe('/dashboard', () => {
 		// which mounts the shared <PeriodSummary> inside a Modal with
 		// title "Period summary".
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		// The stat card may render with a 0 km value if "this week"
 		// (real wall-clock) doesn't intersect any seeded run — that's
@@ -201,7 +201,6 @@ test.describe('/dashboard', () => {
 		// reflect it. A regression that broke fetchRuns wiring or the
 		// derived stat would show up here.
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		const totalRunsCard = page
 			.locator('.stat-card')
@@ -250,7 +249,6 @@ test.describe('/dashboard', () => {
 		// fetchRuns aggressively caches and a deletion isn't reflected
 		// until the next session.
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		const totalRunsCard = page
 			.locator('.stat-card')
@@ -292,7 +290,6 @@ test.describe('/dashboard', () => {
 		// today's workout (or rest-day affordance) embedded inside,
 		// and a button-grade `/plans/[id]` CTA.
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		const hero = page.locator('.plan-hero');
 		await expect(hero).toBeVisible({ timeout: 10_000 });
@@ -374,7 +371,6 @@ test.describe('/dashboard', () => {
 		// the plan entry-point (today-card + Manage-plans link), keep the
 		// /plans route around for archive / multi-plan management.
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		// Sidebar no longer carries a Plans link.
 		const sidebar = page.locator('.sidebar');

@@ -40,7 +40,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		page
 	}) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 
 		const road = page.locator('.mode-btn', { hasText: 'Road' });
 		const trail = page.locator('.mode-btn', { hasText: 'Trail' });
@@ -60,7 +59,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('map-style toggle cycles streets → satellite → terrain → streets', async ({ page }) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 
 		const streets = page.locator('.style-btn', { hasText: 'Streets' });
 		const satellite = page.locator('.style-btn', { hasText: 'Satellite' });
@@ -96,7 +94,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('Undo + Clear + Out-and-back disabled at zero waypoints', async ({ page }) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		// All three editor toolbar buttons gate on waypointCount.
 		const toolbar = page.locator('.btn.btn-ghost');
 		// At least three .btn-ghost buttons exist; iterate and assert
@@ -112,7 +109,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		page
 	}) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 
 		// Default state: distance-target panel collapsed. Find the
 		// toggle button — it has class .style-btn or similar; use the
@@ -150,7 +146,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// then confirms the modal contract (name input + Cancel) via the
 		// builder's bound modal state by toggling the gate off in-DOM.
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		const saveBtn = page.getByRole('button', { name: /Save Route/ });
 		await expect(saveBtn).toBeVisible();
 		await expect(saveBtn).toBeDisabled();
@@ -179,7 +174,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// see what they're about to click. Regressing the fade puts us
 		// back at the "I can't see my map" complaint.
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 
 		const card = page.locator('.canvas-empty');
 		await expect(card).toBeVisible({ timeout: 10_000 });
@@ -265,6 +259,8 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// transparent. Read the compiled CSSStyleSheet rules directly
 		// instead — bypasses scoping and asserts the source of truth.
 		await page.goto('/routes/new');
+		// Needed: next call is page.evaluate() which reads CSSStyleSheets
+		// directly; no Playwright auto-wait on raw DOM snapshots.
 		await page.waitForLoadState('networkidle');
 
 		const colors = await page.evaluate(() => {
@@ -358,7 +354,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// refactor strips that line, this catches it before users
 		// re-report "I can't tell if I'm allowed to click markers".
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		const canvas = page.locator('.maplibregl-canvas');
 		await canvas.click({ position: { x: 200, y: 200 } });
 		const marker = page.locator('.maplibregl-marker').first();
@@ -380,7 +375,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('Generate-by-distance: distance presets update the slider label', async ({ page }) => {
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		// Open the distance-target panel.
 		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
 		// 5k preset → slider value reads ~5.0 km or ~3.1 mi depending
@@ -401,7 +395,6 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// unavailable." The zoom < 6 guard now refuses early with a
 		// clear message.
 		await page.goto('/routes/new');
-		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
 		// Generate button is visible (no start picked, busy=false).
 		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();

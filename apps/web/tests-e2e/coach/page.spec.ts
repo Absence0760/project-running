@@ -50,7 +50,6 @@ test.describe('/coach', () => {
 		// verify the page mounts past the "Loading…" state and the
 		// composer textarea is wired up.
 		await page.goto('/coach');
-		await page.waitForLoadState('networkidle');
 
 		// CoachChat's input has a placeholder starting with "Ask
 		// about today, pace, adherence…" — see CoachChat.svelte.

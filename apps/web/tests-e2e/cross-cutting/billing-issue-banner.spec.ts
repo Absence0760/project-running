@@ -47,7 +47,6 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 		expect(error).toBeNull();
 
 		await page.goto('/dashboard');
-		await page.waitForLoadState('networkidle');
 
 		const banner = page.getByTestId('billing-issue-banner');
 		await expect(banner).toBeVisible({ timeout: 10_000 });

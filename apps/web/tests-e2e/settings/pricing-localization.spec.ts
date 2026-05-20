@@ -55,7 +55,6 @@ test.describe('Pro price — currency localisation', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/settings/upgrade');
-			await page.waitForLoadState('networkidle');
 			const text = await page.locator('.tier-pro .price-amount').textContent();
 			// Both "9,99 €" and "€9,99" formats are valid Intl outputs;
 			// Chromium emits "9,99 €" for de-DE today. Pin to the

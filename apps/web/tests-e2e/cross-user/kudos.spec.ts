@@ -34,7 +34,6 @@ test.describe('cross-user kudos', () => {
 		);
 
 		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-		await page.waitForLoadState('networkidle');
 
 		// Wait for the auth-gated RunSocial to mount.
 		const kudosBtn = page.locator('.kudos-btn');

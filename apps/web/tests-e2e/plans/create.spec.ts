@@ -176,7 +176,6 @@ test.describe('/plans/new — create wizard', () => {
 
 		// Close the wizard.
 		await page.locator('.modal-close').first().click();
-		await page.waitForLoadState('networkidle');
 
 		// Seed plan is still on /plans + still active (no abandon /
 		// complete flip).
