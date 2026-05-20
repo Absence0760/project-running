@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../hr_zones.dart';
+import '../run_intensity.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -1333,21 +1334,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   List<int>? _userHrCutoffs() {
     final svc = widget.settingsSync?.service;
     if (svc == null) return null;
-    final raw = svc.effective<Map>(SettingsKeys.hrZones);
-    if (raw == null) return null;
-    final out = <int>[];
-    for (final k in const ['z1', 'z2', 'z3', 'z4', 'z5']) {
-      final v = raw[k];
-      if (v is! num) return null;
-      out.add(v.round());
-    }
-    if (out.length != 5) return null;
-    // Cutoffs must be strictly increasing for the zone-index math to make
-    // sense; reject malformed configurations.
-    for (var i = 1; i < out.length; i++) {
-      if (out[i] <= out[i - 1]) return null;
-    }
-    return out;
+    return parseHrZones(svc.effective<Map>(SettingsKeys.hrZones));
   }
 
   static String _formatZoneSeconds(int s) {

@@ -13,6 +13,8 @@ import '../training_load.dart';
 import '../training_service.dart';
 import '../widgets/fitness_card.dart';
 import '../widgets/notification_bell.dart';
+import '../run_intensity.dart';
+import '../widgets/intensity_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/training_load_chart.dart';
@@ -390,6 +392,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
                 FitnessCard(runs: runs, now: now),
                 ReadinessCard(runs: runs, now: now),
+                IntensityCard(
+                  runs: runs,
+                  hrZones: parseHrZones(widget.settingsSync?.service
+                      ?.effective<Map>(SettingsKeys.hrZones)),
+                  now: now,
+                ),
                 _buildTrainingLoadChart(runs, now),
               ],
             ),
