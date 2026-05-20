@@ -875,6 +875,12 @@
 		nearStart = false;
 		updateStartMarkerPulse();
 		updateStraightLine();
+		// Notify the parent so waypointCount / Calculate-button-gating /
+		// the empty-state overlay all update. Without this, dropping
+		// pins on the map leaves the page in its "Click to start" state
+		// and Calculate stays disabled until the user runs Calculate
+		// (which won't happen because Calculate is disabled).
+		emitUpdate();
 	}
 
 	export function insertWaypoint(lngLat: { lng: number; lat: number }, atIndex: number) {
@@ -887,6 +893,7 @@
 		markers.splice(atIndex, 0, marker);
 		updateMarkerStyles();
 		updateStraightLine();
+		emitUpdate();
 	}
 
 	export function removeWaypoint(index: number) {
@@ -901,6 +908,7 @@
 		marker?.remove();
 		updateMarkerStyles();
 		updateStraightLine();
+		emitUpdate();
 	}
 
 	export function undoWaypoint() {
@@ -929,6 +937,7 @@
 		updateMarkerStyles();
 		clearPreviewLine();
 		updateStraightLine();
+		emitUpdate();
 	}
 
 	export function clearWaypoints() {
