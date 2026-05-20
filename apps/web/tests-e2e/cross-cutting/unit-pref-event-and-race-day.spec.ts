@@ -136,7 +136,12 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 				goal_time_seconds: 3000, // 50:00 → ~8:03/mi
 				start_date: startIso,
 				end_date: endIso,
-				status: 'active',
+				// 'completed' — not 'active' — because the seed already
+				// gives USER_A an active plan (Sydney Half 2026) and the
+				// partial unique index `training_plans_one_active`
+				// forbids a second. RaceDayPanel only gates on end_date,
+				// not status, so this still exercises the panel.
+				status: 'completed',
 				days_per_week: 4
 			});
 
@@ -188,7 +193,9 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 				goal_time_seconds: 3000,
 				start_date: startIso,
 				end_date: endIso,
-				status: 'active',
+				// 'completed' (not 'active') — see the mi-mode test above
+				// for why; same partial unique index.
+				status: 'completed',
 				days_per_week: 4
 			});
 
