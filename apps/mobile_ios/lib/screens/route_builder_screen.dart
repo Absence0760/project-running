@@ -604,6 +604,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
               routing: _routing,
               saving: _saving,
               waypointCount: _waypoints.length,
+              mode: _mode,
               dragIndex: _dragIndex,
               onCancelDrag: () => setState(() => _dragIndex = null),
             ),
@@ -635,11 +636,16 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                 ),
               ),
             ),
-          // Bottom mode toggle.
+          // Bottom mode toggle. Right edge clears the FAB column so
+          // taps on the Straight segment land on the toggle rather
+          // than the Locate FAB — the FAB is in the Scaffold's
+          // floatingActionButton slot (always on top of body Stack
+          // children) and previously overlapped the rightmost
+          // segment's hit area.
           Positioned(
             bottom: 88,
             left: 16,
-            right: 16,
+            right: 16 + 56 + 12,
             child: _ModeToggle(
               mode: _mode,
               onChanged: _routing || _saving
@@ -671,6 +677,12 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 /// Available routing profiles surfaced to the user. Maps to
 /// [OsrmProfile] for road/trail and bypasses OSRM for straight.
 enum RouteBuilderMode { trail, road, straight }
+
+String _modeLabel(RouteBuilderMode m) => switch (m) {
+      RouteBuilderMode.trail => 'Trail',
+      RouteBuilderMode.road => 'Road',
+      RouteBuilderMode.straight => 'Straight',
+    };
 
 /// Format the user-visible message for a saveRoute failure. Pure
 /// function — extracted so the catch branch in `_save` stays a
@@ -744,6 +756,7 @@ class _StatusPill extends StatelessWidget {
   final bool routing;
   final bool saving;
   final int waypointCount;
+  final RouteBuilderMode mode;
   final int? dragIndex;
   final VoidCallback onCancelDrag;
 
@@ -753,6 +766,7 @@ class _StatusPill extends StatelessWidget {
     required this.routing,
     required this.saving,
     required this.waypointCount,
+    required this.mode,
     required this.dragIndex,
     required this.onCancelDrag,
   });
@@ -764,7 +778,15 @@ class _StatusPill extends StatelessWidget {
     if (dragIndex != null) {
       label = 'Tap anywhere to move point ${dragIndex! + 1}';
     } else if (waypointCount == 0) {
-      label = 'Tap the map to place waypoints';
+      // Surface the current routing mode in the empty hint so flipping
+      // Trail / Road / Straight gives immediate visual feedback even
+      // before the user places two waypoints (otherwise the mode
+      // toggle looks dead until there's a polyline to reshape).
+      label = 'Tap the map to place waypoints · ${_modeLabel(mode)}';
+    } else if (waypointCount == 1) {
+      // One waypoint placed — same rationale: show the mode so the
+      // user can compose the toggle + next tap with confidence.
+      label = 'Place another to draw the line · ${_modeLabel(mode)}';
     } else {
       final km = (distanceM / 1000).toStringAsFixed(2);
       final pointsLabel =

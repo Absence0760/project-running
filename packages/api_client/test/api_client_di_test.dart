@@ -50,35 +50,19 @@ void main() {
       }
     });
 
-    test('default ApiClient() does NOT use the override and falls back to Supabase.instance.client', () {
-      // Without `Supabase.initialize`, the global throws. The test
-      // value is that calling the default constructor + then accessing
-      // a method that reaches the global does NOT route through any
-      // injected fake — confirming the DI hook only fires for
-      // .withClient.
+    test('default ApiClient() falls back to Supabase.instance.client but '
+        'userId/userEmail return null instead of throwing when uninitialised', () {
+      // Without `Supabase.initialize`, `Supabase.instance` asserts.
+      // The getters used to bubble that assertion to callers, which
+      // bit RoutesScreen.embedded — the offline-fallback path
+      // `widget.apiClient ?? ApiClient()` in HomeScreen produces a
+      // default ApiClient, and its first `api.userId` guard crashed
+      // the layout. The contract is now "signed out" semantics for
+      // both getters when the global isn't wired, which screen-level
+      // null guards already handle.
       final defaultApi = ApiClient();
-      expect(
-        () => defaultApi.userId,
-        throwsA(isA<AssertionError>().or(isA<Error>())),
-      );
+      expect(defaultApi.userId, isNull);
+      expect(defaultApi.userEmail, isNull);
     });
   });
-}
-
-extension _ThrowsExt on Matcher {
-  Matcher or(Matcher other) => _OrMatcher(this, other);
-}
-
-class _OrMatcher extends Matcher {
-  final Matcher a;
-  final Matcher b;
-  _OrMatcher(this.a, this.b);
-
-  @override
-  bool matches(item, Map matchState) =>
-      a.matches(item, matchState) || b.matches(item, matchState);
-
-  @override
-  Description describe(Description description) =>
-      description.add('matches ').addDescriptionOf(a).add(' or ').addDescriptionOf(b);
 }

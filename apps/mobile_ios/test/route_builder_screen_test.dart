@@ -145,7 +145,14 @@ void main() {
       (tester) async {
     final store = await _store();
     await _pumpScreen(tester, store);
-    expect(find.text('Tap the map to place waypoints'), findsOneWidget);
+    // Hint suffixes the current routing mode (Trail/Road/Straight)
+    // so flipping the toggle gives immediate feedback even before
+    // the user places two waypoints. Default mode is Trail.
+    expect(
+      find.textContaining('Tap the map to place waypoints'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Trail'), findsAtLeastNWidgets(1));
     final save = find.widgetWithText(TextButton, 'Save');
     expect(save, findsOneWidget);
     expect(tester.widget<TextButton>(save).onPressed, isNull);
@@ -296,6 +303,49 @@ void main() {
         const OverlapSpan(startIndex: 5, endIndex: 6),
       ];
       expect(overlapLatLngsFor(polyline, spans), isEmpty);
+    });
+  });
+
+  group('layout invariants', () {
+    // Source-level guard: the bottom mode toggle's right inset must
+    // clear the Scaffold's floatingActionButton column or the Straight
+    // segment becomes untappable — the FAB renders above body Stack
+    // children. Pin both the magic number AND the rationale so a
+    // future tweak that drops the inset back to "right: 16" fails
+    // loud rather than silently breaking Straight-segment taps. See
+    // user-reported bug: "the straight button is covered by the
+    // locate position button".
+    test('mode toggle Positioned.right clears the FAB column', () {
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        source.contains('right: 16 + 56 + 12'),
+        isTrue,
+        reason:
+            "Mode toggle's right edge must leave room for the 56-dp FAB "
+            "(plus 16 margin + 12 gap) so the Straight segment isn't "
+            "covered by the Locate FAB.",
+      );
+    });
+
+    test('empty-state hint suffixes the current mode', () {
+      // Pin both the empty hint and the one-waypoint hint so flipping
+      // the mode toggle has visible feedback before the user has
+      // placed enough waypoints to trigger a re-route.
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        source.contains(
+            r"'Tap the map to place waypoints · ${_modeLabel(mode)}'"),
+        isTrue,
+        reason: 'Empty-state hint must surface the mode label.',
+      );
+      expect(
+        source.contains(
+            r"'Place another to draw the line · ${_modeLabel(mode)}'"),
+        isTrue,
+        reason: 'Single-waypoint hint must surface the mode label.',
+      );
     });
   });
 }

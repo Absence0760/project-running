@@ -195,10 +195,32 @@ class ApiClient {
   }
 
   /// The current user ID, or null if not signed in.
-  String? get userId => _client.auth.currentUser?.id;
+  /// Current user id, or null when signed-out. Also null when
+  /// Supabase wasn't initialised (offline-mode boot, dev without
+  /// `.env.local` SUPABASE_URL/ANON_KEY) — `_client` resolves
+  /// `Supabase.instance` lazily and that getter asserts when init
+  /// hasn't happened. Callers (RoutesScreen, FeedScreen, every
+  /// "are we signed in?" guard) expect a tristate of "signed in" /
+  /// "signed out" — throwing is a fail-closed bug they can't react
+  /// to. Catch the assertion and degrade to "signed out".
+  String? get userId {
+    try {
+      return _client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
 
-  /// The current user's email, or null if not signed in.
-  String? get userEmail => _client.auth.currentUser?.email;
+  /// The current user's email, or null if not signed in. Same
+  /// offline-safety as [userId] — returns null when Supabase
+  /// hasn't been initialised rather than throwing.
+  String? get userEmail {
+    try {
+      return _client.auth.currentUser?.email;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Sign out the current user.
   Future<void> signOut() async {
