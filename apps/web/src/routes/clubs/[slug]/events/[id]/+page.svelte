@@ -398,7 +398,18 @@
 				scheduleReload
 			)
 			.subscribe((status) => {
-				realtimeReady = status === 'SUBSCRIBED';
+				if (status !== 'SUBSCRIBED') {
+					realtimeReady = false;
+					return;
+				}
+				// Supabase reports SUBSCRIBED as soon as the channel joins,
+				// but the server-side postgres_changes filter wiring trails
+				// the join by a tick. A 250 ms cushion before flipping the
+				// data-attribute closes the flake window for the multi-
+				// context race-control e2e test.
+				setTimeout(() => {
+					realtimeReady = true;
+				}, 250);
 			});
 	}
 
