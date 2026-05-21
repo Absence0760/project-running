@@ -35,7 +35,12 @@ Future<void> _pumpSheet(
     ),
   );
   await tester.tap(find.text('Open'));
-  await tester.pumpAndSettle();
+  // Was `pumpAndSettle()`. That hangs against the full-screen
+  // MaterialPageRoute (cursor + page-route animation never settle in
+  // the test framework's fake clock). Two timed pumps cover the
+  // 300 ms route slide-in.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 void main() {
@@ -68,7 +73,7 @@ void main() {
       await _pumpSheet(tester, prefs);
       await tester.ensureVisible(find.text('Save'));
       await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Set at least one target'), findsOneWidget);
     });
 
@@ -85,7 +90,7 @@ void main() {
       await tester.enterText(distanceField.first, '0');
       await tester.ensureVisible(find.text('Save'));
       await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Distance: enter a positive number'), findsOneWidget);
     });
 
@@ -95,7 +100,10 @@ void main() {
       await _pumpSheet(tester, prefs);
       expect(find.text('New goal'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+      // Pop animation for fullscreenDialog runs ~400-500ms; double-
+      // pump well past so the AppBar title is gone.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
       expect(find.text('New goal'), findsNothing);
       expect(prefs.goals, isEmpty);
     });

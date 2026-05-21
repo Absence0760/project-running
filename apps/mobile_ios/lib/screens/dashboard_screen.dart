@@ -968,12 +968,52 @@ class _PeriodStatCard extends StatelessWidget {
         ],
       ),
     );
+    final isTappable = onTap != null;
+    final theme0 = Theme.of(context);
+    // Subtle differentiation so users can tell which tiles drill in.
+    // - Tappable: outlined border in the primary tint + trailing
+    //   chevron in the value row + standard Card elevation.
+    // - Non-tappable: zero elevation + no chevron + no outline — sits
+    //   visually flatter so it reads as a read-only stat.
+    // Was previously visually identical regardless of onTap — field
+    // report: "clickable sections should be distinguishable from non-
+    // clickable fields … Week / Month / All Time look the same but
+    // only Week and Month are clickable."
+    final body = Stack(
+      children: [
+        inner,
+        if (isTappable)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Icon(
+              Icons.chevron_right,
+              size: 16,
+              color: theme0.colorScheme.outline.withValues(alpha: 0.6),
+            ),
+          ),
+      ],
+    );
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      child: onTap == null
-          ? inner
-          : InkWell(onTap: onTap, child: inner),
+      elevation: isTappable ? null : 0,
+      shape: isTappable
+          ? RoundedRectangleBorder(
+              side: BorderSide(
+                color: theme0.colorScheme.primary.withValues(alpha: 0.25),
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            )
+          : RoundedRectangleBorder(
+              side: BorderSide(
+                color: theme0.colorScheme.outline.withValues(alpha: 0.18),
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+      child: isTappable ? InkWell(onTap: onTap, child: body) : body,
     );
   }
 }

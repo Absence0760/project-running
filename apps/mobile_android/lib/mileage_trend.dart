@@ -24,6 +24,11 @@ class MileagePeriod {
 /// `mileageView` state.
 enum MileageView { weekly, monthly, yearly }
 
+/// Minimum number of buckets to show on the yearly chart even when
+/// most years have zero runs — keeps a single-year user from seeing
+/// a lonely bar.
+const int _kYearlyMinBuckets = 5;
+
 /// Group a list of runs into [MileagePeriod] buckets matching [view].
 /// Returns the most recent [maxBuckets] buckets in chronological
 /// order. Empty when [runs] is empty.
@@ -36,6 +41,11 @@ List<MileagePeriod> aggregateMileage(
   required MileageView view,
   required DateTime now,
   int maxBuckets = 12,
+  /// When true AND view==yearly, backfill empty bucket(s) for prior
+  /// years so a single-year user sees a year-over-year-trend frame
+  /// instead of a lonely bar. Off by default so the pure aggregation
+  /// shape stays unchanged for non-rendering callers.
+  bool padYearlyToMin = false,
 }) {
   if (runs.isEmpty) return const [];
   // Bucket key → (sortKey, label, summedDistance).
@@ -57,6 +67,28 @@ List<MileagePeriod> aggregateMileage(
   // Sort chronologically; keep only the most recent N.
   final ordered = groups.values.toList()
     ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  // Yearly view: a user with all-runs-in-one-year would otherwise
+  // see a single lonely bar (e.g. just "2026"). Backfill empty
+  // buckets for the prior years up to `_kYearlyMinBuckets` so the
+  // chart reads as a year-over-year trend even when most years are
+  // zero. Weekly / monthly views always have ≥12 buckets in their
+  // natural cadence so they don't need this guard.
+  if (padYearlyToMin &&
+      view == MileageView.yearly &&
+      ordered.length < _kYearlyMinBuckets) {
+    final newest = ordered.last;
+    final newestYear = newest.startsAt.year;
+    final existingYears = ordered.map((b) => b.startsAt.year).toSet();
+    for (var y = newestYear - _kYearlyMinBuckets + 1; y < newestYear; y++) {
+      if (existingYears.contains(y)) continue;
+      ordered.add(_Bucket(
+        startsAt: DateTime(y),
+        label: y.toString(),
+        distanceM: 0,
+      ));
+    }
+    ordered.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
   final start = ordered.length > maxBuckets
       ? ordered.length - maxBuckets
       : 0;

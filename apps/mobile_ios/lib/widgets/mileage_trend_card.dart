@@ -35,8 +35,17 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
   @override
   Widget build(BuildContext context) {
     if (widget.runs.isEmpty) return const SizedBox.shrink();
-    final periods =
-        aggregateMileage(widget.runs, view: _view, now: widget.now);
+    final periods = aggregateMileage(
+      widget.runs,
+      view: _view,
+      now: widget.now,
+      // Padding ON so the yearly view backfills empty prior years
+      // when the user only has a single year of data — fixes "the
+      // Mileage -> year looks ugly with just one year." Pure-logic
+      // aggregateMileage callers default to false so the change
+      // doesn't surprise non-rendering consumers.
+      padYearlyToMin: true,
+    );
     if (periods.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
@@ -47,7 +56,13 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
     final latestLabel = _latestLabel(_view);
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      // Use the Card default margin (EdgeInsets.all(4)) so this card
+      // matches the width of every other Card in the dashboard
+      // ListView (which itself supplies 16 px horizontal padding).
+      // The earlier explicit `fromLTRB(16, 8, 16, 8)` doubled the
+      // gutter and made this card visibly narrower than its siblings
+      // — field report: "the Mileage modal looks less wide (thinner)
+      // than the other modals on the dashboard."
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Column(
@@ -230,12 +245,25 @@ class _BarColumn extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            period.label,
-            style: theme.textTheme.labelSmall?.copyWith(color: dim),
-            overflow: TextOverflow.fade,
-            softWrap: false,
-            maxLines: 1,
+          // Rotate the label -45° so 12 columns × "13 May"-style
+          // strings fit without clipping under each ~24 px-wide bar.
+          // The vertical headroom (_labelsExtra = 24 px) was sized
+          // for diagonal labels; horizontal labels under cramped
+          // columns truncated mid-character. Field report: "Mileage
+          // -> Week numbers below the vertical lines are cut off."
+          SizedBox(
+            height: 20,
+            child: Transform.rotate(
+              angle: -0.6,
+              alignment: Alignment.center,
+              child: Text(
+                period.label,
+                style: theme.textTheme.labelSmall?.copyWith(color: dim),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
+              ),
+            ),
           ),
         ],
       ),

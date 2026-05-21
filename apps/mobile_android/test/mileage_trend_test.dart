@@ -153,4 +153,82 @@ void main() {
       expect(out.map((p) => p.label).toList(), ['2024', '2025', '2026']);
     });
   });
+
+  // Reason: a user with all runs in one year used to see a single
+  // lonely bar in the yearly view. `padYearlyToMin: true` backfills
+  // empty prior-year buckets up to the minimum (5) so the chart
+  // reads as a year-over-year trend. Default is false so the
+  // pure-aggregation shape stays unchanged for non-rendering callers.
+  group('padYearlyToMin (yearly view)', () {
+    final padNow = DateTime(2026, 6, 1, 12);
+
+    test('single-year input pads to 5 buckets, ending with that year', () {
+      final out = aggregateMileage(
+        [_run(startedAt: DateTime(2026, 4, 1), distanceM: 5000)],
+        view: MileageView.yearly,
+        now: padNow,
+        padYearlyToMin: true,
+      );
+      expect(out.length, 5);
+      expect(out.map((p) => p.label).toList(),
+          ['2022', '2023', '2024', '2025', '2026']);
+      // Only the trailing bucket carries the run's distance.
+      expect(out.last.distanceM, 5000);
+      for (var i = 0; i < out.length - 1; i++) {
+        expect(out[i].distanceM, 0,
+            reason: 'Backfilled bucket ${out[i].label} must read 0.');
+      }
+    });
+
+    test('padding does NOT fire when there are 5+ real years', () {
+      final out = aggregateMileage(
+        [
+          _run(startedAt: DateTime(2022, 6, 1), distanceM: 1000),
+          _run(startedAt: DateTime(2023, 6, 1), distanceM: 2000),
+          _run(startedAt: DateTime(2024, 6, 1), distanceM: 3000),
+          _run(startedAt: DateTime(2025, 6, 1), distanceM: 4000),
+          _run(startedAt: DateTime(2026, 6, 1), distanceM: 5000),
+        ],
+        view: MileageView.yearly,
+        now: padNow,
+        padYearlyToMin: true,
+      );
+      expect(out.length, 5,
+          reason: '5 real years should pass through unchanged — padding '
+              'guard is `< _kYearlyMinBuckets`, not `<=`.');
+      expect(out.map((p) => p.distanceM).toList(),
+          [1000, 2000, 3000, 4000, 5000]);
+    });
+
+    test('padding does NOT fire on weekly / monthly views', () {
+      final weekly = aggregateMileage(
+        [_run(startedAt: DateTime(2026, 4, 1), distanceM: 5000)],
+        view: MileageView.weekly,
+        now: padNow,
+        padYearlyToMin: true,
+      );
+      expect(weekly.length, 1,
+          reason: 'Weekly view must ignore padYearlyToMin.');
+      final monthly = aggregateMileage(
+        [_run(startedAt: DateTime(2026, 4, 1), distanceM: 5000)],
+        view: MileageView.monthly,
+        now: padNow,
+        padYearlyToMin: true,
+      );
+      expect(monthly.length, 1,
+          reason: 'Monthly view must ignore padYearlyToMin.');
+    });
+
+    test('padYearlyToMin defaults to false (backwards-compat)', () {
+      final out = aggregateMileage(
+        [_run(startedAt: DateTime(2026, 4, 1), distanceM: 5000)],
+        view: MileageView.yearly,
+        now: padNow,
+      );
+      expect(out.length, 1,
+          reason: 'Default-off keeps the pure-aggregation shape so '
+              'non-rendering callers (tests, analytics) see the same '
+              'output they always have.');
+    });
+  });
 }

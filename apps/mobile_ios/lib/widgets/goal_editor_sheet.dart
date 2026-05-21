@@ -4,22 +4,41 @@ import '../goals.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 
-/// Open the goal editor as a modal bottom sheet. Pass an existing goal to
-/// edit it in-place; omit for a new goal.
+/// Open the goal editor as a full-screen modal dialog. Pass an
+/// existing goal to edit it in-place; omit for a new goal.
+///
+/// Was previously a `showModalBottomSheet` — the user surface was
+/// inconsistent with the rest of the dashboard's drill-ins
+/// (PeriodSummaryScreen for Week / Month opens as a full-screen
+/// page). Field report: "Note the Mileage modal looks less wide
+/// (thinner) than the other modals on the dashboard. … I like the
+/// week modal compared to the goal modal." Promoting goal-edit to
+/// a fullscreen dialog matches the period-summary shape and reads
+/// as a "drill-in" the same way.
+///
+/// The function name is kept (`showGoalEditorSheet`) so call sites
+/// don't churn; the surface inside is unchanged.
 Future<void> showGoalEditorSheet(
   BuildContext context, {
   required Preferences preferences,
   SettingsSyncService? settingsSync,
   RunGoal? existing,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (ctx) => _GoalEditorSheet(
-      preferences: preferences,
-      settingsSync: settingsSync,
-      existing: existing,
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => Scaffold(
+        appBar: AppBar(
+          title: Text(existing == null ? 'New goal' : 'Edit goal'),
+        ),
+        body: SafeArea(
+          child: _GoalEditorSheet(
+            preferences: preferences,
+            settingsSync: settingsSync,
+            existing: existing,
+          ),
+        ),
+      ),
     ),
   );
 }
@@ -106,18 +125,15 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
         : mq.viewPadding.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + bottomInset),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              isEditing ? 'Edit goal' : 'New goal',
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 20),
+            // Title now comes from the host Scaffold's AppBar (set
+            // by showGoalEditorSheet's fullscreenDialog wrapper).
+            // Drop the inline title so the heading isn't duplicated.
             _sectionLabel(theme, 'Name (optional)'),
             const SizedBox(height: 8),
             TextField(

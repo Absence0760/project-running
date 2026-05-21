@@ -139,12 +139,28 @@ class _RunsScreenState extends State<RunsScreen> {
   bool _selecting = false;
   final Set<String> _selected = {};
 
+  /// Snapshot of `runStore.runs` IDs from the previous listener tick.
+  /// Used by `_onStoreChanged` to detect freshly-added runs so we can
+  /// auto-clear sticky activity / source filters that would otherwise
+  /// hide them — fixes the field report "I added a run manually and
+  /// it didn't show in History". The dashboard reads runs unfiltered
+  /// so it always reflects the save; the History filter chips persist
+  /// across sessions via SharedPreferences and were silently dropping
+  /// the new entry.
+  Set<String> _previousRunIds = const {};
+
   @override
   void initState() {
     super.initState();
     widget.runStore.addListener(_onStoreChanged);
     widget.preferences.addListener(_onStoreChanged);
     _recompute();
+    // Seed the "previously seen ids" set with whatever the store
+    // already holds at mount. Without this seed, the very first
+    // listener tick would treat every existing run as "newly added"
+    // and reset filters even when the user just opened History.
+    _previousRunIds =
+        widget.runStore.runs.map((r) => r.id).toSet();
     _hydrateFilters();
     _fetchRemote();
   }
@@ -158,12 +174,35 @@ class _RunsScreenState extends State<RunsScreen> {
 
   void _onStoreChanged() {
     if (!mounted) return;
+    final allRuns = widget.runStore.runs;
+    final existing = allRuns.map((r) => r.id).toSet();
+    final added = existing.difference(_previousRunIds);
     setState(() {
       _recompute();
-      final existing = widget.runStore.runs.map((r) => r.id).toSet();
       _selected.removeWhere((id) => !existing.contains(id));
       if (_selected.isEmpty) _selecting = false;
+      // If runs were added but none of them survive the current
+      // activity / source filter, the user just saved a run they can't
+      // see — auto-clear those two filters so the new entry surfaces.
+      // The range filter (week / month / all) is preserved on purpose:
+      // a user with "This year" selected probably wants to keep that.
+      // _previousRunIds is seeded in initState BEFORE the listener can
+      // fire, so `added` is always the genuine delta (never a startup
+      // bulk seed).
+      if (added.isNotEmpty &&
+          (_activityFilter != null || _sourceFilter != null) &&
+          !_filtered.any((r) => added.contains(r.id))) {
+        _activityFilter = null;
+        _sourceFilter = null;
+        _resetPaging();
+        _recompute();
+        // Defer the persist so we don't fight an in-flight setState.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _persistFilters();
+        });
+      }
     });
+    _previousRunIds = existing;
   }
 
   void _recompute() {

@@ -589,4 +589,279 @@ void main() {
       expect(find.text('3 runs'), findsOneWidget);
     });
   });
+
+  // ─── Manual-add → History sync ───────────────────────────────────
+  //
+  // Field report: "I added a run manually on the mobile app and it
+  // is not showing in the history. It is showing on the dashboard
+  // -> this week modal." The two surfaces share the same LocalRunStore,
+  // so a divergence implies either (a) the listener-driven
+  // _onStoreChanged path on RunsScreen is missing the save, or
+  // (b) the filter on RunsScreen drops the new row that the dashboard
+  // accepts. These tests pin both halves of the contract so neither
+  // can quietly regress.
+
+  group('RunsScreen ← LocalRunStore live updates', () {
+    testWidgets(
+        'a run saved via runStore.save AFTER mount appears in the list',
+        (tester) async {
+      final s = await _makeStores();
+      // Start with an empty store so we can pin "the new run shows up"
+      // unambiguously — no risk of confusing it with a seeded entry.
+      await _pump(
+        tester,
+        runStore: s.runStore,
+        routeStore: s.routeStore,
+        prefs: s.prefs,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      // Sanity: empty state visible.
+      expect(find.text('No runs yet'), findsOneWidget);
+
+      // Save a run shaped exactly like AddRunScreen produces: source
+      // RunSource.app, metadata carrying activity_type='run' +
+      // manual_entry=true, startedAt converted to UTC (mirrors
+      // `_startedAt.toUtc()` in add_run_screen.dart#_save). This is
+      // the exact path the field bug runs into.
+      //
+      // `runAsync` is required around `runStore.save` because the
+      // underlying File.writeAsString uses the real dart:io event
+      // loop, which the test scheduler doesn't pump under the
+      // default fake-async clock. Without it, `await save(...)`
+      // blocks forever and the test framework eventually times out.
+      final now = DateTime.now();
+      final manual = Run(
+        id: 'manual-1',
+        startedAt: DateTime(now.year, now.month, now.day, now.hour).toUtc(),
+        duration: const Duration(minutes: 30),
+        distanceMetres: 5000,
+        source: RunSource.app,
+        metadata: const {
+          'activity_type': 'run',
+          'manual_entry': true,
+          'title': 'Morning loop',
+        },
+      );
+      await tester.runAsync(() => s.runStore.save(manual));
+      // Listener-driven setState + a frame to settle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // The manually-saved run must materialise in the filtered list.
+      // We assert via the summary chip (1 run total) — the exact row
+      // text is brittle (depends on UnitFormat + month header), but
+      // the count is invariant.
+      expect(find.text('1 run'), findsOneWidget,
+          reason: 'A manual save must propagate through the LocalRunStore '
+              'listener into _filterAndSort on RunsScreen — the dashboard '
+              'reads the same store and shows the run in This Week, so the '
+              'history must agree.');
+    });
+
+    testWidgets(
+        'manual run with default "this week" filter falls inside the range',
+        (tester) async {
+      // Pin the comparator semantics directly: a run.startedAt that
+      // matches add_run_screen's defaults (today, top-of-hour, .toUtc())
+      // must compare as >= weekStartLocal(now). If the comparator ever
+      // regresses (e.g. someone swaps `isBefore` for a naive numeric
+      // compare against a local timestamp), this test will fail.
+      final s = await _makeStores();
+      final now = DateTime.now();
+      final manualLocal = DateTime(now.year, now.month, now.day, now.hour);
+      // ignore: invalid_use_of_visible_for_testing_member
+      s.runStore.debugSeed([
+        Run(
+          id: 'manual-1',
+          startedAt: manualLocal.toUtc(),
+          duration: const Duration(minutes: 30),
+          distanceMetres: 5000,
+          source: RunSource.app,
+          metadata: const {'activity_type': 'run', 'manual_entry': true},
+        ),
+      ], dir: _runsDir!);
+      await _pump(
+        tester,
+        runStore: s.runStore,
+        routeStore: s.routeStore,
+        prefs: s.prefs,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      // Default range = "this week". A run dated today must show.
+      expect(find.text('1 run'), findsOneWidget);
+    });
+
+    testWidgets(
+        'saving a Run while activity=Walk filter is sticky auto-clears the filter',
+        (tester) async {
+      // Reproduces the most likely field cause: SharedPreferences
+      // restored `activity=walk` from a prior session; the user
+      // adds a "Run" via the FAB; without the auto-clear the new
+      // entry is hidden behind the "No runs match these filters"
+      // empty state and the user reports "my run didn't save".
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({
+          'range': 'week',
+          'sort': 'newest',
+          'activity': 'walk',
+        }),
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
+      final runStore = LocalRunStore();
+      await runStore.init(overrideDirectory: _runsDir);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      // Drain SharedPreferences hydration + first listener tick that
+      // seeds _previousRunIds.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Save a Run-typed entry — should not match the sticky Walk
+      // filter, but the auto-clear must rescue the visibility.
+      final now = DateTime.now();
+      final manual = Run(
+        id: 'manual-1',
+        startedAt: DateTime(now.year, now.month, now.day, now.hour).toUtc(),
+        duration: const Duration(minutes: 30),
+        distanceMetres: 5000,
+        source: RunSource.app,
+        metadata: const {
+          'activity_type': 'run',
+          'manual_entry': true,
+        },
+      );
+      await tester.runAsync(() => runStore.save(manual));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // The summary chip reflects 1 run — auto-clear worked.
+      expect(find.text('1 run'), findsOneWidget,
+          reason: 'A run that does NOT match the sticky filter must '
+              'still surface — the screen auto-clears activity/source '
+              'filters when a fresh save would otherwise be hidden.');
+    });
+
+    testWidgets(
+        'auto-clear does NOT trigger when the new run already matches the filter',
+        (tester) async {
+      // Pin the inverse contract — if the user IS filtering by
+      // activity=Run and they save a Run, the filter must stick.
+      // Without this guard a refactor that always clears on save
+      // would surprise users who set the filter intentionally.
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({
+          'range': 'week',
+          'sort': 'newest',
+          'activity': 'run',
+        }),
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
+      final runStore = LocalRunStore();
+      await runStore.init(overrideDirectory: _runsDir);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final now = DateTime.now();
+      final manual = Run(
+        id: 'manual-1',
+        startedAt: DateTime(now.year, now.month, now.day, now.hour).toUtc(),
+        duration: const Duration(minutes: 30),
+        distanceMetres: 5000,
+        source: RunSource.app,
+        metadata: const {
+          'activity_type': 'run',
+          'manual_entry': true,
+        },
+      );
+      await tester.runAsync(() => runStore.save(manual));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1 run visible AND the filter chip remains on Run. We don't
+      // assert chip presence (the chip rendering moves around), but
+      // we DO check that the persisted SharedPreferences entry still
+      // carries activity=run — proves we didn't reset it.
+      expect(find.text('1 run'), findsOneWidget);
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getString('runs_filters_v1');
+      expect(raw, isNotNull);
+      final j = jsonDecode(raw!) as Map<String, dynamic>;
+      expect(j['activity'], 'run',
+          reason: 'A new run that ALREADY matches the active filter '
+              'must not trigger the auto-clear — preserving the user\'s '
+              "deliberate filter is more important than clearing it.");
+    });
+
+    testWidgets(
+        'a saved run survives a SharedPreferences-restored "this week" filter',
+        (tester) async {
+      // Pin the specific scenario the user hit: SharedPreferences
+      // restores the previously-picked range (the screen does this
+      // in _hydrateFilters). If "this week" is the restored value,
+      // the manual run must still pass. If a future refactor adds
+      // a stricter default (e.g. "this hour"), or breaks the local-
+      // time comparator, this fails.
+      SharedPreferences.setMockInitialValues({
+        'runs_filters_v1': jsonEncode({'range': 'week', 'sort': 'newest'}),
+      });
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_test_');
+      final runStore = LocalRunStore();
+      await runStore.init(overrideDirectory: _runsDir);
+
+      final now = DateTime.now();
+      // ignore: invalid_use_of_visible_for_testing_member
+      runStore.debugSeed([
+        Run(
+          id: 'manual-1',
+          startedAt:
+              DateTime(now.year, now.month, now.day, now.hour).toUtc(),
+          duration: const Duration(minutes: 30),
+          distanceMetres: 5000,
+          source: RunSource.app,
+          metadata: const {'activity_type': 'run', 'manual_entry': true},
+        ),
+      ], dir: _runsDir!);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunsScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('1 run'), findsOneWidget);
+    });
+  });
 }
