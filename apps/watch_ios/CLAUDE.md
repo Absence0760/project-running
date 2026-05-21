@@ -107,6 +107,13 @@ xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
 
 This is exactly what `.github/workflows/ci.yml`'s `build-watch-swift` job runs on a macOS runner.
 
+**No automated tests today.** `apps/watch_ios/` ships ~11 `.swift` source files and zero XCTest files — `WatchApp.xcodeproj` has no `WatchAppTests` target. Consistent with the project's "deferred" status, but it leaves a known coverage gap:
+
+- The cross-platform watch-run-payload fixture (`fixtures/watch_run_payload.json`) is pinned by Dart (`apps/mobile_android/test/watch_payload_fixture_test.dart` + its `mobile_ios` mirror), Kotlin (`apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`), and TS (`apps/web/src/lib/watch_payload_fixture.test.ts`). A Swift slice would close the loop — any drift in the payload shape would otherwise need on-device manual discovery on the Apple Watch path.
+- `WorkoutManager` state-machine transitions (`idle/recovering/recording/paused/finished`), `CheckpointStore` 15 s crash snapshot, `HealthKitManager` HR averaging math, `WatchConnectivityManager` `WCSession.transferFile` payload encoding, `ActiveRunBridge` App-Group UserDefaults shape, `SupabaseService.swift` (`#if DEBUG` direct path): all uncovered.
+
+When the deferral lifts: add a `WatchAppTests` Xcode target, port the cross-platform fixture as the first test (closes the highest-value gap), then back-fill XCTest coverage for the Swift-only state machines.
+
 ## Conventions for Swift code
 
 - SwiftUI-first. Don't mix in UIKit-on-watchOS / WatchKit ObjC unless a framework genuinely requires it.

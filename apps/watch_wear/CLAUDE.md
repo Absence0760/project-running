@@ -412,9 +412,33 @@ What the UI exposes during a recording, for quick reference when reading
   `RunningScreen` surfaces the live count as a `"N steps"` caption
   beneath `bpm`.
 
+## Testing convention
+
+Pure-JVM JUnit tests in `app/src/test/kotlin/com/runapp/watchwear/`. Run with `./gradlew testDebugUnitTest`. Current total: ~395 tests across ~32 files. No Robolectric, no Compose UI test instrumentation — deliberate. The pattern when a load-bearing piece of logic is bound to an Android API (foreground service, OkHttp, Health Services, SensorEventListener, Compose):
+
+1. **Extract the pure logic** into a file-level `internal fun` (or a `companion object` static when it must live on the host class). The Android-bound wrapper method delegates one-line to the helper.
+2. **Test the helper** in isolation against a JVM target. No Robolectric runner, no `androidx.compose.ui.test.*`.
+3. **For UI wiring** that can't be re-expressed as pure logic (callbacks wired through `@Composable` private functions), add a source-grep arch guard à la `ScreenWiringTest.kt` / `RouteMiniMapWiringTest.kt` — they catch refactors that silently drop callback bindings (e.g. removing `HoldToStopButton`, dropping `markLap`, unwiring the recovery prompt). Cheap, no infrastructure investment, surface-level only.
+
+Examples of the extract-then-test pattern in this codebase:
+- `DrainQueueLoop.kt` ← extracted from `RunViewModel.drainQueue` (sync orchestration)
+- `PaceAlert.kt` ← extracted from `RunRecordingService.onGps` (rate-limited drift trigger)
+- `GpsRetryDecision.kt` ← extracted from `RunRecordingService.gpsRetryJob` (self-heal decision)
+- `RouteWaypointsParser.kt` ← extracted from `RunRecordingService.parseRouteWaypoints` (untrusted Intent input)
+- `TtsPhrases.kt` ← extracted from `TtsAnnouncer` (cross-platform voice-cue dialect)
+- `SupabaseUrlBuilders.kt` ← extracted from `SupabaseClient` (URLs + bodies)
+- `PedometerMath.kt` ← extracted from `Pedometer.stream` (baseline subtraction)
+- `buildFinishedLapsList` ← extracted as file-level `internal fun` in `RunViewModel.kt` (lap split / cumulative math)
+- `buildSaveRunRowMap` + `encodeJsonMap` ← extracted as file-level `internal fun` in `SupabaseClient.kt`
+
+When you ship a refactor that adds a meaningfully complex branch, follow the same shape — the surface area that needs Robolectric is uncovered by design.
+
+The full file-by-file test coverage is documented in [../../docs/testing.md § apps/watch_wear/.../*Test.kt](../../docs/testing.md). Don't keep the count in sync by hand — the doc says "Counts here are point-in-time — they drift fast" and CI doesn't gate on the number.
+
 ## Before reporting a task done
 
 - `./gradlew compileDebugKotlin` passes.
+- `./gradlew testDebugUnitTest` passes if you touched any of the extracted helpers or added a new one.
 - If you touched the `runs` schema or added a table to `_kotlinTables`, re-ran `dart run scripts/gen_dart_models.dart` and committed the regenerated Kotlin file.
 - Updated [../../docs/metadata.md](../../docs/metadata.md) if a new `metadata` key is written from this app.
 - Ticked the corresponding Wear OS box in [../../docs/roadmap.md](../../docs/roadmap.md).
