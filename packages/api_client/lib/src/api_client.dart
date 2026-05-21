@@ -1671,6 +1671,16 @@ class ApiClient {
 
   /// Upload bytes to the `run-photos` bucket and insert the metadata
   /// row. The caller passes the storage extension (e.g. 'jpg', 'png').
+  /// Trim a caption and collapse whitespace-only / empty to null.
+  /// Mirrors web's `input.caption?.trim() || null` so captions stored
+  /// from either platform read back identically. Lifted to a static
+  /// so the contract can be unit-tested in isolation.
+  @visibleForTesting
+  static String? normaliseRunPhotoCaption(String? caption) {
+    final t = caption?.trim();
+    return (t == null || t.isEmpty) ? null : t;
+  }
+
   Future<RunPhotoRow> addRunPhoto({
     required String runId,
     required Uint8List bytes,
@@ -1692,7 +1702,7 @@ class ApiClient {
           RunPhotoRow.colRunId: runId,
           RunPhotoRow.colOwnerId: viewerId,
           RunPhotoRow.colStoragePath: '', // placeholder; updated below
-          RunPhotoRow.colCaption: caption,
+          RunPhotoRow.colCaption: normaliseRunPhotoCaption(caption),
           RunPhotoRow.colPositionIdx: positionIdx,
         })
         .select()
@@ -1711,14 +1721,18 @@ class ApiClient {
     return RunPhotoRow.fromJson({...inserted, RunPhotoRow.colStoragePath: path});
   }
 
-  /// Update an existing photo's caption.
+  /// Update an existing photo's caption. Caption is normalised
+  /// (trim → empty becomes null) to match web's contract — a
+  /// whitespace-only edit clears the caption rather than leaving an
+  /// empty-looking-but-non-null row that breaks `IS NOT NULL`
+  /// queries.
   Future<void> updateRunPhotoCaption({
     required String photoId,
     String? caption,
   }) async {
     await _client
         .from(RunPhotoRow.table)
-        .update({RunPhotoRow.colCaption: caption})
+        .update({RunPhotoRow.colCaption: normaliseRunPhotoCaption(caption)})
         .eq(RunPhotoRow.colId, photoId);
   }
 

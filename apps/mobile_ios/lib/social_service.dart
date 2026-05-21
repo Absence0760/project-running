@@ -584,6 +584,17 @@ class SocialService extends ChangeNotifier {
 
   /// Create a new event under a club. Recurrence fields are raw
   /// strings — `recurrence.dart` produces them. Admin-write-gated by RLS.
+  /// Create an event. Mirrors `apps/web/src/lib/data.ts:createEvent`:
+  ///   - trims `title` and normalises `description` / `meetLabel`
+  ///     (trim → empty becomes null) regardless of how the caller
+  ///     pre-processed them.
+  ///   - accepts `recurrenceByDay` as `List<String>?` (matches the
+  ///     `events.recurrence_byday text[]` column type). The previous
+  ///     mobile signature took a bare `String?` and sent it into a
+  ///     `text[]` column — Postgrest doesn't auto-coerce, so the
+  ///     recurrence rule was either rejected or silently dropped.
+  ///   - accepts `recurrenceCount` (the "end after N occurrences"
+  ///     half of the recurrence rule that mobile previously ignored).
   Future<EventRow> createEvent({
     required String clubId,
     required String title,
@@ -598,36 +609,86 @@ class SocialService extends ChangeNotifier {
     int? paceTargetSec,
     int? capacity,
     String? recurrenceFreq,
-    String? recurrenceByDay,
+    List<String>? recurrenceByDay,
     DateTime? recurrenceUntil,
+    int? recurrenceCount,
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
+    final body = buildCreateEventBody(
+      createdBy: uid,
+      clubId: clubId,
+      title: title,
+      startsAt: startsAt,
+      description: description,
+      durationMin: durationMin,
+      meetLabel: meetLabel,
+      meetLat: meetLat,
+      meetLng: meetLng,
+      routeId: routeId,
+      distanceM: distanceM,
+      paceTargetSec: paceTargetSec,
+      capacity: capacity,
+      recurrenceFreq: recurrenceFreq,
+      recurrenceByDay: recurrenceByDay,
+      recurrenceUntil: recurrenceUntil,
+      recurrenceCount: recurrenceCount,
+    );
     final inserted = await _c
         .from('events')
-        .insert({
-          'club_id': clubId,
-          'title': title,
-          'description': description,
-          'starts_at': startsAt.toIso8601String(),
-          'duration_min': durationMin,
-          'meet_label': meetLabel,
-          'meet_lat': meetLat,
-          'meet_lng': meetLng,
-          'route_id': routeId,
-          'distance_m': distanceM,
-          'pace_target_sec': paceTargetSec,
-          'capacity': capacity,
-          'created_by': uid,
-          if (recurrenceFreq != null) 'recurrence_freq': recurrenceFreq,
-          if (recurrenceByDay != null) 'recurrence_byday': recurrenceByDay,
-          if (recurrenceUntil != null)
-            'recurrence_until': recurrenceUntil.toIso8601String(),
-        })
+        .insert(body)
         .select(_eventSelectCols)
         .single();
     notifyListeners();
     return EventRow.fromJson(inserted);
+  }
+
+  /// Pure helper: build the `events.insert` body with web-parity
+  /// normalisation. Lifted to a static so the row shape can be
+  /// unit-tested without standing up a Supabase fixture.
+  @visibleForTesting
+  static Map<String, dynamic> buildCreateEventBody({
+    required String createdBy,
+    required String clubId,
+    required String title,
+    required DateTime startsAt,
+    String? description,
+    int? durationMin,
+    String? meetLabel,
+    double? meetLat,
+    double? meetLng,
+    String? routeId,
+    double? distanceM,
+    int? paceTargetSec,
+    int? capacity,
+    String? recurrenceFreq,
+    List<String>? recurrenceByDay,
+    DateTime? recurrenceUntil,
+    int? recurrenceCount,
+  }) {
+    String? trimToNull(String? s) {
+      final t = s?.trim();
+      return (t == null || t.isEmpty) ? null : t;
+    }
+    return <String, dynamic>{
+      'club_id': clubId,
+      'title': title.trim(),
+      'description': trimToNull(description),
+      'starts_at': startsAt.toIso8601String(),
+      'duration_min': durationMin,
+      'meet_label': trimToNull(meetLabel),
+      'meet_lat': meetLat,
+      'meet_lng': meetLng,
+      'route_id': routeId,
+      'distance_m': distanceM,
+      'pace_target_sec': paceTargetSec,
+      'capacity': capacity,
+      'created_by': createdBy,
+      'recurrence_freq': recurrenceFreq,
+      'recurrence_byday': recurrenceByDay,
+      'recurrence_until': recurrenceUntil?.toIso8601String(),
+      'recurrence_count': recurrenceCount,
+    };
   }
 
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async {

@@ -112,7 +112,10 @@ class _EventFormState extends State<_EventForm> {
             _meetLabel.text.trim().isEmpty ? null : _meetLabel.text.trim(),
         distanceM: distance == null ? null : distance * 1000,
         recurrenceFreq: freq,
-        recurrenceByDay: byday,
+        // `recurrence_byday` is a text[] column — wrap the single
+        // weekday code in a one-element list so postgrest receives a
+        // JSON array, not a bare string.
+        recurrenceByDay: byday == null ? null : [byday],
       );
       if (!mounted) return;
       Navigator.of(context).pop<String?>('ok');
