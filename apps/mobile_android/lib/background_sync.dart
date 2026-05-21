@@ -34,9 +34,17 @@ void callbackDispatcher() {
       if (unsynced.isEmpty) return true;
 
       try {
-        await api.saveRunsBatch(unsynced);
-        await store.markManySynced(unsynced.map((r) => r.id));
-        debugPrint('Background sync: pushed ${unsynced.length}');
+        final failed = await api.saveRunsBatch(unsynced);
+        // Mark only the runs that successfully uploaded (matches
+        // SyncService — a corrupted track no longer poisons the
+        // background sync queue).
+        await store.markManySynced(
+          unsynced.where((r) => !failed.contains(r.id)).map((r) => r.id),
+        );
+        debugPrint(
+          'Background sync: pushed ${unsynced.length - failed.length} '
+          '(skipped ${failed.length} on track-upload failure)',
+        );
       } catch (e) {
         debugPrint('Background sync batch failed: $e');
       }

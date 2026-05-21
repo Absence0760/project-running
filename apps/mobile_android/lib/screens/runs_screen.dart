@@ -549,9 +549,18 @@ class _RunsScreenState extends State<RunsScreen> {
     String? lastError;
 
     try {
-      await api.saveRunsBatch(unsynced);
-      await widget.runStore.markManySynced(unsynced.map((r) => r.id));
-      synced = unsynced.length;
+      final failed = await api.saveRunsBatch(unsynced);
+      // Same partial-success contract as SyncService — only mark
+      // the runs whose track upload succeeded.
+      await widget.runStore.markManySynced(
+        unsynced.where((r) => !failed.contains(r.id)).map((r) => r.id),
+      );
+      synced = unsynced.length - failed.length;
+      if (failed.isNotEmpty) {
+        lastError = '${failed.length} run(s) failed to upload their GPS '
+            'track — the rest were synced. The failed runs will retry '
+            'on the next cycle.';
+      }
     } catch (e) {
       lastError = e.toString();
     }

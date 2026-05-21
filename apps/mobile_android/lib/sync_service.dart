@@ -143,9 +143,21 @@ class SyncService with WidgetsBindingObserver {
       if (unsynced.isNotEmpty) {
         debugPrint('SyncService: pushing ${unsynced.length} runs ($reason)');
         try {
-          await api.saveRunsBatch(unsynced);
-          await runStore.markManySynced(unsynced.map((r) => r.id));
-          debugPrint('SyncService: pushed ${unsynced.length}');
+          final failed = await api.saveRunsBatch(unsynced);
+          // Mark only the runs whose track upload succeeded — the
+          // failed-track set comes back from saveRunsBatch so a single
+          // corrupted run no longer blocks the rest of the queue.
+          // (The full batch-throw path stays for catastrophic
+          // failures like an auth error — we land in the catch below.)
+          final succeededIds = unsynced
+              .where((r) => !failed.contains(r.id))
+              .map((r) => r.id);
+          await runStore.markManySynced(succeededIds);
+          debugPrint(
+            'SyncService: pushed ${unsynced.length - failed.length} '
+            '(skipped ${failed.length} on track-upload failure)',
+          );
+          if (failed.isNotEmpty) anyFailure = true;
         } catch (e) {
           debugPrint('SyncService: batch push failed ($reason): $e');
           anyFailure = true;

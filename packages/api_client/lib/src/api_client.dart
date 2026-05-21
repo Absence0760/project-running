@@ -445,7 +445,12 @@ class ApiClient {
   ///
   /// [onProgress] is called after each row chunk is saved, with the number
   /// of runs saved so far.
-  Future<void> saveRunsBatch(
+  /// Returns the set of run ids whose track upload failed and which
+  /// were therefore SKIPPED from the row upsert. Callers (sync /
+  /// background-sync / runs-screen "Sync all" / import screen) should
+  /// mark only the runs NOT in this set as synced so the failed ones
+  /// retry on the next cycle. Empty set on full success.
+  Future<Set<String>> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -453,23 +458,58 @@ class ApiClient {
   }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
-    if (runs.isEmpty) return;
+    if (runs.isEmpty) return const <String>{};
 
-    // Upload tracks in parallel groups.
+    // Upload tracks in parallel groups. A failure on ANY single
+    // upload used to bubble through `Future.wait` and poison the
+    // entire batch — one corrupted local track meant the sync stalled
+    // until the user manually found + deleted the bad run. Now each
+    // upload runs inside its own try/catch and any failures are
+    // collected; the row upsert below skips those runs entirely so
+    // they stay unsynced for the next retry cycle while the rest of
+    // the batch makes progress.
     final trackUrls = <String, String>{};
+    final trackFailures = <String, Object>{};
     final runsWithTracks = runs.where((r) => r.track.isNotEmpty).toList();
     for (var i = 0; i < runsWithTracks.length; i += uploadConcurrency) {
       final batch = runsWithTracks.skip(i).take(uploadConcurrency);
       final futures = batch.map((r) async {
-        final url = await _uploadTrack(
-            userId: userId, runId: r.id, track: r.track);
-        trackUrls[r.id] = url;
+        try {
+          final url = await _uploadTrack(
+              userId: userId, runId: r.id, track: r.track);
+          trackUrls[r.id] = url;
+        } catch (e) {
+          trackFailures[r.id] = e;
+          debugPrint(
+            'saveRunsBatch: track upload failed for ${r.id}: $e — '
+            'leaving run unsynced for retry, continuing with batch.',
+          );
+        }
       });
       await Future.wait(futures);
     }
 
+    // Drop runs whose track upload failed — their row upsert would
+    // otherwise write a `track_url = null` row that masks the failure
+    // and loses the GPS data forever. Leaving the row unsynced means
+    // the next cycle retries the track upload too.
+    final eligibleRuns = runs.where((r) {
+      if (r.track.isEmpty) return true;
+      return !trackFailures.containsKey(r.id);
+    }).toList();
+    if (eligibleRuns.isEmpty) {
+      if (trackFailures.isNotEmpty) {
+        throw Exception(
+          'saveRunsBatch: every run\'s track upload failed '
+          '(${trackFailures.length} runs). First error: '
+          '${trackFailures.values.first}',
+        );
+      }
+      return const <String>{};
+    }
+
     // Build rows and upsert in chunks.
-    final rows = runs.map((r) {
+    final rows = eligibleRuns.map((r) {
       final trackUrl = trackUrls[r.id] ??
           (r.metadata?['track_url'] as String?) ??
           '';
@@ -523,13 +563,16 @@ class ApiClient {
     // L4 — best-effort plan-workout link for batch ingest (Strava ZIP,
     // Health Connect, etc.). Same auto-match the web `saveRun` path
     // uses; a per-row RPC failure must not break the batch upsert.
-    for (final run in runs) {
+    // Skip auto-match for runs whose track upload failed — their row
+    // wasn't upserted, so the RPC would dangle.
+    for (final run in eligibleRuns) {
       try {
         await autoMatchRunToPlanWorkout(run.id, run.startedAt.toUtc());
       } catch (e) {
         debugPrint('autoMatchRunToPlanWorkout failed: $e');
       }
     }
+    return trackFailures.keys.toSet();
   }
 
   /// Delete a run from the backend, including its gzipped track file

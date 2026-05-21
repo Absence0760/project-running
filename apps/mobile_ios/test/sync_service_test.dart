@@ -25,8 +25,15 @@ class _FakeApiClient extends ApiClient {
   @override
   String? get userId => fakeUserId;
 
+  /// Returned to the SyncService when `saveRunsBatch` "succeeds" —
+  /// matches the partial-success contract: the set is the ids whose
+  /// track upload failed and were therefore skipped from the upsert.
+  /// Tests that want to exercise the "full success" path leave this
+  /// empty; tests that want the partial-failure path populate it.
+  Set<String> saveBatchFailedIds = const <String>{};
+
   @override
-  Future<void> saveRunsBatch(
+  Future<Set<String>> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -37,6 +44,7 @@ class _FakeApiClient extends ApiClient {
       throw saveBatchError ?? Exception('boom');
     }
     savedBatchIds.add(runs.map((r) => r.id).toList());
+    return saveBatchFailedIds;
   }
 
   @override
@@ -133,6 +141,52 @@ void main() {
       expect(api.saveBatchCallCount, 1);
       expect(store.unsyncedCount, 1,
           reason: 'failure must not flip the unsynced flag');
+    });
+
+    test(
+        'partial-success: track-upload failures stay unsynced, the rest '
+        'are marked — the corrupted-track-poisons-the-queue regression',
+        () async {
+      // Three runs, one with a "corrupted" track (returned in the
+      // failed set by saveRunsBatch). The fix should mark r-ok-1 and
+      // r-ok-2 as synced and leave r-bad in the unsynced queue.
+      // Before the fix, a single failing track upload bubbled through
+      // `Future.wait`, the whole batch threw, no runs were marked,
+      // and SyncService backed off — same three runs kept failing
+      // forever.
+      await store.save(makeRun('r-ok-1'));
+      await store.save(makeRun('r-bad'));
+      await store.save(makeRun('r-ok-2'));
+      final api = _FakeApiClient()..saveBatchFailedIds = {'r-bad'};
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 1);
+      expect(store.unsyncedRuns.map((r) => r.id).toList(), ['r-bad'],
+          reason: 'failed-track run must stay unsynced for retry; the '
+              'two clean runs must be marked synced.');
+      expect(store.unsyncedCount, 1);
+    });
+
+    test(
+        'partial-success failures trip the cycle-failure path so backoff '
+        'kicks in (next cycle won\'t immediately retry the failed run)',
+        () async {
+      // When ANY run fails its track upload, the cycle counts as a
+      // failure so the backoff window kicks in. Without this, a
+      // permanently-corrupted track would keep retrying every second
+      // on every connectivity flap.
+      await store.save(makeRun('r-bad'));
+      final api = _FakeApiClient()..saveBatchFailedIds = {'r-bad'};
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      final state = svc.debugBackoffState();
+      expect(state.failures, 1,
+          reason: 'partial failure must increment the failure counter '
+              'so backoff applies to the next cycle.');
     });
   });
 

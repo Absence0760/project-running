@@ -96,7 +96,7 @@ class _ImportScreenState extends State<ImportScreen> {
     if (canSync && savedRuns.isNotEmpty) {
       if (mounted) setState(() => _status = 'Syncing to cloud...');
       try {
-        await api.saveRunsBatch(
+        final failed = await api.saveRunsBatch(
           savedRuns,
           onProgress: (saved) {
             if (mounted) {
@@ -105,7 +105,11 @@ class _ImportScreenState extends State<ImportScreen> {
             }
           },
         );
-        await widget.runStore.markManySynced(savedRuns.map((r) => r.id));
+        // Mark only the runs that successfully uploaded — same
+        // partial-success contract as SyncService / background_sync.
+        await widget.runStore.markManySynced(
+          savedRuns.where((r) => !failed.contains(r.id)).map((r) => r.id),
+        );
       } catch (e) {
         debugPrint('Batch cloud push failed: $e');
       }
