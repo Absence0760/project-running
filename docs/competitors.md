@@ -29,7 +29,7 @@ The Android app already covers a surprising amount of ground for an in-developme
 | Elevation chart per run | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | Weekly distance goal with progress | ✓ | ✓ (Premium) | ✓ | ✓ | — | ✓ (plan-driven) |
 | Personal Bests (longest, fastest pace, fastest 5k) | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| Map tile cache (in-memory) | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| Map tile cache (disk-backed) | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | **Fully offline mode — works with no account** | ✓ | — | — | — | — | — |
 | **JSON backup of all runs** | ✓ | CSV (Premium) | — | TCX export | GPX | — |
 | Auto-sync on wifi reconnect | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -37,19 +37,20 @@ The Android app already covers a surprising amount of ground for an in-developme
 | Edit run title and notes | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Share run as GPX via system share sheet | ✓ | Premium | — | ✓ | ✓ | — |
 | Dark mode + system theme | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Adaptive training plans | Phase 3 | Paywalled | Guided runs | ✓ | — | **Native** |
+| Adaptive training plans | ✓ | Paywalled | Guided runs | ✓ | — | **Native** |
 
 ### What's deliberately not in the app yet (and why)
 
-These are tracked in [roadmap.md](roadmap.md) and intentionally pushed to a later phase:
+Most of what this section used to gate has shipped — OAuth (Google + Apple sign-in), Strava live OAuth + webhook sync, parkrun athlete-number import, BLE chest-strap HR, persistent disk tile cache, premium training endpoints + the matching UI (training plans, VDOT / VO₂ max, training load, recovery advice), live spectator (Supabase Realtime path), segments + leaderboards (v1 + v2 tiered with KOM/QOM crowns), follows + kudos + comments + notifications inbox, clubs + events + posts, gear tracking, photos on runs, web heatmap v1. Today's genuinely deferred items, sourced from the `[ ]` rows in [roadmap.md](roadmap.md) Phase 3 + the unphased competitor-parity backlog:
 
-- **OAuth sign-in (Google, Apple)** — only email/password right now. Needs deep link and signing config.
-- **Strava and parkrun sync** — placeholder buttons removed from Settings to avoid lying. Comes back in Phase 3 with real OAuth + scraping.
-- **Bluetooth heart rate strap** — needs flutter_blue_plus and per-device GATT handling.
-- **Persistent disk tile cache** — currently in-memory only; tiles re-download after app restart. Trail running with no signal still works during a single session.
-- **Premium training features** — shipped on the Go worker (`apps/job_worker/internal/premium/`): VDOT + race predictor + recovery + plan generation. Web + mobile consume via the worker's `/v1/premium/*` endpoints.
-- **Live spectator tracking** — shipped on Supabase Realtime. A Go WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy; clients pick transport via `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL`.
-- **Social features, segments, leaderboards** — explicitly not in scope for v1. These are Strava's moat; we differentiate on free planning and watch parity.
+- **Live workout-execution loop** — specced in [workout_execution.md](workout_execution.md), ~4 dev-days, zero new schema. Lights up the structured-workout band overlay on the run screen and the post-run planned-vs-actual review. Plan + workout *data* is shipped; live execution against it isn't.
+- **Push notifications (FCM / APNs)** — `device_tokens` table is shipped; the sender + client-side token registration are blocked on user-supplied Firebase / APNs credentials.
+- **Garmin Connect OAuth** — hard-blocked on the multi-day Garmin Developer Program application.
+- **Live spectator transport upgrade** — the Realtime fallback is live and shipping; the Go WebSocket hub at `apps/job_worker/internal/livehub/` is code-complete and awaits a Fly deploy.
+- **Offline tile packs + turn-by-turn voice nav** — disk-backed tile cache is shipped for normal browsing, but pre-downloading a region pack before a no-signal trail run isn't.
+- **Audio-coached / guided runs** — NRC-style curated coached workouts (separate from the existing TTS audio-cue layer).
+- **Race calendar + results** — needs a RunSignUp API key; otherwise patterned after the existing parkrun import.
+- **Phase 4: gym + nutrition modules** — see the [multi-modal section below](#multi-modal-competitive-landscape-phase-4--run--lift--meal) and [roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition).
 
 ### Migration paths shipped today
 
@@ -246,21 +247,23 @@ The running app market is dominated by a small number of well-funded incumbents.
 | Strava import | ✓ | Native | ✓ | ✓ | Limited | ✓ | ✓ |
 | HealthKit sync | ✓ | ✓ | ✓ | ✓ | — | — | ✓ |
 | Health Connect sync | ✓ | ✓ | ✓ | — | — | — | Partial |
-| Coached running | Phase 3 | — | Training plans | ✓ | — | — | ✓ |
-| Adaptive training plans | Phase 3 | Paywalled | ✓ | — | — | — | **Native** |
-| Social segments | Phase 3 | ✓ | — | — | — | — | — |
-| Community routes | Phase 3 | ✓ | — | — | ✓ | ✓ | — |
-| Offline maps | Phase 3 | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — |
-| Segments + leaderboards | Backlog | **Native** | — | — | — | — | — |
-| Heatmaps / popular-route tiles | Backlog | ✓ (premium) | — | — | — | ✓ | — |
+| Coached running (curated audio workouts) | Backlog | — | Training plans | **Native** | — | — | ✓ |
+| Adaptive training plans | ✓ (web, Android) | Paywalled | ✓ | — | — | — | **Native** |
+| Social segments | ✓ (web, Android) | ✓ | — | — | — | — | — |
+| Community routes | ✓ (web, Android) | ✓ | — | — | ✓ | ✓ | — |
+| Live structured workout execution | Phase 3 (pending) | Paywalled | ✓ | — | — | — | **Native** |
+| Offline maps | Partial (disk tile cache shipped; offline packs pending) | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — |
+| Segments + leaderboards | ✓ (web, Android — v1 + v2 tiered) | **Native** | — | — | — | — | — |
+| Heatmaps / popular-route tiles | ✓ (web v1; mobile read pending) | ✓ (premium) | — | — | — | ✓ | — |
 | Route-condition reports | Backlog | — | — | — | ✓ | ✓ | — |
-| Social graph (follows, kudos) | Backlog | ✓ | Limited | ✓ | — | ✓ | — |
-| Gear tracking (shoe mileage) | Backlog | ✓ | ✓ | — | — | — | — |
-| Photos on runs / routes | Backlog | ✓ | Partial | — | ✓ | ✓ | — |
+| Social graph (follows, kudos, comments) | ✓ (web, Android) | ✓ | Limited | ✓ | — | ✓ | — |
+| Gear tracking (shoe mileage) | ✓ (web, Android) | ✓ | ✓ | — | — | — | — |
+| Photos on runs / routes | ✓ (web, Android) | ✓ | Partial | — | ✓ | ✓ | — |
 | Audio-coached / guided runs | Backlog | — | — | **Native** | — | — | Partial |
 | Race calendar + results | Backlog | Limited | ✓ | — | — | — | ✓ |
-| VDOT + training load analytics | Backlog | ✓ (premium) | ✓ | — | — | — | ✓ |
+| VDOT + training load + recovery analytics | ✓ (web, Android) | ✓ (premium) | ✓ | — | — | — | ✓ |
 | Clubs + events | ✓ (web, Android) | ✓ | Limited | ✓ | — | — | — |
+| Notifications inbox (kudos / comments / RSVPs) | ✓ (web, Android) | ✓ | ✓ | ✓ | — | — | ✓ |
 
 Backlog items are tracked in `docs/roadmap.md § Competitor-parity backlog` with rough sizing and open decisions. No ordering implied — the user still owes three prioritisation decisions before any of these start.
 
@@ -270,7 +273,7 @@ Backlog items are tracked in `docs/roadmap.md § Competitor-parity backlog` with
 
 | App | Free tier | Paid tier | What's paywalled |
 |---|---|---|---|
-| **This app** | Full core features | ~$6/month | Training plans, AI coaching, advanced analytics |
+| **This app** | Full core features incl. training plans + 5 / day AI coach | ~$9.99/month (Pro) | Unlimited AI coach + priority job-queue processing (see [decisions.md § 23](decisions.md)) |
 | Strava | Basic tracking + social | ~$11.99/month | Route builder, GPX, segment leaderboards, training plans |
 | Garmin Connect | Everything | N/A (hardware cost) | Nothing — hardware is the business model |
 | Nike Run Club | Everything | N/A | Nothing |
