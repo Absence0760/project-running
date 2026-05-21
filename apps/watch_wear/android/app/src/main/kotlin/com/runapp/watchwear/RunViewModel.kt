@@ -973,71 +973,42 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val snapshot = store.queue.first()
-        var lastError: String? = null
-        var anyTransientFailure = false
-        for (run in snapshot) {
-            try {
-                pushRun(run)
-                store.remove(run.id)
-                lastError = null
-            } catch (e: Throwable) {
-                lastError = e.message ?: e.javaClass.simpleName
-                when (classifyDrainError(e)) {
-                    DrainAction.RetryAfterRefresh -> {
-                        // One 401 retry: refresh token + try this run again.
-                        try {
-                            val refreshed = supabase.refreshAccessToken()
-                            val cached = sessionStore.current()
-                            if (cached != null) {
-                                sessionStore.save(
-                                    cached.copy(
-                                        accessToken = refreshed.accessToken,
-                                        refreshToken = refreshed.refreshToken,
-                                        expiresAtMs = refreshed.expiresAtMs,
-                                    )
-                                )
-                            }
-                            pushRun(run)
-                            store.remove(run.id)
-                            lastError = null
-                        } catch (inner: Throwable) {
-                            lastError = inner.message ?: lastError
-                            anyTransientFailure = true
-                            break  // refresh failed → stop, next auth signal retries
-                        }
+        // The loop body itself is in the pure `drainQueueLoop` helper
+        // so the per-error-class semantics, refresh-then-retry shape,
+        // and transient-vs-permanent split can be unit-tested in
+        // isolation (see DrainQueueLoopTest.kt). This wrapper handles
+        // the side-channel concerns the loop is intentionally
+        // unaware of: auth-await, backoff window, persisting the
+        // refreshed session, and posting the UI banner.
+        val result = drainQueueLoop(
+            snapshot = snapshot,
+            push = { run -> pushRun(run) },
+            refresh = {
+                try {
+                    val refreshed = supabase.refreshAccessToken()
+                    val cached = sessionStore.current()
+                    if (cached != null) {
+                        sessionStore.save(
+                            cached.copy(
+                                accessToken = refreshed.accessToken,
+                                refreshToken = refreshed.refreshToken,
+                                expiresAtMs = refreshed.expiresAtMs,
+                            )
+                        )
                     }
-                    DrainAction.DropAndContinue -> {
-                        // 409 is safe to remove: every run carries external_id
-                        // so a 409 means the row is already in the DB
-                        // (idempotent upload).
-                        store.remove(run.id)
-                        lastError = null
-                    }
-                    DrainAction.StopAndRetryLater -> {
-                        // Transient: timeouts, 5xx, network loss. Stop
-                        // iterating so we don't hammer the backend, but keep
-                        // the queue intact. Next drain trigger
-                        // (network-back-online, manual sync) retries — but
-                        // backoff bites first.
-                        anyTransientFailure = true
-                        break
-                    }
-                    DrainAction.SkipAndContinue -> {
-                        // Permanent-ish (400/404/422) or unknown — skip
-                        // to next; this one is stuck. The user can
-                        // Discard from the UI if they want. Doesn't count
-                        // as a transient failure for backoff purposes —
-                        // retrying would just re-skip.
-                    }
+                    true
+                } catch (_: Throwable) {
+                    false
                 }
-            }
-        }
-        if (anyTransientFailure) {
+            },
+            onSuccessfulDrain = OnSuccessfulDrain { id -> store.remove(id) },
+        )
+        if (result.anyTransientFailure) {
             drainBackoff.onFailure()
         } else {
             drainBackoff.onSuccess()
         }
-        _state.value = _state.value.copy(syncError = lastError)
+        _state.value = _state.value.copy(syncError = result.lastError)
     }
 
     private suspend fun pushRun(run: QueuedRun) {

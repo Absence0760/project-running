@@ -40,6 +40,40 @@ private val errorBodyJson = Json { ignoreUnknownKeys = true }
 /// `"HTTP $code"` when the body isn't JSON or has none of them.
 ///
 /// Internal so the unit test can pin the field-precedence behaviour.
+/// Pure helper: build the `runs.insert` row map for [SupabaseClient.saveRun].
+/// Lifted out of the suspending method so the column shape can be
+/// unit-tested without booting OkHttp.
+///
+/// Mirrors the column projection used by mobile's
+/// `ApiClient.saveRun` (Dart) so a watch-saved run reads back
+/// identically to a phone-saved run. `source` is always `"watch"`
+/// (the [RunSource] enum value the row labels the watch with).
+/// `external_id` is set to [runId] for idempotency on retry — the
+/// drain loop's 409 / `DropAndContinue` path counts on the unique
+/// constraint here. `is_public` is OMITTED (not null) when the
+/// caller doesn't pass it, so the DB default (`false`) applies.
+internal fun buildSaveRunRowMap(
+    runId: String,
+    uid: String,
+    startedAtIso: String,
+    durationS: Int,
+    distanceM: Double,
+    trackPath: String,
+    metadata: JsonObject?,
+    isPublic: Boolean?,
+): Map<String, Any?> = buildMap {
+    put(RunRow.COL_ID, runId)
+    put(RunRow.COL_USER_ID, uid)
+    put(RunRow.COL_STARTED_AT, startedAtIso)
+    put(RunRow.COL_DURATION_S, durationS)
+    put(RunRow.COL_DISTANCE_M, distanceM)
+    put(RunRow.COL_SOURCE, "watch")
+    put(RunRow.COL_TRACK_URL, trackPath)
+    put(RunRow.COL_METADATA, metadata)
+    put(RunRow.COL_EXTERNAL_ID, runId)
+    if (isPublic != null) put(RunRow.COL_IS_PUBLIC, isPublic)
+}
+
 internal fun humanErrorMessage(code: Int, body: String): String {
     return try {
         val obj = errorBodyJson.parseToJsonElement(body) as? JsonObject
@@ -474,18 +508,16 @@ class SupabaseClient(
             val path = "$uid/$runId.json.gz"
             uploadTrack(path, gzFile, token)
 
-            val rowMap = buildMap<String, Any?> {
-                put(RunRow.COL_ID, runId)
-                put(RunRow.COL_USER_ID, uid)
-                put(RunRow.COL_STARTED_AT, startedAtIso)
-                put(RunRow.COL_DURATION_S, durationS)
-                put(RunRow.COL_DISTANCE_M, distanceM)
-                put(RunRow.COL_SOURCE, "watch")
-                put(RunRow.COL_TRACK_URL, path)
-                put(RunRow.COL_METADATA, metadata)
-                put(RunRow.COL_EXTERNAL_ID, runId)
-                if (isPublic != null) put(RunRow.COL_IS_PUBLIC, isPublic)
-            }
+            val rowMap = buildSaveRunRowMap(
+                runId = runId,
+                uid = uid,
+                startedAtIso = startedAtIso,
+                durationS = durationS,
+                distanceM = distanceM,
+                trackPath = path,
+                metadata = metadata,
+                isPublic = isPublic,
+            )
             val body = encodeJsonMap(rowMap).toRequestBody(jsonMedia)
 
             val req = Request.Builder()
