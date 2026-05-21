@@ -456,6 +456,7 @@ void main() {
       WidgetTester tester, {
       Size viewport = const Size(360, 700),
       List<RouteClubChoice> clubChoices = const [],
+      String? initialClubId,
     }) async {
       late Future<SaveDialogResult?> resultFuture;
       await tester.pumpWidget(
@@ -469,8 +470,10 @@ void main() {
                     onPressed: () {
                       resultFuture = showDialog<SaveDialogResult>(
                         context: ctx,
-                        builder: (_) =>
-                            SaveRouteDialog(clubChoices: clubChoices),
+                        builder: (_) => SaveRouteDialog(
+                          clubChoices: clubChoices,
+                          initialClubId: initialClubId,
+                        ),
                       );
                     },
                     child: const Text('Open dialog'),
@@ -705,6 +708,84 @@ void main() {
       await tester.tap(find.text('Personal').last);
       await tester.pumpAndSettle();
 
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, isNull);
+    });
+
+    testWidgets(
+        'initialClubId seeds the picker — Save without changing the picker '
+        'pops that clubId (web `/routes/new?club=<id>` parity)',
+        (tester) async {
+      // Entry from the club-detail "Build route" CTA: the dialog
+      // should open with the club already selected so the user can
+      // hit Save and land the route in the club library without
+      // touching the picker.
+      final resultFuture = await openDialog(
+        tester,
+        clubChoices: const [
+          RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+          RouteClubChoice(id: 'club-b', name: 'Vic Park Runners'),
+        ],
+        initialClubId: 'club-b',
+      );
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, 'club-b');
+    });
+
+    testWidgets(
+        'initialClubId is still overridable — user can flip to Personal '
+        'before saving (nothing is locked)', (tester) async {
+      final resultFuture = await openDialog(
+        tester,
+        clubChoices: const [
+          RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+        ],
+        initialClubId: 'club-a',
+      );
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+
+      await tester
+          .tap(find.byKey(const Key('save-route-dialog-club-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Personal').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, isNull,
+          reason: 'initialClubId is a default, not a lock — the user '
+              'must be able to switch to Personal even when launched '
+              'from a club context.');
+    });
+
+    testWidgets(
+        'initialClubId pointing at an unknown id falls back to Personal '
+        '(stale deep-link safety)', (tester) async {
+      // If the caller passes a club id that isn't in `clubChoices`
+      // (left over from a stale invitation, or the user lost
+      // membership between tap and load), the picker must NOT enter
+      // a non-selectable state. Falling back to Personal is the safe
+      // default.
+      final resultFuture = await openDialog(
+        tester,
+        clubChoices: const [
+          RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+        ],
+        initialClubId: 'club-ghost',
+      );
+      await tester.enterText(find.byType(TextField).first, 'Loop');
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pumpAndSettle();
 

@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../local_route_store.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -16,6 +17,12 @@ import 'people_screen.dart';
 class ClubsScreen extends StatefulWidget {
   final SocialService social;
   final TrainingService training;
+  /// Optional — when provided alongside [routeStore], threaded into
+  /// `ClubDetailScreen` so the Routes tab can host the "Build route"
+  /// CTA (admin-only) that opens `RouteBuilderScreen` pre-bound to
+  /// the club. Mirrors web's `/routes/new?club=<id>` deep link.
+  final ApiClient? apiClient;
+  final LocalRouteStore? routeStore;
   /// When true, render only the body (segmented strip + list) without
   /// the Scaffold/AppBar/FAB wrapping. The parent (e.g. SocialScreen)
   /// owns those chrome surfaces. Default false preserves the
@@ -25,6 +32,8 @@ class ClubsScreen extends StatefulWidget {
     super.key,
     required this.social,
     required this.training,
+    this.apiClient,
+    this.routeStore,
     this.embedded = false,
   });
 
@@ -119,6 +128,8 @@ class ClubsScreenState extends State<ClubsScreen> {
             builder: (_) => ClubDetailScreen(
               social: widget.social,
               training: widget.training,
+              apiClient: widget.apiClient,
+              routeStore: widget.routeStore,
               slug: slug,
             ),
           ),
@@ -219,6 +230,8 @@ class ClubsScreenState extends State<ClubsScreen> {
                             builder: (_) => ClubDetailScreen(
                               social: widget.social,
                               training: widget.training,
+                              apiClient: widget.apiClient,
+                              routeStore: widget.routeStore,
                               slug: list[i].row.slug,
                             ),
                           ),

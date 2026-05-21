@@ -8,6 +8,7 @@ import 'package:core_models/core_models.dart' hide Route;
 
 import 'package:api_client/api_client.dart';
 
+import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -18,16 +19,26 @@ import '../widgets/route_track_preview.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'public_route_screen.dart';
+import 'route_builder_screen.dart';
 import '../widgets/top_banner.dart';
 
 class ClubDetailScreen extends StatefulWidget {
   final SocialService social;
   final TrainingService training;
+  /// Optional — when both are supplied, the Routes tab grows an admin-
+  /// only "Build route" CTA that pushes `RouteBuilderScreen` pre-bound
+  /// to this club. Mirrors web's `/routes/new?club=<id>` deep link.
+  /// Old callers (e.g. `ClubInviteScreen`) can omit them; the CTA
+  /// simply doesn't render in that case.
+  final ApiClient? apiClient;
+  final LocalRouteStore? routeStore;
   final String slug;
   const ClubDetailScreen({
     super.key,
     required this.social,
     required this.training,
+    this.apiClient,
+    this.routeStore,
     required this.slug,
   });
 
@@ -1008,6 +1019,33 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     }
   }
 
+  Future<void> _buildClubRoute(ClubView c) async {
+    // Admin-only entry point. Pushes the route builder with the club
+    // pre-bound — `SaveRouteDialog`'s "Save to" picker opens with this
+    // club already selected. The user can still flip to Personal in
+    // the picker if they change their mind mid-save (matches web's
+    // `?club=<id>` deep link, which lets the user pick `null` to
+    // unbind).
+    final api = widget.apiClient;
+    final routeStore = widget.routeStore;
+    if (api == null || routeStore == null) return;
+    final created = await Navigator.of(context).push<cm.Route>(
+      MaterialPageRoute<cm.Route>(
+        builder: (_) => RouteBuilderScreen(
+          apiClient: api,
+          routeStore: routeStore,
+          social: widget.social,
+          initialClubId: c.row.id,
+        ),
+      ),
+    );
+    if (created == null || !mounted) return;
+    showTopBanner(context, 'Saved "${created.name}"');
+    // Reload the club's routes so the new one appears immediately
+    // (the realtime channel doesn't subscribe to `routes`).
+    await _loadRoutes();
+  }
+
   Future<void> _loadTemplates() async {
     final c = _club;
     if (c == null) return;
@@ -1047,29 +1085,69 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (!_routesLoaded) {
       return const Center(child: CircularProgressIndicator());
     }
+    // Admin-only CTA — mirrors web's `Routes` tab "New route" + "Transfer
+    // from My routes" actions strip on `/clubs/[slug]`. We only render
+    // "Build route" today because the mobile transfer flow lives on
+    // `route_detail_screen` (per the empty-state copy below); the new
+    // CTA covers the create path that the old empty-state pointed
+    // users to. Only visible when `apiClient` + `routeStore` were
+    // threaded in — the `ClubInviteScreen` redemption path omits both,
+    // so the CTA disappears there but the rest of the tab still works.
+    final canBuild = c.isAdmin &&
+        widget.apiClient != null &&
+        widget.routeStore != null;
+    final buildCta = canBuild
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('club-detail-build-route'),
+                onPressed: () => _buildClubRoute(c),
+                icon: const Icon(Icons.add_road),
+                label: const Text('Build route for this club'),
+              ),
+            ),
+          )
+        : null;
     if (_routes.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            c.isAdmin
-                ? 'No routes yet. Admins can transfer one of their personal routes from the route detail screen.'
-                : 'No routes shared with this club yet.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
+      return Column(
+        children: [
+          if (buildCta != null) buildCta,
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(
+                  canBuild
+                      ? 'No routes yet. Build the official course above, or '
+                          'transfer one of your personal routes from the '
+                          'route detail screen.'
+                      : c.isAdmin
+                          ? 'No routes yet. Admins can transfer one of their personal routes from the route detail screen.'
+                          : 'No routes shared with this club yet.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       );
     }
-    return RefreshIndicator(
-      onRefresh: _loadRoutes,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _routes.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (_, i) {
+    return Column(
+      children: [
+        if (buildCta != null) buildCta,
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadRoutes,
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _routes.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, i) {
           final r = _routes[i];
           return Card(
             child: ListTile(
@@ -1114,8 +1192,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             ),
           );
         },
-      ),
-    );
+            ),  // ListView.separated
+          ),    // RefreshIndicator
+        ),      // Expanded
+      ],
+    );          // Column
   }
 
   Widget _buildTemplatesTab(ThemeData theme, ClubView c) {

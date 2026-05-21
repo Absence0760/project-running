@@ -111,6 +111,8 @@ class _SocialScreenState extends State<SocialScreen>
             key: _clubsKey,
             social: widget.social,
             training: widget.training,
+            apiClient: widget.api,
+            routeStore: widget.routeStore,
             embedded: true,
           ),
           RoutesScreen(

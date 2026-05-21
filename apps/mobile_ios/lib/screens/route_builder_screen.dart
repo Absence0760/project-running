@@ -63,6 +63,13 @@ class RouteBuilderScreen extends StatefulWidget {
   /// builder was launched from.
   final SocialService? social;
 
+  /// Optional pre-selected club. When non-null, the SaveRouteDialog
+  /// opens with this club already chosen in the "Save to" picker —
+  /// the equivalent of landing on `/routes/new?club=<id>` on web.
+  /// The user can still switch to Personal or a different club from
+  /// the picker; nothing is locked.
+  final String? initialClubId;
+
   /// Test seams — production passes null and each helper uses its
   /// dart:io fetcher / OS geolocator default.
   final OsrmFetcher? osrmFetcher;
@@ -82,6 +89,7 @@ class RouteBuilderScreen extends StatefulWidget {
     required this.routeStore,
     this.initialCenter,
     this.social,
+    this.initialClubId,
     this.osrmFetcher,
     this.elevationFetcher,
     this.geocodingFetcher,
@@ -420,7 +428,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     }
     final result = await showDialog<SaveDialogResult>(
       context: context,
-      builder: (_) => SaveRouteDialog(clubChoices: _clubChoices),
+      builder: (_) => SaveRouteDialog(
+        clubChoices: _clubChoices,
+        initialClubId: widget.initialClubId,
+      ),
     );
     if (result == null || !mounted) return;
     setState(() => _saving = true);
@@ -1091,7 +1102,18 @@ class SaveDialogResult {
 @visibleForTesting
 class SaveRouteDialog extends StatefulWidget {
   final List<RouteClubChoice> clubChoices;
-  const SaveRouteDialog({super.key, this.clubChoices = const []});
+
+  /// Pre-selected club id. Defaults to null (Personal). When the
+  /// caller (e.g. the club-detail "Build route" CTA) wants the
+  /// picker to open already pointing at a specific club, it passes
+  /// that club's id here. The user can still change it.
+  final String? initialClubId;
+
+  const SaveRouteDialog({
+    super.key,
+    this.clubChoices = const [],
+    this.initialClubId,
+  });
   @override
   State<SaveRouteDialog> createState() => _SaveRouteDialogState();
 }
@@ -1100,7 +1122,20 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   bool _isPublic = false;
-  String? _clubId; // null = Personal
+  late String? _clubId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed the picker default from the caller's `initialClubId`, but
+    // only if it matches one of the available choices — otherwise
+    // fall back to Personal so a stale / wrong id can't put the
+    // picker into a non-selectable state.
+    final candidate = widget.initialClubId;
+    final valid = candidate != null &&
+        widget.clubChoices.any((c) => c.id == candidate);
+    _clubId = valid ? candidate : null;
+  }
 
   @override
   void dispose() {
