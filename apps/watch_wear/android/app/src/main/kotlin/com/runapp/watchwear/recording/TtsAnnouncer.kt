@@ -32,26 +32,19 @@ class TtsAnnouncer(context: Context) {
         }
     }
 
-    fun announceStart() = speak("Run started")
+    fun announceStart() = speak(RUN_STARTED_PHRASE)
 
-    fun announceFinish(distanceM: Double, durationS: Int) {
-        val km = distanceM / 1000.0
-        val mins = durationS / 60
-        speak("Run complete. %.2f kilometres in %d minutes.".format(km, mins))
-    }
+    fun announceFinish(distanceM: Double, durationS: Int) =
+        speak(formatFinishPhrase(distanceM, durationS))
 
     /// Announce a split at the end of kilometre [km], pacing reported
     /// in seconds-per-km. Mirrors the Android wording so a runner
     /// carrying both devices doesn't hear two different dialects.
-    fun announceSplit(km: Int, paceSecPerKm: Double?) {
-        val unitWord = if (km == 1) "kilometre" else "kilometres"
-        val paceTail = formatPace(paceSecPerKm)
-        speak("$km $unitWord. $paceTail")
-    }
+    fun announceSplit(km: Int, paceSecPerKm: Double?) =
+        speak(formatSplitPhrase(km, paceSecPerKm))
 
-    fun announcePaceAlert(tooSlow: Boolean) {
-        speak(if (tooSlow) "Pick up the pace" else "Slow down")
-    }
+    fun announcePaceAlert(tooSlow: Boolean) =
+        speak(formatPaceAlert(tooSlow))
 
     fun shutdown() {
         try {
@@ -63,16 +56,12 @@ class TtsAnnouncer(context: Context) {
     }
 
     private fun speak(phrase: String) {
-        if (!ready) return
+        // Allow empty phrases to no-op silently (formatPaceTail
+        // returns "" when pace is unknown, which the split caller
+        // appends unconditionally).
+        if (!ready || phrase.isBlank()) return
         try {
             tts?.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, null)
         } catch (_: Throwable) { /* best-effort */ }
-    }
-
-    private fun formatPace(secondsPerKm: Double?): String {
-        if (secondsPerKm == null || secondsPerKm <= 0) return ""
-        val m = (secondsPerKm / 60).toInt()
-        val s = (secondsPerKm % 60).toInt()
-        return "Pace $m minutes $s seconds per kilometre"
     }
 }
