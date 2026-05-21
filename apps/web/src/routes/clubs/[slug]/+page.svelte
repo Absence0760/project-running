@@ -211,6 +211,10 @@
 	});
 
 	onDestroy(() => {
+		if (pingRetryTimer) {
+			clearTimeout(pingRetryTimer);
+			pingRetryTimer = null;
+		}
 		if (channel) {
 			supabase.removeChannel(channel);
 			channel = null;
@@ -234,6 +238,20 @@
 		}, 250);
 	}
 
+	let pingRetryTimer: ReturnType<typeof setTimeout> | null = null;
+	function sendReadyPing() {
+		channel?.send({ type: 'broadcast', event: 'ready-ping', payload: {} });
+	}
+	function schedulePingRetry() {
+		if (pingRetryTimer) clearTimeout(pingRetryTimer);
+		pingRetryTimer = setTimeout(() => {
+			pingRetryTimer = null;
+			if (realtimeReady || !channel) return;
+			sendReadyPing();
+			schedulePingRetry();
+		}, 1500);
+	}
+
 	function subscribeRealtime() {
 		if (!club) return;
 		channel = supabase
@@ -243,6 +261,10 @@
 			// Self-broadcast roundtrip readiness signal — see the
 			// .subscribe() callback below.
 			.on('broadcast', { event: 'ready-ping' }, () => {
+				if (pingRetryTimer) {
+					clearTimeout(pingRetryTimer);
+					pingRetryTimer = null;
+				}
 				realtimeReady = true;
 				console.log(`[realtime] club-${club?.id} ready=true`);
 			})
@@ -264,12 +286,12 @@
 				}
 				// Self-broadcast a ping; the echo (handled above) flips
 				// readiness. The roundtrip proves the channel is fully
-				// wired before we let any test rely on it.
-				channel?.send({
-					type: 'broadcast',
-					event: 'ready-ping',
-					payload: {}
-				});
+				// wired before we let any test rely on it. Retry every
+				// 1.5 s until the echo arrives — under CI load the first
+				// ping is occasionally dropped, which used to strand
+				// readiness for the full 20 s test timeout.
+				sendReadyPing();
+				schedulePingRetry();
 			});
 	}
 

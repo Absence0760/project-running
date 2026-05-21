@@ -355,6 +355,10 @@
 	});
 
 	onDestroy(() => {
+		if (pingRetryTimer) {
+			clearTimeout(pingRetryTimer);
+			pingRetryTimer = null;
+		}
 		if (channel) {
 			supabase.removeChannel(channel);
 			channel = null;
@@ -375,6 +379,20 @@
 		}, 250);
 	}
 
+	let pingRetryTimer: ReturnType<typeof setTimeout> | null = null;
+	function sendReadyPing() {
+		channel?.send({ type: 'broadcast', event: 'ready-ping', payload: {} });
+	}
+	function schedulePingRetry() {
+		if (pingRetryTimer) clearTimeout(pingRetryTimer);
+		pingRetryTimer = setTimeout(() => {
+			pingRetryTimer = null;
+			if (realtimeReady || !channel) return;
+			sendReadyPing();
+			schedulePingRetry();
+		}, 1500);
+	}
+
 	function subscribeRealtime() {
 		if (!event || !club) return;
 		channel = supabase
@@ -386,6 +404,10 @@
 			// Self-broadcast roundtrip — see the .subscribe() callback
 			// below. Listen FIRST so the echo can't beat the listener.
 			.on('broadcast', { event: 'ready-ping' }, () => {
+				if (pingRetryTimer) {
+					clearTimeout(pingRetryTimer);
+					pingRetryTimer = null;
+				}
 				realtimeReady = true;
 				console.log(`[realtime] event-${event?.id} ready=true`);
 			})
@@ -449,11 +471,11 @@
 				// proves the channel is fully wired bidirectionally. Uses
 				// the realtime WS, not setTimeout, so chromium's timer
 				// throttling on backgrounded tabs doesn't affect it.
-				channel?.send({
-					type: 'broadcast',
-					event: 'ready-ping',
-					payload: {}
-				});
+				// Retry every 1.5 s until the echo arrives — under CI
+				// load the first ping is occasionally dropped, which
+				// used to strand readiness past the test timeout.
+				sendReadyPing();
+				schedulePingRetry();
 			});
 	}
 
