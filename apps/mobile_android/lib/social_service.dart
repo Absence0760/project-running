@@ -936,6 +936,9 @@ class SocialService extends ChangeNotifier {
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
+    final noteTrimmed = note?.trim();
+    final normalisedNote =
+        (noteTrimmed == null || noteTrimmed.isEmpty) ? null : noteTrimmed;
     await _c.from('event_results').upsert(
       {
         'event_id': eventId,
@@ -946,7 +949,10 @@ class SocialService extends ChangeNotifier {
         'distance_m': distanceM,
         'finisher_status': finisherStatus,
         if (ageGradePct != null) 'age_grade_pct': ageGradePct,
-        if (note != null) 'note': note,
+        // Trim + collapse empty-after-trim to null. Matches web's
+        // submitEventResult and the trim-and-null contract used
+        // across createClub / createEvent / saveRoute / etc.
+        'note': normalisedNote,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       },
       onConflict: 'event_id,instance_start,user_id',

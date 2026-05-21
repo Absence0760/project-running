@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
@@ -445,9 +446,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       newDuration = parsedDuration;
     }
 
-    final metadata = Map<String, dynamic>.from(run.metadata ?? {});
-    metadata['title'] = titleCtl.text.trim();
-    metadata['notes'] = notesCtl.text.trim();
+    // Match the new web normalisation in `updateRunMetadata` — trim,
+    // then drop empty-after-trim keys rather than leaving an empty
+    // string behind. Clearing notes via the edit dialog now actually
+    // removes `metadata.notes` instead of writing `""`, so render-
+    // when-present UI on both platforms stays consistent. Logic is
+    // in the pure `applyRunMetadataEdit` helper at the bottom of
+    // this file so it can be unit-tested.
+    final metadata = applyRunMetadataEdit(
+      run.metadata,
+      title: titleCtl.text,
+      notes: notesCtl.text,
+    );
 
     final updated = Run(
       id: run.id,
@@ -2323,5 +2333,39 @@ class _SegmentStatsCard extends StatelessWidget {
     if (m > 0) return '${m}m ${s}s';
     return '${s}s';
   }
+}
+
+/// Apply a user's edit-dialog input (title + notes) to the existing
+/// metadata bag. Mirrors the web `applyRunMetadataPatch` in
+/// `apps/web/src/lib/data_normalise.ts`:
+///   - Trim each field.
+///   - If empty-after-trim, REMOVE the key from the bag (so render-
+///     when-present UI sees the field as cleared).
+///   - Otherwise write the trimmed value.
+///
+/// Pure — exposed `@visibleForTesting` so the contract can be
+/// pinned alongside the web equivalent in the parity suite. The
+/// trip up `metadata.notes = ""` bug this fixes is the exact one
+/// the web side just patched in `updateRunMetadata`.
+@visibleForTesting
+Map<String, dynamic> applyRunMetadataEdit(
+  Map<String, dynamic>? current, {
+  required String title,
+  required String notes,
+}) {
+  final next = Map<String, dynamic>.from(current ?? const {});
+  final titleTrim = title.trim();
+  final notesTrim = notes.trim();
+  if (titleTrim.isEmpty) {
+    next.remove('title');
+  } else {
+    next['title'] = titleTrim;
+  }
+  if (notesTrim.isEmpty) {
+    next.remove('notes');
+  } else {
+    next['notes'] = notesTrim;
+  }
+  return next;
 }
 

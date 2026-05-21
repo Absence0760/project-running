@@ -486,7 +486,12 @@ class TrainingService extends ChangeNotifier {
     if (targetPaceSecPerKm != null) {
       patch[PlanWorkoutRow.colTargetPaceSecPerKm] = targetPaceSecPerKm;
     }
-    if (notes != null) patch[PlanWorkoutRow.colNotes] = notes;
+    if (notes != null) {
+      // Match `createPlan` + web's `updatePlanWorkout` — trim and
+      // collapse empty-after-trim to null so clearing a workout's
+      // notes via the inline editor actually nulls the column.
+      patch[PlanWorkoutRow.colNotes] = _trimToNull(notes);
+    }
     if (patch.isEmpty) return;
     await _c.from(PlanWorkoutRow.table).update(patch).eq('id', workoutId);
     notifyListeners();

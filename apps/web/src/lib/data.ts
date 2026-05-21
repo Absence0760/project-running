@@ -33,6 +33,7 @@ import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
 import { rateLimitErrorMessage } from './rate_limit_errors';
+import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
 import {
 	assignCompetitionRanks,
 	type SegmentAgeBand,
@@ -521,7 +522,10 @@ export async function saveRunAsRoute(
 		.from('routes')
 		.insert({
 			user_id: userId,
-			name,
+			// Defence in depth — the call site already trims, but a
+			// future non-prompt caller (bulk run→route conversion, an
+			// automation) shouldn't be able to write whitespace.
+			name: name.trim(),
 			waypoints,
 			distance_m,
 			elevation_m,
@@ -715,14 +719,19 @@ export async function updateRunMetadata(
 		.eq('id', id)
 		.single();
 	if (!run) throw new Error('Run not found');
-	const metadata = {
-		...(run.metadata as Record<string, unknown> ?? {}),
-		...fields,
-		last_modified_at: new Date().toISOString(),
-	};
+	// Trim + drop empty-after-trim keys so clearing a field via the
+	// edit dialog actually removes the key from the metadata bag
+	// instead of leaving `notes: ""` behind. Mobile's run-detail
+	// edit dialog applies the same normalisation. Logic lives in
+	// data_normalise.ts so the contract can be unit-tested.
+	const next = applyRunMetadataPatch(
+		run.metadata as Record<string, unknown> | null | undefined,
+		fields,
+		new Date().toISOString(),
+	);
 	const { error } = await supabase
 		.from('runs')
-		.update({ metadata })
+		.update({ metadata: next })
 		.eq('id', id);
 	if (error) throw error;
 }
@@ -1894,6 +1903,7 @@ export async function submitEventResult(params: {
 }): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
+	const noteTrimmed = params.note?.trim();
 	const { error } = await supabase.from('event_results').upsert(
 		{
 			event_id: params.eventId,
@@ -1904,7 +1914,11 @@ export async function submitEventResult(params: {
 			distance_m: params.distanceM,
 			finisher_status: params.finisherStatus ?? 'finished',
 			age_grade_pct: params.ageGradePct ?? null,
-			note: params.note ?? null,
+			// Trim + collapse empty-after-trim to null so a whitespace
+			// note from the result-submit dialog doesn't survive to the
+			// DB. Mobile's `SocialService.submitEventResult` applies the
+			// same normalisation.
+			note: noteTrimmed && noteTrimmed.length > 0 ? noteTrimmed : null,
 			updated_at: new Date().toISOString(),
 		},
 		{ onConflict: 'event_id,instance_start,user_id' }
@@ -2724,7 +2738,19 @@ export async function updatePlanWorkout(
 		structure: Record<string, unknown> | null;
 	}>
 ): Promise<void> {
-	const { error } = await supabase.from('plan_workouts').update(patch).eq('id', id);
+	// Normalise the `notes` patch the same way `createTrainingPlan`
+	// does on insert — trim + collapse empty-after-trim to null.
+	// Mobile's `TrainingService.updateWorkout` applies the same
+	// normalisation so the two clients write identical rows. Logic
+	// lives in data_normalise.ts so the contract can be unit-tested.
+	const normalisedPatch: typeof patch = { ...patch };
+	if ('notes' in normalisedPatch) {
+		normalisedPatch.notes = normalisePlanWorkoutNotes(normalisedPatch.notes);
+	}
+	const { error } = await supabase
+		.from('plan_workouts')
+		.update(normalisedPatch)
+		.eq('id', id);
 	if (error) throw error;
 }
 
