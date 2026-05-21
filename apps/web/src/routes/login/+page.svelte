@@ -5,6 +5,7 @@
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
+	import { checkSignUpGates } from '$lib/auth_gates';
 
 	let error = $state('');
 	let info = $state('');
@@ -40,6 +41,18 @@
 
 	async function handleGoogleSignIn() {
 		error = '';
+		// Google OAuth creates an account on first sign-in, so the
+		// sign-up gates (16+ + ToS / Privacy acceptance) have to apply
+		// the same way as the email/password sign-up path. Mobile's
+		// `sign_up_screen._signInWithGoogle` mirrors this via
+		// `_checkGates()`. Sign-in to an existing account skips the
+		// gates — `checkSignUpGates` returns ok when `isSignUp` is
+		// false.
+		const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
+		if (!gate.ok) {
+			error = gate.error;
+			return;
+		}
 		loading = true;
 		try {
 			await auth.signInWithGoogle();
@@ -52,7 +65,9 @@
 	function handleAppleSignIn() {
 		// Apple OAuth isn't wired up on the Supabase side yet — calling
 		// signInWithApple just surfaces an opaque provider error. Tell
-		// the user clearly and point them at the working options.
+		// the user clearly and point them at the working options. When
+		// Apple OAuth ships, copy the `handleGoogleSignIn` gate
+		// pattern so the sign-up checkboxes apply to Apple too.
 		error = 'Sign in with Apple is coming soon. For now, please use Google or email.';
 	}
 
@@ -74,12 +89,8 @@
 				info = "If that email is registered, we've sent a password reset link.";
 				email = '';
 			} else if (isSignUp) {
-				if (!confirmAdult) {
-					throw new Error('Please confirm you are 16 or older to continue.');
-				}
-				if (!acceptTerms) {
-					throw new Error('Please accept the Terms of Service and Privacy Policy to continue.');
-				}
+				const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
+				if (!gate.ok) throw new Error(gate.error);
 				const { error: signUpError } = await supabase.auth.signUp({ email, password });
 				if (signUpError) throw signUpError;
 				await auth.refreshSession();

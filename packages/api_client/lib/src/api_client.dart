@@ -258,6 +258,66 @@ class ApiClient {
     return response.user!.id;
   }
 
+  /// Exchange an Apple ID token (obtained by the host app via the native
+  /// `sign_in_with_apple` flow on iOS, or a web-fallback on Android) for
+  /// a Supabase session. Returns the user ID.
+  ///
+  /// Symmetric counterpart to [signInWithGoogleIdToken]. The mobile
+  /// sign-in / sign-up screens currently call
+  /// `Supabase.instance.client.auth.signInWithIdToken` directly for
+  /// Apple — they should route through this method instead so the
+  /// ApiClient abstraction stays uniform for both providers.
+  Future<String> signInWithAppleIdToken({
+    required String idToken,
+  }) async {
+    final response = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+    );
+    return response.user!.id;
+  }
+
+  /// Ensure the signed-in user has a `user_profiles` row, creating one
+  /// with defaults (`preferred_unit: 'km'`, `subscription_tier: 'free'`)
+  /// if missing. Mirrors web's `fetchUser` upsert-when-null path in
+  /// `apps/web/src/lib/stores/auth.svelte.ts`.
+  ///
+  /// Before this method existed, mobile-only users (signed up via
+  /// mobile and never visited web) had no `user_profiles` row at all —
+  /// any RLS-protected feature that joined on the row silently returned
+  /// nothing, and the dashboard preferred-unit fell back to whichever
+  /// default the readers hard-coded. Now the profile is materialised
+  /// on first sign-in.
+  ///
+  /// Idempotent — safe to call on every sign-in. The body is the same
+  /// shape web uses, so a user whose row already exists is unchanged
+  /// (the upsert on a present `id` is a no-op for the default columns).
+  Future<void> ensureMyProfile() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    // Use the SECURITY DEFINER read so the column-revoked fields
+    // (`subscription_tier`, `subscription_at`, `parkrun_number`) don't
+    // make the SELECT silently return null when the row exists.
+    final existing = await _client.rpc('get_my_profile');
+    if (existing != null) return;
+    await _client.from('user_profiles').upsert(
+      buildDefaultProfileRow(viewerId),
+      onConflict: 'id',
+    );
+  }
+
+  /// Pure helper: the default `user_profiles` row inserted on first
+  /// sign-in. Lifted to a `@visibleForTesting` static so the row shape
+  /// can be unit-tested without a live Supabase.
+  @visibleForTesting
+  static Map<String, dynamic> buildDefaultProfileRow(String userId) {
+    return <String, dynamic>{
+      'id': userId,
+      'preferred_unit': 'km',
+      'subscription_tier': 'free',
+    };
+  }
+
   /// The current user ID, or null if not signed in.
   /// Current user id, or null when signed-out. Also null when
   /// Supabase wasn't initialised (offline-mode boot, dev without

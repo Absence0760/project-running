@@ -152,10 +152,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (idToken == null) {
         throw Exception('Apple sign-in did not return an identity token');
       }
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.apple,
-        idToken: idToken,
-      );
+      // Route through ApiClient instead of `Supabase.instance.client`
+      // directly — matches the Google path and keeps every auth flow
+      // on the ApiClient abstraction.
+      await widget.apiClient.signInWithAppleIdToken(idToken: idToken);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signInWithApple failed: $e');

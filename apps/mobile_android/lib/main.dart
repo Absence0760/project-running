@@ -270,6 +270,15 @@ void main() async {
         .listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         WatchIngest.attach(apiNonNull, watchQueue);
+        // Mirror web's `fetchUser` upsert-when-null path so a mobile-
+        // only sign-up (user creates an account on mobile and never
+        // visits web) gets a `user_profiles` row materialised with
+        // defaults. Without this, RLS-joined reads silently return
+        // nothing and the dashboard's preferred-unit falls back to
+        // whichever hard-coded default each reader uses.
+        apiNonNull.ensureMyProfile().catchError((Object e) {
+          debugPrint('ensureMyProfile failed: $e');
+        });
         try {
           watchQueue.drain(apiNonNull).catchError((Object e) {
             debugPrint('Watch ingest queue drain failed: $e');
