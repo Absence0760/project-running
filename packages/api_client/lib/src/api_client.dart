@@ -1908,6 +1908,9 @@ class ApiClient {
 
   /// Define a new segment on a route. The DB computes `length_m` as
   /// a generated column, so we don't pass it.
+  /// Create a route segment. Mirrors `apps/web/src/lib/data.ts:createSegment`:
+  /// `name` is trimmed at the API layer so any future non-UI caller
+  /// (bulk import, automation) can't write whitespace into the DB.
   Future<SegmentRow> createSegment({
     required String routeId,
     required String name,
@@ -1920,7 +1923,7 @@ class ApiClient {
         .from(SegmentRow.table)
         .insert({
           SegmentRow.colRouteId: routeId,
-          SegmentRow.colName: name,
+          SegmentRow.colName: name.trim(),
           SegmentRow.colStartDistanceM: startDistanceM,
           SegmentRow.colEndDistanceM: endDistanceM,
           SegmentRow.colCreatedBy: viewerId,

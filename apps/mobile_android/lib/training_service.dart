@@ -365,7 +365,10 @@ class TrainingService extends ChangeNotifier {
           'current_5k_seconds': recent5kSec,
           'status': 'active',
           'source': 'generated',
-          'notes': notes?.trim(),
+          // Match web's `notes?.trim() || null` — whitespace-only
+          // collapses to null so the column stays clean for
+          // `IS NOT NULL` filters. Mobile previously stored `""`.
+          'notes': _trimToNull(notes),
         })
         .select()
         .single();
@@ -488,4 +491,19 @@ class TrainingService extends ChangeNotifier {
     await _c.from(PlanWorkoutRow.table).update(patch).eq('id', workoutId);
     notifyListeners();
   }
+
+  /// Pure helper: trim a string then collapse empty-after-trim to
+  /// null. Mirrors web's `s?.trim() || null` pattern used across
+  /// `apps/web/src/lib/data.ts` for every optional text column.
+  /// Exposed `@visibleForTesting` so the contract can be pinned in
+  /// the parity test suite alongside the other normalisation helpers.
+  @visibleForTesting
+  static String? trimToNull(String? s) {
+    final t = s?.trim();
+    return (t == null || t.isEmpty) ? null : t;
+  }
+
+  // Internal alias for the public helper above. Keeps callers inside
+  // this file short while the public name stays explicit.
+  static String? _trimToNull(String? s) => trimToNull(s);
 }
