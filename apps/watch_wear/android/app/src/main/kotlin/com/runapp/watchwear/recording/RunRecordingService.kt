@@ -475,30 +475,13 @@ class RunRecordingService : Service() {
     /// `[{"lat":.., "lng":..}, ...]`). Quietly returns empty on any
     /// parse failure — an empty list disables the `RouteMath` calls in
     /// `onGps` so the run proceeds as a no-route recording.
+    ///
+    /// Delegates to the file-level [parseRouteWaypointsJson] so the
+    /// parse contract (well-formed, malformed, partial, type-coerced)
+    /// is unit-testable in isolation (see `ParseRouteWaypointsTest`).
     private fun parseRouteWaypoints(
         json: String?,
-    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> {
-        if (json.isNullOrEmpty()) return emptyList()
-        return try {
-            val parser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-            val arr = parser.parseToJsonElement(json) as? kotlinx.serialization.json.JsonArray
-                ?: return emptyList()
-            arr.mapNotNull { el ->
-                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
-                val lat = obj["lat"]
-                    ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
-                    ?.content?.toDoubleOrNull()
-                    ?: return@mapNotNull null
-                val lng = obj["lng"]
-                    ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
-                    ?.content?.toDoubleOrNull()
-                    ?: return@mapNotNull null
-                RouteMath.LatLng(lat, lng)
-            }
-        } catch (_: Throwable) {
-            emptyList()
-        }
-    }
+    ): List<RouteMath.LatLng> = parseRouteWaypointsJson(json)
 
     private suspend fun writeCheckpoint() {
         val file = trackWriter ?: return

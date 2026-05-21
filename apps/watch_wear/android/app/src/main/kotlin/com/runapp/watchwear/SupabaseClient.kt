@@ -575,33 +575,45 @@ class SupabaseClient(
     }
 
     /// Encode a `Map<String, Any?>` from [RunRow.toJsonMap] to a JSON string.
-    /// Values are `String`, `Int`, `Double`, `Boolean`, or `JsonElement` —
-    /// no nested Maps today, so a minimal encoder keeps the dependency
-    /// surface small. Replace with kotlinx.serialization proper if we grow
-    /// more shapes.
-    private fun encodeJsonMap(map: Map<String, Any?>): String {
-        val sb = StringBuilder("{")
-        var first = true
-        for ((k, v) in map) {
-            if (!first) sb.append(",")
-            first = false
-            sb.append('"').append(k).append("\":")
-            sb.append(encodeValue(v))
-        }
-        sb.append("}")
-        return sb.toString()
-    }
+}
 
-    private fun encodeValue(v: Any?): String = when (v) {
-        null -> "null"
-        is String -> Json.encodeToString(kotlinx.serialization.json.JsonPrimitive.serializer(),
-            kotlinx.serialization.json.JsonPrimitive(v))
-        is Boolean -> v.toString()
-        is Int -> v.toString()
-        is Long -> v.toString()
-        is Double -> v.toString()
-        is Float -> v.toString()
-        is kotlinx.serialization.json.JsonElement -> v.toString()
-        else -> '"'.toString() + v.toString().replace("\"", "\\\"") + '"'
+/// Hand-rolled JSON encoder for the row maps that
+/// [SupabaseClient.saveRun] (and a handful of other callers) POST to
+/// PostgREST.
+///
+/// Values are `String`, `Int`, `Double`, `Boolean`, or `JsonElement`
+/// — no nested Maps today, so a minimal encoder keeps the dependency
+/// surface small. Replace with kotlinx.serialization proper if we
+/// grow more shapes.
+///
+/// Lifted to file-level `internal` (was a private method) so the
+/// encoder contract — string escaping, null handling, numeric
+/// preservation — can be unit-tested. Every save-to-Supabase path
+/// flows through this encoder; a regression here breaks every POST.
+internal fun encodeJsonMap(map: Map<String, Any?>): String {
+    val sb = StringBuilder("{")
+    var first = true
+    for ((k, v) in map) {
+        if (!first) sb.append(",")
+        first = false
+        sb.append('"').append(k).append("\":")
+        sb.append(encodeJsonValue(v))
     }
+    sb.append("}")
+    return sb.toString()
+}
+
+internal fun encodeJsonValue(v: Any?): String = when (v) {
+    null -> "null"
+    is String -> Json.encodeToString(
+        kotlinx.serialization.json.JsonPrimitive.serializer(),
+        kotlinx.serialization.json.JsonPrimitive(v),
+    )
+    is Boolean -> v.toString()
+    is Int -> v.toString()
+    is Long -> v.toString()
+    is Double -> v.toString()
+    is Float -> v.toString()
+    is kotlinx.serialization.json.JsonElement -> v.toString()
+    else -> '"'.toString() + v.toString().replace("\"", "\\\"") + '"'
 }
