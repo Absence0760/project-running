@@ -767,10 +767,28 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         ],
       ),
     );
-    if (ok == true) {
-      await widget.routeStore.delete(widget.route.id);
-      if (context.mounted) Navigator.pop(context);
+    if (ok != true) return;
+    // Delete the cloud row first — if the API call succeeds, removing
+    // the local file can't leave the cloud row dangling. The previous
+    // behaviour deleted only the local file, so the next refresh
+    // pulled the cloud row back and the route reappeared in the list.
+    //
+    // When the cloud delete fails (offline / RLS / network), surface
+    // the error and KEEP the local file so the user can retry once
+    // they're back online. Falls back to local-only delete when the
+    // ApiClient isn't available (signed-out / no-Supabase build).
+    final api = widget.apiClient;
+    if (api != null && api.userId != null) {
+      try {
+        await api.deleteRoute(widget.route.id);
+      } catch (e) {
+        if (!context.mounted) return;
+        showTopBanner(context, 'Delete failed: $e');
+        return;
+      }
     }
+    await widget.routeStore.delete(widget.route.id);
+    if (context.mounted) Navigator.pop(context);
   }
 
   static String _formatDate(DateTime dt) {

@@ -631,6 +631,20 @@ class ApiClient {
     await _client.from(RunRow.table).delete().eq(RunRow.colId, runId);
   }
 
+  /// Delete a route from the backend. Mirrors `apps/web/src/lib/data.ts:
+  /// deleteRoute`. RLS gates the delete to the owner; foreign-key
+  /// cascades clean up `saved_routes`, `segments`, and `route_reviews`
+  /// rows automatically. Throws on RLS rejection or network failure
+  /// so the caller can surface the error and avoid the
+  /// "deleted-locally-but-cloud-row-persists" silent-divergence bug
+  /// that mobile shipped before this method existed — every refresh
+  /// would re-pull the route the user thought they'd deleted.
+  Future<void> deleteRoute(String routeId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    await _client.from(RouteRow.table).delete().eq(RouteRow.colId, routeId);
+  }
+
   /// Fetch the user's runs, newest first.
   ///
   /// Returned runs have an empty `track`. Use [fetchTrack] to download the
