@@ -163,6 +163,64 @@ data class FinishedLap(
     val cumulativeDistanceM: Double,
 )
 
+/// Pure helper: turn the recording service's cumulative-mark lap list
+/// into per-lap split rows suitable for the post-run table.
+///
+/// Each input [RecordingRepository.Lap] carries the CUMULATIVE position
+/// at the moment the user pressed the lap button (`atMs` since start,
+/// `distanceM` total). The output [FinishedLap] rows carry both the
+/// cumulative figures AND the SPLIT (per-lap delta) figures the table
+/// renders.
+///
+/// The final "bonus" row covers the partial between the last lap mark
+/// and the stop. It's only included when it's non-trivial (≥1 s and
+/// ≥1 m) so a "lap-then-immediately-stop" doesn't produce a phantom
+/// 0/0 row.
+///
+/// Extracted from `RunViewModel.buildFinishedLaps` so the lap-shape
+/// contract — particularly the per-lap split math, the
+/// cumulative-vs-split distinction, and the bonus-row gate — is
+/// unit-testable without booting the ViewModel. The
+/// `start_offset_s = cumulative-BEFORE` shape is registered in
+/// `docs/metadata.md`; this helper feeds the FinishedLap shape that
+/// `WatchRunMetadata.buildRunMetadata` later writes through to the
+/// row's `metadata.laps` jsonb.
+internal fun buildFinishedLapsList(
+    laps: List<RecordingRepository.Lap>,
+    totalDistanceM: Double,
+    totalDurationS: Int,
+): List<FinishedLap> {
+    if (laps.isEmpty()) return emptyList()
+    val out = mutableListOf<FinishedLap>()
+    var prevMs = 0L
+    var prevDist = 0.0
+    for (lap in laps) {
+        val split = ((lap.atMs - prevMs) / 1000).toInt().coerceAtLeast(0)
+        val splitDist = (lap.distanceM - prevDist).coerceAtLeast(0.0)
+        out += FinishedLap(
+            number = lap.number,
+            splitSeconds = split,
+            splitDistanceM = splitDist,
+            cumulativeSeconds = (lap.atMs / 1000).toInt(),
+            cumulativeDistanceM = lap.distanceM,
+        )
+        prevMs = lap.atMs
+        prevDist = lap.distanceM
+    }
+    val finalSplitS = totalDurationS - out.last().cumulativeSeconds
+    val finalSplitM = totalDistanceM - out.last().cumulativeDistanceM
+    if (finalSplitS >= 1 && finalSplitM >= 1.0) {
+        out += FinishedLap(
+            number = out.size + 1,
+            splitSeconds = finalSplitS,
+            splitDistanceM = finalSplitM,
+            cumulativeSeconds = totalDurationS,
+            cumulativeDistanceM = totalDistanceM,
+        )
+    }
+    return out
+}
+
 class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val supabase = SupabaseClient(
         baseUrl = BuildConfig.SUPABASE_URL,
@@ -1073,37 +1131,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private fun buildFinishedLaps(
         m: RecordingRepository.Metrics,
         totalDurationS: Int,
-    ): List<FinishedLap> {
-        if (m.laps.isEmpty()) return emptyList()
-        val out = mutableListOf<FinishedLap>()
-        var prevMs = 0L
-        var prevDist = 0.0
-        for (lap in m.laps) {
-            val split = ((lap.atMs - prevMs) / 1000).toInt().coerceAtLeast(0)
-            val splitDist = (lap.distanceM - prevDist).coerceAtLeast(0.0)
-            out += FinishedLap(
-                number = lap.number,
-                splitSeconds = split,
-                splitDistanceM = splitDist,
-                cumulativeSeconds = (lap.atMs / 1000).toInt(),
-                cumulativeDistanceM = lap.distanceM,
-            )
-            prevMs = lap.atMs
-            prevDist = lap.distanceM
-        }
-        val finalSplitS = totalDurationS - out.last().cumulativeSeconds
-        val finalSplitM = m.distanceM - out.last().cumulativeDistanceM
-        if (finalSplitS >= 1 && finalSplitM >= 1.0) {
-            out += FinishedLap(
-                number = out.size + 1,
-                splitSeconds = finalSplitS,
-                splitDistanceM = finalSplitM,
-                cumulativeSeconds = totalDurationS,
-                cumulativeDistanceM = m.distanceM,
-            )
-        }
-        return out
-    }
+    ): List<FinishedLap> = buildFinishedLapsList(
+        laps = m.laps,
+        totalDistanceM = m.distanceM,
+        totalDurationS = totalDurationS,
+    )
 
     companion object {
         private const val AUTH_WAIT_MS = 3_000L

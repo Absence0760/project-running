@@ -457,12 +457,17 @@ class RunRecordingService : Service() {
         //  - we haven't already fired an alert in the last 30 s
         val target = targetPaceSecPerKm
         if (target != null && target > 0 && pace != null) {
-            val diff = pace - target
-            val nowMs = System.currentTimeMillis()
-            if (kotlin.math.abs(diff) > 30 && nowMs - lastPaceAlertAtMs > 30_000) {
-                lastPaceAlertAtMs = nowMs
-                firePaceAlert(tooSlow = diff > 0)
-            }
+            // Gate in `shouldFirePaceAlert` so the drift threshold +
+            // rate-limit windowing are unit-testable in isolation
+            // (see `PaceAlertTest.kt`).
+            val decision = shouldFirePaceAlert(
+                targetPaceSecPerKm = target,
+                currentPaceSecPerKm = pace,
+                nowMs = System.currentTimeMillis(),
+                lastAlertAtMs = lastPaceAlertAtMs,
+            )
+            lastPaceAlertAtMs = decision.newLastAlertAtMs
+            if (decision.fire) firePaceAlert(tooSlow = decision.tooSlow)
         }
     }
 
