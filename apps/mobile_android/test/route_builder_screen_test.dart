@@ -455,6 +455,7 @@ void main() {
     Future<Future<SaveDialogResult?>> openDialog(
       WidgetTester tester, {
       Size viewport = const Size(360, 700),
+      List<RouteClubChoice> clubChoices = const [],
     }) async {
       late Future<SaveDialogResult?> resultFuture;
       await tester.pumpWidget(
@@ -468,7 +469,8 @@ void main() {
                     onPressed: () {
                       resultFuture = showDialog<SaveDialogResult>(
                         context: ctx,
-                        builder: (_) => const SaveRouteDialog(),
+                        builder: (_) =>
+                            SaveRouteDialog(clubChoices: clubChoices),
                       );
                     },
                     child: const Text('Open dialog'),
@@ -588,6 +590,127 @@ void main() {
 
       final result = await resultFuture;
       expect(result, isNull);
+    });
+
+    testWidgets('club picker is hidden when clubChoices is empty', (tester) async {
+      // Users not in any clubs see the same lean dialog as before —
+      // the picker only appears when there's something to pick.
+      await openDialog(tester);
+      expect(
+        find.byKey(const Key('save-route-dialog-club-picker')),
+        findsNothing,
+        reason: 'Save-to picker must be hidden when the user is in '
+            'no clubs.',
+      );
+    });
+
+    testWidgets('Save with empty clubChoices pops clubId=null', (tester) async {
+      // Pin the existing behaviour for users without clubs — defaults
+      // to Personal (clubId=null) so the route lands in the user's
+      // own library, matching the pre-picker contract.
+      final resultFuture = await openDialog(tester);
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, isNull);
+    });
+
+    testWidgets(
+        'club picker renders when clubChoices is non-empty and defaults to '
+        'Personal', (tester) async {
+      // The "Save to" picker shows with Personal as the default option
+      // so users in a club don't accidentally publish to it; they have
+      // to actively pick a club to set club_id.
+      await openDialog(tester, clubChoices: const [
+        RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+        RouteClubChoice(id: 'club-b', name: 'Vic Park Runners'),
+      ]);
+      expect(
+        find.byKey(const Key('save-route-dialog-club-picker')),
+        findsOneWidget,
+      );
+      expect(find.text('Save to'), findsOneWidget);
+      expect(find.text('Personal'), findsOneWidget,
+          reason: 'Personal must be the default selected option.');
+    });
+
+    testWidgets(
+        'Save without changing the picker selection pops clubId=null '
+        '(Personal default holds)', (tester) async {
+      final resultFuture = await openDialog(tester, clubChoices: const [
+        RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+      ]);
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, isNull,
+          reason: 'User who never opens the picker keeps the Personal '
+              'default — `club_id` must be null on the saved row.');
+    });
+
+    testWidgets(
+        'selecting a club then Save pops clubId set to that club\'s id',
+        (tester) async {
+      final resultFuture = await openDialog(tester, clubChoices: const [
+        RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+        RouteClubChoice(id: 'club-b', name: 'Vic Park Runners'),
+      ]);
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+
+      // Open the dropdown + pick the second club.
+      await tester
+          .tap(find.byKey(const Key('save-route-dialog-club-picker')));
+      await tester.pumpAndSettle();
+      // The dropdown menu now contains both options; tap the last
+      // matching "Vic Park Runners" entry (the menu rendering creates
+      // a second copy of the selected text).
+      await tester.tap(find.text('Vic Park Runners').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, 'club-b');
+      expect(result.name, 'Loop');
+    });
+
+    testWidgets(
+        'selecting a club then switching back to Personal pops clubId=null',
+        (tester) async {
+      // Belt-and-braces: ensure the picker is fully reversible. A user
+      // who toggles around then settles on Personal must get a Personal
+      // save, not a stuck club_id.
+      final resultFuture = await openDialog(tester, clubChoices: const [
+        RouteClubChoice(id: 'club-a', name: 'Hackney Half'),
+      ]);
+      await tester.enterText(find.byType(TextField).first, 'Loop');
+
+      await tester
+          .tap(find.byKey(const Key('save-route-dialog-club-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hackney Half').last);
+      await tester.pumpAndSettle();
+
+      await tester
+          .tap(find.byKey(const Key('save-route-dialog-club-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Personal').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final result = await resultFuture;
+      expect(result, isNotNull);
+      expect(result!.clubId, isNull);
     });
   });
 }

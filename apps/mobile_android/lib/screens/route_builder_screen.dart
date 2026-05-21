@@ -20,6 +20,7 @@ import '../rate_limit_errors.dart';
 import '../route_loop.dart';
 import '../route_overlap.dart';
 import '../routing.dart';
+import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
 import '../tile_cache.dart';
 import '../widgets/snap_to_start.dart';
@@ -53,6 +54,15 @@ class RouteBuilderScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final LatLng? initialCenter;
 
+  /// Optional social service for fetching the user's clubs. When
+  /// provided, the SaveRouteDialog renders a "Save to" picker so a
+  /// route can be created against a club library directly. Mirrors
+  /// web's `?club=<id>` URL parameter on `/routes/new` plus a
+  /// dropdown — mobile lacks an equivalent URL surface, so the
+  /// picker is the universal entry point regardless of where the
+  /// builder was launched from.
+  final SocialService? social;
+
   /// Test seams — production passes null and each helper uses its
   /// dart:io fetcher / OS geolocator default.
   final OsrmFetcher? osrmFetcher;
@@ -61,16 +71,23 @@ class RouteBuilderScreen extends StatefulWidget {
   final Future<void> Function(cm.Route route)? saveRouteFn;
   final Future<Position> Function()? locateFn;
 
+  /// Test seam — when non-null, [_loadClubs] reads from this instead
+  /// of calling into [social]. Lets widget tests drive the dialog's
+  /// club picker without booting a real SocialService / Supabase.
+  final Future<List<RouteClubChoice>> Function()? clubChoicesLoader;
+
   const RouteBuilderScreen({
     super.key,
     required this.apiClient,
     required this.routeStore,
     this.initialCenter,
+    this.social,
     this.osrmFetcher,
     this.elevationFetcher,
     this.geocodingFetcher,
     this.saveRouteFn,
     this.locateFn,
+    this.clubChoicesLoader,
   });
 
   @override
@@ -103,6 +120,46 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   List<PlaceResult> _searchResults = const [];
   Timer? _searchDebounce;
   bool _searchOpen = false;
+
+  // Club picker state for the SaveRouteDialog. Loaded in initState so
+  // by the time the user finishes building + taps Save the list is
+  // already there. Failure is silent — no clubs simply hides the
+  // picker, matching the no-SocialService case.
+  List<RouteClubChoice> _clubChoices = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClubs();
+  }
+
+  Future<void> _loadClubs() async {
+    final loader = widget.clubChoicesLoader ?? _defaultClubsLoader;
+    final social = widget.social;
+    if (loader == _defaultClubsLoader && social == null) return;
+    try {
+      final choices = await loader();
+      if (!mounted || choices.isEmpty) return;
+      setState(() => _clubChoices = choices);
+    } catch (e) {
+      debugPrint('RouteBuilder._loadClubs failed: $e');
+    }
+  }
+
+  Future<List<RouteClubChoice>> _defaultClubsLoader() async {
+    final social = widget.social;
+    if (social == null) return const [];
+    final clubs = await social.fetchMyClubs();
+    // Only clubs the user is actively a member of can hold routes.
+    // Pending memberships and non-member viewers are excluded server-
+    // side via RLS, but we filter here too for snappier UX (no
+    // dropdown entries that would error on save).
+    return [
+      for (final c in clubs)
+        if (c.isMember && c.viewerStatus == 'active')
+          RouteClubChoice(id: c.row.id, name: c.row.name),
+    ];
+  }
 
   @override
   void dispose() {
@@ -363,7 +420,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     }
     final result = await showDialog<SaveDialogResult>(
       context: context,
-      builder: (_) => const SaveRouteDialog(),
+      builder: (_) => SaveRouteDialog(clubChoices: _clubChoices),
     );
     if (result == null || !mounted) return;
     setState(() => _saving = true);
@@ -376,6 +433,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       isPublic: result.isPublic,
       surface: _surfaceFor(_mode),
       description: result.description,
+      clubId: result.clubId,
     );
     try {
       await (widget.saveRouteFn ?? widget.apiClient.saveRoute)(route);
@@ -990,6 +1048,17 @@ class _WaypointPinState extends State<_WaypointPin>
   }
 }
 
+/// One option in the SaveRouteDialog's "Save to" picker. Kept tiny
+/// and screen-local so the dialog doesn't take a dependency on
+/// `SocialService` / `ClubView` — the caller does the membership
+/// lookup and hands in a flat list.
+@visibleForTesting
+class RouteClubChoice {
+  final String id;
+  final String name;
+  const RouteClubChoice({required this.id, required this.name});
+}
+
 /// Result popped by [SaveRouteDialog]. Promoted alongside the dialog so
 /// widget tests can pattern-match on the returned shape.
 @visibleForTesting
@@ -997,19 +1066,32 @@ class SaveDialogResult {
   final String name;
   final bool isPublic;
   final String? description;
+
+  /// The club this route is being saved to, or null for "Personal".
+  /// Mirrors web's `?club=<id>` URL parameter on `/routes/new`.
+  final String? clubId;
+
   const SaveDialogResult({
     required this.name,
     required this.isPublic,
     this.description,
+    this.clubId,
   });
 }
 
 /// Save-route modal. Promoted from file-private so the widget test
 /// can pump it in isolation rather than mounting the whole builder
 /// (which would need a working MapLibre/OSRM/elevation stack).
+///
+/// When the caller passes a non-empty [clubChoices], the dialog
+/// renders a "Save to" dropdown that lets the user choose between
+/// Personal (the default) and any club they're a member of. The
+/// picker is hidden entirely when the list is empty so users who
+/// aren't in any clubs see the same lean dialog as before.
 @visibleForTesting
 class SaveRouteDialog extends StatefulWidget {
-  const SaveRouteDialog();
+  final List<RouteClubChoice> clubChoices;
+  const SaveRouteDialog({super.key, this.clubChoices = const []});
   @override
   State<SaveRouteDialog> createState() => _SaveRouteDialogState();
 }
@@ -1018,6 +1100,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   bool _isPublic = false;
+  String? _clubId; // null = Personal
 
   @override
   void dispose() {
@@ -1028,6 +1111,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final hasClubs = widget.clubChoices.isNotEmpty;
     return AlertDialog(
       title: const Text('Save route'),
       // SingleChildScrollView so the Make public toggle isn't clipped
@@ -1055,6 +1139,28 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
               ),
               maxLines: 3,
             ),
+            if (hasClubs) ...[
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String?>(
+                key: const Key('save-route-dialog-club-picker'),
+                initialValue: _clubId,
+                decoration: const InputDecoration(
+                  labelText: 'Save to',
+                ),
+                items: <DropdownMenuItem<String?>>[
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Personal'),
+                  ),
+                  for (final c in widget.clubChoices)
+                    DropdownMenuItem<String?>(
+                      value: c.id,
+                      child: Text(c.name),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _clubId = v),
+              ),
+            ],
             const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -1080,6 +1186,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
               name: trimmed,
               isPublic: _isPublic,
               description: desc.isEmpty ? null : desc,
+              clubId: _clubId,
             ));
           },
           child: const Text('Save'),

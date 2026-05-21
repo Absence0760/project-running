@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../social_service.dart';
 import '../widgets/route_track_preview.dart';
 import 'explore_routes_screen.dart';
 import 'routes_heatmap_screen.dart';
@@ -57,6 +58,11 @@ class RoutesScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final void Function(cm.Route route)? onStartRun;
+  /// Optional social service. Threaded into [RouteBuilderScreen] so
+  /// the SaveRouteDialog can show a "Save to" picker populated with
+  /// the user's clubs. When null, the picker is hidden and saved
+  /// routes go to the user's personal library (existing behaviour).
+  final SocialService? social;
   /// When true, the screen renders only its body — the parent (e.g.
   /// `SocialScreen`) owns the Scaffold/AppBar/FAB chrome. The dual
   /// "Build" / "Import" FAB column is exposed via [RoutesScreenState.buildRouteFabs]
@@ -70,6 +76,7 @@ class RoutesScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     this.onStartRun,
+    this.social,
     this.embedded = false,
   });
 
@@ -419,6 +426,7 @@ class RoutesScreenState extends State<RoutesScreen> {
         builder: (_) => RouteBuilderScreen(
           apiClient: api,
           routeStore: widget.routeStore,
+          social: widget.social,
         ),
       ),
     );

@@ -119,6 +119,7 @@ class _SocialScreenState extends State<SocialScreen>
             routeStore: widget.routeStore,
             preferences: widget.preferences,
             onStartRun: widget.onStartRun,
+            social: widget.social,
             embedded: true,
           ),
         ],
