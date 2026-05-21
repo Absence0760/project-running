@@ -220,7 +220,11 @@ void main() async {
     }
   }
 
-  final syncService = SyncService(apiClient: api, runStore: store);
+  final syncService = SyncService(
+    apiClient: api,
+    runStore: store,
+    routeStore: routeStore,
+  );
   syncService.start();
 
   final social = SocialService();

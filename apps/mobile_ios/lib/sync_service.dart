@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'local_route_store.dart';
 import 'local_run_store.dart';
 
 /// Pushes unsynced runs to the backend whenever:
@@ -25,6 +26,11 @@ import 'local_run_store.dart';
 class SyncService with WidgetsBindingObserver {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
+  /// Optional — when provided, the sync cycle also drains unsynced
+  /// routes (created offline / while signed out via the in-app route
+  /// builder). When null, route drain is a no-op so older callers
+  /// that don't wire a route store don't blow up.
+  final LocalRouteStore? routeStore;
 
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _syncing = false;
@@ -35,7 +41,11 @@ class SyncService with WidgetsBindingObserver {
   static const Duration _baseBackoff = Duration(seconds: 60);
   static const Duration _maxBackoff = Duration(minutes: 30);
 
-  SyncService({required this.apiClient, required this.runStore});
+  SyncService({
+    required this.apiClient,
+    required this.runStore,
+    this.routeStore,
+  });
 
   void start() {
     WidgetsBinding.instance.addObserver(this);
@@ -135,7 +145,10 @@ class SyncService with WidgetsBindingObserver {
     if (api == null || api.userId == null) return;
     final unsynced = runStore.unsyncedRuns;
     final hasPendingDeletes = runStore.pendingRemoteDeleteIds.isNotEmpty;
-    if (unsynced.isEmpty && !hasPendingDeletes) return;
+    final unsyncedRoutes = routeStore?.unsyncedRoutes ?? const [];
+    if (unsynced.isEmpty &&
+        !hasPendingDeletes &&
+        unsyncedRoutes.isEmpty) return;
 
     _syncing = true;
     var anyFailure = false;
@@ -165,6 +178,10 @@ class SyncService with WidgetsBindingObserver {
       }
       if (hasPendingDeletes) {
         final ok = await _drainPendingDeletes(reason);
+        if (!ok) anyFailure = true;
+      }
+      if (unsyncedRoutes.isNotEmpty) {
+        final ok = await _drainUnsyncedRoutes(unsyncedRoutes, reason);
         if (!ok) anyFailure = true;
       }
     } finally {
@@ -209,6 +226,50 @@ class SyncService with WidgetsBindingObserver {
       }
     }
     debugPrint('SyncService: drained $ok / ${ids.length} pending deletes');
+    return failed == 0;
+  }
+
+  /// Push routes the user created offline (signed-out, network down,
+  /// Supabase init failed at app launch) to the cloud. Each route is
+  /// attempted independently so one bad row (e.g. RLS rejection on a
+  /// stale club_id) doesn't poison the rest of the queue. Successful
+  /// pushes are marked synced; failures stay unsynced for the next
+  /// cycle.
+  ///
+  /// Returns `true` iff every route was drained without error.
+  Future<bool> _drainUnsyncedRoutes(
+    List<Object> unsyncedRoutes,
+    String reason,
+  ) async {
+    final api = apiClient;
+    final store = routeStore;
+    if (api == null || store == null) return true;
+    if (unsyncedRoutes.isEmpty) return true;
+    debugPrint(
+      'SyncService: pushing ${unsyncedRoutes.length} unsynced routes ($reason)',
+    );
+    var ok = 0;
+    var failed = 0;
+    final succeededIds = <String>[];
+    for (final route in unsyncedRoutes) {
+      // Type-erased through Object to keep the import surface narrow;
+      // every caller hands us core_models Route objects.
+      final r = route as dynamic;
+      try {
+        await api.saveRoute(r);
+        succeededIds.add(r.id as String);
+        ok++;
+      } catch (e) {
+        debugPrint('SyncService: route push failed for ${r.id}: $e');
+        failed++;
+      }
+    }
+    if (succeededIds.isNotEmpty) {
+      await store.markManyRoutesSynced(succeededIds);
+    }
+    debugPrint(
+      'SyncService: drained $ok / ${unsyncedRoutes.length} unsynced routes',
+    );
     return failed == 0;
   }
 }

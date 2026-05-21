@@ -446,15 +446,31 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       description: result.description,
       clubId: result.clubId,
     );
+    // Local-first save. The route lands on disk (unsynced) BEFORE we
+    // attempt the cloud push, so a signed-out / offline / Supabase-
+    // init-failed state can never lose the route the user just spent
+    // a few minutes building. SyncService drains unsynced routes on
+    // the next connectivity flap / app foreground / manual Sync chip.
+    await widget.routeStore.save(route);
+
+    final cloudSave = widget.saveRouteFn ?? widget.apiClient.saveRoute;
     try {
-      await (widget.saveRouteFn ?? widget.apiClient.saveRoute)(route);
-      await widget.routeStore.save(route);
+      await cloudSave(route);
+      await widget.routeStore.markRouteSynced(route.id);
       if (!mounted) return;
       Navigator.of(context).pop<cm.Route>(route);
     } catch (e) {
+      // Local copy is already on disk — surface a non-blocking note
+      // so the user knows it'll sync later, then proceed as if the
+      // save succeeded. Beats yelling about a sign-in / network
+      // issue at someone who just wants to capture the route they
+      // built.
       if (!mounted) return;
-      setState(() => _saving = false);
-      showTopBanner(context, formatSaveRouteError(e));
+      showTopBanner(
+        context,
+        'Saved locally. ${formatSaveRouteError(e)} Will sync next time.',
+      );
+      Navigator.of(context).pop<cm.Route>(route);
     }
   }
 

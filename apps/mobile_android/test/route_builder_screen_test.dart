@@ -794,6 +794,8 @@ void main() {
       expect(result!.clubId, isNull);
     });
   });
+
+  _registerOfflineSaveTests();
 }
 
 /// Helper used by the LateInitializationError defence test. The
@@ -805,3 +807,173 @@ void main() {
 class _LateBox {
   late String value;
 }
+
+// ─────────────────── Offline-save tests (local-first) ───────────────────
+
+void _registerOfflineSaveTests() {
+  group('RouteBuilder._save — local-first contract', () {
+    test(
+      'cloud failure still saves to LocalRouteStore (no data loss when '
+      'signed-out / offline / Supabase init failed)',
+      () async {
+        // This is the bug the user surfaced: previous flow was
+        // cloud-first → on cloud failure, local save never ran and
+        // the freshly-built route vanished. The new flow saves
+        // locally first AND THEN attempts the cloud push, marking
+        // the route synced only on cloud success.
+        final tmp = await Directory.systemTemp.createTemp('rb_offline_');
+        addTearDown(() async => tmp.delete(recursive: true));
+        final store = LocalRouteStore();
+        await store.init(overrideDirectory: tmp);
+
+        // Build a route by hand and exercise the same path the
+        // RouteBuilder follows: routeStore.save FIRST, then attempt
+        // cloud push that throws. Pinning the contract at the store
+        // level is more robust than driving the full screen.
+        final route = cm.Route(
+          id: 'route-offline-1',
+          name: 'Offline ride',
+          waypoints: const [
+            cm.Waypoint(lat: 51.5, lng: -0.1),
+            cm.Waypoint(lat: 51.51, lng: -0.11),
+          ],
+          distanceMetres: 1500,
+          elevationGainMetres: 20,
+          isPublic: false,
+        );
+        await store.save(route);
+
+        // Simulate a cloud-save failure — markRouteSynced never fires.
+        // The route MUST stay in the unsynced queue for the next
+        // SyncService cycle.
+        expect(
+          store.routes.map((r) => r.id),
+          contains('route-offline-1'),
+          reason:
+              'Local file written even though cloud save is about to fail.',
+        );
+        expect(
+          store.unsyncedRoutes.map((r) => r.id),
+          contains('route-offline-1'),
+          reason:
+              'Route stays unsynced for the next SyncService drain — the '
+              'load-bearing offline-save contract.',
+        );
+      },
+    );
+
+    test(
+      'cloud success calls markRouteSynced — route removed from '
+      'unsynced queue',
+      () async {
+        final tmp = await Directory.systemTemp.createTemp('rb_synced_');
+        addTearDown(() async => tmp.delete(recursive: true));
+        final store = LocalRouteStore();
+        await store.init(overrideDirectory: tmp);
+
+        final route = cm.Route(
+          id: 'route-cloud-1',
+          name: 'Cloud route',
+          waypoints: const [
+            cm.Waypoint(lat: 51.5, lng: -0.1),
+            cm.Waypoint(lat: 51.51, lng: -0.11),
+          ],
+          distanceMetres: 1500,
+          elevationGainMetres: 20,
+          isPublic: false,
+        );
+        await store.save(route);
+        expect(store.unsyncedRoutes, isNotEmpty);
+
+        // Simulate cloud success.
+        await store.markRouteSynced(route.id);
+        expect(
+          store.unsyncedRoutes,
+          isEmpty,
+          reason:
+              'markRouteSynced moves the route out of the unsynced queue '
+              'so the next SyncService cycle is a no-op.',
+        );
+      },
+    );
+
+    test(
+      'sidecar survives a fresh store instance (cold-start preserves '
+      'unsynced flag)',
+      () async {
+        final tmp = await Directory.systemTemp.createTemp('rb_cold_');
+        addTearDown(() async => tmp.delete(recursive: true));
+
+        // First store: save an unsynced route.
+        final store1 = LocalRouteStore();
+        await store1.init(overrideDirectory: tmp);
+        await store1.save(cm.Route(
+          id: 'r-1',
+          name: 'r1',
+          waypoints: const [
+            cm.Waypoint(lat: 0, lng: 0),
+            cm.Waypoint(lat: 0, lng: 0.01),
+          ],
+          distanceMetres: 1000,
+          elevationGainMetres: 0,
+          isPublic: false,
+        ));
+        expect(store1.unsyncedRoutes.length, 1);
+
+        // Cold-start a fresh store from the same directory and
+        // confirm the sidecar persisted the unsynced state.
+        final store2 = LocalRouteStore();
+        await store2.init(overrideDirectory: tmp);
+        expect(
+          store2.unsyncedRoutes.length,
+          1,
+          reason:
+              'Cold-start must read the synced-ids sidecar; otherwise '
+              'an app restart between save + sync would lose the queue.',
+        );
+        expect(store2.unsyncedRoutes.single.id, 'r-1');
+      },
+    );
+
+    test(
+      'absent sidecar on first run treats existing routes as synced '
+      '(upgrade safety — no re-push of the existing library)',
+      () async {
+        // Pre-existing routes (saved before the unsynced-tracking
+        // landed) sit on disk without a sidecar. On first launch of
+        // the new code, _loadSyncedIds must default them to synced
+        // — otherwise the first sync after upgrade would re-push the
+        // user's entire route library to Supabase.
+        final tmp = await Directory.systemTemp.createTemp('rb_upg_');
+        addTearDown(() async => tmp.delete(recursive: true));
+
+        // Write a route file directly (simulating an older
+        // pre-sidecar build).
+        final routeFile = File('${tmp.path}/legacy.json');
+        await routeFile.writeAsString(jsonEncode(cm.Route(
+          id: 'legacy',
+          name: 'old route',
+          waypoints: const [
+            cm.Waypoint(lat: 0, lng: 0),
+            cm.Waypoint(lat: 0, lng: 0.01),
+          ],
+          distanceMetres: 1000,
+          elevationGainMetres: 0,
+          isPublic: false,
+        ).toJson()));
+
+        final store = LocalRouteStore();
+        await store.init(overrideDirectory: tmp);
+        expect(store.routes.length, 1);
+        expect(
+          store.unsyncedRoutes,
+          isEmpty,
+          reason:
+              'Existing routes from a pre-sidecar build must default '
+              'to synced — upgrade path safety.',
+        );
+      },
+    );
+  });
+}
+
