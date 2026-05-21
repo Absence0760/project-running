@@ -167,13 +167,24 @@
 	 * every race_sessions write. Members listen for both: the broadcast
 	 * is the fast path, the postgres_changes subscription remains as a
 	 * fallback / late-joiner signal.
+	 *
+	 * Triple-fire with short gaps: a single broadcast can be dropped on
+	 * a flaky link (CI load, network mid-handshake on the receiver) and
+	 * the receiver's only fallback is postgres_changes, which itself
+	 * trails the join ack. Three sends inside ~600 ms make the delivery
+	 * essentially certain. The receiver's scheduleReload is debounced
+	 * (250 ms), so duplicates collapse into one reload.
 	 */
 	function broadcastRaceStateChanged() {
-		channel?.send({
-			type: 'broadcast',
-			event: 'race-state-changed',
-			payload: {}
-		});
+		const send = () =>
+			channel?.send({
+				type: 'broadcast',
+				event: 'race-state-changed',
+				payload: {}
+			});
+		send();
+		setTimeout(send, 250);
+		setTimeout(send, 600);
 	}
 
 	async function handleArm() {
