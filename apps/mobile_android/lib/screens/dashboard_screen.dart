@@ -549,7 +549,7 @@ class _WelcomeEmpty extends StatelessWidget {
             Text('Welcome!', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              'Start your first run from the Run tab, '
+              'Your dashboard fills in once you record a run, '
               'set a goal, or import your history.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(

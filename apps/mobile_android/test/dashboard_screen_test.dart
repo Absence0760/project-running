@@ -150,7 +150,7 @@ void main() {
       // sentence so a future tweak that loses an action doesn't
       // silently shrink the copy.
       expect(
-        find.textContaining('Start your first run from the Run tab'),
+        find.textContaining('Your dashboard fills in once you record a run'),
         findsOneWidget,
       );
     });
