@@ -33,7 +33,7 @@ OSRM_URL = "http://osrm.internal:5000"
 # to upgrade. The corresponding clients are `apps/web` (PUBLIC build
 # at https://run.app) and the preview env. Keep the list tight —
 # anything not listed gets a 403 at the WS handshake.
-LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.runonward.com"
+LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.threkir.com"
 
 # Public HTTPS + WebSocket service (live spectator hub).
 # Fly.io's "http" handler transparently upgrades WS frames; the

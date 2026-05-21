@@ -767,7 +767,7 @@ void main() {
       // from `apps/mobile_ios` — skip the assertion there since the
       // host file is shared between targets and only ever lives once.
       final file = File(
-        'android/app/src/main/kotlin/com/runonward/app/RunNotificationBridge.kt',
+        'android/app/src/main/kotlin/com/threkir/app/RunNotificationBridge.kt',
       );
       if (!file.existsSync()) return;
       final source = file.readAsStringSync();
@@ -1421,9 +1421,9 @@ void main() {
       // the task ID gets rejected at registration time.
       expect(
         body,
-        contains('com.runonward.backgroundSync'),
+        contains('com.threkir.backgroundSync'),
         reason: 'BGTaskSchedulerPermittedIdentifiers must include '
-            'the Workmanager task ID (com.runonward.backgroundSync) '
+            'the Workmanager task ID (com.threkir.backgroundSync) '
             'or the periodic sync job will not run on iOS.',
       );
       expect(

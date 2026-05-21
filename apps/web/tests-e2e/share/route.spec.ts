@@ -46,7 +46,7 @@ test.describe('/share/route/[id] — anon', () => {
 
 		// Reactive head tags are populated after the fetchRouteById
 		// onMount call. Wait until the title flips from the
-		// initial "Route — Run Onward" placeholder to the
+		// initial "Route — Threkir" placeholder to the
 		// route-specific version.
 		await expect.poll(async () => await page.title()).toContain('E2E demo public route');
 
@@ -68,7 +68,7 @@ test.describe('/share/route/[id] — anon', () => {
 		);
 		await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute(
 			'content',
-			'Run Onward'
+			'Threkir'
 		);
 		// og:image is now the per-route prerendered PNG. The image URL
 		// includes the route id so the unfurl card carries a real
@@ -166,12 +166,12 @@ test.describe('/share/route/[id] — anon', () => {
 		}
 	});
 
-	test('share page links back to Run Onward via the brand mark', async ({ page }) => {
+	test('share page links back to Threkir via the brand mark', async ({ page }) => {
 		// Anon viewers landing from a paste-link must have a clear
 		// click-out to the marketing site. The header brand link is
 		// the canonical affordance.
 		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
-		await expect(page.getByRole('link', { name: 'Run Onward' }).first()).toHaveAttribute(
+		await expect(page.getByRole('link', { name: 'Threkir' }).first()).toHaveAttribute(
 			'href',
 			'/'
 		);

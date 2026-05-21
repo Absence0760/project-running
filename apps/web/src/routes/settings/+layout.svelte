@@ -31,7 +31,7 @@
 </script>
 
 <svelte:head>
-	<title>Settings — Run Onward</title>
+	<title>Settings — Threkir</title>
 </svelte:head>
 
 <div class="settings-shell">

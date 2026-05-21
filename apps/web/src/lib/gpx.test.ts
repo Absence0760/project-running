@@ -11,7 +11,7 @@ const ELEVS_3 = [400, 410, 420];
 
 test('toGpx — has GPX 1.1 namespace + creator', () => {
 	const xml = toGpx('Morning loop', COORDS_3, ELEVS_3);
-	assert.match(xml, /<gpx version="1.1" creator="RunOnward"/);
+	assert.match(xml, /<gpx version="1.1" creator="Threkir"/);
 	assert.match(xml, /xmlns="http:\/\/www\.topografix\.com\/GPX\/1\/1"/);
 });
 

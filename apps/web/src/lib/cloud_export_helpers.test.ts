@@ -7,22 +7,22 @@ import {
 
 test('buildCloudExportUrl — clean base', () => {
 	assert.equal(
-		buildCloudExportUrl('https://live.runonward.com'),
-		'https://live.runonward.com/v1/export',
+		buildCloudExportUrl('https://live.threkir.com'),
+		'https://live.threkir.com/v1/export',
 	);
 });
 
 test('buildCloudExportUrl — strips a trailing slash', () => {
 	assert.equal(
-		buildCloudExportUrl('https://live.runonward.com/'),
-		'https://live.runonward.com/v1/export',
+		buildCloudExportUrl('https://live.threkir.com/'),
+		'https://live.threkir.com/v1/export',
 	);
 });
 
 test('buildCloudExportUrl — strips multiple trailing slashes', () => {
 	assert.equal(
-		buildCloudExportUrl('https://live.runonward.com///'),
-		'https://live.runonward.com/v1/export',
+		buildCloudExportUrl('https://live.threkir.com///'),
+		'https://live.threkir.com/v1/export',
 	);
 });
 

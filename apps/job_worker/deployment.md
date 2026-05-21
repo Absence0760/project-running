@@ -73,7 +73,7 @@ WORKER_ID = "fly-${FLY_MACHINE_ID}"
 OSRM_URL = "http://osrm.internal:5000"
 # Comma-separated WS Origin allow-list. Anything not listed gets a 403 at
 # the WS handshake. Production clients: apps/web prod + preview.
-LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.runonward.com"
+LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.threkir.com"
 
 [[services]]
 internal_port = 8080
@@ -174,10 +174,10 @@ All four endpoints share the same auth + Pro-check shape: 503 when `SUPABASE_JWT
 1. Set the four Strava env vars as Fly secrets: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_WEBHOOK_SECRET`, `STRAVA_VERIFY_TOKEN`. Boot log should read `stravahook: enabled (Strava webhook endpoint mounted at /v1/strava/webhook)`. Without all four the endpoint returns 503 and Strava drops events.
 2. Smoke-test the GET handshake:
    ```bash
-   curl -i 'https://live.runonward.com/v1/strava/webhook?secret=<STRAVA_WEBHOOK_SECRET>&hub.mode=subscribe&hub.challenge=abc123&hub.verify_token=<STRAVA_VERIFY_TOKEN>'
+   curl -i 'https://live.threkir.com/v1/strava/webhook?secret=<STRAVA_WEBHOOK_SECRET>&hub.mode=subscribe&hub.challenge=abc123&hub.verify_token=<STRAVA_VERIFY_TOKEN>'
    ```
    Expect 200 echoing `{"hub.challenge":"abc123"}`. A 403 means one of the two secrets is wrong; 503 means env vars didn't land.
-3. **Re-register the Strava subscription.** Strava's webhook URL is set once via `POST /api/v3/push_subscriptions` and survives until explicitly deleted. The operator deletes the existing EF-targeted subscription and creates a new one pointing at `https://live.runonward.com/v1/strava/webhook?secret=<STRAVA_WEBHOOK_SECRET>`, with the same `verify_token` you set in the Fly secret. Strava sends the GET handshake to validate; on success the new subscription `id` is authoritative.
+3. **Re-register the Strava subscription.** Strava's webhook URL is set once via `POST /api/v3/push_subscriptions` and survives until explicitly deleted. The operator deletes the existing EF-targeted subscription and creates a new one pointing at `https://live.threkir.com/v1/strava/webhook?secret=<STRAVA_WEBHOOK_SECRET>`, with the same `verify_token` you set in the Fly secret. Strava sends the GET handshake to validate; on success the new subscription `id` is authoritative.
 4. Watch `flyctl logs --app job_worker` for the first few real events — the endpoint enqueues a `strava_event` job in <100ms; the worker runs the activity fetch + Storage upload + runs insert async. The EF stays deployed; it'll just stop seeing traffic once Strava's subscription URL is the new one.
 5. Once steady, the `strava-webhook` Edge Function can be marked Deprecated in `apps/backend/CLAUDE.md` (same treatment we gave `refresh-tokens`).
 
@@ -243,21 +243,21 @@ Point a subdomain at the Fly app so the public URL doesn't leak the Fly hostname
 
 ```bash
 # Tell Fly to provision a Let's Encrypt cert for the subdomain
-flyctl certs add live.runonward.com --app job_worker
+flyctl certs add live.threkir.com --app job_worker
 
 # Then add a Route 53 record (managed via infra/dns/) — CNAME to
 # job_worker.fly.dev (or A/AAAA to the Fly anycast IPs reported by
 # `flyctl ips list --app job_worker`).
 ```
 
-Once the cert lights up green in `flyctl certs show live.runonward.com`, the hub is reachable at `https://live.runonward.com/v1/live/...`.
+Once the cert lights up green in `flyctl certs show live.threkir.com`, the hub is reachable at `https://live.threkir.com/v1/live/...`.
 
 ### Client env flip
 
 After DNS resolves and a smoke-test push round-trips:
 
-1. **Web** — set `PUBLIC_LIVE_HUB_URL=https://live.runonward.com` in the prod sops blob (`infra/envs/prod/secrets.sops.json` → `runtime.PUBLIC_LIVE_HUB_URL`). Rebuild + redeploy via the `web@*` tag.
-2. **Mobile** — set `LIVE_HUB_URL=https://live.runonward.com` in the Android + iOS release `.env` (not committed; injected at build time). Ship a new build through the Play Console / TestFlight.
+1. **Web** — set `PUBLIC_LIVE_HUB_URL=https://live.threkir.com` in the prod sops blob (`infra/envs/prod/secrets.sops.json` → `runtime.PUBLIC_LIVE_HUB_URL`). Rebuild + redeploy via the `web@*` tag.
+2. **Mobile** — set `LIVE_HUB_URL=https://live.threkir.com` in the Android + iOS release `.env` (not committed; injected at build time). Ship a new build through the Play Console / TestFlight.
 
 Both clients pick up the new transport on next launch. Old builds with the env unset stay on the Supabase Realtime path — they continue to work because the trigger-driven `live_run_pings` table still receives pings from any recorder that hasn't been updated. Roll-forward is gradual.
 
@@ -286,10 +286,10 @@ Token verification uses HS256 with the Supabase project's JWT secret. `alg:none`
 - [ ] `SUPABASE_JWT_SECRET` set as a Fly secret (Studio → Project Settings → API → JWT Secret)
 - [ ] `flyctl deploy --remote-only` from `apps/job_worker/` (or push a `worker@*` tag once `release-worker.yml` lands)
 - [ ] Boot log shows `livehub auth: enabled (Supabase JWT)` — if it says DISABLED, the env var didn't land
-- [ ] `flyctl certs add live.runonward.com --app job_worker` and Route 53 record pointing at it
-- [ ] `flyctl certs show live.runonward.com` shows a valid Let's Encrypt cert
-- [ ] `curl https://live.runonward.com/health` returns `{"status":"ok"}`
-- [ ] Smoke push without auth → 403: `curl -i -X POST https://live.runonward.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` — production must reject this
+- [ ] `flyctl certs add live.threkir.com --app job_worker` and Route 53 record pointing at it
+- [ ] `flyctl certs show live.threkir.com` shows a valid Let's Encrypt cert
+- [ ] `curl https://live.threkir.com/health` returns `{"status":"ok"}`
+- [ ] Smoke push without auth → 403: `curl -i -X POST https://live.threkir.com/v1/live/test-run/push -H 'content-type: application/json' -d '{"ts":1700000000,"lat":51.5,"lng":-0.1}'` — production must reject this
 - [ ] Smoke push with the seed user's JWT → 202 with `{ok:true,...}` (or `clipped:true` if test-run sits inside a seed user's zone, which is also a healthy signal)
 - [ ] WS Origin allow-list (`LIVEHUB_ALLOWED_ORIGINS` in `[env]`) covers every host that will subscribe (prod web + preview web + any dev tunnel that needs to be tested against prod)
 - [ ] `PUBLIC_LIVE_HUB_URL` set in the web prod sops blob, redeployed

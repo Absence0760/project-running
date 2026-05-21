@@ -22,7 +22,7 @@ test.describe('Legal route stubs', () => {
 		await expect(page.getByRole('heading', { name: 'Privacy Policy' })).toBeVisible();
 		await expect(page.getByText(/Draft\./)).toBeVisible();
 		await expect(
-			page.getByRole('link', { name: /privacy@runonward\.com/ }).first()
+			page.getByRole('link', { name: /privacy@threkir\.com/ }).first()
 		).toBeVisible();
 		// Cross-link to /terms — important for the "consistent across docs" sanity test.
 		await expect(page.getByRole('link', { name: 'Cookie Notice' }).first()).toHaveAttribute(
@@ -141,7 +141,7 @@ test.describe('Legal route stubs', () => {
 		// The privacy contact mailto is repeated across the page; the
 		// first instance is the controller block.
 		await expect(
-			page.getByRole('link', { name: /privacy@runonward\.com/ }).first()
+			page.getByRole('link', { name: /privacy@threkir\.com/ }).first()
 		).toHaveAttribute('href', /^mailto:/);
 	});
 });

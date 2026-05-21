@@ -28,7 +28,7 @@
 </script>
 
 <svelte:head>
-	<title>Guided runs — Run Onward</title>
+	<title>Guided runs — Threkir</title>
 	<meta
 		name="description"
 		content="Coach-voice scripted workouts — pace cues, form reminders, intervals."

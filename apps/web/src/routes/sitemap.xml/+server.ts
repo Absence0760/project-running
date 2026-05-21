@@ -14,11 +14,11 @@ import { buildRunCountByRouteId, buildSitemap, composeEntries } from '$lib/sitem
 // service-role key never enters the static bundle.
 //
 // PUBLIC_SITE_URL (`$env/dynamic/public`) lets preview vs prod use
-// different canonical hosts; defaults to https://runonward.com when
+// different canonical hosts; defaults to https://threkir.com when
 // unset so the local prerender still emits sensible URLs.
 export const prerender = true;
 
-const DEFAULT_SITE_URL = 'https://runonward.com';
+const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Sitemap spec caps at 50k URLs per file. Our public counts are
 // nowhere near that; cap each list defensively at 10k as a guard

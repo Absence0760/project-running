@@ -25,9 +25,9 @@ So: `mobile_ios@1.2.3` triggers one CI workflow that ships **both** apps.
 **Bundle IDs:**
 
 ```
-app.runonward.runner            ← iOS phone app
-app.runonward.runner.watchkitapp ← Apple Watch app target
-app.runonward.runner.watchkitapp.WidgetsExtension  ← (when the complication ships)
+com.threkir.app            ← iOS phone app
+com.threkir.app.watchkitapp ← Apple Watch app target
+com.threkir.app.watchkitapp.WidgetsExtension  ← (when the complication ships)
 ```
 
 **Country / region rollout:** Same shape as Android — start with UK + Australia + US, expand once stable.
@@ -39,10 +39,10 @@ app.runonward.runner.watchkitapp.WidgetsExtension  ← (when the complication sh
 1. **Pay $99/year for the Apple Developer Program.** Use a long-lived team mailbox, not a personal Apple ID. Apple's account recovery is brutal — it's worth the extra ~5 minutes of setup to use a shared account.
 2. **Create an organisational team** (Apple Developer → Membership). Personal accounts work but limit to 1 admin; an organisation lets multiple maintainers manage signing.
 3. **Create the App ID** at developer.apple.com → Identifiers:
-   - Bundle ID: `app.runonward.runner` (Explicit)
+   - Bundle ID: `com.threkir.app` (Explicit)
    - Capabilities: HealthKit, Sign in with Apple, Push Notifications, Background Modes (Location updates), Maps, Associated Domains (for universal links — optional)
 4. **Create the Watch App ID:**
-   - Bundle ID: `app.runonward.runner.watchkitapp`
+   - Bundle ID: `com.threkir.app.watchkitapp`
    - Capabilities: HealthKit, Background Modes (Workout processing)
 5. **Provisioning profiles.** Create App Store distribution profiles for both bundle IDs. Set the team to your Developer Program team. Download the `.mobileprovision` files.
 6. **Create the App Store listing** at App Store Connect:
@@ -62,8 +62,8 @@ In Keychain Access on a Mac:
 1. Certificate Assistant → Request a Certificate from a Certificate Authority. Email = the developer team mailbox. Choose "Saved to disk".
 2. developer.apple.com → Certificates → "+" → iOS Distribution → upload the `.certSigningRequest` from step 1.
 3. Download the issued `.cer`. Double-click to install in Keychain Access.
-4. In Keychain Access, find the certificate. Expand to see the private key. Right-click → Export → save as `runonward-distribution.p12` with a password.
-5. `base64 -i runonward-distribution.p12 | pbcopy` → paste into GitHub Secret `IOS_BUILD_CERTIFICATE_BASE64`.
+4. In Keychain Access, find the certificate. Expand to see the private key. Right-click → Export → save as `threkir-distribution.p12` with a password.
+5. `base64 -i threkir-distribution.p12 | pbcopy` → paste into GitHub Secret `IOS_BUILD_CERTIFICATE_BASE64`.
 
 ### App Store Connect API key (one-time)
 
@@ -77,7 +77,7 @@ This is what lets CI upload to TestFlight without a maintainer's Apple ID passwo
 
 | Secret | Source |
 |---|---|
-| `IOS_BUILD_CERTIFICATE_BASE64` | base64 of `runonward-distribution.p12` |
+| `IOS_BUILD_CERTIFICATE_BASE64` | base64 of `threkir-distribution.p12` |
 | `IOS_P12_PASSWORD` | the password from the export step |
 | `IOS_PROVISIONING_PROFILE_BASE64` | base64 of the iOS app's `.mobileprovision` |
 | `IOS_WATCH_PROVISIONING_PROFILE_BASE64` | base64 of the Watch app's `.mobileprovision` |
@@ -96,9 +96,9 @@ Same shape as Android: `dev` and `production` build configurations, gated on `xc
 
 | Configuration | Bundle ID | Backend |
 |---|---|---|
-| `Debug-Dev` | `app.runonward.runner.dev` | Local Supabase |
-| `Release-Dev` | `app.runonward.runner.dev` | Staging Supabase |
-| `Release-Production` | `app.runonward.runner` | Production Supabase |
+| `Debug-Dev` | `com.threkir.app.dev` | Local Supabase |
+| `Release-Dev` | `com.threkir.app.dev` | Staging Supabase |
+| `Release-Production` | `com.threkir.app` | Production Supabase |
 
 ### Production secrets via `dart_defines.json`
 
@@ -106,7 +106,7 @@ The iOS toolchain doesn't accept Supabase's `sb_publishable_...` keys via inline
 
 ```json
 {
-  "SUPABASE_URL": "https://api.runonward.com",
+  "SUPABASE_URL": "https://api.threkir.com",
   "SUPABASE_ANON_KEY": "sb_publishable_...",
   "MAPTILER_KEY": "...",
   "REVENUECAT_API_KEY": "appl_...",
@@ -133,7 +133,7 @@ Required keys:
 
 - `UIBackgroundModes` array containing `location` (background GPS) and `workout-processing` (Apple Watch session)
 - `WKWatchKitApp` (in the watch target's Info.plist) — true
-- `WKCompanionAppBundleIdentifier` — `app.runonward.runner`
+- `WKCompanionAppBundleIdentifier` — `com.threkir.app`
 
 ### Capabilities to enable in Signing & Capabilities
 
@@ -141,7 +141,7 @@ Required keys:
 - Sign in with Apple
 - Push Notifications (APNs)
 - Background Modes → Location updates + Audio (for TTS) + Background fetch
-- App Groups → `group.app.runonward.runner` (shared between iOS app, watch app, and the future complication target — see [`apps/watch_ios/Complications/README.md`](../watch_ios/Complications/README.md))
+- App Groups → `group.com.threkir.app` (shared between iOS app, watch app, and the future complication target — see [`apps/watch_ios/Complications/README.md`](../watch_ios/Complications/README.md))
 
 ---
 
@@ -194,7 +194,7 @@ There's no separate review for the Watch app. App Store review covers both targe
 
 ### HealthKit entitlements (Watch)
 
-The Watch target needs its own HealthKit entitlement (separate from the iOS one). Set up at developer.apple.com → Identifiers → `app.runonward.runner.watchkitapp` → enable HealthKit.
+The Watch target needs its own HealthKit entitlement (separate from the iOS one). Set up at developer.apple.com → Identifiers → `com.threkir.app.watchkitapp` → enable HealthKit.
 
 ### Watch Connectivity
 
@@ -276,7 +276,7 @@ Apple's appeal process is faster than Google's but still painful. Mitigations:
 - [ ] Bundle IDs registered at developer.apple.com (iOS + Watch)
 - [ ] Capabilities enabled on both bundle IDs (HealthKit, Sign in with Apple, Push, Background Modes, App Groups)
 - [ ] App Store Connect listing created (description, keywords, support URL, screenshots — required at iPhone 6.7", iPhone 5.5", iPad 12.9", Apple Watch screen sizes)
-- [ ] Privacy policy live at `runonward.com/privacy`
+- [ ] Privacy policy live at `threkir.com/privacy`
 - [ ] App Privacy nutrition label completed, matches policy
 - [ ] Distribution certificate generated, in 1Password and GitHub Secrets
 - [ ] Provisioning profiles for both bundle IDs in GitHub Secrets

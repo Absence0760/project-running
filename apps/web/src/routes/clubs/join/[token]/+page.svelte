@@ -38,7 +38,7 @@
 	<header class="invite-header">
 		<a href="/" class="logo">
 			<img src="/icon-192.png" alt="" class="logo-mark" />
-			<span>Run Onward</span>
+			<span>Threkir</span>
 		</a>
 	</header>
 
@@ -57,7 +57,7 @@
 				<p class="kicker">You've been invited</p>
 				<h1>Sign in to accept this invite</h1>
 				<p class="muted">
-					You need a Run Onward account to join. Sign in to an existing account or
+					You need a Threkir account to join. Sign in to an existing account or
 					create a new one — both are free.
 				</p>
 				<div class="invite-actions">

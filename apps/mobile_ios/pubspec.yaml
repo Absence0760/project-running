@@ -68,7 +68,7 @@ dependencies:
   # package opens a Chrome Custom Tab and intercepts the callback via
   # an intent-filter; on iOS it uses ASWebAuthenticationSession which
   # captures the redirect URL without any Info.plist registration.
-  # See lib/strava.dart for the `runonward://strava-callback` URI we
+  # See lib/strava.dart for the `threkir://strava-callback` URI we
   # pin in the Strava developer console and `STRAVA_ALLOWED_REDIRECTS`.
   flutter_web_auth_2: ^5.0.0
   flutter_markdown: ^0.7.4

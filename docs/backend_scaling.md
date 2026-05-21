@@ -2,7 +2,7 @@
 
 How the backend evolves from a single Supabase project to a two-service architecture (Supabase + Go) that supports live spectator tracking, training intelligence, and hundreds of thousands of users.
 
-> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, and `strava_event` job kinds plus the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.runonward.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
+> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, and `strava_event` job kinds plus the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.threkir.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
 
 ---
 
@@ -447,7 +447,7 @@ Aligned with the existing product roadmap.
 
 **New:**
 - [x] Deploy Go service to Fly.io (`apps/job_worker/` — drains `map_match`, `token_refresh`, `strava_event`)
-- [~] WebSocket hub for live spectator tracking (`apps/job_worker/internal/livehub/` code shipped + tested; awaits `flyctl deploy` + `live.runonward.com` DNS)
+- [~] WebSocket hub for live spectator tracking (`apps/job_worker/internal/livehub/` code shipped + tested; awaits `flyctl deploy` + `live.threkir.com` DNS)
 - [x] Move Strava webhook handler from Edge Function to Go (`apps/job_worker/internal/stravahook/`; EF kept as rollback)
 - [x] Move token refresh from Edge Function to Go cron worker (`token_refresh` job kind; EF kept as rollback)
 - [x] Move data export from Edge Function to Go background job (`POST /v1/export` via `apps/job_worker/internal/dataexport/`; EF kept as rollback)

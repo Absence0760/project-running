@@ -116,7 +116,7 @@ test('fails when PUBLIC_LIVE_HUB_URL points at a remote host', () => {
 	// test pings at the live broadcast service. The Dart twin uses
 	// LIVE_HUB_URL via dotenv; both forms must be guarded.
 	const r = checkEnvIsolation({
-		PUBLIC_LIVE_HUB_URL: 'https://live.runonward.com',
+		PUBLIC_LIVE_HUB_URL: 'https://live.threkir.com',
 	});
 	assert.equal(r.ok, false);
 	assert.equal(r.findings[0].envVar, 'PUBLIC_LIVE_HUB_URL');
@@ -136,7 +136,7 @@ test('fails when PUBLIC_EXPORT_HUB_URL points at a remote host', () => {
 	// .env aimed at the prod exporter would write test export jobs
 	// into live infra's queue + Storage.
 	const r = checkEnvIsolation({
-		PUBLIC_EXPORT_HUB_URL: 'https://api.runonward.com',
+		PUBLIC_EXPORT_HUB_URL: 'https://api.threkir.com',
 	});
 	assert.equal(r.ok, false);
 	assert.equal(r.findings[0].envVar, 'PUBLIC_EXPORT_HUB_URL');

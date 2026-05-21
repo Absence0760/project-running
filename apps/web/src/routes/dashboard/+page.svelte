@@ -456,7 +456,7 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard — Run Onward</title>
+	<title>Dashboard — Threkir</title>
 </svelte:head>
 
 <div class="page">

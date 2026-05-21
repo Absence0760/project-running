@@ -23,7 +23,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
-        android:label="Run Onward"
+        android:label="Threkir"
         android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault"
         android:networkSecurityConfig="@xml/network_security_config"

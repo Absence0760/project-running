@@ -245,7 +245,7 @@
 </script>
 
 <svelte:head>
-	<title>Routes — Run Onward</title>
+	<title>Routes — Threkir</title>
 </svelte:head>
 
 {#if showImport}

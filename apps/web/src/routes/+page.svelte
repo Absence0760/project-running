@@ -48,7 +48,7 @@
 </script>
 
 <svelte:head>
-	<title>Run Onward — track anywhere, review everywhere</title>
+	<title>Threkir — track anywhere, review everywhere</title>
 	<meta
 		name="description"
 		content="Plan routes, track runs, and analyse everything across web, mobile, and watch. Free, open about its data, no paywall on the analysis."
@@ -63,7 +63,7 @@
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
 		<img src="/icon-192.png" alt="" class="landing-logo-mark" />
-		Run Onward
+		Threkir
 	</a>
 	<div class="nav-links">
 		<a href="#apps" class="nav-link">Apps</a>
@@ -136,7 +136,7 @@
 </section>
 
 <footer class="landing-footer">
-	<span>&copy; Run Onward — track anywhere, review everywhere.</span>
+	<span>&copy; Threkir — track anywhere, review everywhere.</span>
 	<div class="footer-links">
 		<a href="/login">Sign In</a>
 		<a href="#apps">Apps</a>

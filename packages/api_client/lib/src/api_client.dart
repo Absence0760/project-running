@@ -3080,7 +3080,7 @@ class ApiClient {
 
   /// Complete the in-app Strava OAuth exchange. The caller (Settings)
   /// drives the user through `FlutterWebAuth2.authenticate(...)` and
-  /// receives a `runonward://strava-callback?code=...&scope=...` URL;
+  /// receives a `threkir://strava-callback?code=...&scope=...` URL;
   /// this method posts the extracted `code` + `scope` + `redirect_uri`
   /// to the `strava-import` EF with `action: 'connect'`. The EF
   /// validates the redirect against `STRAVA_ALLOWED_REDIRECTS`, swaps

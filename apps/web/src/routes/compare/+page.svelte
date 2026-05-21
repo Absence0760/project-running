@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-	<title>How we compare to Strava — Run Onward</title>
+	<title>How we compare to Strava — Threkir</title>
 	<meta
 		name="description"
 		content="Every Strava Pro feature, free. See the side-by-side."
@@ -30,7 +30,7 @@
 
 		<div class="price-cards">
 			<div class="price-card us">
-				<span class="price-label">Run Onward</span>
+				<span class="price-label">Threkir</span>
 				<span class="price">{COMPARE_HEADLINE.usPrice}</span>
 				<span class="price-sub">Forever</span>
 			</div>
@@ -54,7 +54,7 @@
 				<thead>
 					<tr>
 						<th class="feature-col">Feature</th>
-						<th>Run Onward</th>
+						<th>Threkir</th>
 						<th>Strava Free</th>
 						<th>Strava Pro</th>
 					</tr>
@@ -68,7 +68,7 @@
 									<div class="feature-note">{row.note}</div>
 								{/if}
 							</td>
-							<td class="cell cell-{row.ours} ours" data-col="Run Onward">
+							<td class="cell cell-{row.ours} ours" data-col="Threkir">
 								<span class="material-symbols">
 									{row.ours === 'yes' ? 'check_circle' : row.ours === 'partial' ? 'change_history' : 'remove'}
 								</span>
@@ -98,7 +98,7 @@
 
 	<footer class="cmp-footer">
 		<p>
-			Run Onward is free because the math is open-source, we’re indie, and the infrastructure runs on
+			Threkir is free because the math is open-source, we’re indie, and the infrastructure runs on
 			a shoestring. No ads, no upsell modals. If you want to support us, the
 			<a href="/settings/upgrade">donate page</a> exists; it’s never required.
 		</p>

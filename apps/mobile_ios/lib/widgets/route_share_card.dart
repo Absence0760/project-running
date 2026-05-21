@@ -206,7 +206,7 @@ class _ShareCardContent extends StatelessWidget {
       children: [
         TileLayer(
           urlTemplate: _tileUrl,
-          userAgentPackageName: 'com.runonward.app',
+          userAgentPackageName: 'com.threkir.app',
           maxZoom: 19,
           tileProvider: CachedTileProvider(
             store: TileCache.store,
@@ -303,7 +303,7 @@ class _ShareCardContent extends StatelessWidget {
             ],
           ),
           const Text(
-            'Run · Run Onward',
+            'Run · Threkir',
             style: TextStyle(
               color: Color(0xFF818CF8),
               fontSize: 11,

@@ -34,7 +34,7 @@
 </script>
 
 <svelte:head>
-	<title>Social — Run Onward</title>
+	<title>Social — Threkir</title>
 </svelte:head>
 
 <div class="page">

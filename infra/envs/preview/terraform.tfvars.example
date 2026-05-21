@@ -1,8 +1,8 @@
 # Copy to terraform.tfvars (gitignored) before applying.
 
-apex_domain              = "runonward.com"
+apex_domain              = "threkir.com"
 preview_subdomain        = "preview"
-public_supabase_url      = "https://api.runonward.com"  # or a separate preview project
+public_supabase_url      = "https://api.threkir.com"  # or a separate preview project
 public_supabase_anon_key = "ey..."
 
 extra_lambda_env = {}

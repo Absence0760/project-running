@@ -113,7 +113,7 @@
 	<header class="page-header">
 		<h1>Open-source licenses</h1>
 		<p class="subtitle">
-			Run Onward is built on a stack of open-source projects. Each one
+			Threkir is built on a stack of open-source projects. Each one
 			below ships under a permissive licence; follow the links to read the
 			full text and source.
 		</p>
@@ -166,7 +166,7 @@
 	<section class="card">
 		<h2>This project</h2>
 		<p>
-			Run Onward itself is a closed-source application. The open-source
+			Threkir itself is a closed-source application. The open-source
 			components above are used under the terms of their respective licences;
 			this page is our notice of attribution.
 		</p>

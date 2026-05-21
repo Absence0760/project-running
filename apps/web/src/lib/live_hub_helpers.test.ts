@@ -18,18 +18,18 @@ test('trimTrailingSlash — strips one trailing slash', () => {
 });
 
 test('buildSnapshotUrl — points at /v1/live/{run_id}/snapshot', () => {
-	const url = buildSnapshotUrl('https://live.runonward.com', 'run-1');
-	assert.equal(url, 'https://live.runonward.com/v1/live/run-1/snapshot');
+	const url = buildSnapshotUrl('https://live.threkir.com', 'run-1');
+	assert.equal(url, 'https://live.threkir.com/v1/live/run-1/snapshot');
 });
 
 test('buildSnapshotUrl — URL-encodes the run id', () => {
-	const url = buildSnapshotUrl('https://live.runonward.com', 'a b/c');
-	assert.equal(url, 'https://live.runonward.com/v1/live/a%20b%2Fc/snapshot');
+	const url = buildSnapshotUrl('https://live.threkir.com', 'a b/c');
+	assert.equal(url, 'https://live.threkir.com/v1/live/a%20b%2Fc/snapshot');
 });
 
 test('buildSubscribeUrl — flips https:// to wss://', () => {
-	const url = buildSubscribeUrl('https://live.runonward.com', 'run-1');
-	assert.equal(url, 'wss://live.runonward.com/v1/live/run-1/subscribe');
+	const url = buildSubscribeUrl('https://live.threkir.com', 'run-1');
+	assert.equal(url, 'wss://live.threkir.com/v1/live/run-1/subscribe');
 });
 
 test('buildSubscribeUrl — flips http:// to ws://', () => {
@@ -38,8 +38,8 @@ test('buildSubscribeUrl — flips http:// to ws://', () => {
 });
 
 test('buildSubscribeUrl — strips a trailing slash on base', () => {
-	const url = buildSubscribeUrl('https://live.runonward.com/', 'run-1');
-	assert.equal(url, 'wss://live.runonward.com/v1/live/run-1/subscribe');
+	const url = buildSubscribeUrl('https://live.threkir.com/', 'run-1');
+	assert.equal(url, 'wss://live.threkir.com/v1/live/run-1/subscribe');
 });
 
 test('nextBackoff — doubles up to a 30s cap', () => {

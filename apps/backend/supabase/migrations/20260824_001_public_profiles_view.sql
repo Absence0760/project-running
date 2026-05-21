@@ -5,8 +5,8 @@
 -- is `auth.uid() = id`). Anon reads return zero rows, which blocks
 -- the prerendered /share/run/[id] page from baking the runner's
 -- display name into the og:title. The static unfurl card therefore
--- reads `5.0 km run on 11 May 2026 — Run Onward` rather than
--- `5.0 km by Jared on 11 May 2026 — Run Onward`.
+-- reads `5.0 km run on 11 May 2026 — Threkir` rather than
+-- `5.0 km by Jared on 11 May 2026 — Threkir`.
 --
 -- Privacy posture mirrors the existing public surfaces:
 --   * `display_name` + `avatar_url` are already visible on every

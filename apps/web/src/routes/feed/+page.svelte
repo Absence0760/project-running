@@ -12,7 +12,7 @@
 </script>
 
 <svelte:head>
-	<title>Feed — Run Onward</title>
+	<title>Feed — Threkir</title>
 </svelte:head>
 
 <div class="page">

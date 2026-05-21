@@ -24,7 +24,7 @@ export interface CloudExportResponse {
 
 /// Build the absolute URL of the Go service's `/v1/export` endpoint.
 /// Strips a trailing slash on the base so a paste-in
-/// `https://live.runonward.com/` still produces a single-slash join.
+/// `https://live.threkir.com/` still produces a single-slash join.
 export function buildCloudExportUrl(base: string): string {
 	return `${base.replace(/\/+$/, '')}/v1/export`;
 }

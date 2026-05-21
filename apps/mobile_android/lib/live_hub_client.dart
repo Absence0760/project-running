@@ -33,7 +33,7 @@ Future<int> _defaultFetcher(Uri url, Map<String, dynamic> body) async {
 }
 
 class LiveHubClient {
-  /// Base URL of the Go live hub — e.g. `https://live.runonward.com`.
+  /// Base URL of the Go live hub — e.g. `https://live.threkir.com`.
   /// Pings POST to `{baseUrl}/v1/live/{run_id}/push`.
   final String baseUrl;
 

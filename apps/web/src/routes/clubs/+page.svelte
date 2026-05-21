@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Clubs — Run Onward</title>
+	<title>Clubs — Threkir</title>
 </svelte:head>
 
 <div class="page">

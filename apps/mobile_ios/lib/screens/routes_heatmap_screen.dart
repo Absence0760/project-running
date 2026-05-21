@@ -365,7 +365,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     TileLayer(
                       urlTemplate:
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.runonward.app',
+                      userAgentPackageName: 'com.threkir.app',
                     ),
                     CircleLayer(
                       circles: [

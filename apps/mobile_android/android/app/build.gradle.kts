@@ -16,7 +16,7 @@ if (keystoreFile.exists()) {
 }
 
 android {
-    namespace = "com.runonward.app"
+    namespace = "com.threkir.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -35,7 +35,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.runonward.app"
+        applicationId = "com.threkir.app"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

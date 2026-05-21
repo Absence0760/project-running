@@ -3,8 +3,8 @@
 </script>
 
 <svelte:head>
-	<title>Privacy Policy — Run Onward</title>
-	<meta name="description" content="How Run Onward collects, uses, and protects your personal data." />
+	<title>Privacy Policy — Threkir</title>
+	<meta name="description" content="How Threkir collects, uses, and protects your personal data." />
 </svelte:head>
 
 <div class="legal-page">
@@ -18,16 +18,16 @@
 
 	<h1>Privacy Policy</h1>
 	<p class="lead">
-		Run Onward is a running app. This policy explains what data we collect, why, who we share it
+		Threkir is a running app. This policy explains what data we collect, why, who we share it
 		with, how long we keep it, and how to exercise your rights.
 	</p>
 	<p class="meta">Last updated: {lastUpdated}</p>
 
 	<h2>1. Who we are</h2>
 	<p>
-		<strong>Controller:</strong> Run Onward, operated by <em>TODO: legal entity name + address</em>.
+		<strong>Controller:</strong> Threkir, operated by <em>TODO: legal entity name + address</em>.
 		<br />
-		<strong>Privacy contact:</strong> <a href="mailto:privacy@runonward.com">privacy@runonward.com</a>.
+		<strong>Privacy contact:</strong> <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>.
 		<br />
 		<strong>EU representative (Art 27 GDPR):</strong> <em>TODO: name + address of the appointed representative</em>. See
 		<a href="/docs/compliance/eu-representative">eu-representative.md</a> in the project repo for
@@ -148,7 +148,7 @@
 		<li><strong>Access</strong> your personal data (Art 15) — use Settings → Export your data.</li>
 		<li><strong>Rectify</strong> inaccurate data (Art 16) — use Settings → Profile.</li>
 		<li><strong>Erase</strong> your data (Art 17) — use Settings → Delete account.</li>
-		<li><strong>Restrict</strong> or <strong>object to</strong> processing (Arts 18 + 21) — email <a href="mailto:privacy@runonward.com">privacy@runonward.com</a>.</li>
+		<li><strong>Restrict</strong> or <strong>object to</strong> processing (Arts 18 + 21) — email <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>.</li>
 		<li><strong>Portability</strong> (Art 20) — use Settings → Export your data; the bundle is machine-readable JSON.</li>
 		<li><strong>Withdraw consent</strong> at any time without affecting the lawfulness of prior processing.</li>
 		<li><strong>Lodge a complaint</strong> with your local supervisory authority. UK residents may contact the <a href="https://ico.org.uk/" target="_blank" rel="noopener noreferrer">ICO</a>. EU residents may contact the DPA of their member state.</li>
@@ -156,10 +156,10 @@
 
 	<h2>8. Children</h2>
 	<p>
-		Run Onward is not directed to children under 13. We require all users to confirm they are
+		Threkir is not directed to children under 13. We require all users to confirm they are
 		16 or older at signup; that age is the most conservative threshold across EU member states
 		(GDPR Art 8). If you believe a child under 13 has provided personal data to us, please email
-		<a href="mailto:privacy@runonward.com">privacy@runonward.com</a> and we will delete the
+		<a href="mailto:privacy@threkir.com">privacy@threkir.com</a> and we will delete the
 		account.
 	</p>
 
@@ -175,7 +175,7 @@
 		repository under <em>docs/architecture.md</em> and <em>docs/api_database.md</em>.
 	</p>
 	<p>
-		If you discover a vulnerability, please email <a href="mailto:security@runonward.com">security@runonward.com</a>.
+		If you discover a vulnerability, please email <a href="mailto:security@threkir.com">security@threkir.com</a>.
 	</p>
 
 	<h2>11. Changes</h2>
@@ -187,8 +187,8 @@
 
 	<h2>12. Contact</h2>
 	<p>
-		Privacy: <a href="mailto:privacy@runonward.com">privacy@runonward.com</a>
-		<br />Security: <a href="mailto:security@runonward.com">security@runonward.com</a>
+		Privacy: <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>
+		<br />Security: <a href="mailto:security@threkir.com">security@threkir.com</a>
 		<br />Postal: <em>TODO: legal address</em>
 	</p>
 </div>

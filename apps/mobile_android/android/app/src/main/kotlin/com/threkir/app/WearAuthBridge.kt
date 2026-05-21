@@ -1,4 +1,4 @@
-package com.runonward.app
+package com.threkir.app
 
 import android.content.Context
 import android.net.Uri

@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>Add a run — Run Onward</title>
+	<title>Add a run — Threkir</title>
 </svelte:head>
 
 <div class="page">

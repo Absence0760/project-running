@@ -90,7 +90,7 @@
 </script>
 
 <svelte:head>
-	<title>Coach — Run Onward</title>
+	<title>Coach — Threkir</title>
 </svelte:head>
 
 <div class="page">

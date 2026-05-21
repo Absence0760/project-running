@@ -133,7 +133,7 @@ The modal shell uses the canonical `.modal-backdrop` / `.modal` / `.modal-header
 
 Production plan + cost / observability / rollback: [deployment.md](deployment.md). Hosted on **AWS** (S3 + CloudFront + Lambda + Route 53), Terraform-provisioned (`infra/`), sops + AWS KMS for runtime secrets, OIDC-deployed from GitHub Actions. See [decisions.md § 53](../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the choice rationale.
 
-Tag `web@*` triggers `.github/workflows/release-web.yml` which: builds the static site → uploads to the prod S3 bucket → updates the coach Lambda → invalidates CloudFront. Push to `main` deploys to the `preview.runonward.com` environment.
+Tag `web@*` triggers `.github/workflows/release-web.yml` which: builds the static site → uploads to the prod S3 bucket → updates the coach Lambda → invalidates CloudFront. Push to `main` deploys to the `preview.threkir.com` environment.
 
 ## Pull Request Guidelines
 

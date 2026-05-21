@@ -51,10 +51,10 @@ Working from zero — no AWS account, no domain, no AWS CLI:
 
 **0.1 — AWS account.** Sign up at https://aws.amazon.com/. Enable MFA on the root account, create an Identity Center user with `AdministratorAccess` (we tighten later), and assign it to the account. Note the **AWS access portal URL** Identity Center gives you (`https://d-xxxxxx.awsapps.com/start`). Account-wide spend alerts are Terraformed in `infra/envs/prod/budgets.tf` (50 % / 100 % ACTUAL + 100 % FORECASTED notifications); set `monthly_budget_limit_usd` and `budget_alert_emails` in `terraform.tfvars` before the prod apply.
 
-**0.2 — Domain.** Either register one fresh (Porkbun, Namecheap, Cloudflare Registrar — all fine; you don't need Route 53 to register, only to host DNS) or pick an apex you already own. The default examples use `runonward.com` — search the repo for it and swap if you're using something else. The places that hardcode it are:
+**0.2 — Domain.** Either register one fresh (Porkbun, Namecheap, Cloudflare Registrar — all fine; you don't need Route 53 to register, only to host DNS) or pick an apex you already own. The default examples use `threkir.com` — search the repo for it and swap if you're using something else. The places that hardcode it are:
 - `infra/dns/` — pass `-var "apex_domain=<yours>"` on apply
 - `infra/envs/{preview,prod}/terraform.tfvars` — set `apex_domain` there
-- `infra/envs/preview/variables.tf` + `infra/envs/prod/variables.tf` — `default = "runonward.com"` if you want a fallback
+- `infra/envs/preview/variables.tf` + `infra/envs/prod/variables.tf` — `default = "threkir.com"` if you want a fallback
 
 **0.3 — Workstation tooling.**
 
@@ -94,10 +94,10 @@ Creates the S3 bucket every other stack uses for remote state. **Local state onl
 ```bash
 cd ../dns
 terraform init
-terraform apply -var "apex_domain=runonward.com"
+terraform apply -var "apex_domain=threkir.com"
 ```
 
-Outputs the four NS records — paste those at the registrar that owns `runonward.com`. Wait for propagation (typically <5 min, occasionally an hour) before continuing — ACM cert validation requires the NS delegation to be live.
+Outputs the four NS records — paste those at the registrar that owns `threkir.com`. Wait for propagation (typically <5 min, occasionally an hour) before continuing — ACM cert validation requires the NS delegation to be live.
 
 ### 3. GitHub OIDC
 

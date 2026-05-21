@@ -27,7 +27,7 @@ In scope: anything under this repository. Where the issue spans this
 repo and an upstream dependency, we will coordinate with the upstream
 maintainer once the impact here is understood.
 
-Out of scope: denial-of-service tests against runonward.com,
+Out of scope: denial-of-service tests against threkir.com,
 brute-force credential stuffing, social-engineering attempts, or
 issues that require physical access to a user's device.
 

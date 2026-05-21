@@ -13,7 +13,7 @@ test('buildRunOgSvg — emits a 1200x630 svg root', () => {
 
 test('buildRunOgSvg — renders the brand strap', () => {
 	const svg = buildRunOgSvg({});
-	assert.ok(svg.includes('Run Onward'));
+	assert.ok(svg.includes('Threkir'));
 });
 
 test('buildRunOgSvg — distance becomes the hero numeral', () => {

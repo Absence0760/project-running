@@ -3,8 +3,8 @@
 </script>
 
 <svelte:head>
-	<title>Cookie Notice — Run Onward</title>
-	<meta name="description" content="What cookies and similar technologies Run Onward uses and why." />
+	<title>Cookie Notice — Threkir</title>
+	<meta name="description" content="What cookies and similar technologies Threkir uses and why." />
 </svelte:head>
 
 <div class="legal-page">
@@ -16,7 +16,7 @@
 
 	<h1>Cookie Notice</h1>
 	<p class="lead">
-		Run Onward uses a small number of cookies and similar technologies. Most are strictly
+		Threkir uses a small number of cookies and similar technologies. Most are strictly
 		necessary; the rest are off by default and load only after you opt in.
 	</p>
 	<p class="meta">Last updated: {lastUpdated}</p>
@@ -32,8 +32,8 @@
 		</thead>
 		<tbody>
 			<tr><td>sb-access-token / sb-refresh-token</td><td>Supabase Auth</td><td>Authentication session</td><td>1 hour / 30 days</td></tr>
-			<tr><td>theme</td><td>Run Onward (localStorage)</td><td>Light/dark mode preference</td><td>Persistent</td></tr>
-			<tr><td>sidebar_collapsed</td><td>Run Onward (localStorage)</td><td>Sidebar collapse state</td><td>Persistent</td></tr>
+			<tr><td>theme</td><td>Threkir (localStorage)</td><td>Light/dark mode preference</td><td>Persistent</td></tr>
+			<tr><td>sidebar_collapsed</td><td>Threkir (localStorage)</td><td>Sidebar collapse state</td><td>Persistent</td></tr>
 		</tbody>
 	</table>
 
@@ -45,7 +45,7 @@
 		</thead>
 		<tbody>
 			<tr><td>sentry-trace, baggage</td><td>Sentry</td><td>Error monitoring + performance traces</td><td>Per-request</td></tr>
-			<tr><td>cookie_consent</td><td>Run Onward (localStorage)</td><td>Remembers your consent choice</td><td>12 months</td></tr>
+			<tr><td>cookie_consent</td><td>Threkir (localStorage)</td><td>Remembers your consent choice</td><td>12 months</td></tr>
 		</tbody>
 	</table>
 
@@ -91,7 +91,7 @@
 
 	<h2>5. Contact</h2>
 	<p>
-		Privacy questions: <a href="mailto:privacy@runonward.com">privacy@runonward.com</a>.
+		Privacy questions: <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>.
 	</p>
 </div>
 

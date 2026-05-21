@@ -19,7 +19,7 @@ test.describe('/live/[id] — anon spectator', () => {
 	}) => {
 		await page.goto(`/live/${RUNNER_PUBLIC_RUN_ID}`);
 
-		await expect(page.locator('.live-logo')).toContainText('Run Onward');
+		await expect(page.locator('.live-logo')).toContainText('Threkir');
 		await expect(page.locator('.live-badge')).toBeVisible();
 		await expect(page.locator('.live-stat-label')).toHaveCount(3);
 	});
@@ -28,7 +28,7 @@ test.describe('/live/[id] — anon spectator', () => {
 		page
 	}) => {
 		await page.goto(`/live/${RUNNER_PUBLIC_RUN_ID}`);
-		await expect(page).toHaveTitle(/Live|Run Onward/i);
+		await expect(page).toHaveTitle(/Live|Threkir/i);
 	});
 
 	test('in-progress run: planted live pings hydrate distance + elapsed and flip badge to LIVE', async ({
@@ -133,12 +133,12 @@ test.describe('/live/[id] — anon spectator', () => {
 	test('unknown run id renders the not-broadcasting empty state', async ({ page }) => {
 		const bogusId = '00000000-0000-0000-0000-000000000bad';
 		await page.goto(`/live/${bogusId}`);
-		await expect(page.locator('.live-logo')).toContainText('Run Onward');
+		await expect(page.locator('.live-logo')).toContainText('Threkir');
 		await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
 			timeout: 10_000
 		});
 		await expect(page.getByRole('heading', { name: /isn't broadcasting/i })).toBeVisible();
-		await expect(page.getByRole('link', { name: /Back to Run Onward/ })).toHaveAttribute(
+		await expect(page.getByRole('link', { name: /Back to Threkir/ })).toHaveAttribute(
 			'href',
 			'/'
 		);
@@ -152,7 +152,7 @@ test.describe('/live/[id] — anon spectator', () => {
 		// surface a raw Postgres error string. Pin that the page still
 		// renders the shell + the not-found empty state.
 		await page.goto('/live/not-a-uuid');
-		await expect(page.locator('.live-logo')).toContainText('Run Onward');
+		await expect(page.locator('.live-logo')).toContainText('Threkir');
 		await expect(page.locator('.live-badge')).toHaveClass(/not-found/, {
 			timeout: 10_000
 		});

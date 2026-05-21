@@ -23,7 +23,7 @@
                      android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application
-        android:label="Run Onward"
+        android:label="Threkir"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -55,7 +55,7 @@
             android:value="2" />
 
         <!-- flutter_web_auth_2 callback activity. Captures the Strava
-             OAuth redirect (runonward://strava-callback?code=...) and
+             OAuth redirect (threkir://strava-callback?code=...) and
              hands it back to the in-flight authenticate() call. The
              scheme must match `kStravaCallbackScheme` in lib/strava.dart
              AND be allow-listed in the Strava developer console + the
@@ -67,7 +67,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="runonward" />
+                <data android:scheme="threkir" />
             </intent-filter>
         </activity>
     </application>

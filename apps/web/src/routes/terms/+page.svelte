@@ -3,8 +3,8 @@
 </script>
 
 <svelte:head>
-	<title>Terms of Service — Run Onward</title>
-	<meta name="description" content="Terms of Service for the Run Onward running app." />
+	<title>Terms of Service — Threkir</title>
+	<meta name="description" content="Terms of Service for the Threkir running app." />
 </svelte:head>
 
 <div class="legal-page">
@@ -15,12 +15,12 @@
 	</div>
 
 	<h1>Terms of Service</h1>
-	<p class="lead">By creating an account or using the Run Onward apps, you agree to these terms.</p>
+	<p class="lead">By creating an account or using the Threkir apps, you agree to these terms.</p>
 	<p class="meta">Last updated: {lastUpdated}</p>
 
 	<h2>1. Who provides the service</h2>
 	<p>
-		Run Onward is operated by <em>TODO: legal entity name + jurisdiction</em>. We provide web,
+		Threkir is operated by <em>TODO: legal entity name + jurisdiction</em>. We provide web,
 		mobile, and watch applications for recording runs, planning training, and sharing activity
 		with friends and clubs.
 	</p>
@@ -47,7 +47,7 @@
 	<h2>4. Subscriptions + payments</h2>
 	<ul>
 		<li>
-			Run Onward is free to start. A paid "Pro" tier unlocks the AI Coach (with a daily
+			Threkir is free to start. A paid "Pro" tier unlocks the AI Coach (with a daily
 			message cap), advanced training-load views, and other features listed on the
 			<a href="/compare">/compare</a> page.
 		</li>
@@ -71,7 +71,7 @@
 			UK consumers have a 14-day right of withdrawal (EU Consumer Rights Directive 2011/83/EU
 			Art 16(m) — note that we may legitimately ask you to waive this right if you begin
 			actively using the Pro AI Coach during the 14-day window). Contact
-			<a href="mailto:billing@runonward.com">billing@runonward.com</a> with any refund
+			<a href="mailto:billing@threkir.com">billing@threkir.com</a> with any refund
 			request.
 		</li>
 	</ul>
@@ -88,7 +88,7 @@
 
 	<h2>6. Disclaimers</h2>
 	<p>
-		Run Onward is provided "as is". Training advice and AI Coach responses are informational
+		Threkir is provided "as is". Training advice and AI Coach responses are informational
 		only and do not constitute medical advice. Consult a qualified healthcare professional
 		before starting a new training program. Real-time spectator tracking depends on your phone's
 		network and battery state and may be delayed or absent without warning.
@@ -136,10 +136,10 @@
 
 	<h2>11. Contact</h2>
 	<p>
-		General: <a href="mailto:hello@runonward.com">hello@runonward.com</a>
-		<br />Billing: <a href="mailto:billing@runonward.com">billing@runonward.com</a>
-		<br />Privacy: <a href="mailto:privacy@runonward.com">privacy@runonward.com</a>
-		<br />Security: <a href="mailto:security@runonward.com">security@runonward.com</a>
+		General: <a href="mailto:hello@threkir.com">hello@threkir.com</a>
+		<br />Billing: <a href="mailto:billing@threkir.com">billing@threkir.com</a>
+		<br />Privacy: <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>
+		<br />Security: <a href="mailto:security@threkir.com">security@threkir.com</a>
 		<br />Postal: <em>TODO: legal address</em>
 	</p>
 </div>

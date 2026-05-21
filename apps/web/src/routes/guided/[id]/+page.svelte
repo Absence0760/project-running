@@ -33,7 +33,7 @@
 </script>
 
 <svelte:head>
-	<title>{run?.title ?? 'Guided run'} — Run Onward</title>
+	<title>{run?.title ?? 'Guided run'} — Threkir</title>
 </svelte:head>
 
 <div class="page">

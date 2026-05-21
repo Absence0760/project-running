@@ -87,7 +87,7 @@
 </script>
 
 <svelte:head>
-	<title>My {year} in running — Run Onward</title>
+	<title>My {year} in running — Threkir</title>
 </svelte:head>
 
 <div class="page">

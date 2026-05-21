@@ -12,7 +12,7 @@
 /// triggered the scrape), so we default to km here and ignore the
 /// viewer-side preference entirely.
 
-const SITE_NAME = 'Run Onward';
+const SITE_NAME = 'Threkir';
 
 export type ShareRunMeta = {
 	distance_m?: number | null;
@@ -75,7 +75,7 @@ export function buildRunShareDescription(
 	run: ShareRunMeta | null | undefined,
 	displayName?: string | null,
 ): string {
-	if (!run) return 'View a public run on Run Onward — map, splits, elevation, kudos.';
+	if (!run) return 'View a public run on Threkir — map, splits, elevation, kudos.';
 	const km = formatKmStable(run.distance_m);
 	const date = formatDateStable(run.started_at);
 	const by = displayName ? ` by ${displayName}` : '';
@@ -84,7 +84,7 @@ export function buildRunShareDescription(
 	else if (by.trim()) bits.push(`Run${by}`);
 	if (date) bits.push(`on ${date}`);
 	const lead = bits.length > 0 ? `${bits.join(' ')}.` : '';
-	return `${lead} Map, splits, and elevation on Run Onward.`.trim();
+	return `${lead} Map, splits, and elevation on Threkir.`.trim();
 }
 
 export function buildRouteShareTitle(route: ShareRouteMeta | null | undefined): string {
@@ -95,7 +95,7 @@ export function buildRouteShareTitle(route: ShareRouteMeta | null | undefined): 
 export function buildRouteShareDescription(
 	route: ShareRouteMeta | null | undefined,
 ): string {
-	if (!route) return 'A public route on Run Onward.';
+	if (!route) return 'A public route on Threkir.';
 	const km = formatKmStable(route.distance_m);
 	const surface = route.surface ?? '';
 	const elev = route.elevation_m
@@ -104,5 +104,5 @@ export function buildRouteShareDescription(
 	if (km && surface) return `${km} ${surface} route${elev}.`;
 	if (km) return `${km} route${elev}.`;
 	if (surface) return `${surface} route${elev}.`;
-	return 'A public route on Run Onward.';
+	return 'A public route on Threkir.';
 }

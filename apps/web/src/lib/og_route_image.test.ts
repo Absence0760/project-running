@@ -24,7 +24,7 @@ test('buildRouteOgSvg — emits a 1200x630 svg root', () => {
 
 test('buildRouteOgSvg — renders the brand strap + route name', () => {
 	const svg = buildRouteOgSvg({ name: 'Hampstead Heath loop', track: sampleTrack });
-	assert.ok(svg.includes('Run Onward'));
+	assert.ok(svg.includes('Threkir'));
 	assert.ok(svg.includes('Hampstead Heath loop'));
 });
 

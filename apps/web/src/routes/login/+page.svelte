@@ -97,7 +97,7 @@
 		}
 	}
 
-	let kicker = $derived(isReset ? 'Forgot your password?' : isSignUp ? 'Join Run Onward' : 'Welcome back');
+	let kicker = $derived(isReset ? 'Forgot your password?' : isSignUp ? 'Join Threkir' : 'Welcome back');
 	let headline = $derived(
 		isReset ? 'Reset your password' : isSignUp ? 'Create an account' : 'Sign in to your account'
 	);
@@ -114,7 +114,7 @@
 	<aside class="brand-pane" aria-hidden="true">
 		<a href="/" class="brand-logo">
 			<img src="/icon-192.png" alt="" class="brand-mark" />
-			<span class="brand-name">Run Onward</span>
+			<span class="brand-name">Threkir</span>
 		</a>
 		<div class="brand-copy">
 			<p class="brand-kicker">{kicker}</p>
@@ -141,7 +141,7 @@
 		<div class="login-card">
 			<a href="/" class="logo logo-mobile">
 				<img src="/icon-192.png" alt="" class="logo-mark" />
-				<span>Run Onward</span>
+				<span>Threkir</span>
 			</a>
 
 			<p class="kicker">{kicker}</p>

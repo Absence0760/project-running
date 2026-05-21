@@ -42,7 +42,7 @@ export function buildRouteOgSvg(input: RouteImageInput): string {
 
 	// Top-left: site name strap.
 	parts.push(
-		`<text x="${PAD}" y="${PAD + 24}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="28" font-weight="700" fill="${FG}">Run Onward</text>`,
+		`<text x="${PAD}" y="${PAD + 24}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="28" font-weight="700" fill="${FG}">Threkir</text>`,
 	);
 
 	// Track polyline — projected into the lower-right 800×500 viewport.

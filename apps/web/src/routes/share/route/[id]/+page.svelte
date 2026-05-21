@@ -45,7 +45,7 @@
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={pageDesc} />
 	<meta property="og:type" content="website" />
-	<meta property="og:site_name" content="Run Onward" />
+	<meta property="og:site_name" content="Threkir" />
 	<meta property="og:image" content="/og/route/{data.id}.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
@@ -57,7 +57,7 @@
 
 <div class="share-page">
 	<header class="share-header">
-		<a href="/" class="share-logo">Run Onward</a>
+		<a href="/" class="share-logo">Threkir</a>
 	</header>
 
 	{#if loading}
@@ -73,7 +73,7 @@
 				</p>
 				<div class="notfound-actions">
 					<a class="btn btn-primary" href="/login">Sign in</a>
-					<a class="btn btn-outline" href="/">Go to Run Onward</a>
+					<a class="btn btn-outline" href="/">Go to Threkir</a>
 				</div>
 			</div>
 		</div>
@@ -120,7 +120,7 @@
 	{/if}
 
 	<footer class="share-footer">
-		<a href="/">Run Onward home</a>
+		<a href="/">Threkir home</a>
 		<span class="dot">&middot;</span>
 		<a href="/login">Sign in</a>
 	</footer>

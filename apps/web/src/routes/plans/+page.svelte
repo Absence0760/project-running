@@ -221,7 +221,7 @@
 </script>
 
 <svelte:head>
-	<title>Training plans — Run Onward</title>
+	<title>Training plans — Threkir</title>
 </svelte:head>
 
 <div class="page">

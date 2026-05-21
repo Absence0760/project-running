@@ -23,7 +23,7 @@ We picked **#3** ([decisions.md § 15](../../docs/decisions.md#15-watch_wear-is-
 - Independent release cadence — a watch UI tweak shouldn't require shipping a phone build.
 - Independent crash + ANR metrics in the Play Console.
 
-So: `app.runonward.runner` (phone) and `app.runonward.watchwear` (Wear OS) are two Play listings under the same developer account.
+So: `com.threkir.app` (phone) and `app.threkir.watchwear` (Wear OS) are two Play listings under the same developer account.
 
 ---
 
@@ -31,7 +31,7 @@ So: `app.runonward.runner` (phone) and `app.runonward.watchwear` (Wear OS) are t
 
 Same Play Console developer account as `mobile_android`. Setup is largely identical to `apps/mobile_android/deployment.md` § One-time Play Console setup, with these differences:
 
-- Application ID: `app.runonward.watchwear`
+- Application ID: `app.threkir.watchwear`
 - Form factor: Wear OS (declare in the Console under "Form factors")
 - Listing screenshots: Wear OS-specific (round + square watch face previews)
 - The store listing description should call out "Wear OS standalone — no phone required"
@@ -78,7 +78,7 @@ Plus build-time secrets injected via Gradle properties:
 
 | Secret | Source |
 |---|---|
-| `SUPABASE_URL` | `https://api.runonward.com` (production) |
+| `SUPABASE_URL` | `https://api.threkir.com` (production) |
 | `SUPABASE_ANON_KEY` | publishable key |
 | `PUBLIC_MAPTILER_KEY` | shared MapTiler key |
 
@@ -95,7 +95,7 @@ These are passed to Gradle via `-PSUPABASE_URL=...` and end up in `BuildConfig` 
 ```kotlin
 android {
     defaultConfig {
-        applicationId = "app.runonward.watchwear"
+        applicationId = "app.threkir.watchwear"
         minSdk = 30           // Wear OS 3+
         targetSdk = 35
         compileSdk = 36
@@ -196,7 +196,7 @@ A Wear OS-specific edge: Google occasionally tightens Wear OS-specific guideline
 
 ## Production readiness checklist
 
-- [ ] Play Console listing for `app.runonward.watchwear` created
+- [ ] Play Console listing for `app.threkir.watchwear` created
 - [ ] Form factor: Wear OS declared
 - [ ] Wear OS standalone meta-data set to `true`
 - [ ] Store listing complete (description, screenshots — round + square watch faces, feature graphic)

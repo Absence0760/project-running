@@ -84,7 +84,7 @@
 </script>
 
 <svelte:head>
-	<title>New plan — Run Onward</title>
+	<title>New plan — Threkir</title>
 </svelte:head>
 
 <div class="page">

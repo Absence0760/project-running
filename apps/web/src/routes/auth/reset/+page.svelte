@@ -48,7 +48,7 @@
 	<header class="reset-header">
 		<a href="/" class="logo">
 			<img src="/icon-192.png" alt="" class="logo-mark" />
-			<span>Run Onward</span>
+			<span>Threkir</span>
 		</a>
 	</header>
 

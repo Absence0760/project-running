@@ -96,7 +96,7 @@
 		<p class="kicker">Settings</p>
 		<h1>Pro &amp; support</h1>
 		<p class="tagline">
-			Run Onward is free for the parts that matter — recording, routes, plans,
+			Threkir is free for the parts that matter — recording, routes, plans,
 			clubs, imports. Pro lifts the daily Coach cap and pushes your map-matching
 			to the front of the queue. Or chip in one-off to help keep the lights on.
 		</p>
@@ -178,7 +178,7 @@
 			</ul>
 			{#if isPro}
 				<p class="pro-note">
-					Thanks for supporting Run Onward. Manage your subscription where
+					Thanks for supporting Threkir. Manage your subscription where
 					you started it — App Store, Play Store, or the web billing portal.
 				</p>
 				<button class="btn btn-outline" onclick={handleManageSubscription}>

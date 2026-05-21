@@ -110,7 +110,7 @@ Same as above but scoped to `apps/<app>`.
 - Last tag: `git describe --tags --match "web@*" --abbrev=0`.
 - Commits since: `git rev-list --count <last-tag>..HEAD`. Zero → red.
 - Confirm `apps/web/lambda/coach/build.mjs` builds (run `node apps/web/lambda/coach/build.mjs` if it exists; success → green). The release workflow re-runs this; failing here is a pre-flight catch.
-- Note: production hits `runonward.com` / `www.runonward.com` (per [`apps/web/deployment.md`](../../apps/web/deployment.md)), preview at `preview.runonward.com`. Mention which one this tag will deploy to.
+- Note: production hits `threkir.com` / `www.threkir.com` (per [`apps/web/deployment.md`](../../apps/web/deployment.md)), preview at `preview.threkir.com`. Mention which one this tag will deploy to.
 
 #### `backend`
 

@@ -396,7 +396,7 @@ One-line summary: five confirmed bugs including two silent data-loss paths (`sav
 
 - **File(s)**: `apps/web/src/lib/gpx.ts:19`, `apps/web/src/lib/gpx.ts:58`
 - **Category**: inconsistency
-- **Status**: Resolved as part of the "Run Onward" rebrand — both occurrences now emit `creator="RunOnward"`, matching the user-visible product name.
+- **Status**: Resolved as part of the "Threkir" rebrand — both occurrences now emit `creator="Threkir"`, matching the user-visible product name.
 
 ---
 

@@ -22,7 +22,7 @@ const KNOWN_ENV_VARS = [
 	// Web reads PUBLIC_LIVE_HUB_URL (bundled into the client); the
 	// Android twin reads LIVE_HUB_URL via dotenv. Both forms must be
 	// loopback in dev — without the PUBLIC_ form here, a stray
-	// `PUBLIC_LIVE_HUB_URL=https://live.runonward.com` in .env.local
+	// `PUBLIC_LIVE_HUB_URL=https://live.threkir.com` in .env.local
 	// would let dev sessions push test pings at the production
 	// live-broadcast service.
 	'LIVE_HUB_URL',

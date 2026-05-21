@@ -4,8 +4,8 @@
 # server-side SENTRY_DSN) live in the sops-encrypted file
 # `secrets.enc.yaml`, not here.
 
-apex_domain              = "runonward.com"
-public_supabase_url      = "https://api.runonward.com"
+apex_domain              = "threkir.com"
+public_supabase_url      = "https://api.threkir.com"
 public_supabase_anon_key = "ey..." # publishable key, NOT service-role
 
 extra_lambda_env = {

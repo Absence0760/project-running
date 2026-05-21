@@ -25,7 +25,7 @@
 </script>
 
 <svelte:head>
-	<title>Create a club — Run Onward</title>
+	<title>Create a club — Threkir</title>
 </svelte:head>
 
 <div class="page">

@@ -36,7 +36,7 @@ test.describe('/sitemap.xml — prerendered SEO sitemap', () => {
 		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
 		// Each of the three top-level surfaces should appear. The host
 		// is whatever PUBLIC_SITE_URL is set to at build time (defaults
-		// to runonward.com); match the path suffix to stay env-agnostic.
+		// to threkir.com); match the path suffix to stay env-agnostic.
 		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/feed<\/loc>/);
 		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/routes\?tab=explore<\/loc>/);

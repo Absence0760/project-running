@@ -93,7 +93,7 @@ test.describe('/clubs/join/[token] — signed-out branch', () => {
 		);
 
 		await expect(page.locator('.logo .logo-mark')).toBeVisible();
-		await expect(page.locator('.logo span', { hasText: 'Run Onward' }))
+		await expect(page.locator('.logo span', { hasText: 'Threkir' }))
 			.toBeVisible();
 	});
 

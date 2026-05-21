@@ -45,7 +45,7 @@ export function buildRunOgSvg(input: RunImageInput): string {
 
 	// Brand strap, top-left.
 	parts.push(
-		`<text x="${PAD}" y="${PAD + 24}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="28" font-weight="700" fill="${BRAND}">Run Onward</text>`,
+		`<text x="${PAD}" y="${PAD + 24}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="28" font-weight="700" fill="${BRAND}">Threkir</text>`,
 	);
 
 	// Main stat — distance, centred horizontally. The 1200×630 canvas

@@ -75,11 +75,11 @@ test.describe('/share/run/[id] — anon', () => {
 		// ("X km run by NAME on DD MMM YYYY") rather than specific
 		// values so a seed tweak doesn't break the spec.
 		await expect(page).toHaveTitle(
-			/\d+(\.\d+)?\s+km run by .+ on \d+\s\w+\s\d{4}\s—\sRun Onward/
+			/\d+(\.\d+)?\s+km run by .+ on \d+\s\w+\s\d{4}\s—\sThrekir/
 		);
 		await expect(page.locator('meta[name="description"]')).toHaveAttribute(
 			'content',
-			/Map, splits, and elevation on Run Onward\.$/
+			/Map, splits, and elevation on Threkir\.$/
 		);
 		await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
 			'content',
@@ -91,7 +91,7 @@ test.describe('/share/run/[id] — anon', () => {
 		);
 		await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute(
 			'content',
-			'Run Onward'
+			'Threkir'
 		);
 		// Per-run og:image is the prerendered PNG under /og/run/<id>.png.
 		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
@@ -215,7 +215,7 @@ test.describe('/share/run/[id] — anon', () => {
 		// track in Storage so we don't assert on the map. The chrome
 		// + run-meta combo confirms anon read of the runs row succeeded
 		// via the public_runs view (no auth, no 404). The page also renders
-		// a footer "Run Onward home" link — scope the brand-mark assertion
+		// a footer "Threkir home" link — scope the brand-mark assertion
 		// to the .share-logo header so it stays unambiguous.
 		await expect(page.locator('.share-logo')).toBeVisible();
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });

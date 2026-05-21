@@ -122,7 +122,7 @@ void main() {
       Uri? hubUrl;
       Map<String, dynamic>? hubBody;
       final hub = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: (u, b) async {
           hubUrl = u;
           hubBody = b;
@@ -177,7 +177,7 @@ void main() {
         () async {
       final api = _FakeApiClient();
       final hub = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: (_, __) async => throw StateError('hub down'),
       );
       final lb = LiveBroadcaster(api, hubClient: hub);

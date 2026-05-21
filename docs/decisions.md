@@ -417,13 +417,13 @@ The spectator page at `/live/{run_id}` streams a runner's in-progress GPS trace 
 
 ---
 
-## 27. Product renamed from "Better Runner" to "Run Onward"; bundle IDs follow
+## 27. Product renamed from "Better Runner" to "Threkir"; bundle IDs follow
 
 **Decided:** April 2026 (display rebrand). **Revised:** May 2026 (bundle IDs aligned).
 
-The user-visible product name is **Run Onward** (URL: `runonward.com`). All display strings — Android `android:label`, iOS `CFBundleDisplayName` / `CFBundleName`, watchOS health-permission usage strings, web `<title>` + meta + share-card chrome, GPX `creator=` attribute — match. The Android `applicationId` + Kotlin package directory + iOS `PRODUCT_BUNDLE_IDENTIFIER` are now also `com.runonward.com`, and the WorkManager task name is `com.runonward.backgroundSync`. `BACKUP_FORMAT` stays `'run-app-backup'` since changing it would break restore of any local backup blobs already exported during the dev cycle.
+The user-visible product name is **Threkir** (URL: `threkir.com`). All display strings — Android `android:label`, iOS `CFBundleDisplayName` / `CFBundleName`, watchOS health-permission usage strings, web `<title>` + meta + share-card chrome, GPX `creator=` attribute — match. The Android `applicationId` + Kotlin package directory + iOS `PRODUCT_BUNDLE_IDENTIFIER` are now also `com.threkir.com`, and the WorkManager task name is `com.threkir.backgroundSync`. `BACKUP_FORMAT` stays `'run-app-backup'` since changing it would break restore of any local backup blobs already exported during the dev cycle.
 
-**Why:** "Better Runner" was running-only branding for a multi-modal app (run + walk + hike + cycle). "Run Onward" reframes the verb as forward movement rather than jogging, and `runonward.com` was the rare clean `.com` left in the running-adjacent namespace (most short slang `.com`s are squatted on Afternic).
+**Why:** "Better Runner" was running-only branding for a multi-modal app (run + walk + hike + cycle). "Threkir" reframes the verb as forward movement rather than jogging, and `threkir.com` was the rare clean `.com` left in the running-adjacent namespace (most short slang `.com`s are squatted on Afternic).
 
 **Why the revision:** the original April 2026 decision deliberately kept the bundle ID at `com.betterrunner.app` to preserve the Play Store / App Store upgrade path. We later confirmed there are no published builds yet — pre-launch was the free window to align internal identifiers with the rebrand. Once published, the rule from the original ADR holds: **never change the bundle ID afterwards**, since that creates a new app listing with no upgrade path, breaks deep links, and forces signing-key reassociation. Twitter→X kept `com.atebits.Tweetie2` long after their rebrand for exactly this reason.
 
@@ -1033,7 +1033,7 @@ The table is provider-keyed so future webhooks (Stripe, Linear, etc.) share the 
 
 ## 53. Web app + domain on AWS (S3 + CloudFront + Lambda + Route 53), not Vercel or Cloudflare Pages
 
-The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Origin Access Control), CloudFront in front, Lambda Function URL for the single SSR route (`/api/coach`), Route 53 + ACM cert in `us-east-1` for `runonward.com` / `www.runonward.com`. Provisioned via **Terraform** (matching the workstation toolchain — see [`/home/jhoward/CLAUDE.md`](https://github.com/jaredhoward/dotfiles)), with **sops + AWS KMS** for the runtime secrets the coach Lambda reads. GitHub Actions deploys via OIDC role assumption (no long-lived AWS keys in `Settings → Secrets`).
+The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Origin Access Control), CloudFront in front, Lambda Function URL for the single SSR route (`/api/coach`), Route 53 + ACM cert in `us-east-1` for `threkir.com` / `www.threkir.com`. Provisioned via **Terraform** (matching the workstation toolchain — see [`/home/jhoward/CLAUDE.md`](https://github.com/jaredhoward/dotfiles)), with **sops + AWS KMS** for the runtime secrets the coach Lambda reads. GitHub Actions deploys via OIDC role assumption (no long-lived AWS keys in `Settings → Secrets`).
 
 **Why:**
 
@@ -1052,7 +1052,7 @@ The web app is deployed to AWS: static SvelteKit build on S3 (private bucket, Or
 **Architecture pinned by this decision:**
 
 ```
-Route 53 (runonward.com, www.runonward.com)
+Route 53 (threkir.com, www.threkir.com)
    │  ALIAS / A
    ▼
 CloudFront distribution (one per env: prod, preview)

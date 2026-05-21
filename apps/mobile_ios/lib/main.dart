@@ -412,7 +412,7 @@ class _RunAppState extends State<RunApp> {
       valueListenable: themeModeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Run Onward',
+          title: 'Threkir',
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,

@@ -1,4 +1,4 @@
-package com.runonward.app
+package com.threkir.app
 
 import android.Manifest
 import android.app.Notification

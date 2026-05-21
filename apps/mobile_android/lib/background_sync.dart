@@ -6,7 +6,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'local_run_store.dart';
 
-const backgroundSyncTaskName = 'com.runonward.backgroundSync';
+const backgroundSyncTaskName = 'com.threkir.backgroundSync';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {

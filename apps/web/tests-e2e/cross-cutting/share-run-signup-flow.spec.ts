@@ -30,7 +30,7 @@ test.describe('/share/run/<id> — signup conversion', () => {
 		try {
 			await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
 
-			await expect(page.getByText('A run on Run Onward')).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByText('A run on Threkir')).toBeVisible({ timeout: 10_000 });
 			await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 			await expect(page.locator('.hero .subtitle')).toBeVisible();
 
@@ -64,7 +64,7 @@ test.describe('/share/run/<id> — signup conversion', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
-			await expect(page.getByText('A run on Run Onward')).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByText('A run on Threkir')).toBeVisible({ timeout: 10_000 });
 			await expect(page.locator('.signup-cta')).toHaveCount(0);
 		} finally {
 			await ctx.close();

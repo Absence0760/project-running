@@ -18,7 +18,7 @@ The `app-store-privacy-auditor` agent has the full per-store checklist. The head
 - `NSPrivacyAccessedAPITypes` (`PrivacyInfo.xcprivacy`) exists + covers every plugin
 - Every required `NSUsageDescription` (Location When In Use + Always, Motion, Bluetooth, HealthKit Share/Update, PhotoLibrary)
 - `ITSAppUsesNonExemptEncryption = false`
-- `UIBackgroundModes` = location + processing; `BGTaskSchedulerPermittedIdentifiers` lists `com.runonward.backgroundSync`
+- `UIBackgroundModes` = location + processing; `BGTaskSchedulerPermittedIdentifiers` lists `com.threkir.backgroundSync`
 - In-app account deletion (Guideline 5.1.1(v))
 - Sign in with Apple at least as prominent as Google (Guideline 4.8)
 - HealthKit data not sent for advertising (Guideline 5.1.3)

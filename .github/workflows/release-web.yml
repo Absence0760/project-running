@@ -1,10 +1,10 @@
 name: Release Web
 
 # Tag-only trigger:
-#   - tag `web@*`     →  prod  →  runonward.com + www.runonward.com
+#   - tag `web@*`     →  prod  →  threkir.com + www.threkir.com
 #
 # A preview deploy on push-to-main is supported by the rest of the
-# workflow (env=preview, ARN_PREVIEW, preview.runonward.com), but the
+# workflow (env=preview, ARN_PREVIEW, preview.threkir.com), but the
 # trigger is left out here because this fork doesn't have the AWS
 # Terraform stacks applied or the GitHub secrets populated — every
 # push to main would otherwise fail the configure-aws-credentials
@@ -178,7 +178,7 @@ jobs:
           echo "bucket=runonward-web-${ENV}-site" >> "$GITHUB_OUTPUT"
           echo "lambda=runonward-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
 
-          if [[ "$ENV" == "prod" ]]; then ALIAS="runonward.com"; else ALIAS="preview.runonward.com"; fi
+          if [[ "$ENV" == "prod" ]]; then ALIAS="threkir.com"; else ALIAS="preview.threkir.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \
             --query "DistributionList.Items[?Aliases.Items != null && contains(Aliases.Items, '${ALIAS}')] | [0].Id" \
             --output text)

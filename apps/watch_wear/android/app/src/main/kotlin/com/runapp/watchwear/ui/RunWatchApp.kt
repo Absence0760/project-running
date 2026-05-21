@@ -365,7 +365,7 @@ private fun BatteryInstructions(
         }
         item {
             Text(
-                "On phone: open Wear OS / Galaxy Wearable → Run Onward → Battery → Unrestricted.",
+                "On phone: open Wear OS / Galaxy Wearable → Threkir → Battery → Unrestricted.",
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.parchment,
                 textAlign = TextAlign.Start,
@@ -374,7 +374,7 @@ private fun BatteryInstructions(
         }
         item {
             Text(
-                "Or on watch: Settings → Apps → Run Onward → Battery → Unrestricted (if shown).",
+                "Or on watch: Settings → Apps → Threkir → Battery → Unrestricted (if shown).",
                 style = MaterialTheme.typography.caption3,
                 color = DuskPalette.haze,
                 textAlign = TextAlign.Start,

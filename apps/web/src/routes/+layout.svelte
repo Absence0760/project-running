@@ -168,9 +168,9 @@
 	<div class="app-shell" class:sidebar-collapsed={sidebarCollapsed}>
 		<nav class="sidebar" class:collapsed={sidebarCollapsed}>
 			<div class="sidebar-head">
-				<a href="/dashboard" class="logo" aria-label="Run Onward">
+				<a href="/dashboard" class="logo" aria-label="Threkir">
 					<img src="/icon-192.png" alt="" class="logo-mark" />
-					<span class="logo-text">Run Onward</span>
+					<span class="logo-text">Threkir</span>
 				</a>
 				<div class="sidebar-head-actions">
 					<NotificationBell />

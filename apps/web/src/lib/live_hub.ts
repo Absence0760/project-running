@@ -1,5 +1,5 @@
 /// Web client for the Go live-hub. When the deploy sets
-/// `PUBLIC_LIVE_HUB_URL` (e.g. `https://live.runonward.com`), the
+/// `PUBLIC_LIVE_HUB_URL` (e.g. `https://live.threkir.com`), the
 /// spectator page swaps from the legacy Supabase Realtime channel to
 /// this WebSocket-streamed source.
 ///

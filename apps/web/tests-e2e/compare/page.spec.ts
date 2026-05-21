@@ -35,7 +35,7 @@ test.describe('/compare — feature comparison vs Strava', () => {
 		await page.goto('/compare');
 		await expect(page.getByRole('heading', { name: /Everything Strava Pro has/ })).toBeVisible();
 		await expect(
-			page.locator('.price-card .price-label', { hasText: 'Run Onward' }),
+			page.locator('.price-card .price-label', { hasText: 'Threkir' }),
 		).toBeVisible();
 		await expect(
 			page.locator('.price-card .price-label', { hasText: 'Strava Free' }),
@@ -66,7 +66,7 @@ test.describe('/compare — feature comparison vs Strava', () => {
 		await expect(tables).toHaveCount(6);
 		const firstTable = tables.first();
 		await expect(firstTable.locator('thead th').nth(0)).toHaveText('Feature');
-		await expect(firstTable.locator('thead th').nth(1)).toHaveText('Run Onward');
+		await expect(firstTable.locator('thead th').nth(1)).toHaveText('Threkir');
 		await expect(firstTable.locator('thead th').nth(2)).toHaveText('Strava Free');
 		await expect(firstTable.locator('thead th').nth(3)).toHaveText('Strava Pro');
 	});
@@ -78,10 +78,10 @@ test.describe('/compare — feature comparison vs Strava', () => {
 		await expect(page.getByText('Partial', { exact: true }).first()).toBeVisible();
 	});
 
-	test('mentions Run Onward + Strava in the body for SEO', async ({ page }) => {
+	test('mentions Threkir + Strava in the body for SEO', async ({ page }) => {
 		await page.goto('/compare');
 		const body = await page.content();
-		expect(body).toMatch(/Run Onward/);
+		expect(body).toMatch(/Threkir/);
 		expect(body).toMatch(/Strava/);
 	});
 

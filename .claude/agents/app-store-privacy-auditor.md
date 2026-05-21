@@ -35,7 +35,7 @@ You are **read-only**. Reporting is the deliverable.
    - `NSCameraUsageDescription` — if we ever shoot a photo in-app (not today)
    - `NSUserTrackingUsageDescription` — if ATT is on
 5. **Encryption export compliance.** `ITSAppUsesNonExemptEncryption` in `Info.plist`. We use HTTPS only — exempt. Verify the key is `false` (or `ITSEncryptionExportComplianceCode` set if non-exempt).
-6. **Background modes (`UIBackgroundModes`).** `location` + `processing` (for the workmanager task `com.runonward.backgroundSync` per twin-test `architecture_guards_test.dart`). Verify `BGTaskSchedulerPermittedIdentifiers` has it.
+6. **Background modes (`UIBackgroundModes`).** `location` + `processing` (for the workmanager task `com.threkir.backgroundSync` per twin-test `architecture_guards_test.dart`). Verify `BGTaskSchedulerPermittedIdentifiers` has it.
 7. **Account deletion.** Apple Guideline 5.1.1(v): apps with account creation must let the user delete their account *in-app*. Verify the iOS settings screen has the route and that it reaches `delete-account`.
 8. **Sign in with Apple.** Required if the app offers any third-party social sign-in (Google) — Guideline 4.8. We have both Google and Apple wired today — confirm Apple is at least as prominent.
 9. **HealthKit handling rules.** Health data must not be transmitted to a third-party advertising service or used for advertising — Guideline 5.1.3. Sanity check the coach prompt builder isn't sending HR + dob to Anthropic *for advertising*. (It isn't — but the disclosure must say so.)

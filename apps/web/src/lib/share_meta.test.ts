@@ -54,24 +54,24 @@ test('formatDateStable — null / malformed returns empty', () => {
 // ---------------- buildRunShareTitle ----------------
 
 test('buildRunShareTitle — null run keeps the generic fallback', () => {
-	assert.equal(buildRunShareTitle(null), 'Run — Run Onward');
+	assert.equal(buildRunShareTitle(null), 'Run — Threkir');
 });
 
 test('buildRunShareTitle — full meta produces a deterministic title', () => {
 	assert.equal(
 		buildRunShareTitle({ distance_m: 5000, started_at: '2026-05-11T00:00:00Z' }),
-		'5.0 km run on 11 May 2026 — Run Onward',
+		'5.0 km run on 11 May 2026 — Threkir',
 	);
 });
 
 test('buildRunShareTitle — distance-only run omits date', () => {
-	assert.equal(buildRunShareTitle({ distance_m: 10000 }), '10.0 km run — Run Onward');
+	assert.equal(buildRunShareTitle({ distance_m: 10000 }), '10.0 km run — Threkir');
 });
 
 test('buildRunShareTitle — date-only run omits distance', () => {
 	assert.equal(
 		buildRunShareTitle({ started_at: '2026-05-11T00:00:00Z' }),
-		'Run on 11 May 2026 — Run Onward',
+		'Run on 11 May 2026 — Threkir',
 	);
 });
 
@@ -81,26 +81,26 @@ test('buildRunShareTitle — display_name folds into the title when provided', (
 			{ distance_m: 5000, started_at: '2026-05-11T00:00:00Z' },
 			'Jared',
 		),
-		'5.0 km run by Jared on 11 May 2026 — Run Onward',
+		'5.0 km run by Jared on 11 May 2026 — Threkir',
 	);
 });
 
 test('buildRunShareTitle — display_name with distance only', () => {
 	assert.equal(
 		buildRunShareTitle({ distance_m: 10000 }, 'Alex'),
-		'10.0 km run by Alex — Run Onward',
+		'10.0 km run by Alex — Threkir',
 	);
 });
 
 test('buildRunShareTitle — null display_name falls back to anonymous shape', () => {
 	assert.equal(
 		buildRunShareTitle({ distance_m: 5000, started_at: '2026-05-11T00:00:00Z' }, null),
-		'5.0 km run on 11 May 2026 — Run Onward',
+		'5.0 km run on 11 May 2026 — Threkir',
 	);
 });
 
 test('buildRunShareTitle — display_name with no run meta still attributes', () => {
-	assert.equal(buildRunShareTitle({}, 'Morgan'), 'Run by Morgan — Run Onward');
+	assert.equal(buildRunShareTitle({}, 'Morgan'), 'Run by Morgan — Threkir');
 });
 
 // ---------------- buildRunShareDescription ----------------
@@ -111,7 +111,7 @@ test('buildRunShareDescription — meta is appended before the lead', () => {
 		started_at: '2026-05-11T00:00:00Z',
 	});
 	assert.ok(desc.startsWith('5.0 km on 11 May 2026.'));
-	assert.ok(desc.includes('Map, splits, and elevation on Run Onward.'));
+	assert.ok(desc.includes('Map, splits, and elevation on Threkir.'));
 });
 
 test('buildRunShareDescription — display_name appears next to the distance', () => {
@@ -125,7 +125,7 @@ test('buildRunShareDescription — display_name appears next to the distance', (
 test('buildRunShareDescription — null run keeps generic copy', () => {
 	assert.equal(
 		buildRunShareDescription(null),
-		'View a public run on Run Onward — map, splits, elevation, kudos.',
+		'View a public run on Threkir — map, splits, elevation, kudos.',
 	);
 });
 
@@ -134,13 +134,13 @@ test('buildRunShareDescription — null run keeps generic copy', () => {
 test('buildRouteShareTitle — uses the route name when present', () => {
 	assert.equal(
 		buildRouteShareTitle({ name: 'Hampstead Heath loop' }),
-		'Hampstead Heath loop — Run Onward',
+		'Hampstead Heath loop — Threkir',
 	);
 });
 
 test('buildRouteShareTitle — missing name falls back to generic', () => {
-	assert.equal(buildRouteShareTitle({ distance_m: 5000 }), 'Route — Run Onward');
-	assert.equal(buildRouteShareTitle(null), 'Route — Run Onward');
+	assert.equal(buildRouteShareTitle({ distance_m: 5000 }), 'Route — Threkir');
+	assert.equal(buildRouteShareTitle(null), 'Route — Threkir');
 });
 
 // ---------------- buildRouteShareDescription ----------------
@@ -164,5 +164,5 @@ test('buildRouteShareDescription — elevation is appended when present', () => 
 });
 
 test('buildRouteShareDescription — null returns the generic fallback', () => {
-	assert.equal(buildRouteShareDescription(null), 'A public route on Run Onward.');
+	assert.equal(buildRouteShareDescription(null), 'A public route on Threkir.');
 });

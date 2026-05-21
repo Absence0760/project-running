@@ -336,7 +336,7 @@
 </script>
 
 <svelte:head>
-	<title>{profile?.display_name ?? 'Runner'} — Run Onward</title>
+	<title>{profile?.display_name ?? 'Runner'} — Threkir</title>
 </svelte:head>
 
 <div class="page">

@@ -8,7 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// Today the mobile clients defer OAuth to the web (`_connectStrava`
 /// in `settings_screen.dart` opens `https://run.app/settings/
 /// integrations` in the browser). Once a native URL-scheme callback
-/// lands (e.g. `runonward://strava-callback`) the connect button can
+/// lands (e.g. `threkir://strava-callback`) the connect button can
 /// invoke [stravaAuthUrl] to build the authorize URL with a mobile-
 /// flavoured redirect, and [completeStravaOAuth] (defined in
 /// `ApiClient.completeStravaOAuth` — see api_client.dart) to exchange
@@ -27,11 +27,11 @@ const _kStravaScope = 'activity:read_all,read';
 
 /// Custom URL scheme the in-app OAuth flow listens for. Must match a
 /// scheme registered in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function
-/// side AND a `<data android:scheme="runonward" />` intent-filter on
+/// side AND a `<data android:scheme="threkir" />` intent-filter on
 /// the `flutter_web_auth_2` callback activity (see AndroidManifest).
 /// iOS doesn't need any Info.plist registration —
 /// ASWebAuthenticationSession matches the scheme at runtime.
-const String kStravaCallbackScheme = 'runonward';
+const String kStravaCallbackScheme = 'threkir';
 const String kStravaCallbackUri = '$kStravaCallbackScheme://strava-callback';
 
 /// Result of parsing a Strava OAuth callback URL.
@@ -50,7 +50,7 @@ class StravaCallback {
   bool get isSuccess => code != null && code!.isNotEmpty && error == null;
 }
 
-/// Parse a `runonward://strava-callback?code=...&scope=...` URL into
+/// Parse a `threkir://strava-callback?code=...&scope=...` URL into
 /// its components. Pure helper kept out of the Settings screen so the
 /// success / decline / malformed branches can be unit-tested without
 /// invoking the auth session.

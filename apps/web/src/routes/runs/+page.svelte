@@ -444,7 +444,7 @@
 </script>
 
 <svelte:head>
-	<title>My runs — Run Onward</title>
+	<title>My runs — Threkir</title>
 </svelte:head>
 
 <div class="page">

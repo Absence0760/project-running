@@ -317,9 +317,9 @@
 </script>
 
 <svelte:head>
-	<title>Live Run — Run Onward</title>
+	<title>Live Run — Threkir</title>
 	<meta name="description" content="Watch a runner's progress in real time" />
-	<meta property="og:title" content="Live Run — Run Onward" />
+	<meta property="og:title" content="Live Run — Threkir" />
 	<meta property="og:description" content="Watch a runner's progress in real time" />
 	<meta property="og:type" content="website" />
 </svelte:head>
@@ -329,7 +329,7 @@
 	<header class="live-header">
 		<a href="/" class="live-logo">
 			<img src="/icon-192.png" alt="" class="live-logo-mark" />
-			Run Onward
+			Threkir
 		</a>
 		<div
 			class="live-badge"
@@ -365,7 +365,7 @@
 				The link may be stale, the run may have finished, or it may be private. Ask the runner
 				to share a new live link if you expected to see something here.
 			</p>
-			<a href="/" class="btn btn-primary">Back to Run Onward</a>
+			<a href="/" class="btn btn-primary">Back to Threkir</a>
 		</div>
 	{:else}
 		<section class="live-strip" aria-label="Live status">

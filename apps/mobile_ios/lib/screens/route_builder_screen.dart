@@ -529,7 +529,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
             children: [
               TileLayer(
                 urlTemplate: _tileUrl,
-                userAgentPackageName: 'com.runonward.app',
+                userAgentPackageName: 'com.threkir.app',
                 maxNativeZoom: 19,
                 maxZoom: 22,
                 tileProvider: CachedTileProvider(

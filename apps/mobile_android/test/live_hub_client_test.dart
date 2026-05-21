@@ -23,7 +23,7 @@ void main() {
       expect(c.isConfigured, isFalse);
     });
     test('true when baseUrl is non-empty', () {
-      const c = LiveHubClient(baseUrl: 'https://live.runonward.com');
+      const c = LiveHubClient(baseUrl: 'https://live.threkir.com');
       expect(c.isConfigured, isTrue);
     });
   });
@@ -33,18 +33,18 @@ void main() {
         () async {
       final f = _RecordingFetcher();
       final c = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: f.call,
       );
       await c.pushPing(runId: 'run-1', lat: 47.37, lng: 8.54);
-      expect(f.lastUrl!.host, 'live.runonward.com');
+      expect(f.lastUrl!.host, 'live.threkir.com');
       expect(f.lastUrl!.path, '/v1/live/run-1/push');
     });
 
     test('URL-encodes the run id', () async {
       final f = _RecordingFetcher();
       final c = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: f.call,
       );
       // Realistic IDs are UUIDs so this normally doesn't matter, but
@@ -57,7 +57,7 @@ void main() {
     test('strips a trailing slash from baseUrl', () async {
       final f = _RecordingFetcher();
       final c = LiveHubClient(
-        baseUrl: 'https://live.runonward.com/',
+        baseUrl: 'https://live.threkir.com/',
         fetcher: f.call,
       );
       await c.pushPing(runId: 'run-1', lat: 0, lng: 0);
@@ -67,7 +67,7 @@ void main() {
     test('omits optional fields when null', () async {
       final f = _RecordingFetcher();
       final c = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: f.call,
       );
       await c.pushPing(runId: 'run-1', lat: 47.37, lng: 8.54);
@@ -84,7 +84,7 @@ void main() {
     test('includes optional fields when set', () async {
       final f = _RecordingFetcher();
       final c = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: f.call,
       );
       await c.pushPing(
@@ -107,7 +107,7 @@ void main() {
     test('returns the fetcher status code', () async {
       final f = _RecordingFetcher(status: 202);
       final c = LiveHubClient(
-        baseUrl: 'https://live.runonward.com',
+        baseUrl: 'https://live.threkir.com',
         fetcher: f.call,
       );
       final s = await c.pushPing(runId: 'run-1', lat: 0, lng: 0);
@@ -119,10 +119,10 @@ void main() {
         throw StateError('network down');
       }
 
-      const c = LiveHubClient(baseUrl: 'https://live.runonward.com');
+      const c = LiveHubClient(baseUrl: 'https://live.threkir.com');
       expect(
         () => LiveHubClient(
-                baseUrl: 'https://live.runonward.com', fetcher: bomb)
+                baseUrl: 'https://live.threkir.com', fetcher: bomb)
             .pushPing(runId: 'run-1', lat: 0, lng: 0),
         throwsA(isA<StateError>()),
       );
