@@ -1188,6 +1188,17 @@ class ApiClient {
   /// with ILIKE, excludes self, hydrates viewer→target follow edges
   /// so the row's Follow toggle starts in the right state. Mirrors
   /// `searchPeople` in `apps/web/src/lib/data.ts`.
+  /// Display-name search on `user_profiles`, ranked by web parity:
+  /// public-runs count desc, then shared-clubs count desc, then
+  /// display name asc. Mirrors `apps/web/src/lib/data.ts:searchPeople`
+  /// + `apps/web/src/lib/search_ranking.ts:comparePeopleRank`.
+  ///
+  /// Before this round, mobile fetched exactly `limit` candidates and
+  /// returned them in whatever order PostgREST handed back. Web
+  /// over-fetched 3× then ranked, so a search for a common first name
+  /// surfaced active users above zero-run / zero-club accounts (the
+  /// anti-spam phase-1 ranking). Mobile now over-fetches + applies the
+  /// same comparator so search results match across platforms.
   Future<List<PeopleSuggestion>> searchPeople(
     String query, {
     int limit = 20,
@@ -1195,17 +1206,42 @@ class ApiClient {
     final term = query.trim();
     if (term.isEmpty) return const [];
     final viewerId = _client.auth.currentUser?.id;
+    final candidateLimit = limit * 3 > 120 ? 120 : limit * 3;
     final profiles = await _client
         .from(UserProfileRow.table)
         .select('id, display_name, avatar_url')
         .ilike(UserProfileRow.colDisplayName, '%$term%')
-        .limit(limit);
+        .limit(candidateLimit);
     final ids = profiles
         .map<String>((p) => p['id'] as String)
         .where((id) => id != viewerId)
         .toList();
     if (ids.isEmpty) return const [];
-    return _hydratePeopleSuggestions(ids, viewerId, sharedCounts: const {});
+    final hydrated =
+        await _hydratePeopleSuggestions(ids, viewerId, sharedCounts: const {});
+    hydrated.sort(comparePeopleRank);
+    return hydrated.take(limit).toList();
+  }
+
+  /// Pure comparator mirroring `comparePeopleRank` in
+  /// `apps/web/src/lib/search_ranking.ts`. Sorts by:
+  ///   1. `publicRunsCount` desc — active users surface above bots
+  ///   2. `sharedClubs` desc — co-members tied on activity surface higher
+  ///   3. `displayName` asc — stable alphabetical tie-break
+  ///
+  /// Zero-runs accounts aren't *hidden* — a friend the viewer
+  /// searches for by exact name may have posted no runs yet — they
+  /// just rank last within the result set. Lifted to a static so
+  /// tests can pin the contract against the web equivalent.
+  @visibleForTesting
+  static int comparePeopleRank(PeopleSuggestion a, PeopleSuggestion b) {
+    if (b.publicRunsCount != a.publicRunsCount) {
+      return b.publicRunsCount.compareTo(a.publicRunsCount);
+    }
+    if (b.sharedClubs != a.sharedClubs) {
+      return b.sharedClubs.compareTo(a.sharedClubs);
+    }
+    return (a.displayName ?? '').compareTo(b.displayName ?? '');
   }
 
   /// Suggested people for the social People surface: members of the
