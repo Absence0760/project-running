@@ -271,15 +271,19 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
 | `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
 
-## Donation flow (user perspective)
+## One-off donation flow (user perspective)
 
 1. User navigates to `/settings/upgrade` (linked from sidebar and
    settings layout).
-2. Page shows a transparent cost breakdown (server costs, dev time)
-   with progress bars showing donation coverage for the current month.
-3. User picks a donation tier (e.g. "Buy me a gel" / "Cover a day of
-   servers") and is directed to an external payment link.
-4. Project owner updates `monthly_funding` when donations land.
+2. Page shows the two-card layout: Pro plan card ($9.99 / month) plus
+   a one-off **Donate** button.
+3. Tapping Donate opens an external payment link in a new tab.
+
+The tiered donation picker, transparent cost breakdown, progress bars,
+and donor count that existed under the previous donations-only model
+were removed when the Pro tier was reintroduced — see
+[decisions.md § 23](decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
+The `monthly_funding` table is retained but no longer read by the UI.
 
 ## Payment flow (retained for future re-gating)
 

@@ -44,7 +44,7 @@ See [features § Cloud sync and auth](features.md#cloud-sync-and-auth).
 |---|---|---|---|---|---|---|
 | Email / password sign-in | ✓ | ✓ | ✓ | ✗ | ✗ | Watches authenticate by piggy-backing on the paired phone's Supabase session (handed over via Watch Connectivity / companion app), not through a native sign-in UI. |
 | Google OAuth | ✓ | Partial | ✓ | ✗ | ✗ | iOS: scaffolded, needs provider credentials. |
-| Apple OAuth | ✓ | Partial | ✓ | ✗ | ✗ | iOS: behind `_kAppleSignInEnabled = false` pending Services ID setup. |
+| Apple OAuth | ✓ | Partial | ✗ | ✗ | ✗ | Android: native `sign_in_with_apple` SDK via `sign_in_screen.dart`. iOS: behind `_kAppleSignInEnabled = false` pending Services ID setup. Web: button rendered behind a "Soon" pill, `handleAppleSignIn` surfaces a "coming soon" toast — Apple Services-ID configuration for the web OAuth flow is the unblocking step. |
 | Auth callback / deep-link handler | ✓ | ✓ | ✓ | N/A | N/A | Watches never handle the OAuth redirect directly. |
 | Onboarding flow (first launch permissions) | ✓ | Partial | N/A | N/A | N/A | Web has no location permission pre-gate; the browser prompts per-feature. |
 | Offline-only mode (no auth required) | ✓ | ✗ | N/A | N/A | N/A | Architectural exception for web: the web app is cloud-first by design — every view reads from Supabase, sign-in is the entry point, there is no local-first run database in the browser. Mobile keeps runs local first and syncs opportunistically; the watches inherit auth from their phone. |

@@ -128,6 +128,31 @@ Web env vars:
 - `PUBLIC_STRAVA_CLIENT_ID` — public client ID baked into the OAuth URL.
 - `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` — Edge Function only.
 
+### Auth flow (mobile, shipped)
+
+Native in-app OAuth via `flutter_web_auth_2` — Chrome Custom Tabs on Android, `ASWebAuthenticationSession` on iOS. The mobile flow ends up at the same `strava-import` Edge Function as web; only the OAuth round-trip differs. The user never leaves the app and never sees a browser tab.
+
+```
+1. User taps Strava tile in Settings → Integrations.
+2. `_connectStrava` (settings_screen.dart) builds the same /oauth/authorize
+   URL via `stravaAuthUrl(redirectUri)` in `lib/strava.dart`. Redirect URI
+   uses the `threkir://strava-callback` custom scheme.
+3. `WebAuth.authenticate(url)` opens Chrome Custom Tabs (Android) or
+   ASWebAuthenticationSession (iOS); user approves on Strava.
+4. The custom-scheme redirect lands back in the app; the session closes
+   and returns the callback URL.
+5. `parseStravaCallback` extracts code + scope; `ApiClient.completeStravaOAuth`
+   POSTs to `strava-import` with `action: 'connect'` — same code-for-token
+   exchange + 90-day backfill as web.
+6. "Sync now" tile calls `ApiClient.syncStrava` (`action: 'sync'`).
+   "Disconnect" deletes the integrations row.
+```
+
+Operational pre-requisites:
+- The `threkir://strava-callback` URI must be allow-listed in the Strava developer console **and** in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function.
+- Falls back to the web browser hand-off on builds where the client ID is unconfigured (matches the existing `url_launcher` path used before native OAuth shipped).
+- `lib/strava.dart` mirrors `apps/web/src/lib/strava.ts` and is unit-tested (7 tests on URL building + configured-state checks).
+
 ### Webhook (real-time sync)
 
 Register once per app (not per user). Strava pushes a notification within seconds of a user creating, updating, or deleting an activity.

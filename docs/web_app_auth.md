@@ -12,9 +12,9 @@ Supported sign-in methods:
 
 - **Email + password** (sign-up via `/login`'s "Sign up" toggle, sign-in via the same form)
 - **Google OAuth** (`signInWithOAuth({ provider: 'google' })`)
-- **Apple OAuth** (`signInWithOAuth({ provider: 'apple' })`)
+- **Apple OAuth** — *not yet shipped on web.* The button is rendered behind a "Soon" pill and clicking it surfaces a "coming soon" toast (`apps/web/src/routes/login/+page.svelte` `handleAppleSignIn`). Apple Services-ID configuration for the web OAuth flow is the unblocking step. Apple Sign-In *is* wired on mobile via the native `sign_in_with_apple` SDK — see `apps/mobile_android/lib/screens/sign_in_screen.dart`.
 
-Any one user can have **multiple identities linked**. A user who signed up with email can attach Google and Apple from `/settings/account` so the same account is reachable from any of those methods.
+Any one user can have **multiple identities linked**. A user who signed up with email can attach Google from `/settings/account` so the same account is reachable from either method. Apple identity linking will follow once the web Apple OAuth flow ships.
 
 ---
 
@@ -57,7 +57,7 @@ The shape is hydrated from `user_profiles` on every sign-in. If the row doesn't 
 | Method | Description |
 |---|---|
 | `auth.signInWithGoogle()` | Kicks off Google OAuth via Supabase; redirects to the provider |
-| `auth.signInWithApple()` | Kicks off Apple OAuth via Supabase; redirects to the provider |
+| `auth.signInWithApple()` | Defined in the store but **not invoked from the UI yet** — the login page's Apple button surfaces a "coming soon" toast. Will be wired once Apple Services-ID setup is complete. |
 | `auth.refreshSession()` | Re-reads the Supabase session (useful after OAuth return) |
 | `auth.logout()` | `supabase.auth.signOut()` + clears local state |
 
