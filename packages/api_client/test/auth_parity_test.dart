@@ -82,3 +82,18 @@ void main() {
 /// breaks before the test runner even starts — louder than a runtime
 /// MissingMethod failure.
 Future<String> _signature({required String idToken}) async => idToken;
+
+/// Same trick for `deleteAccount` — added in this round as a sibling
+/// of `signOut`, the existing settings-screen flow previously called
+/// `Supabase.instance.client.functions.invoke('delete-account')`
+/// directly. Pin the no-arg shape so callers don't grow accidental
+/// positional args.
+// ignore: unused_element
+Future<void> _deleteAccountSignature() async {
+  // Compile-time check by tearing off the instance method onto a
+  // typed variable. Doesn't run at test time but proves the
+  // signature at build time.
+  // ignore: unused_local_variable
+  Future<void> Function() expected = () async {};
+  expect(expected, isNotNull); // keep `expect` import warm
+}

@@ -351,6 +351,29 @@ class ApiClient {
     await _client.auth.signOut();
   }
 
+  /// Delete the signed-in user's account. Invokes the `delete-account`
+  /// Edge Function which cascades the deletion through every public
+  /// FK to `auth.users` (decisions.md §56). The caller is responsible
+  /// for the confirmation dialog and the post-delete sign-out + nav.
+  ///
+  /// Mirrors `apps/web/src/routes/settings/account/+page.svelte`'s
+  /// `handleDeleteAccount` — same EF, same auth header derived from
+  /// the session. The settings screen previously called
+  /// `Supabase.instance.client.functions.invoke('delete-account')`
+  /// directly, bypassing the ApiClient abstraction; this method
+  /// keeps every auth / account flow on the same surface.
+  Future<void> deleteAccount() async {
+    final res = await _client.functions.invoke('delete-account');
+    // The EF returns 2xx on success and embeds an `error` field on
+    // failure paths. Surface that as a typed exception so the
+    // caller can show a friendly message — matches how web reads
+    // `body.error` off a non-2xx response.
+    final body = res.data;
+    if (body is Map && body['error'] is String) {
+      throw Exception(body['error'] as String);
+    }
+  }
+
   /// Save a completed [Run] to the backend.
   ///
   /// The GPS track is uploaded as a gzipped JSON file to the `runs` Storage

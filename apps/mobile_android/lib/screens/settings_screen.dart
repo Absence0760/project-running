@@ -1205,8 +1205,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirm != true) return;
     if (!mounted) return;
     try {
-      await Supabase.instance.client.functions.invoke('delete-account');
-      await widget.apiClient?.signOut();
+      // Route through ApiClient instead of `Supabase.instance.client`
+      // directly — keeps every auth / account flow on the same
+      // abstraction so the bootstrap guards in `_client` apply
+      // uniformly. Same EF behind both web + mobile.
+      final api = widget.apiClient;
+      if (api == null) {
+        showTopBanner(context, 'Sign in first to delete your account.');
+        return;
+      }
+      await api.deleteAccount();
+      await api.signOut();
       if (mounted) {
         showTopBanner(context, 'Account deleted');
         setState(() {});
