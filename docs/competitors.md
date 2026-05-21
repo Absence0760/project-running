@@ -282,6 +282,55 @@ The pricing sweet spot is keeping everything Strava paywalls as free in this app
 
 ---
 
+## Multi-modal competitive landscape (Phase 4 — run + lift + meal)
+
+Forward-looking. Phase 4 expands the product from running-only to running + gym + nutrition ([roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition), [decisions.md § 63](decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)). The competitive set is entirely different from the running incumbents profiled above — no major player has the run + lift + meal combination as a first-class product. The space stays fragmented because each app's DNA prevents the next modality: nutrition apps treat exercise as "calories burned," strength apps don't understand cardio, running apps treat strength as cross-training rather than a parallel discipline, and the OS-level aggregators (Apple Health, Google Fit) treat everything as data rather than a guided experience.
+
+### Ecosystem aggregators — the "data layer" play
+
+- **Apple Health + Fitness+** — Health is the read-aggregator (logs all three modalities via third-party writes or native Apple Watch capture), Fitness+ is the workout-content product (~$9.99/month), Apple Watch is the capture hardware. Closest thing on the market to "everything in one place," but Health isn't really an active-use product — it's a data layer that surfaces other apps' writes. Nutrition surface is anaemic; users still pair it with MyFitnessPal.
+- **Google Fit / Samsung Health** — the same play with weaker execution. Both deprioritised by their parent companies.
+
+**Verdict:** Strong as a *data hub*, weak as an active-use product. The defensible angle isn't to compete with the aggregator — it's to be the *better source* that writes into the aggregator while owning the user-facing experience.
+
+### Content / coaching-led — "do all three" via prescription
+
+- **Centr** (Chris Hemsworth, ~$30/month) — explicitly pitches strength + cardio + meal plans + mindfulness. Celebrity-content-led, not a logging tool. Closest pitch overlap with multi-modal threkir, but the model is "follow our workouts and recipes" rather than "log what you actually did."
+- **Future** (~$150/month) — 1:1 human coaching across modalities. Coach-mediated, not self-service.
+- **Caliber** — strength + nutrition + cardio with coaching. Running is the weak point.
+
+**Verdict:** The pitch overlaps but the model is opposite — they're content / coaching products that *happen to* span modalities; threkir is a logging / data product that *happens to* span modalities. Different buyer.
+
+### Deep in one modality, weak bolt-on of another
+
+- **MyFitnessPal** — nutrition-first, ~$19.99/month Premium. Workout logging has existed for years but runners don't use it for runs. Still the dominant nutrition player by a wide margin.
+- **Hevy** — strength-first, ~$5.99/month Hevy Pro. Added nutrition tracking in 2024 but it's secondary. Running is not native.
+- **Strong** — strength training only; deliberately scoped.
+- **Garmin Connect** — strong across run / ride / swim / strength; nutrition is essentially absent.
+- **Strava** — running / cycling; nutrition absent, strength logging exists but is barely used.
+- **Fitbit (Google)** — wearable-first; nutrition logging is famously bad and Google's ownership has stalled investment since the acquisition.
+
+**Verdict:** Each is locked in by its DNA. The bolt-ons exist but don't pull users from the dominant app in the other modality. A serious runner using MyFitnessPal for food is *also* using Strava or Garmin for runs — the bolt-on doesn't displace.
+
+### B2B coaching platforms
+
+- **Trainerize** — supports run + lift + nutrition but it's trainer-facing, not consumer-facing. Users log under their trainer's roof; trainers pay the subscription.
+
+**Verdict:** Different market. Relevant only as evidence that the multi-modal data model is solvable.
+
+### Where threkir slots in
+
+The defensible position is **runner-led, with gym + nutrition as the natural complement to running performance** — a position no current player owns:
+
+- **Strava and Runna** won't add nutrition as first-class (wrong DNA — Strava is social-graph-led, Runna is plan-led).
+- **MyFitnessPal** can't get running right; improving it would cannibalise its Strava-pair-up audience.
+- **Centr / Future** are content-led, not data-led — runners who care about pace, splits, and HR zones don't get what they need from a coaching app.
+- **Aggregators (Apple / Google)** are data layers, not active-use products. Users still need a destination app that surfaces and reasons about the combined view.
+
+The realistic upside is being the runner's chosen destination across all three modalities, with the cross-domain view (mileage + lift volume + protein intake on one Home) as the wedge against any one-modality incumbent.
+
+---
+
 ## User acquisition opportunities
 
 ### SEO — public route pages
@@ -313,6 +362,10 @@ NRC dropping Wear OS support leaves a gap. Android users with a Pixel Watch or G
 
 **Strava API rate limits at scale.** The default Strava API quota is 2,000 requests per day across all users. With many connected users this gets tight quickly. Apply for a quota increase early — Strava reviews these individually.
 
+**Multi-modal incumbents could squeeze the niche (Phase 4 risk).** Apple Health, MyFitnessPal, and Strava could each add the missing two modalities to their stack. Apple is the most likely — Health is already the data layer, Apple Watch the capture hardware, and adding a first-class nutrition logging surface is months of work, not years. Mitigation: stay runner-led from the data shape down, so even if Apple adds nutrition, runners still need a destination that surfaces and reasons about the combined view in a runner-specific way. Stay light on lock-in (full export of every modality in standard formats) so a user who eventually defaults to Apple Health doesn't feel trapped here.
+
+**Acquisition over build is the historical pattern in this space.** Strava acquired Runna (2025); Under Armour acquired then divested MyFitnessPal; Google acquired Fitbit and then stalled it. A specific, runner-led multi-modal product is acquisition-target shape, which is upside if priced into the plan and downside if user-trust suffers from a sale signal. No action needed today; pin once Phase 4 lights start showing real DAU.
+
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026*
