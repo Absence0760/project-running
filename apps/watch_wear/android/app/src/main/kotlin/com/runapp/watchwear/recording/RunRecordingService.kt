@@ -237,17 +237,20 @@ class RunRecordingService : Service() {
                 if (RecordingRepository.metrics.value.stage !=
                     RecordingRepository.Stage.Recording) continue
 
-                val jobAlive = gpsJob?.isActive == true
                 val now = System.currentTimeMillis()
-                val silentMidRun = lastPointAtMs > 0 &&
-                    (now - lastPointAtMs) > GPS_STALL_MS
-
-                if (!jobAlive || silentMidRun) {
+                // Decision in `shouldResubscribeGps` — unit-tested
+                // independently (see `GpsRetryDecisionTest`).
+                val decision = shouldResubscribeGps(
+                    jobAlive = gpsJob?.isActive == true,
+                    lastPointAtMs = lastPointAtMs,
+                    nowMs = now,
+                )
+                if (decision.shouldResubscribe) {
                     subscribeToGps()
                     // Reset the staleness window so we don't thrash if
                     // the fresh subscription also takes a few seconds
                     // to start emitting.
-                    if (silentMidRun) lastPointAtMs = now
+                    if (decision.triggeredByStall) lastPointAtMs = now
                 }
             }
         }
@@ -675,7 +678,9 @@ class RunRecordingService : Service() {
         // — set well above the 1 s request cadence so a normal hiccup
         // doesn't retrigger a fresh subscription.
         private const val GPS_RETRY_INTERVAL_MS = 10_000L
-        private const val GPS_STALL_MS = 30_000L
+        // GPS_STALL_MS lives in `GpsRetryDecision.kt` so the
+        // resubscribe decision can be unit-tested. Re-exported here
+        // by reference, not redeclared, to keep one source of truth.
 
         fun start(
             context: Context,

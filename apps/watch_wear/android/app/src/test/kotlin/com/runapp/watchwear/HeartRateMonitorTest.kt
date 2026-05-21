@@ -105,4 +105,75 @@ class HeartRateMonitorTest {
         assertFalse(HeartRateMonitor.isValidBpm(Double.POSITIVE_INFINITY))
         assertFalse(HeartRateMonitor.isValidBpm(Double.NEGATIVE_INFINITY))
     }
+
+    // ─────────── bpmFromSampleValue (Health Services value coercion) ───────────
+
+    @Test
+    fun `bpmFromSampleValue returns null on null input`() {
+        // The SDK's `.value` accessor can return null on a
+        // degenerate frame. Pin the null short-circuit so the
+        // callback can `?: continue` without an NPE.
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue(null))
+    }
+
+    @Test
+    fun `bpmFromSampleValue parses Double sample`() {
+        // Most Health Services emitters use Double on the wire.
+        assertEquals(142, HeartRateMonitor.bpmFromSampleValue(142.0))
+        assertEquals(60, HeartRateMonitor.bpmFromSampleValue(60.0))
+    }
+
+    @Test
+    fun `bpmFromSampleValue parses Float sample`() {
+        // Some SDK versions use Float — the same `.toString().toDoubleOrNull()`
+        // cascade handles both.
+        assertEquals(142, HeartRateMonitor.bpmFromSampleValue(142.0f))
+    }
+
+    @Test
+    fun `bpmFromSampleValue parses Int sample (whole-number HR)`() {
+        // A few emitters round to Int before delivery. Confirm
+        // the parser handles that shape too.
+        assertEquals(142, HeartRateMonitor.bpmFromSampleValue(142))
+    }
+
+    @Test
+    fun `bpmFromSampleValue parses String sample`() {
+        // Defence-in-depth: if a future SDK shape stringifies
+        // before delivery, the parser still produces an Int.
+        assertEquals(142, HeartRateMonitor.bpmFromSampleValue("142"))
+        assertEquals(142, HeartRateMonitor.bpmFromSampleValue("142.0"))
+    }
+
+    @Test
+    fun `bpmFromSampleValue truncates fractional readings`() {
+        // 142.7 → 142, not 143. The watch's avg_bpm averaging
+        // works in integer space (the Int conversion is canonical
+        // before averaging starts).
+        assertEquals(142, HeartRateMonitor.bpmFromSampleValue(142.7))
+    }
+
+    @Test
+    fun `bpmFromSampleValue rejects out-of-range values`() {
+        // The validity gate (30..230) applies before the Int
+        // conversion. A 500-bpm spike returns null, not 500.
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue(500.0))
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue(20.0))
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue(0.0))
+    }
+
+    @Test
+    fun `bpmFromSampleValue rejects non-numeric Strings`() {
+        // A "0xff" or "n/a" can't parse to Double — null out.
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue("n/a"))
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue("nope"))
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue(""))
+    }
+
+    @Test
+    fun `bpmFromSampleValue rejects NaN`() {
+        // Same NaN-trap as isValidBpm — explicitly pin it survives
+        // the parse + clamp cascade.
+        assertEquals(null, HeartRateMonitor.bpmFromSampleValue(Double.NaN))
+    }
 }

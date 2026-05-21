@@ -37,11 +37,13 @@ class HeartRateMonitor(context: Context) {
                 if (!isAvailable) return
                 val points = data.getData(DataType.HEART_RATE_BPM)
                 for (p in points) {
-                    val bpm = (p as? SampleDataPoint<*>)?.value?.toString()?.toDoubleOrNull()
-                        ?: p.value.toString().toDoubleOrNull()
-                        ?: continue
-                    if (!isValidBpm(bpm)) continue
-                    trySend(bpm.toInt())
+                    // SDK shape varies by Health Services version
+                    // — `SampleDataPoint<*>.value` or `DataPoint.value`.
+                    // Both stringify to a parseable Double on a real
+                    // device; the cascade survives either shape.
+                    val rawValue = (p as? SampleDataPoint<*>)?.value ?: p.value
+                    val bpm = bpmFromSampleValue(rawValue) ?: continue
+                    trySend(bpm)
                 }
             }
         }
@@ -74,5 +76,23 @@ class HeartRateMonitor(context: Context) {
         /// drop legitimate floor / ceiling readings.
         fun isValidBpm(bpm: Double): Boolean =
             bpm >= MIN_VALID_BPM && bpm <= MAX_VALID_BPM
+
+        /// Validate + truncate a raw `DataPointContainer` sample value
+        /// into the typed `Int` BPM that flows through the watch's
+        /// HR average. The SDK boxes the numeric in different
+        /// shapes across versions; the caller does the cast cascade,
+        /// then this helper does the stringify → Double → validity
+        /// gate → Int conversion.
+        ///
+        /// Returns null when the value can't be parsed OR fails the
+        /// 30..230 validity gate. Extracted so the parse + clamp
+        /// path is unit-testable without booting Health Services
+        /// (the SDK's `SampleDataPoint` isn't on the JVM-only test
+        /// classpath).
+        fun bpmFromSampleValue(rawValue: Any?): Int? {
+            val parsed = rawValue?.toString()?.toDoubleOrNull() ?: return null
+            if (!isValidBpm(parsed)) return null
+            return parsed.toInt()
+        }
     }
 }

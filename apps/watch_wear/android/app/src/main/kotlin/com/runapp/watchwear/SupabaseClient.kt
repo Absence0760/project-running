@@ -305,12 +305,11 @@ class SupabaseClient(
         val refresh = refreshToken
             ?: throw IllegalStateException("no refresh token cached")
 
-        val body = buildJsonObject {
-            put("refresh_token", refresh)
-        }.toString().toRequestBody(jsonMedia)
-
+        // Wire shape lives in `SupabaseUrlBuilders.kt` so the URL +
+        // body keys can be unit-tested (see `SupabaseUrlBuildersTest`).
+        val body = buildRefreshTokenBody(refresh).toRequestBody(jsonMedia)
         val req = Request.Builder()
-            .url("$baseUrl/auth/v1/token?grant_type=refresh_token")
+            .url(buildRefreshTokenUrl(baseUrl))
             .header("apikey", anonKey)
             .post(body)
             .build()
@@ -321,11 +320,11 @@ class SupabaseClient(
         val newAccess = parsed["access_token"]?.toString()?.trim('"')
             ?: throw IllegalStateException("refresh response missing access_token")
         val newRefresh = parsed["refresh_token"]?.toString()?.trim('"') ?: refresh
-        val expiresInSec = (parsed["expires_in"]?.toString()?.toLongOrNull()) ?: 3600L
+        val expiresInSec = (parsed["expires_in"]?.toString()?.toLongOrNull())
 
         accessToken = newAccess
         refreshToken = newRefresh
-        val expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000L
+        val expiresAtMs = computeRefreshExpiryMs(System.currentTimeMillis(), expiresInSec)
         return RefreshedSession(newAccess, newRefresh, expiresAtMs)
     }
 
@@ -393,32 +392,17 @@ class SupabaseClient(
     /// `{lat, lng, ...}` — we extract lat/lng only.
     suspend fun fetchRoutes(): List<SavedRoute> {
         val token = accessToken ?: return emptyList()
-        // Starred-only fetch first. The runner curates "what I
-        // actually run" via the star toggle on the web / mobile app —
-        // a much stronger signal than "most-recently-updated" for a
-        // 1.4-inch picker. The DB index `idx_routes_user_starred`
-        // (user_id, updated_at desc) WHERE is_starred makes this an
-        // O(starred) read. Cap at 30 for the rare power user.
-        val starred = fetchRoutesQuery(
-            token,
-            "select=id,name,waypoints,distance_m&is_starred=eq.true&order=updated_at.desc&limit=30",
-        )
+        // Query-string predicates + the starred-vs-fallback decision
+        // are in `SupabaseUrlBuilders.kt` so the URL build can be
+        // unit-tested (see `SupabaseUrlBuildersTest`).
+        val starred = fetchRoutesQuery(token, chooseFirstRoutesQuery())
         if (starred.isNotEmpty()) return starred
-        // First-launch fallback: a user who has never starred a
-        // route still wants *something* in the picker. Pull the 10
-        // most-recently-updated owned routes so the watch isn't
-        // useless before they've curated. Capped tighter than the
-        // starred path because this is undirected — we'd rather
-        // show too few than fill the picker with stale GPX imports.
-        return fetchRoutesQuery(
-            token,
-            "select=id,name,waypoints,distance_m&order=updated_at.desc&limit=10",
-        )
+        return fetchRoutesQuery(token, chooseFallbackRoutesQuery())
     }
 
     private suspend fun fetchRoutesQuery(token: String, query: String): List<SavedRoute> {
         val req = Request.Builder()
-            .url("$baseUrl/rest/v1/routes?$query")
+            .url(buildFetchRoutesUrl(baseUrl, query))
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $token")
             .get()

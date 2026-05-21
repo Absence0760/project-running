@@ -284,13 +284,15 @@ class RouteMiniMapWiringTest {
         // updated owned routes. Either branch alone is a regression:
         // dropping the starred filter floods the picker on power
         // users; dropping the fallback empties it on first launch.
-        val src = File("src/main/kotlin/com/runapp/watchwear/SupabaseClient.kt").readText()
+        // Query strings live in `SupabaseUrlBuilders.kt` (moved out
+        // of SupabaseClient for unit-testability).
+        val src = File("src/main/kotlin/com/runapp/watchwear/SupabaseUrlBuilders.kt").readText()
         assertTrue(
-            "SupabaseClient.fetchRoutes must request is_starred=eq.true with a 30-row cap",
+            "FETCH_ROUTES_STARRED_QUERY must filter is_starred=eq.true with limit=30",
             Regex("""is_starred=eq\.true[^"]*limit=30""").containsMatchIn(src),
         )
         assertTrue(
-            "SupabaseClient.fetchRoutes must fall back to a recent-only query (no is_starred filter, limit=10)",
+            "FETCH_ROUTES_FALLBACK_QUERY must omit is_starred and cap at limit=10",
             Regex("""order=updated_at\.desc&limit=10""").containsMatchIn(src),
         )
     }

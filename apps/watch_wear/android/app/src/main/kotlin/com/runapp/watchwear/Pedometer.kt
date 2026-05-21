@@ -43,12 +43,11 @@ class Pedometer(context: Context) {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 val total = event.values.firstOrNull() ?: return
-                val b = baseline ?: run {
-                    baseline = total
-                    total
-                }
-                val stepsThisRun = (total - b).toInt().coerceAtLeast(0)
-                trySend(stepsThisRun)
+                // Baseline math in `stepsSinceBaseline` — unit-tested
+                // independently (see `PedometerMathTest`).
+                val result = stepsSinceBaseline(total, baseline)
+                baseline = result.baseline
+                trySend(result.stepsThisRun)
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
