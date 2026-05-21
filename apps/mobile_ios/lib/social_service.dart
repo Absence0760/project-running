@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
@@ -337,6 +339,20 @@ class SocialService extends ChangeNotifier {
 
   /// Create a new club. The `enroll_club_owner` trigger auto-inserts
   /// the owner's `club_members` row, so we don't add it here.
+  /// Create a club. Mirrors `apps/web/src/lib/data.ts:createClub`:
+  ///   - trims `name` and normalises `description` / `locationLabel`
+  ///     (trim → empty becomes null), so whitespace-only inputs don't
+  ///     survive to the DB regardless of how the caller pre-processed
+  ///     them.
+  ///   - generates a 32-hex-char `invite_token` client-side when
+  ///     `joinPolicy == 'invite'`. The column has no DB-side default,
+  ///     so without this an invite-only club created on mobile has a
+  ///     null token and can't be shared via a join link.
+  ///   - retries up to 4 times on slug-uniqueness conflicts (23505),
+  ///     suffixing the slug with 4 random alphanumeric chars on each
+  ///     retry. Matches the web behaviour so two users creating
+  ///     "Hackney Half" at the same moment don't have the second one
+  ///     fail with a raw Postgres error.
   Future<ClubRow> createClub({
     required String name,
     required String slug,
@@ -347,21 +363,89 @@ class SocialService extends ChangeNotifier {
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
-    final inserted = await _c
-        .from('clubs')
-        .insert({
-          'owner_id': uid,
-          'name': name,
-          'slug': slug,
-          'description': description,
-          'location_label': locationLabel,
-          'is_public': isPublic,
-          'join_policy': joinPolicy,
-        })
-        .select(_clubSelectCols)
-        .single();
-    notifyListeners();
-    return ClubRow.fromJson(inserted);
+    final inviteToken = joinPolicy == 'invite' ? genInviteToken() : null;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final candidate =
+          attempt == 0 ? slug : '$slug-${_randomSlugSuffix()}';
+      final body = buildCreateClubBody(
+        ownerId: uid,
+        name: name,
+        slug: candidate,
+        description: description,
+        locationLabel: locationLabel,
+        isPublic: isPublic,
+        joinPolicy: joinPolicy,
+        inviteToken: inviteToken,
+      );
+      try {
+        final inserted = await _c
+            .from('clubs')
+            .insert(body)
+            .select(_clubSelectCols)
+            .single();
+        notifyListeners();
+        return ClubRow.fromJson(inserted);
+      } on PostgrestException catch (e) {
+        // 23505 is the slug-uniqueness conflict — retry with a
+        // suffix. Anything else (including the create_club rate-limit
+        // P0001 from migration 20260907_001) bubbles to the caller.
+        if (e.code != '23505') rethrow;
+      }
+    }
+    throw Exception(
+      'Could not allocate a slug for "$name" after 4 attempts',
+    );
+  }
+
+  /// Pure helper: build the `clubs.insert` body with web-parity
+  /// normalisation. Lifted to a static so the row shape can be
+  /// unit-tested without standing up a Supabase fixture.
+  @visibleForTesting
+  static Map<String, dynamic> buildCreateClubBody({
+    required String ownerId,
+    required String name,
+    required String slug,
+    String? description,
+    String? locationLabel,
+    required bool isPublic,
+    required String joinPolicy,
+    String? inviteToken,
+  }) {
+    String? trimToNull(String? s) {
+      final t = s?.trim();
+      return (t == null || t.isEmpty) ? null : t;
+    }
+    return <String, dynamic>{
+      'owner_id': ownerId,
+      'name': name.trim(),
+      'slug': slug,
+      'description': trimToNull(description),
+      'location_label': trimToNull(locationLabel),
+      'is_public': isPublic,
+      'join_policy': joinPolicy,
+      'invite_token': inviteToken,
+    };
+  }
+
+  /// Pure helper: generate a 32-hex-char invite token. Mirrors web's
+  /// `genToken()` (16 random bytes → hex). Pass [rng] in tests for
+  /// deterministic output; production always uses `Random.secure()`.
+  @visibleForTesting
+  static String genInviteToken({Random? rng}) {
+    final r = rng ?? Random.secure();
+    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  static String _randomSlugSuffix() {
+    // Matches the spirit of web's `Math.random().toString(36).slice(2, 6)`
+    // — 4 chars from the base36 alphabet, lowercase. Collision odds at
+    // this length are still under 1 in a million for the small number
+    // of retries per request.
+    final r = Random.secure();
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    return List<String>.generate(4, (_) => chars[r.nextInt(chars.length)])
+        .join();
   }
 
   /// Pending join requests on a club (admins only — RLS will filter).
