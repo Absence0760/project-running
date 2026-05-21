@@ -815,10 +815,37 @@ class ApiClient {
   }
 
   /// Saves a [Route] to the backend.
+  /// Persist a new route. Mirrors `apps/web/src/lib/data.ts:saveRoute`:
+  /// same column set, same description normalisation (trim → empty
+  /// becomes null), same `club_id` handling.
+  ///
+  /// **Id-handling parity with `saveRun`:** the caller's
+  /// client-generated `route.id` is written into the insert and
+  /// becomes the canonical row id. The previous implementation
+  /// stripped the id and let the server generate one, which left the
+  /// local `LocalRouteStore` entry pointing at `clientId` while the
+  /// server row had a different `serverId` — any later edit / delete
+  /// by id would miss the server row. Routes now follow the same
+  /// client-id-is-authoritative model that runs use.
   Future<void> saveRoute(Route route) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
+    final body = buildSaveRouteBody(route, userId);
+    await _client.from(RouteRow.table).insert(body);
+  }
 
+  /// Pure helper that produces the insert body for [saveRoute]. Lifted
+  /// to a static so the row-shape can be unit-tested (description
+  /// trimming, client-id preservation, `club_id` pass-through, web
+  /// parity) without standing up a Supabase fixture.
+  @visibleForTesting
+  static Map<String, dynamic> buildSaveRouteBody(Route route, String userId) {
+    // Match web's description normalisation: trim, then collapse
+    // empty-after-trim to null so the column stays clean for
+    // `IS NOT NULL` queries.
+    final descriptionRaw = route.description?.trim();
+    final description =
+        (descriptionRaw == null || descriptionRaw.isEmpty) ? null : descriptionRaw;
     final row = RouteRow(
       id: route.id,
       userId: userId,
@@ -838,13 +865,14 @@ class ApiClient {
       featured: route.featured,
       runCount: route.runCount,
       isStarred: route.isStarred,
-      description: route.description,
+      clubId: route.clubId,
+      description: description,
     );
     // Drop null / server-default columns so Postgres fills them in.
-    final body = Map<String, dynamic>.from(row.toJson())
+    // `id` is NOT dropped — we want the client UUID to flow through
+    // so local and server agree on row identity (matches `saveRun`).
+    return Map<String, dynamic>.from(row.toJson())
       ..removeWhere((k, v) => v == null);
-    body.remove(RouteRow.colId);
-    await _client.from(RouteRow.table).insert(body);
   }
 
   /// Fetches the user's saved routes, newest first.
