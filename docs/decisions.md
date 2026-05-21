@@ -1273,6 +1273,37 @@ Pinned by `apps/web/tests-e2e/clubs/event-rsvp.spec.ts` (anon visitor test — p
 
 ---
 
+## 63. Single-app multi-modal expansion: run + gym + nutrition under one nav, one DB
+
+**Decided:** May 2026
+
+The product expands from single-modality (running) to multi-modality (running + gym + nutrition) inside **one app per platform** and **one Supabase project**, not three sibling apps that happen to share a backend.
+
+Mobile navigation reorganises around the *action* (`Log`) rather than the *modality* (`Run`). The current `Run` bottom-nav tab disappears; a centre `Log` action button presents a sheet (Start run / Start lift / Log meal / Log snack) with long-press = repeat last activity to preserve one-tap muscle memory for runners. Home becomes the cross-modality dashboard (today's run, today's lift, daily nutrition rings); History becomes a unified timeline with type filter chips. Web — less constrained by a tab ceiling — gets `Run` / `Gym` / `Nutrition` as explicit sidebar siblings.
+
+The data model gains a shared `kind` abstraction. Existing `runs` rows acquire `kind = 'run'`; new tables for gym sessions and logged food items sit beside it. Cross-modality views (recovery score, weekly composite, AI Coach context) read from all of them through a typed adapter.
+
+**Why one app, not three sibling apps:** the differentiator versus Strava (running silo) and MyFitnessPal (nutrition silo) is the *combination* — weekly mileage next to protein intake next to lift volume in one Home. Three separate apps make that view impossible without inventing yet another aggregator app (Apple Health, Google Fit already exist and they're not the product we want to be). Cost side: three apps means three App Store listings, three release pipelines, three permission asks, three brand investments — for a single-dev product, that's the wrong shape.
+
+**Why one Supabase project, not three with sync:** "three apps that all sync" is the worst of both worlds — the same code-sharing complexity as one app, plus three release pipelines, plus three logins. One project means shared auth, shared social graph, and shared paywall (`subscription_tier` already exists; Pro unlocks across all modalities).
+
+**Trade-offs accepted:**
+
+- Tapping "Run" from anywhere is one tap today, becomes two (`Log` → Start run). Mitigated by long-press = last activity.
+- Bundle size grows. Nutrition wants camera; gym is mostly silent; running wants always-on GPS. Permission asks consolidate per Apple / Google rules (we ask for what the feature needs when the user invokes it, not all of them at install).
+- Home gets denser. The redesign has to be deliberate or it becomes a wall of cards. Cards self-hide when the modality has no data so a runner who doesn't log meals sees the same Home they see today.
+- The web-canonical rule (§24) still holds. Each new modality builds on web first; mobile and watches mirror.
+
+**Don't re-litigate** by:
+
+- Splitting into `threkir - run` / `threkir - gym` / `threkir - nutrition` apps that sync — explicitly rejected.
+- Adding gym / nutrition as additional bottom-nav tabs — the 5-tab ceiling is real (Routes was already folded into Social for this reason; see §61).
+- Spinning the new modalities into separate Supabase projects "for isolation" — the cross-modality view is the *whole* point.
+
+Phased delivery tracked in [roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition). The standalone-product-test escape hatch (ship nutrition as a genuinely independent app to validate market fit before merging) is documented there as a deliberate branch off this plan, not as a default.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

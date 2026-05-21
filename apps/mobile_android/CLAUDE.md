@@ -22,6 +22,8 @@ The most mature Flutter target in the monorepo. Almost every "Android" checkbox 
 
 When closing a parity gap, the order is: row classes (already generated) → `api_client` typed methods → domain model in `core_models` if the shape isn't 1:1 → ChangeNotifier or screen-local state → screen. See [../../docs/mobile_android_backlog.md](../../docs/mobile_android_backlog.md) for the live execution order.
 
+**Multi-modal expansion (Phase 4, planned).** The bottom nav restructures from `Home / Run / History / Social / Settings` to `Home / History / Log / Social / Settings`: the `Run` tab disappears, the centre `Log` slot becomes an action button that opens a Start-run / Start-lift / Log-meal sheet (long-press = repeat last activity). New `gym_*` and `nutrition_*` screens land behind the same nav. Don't add gym / nutrition screens or new bottom-nav tabs ahead of the Phase 4 foundation — the 5-tab ceiling is the reason for the restructure. See [decisions.md § 63](../../docs/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) for the architectural commitment and [roadmap.md § Phase 4](../../docs/roadmap.md#phase-4--multi-modal-gym--nutrition) for sequencing.
+
 ## Stack
 
 - **Flutter** stable, Dart 3.x

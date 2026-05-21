@@ -28,6 +28,10 @@ The web app and mobile apps are separate codebases — different languages, diff
 
 New product work starts on web. Drift in the mobile → web direction (Android has X that web doesn't) is closed by building the web version; drift in the web → mobile direction (web has X that mobile doesn't) is closed by porting down. The [parity matrix](parity.md) is the living checklist for both directions.
 
+### Modalities
+
+The product is multi-modal by design — running today, gym + nutrition next ([decisions.md § 63](decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)). The DB carries a shared `kind` abstraction across activity tables; the unified `activities` view drives cross-modality surfaces (Home, History, AI Coach). Mobile organises around the `Log` action rather than per-modality tabs to scale past the 5-tab bottom-nav ceiling. Phased delivery in [roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition).
+
 ---
 
 ## Repository structure

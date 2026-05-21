@@ -494,6 +494,102 @@ Surfaces that other running apps ship as table stakes and we don't. Each one is 
 
 ---
 
+## Phase 4 — multi-modal: gym + nutrition
+
+**Target:** TBD (post-Phase-3 monetisation milestone)
+**Goal:** Expand from running-only to a running + gym + nutrition product inside one app per platform. The differentiator vs Strava (running silo) and MyFitnessPal (nutrition silo) is the cross-modality view — weekly mileage, lift volume, and protein intake side-by-side in one Home and one History.
+**Architecture:** [decisions.md § 63](decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) is the foundational ADR.
+
+Workstreams run **in parallel** within this phase — the nav reorg ships with the first modality, both modalities ship together at the lightweight tier. Depth tiers (Strong-app / MyFitnessPal / AI-driven) are documented at the bottom as future work, not committed to in Phase 4.
+
+### Navigation foundation (mobile + web)
+
+Without this, every new modality competes for the 5-slot bottom nav.
+
+- [ ] **Mobile bottom nav** — `Home / History / Log / Social / Settings`. The current `Run` tab disappears as top-level. The centre `Log` slot is an action button (not a tab) that presents a sheet: Start run / Start lift / Log meal / Log snack. Long-press = repeat last activity (preserves the one-tap "start run" muscle memory).
+- [ ] **Home redesign (mobile + web)** — cards from every modality: today's run, today's lift, daily nutrition rings, plus the existing dashboard cards (mileage chart, training load, fitness, intensity, weekly goal). Cards self-hide when the modality has no data.
+- [ ] **History unification (mobile + web)** — single timeline of activities (runs + lifts + meals) with filter chips. Run-detail / lift-detail / meal-detail are separate routes.
+- [ ] **Web sidebar** — `Run` / `Gym` / `Nutrition` as explicit siblings. Web isn't constrained by the bottom-nav ceiling so the modalities surface directly.
+- [ ] **Feature flag** — `multi_modal_nav` per user, defaults off until the redesign is shippable on both platforms.
+
+### Activity-kind data model
+
+The DB grows a shared abstraction so cross-modality views stay sane.
+
+- [ ] Migration: `runs.kind` column carrying the broader modality (`'run' | 'lift' | 'meal'`) — the existing `activity_type` enum (`run | walk | cycle | hike`) stays as the finer-grained running-family classification. The new column is what the `activities` view unions on.
+- [ ] New tables: a `gym_workouts` parent + `gym_sets` child (one row per set within a workout), and a `food_log` table (one row per logged item). Schema kept deliberately thin for the lightweight tier; food / exercise DB tables are deferred to depth tiers.
+- [ ] `activities` view — UNION of `runs` + `gym_workouts` + `food_log` projecting `(id, user_id, kind, started_at, summary_jsonb)`. Drives the unified History list without three round trips.
+- [ ] RLS — owner-scoped writes, public-toggle aligned with how `runs.is_public` works today so the social layer reuses the existing follower / feed plumbing.
+- [ ] Codegen — `npm run gen:types` + `dart run scripts/gen_dart_models.dart` after each migration (per [schema_codegen.md](schema_codegen.md)). Update the narrow-union pair list in `apps/web/scripts/check_constraint_unions.mjs` for the new `kind` CHECK.
+
+### Gym — lightweight tier
+
+Strong app's free-form log, not its programmed-routine engine.
+
+- [ ] Web: `/gym/new` (composer — exercise name as free text, sets[] with reps + weight + optional RPE), `/gym/[id]` (detail), `/gym` (list).
+- [ ] Mobile: `gym_screen.dart` (list), `gym_compose_sheet.dart` (composer), `gym_detail_screen.dart` (detail). Twin-mirrored to iOS per the byte-identical-twin rule ([decisions.md § 39](decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)).
+- [ ] Personal-records per `(user, exercise_name)` — heaviest set, most volume, best rep PR. Surfaces on Home as a card and on the History row as a "PR" badge.
+- [ ] Sharing — same `is_public` pattern as runs; lift summary cards appear in the social feed.
+- [ ] **Not in scope:** exercise database, workout templates, programmes, RPE-driven progression (all in the gym depth tier below).
+
+### Nutrition — lightweight tier
+
+Manual macro logging. No food database, no barcode scan, no photo recognition (all in the nutrition depth tier below).
+
+- [ ] Web: `/nutrition` (daily log + weekly trends), `/nutrition/log` (composer — item name as free text, calories + protein + carbs + fat manual entry).
+- [ ] Mobile: `nutrition_screen.dart`, `nutrition_log_sheet.dart`, twin-mirrored.
+- [ ] Daily targets — user sets calorie + macro goals in Settings; rings show daily progress on Home. Defaults from a Mifflin-St Jeor BMR × activity-level heuristic; user can override.
+- [ ] Water tracker — separate from food log, simple count of 250 ml units.
+- [ ] Weekly trends — mirrors the existing `mileage_trend_card` pattern.
+
+### Cross-modality integration
+
+The point of the whole exercise. Each item assumes both lightweight modules above are shipped.
+
+- [ ] Home dashboard composes cards from all three modalities (run, gym, nutrition) plus the existing training load + fitness cards. Order and visibility driven by what the user actually logs.
+- [ ] AI Coach context (`apps/web/src/lib/coach/` + the `/api/coach` Lambda) reads recent gym sessions + last 7 d nutrition averages alongside the existing run window. Same prompt-caching pattern, just more rows. Daily-cap unchanged.
+- [ ] History timeline shows all three kinds with filter chips. Social feed extends to lift + meal cards with the same `is_public` gate.
+- [ ] Training-load chart factors lift sessions as additional stress (TRIMP-from-RPE or simple per-set load) so CTL / ATL / TSB reflects the full picture. Algorithm details and source of truth deferred to spec when work starts.
+
+### Depth tiers (deferred, documented for sequencing decisions)
+
+Not Phase 4 work — documented so future-us doesn't re-litigate scope when the lightweight modules ship.
+
+**Gym — mid (Strong-app territory):**
+
+- Exercise database (FK from `gym_sets.exercise_id` instead of free text), with a starter set of common compounds + isolations + cardio.
+- Workout templates — saved routines users adopt from a library or build themselves (mirror of training-plan templates).
+- RPE / set-type metadata (warmup / working / dropset / failure).
+
+**Gym — heavy (full programming):**
+
+- Periodised programs (linear, conjugate, block) with progressive-overload prescriptions.
+- AI Coach extension: writes the program from goals + history.
+- Equipment / gym-availability constraints in plan generation.
+
+**Nutrition — mid (MyFitnessPal territory):**
+
+- Food database (USDA + Open Food Facts), barcode scan (mobile-only, camera permission).
+- Meal templates — saved meals users log with one tap.
+- Recipe builder — N ingredients → one logged meal.
+
+**Nutrition — heavy (AI-driven):**
+
+- Photo-of-plate recognition (vision-model-based — heavy lift, expensive at scale).
+- AI Coach writes the meal plan from training plan + goals + dietary preferences.
+- Restaurant menu suggestions, grocery list export.
+
+**Cross-modality depth:**
+
+- Unified recovery score factoring lift + sleep + nutrition + run load (the "Whoop" view).
+- Recommendation engine — "you're under-fuelling for tomorrow's long run" / "skip the lift, your CTL is too high".
+
+### Standalone-product test escape hatch
+
+If during early Phase 4 development it becomes obvious that nutrition has a very different user / market shape than running + gym, ship it as a separate app with its own Supabase project and converge later if/when the data justifies it. This is a deliberate branch, not a default — see [decisions.md § 63](decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) for why "one app vs three apps that sync" is a binary choice with no defensible middle ground.
+
+---
+
 ## Future — Protomaps self-hosted tiles
 
 Migrate from MapTiler to self-hosted map tiles using Protomaps (PMTiles format on S3 or Cloudflare R2). Eliminates per-request tile costs entirely — pay only for storage and bandwidth. Evaluate once tile API usage exceeds MapTiler free tier.

@@ -4,6 +4,8 @@
 
 **Working rule:** when you're asked to build a feature, build it here first. When you're asked to fix drift between web and mobile, close it by bringing web up to parity with mobile (not the reverse) unless the feature is a physical exception. See [../../docs/parity.md](../../docs/parity.md) for the live matrix — rows where this app is `✗` or `Partial` on a non-exception feature are the backlog.
 
+**Multi-modal expansion (Phase 4, planned):** the product expands from running-only to running + gym + nutrition inside one app per platform ([decisions.md § 63](../../docs/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)). On web that means `Run` / `Gym` / `Nutrition` as sibling sidebar sections plus a unified `Home` and `History`. Don't pre-emptively add gym / nutrition surfaces until the Phase 4 nav + data-model foundation lands; see [roadmap.md § Phase 4](../../docs/roadmap.md#phase-4--multi-modal-gym--nutrition) for sequencing.
+
 Deployed to AWS — S3 (static SvelteKit build) + CloudFront + Route 53 for everything except `/api/coach`, which deploys as a Node 20 Lambda Function URL routed by a separate CloudFront behaviour. Terraform-provisioned (modules + per-env stacks under `infra/`), runtime secrets via sops + AWS KMS, OIDC-deployed from GitHub Actions. See [decisions.md § 53](../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the rationale and [deployment.md](deployment.md) for the full plan.
 
 ## Stack
